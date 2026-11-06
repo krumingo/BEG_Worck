@@ -793,6 +793,9 @@ def test_r31_no_per_worker_pay_by_derivation():
     # every SMR with 2+ workers -> the per-SMR spent stays
     v2 = r31_view(body, {"мазилка": {"w1", "w4"}, "шпакловка": {"w2", "w3"}}, 4)
     assert [a["actual_cost"] for a in v2["activities"]] == [200, 210]
+    # no worker map, but the row itself says one worker -> hidden as well
+    v4 = r31_view(body, {}, 3)
+    assert "total_cost" not in v4["smr_summary"][0]
     # the whole project has ONE worker -> no project-level spent either
     v3 = r31_view(body, {"мазилка": {"w1"}}, 1)
     assert "total_actual_cost" not in v3["summary"] and v3["summary"]["total_planned_cost"] == 5000

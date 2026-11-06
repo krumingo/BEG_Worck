@@ -405,7 +405,9 @@ def r31_view(value, workers_by_smr: Dict[str, set], project_workers: int):
             names = {_norm(r.get(k)) for r in rows for k in _ROW_NAME_KEYS if r.get(k)}
             # one single-worker SMR row -> no row of the list keeps its "spent" (else
             # the project total minus the other rows would still give it)
-            hide = bool(names & single)
+            hide = bool(names & single) or any(
+                isinstance(r.get("workers_count"), int) and r["workers_count"] <= 1
+                for r in rows)                       # the row itself says: one worker
             out = []
             for x in v:
                 y = walk(x)

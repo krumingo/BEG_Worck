@@ -19,7 +19,8 @@ const STATUS_CFG = {
 
 function ComparisonRow({ item }) {
   const st = STATUS_CFG[item.status] || STATUS_CFG.on_track;
-  const pct = item.planned_cost > 0 ? Math.min(Math.round(item.actual_cost / item.planned_cost * 100), 200) : 0;
+  // SEC-02-D (R31): a hidden "spent" (one worker on the SMR) gives no bar, not NaN
+  const pct = item.planned_cost > 0 && item.actual_cost !== undefined ? Math.min(Math.round(item.actual_cost / item.planned_cost * 100), 200) : 0;
   return (
     <div className="flex items-center gap-3 py-1.5 text-xs">
       <span className={`w-2 h-2 rounded-full ${st.bg} flex-shrink-0`} />

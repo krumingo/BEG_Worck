@@ -750,7 +750,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 117.3,
+ "seconds": 123.1,
  "rows": [
   {
    "mode": "off",
@@ -10699,6 +10699,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -10719,6 +10725,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -10739,6 +10751,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -10766,6 +10780,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -10822,6 +10842,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -10837,6 +10862,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -10876,6 +10906,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -10927,6 +10962,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -10947,6 +10988,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -10967,6 +11014,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -10994,6 +11043,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -11050,6 +11105,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -11065,6 +11125,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -11104,6 +11169,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -11154,7 +11224,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -11166,7 +11242,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -11178,7 +11260,9 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -11202,7 +11286,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -11250,7 +11340,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -11262,7 +11354,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -11298,7 +11392,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17305,7 +17401,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17333,7 +17438,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17350,16 +17464,15 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17377,7 +17490,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17405,7 +17520,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17423,7 +17547,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17441,7 +17567,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17459,7 +17587,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17604,7 +17734,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17628,7 +17767,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17645,13 +17793,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17668,7 +17815,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17692,7 +17841,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17709,7 +17867,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17726,7 +17886,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17743,7 +17905,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17767,7 +17931,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17791,7 +17964,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17808,7 +17990,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17825,7 +18009,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17849,7 +18035,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -17866,7 +18061,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17883,7 +18080,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17900,7 +18099,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17924,7 +18125,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -17948,7 +18161,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -17963,14 +18188,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_cost",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -17985,7 +18208,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -18009,7 +18236,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -18024,7 +18263,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -18039,7 +18282,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -18054,7 +18301,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -18069,7 +18320,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18084,7 +18337,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18099,7 +18354,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18114,7 +18371,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18129,7 +18388,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18144,7 +18405,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18159,7 +18422,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18174,7 +18439,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18782,7 +19049,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18809,7 +19082,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18823,17 +19102,16 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "actual_cost",
     "labor_budget",
     "material_budget",
-    "total_actual_cost",
     "total_budget",
-    "total_burn_pct",
     "total_labor_budget",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18848,7 +19126,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18875,7 +19155,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18902,7 +19188,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18917,7 +19205,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18937,7 +19227,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -18957,7 +19252,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19001,7 +19301,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19061,7 +19366,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19085,13 +19397,59 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
    "tenant": "A",
    "role": "requester",
    "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "has_budget",
+    "labor_budget",
+    "materials_budget",
+    "totals"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
    "probe": "GET /api/projects/{project_id}/activity-budget-summary",
    "rule": "R20-5B",
    "target": "P1",
@@ -19109,46 +19467,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "off",
-   "tenant": "A",
-   "role": "technician",
-   "legacy_role": "Technician",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "off",
-   "tenant": "A",
-   "role": "accountant",
-   "legacy_role": "Accountant",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [
-    "has_budget",
-    "labor_budget",
+   "leaks_7777": false,
+   "actual_keys": [
     "labor_remaining",
     "labor_spent",
-    "materials_budget",
     "materials_remaining",
-    "materials_spent",
-    "totals"
+    "materials_spent"
    ],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19175,7 +19501,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19190,7 +19518,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19213,7 +19543,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19236,7 +19573,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19283,7 +19627,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19337,7 +19688,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19355,7 +19708,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19373,7 +19728,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19388,7 +19745,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19406,7 +19765,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19433,7 +19794,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19448,7 +19811,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19463,7 +19828,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19478,7 +19845,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19517,7 +19886,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19574,7 +19945,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19595,7 +19972,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19610,13 +19993,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget",
-    "spent",
-    "total_budget",
-    "total_remaining",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19631,7 +20013,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19652,7 +20036,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19679,7 +20069,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19694,7 +20086,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19713,7 +20107,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19732,7 +20131,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -19775,7 +20179,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -20890,6 +21299,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -20908,6 +21318,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -20926,6 +21337,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -20941,6 +21353,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -20956,6 +21369,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -21013,6 +21427,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -21031,6 +21446,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -21075,6 +21491,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -31177,6 +31594,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -31197,6 +31620,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -31217,6 +31646,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31244,6 +31675,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -31300,6 +31737,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31315,6 +31757,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31354,6 +31801,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31405,6 +31857,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -31425,6 +31883,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -31445,6 +31909,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31472,6 +31938,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -31528,6 +32000,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31543,6 +32020,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31582,6 +32064,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -31632,7 +32119,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -31644,7 +32137,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -31656,7 +32155,9 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -31680,7 +32181,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -31728,7 +32235,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -31740,7 +32249,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -31776,7 +32287,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -37783,7 +38296,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -37811,7 +38333,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -37828,16 +38359,15 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -37855,7 +38385,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -37883,7 +38415,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -37901,7 +38442,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -37919,7 +38462,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -37937,7 +38482,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38082,7 +38629,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -38106,7 +38662,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -38123,13 +38688,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38146,7 +38710,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38170,7 +38736,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -38187,7 +38762,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38204,7 +38781,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38221,7 +38800,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38245,7 +38826,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -38269,7 +38859,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -38286,7 +38885,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38303,7 +38904,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38327,7 +38930,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -38344,7 +38956,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38361,7 +38975,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38378,7 +38994,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38402,7 +39020,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38426,7 +39056,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38441,14 +39083,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_cost",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38463,7 +39103,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38487,7 +39131,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38502,7 +39158,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38517,7 +39177,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38532,7 +39196,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "off",
@@ -38547,7 +39215,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38562,7 +39232,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38577,7 +39249,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38592,7 +39266,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38607,7 +39283,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38622,7 +39300,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38637,7 +39317,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -38652,7 +39334,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39260,7 +39944,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39287,7 +39977,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39301,17 +39997,16 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "actual_cost",
     "labor_budget",
     "material_budget",
-    "total_actual_cost",
     "total_budget",
-    "total_burn_pct",
     "total_labor_budget",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39326,7 +40021,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39353,7 +40050,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39380,7 +40083,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39395,7 +40100,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39415,7 +40122,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39435,7 +40147,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39479,7 +40196,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39539,7 +40261,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39563,13 +40292,59 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
    "tenant": "B",
    "role": "requester",
    "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "has_budget",
+    "labor_budget",
+    "materials_budget",
+    "totals"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
    "probe": "GET /api/projects/{project_id}/activity-budget-summary",
    "rule": "R20-5B",
    "target": "P1",
@@ -39587,46 +40362,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "off",
-   "tenant": "B",
-   "role": "technician",
-   "legacy_role": "Technician",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "off",
-   "tenant": "B",
-   "role": "accountant",
-   "legacy_role": "Accountant",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [
-    "has_budget",
-    "labor_budget",
+   "leaks_7777": false,
+   "actual_keys": [
     "labor_remaining",
     "labor_spent",
-    "materials_budget",
     "materials_remaining",
-    "materials_spent",
-    "totals"
+    "materials_spent"
    ],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39653,7 +40396,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39668,7 +40413,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39691,7 +40438,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39714,7 +40468,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39761,7 +40522,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39815,7 +40583,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39833,7 +40603,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39851,7 +40623,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39866,7 +40640,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39884,7 +40660,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39911,7 +40689,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39926,7 +40706,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39941,7 +40723,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39956,7 +40740,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -39995,7 +40781,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40052,7 +40840,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40073,7 +40867,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40088,13 +40888,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget",
-    "spent",
-    "total_budget",
-    "total_remaining",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40109,7 +40908,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40130,7 +40931,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40157,7 +40964,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40172,7 +40981,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40191,7 +41002,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40210,7 +41026,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -40253,7 +41074,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -41368,6 +42194,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41386,6 +42213,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41404,6 +42232,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41419,6 +42248,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41434,6 +42264,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41491,6 +42322,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41509,6 +42341,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -41553,6 +42386,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -43099,6 +43933,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -43114,6 +43953,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -43165,6 +44009,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -43180,6 +44029,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -43230,7 +44084,9 @@
    "target": "XA",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -43242,7 +44098,9 @@
    "target": "XA",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -43976,7 +44834,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -44000,7 +44867,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "off",
@@ -44017,7 +44893,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44034,7 +44912,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44051,7 +44931,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44066,7 +44948,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44081,7 +44965,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44096,7 +44982,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44111,7 +44999,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44126,7 +45016,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44286,7 +45178,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44306,7 +45203,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44365,7 +45267,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44388,7 +45297,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44439,7 +45355,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44454,7 +45372,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44509,7 +45429,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -44528,7 +45453,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "off",
@@ -54513,6 +55443,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -54533,6 +55469,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -54553,6 +55495,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54580,6 +55524,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -54636,6 +55586,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54651,6 +55606,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54690,6 +55650,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54741,6 +55706,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -54761,6 +55732,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -54781,6 +55758,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54808,6 +55787,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -54864,6 +55849,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54879,6 +55869,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54918,6 +55913,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -54968,7 +55968,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -54980,7 +55986,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -54992,7 +56004,9 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -55016,7 +56030,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -55064,7 +56084,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -55076,7 +56098,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -55112,7 +56136,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61119,7 +62145,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61147,7 +62182,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61164,16 +62208,15 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61191,7 +62234,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61219,7 +62264,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61237,7 +62291,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61255,7 +62311,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61273,7 +62331,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61418,7 +62478,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61442,7 +62511,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61459,13 +62537,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61482,7 +62559,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61506,7 +62585,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61523,7 +62611,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61540,7 +62630,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61557,7 +62649,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61581,7 +62675,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61605,7 +62708,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61622,7 +62734,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61639,7 +62753,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61663,7 +62779,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -61680,7 +62805,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61697,7 +62824,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61714,7 +62843,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61738,7 +62869,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61762,7 +62905,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61777,14 +62932,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_cost",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61799,7 +62952,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61823,7 +62980,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61838,7 +63007,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61853,7 +63026,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61868,7 +63045,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -61883,7 +63064,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61898,7 +63081,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61913,7 +63098,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61928,7 +63115,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61943,7 +63132,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61958,7 +63149,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61973,7 +63166,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -61988,7 +63183,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62596,7 +63793,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62623,7 +63826,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62637,17 +63846,16 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "actual_cost",
     "labor_budget",
     "material_budget",
-    "total_actual_cost",
     "total_budget",
-    "total_burn_pct",
     "total_labor_budget",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62662,7 +63870,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62689,7 +63899,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62716,7 +63932,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62731,7 +63949,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62751,7 +63971,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62771,7 +63996,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62815,7 +64045,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62875,7 +64110,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62899,13 +64141,59 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
    "tenant": "A",
    "role": "requester",
    "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "has_budget",
+    "labor_budget",
+    "materials_budget",
+    "totals"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
    "probe": "GET /api/projects/{project_id}/activity-budget-summary",
    "rule": "R20-5B",
    "target": "P1",
@@ -62923,46 +64211,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "shadow",
-   "tenant": "A",
-   "role": "technician",
-   "legacy_role": "Technician",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "shadow",
-   "tenant": "A",
-   "role": "accountant",
-   "legacy_role": "Accountant",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [
-    "has_budget",
-    "labor_budget",
+   "leaks_7777": false,
+   "actual_keys": [
     "labor_remaining",
     "labor_spent",
-    "materials_budget",
     "materials_remaining",
-    "materials_spent",
-    "totals"
+    "materials_spent"
    ],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -62989,7 +64245,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63004,7 +64262,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63027,7 +64287,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63050,7 +64317,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63097,7 +64371,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63151,7 +64432,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63169,7 +64452,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63187,7 +64472,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63202,7 +64489,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63220,7 +64509,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63247,7 +64538,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63262,7 +64555,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63277,7 +64572,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63292,7 +64589,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63331,7 +64630,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63388,7 +64689,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63409,7 +64716,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63424,13 +64737,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget",
-    "spent",
-    "total_budget",
-    "total_remaining",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63445,7 +64757,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63466,7 +64780,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63493,7 +64813,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63508,7 +64830,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63527,7 +64851,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63546,7 +64875,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -63589,7 +64923,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -64704,6 +66043,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64722,6 +66062,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64740,6 +66081,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64755,6 +66097,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64770,6 +66113,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64827,6 +66171,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64845,6 +66190,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -64889,6 +66235,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -74991,6 +76338,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -75011,6 +76364,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -75031,6 +76390,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75058,6 +76419,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -75114,6 +76481,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75129,6 +76501,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75168,6 +76545,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75219,6 +76601,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -75239,6 +76627,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -75259,6 +76653,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75286,6 +76682,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -75342,6 +76744,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75357,6 +76764,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75396,6 +76808,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -75446,7 +76863,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -75458,7 +76881,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -75470,7 +76899,9 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -75494,7 +76925,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -75542,7 +76979,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -75554,7 +76993,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -75590,7 +77031,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81597,7 +83040,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -81625,7 +83077,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -81642,16 +83103,15 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81669,7 +83129,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81697,7 +83159,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -81715,7 +83186,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81733,7 +83206,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81751,7 +83226,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81896,7 +83373,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -81920,7 +83406,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -81937,13 +83432,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81960,7 +83454,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -81984,7 +83480,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -82001,7 +83506,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82018,7 +83525,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82035,7 +83544,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82059,7 +83570,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -82083,7 +83603,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -82100,7 +83629,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82117,7 +83648,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82141,7 +83674,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -82158,7 +83700,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82175,7 +83719,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82192,7 +83738,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82216,7 +83764,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82240,7 +83800,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82255,14 +83827,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_cost",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82277,7 +83847,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82301,7 +83875,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82316,7 +83902,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82331,7 +83921,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82346,7 +83940,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "shadow",
@@ -82361,7 +83959,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82376,7 +83976,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82391,7 +83993,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82406,7 +84010,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82421,7 +84027,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82436,7 +84044,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82451,7 +84061,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -82466,7 +84078,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83074,7 +84688,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83101,7 +84721,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83115,17 +84741,16 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "actual_cost",
     "labor_budget",
     "material_budget",
-    "total_actual_cost",
     "total_budget",
-    "total_burn_pct",
     "total_labor_budget",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83140,7 +84765,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83167,7 +84794,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83194,7 +84827,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83209,7 +84844,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83229,7 +84866,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83249,7 +84891,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83293,7 +84940,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83353,7 +85005,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83377,13 +85036,59 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
    "tenant": "B",
    "role": "requester",
    "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "has_budget",
+    "labor_budget",
+    "materials_budget",
+    "totals"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
+   "rule": "R20-5B",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
    "probe": "GET /api/projects/{project_id}/activity-budget-summary",
    "rule": "R20-5B",
    "target": "P1",
@@ -83401,46 +85106,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "shadow",
-   "tenant": "B",
-   "role": "technician",
-   "legacy_role": "Technician",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
-  },
-  {
-   "mode": "shadow",
-   "tenant": "B",
-   "role": "accountant",
-   "legacy_role": "Accountant",
-   "probe": "GET /api/projects/{project_id}/activity-budget-summary",
-   "rule": "R20-5B",
-   "target": "P1",
-   "status": 200,
-   "written": [],
-   "foreign_ids": false,
-   "money_keys": [
-    "has_budget",
-    "labor_budget",
+   "leaks_7777": false,
+   "actual_keys": [
     "labor_remaining",
     "labor_spent",
-    "materials_budget",
     "materials_remaining",
-    "materials_spent",
-    "totals"
+    "materials_spent"
    ],
-   "hidden_budget_keys": [],
-   "leaks_7777": false
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83467,7 +85140,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83482,7 +85157,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83505,7 +85182,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83528,7 +85212,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83575,7 +85266,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83629,7 +85327,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83647,7 +85347,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83665,7 +85367,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83680,7 +85384,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83698,7 +85404,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83725,7 +85433,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83740,7 +85450,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83755,7 +85467,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83770,7 +85484,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83809,7 +85525,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83866,7 +85584,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83887,7 +85611,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83902,13 +85632,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget",
-    "spent",
-    "total_budget",
-    "total_remaining",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83923,7 +85652,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83944,7 +85675,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83971,7 +85708,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -83986,7 +85725,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -84005,7 +85746,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -84024,7 +85770,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -84067,7 +85818,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -85182,6 +86938,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85200,6 +86957,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85218,6 +86976,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85233,6 +86992,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85248,6 +87008,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85305,6 +87066,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85323,6 +87085,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -85367,6 +87130,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -86913,6 +88677,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -86928,6 +88697,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -86979,6 +88753,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -86994,6 +88773,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -87044,7 +88828,9 @@
    "target": "XA",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87056,7 +88842,9 @@
    "target": "XA",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87790,7 +89578,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -87814,7 +89611,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "shadow",
@@ -87831,7 +89637,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87848,7 +89656,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87865,7 +89675,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87880,7 +89692,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87895,7 +89709,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87910,7 +89726,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87925,7 +89743,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -87940,7 +89760,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88100,7 +89922,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88120,7 +89947,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88179,7 +90011,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88202,7 +90041,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88253,7 +90099,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88268,7 +90116,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88323,7 +90173,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -88342,7 +90197,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "shadow",
@@ -98337,6 +100197,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -98357,6 +100223,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -98377,6 +100249,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98404,6 +100278,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -98460,6 +100340,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98475,6 +100360,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98514,6 +100404,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98565,6 +100460,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -98585,6 +100486,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -98605,6 +100512,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98632,6 +100541,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -98688,6 +100603,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98703,6 +100623,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98742,6 +100667,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -98792,7 +100722,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -98804,7 +100740,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -98816,7 +100758,9 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -98840,7 +100784,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -98888,7 +100838,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -98900,7 +100852,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -98936,7 +100890,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -104973,7 +106929,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105001,7 +106966,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105018,16 +106992,15 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105045,7 +107018,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105073,7 +107048,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105091,7 +107075,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105109,7 +107095,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105127,7 +107115,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105272,7 +107262,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105296,7 +107295,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105313,13 +107321,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105336,7 +107343,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105360,7 +107369,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105377,7 +107395,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105394,7 +107414,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105411,7 +107433,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105435,7 +107459,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105459,7 +107492,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105476,7 +107518,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105493,7 +107537,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105517,7 +107563,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -105534,7 +107589,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105551,7 +107608,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105568,7 +107627,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105592,7 +107653,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105616,7 +107689,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105631,14 +107716,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_cost",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105653,7 +107736,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105677,7 +107764,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105692,7 +107791,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105707,7 +107810,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105722,7 +107829,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -105737,7 +107848,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105752,7 +107865,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105767,7 +107882,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105782,7 +107899,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105797,7 +107916,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105812,7 +107933,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105827,7 +107950,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -105842,7 +107967,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106450,7 +108577,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106477,7 +108610,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106491,17 +108630,16 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "actual_cost",
     "labor_budget",
     "material_budget",
-    "total_actual_cost",
     "total_budget",
-    "total_burn_pct",
     "total_labor_budget",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106516,7 +108654,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106543,7 +108683,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106570,7 +108716,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106585,7 +108733,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106605,7 +108755,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106625,7 +108780,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106669,7 +108829,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106729,7 +108894,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106753,7 +108925,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106769,15 +108948,13 @@
    "money_keys": [
     "has_budget",
     "labor_budget",
-    "labor_remaining",
-    "labor_spent",
     "materials_budget",
-    "materials_remaining",
-    "materials_spent",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106792,7 +108969,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106816,7 +108995,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106843,7 +109029,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106858,7 +109046,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106881,7 +109071,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106904,7 +109101,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -106951,7 +109155,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107005,7 +109216,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107023,7 +109236,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107041,7 +109256,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107056,7 +109273,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107074,7 +109293,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107101,7 +109322,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107116,7 +109339,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107131,7 +109356,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107146,7 +109373,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107185,7 +109414,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107246,7 +109477,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107267,7 +109504,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107282,13 +109525,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget",
-    "spent",
-    "total_budget",
-    "total_remaining",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107303,7 +109545,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107324,7 +109568,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107351,7 +109601,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107366,7 +109618,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107385,7 +109639,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107404,7 +109663,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -107447,7 +109711,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -108562,6 +110831,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108580,6 +110850,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108598,6 +110869,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108613,6 +110885,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108628,6 +110901,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108691,6 +110965,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108709,6 +110984,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -108757,6 +111033,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -118875,6 +121152,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -118895,6 +121178,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -118915,6 +121204,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -118942,6 +121233,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -118998,6 +121295,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119013,6 +121315,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119052,6 +121359,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119103,6 +121415,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -119123,6 +121441,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -119143,6 +121467,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119170,6 +121496,12 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 1,
    "group_price_keys": [
     "actual_cost",
@@ -119226,6 +121558,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119241,6 +121578,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119280,6 +121622,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -119330,7 +121677,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -119342,7 +121695,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -119354,7 +121713,9 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -119378,7 +121739,13 @@
    "target": "P1",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [
+    "burn_pct_total",
+    "clean_labor_cost",
+    "labor_cost_with_overhead"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -119426,7 +121793,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -119438,7 +121807,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -119474,7 +121845,9 @@
    "target": "P2",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125511,7 +127884,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125539,7 +127921,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125556,16 +127947,15 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125583,7 +127973,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125611,7 +128003,16 @@
     "P1",
     "P2"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125629,7 +128030,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125647,7 +128050,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125665,7 +128070,9 @@
    "money_keys": [],
    "hidden_budget_keys": [],
    "sites_with_money": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125810,7 +128217,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125834,7 +128250,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125851,13 +128276,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125874,7 +128298,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125898,7 +128324,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125915,7 +128350,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125932,7 +128369,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125949,7 +128388,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -125973,7 +128414,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -125997,7 +128447,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -126014,7 +128473,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126031,7 +128492,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126055,7 +128518,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -126072,7 +128544,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126089,7 +128563,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126106,7 +128582,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126130,7 +128608,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126154,7 +128644,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126169,14 +128671,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget_snapshot",
-    "remaining",
-    "total_budget",
-    "total_cost",
-    "total_labor_cost",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126191,7 +128691,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126215,7 +128719,19 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true
+   "leaks_7777": true,
+   "actual_keys": [
+    "labor_cost",
+    "remaining",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers",
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126230,7 +128746,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126245,7 +128765,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126260,7 +128784,11 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": [
+    "workers_count"
+   ]
   },
   {
    "mode": "enforce",
@@ -126275,7 +128803,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126290,7 +128820,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126305,7 +128837,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126320,7 +128854,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126335,7 +128871,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126350,7 +128888,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126365,7 +128905,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126380,7 +128922,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -126988,7 +129532,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127015,7 +129565,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127029,17 +129585,16 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "actual_cost",
     "labor_budget",
     "material_budget",
-    "total_actual_cost",
     "total_budget",
-    "total_burn_pct",
     "total_labor_budget",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127054,7 +129609,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127081,7 +129638,13 @@
    "hidden_budget_keys": [
     "subcontractor_price"
    ],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "actual_cost",
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127108,7 +129671,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127123,7 +129688,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127143,7 +129710,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127163,7 +129735,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127207,7 +129784,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127267,7 +129849,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127291,7 +129880,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127307,15 +129903,13 @@
    "money_keys": [
     "has_budget",
     "labor_budget",
-    "labor_remaining",
-    "labor_spent",
     "materials_budget",
-    "materials_remaining",
-    "materials_spent",
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127330,7 +129924,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127354,7 +129950,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127381,7 +129984,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127396,7 +130001,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127419,7 +130026,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127442,7 +130056,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127489,7 +130110,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127543,7 +130171,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127561,7 +130191,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127579,7 +130211,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127594,7 +130228,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127612,7 +130248,9 @@
     "material_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127639,7 +130277,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127654,7 +130294,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127669,7 +130311,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127684,7 +130328,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127723,7 +130369,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127784,7 +130432,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127805,7 +130459,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127820,13 +130480,12 @@
    "foreign_ids": false,
    "money_keys": [
     "budget",
-    "spent",
-    "total_budget",
-    "total_remaining",
-    "total_spent"
+    "total_budget"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127841,7 +130500,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127862,7 +130523,13 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "spent",
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127889,7 +130556,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127904,7 +130573,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127923,7 +130594,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127942,7 +130618,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -127985,7 +130666,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -129100,6 +131786,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129118,6 +131805,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129136,6 +131824,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129151,6 +131840,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129166,6 +131856,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129229,6 +131920,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129247,6 +131939,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -129295,6 +131988,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "foreign_ids": false,
@@ -130847,6 +133541,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -130862,6 +133561,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -130913,6 +133617,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -130928,6 +133637,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "variance_cost"
+   ],
+   "worker_detail": [],
    "groups": 0,
    "group_price_keys": [],
    "leaks_7777": false
@@ -130978,7 +133692,9 @@
    "target": "XA",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -130990,7 +133706,9 @@
    "target": "XA",
    "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131724,7 +134442,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -131748,7 +134475,16 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "remaining",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "worker_detail": [
+    "workers"
+   ]
   },
   {
    "mode": "enforce",
@@ -131765,7 +134501,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131782,7 +134520,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131799,7 +134539,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131814,7 +134556,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131829,7 +134573,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131844,7 +134590,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131859,7 +134607,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -131874,7 +134624,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132034,7 +134786,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132054,7 +134811,12 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_actual_cost",
+    "total_burn_pct"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132113,7 +134875,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132136,7 +134905,14 @@
     "totals"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "labor_remaining",
+    "labor_spent",
+    "materials_remaining",
+    "materials_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132187,7 +134963,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132202,7 +134980,9 @@
    "foreign_ids": false,
    "money_keys": [],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132259,7 +135039,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",
@@ -132278,7 +135063,12 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": false
+   "leaks_7777": false,
+   "actual_keys": [
+    "total_remaining",
+    "total_spent"
+   ],
+   "worker_detail": []
   },
   {
    "mode": "enforce",

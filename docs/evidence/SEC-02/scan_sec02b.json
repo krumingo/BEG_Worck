@@ -16,24 +16,18 @@
  "allowed_budget_view": {
   "/api/projects/{project_id}/activities-overview": {
    "off/requester": [
-    ".activities[].actual_cost",
     ".activities[].labor_budget",
     ".activities[].total_budget",
-    ".totals.total_actual_cost",
     ".totals.total_labor_budget"
    ],
    "shadow/requester": [
-    ".activities[].actual_cost",
     ".activities[].labor_budget",
     ".activities[].total_budget",
-    ".totals.total_actual_cost",
     ".totals.total_labor_budget"
    ],
    "enforce/requester": [
-    ".activities[].actual_cost",
     ".activities[].labor_budget",
     ".activities[].total_budget",
-    ".totals.total_actual_cost",
     ".totals.total_labor_budget"
    ]
   },
@@ -78,74 +72,44 @@
   },
   "/api/projects/{project_id}/centralized-reports/activities": {
    "off/requester": [
-    ".activities[].clean_labor_cost",
     ".activities[].labor_budget",
-    ".activities[].labor_cost_with_overhead",
     ".activities[].total_budget"
    ],
    "shadow/requester": [
-    ".activities[].clean_labor_cost",
     ".activities[].labor_budget",
-    ".activities[].labor_cost_with_overhead",
     ".activities[].total_budget"
    ],
    "enforce/requester": [
-    ".activities[].clean_labor_cost",
     ".activities[].labor_budget",
-    ".activities[].labor_cost_with_overhead",
     ".activities[].total_budget"
    ]
   },
   "/api/projects/{project_id}/expected-actual": {
    "off/requester": [
-    ".activities[].actual_cost",
     ".activities[].planned_cost",
-    ".activities[].variance_cost",
-    ".summary.total_actual_cost",
-    ".summary.total_planned_cost",
-    ".summary.variance_cost"
+    ".summary.total_planned_cost"
    ],
    "shadow/requester": [
-    ".activities[].actual_cost",
     ".activities[].planned_cost",
-    ".activities[].variance_cost",
-    ".summary.total_actual_cost",
-    ".summary.total_planned_cost",
-    ".summary.variance_cost"
+    ".summary.total_planned_cost"
    ],
    "enforce/requester": [
-    ".activities[].actual_cost",
     ".activities[].planned_cost",
-    ".activities[].variance_cost",
-    ".summary.total_actual_cost",
-    ".summary.total_planned_cost",
-    ".summary.variance_cost"
+    ".summary.total_planned_cost"
    ]
   },
   "/api/projects/{project_id}/expected-actual/compact": {
    "off/requester": [
-    ".summary.total_actual_cost",
     ".summary.total_planned_cost",
-    ".summary.variance_cost",
-    ".top_overruns.activities[].actual_cost",
-    ".top_overruns.activities[].planned_cost",
-    ".top_overruns.activities[].variance_cost"
+    ".top_overruns.activities[].planned_cost"
    ],
    "shadow/requester": [
-    ".summary.total_actual_cost",
     ".summary.total_planned_cost",
-    ".summary.variance_cost",
-    ".top_overruns.activities[].actual_cost",
-    ".top_overruns.activities[].planned_cost",
-    ".top_overruns.activities[].variance_cost"
+    ".top_overruns.activities[].planned_cost"
    ],
    "enforce/requester": [
-    ".summary.total_actual_cost",
     ".summary.total_planned_cost",
-    ".summary.variance_cost",
-    ".top_overruns.activities[].actual_cost",
-    ".top_overruns.activities[].planned_cost",
-    ".top_overruns.activities[].variance_cost"
+    ".top_overruns.activities[].planned_cost"
    ]
   },
   "/api/pulse/today": {
@@ -172,19 +136,13 @@
   },
   "/api/sites/{site_id}/pulse/range": {
    "off/requester": [
-    ".items[].budget_snapshot.total_budget",
-    ".items[].smr_summary[].total_cost",
-    ".items[].total_labor_cost"
+    ".items[].budget_snapshot.total_budget"
    ],
    "shadow/requester": [
-    ".items[].budget_snapshot.total_budget",
-    ".items[].smr_summary[].total_cost",
-    ".items[].total_labor_cost"
+    ".items[].budget_snapshot.total_budget"
    ],
    "enforce/requester": [
-    ".items[].budget_snapshot.total_budget",
-    ".items[].smr_summary[].total_cost",
-    ".items[].total_labor_cost"
+    ".items[].budget_snapshot.total_budget"
    ]
   }
  },
