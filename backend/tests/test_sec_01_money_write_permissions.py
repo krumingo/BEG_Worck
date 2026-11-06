@@ -152,7 +152,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             url = path.replace("{project_id}", fx[project_of]["project_id"])
             before = tc.portal.call(lambda: pm._last_ts(oplog))
             resp = tc.request(method, url, json=_body(path, fx[tkey]),
-                              headers={"Authorization": "Bearer " + tokens[(tkey, role)]})
+                              headers={"Authorization": "Bearer " + tokens[(tkey, role)],
+                                       # R29 / SEC-01-C03-A: every money POST carries a key
+                                       "Idempotency-Key": uuid.uuid4().hex})
             written = tc.portal.call(lambda: pm._writes_since(oplog, before, dbs))
             org = None
             if resp.status_code < 300:
@@ -168,7 +170,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     "legacy_role": fx[tkey]["users"][role]["role"],
                     "method": method, "path": path, "target_project_tenant": project_of,
                     "status": resp.status_code,
-                    "written": sorted(short(n) for n in written),
+                    "written": sorted(short(n) for n in written
+                                      if not n.endswith(".audit_idempotency")),  # SEC-01-C03: the key registry is bookkeeping
                     "record_org_is_caller_tenant": (None if org is None
                                                     else org == fx[tkey]["tenant_id"])}
 
@@ -377,6 +380,8 @@ def test_the_fixture_has_no_project_membership():
 AMOUNT_REQUIRED = {"/api/finance/cash-transactions", "/api/finance/bonus-payments",
                    "/api/finance/overhead-transactions", "/api/overhead-snapshots",
                    "/api/labor-entries"}
+# SEC-01-C03-A (R29): its amount is present in PM-01's body, so the missing key decides.
+KEY_REQUIRED = {"/api/projects/{project_id}/material-waste"}
 
 
 def test_the_pm01_matrix_shows_the_money_write_cells_closed():
@@ -394,6 +399,9 @@ def test_the_pm01_matrix_shows_the_money_write_cells_closed():
             # nothing written (before C03: a 0-amount row). That the finance roles do
             # write with a valid amount is the real-Mongo test below.
             assert r["status"] == "422" and r["wrote"] == "no", r
+        elif r["legacy_role"] in ALLOWED_LEGACY and r["path"] in KEY_REQUIRED:
+            # SEC-01-C03-A (R29): PM-01 sends no Idempotency-Key -> 428, nothing written.
+            assert r["status"] == "428" and r["wrote"] == "no", r
         elif r["legacy_role"] in ALLOWED_LEGACY:
             assert r["status"] == str(SUCCESS[r["path"]]) and r["wrote"] == "yes", r
             assert BUSINESS[r["path"]] in r["written"].split(";"), r

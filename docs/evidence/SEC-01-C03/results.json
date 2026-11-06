@@ -89,7 +89,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 21.3,
+ "seconds": 16.4,
  "amount_rows": [
   {
    "mode": "off",
@@ -2166,11 +2166,12 @@
   {
    "mode": "off",
    "probe": "cash",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2193,11 +2194,12 @@
   {
    "mode": "off",
    "probe": "bonus",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2220,11 +2222,12 @@
   {
    "mode": "off",
    "probe": "ohtx",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2247,11 +2250,12 @@
   {
    "mode": "off",
    "probe": "ohsnap",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2274,11 +2278,12 @@
   {
    "mode": "off",
    "probe": "subpay",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2303,11 +2308,12 @@
   {
    "mode": "off",
    "probe": "subpay_vat",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2332,11 +2338,12 @@
   {
    "mode": "off",
    "probe": "labor",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2359,11 +2366,12 @@
   {
    "mode": "off",
    "probe": "waste",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2386,11 +2394,12 @@
   {
    "mode": "shadow",
    "probe": "cash",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2413,11 +2422,12 @@
   {
    "mode": "shadow",
    "probe": "bonus",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2440,11 +2450,12 @@
   {
    "mode": "shadow",
    "probe": "ohtx",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2467,11 +2478,12 @@
   {
    "mode": "shadow",
    "probe": "ohsnap",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2494,11 +2506,12 @@
   {
    "mode": "shadow",
    "probe": "subpay",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2523,11 +2536,12 @@
   {
    "mode": "shadow",
    "probe": "subpay_vat",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2552,11 +2566,12 @@
   {
    "mode": "shadow",
    "probe": "labor",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2579,11 +2594,12 @@
   {
    "mode": "shadow",
    "probe": "waste",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2606,11 +2622,12 @@
   {
    "mode": "enforce",
    "probe": "cash",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2633,11 +2650,12 @@
   {
    "mode": "enforce",
    "probe": "bonus",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2660,11 +2678,12 @@
   {
    "mode": "enforce",
    "probe": "ohtx",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2687,11 +2706,12 @@
   {
    "mode": "enforce",
    "probe": "ohsnap",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2714,11 +2734,12 @@
   {
    "mode": "enforce",
    "probe": "subpay",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2743,11 +2764,12 @@
   {
    "mode": "enforce",
    "probe": "subpay_vat",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2772,11 +2794,12 @@
   {
    "mode": "enforce",
    "probe": "labor",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2799,11 +2822,12 @@
   {
    "mode": "enforce",
    "probe": "waste",
-   "valid_no_key": [
-    201,
-    201
-   ],
-   "rows_added_no_key": 2,
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
    "same_key_first": {
     "status": 201,
     "business_written": [
@@ -2835,6 +2859,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "error_code": null
@@ -2849,6 +2874,7 @@
     "op.material_waste_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.material_waste_entries"
    ],
    "error_code": null
@@ -2883,6 +2909,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "error_code": null
@@ -2897,6 +2924,7 @@
     "op.material_waste_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.material_waste_entries"
    ],
    "error_code": null
@@ -2931,6 +2959,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "error_code": null
@@ -2945,6 +2974,7 @@
     "op.material_waste_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.material_waste_entries"
    ],
    "error_code": null
@@ -2979,6 +3009,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "error_code": null
@@ -2993,6 +3024,7 @@
     "op.material_waste_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.material_waste_entries"
    ],
    "error_code": null
@@ -3027,6 +3059,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3041,6 +3074,7 @@
     "op.material_waste_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.material_waste_entries"
    ],
    "error_code": null
@@ -3079,6 +3113,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3093,6 +3128,7 @@
     "op.material_waste_entries"
    ],
    "written": [
+    "op.audit_idempotency",
     "op.material_waste_entries"
    ],
    "error_code": null
