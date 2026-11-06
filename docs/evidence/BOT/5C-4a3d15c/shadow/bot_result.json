@@ -1,0 +1,3732 @@
+{
+  "task": "5C-4a3d15c",
+  "sha": "4a3d15c",
+  "started": "2026-11-06T22:37:59.502Z",
+  "steps": [
+    {
+      "step": "0 precondition: tenant already has W0-04 AuditEvents, a legacy batch row and the legacy unique batch_number index; canonical indexes came from app startup",
+      "pass": true,
+      "detail": {
+        "audit_events": 7,
+        "legacy_batches": 1,
+        "legacy_unique_index": true,
+        "canonical_indexes": 6
+      }
+    },
+    {
+      "step": "1.1 [1280 UI] receive 10 to central warehouse on a tenant with existing AuditEvents -> 200 (F-1)",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "01_1_1_1280_UI_receive_10_to_central_wareho.png"
+    },
+    {
+      "step": "1.1b [1280 UI] second receive (other item) with the legacy batch index present -> 200 (F-2)",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "message": ""
+      },
+      "screenshot": "02_1_1b_1280_UI_second_receive_other_item_w.png"
+    },
+    {
+      "step": "1.2 [1280 UI] stock panel shows 10 at central_warehouse:CEN",
+      "pass": true,
+      "detail": {
+        "rows": "central_warehouse:CEN (свободна)\n10"
+      },
+      "screenshot": "03_1_2_1280_UI_stock_panel_shows_10_at_cent.png"
+    },
+    {
+      "step": "1.3p direct dispatch to a project (destination project/free) is refused and credits nothing",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "error_code": "INVARIANT_VIOLATION",
+        "balances": [
+          "central_warehouse:free=5"
+        ]
+      }
+    },
+    {
+      "step": "1.3q [1280 UI] dispatch form has a FIXED destination read in Bulgarian „в път · очаква приемане“ (no destination picker)",
+      "pass": true,
+      "detail": {
+        "text": "в път · очаква приемане"
+      },
+      "screenshot": "04_1_3q_1280_UI_dispatch_form_has_a_FIXED_d.png"
+    },
+    {
+      "step": "1.3 [1280 UI] dispatch 10 to project -> 200 (in transit)",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "05_1_3_1280_UI_dispatch_10_to_project_200_i.png"
+    },
+    {
+      "step": "1.3r project holds nothing before acceptance (stock in transit)",
+      "pass": true,
+      "detail": {
+        "balances": [
+          "in_transit:in_transit=10"
+        ]
+      }
+    },
+    {
+      "step": "1.4 [1280 UI] accept 3 + 4 + 3 all -> 200",
+      "pass": true,
+      "detail": {
+        "accs": [
+          {
+            "q": 3,
+            "status": 200,
+            "open": 1
+          },
+          {
+            "q": 4,
+            "status": 200,
+            "open": 2
+          },
+          {
+            "q": 3,
+            "status": 200,
+            "open": 0
+          }
+        ]
+      },
+      "screenshot": "06_1_4_1280_UI_accept_3_4_3_all_200.png"
+    },
+    {
+      "step": "1.5 unresolved discrepancies after 3+4+3 == 0 (all accepts succeeded; ledger + in-transit projection)",
+      "pass": true,
+      "detail": {
+        "open_after_each": [
+          1,
+          2,
+          0
+        ],
+        "in_transit": [
+          {
+            "unresolved": 0
+          }
+        ]
+      },
+      "screenshot": "07_1_5_unresolved_discrepancies_after_3_4_3.png"
+    },
+    {
+      "step": "1.6 [1280 UI] stock: project holds 10",
+      "pass": true,
+      "detail": {
+        "rows": [
+          "project:8e3b0bde-d029-455b-a49e-02ddff00b886 (свободна)\n10"
+        ]
+      },
+      "screenshot": "08_1_6_1280_UI_stock_project_holds_10.png"
+    },
+    {
+      "step": "1.7 [1280 UI] integrity-warnings API 200 and panel shows the empty state (F-3)",
+      "pass": true,
+      "detail": {
+        "api_status": 200
+      },
+      "screenshot": "09_1_7_1280_UI_integrity_warnings_API_200_a.png"
+    },
+    {
+      "step": "1.7b [1280 UI] backend integrity-warnings call fails (forced 500) -> panel shows an ERROR state, not \"no alarms\"",
+      "pass": true,
+      "detail": {
+        "error_visible": true,
+        "empty_visible": false,
+        "text": "Алармите не са проверени — състоянието е НЕИЗВЕСТНО. HTTP_500: Request failed with status code 500"
+      },
+      "screenshot": "10_1_7b_1280_UI_backend_integrity_warnings_.png"
+    },
+    {
+      "step": "1.7c [1280 UI] network failure on integrity-warnings -> error state",
+      "pass": true,
+      "detail": {},
+      "screenshot": "11_1_7c_1280_UI_network_failure_on_integrit.png"
+    },
+    {
+      "step": "1.8 [1280] no horizontal scroll",
+      "pass": true,
+      "screenshot": "12_1_8_1280_no_horizontal_scroll.png"
+    },
+    {
+      "step": "2.1 [390 UI] receive 10 -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "13_2_1_390_UI_receive_10_200.png"
+    },
+    {
+      "step": "2.2 [390 UI] dispatch 10 -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "14_2_2_390_UI_dispatch_10_200.png"
+    },
+    {
+      "step": "2.3 [390 UI] accept 8 -> 200 and exactly 1 open discrepancy",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "open": 1
+      },
+      "screenshot": "15_2_3_390_UI_accept_8_200_and_exactly_1_op.png"
+    },
+    {
+      "step": "2.4 [390 UI] accept 2 -> 200 and zero unresolved discrepancies",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "open": 0
+      },
+      "screenshot": "16_2_4_390_UI_accept_2_200_and_zero_unresol.png"
+    },
+    {
+      "step": "2.5 [390 UI] consume form has an SMR field (required before submit)",
+      "pass": true,
+      "detail": {
+        "smr_field_visible": true,
+        "submit_disabled_without_smr": true
+      },
+      "screenshot": "17_2_5_390_UI_consume_form_has_an_SMR_field.png"
+    },
+    {
+      "step": "2.6 [390 UI] consume 3 bound to the SMR through the form -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "18_2_6_390_UI_consume_3_bound_to_the_SMR_th.png"
+    },
+    {
+      "step": "2.7 (R17) the UI consume writes exactly ONE SMR allocation row: value 15 in movement_value, cost_recognized false, total_value 0 (cost is recognised at accept, not here)",
+      "pass": true,
+      "detail": {
+        "rows_for_movement": [
+          {
+            "cost_recognized": false,
+            "movement_id": "mv_cf3ceb536b6b44ab8c2363ea73e9068d",
+            "movement_kind": "consume",
+            "movement_value": "15.0000",
+            "quantity": "3",
+            "smr_id": "eeef9b3a-d041-412b-8c5f-124d6831ceee",
+            "total_value": "0"
+          }
+        ],
+        "consume_rows_for_smr": 1
+      }
+    },
+    {
+      "step": "2.8 identical consume resend returns the ORIGINAL result (200, replay:true, same movement_id) and adds no row (F-5)",
+      "pass": true,
+      "detail": {
+        "first": 200,
+        "resend": 200,
+        "replay": true,
+        "same_id": true,
+        "rows_for_movement": 1
+      }
+    },
+    {
+      "step": "2.9 [390] no horizontal scroll (form with SMR field)",
+      "pass": true,
+      "screenshot": "19_2_9_390_no_horizontal_scroll_form_with_S.png"
+    },
+    {
+      "step": "2.10 [390] project page, Finance tab: material ledger visible with the canonical trail (dispatched 20, consumed 4, remaining 16)",
+      "pass": true,
+      "detail": {
+        "text": "Материална справка Отпусни от склад Отчети разход Върни в склад it-cement: оставащо 16.0 от 20.0 Материал Ед. Поискано Купено Отпуснато Вложено Върнато Остатък it-cement bag — — 20 4 — 16!"
+      },
+      "screenshot": "20_2_10_390_project_page_Finance_tab_materi.png"
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) material summary (/project-material-summary): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) package material (/material-cost/by-execution-package): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) package financial: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) package breakdown (/financial-breakdown): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) package net-financial: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) net profit (financial page data): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) project profit: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) P&L (/pnl): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) P&L summary (card): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.0 (R17) after DISPATCH 5, before accept: project cost 0 (stock in transit) profit by period: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 [1280 UI] receive 10 @10, dispatch 5, accept 5 -> 200",
+      "pass": true,
+      "detail": {
+        "statuses": [
+          200,
+          200,
+          200
+        ],
+        "codes": [
+          null,
+          null,
+          null
+        ]
+      },
+      "screenshot": "21_A_1_1280_UI_receive_10_10_dispatch_5_acc.png"
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) material summary (/project-material-summary): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) package material (/material-cost/by-execution-package): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) package financial: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) package breakdown (/financial-breakdown): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) package net-financial: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) net profit (financial page data): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) project profit: material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) P&L (/pnl): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) P&L summary (card): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 (R17) after ACCEPT 5 @10: project cost 50 appears; packages 0 (nothing allocated yet) profit by period: material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.1 [1280] screen \"financial page\": Материали 50, Фира 0, Общ разход 50",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        }
+      },
+      "screenshot": "22_A_1_1280_screen_financial_page_50_0_50.png"
+    },
+    {
+      "step": "A.1 [1280] screen \"project page, Finance tab (P&L dashboard)\": Материали 50, Фира 0, Общ разход 50",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        }
+      },
+      "screenshot": "23_A_1_1280_screen_project_page_Finance_tab.png"
+    },
+    {
+      "step": "A.2 [1280 UI] consume 3 with SMR -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "24_A_2_1280_UI_consume_3_with_SMR_200.png"
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated material summary (/project-material-summary): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated package material (/material-cost/by-execution-package): material 30 / фира 0 / total 30",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "expected": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated package financial: material 30 / фира 0 / total 30",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "expected": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated package breakdown (/financial-breakdown): material 30 / фира 0 / total 30",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "expected": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated package net-financial: material 30 / фира 0 / total 30",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "expected": {
+          "m": 30,
+          "w": 0,
+          "t": 30
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated net profit (financial page data): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated project profit: material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated P&L (/pnl): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated P&L summary (card): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.2 (R17) after CONSUME 3: project cost STILL 50 (consume adds no cost); packages show the 30 allocated profit by period: material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 material summary (/project-material-summary): material 150 / фира 0 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "expected": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 package material (/material-cost/by-execution-package): material 130 / фира 0 / total 130",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "expected": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 package financial: material 130 / фира 0 / total 130",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "expected": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 package breakdown (/financial-breakdown): material 130 / фира 0 / total 130",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "expected": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 package net-financial: material 130 / фира 0 / total 130",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "expected": {
+          "m": 130,
+          "w": 0,
+          "t": 130
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 net profit (financial page data): material 150 / фира 0 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "expected": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 project profit: material 150 / фира 0 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "expected": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 P&L (/pnl): material 150 / фира 0 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "expected": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 P&L summary (card): material 150 / фира 0 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "expected": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.3 + legacy issue 100 dated before cutover: project 150 (50 + 100); package 130 profit by period: material 150 / фира 0 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "expected": {
+          "m": 150,
+          "w": 0,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4a write-off 2 @10 from the project through the form: the form cannot attach the evidence (file_ids) the write-off requires",
+      "pass": false,
+      "status": "NO_SCREEN",
+      "note": "UI attempt answered 503 FILE_REGISTRY_UNAVAILABLE",
+      "api": {
+        "ui_status": 503,
+        "ui_code": "FILE_REGISTRY_UNAVAILABLE"
+      }
+    },
+    {
+      "step": "A.4 [API /project-writeoff] write-off 2 @10 from the project with evidence -> 2xx",
+      "pass": true,
+      "detail": {
+        "status": 201
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 material summary (/project-material-summary): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 package material (/material-cost/by-execution-package): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 package financial: material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 package breakdown (/financial-breakdown): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 package net-financial: material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 net profit (financial page data): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 project profit: material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 P&L (/pnl): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 P&L summary (card): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 + write-off 2@10: project total stays 150 (фира is inside the accepted cost), material 130, фира 20 profit by period: material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "A.4 [1280] screen \"financial page\": Материали 130, Фира 20, Общ разход 150",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      },
+      "screenshot": "25_A_4_1280_screen_financial_page_130_20_15.png"
+    },
+    {
+      "step": "A.4 [1280] screen \"project page, Finance tab (P&L dashboard)\": Материали 130, Фира 20, Общ разход 150",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      },
+      "screenshot": "26_A_4_1280_screen_project_page_Finance_tab.png"
+    },
+    {
+      "step": "A.5 [1280] Finance tab \"Материални отклонения\" shows the write-off: \"Отписвания от склада: 1 · 2\" and one badge row",
+      "pass": true,
+      "detail": {
+        "counter": "Отписвания от склада: 1 · 2",
+        "rows": [
+          "отписване от склада it-cost 2 bag 2026-11-06"
+        ]
+      },
+      "screenshot": "27_A_5_1280_Finance_tab_shows_the_write_off.png"
+    },
+    {
+      "step": "A.6 material entries: accept row = project cost 50; consume row = allocation (total_value 0, movement_value 30); write-off row = фира allocation 20",
+      "pass": true,
+      "detail": {
+        "rows": [
+          {
+            "kind": "accept",
+            "total_value": "50.0000",
+            "movement_value": "50.0000",
+            "cost_recognized": true
+          },
+          {
+            "kind": "consume",
+            "total_value": "0",
+            "movement_value": "30.0000",
+            "cost_recognized": false
+          },
+          {
+            "kind": "write_off",
+            "total_value": "0",
+            "movement_value": "20.0000",
+            "cost_recognized": false
+          }
+        ]
+      }
+    },
+    {
+      "step": "A.4 [390] screen \"financial page\": Материали 130, Фира 20, Общ разход 150",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      },
+      "screenshot": "28_A_4_390_screen_financial_page_130_20_150.png"
+    },
+    {
+      "step": "A.4 [390] screen \"project page, Finance tab (P&L dashboard)\": Материали 130, Фира 20, Общ разход 150",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      },
+      "screenshot": "29_A_4_390_screen_project_page_Finance_tab_.png"
+    },
+    {
+      "step": "B.1 [1280 UI] receive 10 @10, dispatch 10, accept 10 on project B -> 200",
+      "pass": true,
+      "detail": {
+        "statuses": [
+          200,
+          200,
+          200
+        ]
+      },
+      "screenshot": "30_B_1_1280_UI_receive_10_10_dispatch_10_ac.png"
+    },
+    {
+      "step": "B.1 project B cost 100 after accepting 10 @10 material summary (/project-material-summary): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.1 project B cost 100 after accepting 10 @10 net profit (financial page data): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.1 project B cost 100 after accepting 10 @10 project profit: material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.1 project B cost 100 after accepting 10 @10 P&L (/pnl): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.1 project B cost 100 after accepting 10 @10 P&L summary (card): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.1 project B cost 100 after accepting 10 @10 profit by period: material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.2 (R18) direct return (destination = the warehouse) is refused and moves nothing",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "INVARIANT_VIOLATION",
+        "message": "direct transfer_project_to_warehouse is refused: the stock goes to in_transit and the target is credited only by accept_project_delivery (Ru"
+      }
+    },
+    {
+      "step": "B.3 (R18) [1280 UI] return 3 to the warehouse -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "target_state": "quarantine",
+        "destination": "in_transit"
+      },
+      "screenshot": "31_B_3_R18_1280_UI_return_3_to_the_warehous.png"
+    },
+    {
+      "step": "B.4 (R18) [1280 UI] while the return is not accepted the stock panel shows it „в път“ (row 3, no raw in_transit); warehouse holds neither free nor quarantine",
+      "pass": true,
+      "detail": {
+        "rows": [
+          "в път:mv_aa31f50520fd4ff9887439dfcdb01663 (в път) 3",
+          "project:4b525c24-cd47-4199-98d2-677a92151576 (свободна) 7"
+        ]
+      },
+      "screenshot": "32_B_4_R18_1280_UI_while_the_return_is_not_.png"
+    },
+    {
+      "step": "B.5 (R17) return in transit: project B still carries the lot (cost 100 until accepted) material summary (/project-material-summary): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.5 (R17) return in transit: project B still carries the lot (cost 100 until accepted) net profit (financial page data): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.5 (R17) return in transit: project B still carries the lot (cost 100 until accepted) project profit: material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.5 (R17) return in transit: project B still carries the lot (cost 100 until accepted) P&L (/pnl): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.5 (R17) return in transit: project B still carries the lot (cost 100 until accepted) P&L summary (card): material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.5 (R17) return in transit: project B still carries the lot (cost 100 until accepted) profit by period: material 100 / фира 0 / total 100",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "expected": {
+          "m": 100,
+          "w": 0,
+          "t": 100
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.6 (R18) [1280 UI] accepting the return into FREE stock is refused",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "QUARANTINE_STATE_VIOLATION"
+      },
+      "screenshot": "33_B_6_R18_1280_UI_accepting_the_return_int.png"
+    },
+    {
+      "step": "B.7 (R18) [1280 UI] accepting the return into QUARANTINE -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "dest_state": "quarantine"
+      },
+      "screenshot": "34_B_7_R18_1280_UI_accepting_the_return_int.png"
+    },
+    {
+      "step": "B.8 (R17) after the return is accepted: project B cost 70 (7 x 10) on every report material summary (/project-material-summary): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.8 (R17) after the return is accepted: project B cost 70 (7 x 10) on every report net profit (financial page data): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.8 (R17) after the return is accepted: project B cost 70 (7 x 10) on every report project profit: material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.8 (R17) after the return is accepted: project B cost 70 (7 x 10) on every report P&L (/pnl): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.8 (R17) after the return is accepted: project B cost 70 (7 x 10) on every report P&L summary (card): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.8 (R17) after the return is accepted: project B cost 70 (7 x 10) on every report profit by period: material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.9 (R18) [1280 UI] stock panel in Bulgarian: warehouse „карантина“ 3, project „свободна“ 7, nothing „в път“",
+      "pass": true,
+      "detail": {
+        "rows": [
+          "central_warehouse:CEN-R (карантина) 3",
+          "project:4b525c24-cd47-4199-98d2-677a92151576 (свободна) 7"
+        ]
+      },
+      "screenshot": "35_B_9_R18_1280_UI_stock_panel_in_Bulgarian.png"
+    },
+    {
+      "step": "B.10 (R18) quarantined stock cannot be reused: dispatch of 1 from free stock is refused",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "NEGATIVE_STOCK"
+      }
+    },
+    {
+      "step": "B.11 quarantine release: the form sends the source with state free only, so a quarantine source cannot be entered",
+      "pass": false,
+      "status": "NO_SCREEN",
+      "note": "released by API",
+      "api": {
+        "api_status": 200
+      }
+    },
+    {
+      "step": "B.11b [API] quarantine release after the quality check -> 200; value conserved (3 x 10 = 30 free)",
+      "pass": true,
+      "detail": {
+        "rel": 200,
+        "stock": {
+          "tenant_id": "92ccc63d-097c-4b8a-a6b1-670863d28cdc",
+          "item_id": "it-ret",
+          "location": {
+            "location_type": "central_warehouse",
+            "location_id": "CEN-R",
+            "state": "free"
+          },
+          "quantity": "3",
+          "total_value": "30.0000",
+          "layer_count": 1,
+          "layers": [
+            {
+              "source_movement_id": "mv_1ae2d48ee5b8410983f157251dd8629f",
+              "layer_sequence": 1,
+              "quantity": "3",
+              "unit_value": "10",
+              "currency": "BGN"
+            }
+          ],
+          "generated_at": "2026-11-06T22:39:22.676727+00:00",
+          "ledger_checkpoint": {
+            "ledger_sequence": 30,
+            "movement_id": "mv_1ae2d48ee5b8410983f157251dd8629f",
+            "recorded_at": "2026-11-06T22:39:22.657780+00:00",
+            "generated_at": "2026-11-06T22:39:22.676709+00:00"
+          },
+          "truncated": false
+        }
+      }
+    },
+    {
+      "step": "B.12 after release the stock is reusable: dispatch of 1 -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "step": "B.13 (R18) direct project -> project move (destination = the other project) is refused",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "INVARIANT_VIOLATION"
+      }
+    },
+    {
+      "step": "B.14 (R18) [1280 UI] transfer 2 project B -> project C -> 200, in transit",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "36_B_14_R18_1280_UI_transfer_2_project_B_pr.png"
+    },
+    {
+      "step": "B.15 (R17) project->project in transit: B still 70, C still 0 material summary (/project-material-summary): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 (R17) project->project in transit: B still 70, C still 0 net profit (financial page data): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 (R17) project->project in transit: B still 70, C still 0 project profit: material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 (R17) project->project in transit: B still 70, C still 0 P&L (/pnl): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 (R17) project->project in transit: B still 70, C still 0 P&L summary (card): material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 (R17) project->project in transit: B still 70, C still 0 profit by period: material 70 / фира 0 / total 70",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "expected": {
+          "m": 70,
+          "w": 0,
+          "t": 70
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 project C still 0 material summary (/project-material-summary): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 project C still 0 net profit (financial page data): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 project C still 0 project profit: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 project C still 0 P&L (/pnl): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 project C still 0 P&L summary (card): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.15 project C still 0 profit by period: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.16 [1280 UI] project C accepts the 2 -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "37_B_16_1280_UI_project_C_accepts_the_2_200.png"
+    },
+    {
+      "step": "B.17 (R17) after acceptance at C: project B 50 (lot left), project C 20 (lot arrived) material summary (/project-material-summary): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 (R17) after acceptance at C: project B 50 (lot left), project C 20 (lot arrived) net profit (financial page data): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 (R17) after acceptance at C: project B 50 (lot left), project C 20 (lot arrived) project profit: material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 (R17) after acceptance at C: project B 50 (lot left), project C 20 (lot arrived) P&L (/pnl): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 (R17) after acceptance at C: project B 50 (lot left), project C 20 (lot arrived) P&L summary (card): material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 (R17) after acceptance at C: project B 50 (lot left), project C 20 (lot arrived) profit by period: material 50 / фира 0 / total 50",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "expected": {
+          "m": 50,
+          "w": 0,
+          "t": 50
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 project C 20 material summary (/project-material-summary): material 20 / фира 0 / total 20",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "expected": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 project C 20 net profit (financial page data): material 20 / фира 0 / total 20",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "expected": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 project C 20 project profit: material 20 / фира 0 / total 20",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "expected": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 project C 20 P&L (/pnl): material 20 / фира 0 / total 20",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "expected": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 project C 20 P&L summary (card): material 20 / фира 0 / total 20",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "expected": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "B.17 project C 20 profit by period: material 20 / фира 0 / total 20",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "expected": {
+          "m": 20,
+          "w": 0,
+          "t": 20
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.1 [1280 UI] receive 7000@1, 11000@2.5, 5000@3.33 and dispatch 15000 -> all 200",
+      "pass": true,
+      "detail": {
+        "statuses": [
+          200,
+          200,
+          200,
+          200
+        ]
+      },
+      "screenshot": "38_C_1_1280_UI_receive_7000_1_11000_2_5_500.png"
+    },
+    {
+      "step": "C.2 (R21) [1280 UI] accept 9000 takes the dispatched layers oldest first: 7000@1 + 2000@2.5 (not pro-rata)",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "layers": [
+          "7000@1",
+          "2000@2.5"
+        ]
+      },
+      "screenshot": "39_C_2_R21_1280_UI_accept_9000_takes_the_di.png"
+    },
+    {
+      "step": "C.3 (R21) project cost after accepting 9000 = 7000x1 + 2000x2.5 = 12000 material summary (/project-material-summary): material 12000 / фира 0 / total 12000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "expected": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.3 (R21) project cost after accepting 9000 = 7000x1 + 2000x2.5 = 12000 net profit (financial page data): material 12000 / фира 0 / total 12000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "expected": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.3 (R21) project cost after accepting 9000 = 7000x1 + 2000x2.5 = 12000 project profit: material 12000 / фира 0 / total 12000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "expected": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.3 (R21) project cost after accepting 9000 = 7000x1 + 2000x2.5 = 12000 P&L (/pnl): material 12000 / фира 0 / total 12000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "expected": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.3 (R21) project cost after accepting 9000 = 7000x1 + 2000x2.5 = 12000 P&L summary (card): material 12000 / фира 0 / total 12000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "expected": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.3 (R21) project cost after accepting 9000 = 7000x1 + 2000x2.5 = 12000 profit by period: material 12000 / фира 0 / total 12000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "expected": {
+          "m": 12000,
+          "w": 0,
+          "t": 12000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.4 (R21) the unresolved remainder keeps the leftover layer 6000@2.5 (value 15000)",
+      "pass": true,
+      "detail": {
+        "discrepancy": [
+          {
+            "qty": "6000",
+            "layers": [
+              "6000@2.5"
+            ],
+            "value": 15000
+          }
+        ]
+      }
+    },
+    {
+      "step": "C.5 (R21) [1280 UI] accept 6000 takes 6000@2.5; 0 unresolved afterwards",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "layers": [
+          "6000@2.5"
+        ],
+        "open": 0
+      },
+      "screenshot": "40_C_5_R21_1280_UI_accept_6000_takes_6000_2.png"
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) material summary (/project-material-summary): material 27000 / фира 0 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "expected": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) package material (/material-cost/by-execution-package): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) package financial: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) package breakdown (/financial-breakdown): material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) package net-financial: material 0 / фира 0 / total 0",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "expected": {
+          "m": 0,
+          "w": 0,
+          "t": 0
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) net profit (financial page data): material 27000 / фира 0 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "expected": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) project profit: material 27000 / фира 0 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "expected": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) P&L (/pnl): material 27000 / фира 0 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "expected": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) P&L summary (card): material 27000 / фира 0 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "expected": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.6 project cost 27000 after both acceptances (7000x1 + 8000x2.5) profit by period: material 27000 / фира 0 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "expected": {
+          "m": 27000,
+          "w": 0,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.7 (R21) consume 10000 follows the batches oldest first: 7000@1 + 3000@2.5 = 14500",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "value": 14500,
+        "layers": [
+          "7000@1",
+          "2000@2.5",
+          "1000@2.5"
+        ]
+      },
+      "screenshot": "41_C_7_R21_consume_10000_follows_the_batche.png"
+    },
+    {
+      "step": "C.8 (R21) [API] write-off 5000 takes 5000@2.5 = 12500 (pro-rata would have been 9800)",
+      "pass": true,
+      "detail": {
+        "status": 201,
+        "value": 12500,
+        "layers": [
+          "5000@2.5"
+        ]
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 material summary (/project-material-summary): material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 package material (/material-cost/by-execution-package): material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 package financial: material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 package breakdown (/financial-breakdown): material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 package net-financial: material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 net profit (financial page data): material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 project profit: material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 P&L (/pnl): material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 P&L summary (card): material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.9 (R21) cost 27000 unchanged, фира 12500 (material 14500); package = consumed 14500 + фира 12500 profit by period: material 14500 / фира 12500 / total 27000",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "C.10 (R21) warehouse keeps the remaining batches exactly: 3000@2.5 + 5000@3.33 = value 24150",
+      "pass": true,
+      "detail": {
+        "stock": {
+          "tenant_id": "92ccc63d-097c-4b8a-a6b1-670863d28cdc",
+          "item_id": "it-r21",
+          "location": {
+            "location_type": "central_warehouse",
+            "location_id": "CEN-D",
+            "state": "free"
+          },
+          "quantity": "8000",
+          "total_value": "24150.0000",
+          "layer_count": 2,
+          "layers": [
+            {
+              "source_movement_id": "mv_3d2a744d81604970b6e539897db788b9",
+              "layer_sequence": 1,
+              "quantity": "3000",
+              "unit_value": "2.5",
+              "currency": "BGN"
+            },
+            {
+              "source_movement_id": "mv_5c6ad060f3a74e0eae8e9cfaddb39e6a",
+              "layer_sequence": 1,
+              "quantity": "5000",
+              "unit_value": "3.33",
+              "currency": "BGN"
+            }
+          ],
+          "generated_at": "2026-11-06T22:39:31.745996+00:00",
+          "ledger_checkpoint": {
+            "ledger_sequence": 43,
+            "movement_id": "mv_4f2560bd1b9a4101afdf71a920f57dd5",
+            "recorded_at": "2026-11-06T22:39:31.567588+00:00",
+            "generated_at": "2026-11-06T22:39:31.745975+00:00"
+          },
+          "truncated": false
+        }
+      }
+    },
+    {
+      "step": "C.9 [1280] screen \"financial page\": Материали 14500, Фира 12500, Общ разход 27000",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        }
+      },
+      "screenshot": "42_C_9_1280_screen_financial_page_14500_125.png"
+    },
+    {
+      "step": "C.9 [1280] screen \"project page, Finance tab (P&L dashboard)\": Материали 14500, Фира 12500, Общ разход 27000",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        },
+        "expected": {
+          "m": 14500,
+          "w": 12500,
+          "t": 27000
+        }
+      },
+      "screenshot": "43_C_9_1280_screen_project_page_Finance_tab.png"
+    },
+    {
+      "step": "D.1 [1280 UI] invoice line 100 (Path B, direct to project) + receive 10, dispatch 5, accept 5, consume 3, write-off 2 (API) -> all 200",
+      "pass": true,
+      "detail": {
+        "statuses": [
+          200,
+          200,
+          200,
+          200,
+          201
+        ]
+      },
+      "screenshot": "44_D_1_1280_UI_invoice_line_100_Path_B_dire.png"
+    },
+    {
+      "step": "D.2 (FG-17) invoice 100 + accepted 50 = 150 everywhere, фира 20 (no max(invoice, warehouse)) material summary (/project-material-summary): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "D.2 (FG-17) invoice 100 + accepted 50 = 150 everywhere, фира 20 (no max(invoice, warehouse)) net profit (financial page data): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "D.2 (FG-17) invoice 100 + accepted 50 = 150 everywhere, фира 20 (no max(invoice, warehouse)) project profit: material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "D.2 (FG-17) invoice 100 + accepted 50 = 150 everywhere, фира 20 (no max(invoice, warehouse)) P&L (/pnl): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "D.2 (FG-17) invoice 100 + accepted 50 = 150 everywhere, фира 20 (no max(invoice, warehouse)) P&L summary (card): material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "D.2 (FG-17) invoice 100 + accepted 50 = 150 everywhere, фира 20 (no max(invoice, warehouse)) profit by period: material 130 / фира 20 / total 150",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "err": ""
+      }
+    },
+    {
+      "step": "D.3 (FG-17) P&L total expense == net-profit total cost == project-profit total == 150",
+      "pass": true,
+      "detail": {
+        "pnl": 150,
+        "net_profit": 150,
+        "project_profit": 150,
+        "pnl_basis": {
+          "warehouse": "canonical",
+          "warehouse_material_cost": 150,
+          "invoice_cost": 100,
+          "cost_rule": "R17_cost_at_acceptance",
+          "accepted_cost": 50,
+          "returned_cost": 0,
+          "invoice_linked_excluded_cost": 0,
+          "allocated_cost": 0,
+          "unallocated_cost": 150,
+          "legacy_excluded_cost": 0,
+          "consumed_qty": 3,
+          "waste_cost": 20,
+          "waste_qty": 2,
+          "partial_cost_data": false,
+          "canonical_cost": 50,
+          "legacy_cost": 0,
+          "legacy_undated_cost": 0,
+          "cutover_at": "2026-11-06T22:38:07.314198+00:00",
+          "cutover_source": "first_canonical_ledger_row"
+        }
+      }
+    },
+    {
+      "step": "D.4 (FG-17) [1280] screen \"financial page\": Материали 130, Фира 20, Общ разход 150",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      },
+      "screenshot": "45_D_4_FG_17_1280_screen_financial_page_130.png"
+    },
+    {
+      "step": "D.4 (FG-17) [1280] screen \"project page, Finance tab (P&L dashboard)\": Материали 130, Фира 20, Общ разход 150",
+      "pass": true,
+      "detail": {
+        "got": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "expected": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      },
+      "screenshot": "46_D_4_FG_17_1280_screen_project_page_Finan.png"
+    },
+    {
+      "step": "D.5 (FG-17) the two screens show the same total: financial page \"Общ разход\" == project P&L dashboard \"Общо разход\"",
+      "pass": true,
+      "detail": {
+        "financial_page": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        },
+        "pnl_dashboard": {
+          "m": 130,
+          "w": 20,
+          "t": 150
+        }
+      }
+    },
+    {
+      "step": "D.6 the supplier invoice line (Path B) cannot be created from the canonical warehouse screen; seeded directly",
+      "pass": false,
+      "status": "NO_SCREEN",
+      "note": "invoice_lines row inserted into the synthetic tenant DB",
+      "api": {
+        "pnl_summary_total_expense": 150
+      }
+    },
+    {
+      "step": "T.1 direct warehouse->warehouse transfer (destination = the other warehouse) is refused and moves nothing",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "INVARIANT_VIOLATION",
+        "message": "direct transfer_warehouse_to_warehouse is refused: the stock goes to in_transit and the target is credited only by accept_project_delivery (",
+        "balances": [
+          "central_warehouse:CEN:free=10"
+        ]
+      }
+    },
+    {
+      "step": "T.2 [1280 UI] transfer form: fixed in-transit destination + a target-warehouse field (no direct destination picker)",
+      "pass": true,
+      "detail": {},
+      "screenshot": "47_T_2_1280_UI_transfer_form_fixed_in_trans.png"
+    },
+    {
+      "step": "T.3 [1280 UI] transfer 10 CEN -> WH2 -> 200, stock in transit (CEN 0, WH2 0)",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "rows": [
+          "in_transit:mv_845c7d4182184bfabd5a479c0c19ed1d:in_transit=10"
+        ]
+      },
+      "screenshot": "48_T_3_1280_UI_transfer_10_CEN_WH2_200_stoc.png"
+    },
+    {
+      "step": "T.4 [1280 UI] accept 6 then 4 at WH2 -> both 200; 1 open discrepancy after 6, 0 after 4",
+      "pass": true,
+      "detail": {
+        "ta": [
+          {
+            "q": 6,
+            "status": 200,
+            "message": "",
+            "open": 1
+          },
+          {
+            "q": 4,
+            "status": 200,
+            "message": "",
+            "open": 0
+          }
+        ]
+      },
+      "screenshot": "49_T_4_1280_UI_accept_6_then_4_at_WH2_both_.png"
+    },
+    {
+      "step": "T.5 transfer ends with 0 unresolved (ledger + in-transit projection) and WH2 holds 10, CEN 0",
+      "pass": true,
+      "detail": {
+        "open": 0,
+        "in_transit": [
+          {
+            "unresolved": 0
+          }
+        ],
+        "rows": [
+          "small_warehouse:WH2:free=10"
+        ]
+      },
+      "screenshot": "50_T_5_transfer_ends_with_0_unresolved_ledg.png"
+    },
+    {
+      "step": "T.6 over-acceptance of the finished transfer is refused",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "ORIGIN_ACCEPTANCE_OVERRUN"
+      }
+    },
+    {
+      "step": "T.7 [390] transfer form usable on the phone, no horizontal scroll",
+      "pass": true,
+      "detail": {},
+      "screenshot": "51_T_7_390_transfer_form_usable_on_the_phon.png"
+    },
+    {
+      "step": "R.0 stock for the write-off rights matrix: 15 on each of three projects (200)",
+      "pass": true,
+      "detail": {
+        "statuses": [
+          200,
+          200,
+          200,
+          200
+        ]
+      }
+    },
+    {
+      "step": "R.1 project team set up through the API: sm + tech2 + pm on project X (pm as team manager), pm on project Y only as a technician",
+      "pass": true,
+      "detail": {
+        "statuses": [
+          201,
+          201,
+          201,
+          201
+        ],
+        "codes": [
+          null,
+          null,
+          null,
+          null
+        ]
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Admin: 2xx, one row written",
+      "pass": true,
+      "detail": {
+        "status": 201,
+        "rows_written": 1
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Accountant: 2xx, one row written",
+      "pass": true,
+      "detail": {
+        "status": 201,
+        "rows_written": 1
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Warehousekeeper: 403, nothing written",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "code": "PERMISSION_DENIED",
+        "reason": "R27_WRITE_OFF_NOT_ALLOWED",
+        "rows_written": 0
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Viewer: 403, nothing written",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "code": "PERMISSION_DENIED",
+        "reason": "R27_WRITE_OFF_NOT_ALLOWED",
+        "rows_written": 0
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — SiteManager, member of X: 2xx, one row written",
+      "pass": true,
+      "detail": {
+        "status": 201,
+        "rows_written": 1
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — SiteManager, NOT a member (project Y): 403, nothing written",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "code": "PERMISSION_DENIED",
+        "reason": "R27_WRITE_OFF_NOT_ALLOWED",
+        "rows_written": 0
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Technician, member of X: 2xx, one row written",
+      "pass": true,
+      "detail": {
+        "status": 201,
+        "rows_written": 1
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Technician, NOT a member (project Y): 403, nothing written",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "code": "PERMISSION_DENIED",
+        "reason": "R27_WRITE_OFF_NOT_ALLOWED",
+        "rows_written": 0
+      }
+    },
+    {
+      "step": "R.2 [shadow] write-off 1 from a project — Technician (never added), project X: 403, nothing written",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "code": "PERMISSION_DENIED",
+        "reason": "R27_WRITE_OFF_NOT_ALLOWED",
+        "rows_written": 0
+      }
+    },
+    {
+      "step": "R.3 project manager (Р30) cannot be tested in this mode: the legacy session roles have no project manager",
+      "pass": false,
+      "status": "NO_SCREEN",
+      "note": "canonical project_manager is a RoleAssignment role; exercised in the enforce run",
+      "api": {}
+    },
+    {
+      "step": "R.4 [shadow] write-off from a WAREHOUSE (not project cost): Admin 200; Accountant 403; Warehousekeeper 403",
+      "pass": true,
+      "detail": {
+        "admin": 200,
+        "accountant": 403,
+        "keeper": 403,
+        "codes": [
+          null,
+          "PERMISSION_DENIED",
+          "PERMISSION_DENIED"
+        ]
+      }
+    },
+    {
+      "step": "R.5 [shadow] the generic /movements route does not bypass Р27: Warehousekeeper write_off from a project -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "code": "PERMISSION_DENIED"
+      }
+    },
+    {
+      "step": "R20.1 [shadow] Warehousekeeper API reads (balance, stock, history, integrity-warnings): HTTP 200 and NO money field, values_hidden=true",
+      "pass": true,
+      "detail": {
+        "res": {
+          "balance": {
+            "status": 200,
+            "money_keys": [],
+            "values_hidden": true
+          },
+          "stock": {
+            "status": 200,
+            "money_keys": [],
+            "values_hidden": true
+          },
+          "history": {
+            "status": 200,
+            "money_keys": [],
+            "values_hidden": true
+          },
+          "warnings": {
+            "status": 200,
+            "money_keys": [],
+            "values_hidden": true
+          }
+        }
+      }
+    },
+    {
+      "step": "R20.2 [shadow] Accountant (finance role) still sees the values on the same reads (control)",
+      "pass": true,
+      "detail": {
+        "res": {
+          "balance": {
+            "status": 200,
+            "money_keys": 0
+          },
+          "stock": {
+            "status": 200,
+            "money_keys": 3
+          },
+          "history": {
+            "status": 200,
+            "money_keys": 45
+          },
+          "warnings": {
+            "status": 200,
+            "money_keys": 0
+          }
+        },
+        "note": "balance rows and alarms carry no money for anyone"
+      }
+    },
+    {
+      "step": "R20.3 [shadow] Warehousekeeper's own command response (receive 1) carries no money: no unit_value / layer values, values_hidden",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "money_keys": []
+      }
+    },
+    {
+      "step": "R20.4 [shadow] [1280 UI] Warehousekeeper: stock panel, history and alarms show quantities only (no price, value, currency)",
+      "pass": true,
+      "detail": {
+        "stock_rows": [
+          "central_warehouse:CEN (свободна) 5"
+        ],
+        "history": "2026-11-06T22:38:33.040795+00:00 receive_from_supplier 10 bag 2026-11-06T22:38:33.580907+00:00 dispatch_warehouse_to_project 5 bag 2026-11-06T22:38:34.295153+00:00 accept_project_delivery 5 bag 2026-11-06T22:38:45.909873+00:00 consume_to_sm",
+        "alarms": "Актуализирано: Няма активни аларми по интегритет."
+      },
+      "screenshot": "52_R20_4_shadow_1280_UI_Warehousekeeper_sto.png"
+    },
+    {
+      "step": "R20.5 [shadow] [1280 UI] observation: the Warehousekeeper's receive form shows NO unit-price input",
+      "pass": false,
+      "detail": {
+        "price_input_present": true,
+        "note": "a price INPUT on the receive form; no price is displayed anywhere — may be intended (price entered at receipt); reported, not judged"
+      },
+      "screenshot": "53_R20_5_shadow_1280_UI_observation_the_War.png"
+    },
+    {
+      "step": "R20.6 [shadow] [1280 UI] Warehousekeeper cannot open the project financial page (no cost screen): landed /tech",
+      "pass": true,
+      "detail": {
+        "landed": "/tech"
+      },
+      "screenshot": "54_R20_6_shadow_1280_UI_Warehousekeeper_can.png"
+    },
+    {
+      "step": "R20.7 [shadow] [390 UI] Warehousekeeper stock panel: quantities only, no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "rows": [
+          "central_warehouse:CEN (свободна) 5"
+        ]
+      },
+      "screenshot": "55_R20_7_shadow_390_UI_Warehousekeeper_stoc.png"
+    },
+    {
+      "step": "3.1 keeper (Warehousekeeper): receive 200, consume_to_smr 403, read 200",
+      "pass": true,
+      "detail": {
+        "receive": 200,
+        "consume": 403,
+        "read": 200
+      }
+    },
+    {
+      "step": "3.2 technician: receive/consume/read all 403 (direct API)",
+      "pass": false,
+      "detail": {
+        "receive": 403,
+        "consume": 403,
+        "read": 200
+      }
+    },
+    {
+      "step": "3.3 viewer: receive/consume/read all 403 (direct API)",
+      "pass": false,
+      "detail": {
+        "receive": 403,
+        "consume": 403,
+        "read": 200
+      }
+    },
+    {
+      "step": "3.4 accountant (read-only role): receive 403, consume 403, read 200 (direct API)",
+      "pass": true,
+      "detail": {
+        "receive": 403,
+        "consume": 403,
+        "read": 200
+      }
+    },
+    {
+      "step": "3.5 [1280] keeper HAS a warehouse screen: opens /warehouse/canonical, write tab present, actions limited to receive/dispatch/accept..., no consume",
+      "pass": true,
+      "detail": {
+        "url": "/warehouse/canonical",
+        "tabs": [
+          "stock",
+          "history",
+          "commands",
+          "warnings"
+        ],
+        "actions": [
+          "receive_from_supplier",
+          "reserve",
+          "release_reservation",
+          "dispatch_warehouse_to_project",
+          "accept_project_delivery",
+          "transfer_project_to_warehouse",
+          "transfer_warehouse_to_warehouse",
+          "quarantine_entry",
+          "quarantine_release"
+        ]
+      },
+      "screenshot": "56_3_5_1280_keeper_HAS_a_warehouse_screen_o.png"
+    },
+    {
+      "step": "3.6 [1280] accountant sees NO write form (read tabs only)",
+      "pass": true,
+      "detail": {
+        "url": "/warehouse/canonical",
+        "tabs": [
+          "stock",
+          "history",
+          "warnings"
+        ]
+      },
+      "screenshot": "57_3_6_1280_accountant_sees_NO_write_form_r.png"
+    },
+    {
+      "step": "3.7 [1280] technician does not get the warehouse write form (landed /tech)",
+      "pass": true,
+      "detail": {
+        "url": "/tech",
+        "onPage": false,
+        "tabs": []
+      },
+      "screenshot": "58_3_7_1280_technician_does_not_get_the_war.png"
+    },
+    {
+      "step": "3.7 [1280] viewer does not get the warehouse write form (landed /tech)",
+      "pass": true,
+      "detail": {
+        "url": "/tech",
+        "onPage": false,
+        "tabs": []
+      },
+      "screenshot": "59_3_7_1280_viewer_does_not_get_the_warehou.png"
+    },
+    {
+      "step": "3.5 [390] keeper HAS a warehouse screen: opens /warehouse/canonical, write tab present, actions limited to receive/dispatch/accept..., no consume",
+      "pass": true,
+      "detail": {
+        "url": "/warehouse/canonical",
+        "tabs": [
+          "stock",
+          "history",
+          "commands",
+          "warnings"
+        ],
+        "actions": [
+          "receive_from_supplier",
+          "reserve",
+          "release_reservation",
+          "dispatch_warehouse_to_project",
+          "accept_project_delivery",
+          "transfer_project_to_warehouse",
+          "transfer_warehouse_to_warehouse",
+          "quarantine_entry",
+          "quarantine_release"
+        ]
+      },
+      "screenshot": "60_3_5_390_keeper_HAS_a_warehouse_screen_op.png"
+    },
+    {
+      "step": "3.8 [390] keeper screen: no horizontal scroll",
+      "pass": true,
+      "screenshot": "61_3_8_390_keeper_screen_no_horizontal_scro.png"
+    },
+    {
+      "step": "3.6 [390] accountant sees NO write form (read tabs only)",
+      "pass": true,
+      "detail": {
+        "url": "/warehouse/canonical",
+        "tabs": [
+          "stock",
+          "history",
+          "warnings"
+        ]
+      },
+      "screenshot": "62_3_6_390_accountant_sees_NO_write_form_re.png"
+    },
+    {
+      "step": "3.7 [390] technician does not get the warehouse write form (landed /tech)",
+      "pass": true,
+      "detail": {
+        "url": "/tech",
+        "onPage": false,
+        "tabs": []
+      },
+      "screenshot": "63_3_7_390_technician_does_not_get_the_ware.png"
+    },
+    {
+      "step": "3.7 [390] viewer does not get the warehouse write form (landed /tech)",
+      "pass": true,
+      "detail": {
+        "url": "/tech",
+        "onPage": false,
+        "tabs": []
+      },
+      "screenshot": "64_3_7_390_viewer_does_not_get_the_warehous.png"
+    },
+    {
+      "step": "3.9 [1280 UI] keeper receives 2 through the screen -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "65_3_9_1280_UI_keeper_receives_2_through_th.png"
+    },
+    {
+      "step": "4.1 tenant B: balance of A item empty; history empty",
+      "pass": true,
+      "detail": {
+        "bal": [],
+        "hist": 0
+      }
+    },
+    {
+      "step": "4.2 tenant B cannot accept tenant A dispatch (write refused)",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "ORIGIN_ACCEPTANCE_OVERRUN"
+      }
+    },
+    {
+      "step": "4.2b tenant B can write in its OWN database on a fresh install (receive 2) and A does not see it",
+      "pass": true,
+      "detail": {
+        "b_status": 200,
+        "b_message": "",
+        "a_sees": 0
+      }
+    },
+    {
+      "step": "4.3 [1280 UI] tenant B stock panel for A's item shows empty",
+      "pass": true,
+      "detail": {
+        "rows": []
+      },
+      "screenshot": "66_4_3_1280_UI_tenant_B_stock_panel_for_A_s.png"
+    },
+    {
+      "step": "4.3 [390 UI] tenant B stock panel for A's item shows empty",
+      "pass": true,
+      "detail": {
+        "rows": []
+      },
+      "screenshot": "67_4_3_390_UI_tenant_B_stock_panel_for_A_s_.png"
+    },
+    {
+      "step": "4.4 control: tenant A still sees its own stock",
+      "pass": true,
+      "detail": {
+        "n": 1
+      }
+    }
+  ],
+  "ui_visibility": {
+    "keeper@1280": {
+      "url": "/warehouse/canonical",
+      "onPage": true,
+      "tabs": [
+        "stock",
+        "history",
+        "commands",
+        "warnings"
+      ],
+      "actions": [
+        "receive_from_supplier",
+        "reserve",
+        "release_reservation",
+        "dispatch_warehouse_to_project",
+        "accept_project_delivery",
+        "transfer_project_to_warehouse",
+        "transfer_warehouse_to_warehouse",
+        "quarantine_entry",
+        "quarantine_release"
+      ]
+    },
+    "accountant@1280": {
+      "url": "/warehouse/canonical",
+      "onPage": true,
+      "tabs": [
+        "stock",
+        "history",
+        "warnings"
+      ],
+      "actions": []
+    },
+    "technician@1280": {
+      "url": "/tech",
+      "onPage": false,
+      "tabs": [],
+      "actions": []
+    },
+    "viewer@1280": {
+      "url": "/tech",
+      "onPage": false,
+      "tabs": [],
+      "actions": []
+    },
+    "keeper@390": {
+      "url": "/warehouse/canonical",
+      "onPage": true,
+      "tabs": [
+        "stock",
+        "history",
+        "commands",
+        "warnings"
+      ],
+      "actions": [
+        "receive_from_supplier",
+        "reserve",
+        "release_reservation",
+        "dispatch_warehouse_to_project",
+        "accept_project_delivery",
+        "transfer_project_to_warehouse",
+        "transfer_warehouse_to_warehouse",
+        "quarantine_entry",
+        "quarantine_release"
+      ]
+    },
+    "accountant@390": {
+      "url": "/warehouse/canonical",
+      "onPage": true,
+      "tabs": [
+        "stock",
+        "history",
+        "warnings"
+      ],
+      "actions": []
+    },
+    "technician@390": {
+      "url": "/tech",
+      "onPage": false,
+      "tabs": [],
+      "actions": []
+    },
+    "viewer@390": {
+      "url": "/tech",
+      "onPage": false,
+      "tabs": [],
+      "actions": []
+    }
+  },
+  "facts": {
+    "orgA": "92ccc63d-097c-4b8a-a6b1-670863d28cdc",
+    "project": "8e3b0bde-d029-455b-a49e-02ddff00b886",
+    "project2": "c3fab1d1-8d2d-4cb2-ac56-5b8f027152f9",
+    "smr": "eeef9b3a-d041-412b-8c5f-124d6831ceee",
+    "smr2": "caef2bd3-d122-4304-96b7-1ea94936fafa",
+    "pkg": "pkg-bot-1",
+    "rows1": "central_warehouse:CEN (свободна)\n10",
+    "disp1": "mv_4bd94d5035c148b4add9b13a0c15ca7a",
+    "rows1b": [
+      "project:8e3b0bde-d029-455b-a49e-02ddff00b886 (свободна)\n10"
+    ],
+    "disp2": "mv_9a1d6ee49f004f78bca858dfaddeb441",
+    "frc": "Ликвидност Фактурирано (начислено) 0 € Реално платено (касов приход) +0 € Плащания -150 € Баланс -150 € Реални пари — постъпили и платени Оперативен резултат Фактурирано (начислено) 0 € Реално платено (касов приход) 0 € Директни разходи -150 € Резултат -150 € Без общофирмени режийни 0% Реален резултат Оперативен -150 € Фирмени режийни -0 € Резултат с фирмени режийни -150 € С режийни и осигуровки 0% Няма формални overhead allocations — fully loaded може да е непълен Детайлна разбивка",
+    "transfer": "mv_845c7d4182184bfabd5a479c0c19ed1d"
+  },
+  "permission_http": {
+    "keeperReceive": "200",
+    "keeperConsume": "403 PERMISSION_DENIED",
+    "keeperRead": "200",
+    "techRecv": "403 PERMISSION_DENIED",
+    "techConsume": "403 PERMISSION_DENIED",
+    "techRead": "200",
+    "viewRecv": "403 PERMISSION_DENIED",
+    "viewConsume": "403 PERMISSION_DENIED",
+    "viewRead": "200",
+    "accRecv": "403 PERMISSION_DENIED",
+    "accConsume": "403 PERMISSION_DENIED",
+    "accRead": "200"
+  },
+  "passed": 231,
+  "total": 238,
+  "no_screen": 4,
+  "verdict": "FAIL",
+  "finished": "2026-11-06T22:41:10.752Z"
+}
