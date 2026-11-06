@@ -222,3 +222,80 @@ def test_write_build_info_refuses_bundle_with_tampered_identity(tmp_path):
                         "--target", str(tmp_path / "ctx")], capture_output=True, text=True)
     assert w.returncode == 2 and "!= manifest commit" in w.stderr
     assert not (tmp_path / "ctx" / "backend" / "BUILD_INFO.json").exists()
+
+
+# ── 9. RC-01-C01: --commit must be the tree being built (audit P1) ─────────────────────
+
+def _repo_with_two_commits(tmp_path):
+    repo = tmp_path / "wt"
+    (repo / "backend").mkdir(parents=True)
+    (repo / "frontend").mkdir()
+    _git(tmp_path, "init", "-q", str(repo))
+    for k, v in (("user.email", "t@example.invalid"), ("user.name", "t"), ("commit.gpgsign", "false")):
+        _git(repo, "config", k, v)
+    (repo / ".gitignore").write_text("BUILD_INFO.json\n*.tmp\n", encoding="utf-8")
+    (repo / "backend" / "a.txt").write_text("a\n", encoding="utf-8")
+    _git(repo, "add", "-A")
+    _git(repo, "commit", "-q", "-m", "A")
+    a = _git(repo, "rev-parse", "HEAD")
+    (repo / "backend" / "a.txt").write_text("b\n", encoding="utf-8")
+    _git(repo, "commit", "-q", "-am", "B")
+    b = _git(repo, "rev-parse", "HEAD")
+    return repo, a, b
+
+
+def _wbi(*args):
+    return subprocess.run([sys.executable, str(RELEASE_DIR / "write_build_info.py"), *args],
+                          capture_output=True, text=True)
+
+
+def _stamped(root):
+    return [p for sub in ("backend", "frontend") for p in (root / sub).glob("BUILD_INFO.json*")]
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+@pytest.mark.parametrize("allow_dirty", [False, True])
+def test_write_build_info_refuses_commit_that_is_not_the_tree(tmp_path, allow_dirty):
+    repo, a, b = _repo_with_two_commits(tmp_path)
+    _git(repo, "checkout", "-q", a)  # tree is A, caller claims B
+    w = _wbi("--repo", str(repo), "--commit", b, *(["--allow-dirty"] if allow_dirty else []))
+    assert w.returncode != 0 and "refusing to stamp" in w.stderr, w.stdout + w.stderr
+    assert _stamped(repo) == []  # nothing written, no temp files left
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_write_build_info_refuses_non_git_target_for_commit(tmp_path):
+    repo, _, b = _repo_with_two_commits(tmp_path)
+    ctx = tmp_path / "ctx"  # e.g. an extracted copy: --commit cannot prove its contents
+    (ctx / "backend").mkdir(parents=True)
+    (ctx / "frontend").mkdir()
+    w = _wbi("--repo", str(repo), "--commit", b, "--target", str(ctx))
+    assert w.returncode != 0 and "--from-bundle" in w.stderr, w.stderr
+    assert _stamped(ctx) == []
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_write_build_info_refuses_other_checkout_as_target(tmp_path):
+    repo, a, b = _repo_with_two_commits(tmp_path)
+    other = tmp_path / "other"
+    _git(tmp_path, "clone", "-q", str(repo), str(other))
+    _git(other, "checkout", "-q", a)
+    w = _wbi("--repo", str(repo), "--commit", b, "--target", str(other))  # repo HEAD is B, target is A
+    assert w.returncode != 0 and "refusing to stamp" in w.stderr, w.stderr
+    assert _stamped(other) == [] and _stamped(repo) == []
+
+
+@pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
+def test_write_build_info_stamps_matching_commit_and_still_refuses_dirty(tmp_path):
+    repo, a, b = _repo_with_two_commits(tmp_path)
+    w = _wbi("--repo", str(repo), "--commit", "HEAD")
+    assert w.returncode == 0, w.stderr
+    for sub in ("backend", "frontend"):
+        info = json.loads((repo / sub / "BUILD_INFO.json").read_text(encoding="utf-8"))
+        assert info["build_sha"] == b and info["source"] == "git-objects"
+    for f in _stamped(repo):
+        f.unlink()
+    (repo / "backend" / "a.txt").write_text("dirty\n", encoding="utf-8")
+    w = _wbi("--repo", str(repo), "--commit", b)
+    assert w.returncode == 2 and "uncommitted changes" in w.stderr
+    assert _stamped(repo) == []

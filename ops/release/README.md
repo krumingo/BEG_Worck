@@ -148,7 +148,7 @@ Git дървото. Затова идентичността **не е в `artifa
 |---|---|
 | `release_build.py` | пише `build_info.json` = `{schema: beg.build-info/v1, build_sha, build_time, source: git-objects}`; `build_sha` = `release.app.commit`, `build_time` = commit time (UTC). Влиза в `SHA256SUMS`. |
 | `write_build_info.py --from-bundle <bundle> --target <build context>` | проверява `build_info.json` == manifest commit и пише `backend/BUILD_INFO.json` и `frontend/BUILD_INFO.json` (git-ignored). |
-| `write_build_info.py --commit HEAD` | същото за локален build, директно от Git обекти; отказва при незаписани промени (освен `--allow-dirty`). |
+| `write_build_info.py --commit HEAD` | същото за локален build, директно от Git обекти. `--target` (по подразбиране `--repo`) трябва да е корен на Git work tree с `HEAD` == подадения commit; иначе отказ (exit 2) и нищо не се записва (RC-01-C01). Отказва при незаписани промени (освен `--allow-dirty`, което не допуска друг commit). За извадено дърво — само `--from-bundle`. |
 | backend | `GET /api/version` (без вход): `build_sha`, `build_time`, `environment_label`, `source`. Файлът печели пред `BUILD_SHA` env; разминаване → лог. Нищо → `unknown`. |
 | frontend | `craco.config.js` вгражда `frontend/BUILD_INFO.json` (иначе `REACT_APP_BUILD_SHA`, иначе `unknown`) като константа в bundle-а. UI показва първите 12 знака + предупреждение при разлика/`unknown`. |
 
