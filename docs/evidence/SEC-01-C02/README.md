@@ -60,6 +60,30 @@
 
 `docs/architecture/PM-01_PERMISSION_MODE_REPORT.md`: §5.1 е обозначен като **долна граница** с препратка към пробите върху съществуващи записи; в §5 е отбелязано, че за труд и фира правилото е Р16, не каталогът.
 
+## Допълнение A — SEC-R1: изтекло или бъдещо членство не е членство
+
+Пакетът @ `071d19b`, Допълнение A. По Р16 членството важи само в дните, които покрива.
+
+- **off/shadow:** `project_team.membership_filter` (`app/tenancy/project_team.py`) вече изисква освен `active` и `from_date <= днес` (ако е зададена) и `to_date >= днес` или липсваща (`membership_date_window`). Датите се сравняват като ISO низове по UTC дата; граница от друг тип не съвпада (fail closed).
+- **enforce:** имаше същата дупка. Огледалното проектно назначение се създаваше с `valid_from=сега, valid_to=None`, без датите на членството. Сега `sync_project_membership` и W0-02 bootstrap-ът пренасят датите на членството (`membership_validity`): `from_date` → 00:00 UTC, `to_date` → 23:59:59.999999 UTC. Permission Service връща `ASSIGNMENT_EXPIRED` извън прозореца. Членство без дати запазва досегашния прозорец на назначението.
+- **Тест:** на P2 членството на Technician е изтекло вчера, а на SiteManager започва утре. И двете са добавени през реалния API в enforce, проверени в `results.json` → `dated_memberships_of_P2`. Резултат: 403 и нищо записано в трите режима. Активното членство без дати на P1 → 201.
+- **Контрапроба** (`sec_r1_counter_check.json`): същият harness без поправката → същите 36 клетки дават 200/201 и записват, **и в трите режима**.
+
+**Кои други пътища ползват `membership_filter`** (през `member_row` / `is_member`) и как се променят — от днес изтекло/бъдещо членство е „не член“ навсякъде:
+
+| Път | Ефект |
+|---|---|
+| `app/permissions/money_write.py:144` — Р16 труд/фира | целта на поправката: 403 |
+| `app/deps/auth.py:143` `can_access_project`, `:152` `can_manage_project` (12 route модула) | изтекъл член не вижда/управлява обекта (Admin/Owner — без промяна) |
+| `app/tenancy/data_access.py:429` `is_project_member` → `routes/offers.py:41,49` | достъп/управление на оферти на обекта |
+| `app/routes/attendance.py` — `can_access_report`, `can_review_report`, `missing-attendance`, `project-day-reports`, `site-attendance` | присъствие и отчети на обекта |
+| `app/routes/work_logs.py` — `check_site_access`, `can_approve_site` | дневник и одобрение на обекта |
+| `app/routes/projects.py:456` `add_team_member` — „вече е в екипа“ | изтекъл член **може да бъде добавен наново** (нов ред); огледалното назначение се намира по ключ и получава новите дати |
+
+**Не са променени** (не ползват `membership_filter`, а само `active`): `assigned_project_ids` / `managed_project_ids` / `project_rows` → списъци „моите обекти“ и състав на екипа все още показват изтеклите членства. Записано като дълг **SEC-01-C02-D5**.
+
+**Внедряване (дълг SEC-01-C02-D6):** вече съществуващите огледални назначения получават датите при следващата синхронизация на членството или при ново пускане на bootstrap-а. Дотогава в enforce изтекъл член все още има действието. В off/shadow поправката важи веднага.
+
 ## Резултат (реална MongoDB 7.0 replica set, ST-01 фирми A и B + съществуващи записи)
 
 `results.json` — 1047 извиквания: 16 проби × 8 роли × 2 фирми × (P1 и P2 за проектните) × 3 режима + B→A върху записи/обекти на A. Записът се мери от oplog-а, с `org_id` на всеки ред; за всяко извикване се проверява и че **няма нито едно изтриване**.
@@ -87,6 +111,7 @@
 - **SEC-01-C02-D2:** `GET /api/pricing/material?force=true` прави същото обновяване на цената като `POST /pricing/refresh` и не е охранен.
 - **SEC-01-C02-D3:** sync на труда — без idempotency key; два едновременни sync-а могат да вмъкнат двоен ред (както и преди).
 - **SEC-01-C02-D4:** още отворени записи по същите ресурси, които FG-30 не изброява: `POST/PUT /client-acts`, `POST /client-acts/from-offer/{id}`, `POST /supplier-invoices`, `.../post-to-warehouse`, `POST /subcontractor-acts`, пакетите на подизпълнители, `PUT /ocr-invoice/{id}/review|reject`, `PUT /execution-packages/{id}`. Оркестраторът да реши пакета.
+- **SEC-01-C02-D5, D6:** виж Допълнение A.
 - Остават: SEC-01-D1, SEC-01-C01-D2, SEC-01-C01-D4, FG-28.
 
 ## Rollback

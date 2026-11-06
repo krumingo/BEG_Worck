@@ -26,6 +26,7 @@ PR-02 identity rules
 * A DuplicateKey on insert is never a silent success: the real existing
   record is read back and must match the intended operation.
 """
+from typing import Any
 from datetime import datetime, timezone
 
 from app.tenancy import registry
@@ -236,18 +237,36 @@ async def _find_project_mirror(user_id: str, tid: str, member_role_id: str, proj
     return None
 
 
+def membership_validity(from_date: Any = None, to_date: Any = None):
+    """SEC-R1 (SEC-01-C02 addendum A): the membership's own day window as the mirror's
+    (valid_from, valid_to). A "YYYY-MM-DD" bound covers the whole UTC day; a full ISO
+    timestamp is kept as is; None/"" is open. Anything else is passed through, so the
+    Permission Service treats the assignment as INVALID (fail closed), never as open.
+    """
+    def bound(value, end: bool):
+        if value is None or value == "":
+            return None
+        if isinstance(value, str) and len(value) == 10:
+            return value + ("T23:59:59.999999+00:00" if end else "T00:00:00+00:00")
+        return value
+    return bound(from_date, False), bound(to_date, True)
+
+
 async def sync_project_membership(ctx, user_id: str, member_role_id: str,
                                   project_id: str, role_in_project: str, active: bool,
-                                  *, actor_id: str):
+                                  *, actor_id: str, from_date: Any = None,
+                                  to_date: Any = None):
     """Mirror one project_team membership into a project-scope assignment.
 
     active member  -> project assignment with budget.read (SiteManager: +write);
     inactive/removed -> the assignment is revoked (next request loses access).
 
-    An existing mirror keeps its id, valid_from/valid_to and max_amount; only
-    the fields that actually follow the membership (status, permissions,
-    role_id) change, and only when they differ.
+    An existing mirror keeps its id and max_amount; only the fields that actually
+    follow the membership (status, permissions, role_id and — SEC-R1 — the validity
+    window from the membership's from_date/to_date) change, and only when they differ.
+    A membership without dates keeps the mirror's own window.
     """
+    vf, vt = membership_validity(from_date, to_date)
     tid = sync_tenant_id(ctx)          # PR-06: tenant of the business write
     existing = await _find_project_mirror(user_id, tid, member_role_id, project_id)
     reason = f"project {project_id} membership ({role_in_project})"
@@ -266,7 +285,7 @@ async def sync_project_membership(ctx, user_id: str, member_role_id: str,
             "id": project_assignment_id(user_id, tid, project_id), "user_id": user_id,
             "tenant_id": tid, "role_id": member_role_id, "scope_type": "project",
             "scope_id": project_id, "module": None, "permissions": perms,
-            "max_amount": None, "valid_from": _now(), "valid_to": None,
+            "max_amount": None, "valid_from": vf or _now(), "valid_to": vt,
             "status": "active", "created_by": actor_id, "approved_by": actor_id,
             "migrated_from": SYNC_SOURCE_PROJECT_TEAM, "sync_source": SYNC_SOURCE_PROJECT_TEAM,
         }
@@ -288,6 +307,10 @@ async def sync_project_membership(ctx, user_id: str, member_role_id: str,
         patch["permissions"] = perms
     if existing.get("role_id") != member_role_id:
         patch["role_id"] = member_role_id
+    if vf is not None and existing.get("valid_from") != vf:
+        patch["valid_from"] = vf
+    if vt is not None and existing.get("valid_to") != vt:
+        patch["valid_to"] = vt
     if existing.get("status") != "active":
         return await _reactivate(ctx, existing, {**patch, "sync_source": SYNC_SOURCE_PROJECT_TEAM},
                                  actor_id=actor_id, reason=reason)

@@ -200,6 +200,7 @@ async def build_backfill() -> list:
     from app.permissions.catalog import (
         LEGACY_ROLE_MAP, project_membership_actions,
     )
+    from app.permissions.sync import membership_validity
     await _refuse_ownerless()
     out = []
     for t, _tenant, members, users in await _tenant_memberships():
@@ -218,7 +219,10 @@ async def build_backfill() -> list:
                 "scope_type": "project", "scope_id": m["project_id"], "module": None,
                 # SEC-01-C01 (R16): + field cost writes for SiteManager/Technician members.
                 "permissions": project_membership_actions(role_id, m.get("role_in_project", "")),
-                "max_amount": None, "valid_from": now(), "valid_to": None,
+                # SEC-R1 (SEC-01-C02 addendum A): the membership's own day window.
+                "max_amount": None,
+                "valid_from": membership_validity(m.get("from_date"), m.get("to_date"))[0] or now(),
+                "valid_to": membership_validity(m.get("from_date"), m.get("to_date"))[1],
                 "status": "active", "created_by": "system:migration", "approved_by": None,
                 "migrated_from": "project_team",
                 "note": "W0-02 project-scope backfill from project_team membership.",

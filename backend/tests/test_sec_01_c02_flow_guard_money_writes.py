@@ -16,6 +16,11 @@ Rules under test:
   r16      FG-24: labor and waste — Owner/Admin/Accountant everywhere; SiteManager and
            Technician on a project they are MEMBERS of (P1); not on P2; Viewer/Driver
            403 even as members.
+  SEC-R1   addendum A: an EXPIRED or FUTURE membership is not a membership. On P2 the
+           Technician's membership ended yesterday and the SiteManager's starts
+           tomorrow (both added through the real API, so the enforce mirror carries the
+           dates) -> 403, nothing written, all three modes. P1's memberships have no
+           dates -> 201.
   no delete  FG-26: ``sync-from-work-reports`` never deletes a labor row. A changed
            work-report line gives a REVERSAL row + the new row; the original stays; a
            second sync writes nothing. Every call of the matrix is checked for
@@ -65,6 +70,19 @@ AUDIT = {"audit_events", "audit_logs", "audit_chain_heads", "audit_chain", "audi
 TEAM = (("requester", "SiteManager"), ("technician", "Technician"),
         ("viewer", "Viewer"), ("driver", "Viewer"))
 CROSS_ROLES = ("admin", "accountant", "requester", "technician", "viewer")
+# SEC-R1: dated memberships of P2 (user key, role in project, window).
+P2_DATED = (("technician", "Technician", "expired"), ("requester", "SiteManager", "future"))
+
+
+def dated_window(kind: str, today: Optional[str] = None) -> Dict[str, Optional[str]]:
+    from datetime import date, timedelta
+    d = date.fromisoformat(today) if today else date.today()
+    if kind == "expired":
+        return {"from_date": (d - timedelta(days=30)).isoformat(),
+                "to_date": (d - timedelta(days=1)).isoformat()}
+    if kind == "future":
+        return {"from_date": (d + timedelta(days=1)).isoformat(), "to_date": None}
+    raise AssertionError(kind)
 SALE_BATCH_QTY = 10.0
 WORK_DATE = "2026-11-03"
 
@@ -320,7 +338,32 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                   "role_in_project": role_in_project},
                             headers={"Authorization": "Bearer " + tokens[(tkey, "admin")]})
                 assert r.status_code == 201, (tkey, ukey, r.status_code, r.text[:300])
+            # SEC-R1: expired / future memberships of P2, same real API, in enforce.
+            for ukey, role_in_project, kind in P2_DATED:
+                r = tc.post("/api/projects/%s/team" % fx[tkey]["project2_id"],
+                            json={"user_id": fx[tkey]["users"][ukey]["id"],
+                                  "role_in_project": role_in_project, **dated_window(kind)},
+                            headers={"Authorization": "Bearer " + tokens[(tkey, "admin")]})
+                assert r.status_code == 201, (tkey, ukey, kind, r.status_code, r.text[:300])
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        from app.permissions.sync import project_assignment_id
+        from app.tenancy import registry
+        dated: List[Dict[str, Any]] = []
+        for tkey in ("A", "B"):
+            for ukey, role_in_project, kind in P2_DATED:
+                uid = fx[tkey]["users"][ukey]["id"]
+                row = tc.portal.call(lambda: op_db.project_team.find_one(
+                    {"project_id": fx[tkey]["project2_id"], "user_id": uid}, {"_id": 0}))
+                mirror = tc.portal.call(lambda: registry.get_role_assignment(
+                    project_assignment_id(uid, fx[tkey]["tenant_id"], fx[tkey]["project2_id"])))
+                dated.append({"tenant": tkey, "user": ukey, "kind": kind,
+                              "active": row.get("active"), "from_date": row.get("from_date"),
+                              "to_date": row.get("to_date"),
+                              "mirror_status": (mirror or {}).get("status"),
+                              "mirror_valid_from": (mirror or {}).get("valid_from"),
+                              "mirror_valid_to": (mirror or {}).get("valid_to"),
+                              "mirror_has_field_actions": "labor.entry.create" in
+                              ((mirror or {}).get("permissions") or [])})
         snap = tc.portal.call(lambda: pm._snapshot(client, dbs))
 
         def project_of(tkey: str, target: Optional[str]) -> Optional[str]:
@@ -433,6 +476,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "modes": list(MODES), "probes": [list(p[:5]) for p in PROBES],
         "mongo": "local replica set (oplog)", "outbound_http": "closed local port",
         "seconds": round(time.time() - started, 1), "rows": rows, "sequences": seq,
+        "dated_memberships_of_P2": dated,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -525,6 +569,22 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
         2 if k in PROJECT_PROBES else 1 for k in PROBE)
     assert len([c for c in by_cell if c[3] == "XA"]) == \
         len(RECORD_PROBES | PROJECT_PROBES) * len(CROSS_ROLES)
+
+
+def check_dated_memberships(dated: List[Dict[str, Any]]) -> None:
+    """SEC-R1: P2's dated memberships exist, are 'active', carry their window, and the
+    enforce mirror carries the same window WITH the field actions — so every 403 of a
+    SiteManager/Technician on P2 (check_rows) is refused by the dates alone."""
+    assert sorted((d["tenant"], d["kind"]) for d in dated) == [
+        ("A", "expired"), ("A", "future"), ("B", "expired"), ("B", "future")]
+    for d in dated:
+        assert d["active"] is True and d["mirror_status"] == "active", d
+        assert d["mirror_has_field_actions"] is True, d
+        if d["kind"] == "expired":
+            assert d["to_date"] and d["mirror_valid_to"] == d["to_date"] + "T23:59:59.999999+00:00", d
+        else:
+            assert d["to_date"] is None and d["mirror_valid_to"] is None, d
+            assert d["mirror_valid_from"] == d["from_date"] + "T00:00:00+00:00", d
 
 
 def check_sequences(seq: Dict[str, Any]) -> None:
@@ -626,6 +686,57 @@ def test_the_subcontractor_payment_writes_the_ledger_or_nothing():
     assert "if account_id:" not in src
 
 
+def test_the_membership_window_and_its_mirror():
+    """SEC-R1: the filter's day window and the enforce mirror's validity window."""
+    from app.tenancy import project_team as pt
+    from app.permissions.sync import membership_validity
+    flt = pt.membership_filter("u", "p", today="2026-11-06")
+    assert flt["active"] is True and flt["$and"] == pt.membership_date_window("2026-11-06")["$and"]
+    assert "$and" not in pt.membership_filter("u", "p", active=False)
+    assert membership_validity(None, None) == (None, None)
+    assert membership_validity("", "") == (None, None)
+    assert membership_validity("2026-11-01", "2026-11-05") == (
+        "2026-11-01T00:00:00+00:00", "2026-11-05T23:59:59.999999+00:00")
+    assert membership_validity("2026-11-01T08:00:00+00:00", None) == (
+        "2026-11-01T08:00:00+00:00", None)
+    assert dated_window("expired", "2026-11-06") == {"from_date": "2026-10-07",
+                                                     "to_date": "2026-11-05"}
+    assert dated_window("future", "2026-11-06") == {"from_date": "2026-11-07", "to_date": None}
+
+
+def test_an_expired_mirror_grants_nothing_in_enforce():
+    """SEC-R1 in enforce: the Permission Service refuses the mirror outside its window."""
+    import asyncio
+    from app.permissions import service
+    from app.permissions.catalog import project_membership_actions
+    from app.permissions.sync import membership_validity
+
+    def mirror(window):
+        vf, vt = membership_validity(*window)
+        return {"id": "m", "status": "active", "role_id": "LEGACY_TECHNICIAN",
+                "scope_type": "project", "scope_id": "P", "valid_from": vf, "valid_to": vt,
+                "permissions": project_membership_actions("LEGACY_TECHNICIAN", "Technician")}
+
+    class Ctx:
+        user_id, tenant_id = "u", "T"
+
+    def allowed(a):
+        async def load(_u, _t):
+            return [a]
+        orig = service._load_assignments
+        service._load_assignments = load
+        try:
+            return asyncio.run(service.evaluate_permission(
+                Ctx(), "labor.entry.create", module="M2", scope_type="project",
+                scope_id="P")).allowed
+        finally:
+            service._load_assignments = orig
+
+    assert not allowed(mirror(tuple(dated_window("expired").values())))
+    assert not allowed(mirror(tuple(dated_window("future").values())))
+    assert allowed(mirror((None, None)))
+
+
 def test_the_rule_table_itself():
     assert expected("labor_sync", "SiteManager", "A", "P1") == {"status": 200, "writes": True}
     assert expected("labor_sync", "Technician", "A", "P2")["status"] == 403
@@ -648,6 +759,7 @@ def test_the_committed_evidence_satisfies_the_package():
          "Driver", "Viewer"])
     check_rows(data["rows"])
     check_sequences(data["sequences"])
+    check_dated_memberships(data["dated_memberships_of_P2"])
 
 
 # ═══════════════════════════════════════════════════════════════════ real-Mongo test
@@ -668,6 +780,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     data = json.loads(out.read_text(encoding="utf-8"))
     check_rows(data["rows"])
     check_sequences(data["sequences"])
+    check_dated_memberships(data["dated_memberships_of_P2"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r["written"]) for r in data["rows"]} == \

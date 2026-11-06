@@ -474,7 +474,8 @@ async def add_team_member(project_id: str, data: TeamMemberAdd, user: dict = Dep
 
         def _sync():
             return sync_project_membership(_ctx, data.user_id, rid, project_id,
-                                           data.role_in_project, True, actor_id=user["id"])
+                                           data.role_in_project, True, actor_id=user["id"],
+                                           from_date=data.from_date, to_date=data.to_date)
         if _mode == MODE_SHADOW:
             # PR-06: in shadow the legacy membership write above is the truth and
             # stays done; a sync failure is observed (warning + FAILED reservation)
