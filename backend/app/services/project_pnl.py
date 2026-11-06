@@ -86,7 +86,13 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     wh = await project_warehouse_material_cost(tenant, org_id, project_id)
     material_cost_warehouse = wh["material_cost"]
 
-    material_cost = max(material_cost_invoices, material_cost_warehouse)
+    # 5C-C21 F-12 (Р10) — a project write-off is project cost, shown as its
+    # own „фира" line. It is part of the warehouse figure, so the existing
+    # max(invoice, warehouse) rule still sees it, and it is split out of the
+    # result: material_cost + material_waste_cost == the one material total.
+    material_total = max(material_cost_invoices, material_cost_warehouse)
+    material_waste_cost = round(wh.get("waste_cost", 0.0) or 0.0, 2)
+    material_cost = round(material_total - material_waste_cost, 2)
 
     # ── e. SUBCONTRACTOR COST ──────────────────────────────────────
     sub_payments = await tenant.subcontractor_payments.find(
@@ -120,7 +126,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     other_cost = round(sum(p.get("amount", 0) for p in other_docs), 2)
 
     # ── g. TOTALS ──────────────────────────────────────────────────
-    total_expense = round(labor_cost + material_cost + subcontractor_cost + contract_cost + overhead + other_cost, 2)
+    total_expense = round(labor_cost + material_cost + material_waste_cost + subcontractor_cost + contract_cost + overhead + other_cost, 2)
     gross_profit = round(total_revenue - total_expense, 2)
     margin_pct = round(gross_profit / total_revenue * 100, 1) if total_revenue > 0 else 0
     budget_vs_actual = round(total_budget - total_expense, 2)
@@ -154,6 +160,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "labor_hours": labor_hours,
             "overtime_cost": overtime_cost,
             "material_cost": material_cost,
+            "material_waste_cost": material_waste_cost,   # „фира" (5C-C21 F-12)
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
             "overhead": overhead,
@@ -167,6 +174,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "invoice_cost": material_cost_invoices,
             "legacy_excluded_cost": wh["legacy_excluded_cost"],
             "consumed_qty": wh["consumed_qty"],
+            "waste_cost": material_waste_cost,
+            "waste_qty": wh.get("waste_qty", 0.0),
             "partial_cost_data": wh["partial_cost_data"],
         },
         "profit": {

@@ -41,6 +41,8 @@ async def get_pnl_summary(project_id: str, user: dict = Depends(get_current_user
         "vat_payable": pnl["vat"]["vat_payable"],
         "total_expense": pnl["expense"]["total_expense"],
         "material_cost": pnl["expense"]["material_cost"],
+        # 5C-C21 F-12 — project write-off, its own „фира" line (in total_expense once).
+        "material_waste_cost": pnl["expense"]["material_waste_cost"],
         "gross_profit": pnl["profit"]["gross_profit"],
         "margin_pct": pnl["profit"]["margin_pct"],
         "status": pnl["profit"]["status"],

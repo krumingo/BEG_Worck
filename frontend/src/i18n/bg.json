@@ -1728,6 +1728,7 @@
     "revenueBreakdown": "Приходи",
     "laborCost": "Труд",
     "materialCost": "Материали",
+    "materialWasteCost": "Фира",
     "subcontractorCost": "Подизпълнители",
     "contractCost": "Външни плащания",
     "overhead": "Режийни",

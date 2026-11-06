@@ -377,7 +377,11 @@ def validate_envelope(env: MovementEnvelope) -> None:
         raise ValueError("only revision_adjustment may set corrects_movement_id")
 
 
-def envelope_fingerprint(env: MovementEnvelope) -> str:
+def envelope_fingerprint(
+    env: MovementEnvelope,
+    *,
+    transfer_target: Optional[Dict[str, str]] = None,
+) -> str:
     """Deterministic SHA-256 over the canonical envelope.
 
     Used as `request_fingerprint` in the idempotency registry: same
@@ -404,5 +408,12 @@ def envelope_fingerprint(env: MovementEnvelope) -> str:
     # (receive, dispatch, ...) is byte-identical to before.
     if "confirmed_at" in payload:
         payload["confirmed_at"] = None
+    # 5C-C21 F-13 — a warehouse transfer's target warehouse is business
+    # input carried beside the envelope (the row itself goes to
+    # in_transit), so a resend to another warehouse under the same key is
+    # a conflict. Added only when present: every other fingerprint stays
+    # byte-identical.
+    if transfer_target is not None:
+        payload["transfer_target"] = dict(transfer_target)
     canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

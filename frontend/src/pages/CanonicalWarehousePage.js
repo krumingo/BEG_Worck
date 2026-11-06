@@ -103,6 +103,10 @@ function CommandForm({ onResult, allowedActions }) {
   // project is credited only by its acceptance. The server enforces it; the
   // form does not even offer another destination.
   const isDispatch = action === ACTIONS.DISPATCH_WAREHOUSE_TO_PROJECT;
+  // 5C-C21 F-13 (Р11): a warehouse→warehouse transfer is in transit too; the
+  // receiving warehouse is the `transfer_target`, credited only on acceptance.
+  const isWhTransfer = action === ACTIONS.TRANSFER_WAREHOUSE_TO_WAREHOUSE;
+  const inTransit = isDispatch || isWhTransfer;
   // 5C-C19 F-6: consumption is bound to an SMR.
   const isConsume = action === ACTIONS.CONSUME_TO_SMR;
   const needsReason = action === ACTIONS.REVISION_ADJUSTMENT
@@ -134,10 +138,13 @@ function CommandForm({ onResult, allowedActions }) {
       if (sourceId) payload.source = {
         location_type: sourceType, location_id: sourceId, state: STATES.FREE,
       };
-      if (isDispatch) {
+      if (inTransit) {
         payload.destination = {
           location_type: LOCATION_TYPES.IN_TRANSIT, location_id: "pending",
           state: STATES.IN_TRANSIT,
+        };
+        if (isWhTransfer && destId) payload.transfer_target = {
+          location_type: destType, location_id: destId, state: STATES.FREE,
         };
       } else if (destId) payload.destination = {
         location_type: destType, location_id: destId,
@@ -171,7 +178,7 @@ function CommandForm({ onResult, allowedActions }) {
   }, [action, itemId, unit, quantity, unitValue, sourceType, sourceId,
       destType, destId, projectId, smrId, dispatchMovementId, acceptedQuantity,
       requestedQuantity, reason, notes, itemPending, outbound, isDispatch,
-      isConsume, onResult]);
+      isWhTransfer, inTransit, isConsume, onResult]);
 
   return (
     <div className="wh-form">
@@ -218,14 +225,29 @@ function CommandForm({ onResult, allowedActions }) {
         </div>
       </Field>
 
-      {isDispatch ? (
+      {inTransit ? (
         <Field label="Дестинация"
-               hint="Изпращането остава „в транзит“, докато обектът не го приеме (Rule B).">
+               hint={isWhTransfer
+                 ? "Трансферът остава „в транзит“, докато целевият склад не го приеме (Rule B)."
+                 : "Изпращането остава „в транзит“, докато обектът не го приеме (Rule B)."}>
           <div className="wh-fixed" data-testid="wh-dispatch-in-transit">
             in_transit · pending
           </div>
         </Field>
-      ) : (
+      ) : null}
+      {isWhTransfer ? (
+        <Field label="Целеви склад (кредитира се само при приемане)">
+          <div className="wh-row">
+            <select value={destType} data-testid="wh-transfer-target-type"
+                    onChange={e => setDestType(e.target.value)}>
+              <option value={LOCATION_TYPES.CENTRAL_WAREHOUSE}>central_warehouse</option>
+              <option value={LOCATION_TYPES.SMALL_WAREHOUSE}>small_warehouse</option>
+            </select>
+            <input value={destId} onChange={e => setDestId(e.target.value)}
+                   placeholder="ID" data-testid="wh-transfer-target-id" />
+          </div>
+        </Field>
+      ) : inTransit ? null : (
         <Field label="Дестинация">
           <div className="wh-row">
             <select value={destType}

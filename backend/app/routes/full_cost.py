@@ -264,8 +264,9 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
 
     sale = pkg.get("sale_total", 0)
     # 5C-C20 F-10 — canonical material actual at read time (no recompute).
-    from app.services.canonical_material_cost import package_material_actual
-    mat = await package_material_actual(tenant, org_id, pkg)
+    from app.services.canonical_material_cost import package_material_split
+    split = await package_material_split(tenant, org_id, pkg)
+    mat = split["total"]          # consumption + фира, once
     lab = pkg.get("actual_labor_cost", 0)
     overhead = pkg.get("overhead_actual_allocated", 0)
 
@@ -291,7 +292,8 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         "currency": "EUR",
         "sale_total": sale,
         "costs": {
-            "material": mat, "labor": lab, "subcontract": round(sub, 2),
+            "material": split["material"], "waste": split["waste"],
+            "labor": lab, "subcontract": round(sub, 2),
             "gross_cost": gross_cost, "overhead": overhead, "total_cost": total_cost,
         },
         "margin": {
@@ -331,7 +333,8 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
     # Material
     from app.routes.material_smr import get_material_summary_for_project
     mat_summary = await get_material_summary_for_project(org_id, project_id)
-    mat_cost = mat_summary["total_cost"]
+    mat_cost = mat_summary["total_cost"]                 # consumption + фира, once
+    mat_waste = mat_summary.get("waste_cost", 0.0) or 0.0  # 5C-C21 F-12
 
     # Labor
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -370,7 +373,7 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
         "project_code": project.get("code", ""), "project_name": project.get("name", ""),
         "currency": "EUR",
         "revenue": {"contracted": round(contracted, 2), "earned": round(earned, 2), "billed": round(billed, 2), "collected": round(collected, 2), "receivables": round(billed - collected, 2), "basis": basis_label},
-        "costs": {"material": mat_cost, "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost},
+        "costs": {"material": round(mat_cost - mat_waste, 2), "waste": round(mat_waste, 2), "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost},
         "profit": {
             "gross_profit": gross_profit, "gross_margin_percent": gross_pct,
             "net_profit": net_profit, "net_margin_percent": net_pct,

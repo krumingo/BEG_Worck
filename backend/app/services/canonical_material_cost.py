@@ -34,9 +34,12 @@ row keeps its historical legacy figure. This is the same rule
 ``/project-profit`` (``revenue_expense``) already applies via
 ``get_material_summary_for_project().has_data``.
 
-Open business questions this module deliberately does NOT decide (5C-C20):
-write-off as project cost, and Rule B for warehouse-to-warehouse transfers.
-Write-off stays a quantity-only movement here (COST_KINDS unchanged).
+5C-C21 F-12 (Р10, Крум 06.11.2026): a write-off (брак / загуба) FROM A
+PROJECT bucket is project cost — recognised once, by the projector row the
+command service writes inside the write-off transaction — and is reported as
+its own line, „фира" (``waste_cost``). Readers keep ``material`` = consumption
+and add ``waste`` beside it; every total includes both exactly once. A
+write-off from a warehouse is not project cost (no row is written).
 """
 from __future__ import annotations
 
@@ -45,7 +48,10 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 CANONICAL_SOURCE = "canonical_warehouse_service"
 
 # 5C-C19 F-7 — project material cost is recognised ONCE, at consumption.
-COST_KINDS: Tuple[str, ...] = ("consume",)
+# 5C-C21 F-12 (Р10) — and at a write-off from a project („фира").
+COST_KINDS: Tuple[str, ...] = ("consume", "write_off")
+WASTE_KINDS: Tuple[str, ...] = ("write_off",)
+WASTE_LABEL = "фира"
 
 PROJECT_LOCATION_TYPES = ("project", "subproject")
 
@@ -101,7 +107,8 @@ async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
     cursor = tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id,
          "projection_source": CANONICAL_SOURCE,
-         "movement_kind": {"$in": list(COST_KINDS)}},
+         "movement_kind": {"$in": list(COST_KINDS)},
+         "cost_recognized": True},
         {"_id": 0},
     )
     return [row async for row in cursor]
@@ -112,28 +119,45 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
     rows = await project_cost_rows(tenant, org_id, project_id)
     by_item, by_name = await load_planned_mapping(tenant, org_id, project_id)
     total = 0.0
+    waste = 0.0
     qty = 0.0
+    waste_qty = 0.0
     partial = False
     by_package: Dict[str, float] = {}
+    waste_by_package: Dict[str, float] = {}
     qty_by_package: Dict[str, float] = {}
     unmapped_cost = 0.0
     for row in rows:
         value = _f(row.get("total_value"))
         q = _f(row.get("quantity")) or 0.0
-        qty += q
+        is_waste = row.get("movement_kind") in WASTE_KINDS
         pkg_id = resolve_execution_package(row, by_item, by_name)
-        if pkg_id:
-            qty_by_package[pkg_id] = qty_by_package.get(pkg_id, 0.0) + q
+        if is_waste:
+            waste_qty += q
+        else:
+            qty += q
+            if pkg_id:
+                qty_by_package[pkg_id] = qty_by_package.get(pkg_id, 0.0) + q
         if value is None:
             partial = True
             continue
         total += value
+        if is_waste:
+            waste += value
         if pkg_id:
             by_package[pkg_id] = by_package.get(pkg_id, 0.0) + value
+            if is_waste:
+                waste_by_package[pkg_id] = waste_by_package.get(pkg_id, 0.0) + value
         else:
             unmapped_cost += value
     return {
+        # total_cost = consumption + фира (each recognised once).
         "total_cost": round(total, 2),
+        "consumption_cost": round(total - waste, 2),
+        "waste_cost": round(waste, 2),
+        "waste_qty": round(waste_qty, 4),
+        "waste_label": WASTE_LABEL,
+        "waste_by_package": {k: round(v, 2) for k, v in waste_by_package.items()},
         "consumed_qty": round(qty, 4),
         "mapped_cost": round(total - unmapped_cost, 2),
         "unmapped_cost": round(unmapped_cost, 2),
@@ -148,12 +172,26 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
 
 
 async def package_material_actual(tenant, org_id: str, pkg: dict) -> float:
-    """Canonical material actual of one execution package (read time)."""
+    """Canonical material actual of one execution package (read time):
+    consumption + фира of the package."""
+    split = await package_material_split(tenant, org_id, pkg)
+    return split["total"]
+
+
+async def package_material_split(tenant, org_id: str, pkg: dict) -> Dict[str, float]:
+    """5C-C21 F-12 — {material (consumption), waste (фира), total} of a package."""
     project_id = pkg.get("project_id")
     if not project_id:
-        return 0.0
+        return {"material": 0.0, "waste": 0.0, "total": 0.0}
     cost = await project_material_cost(tenant, org_id, project_id)
-    return cost["by_package"].get(pkg["id"], 0.0)
+    return split_for_package(cost, pkg["id"])
+
+
+def split_for_package(cost: Dict[str, Any], pkg_id: str) -> Dict[str, float]:
+    total = cost["by_package"].get(pkg_id, 0.0)
+    waste = cost["waste_by_package"].get(pkg_id, 0.0)
+    return {"material": round(total - waste, 2), "waste": round(waste, 2),
+            "total": round(total, 2)}
 
 
 def legacy_issue_cost(txns: Iterable[dict]) -> float:
@@ -179,16 +217,25 @@ async def project_warehouse_material_cost(tenant, org_id: str, project_id: str) 
     if canonical["has_data"]:
         return {"material_cost": canonical["total_cost"], "source": "canonical",
                 "canonical_cost": canonical["total_cost"],
+                "consumption_cost": canonical["consumption_cost"],
+                "waste_cost": canonical["waste_cost"],
+                "waste_qty": canonical["waste_qty"],
                 "legacy_cost": 0.0, "legacy_excluded_cost": legacy,
                 "consumed_qty": canonical["consumed_qty"],
                 "partial_cost_data": canonical["partial_cost_data"]}
     return {"material_cost": legacy, "source": "legacy" if legacy_txns else "none",
             "canonical_cost": 0.0, "legacy_cost": legacy,
+            "consumption_cost": legacy, "waste_cost": 0.0, "waste_qty": 0.0,
             "legacy_excluded_cost": 0.0, "consumed_qty": 0.0,
             "partial_cost_data": False}
 
 
 # ───────────────────────── quantity trail (F-11) ─────────────────────────
+
+def is_project_location(loc: Optional[dict]) -> bool:
+    """A ledger location dict that is a project / subproject bucket."""
+    return bool(loc) and loc.get("location_type") in PROJECT_LOCATION_TYPES
+
 
 def _at_project(loc: Optional[dict], project_id: str) -> bool:
     return bool(loc) and loc.get("location_type") in PROJECT_LOCATION_TYPES \
@@ -223,8 +270,8 @@ async def canonical_project_trail(tenant, org_id: str, project_id: str) -> Dict[
       Rule B: not on the project yet);
     * issued_to_project — accepted on / delivered directly to the project;
     * consumed — consume_to_smr from the project;
-    * written_off — write-off from the project (quantity only; cost
-      treatment is an open question, not decided here);
+    * written_off — write-off from the project (its cost is the „фира"
+      line of project_material_cost, 5C-C21 F-12);
     * returned — any other movement leaving the project (transfer to a
       warehouse / project, quarantine entry, return to supplier).
     """

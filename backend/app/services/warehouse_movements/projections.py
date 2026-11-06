@@ -135,6 +135,12 @@ async def apply_projection(
     if act == CanonicalAction.CONSUME_TO_SMR.value:
         await _project_consumption(tenant_db, env, session=session)
 
+    # 3b. 5C-C21 F-12 (Р10) — a write-off FROM A PROJECT bucket is project
+    # cost, recognised once, as the „фира" line. A warehouse write-off
+    # is not project cost and writes no material_entries row.
+    if act == CanonicalAction.WRITE_OFF.value and is_project_location(env.source):
+        await _project_write_off(tenant_db, env, session=session)
+
     # 4. Dispatch / transfer open an in-transit bucket mirroring the
     # dispatched layers so a later acceptance can split them.
     if act in {
@@ -143,7 +149,8 @@ async def apply_projection(
         CanonicalAction.TRANSFER_PROJECT_TO_WAREHOUSE.value,
         CanonicalAction.TRANSFER_PROJECT_TO_PROJECT.value,
     }:
-        await _open_in_transit(tenant_db, env, session=session)
+        await _open_in_transit(tenant_db, env, session=session,
+                               transfer_target=hints.get("transfer_target"))
 
     # 5. Acceptance closes in-transit (decrements unresolved).
     if act == CanonicalAction.ACCEPT_PROJECT_DELIVERY.value:
@@ -404,8 +411,61 @@ async def _project_consumption(
     )
 
 
+PROJECT_LOCATION_TYPES = (LocationType.PROJECT.value, LocationType.SUBPROJECT.value)
+
+
+def is_project_location(loc: Optional[Dict[str, Any]]) -> bool:
+    """True when a ledger location dict is a project / subproject bucket."""
+    return bool(loc) and loc.get("location_type") in PROJECT_LOCATION_TYPES
+
+
+async def _project_write_off(
+    tenant_db, env: MovementEnvelope, *, session=None,
+) -> None:
+    """5C-C21 F-12 (Р10) — rebuildable `material_entries` row for one
+    write-off (брак / загуба) from a project bucket: project cost, shown
+    as the „фира" line. Same deterministic key as a consumption
+    (`me_<movement_id>`), so a replay or a sync upserts the SAME row and
+    the cost is recognised exactly once. Value is the server FIFO value
+    of the written-off layers (env.unit_value), never client input.
+    """
+    quantity = Decimal(str(env.quantity))
+    unit_value = Decimal(str(env.unit_value))
+    project_id = env.project_id or (env.source or {}).get("location_id")
+    row = {
+        "projection_source": "canonical_warehouse_service",
+        "projection_version": 2,
+        "tenant_id": env.tenant_id,
+        "org_id": env.tenant_id,
+        "movement_id": env.movement_id,
+        "project_id": project_id,
+        "subproject_id": env.subproject_id,
+        "smr_id": env.smr_id,
+        "work_package_id": env.work_package_id,
+        "item_id": env.item_id,
+        "unit": env.unit,
+        "quantity": str(quantity),
+        "unit_value": str(unit_value),
+        "total_value": str((quantity * unit_value).quantize(Decimal("0.0001"))),
+        "currency": env.currency,
+        "written_off_at": env.recorded_at,
+        "reason": env.reason,
+        "ledger_sequence": None,
+        "movement_kind": "write_off",
+        "cost_recognized": True,
+        "id": f"me_{env.movement_id}",
+    }
+    await tenant_db[MATERIAL_ENTRIES_COLLECTION].update_one(
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "movement_id": env.movement_id},
+        {"$set": row},
+        upsert=True,
+        session=session,
+    )
+
+
 async def _open_in_transit(
     tenant_db, env: MovementEnvelope, *, session=None,
+    transfer_target: Optional[Dict[str, str]] = None,
 ) -> None:
     """Open an in-transit bucket keyed by dispatch_movement_id.
 
@@ -431,6 +491,10 @@ async def _open_in_transit(
         "unit_value": str(env.unit_value),
         "currency": env.currency,
         "dispatched_at": env.recorded_at,
+        # 5C-C21 F-13 — the warehouse a transfer is for (None for a
+        # project dispatch). Live: from the service hint; rebuild: from
+        # the ledger row.
+        "transfer_target": transfer_target or getattr(env, "transfer_target", None),
     }
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
         {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "dispatch_movement_id": env.movement_id},

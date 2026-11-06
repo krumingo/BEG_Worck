@@ -32,9 +32,12 @@ router = APIRouter(tags=["Material Cost by SMR"])
 # Every cost reader in this module filters on COST_KINDS.
 from app.services.canonical_material_cost import (  # noqa: E402
     COST_KINDS,
+    WASTE_KINDS,
     canonical_project_trail,
-    package_material_actual,
+    is_project_location,
+    package_material_split,
     project_material_cost,
+    split_for_package,
     resolve_execution_package,
     resolve_planned,
 )
@@ -119,7 +122,9 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
         "transfer_project_to_warehouse": ("transfer_out", -1),
         "transfer_project_to_project": ("transfer", 1),
         "revision_adjustment": ("revision", 1),
-        "write_off": ("write_off", -1),
+        # 5C-C21 F-12: a project write-off is cost (фира), so it is +1
+        # like a consumption (both leave the project as cost).
+        "write_off": ("write_off", 1),
     }
 
     cursor = tenant.warehouse_transactions.find(
@@ -141,7 +146,9 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
         mv_id = row.get("movement_id")
         movement_value = (unit_value_f * qty) if unit_value_f is not None else None
         # 5C-C19 F-7: only a consumption is project cost.
-        cost_recognized = kind in COST_KINDS
+        # 5C-C21 F-12: a write-off only from a project bucket (Р10).
+        cost_recognized = kind in COST_KINDS and (
+            kind != "write_off" or is_project_location(row.get("source")))
         if cost_recognized:
             total_value = movement_value
         else:
@@ -238,6 +245,8 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
     total_issued_qty = 0.0
     total_returned_qty = 0.0
     total_cost = 0.0
+    waste_cost = 0.0
+    total_waste_qty = 0.0
     partial_cost = False
     entries_count = 0
     if project_id:
@@ -247,7 +256,8 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
         def _row(name, unit):
             return by_material.setdefault(name, {
                 "material_name": name, "unit": unit or "", "issued_qty": 0,
-                "returned_qty": 0, "consumed_qty": 0, "net_cost": 0})
+                "returned_qty": 0, "consumed_qty": 0, "waste_qty": 0,
+                "waste_cost": 0, "net_cost": 0})
 
         for e in cost["rows"]:
             if resolve_execution_package(e, by_item, by_name) != pkg_id:
@@ -257,13 +267,24 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
             name = e.get("material_name") or (pm or {}).get("material_name") or e.get("item_id") or ""
             m = _row(name, e.get("unit"))
             qty = float(e.get("quantity") or 0)
-            m["consumed_qty"] += qty
-            total_returned_qty += abs(qty)
+            is_waste = e.get("movement_kind") in WASTE_KINDS
+            if is_waste:
+                # 5C-C21 F-12 — the „фира" line; its quantity is already in
+                # the trail's written_off (returned_qty) below.
+                m["waste_qty"] += qty
+                total_waste_qty += qty
+            else:
+                m["consumed_qty"] += qty
+                total_returned_qty += abs(qty)
             if e.get("total_value") is None:
                 partial_cost = True
             else:
-                total_cost += float(e["total_value"])
-                m["net_cost"] += float(e["total_value"])
+                value = float(e["total_value"])
+                total_cost += value
+                m["net_cost"] += value
+                if is_waste:
+                    waste_cost += value
+                    m["waste_cost"] += value
 
         # Quantity trail (arrived / left) from the canonical ledger itself.
         trail = await canonical_project_trail(tenant, org_id, project_id)
@@ -278,7 +299,8 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
             total_returned_qty += t["returned"] + t["written_off"]
 
     for v in by_material.values():
-        for k in ["issued_qty", "returned_qty", "consumed_qty", "net_cost"]:
+        for k in ["issued_qty", "returned_qty", "consumed_qty", "waste_qty",
+                  "waste_cost", "net_cost"]:
             v[k] = round(v[k], 2)
 
     budget = pkg.get("material_budget_total", 0)
@@ -288,7 +310,12 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
         "execution_package_id": pkg_id,
         "activity_name": pkg.get("activity_name", ""),
         "material_budget": budget,
-        "material_actual_cost": round(total_cost, 2),
+        # 5C-C21 F-12: material = consumption; „фира" its own line;
+        # the variance is on their sum (both use the material budget).
+        "material_actual_cost": round(total_cost - waste_cost, 2),
+        "material_waste_cost": round(waste_cost, 2),
+        "material_waste_qty": round(total_waste_qty, 2),
+        "material_total_cost": round(total_cost, 2),
         "material_variance": variance,
         "total_issued_qty": round(total_issued_qty, 2),
         "total_returned_qty": round(total_returned_qty, 2),
@@ -327,19 +354,24 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
     # Aggregate actual from the canonical cost rows — same read-time
     # attribution every report uses (5C-C20 F-10), so the cached
     # `actual_material_cost` equals what the reports compute.
-    actual_by_pkg = (await project_material_cost(tenant, org_id, project_id))["by_package"]
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+    actual_by_pkg = mat_cost["by_package"]
 
     updated = 0
     for pkg in pkgs:
         pid = pkg["id"]
         budget = budget_by_pkg.get(pid) or pkg.get("material_budget_total", 0)
-        actual = round(actual_by_pkg.get(pid, 0), 2)
+        # 5C-C21 F-12: the cache keeps material (consumption) and „фира"
+        # apart, exactly as the reports show them; the variance is on the sum.
+        split = split_for_package(mat_cost, pid)
+        actual = split["total"]
         variance_val = round(actual - budget, 2) if budget > 0 else None
         variance_pct = round(variance_val / budget * 100, 1) if budget > 0 and variance_val is not None else None
 
         await tenant.execution_packages.update_one({"id": pid}, {"$set": {
             "material_budget_total": round(budget, 2),
-            "actual_material_cost": actual,
+            "actual_material_cost": split["material"],
+            "actual_material_waste_cost": split["waste"],
             "material_variance_value": variance_val,
             "material_variance_percent": variance_pct,
             "updated_at": datetime.now(timezone.utc).isoformat(),
@@ -364,7 +396,8 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
 
     sale = pkg.get("sale_total", 0)
     # 5C-C20 F-10 — canonical material actual at read time (no recompute).
-    mat_actual = await package_material_actual(tenant, org_id, pkg)
+    split = await package_material_split(tenant, org_id, pkg)
+    mat_actual = split["total"]          # consumption + фира, once (5C-C21 F-12)
     lab_actual = pkg.get("actual_labor_cost", 0)
 
     # Subcontract for this package
@@ -396,7 +429,8 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
             "total": budget_total,
         },
         "actual": {
-            "material": mat_actual,
+            "material": split["material"],
+            "waste": split["waste"],             # „фира"
             "labor": lab_actual,
             "subcontract": round(sub_certified, 2),
             "total": total_actual,
@@ -437,7 +471,8 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
     for pkg in pkgs:
         pid = pkg["id"]
         sale = pkg.get("sale_total", 0)
-        mat = mat_cost["by_package"].get(pid, 0.0)
+        split = split_for_package(mat_cost, pid)
+        mat = split["total"]                  # consumption + фира, once
         mat_budget = pkg.get("material_budget_total", 0) or 0
         mat_variance = round(mat - mat_budget, 2) if mat_budget > 0 else None
         lab = pkg.get("actual_labor_cost", 0)
@@ -451,7 +486,8 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
             "activity_name": pkg.get("activity_name", ""),
             "sale_total": sale,
             "material_budget": pkg.get("material_budget_total", 0),
-            "material_actual": mat,
+            "material_actual": split["material"],
+            "material_waste": split["waste"],     # „фира" (5C-C21 F-12)
             "material_variance": mat_variance,
             "labor_budget": pkg.get("labor_budget_total", 0),
             "labor_actual": lab,
@@ -528,6 +564,9 @@ async def get_material_summary_for_project(org_id: str, project_id: str) -> dict
     total = cost["total_cost"]
     return {
         "total_cost": total,
+        # 5C-C21 F-12 — total = consumption + „фира", each once.
+        "consumption_cost": cost["consumption_cost"],
+        "waste_cost": cost["waste_cost"],
         "mapped_cost": cost["mapped_cost"],
         "unmapped_cost": cost["unmapped_cost"],
         "budget_total": round(budget, 2),

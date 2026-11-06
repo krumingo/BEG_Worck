@@ -112,6 +112,9 @@ async def test_transfer_conserves_qty_and_value_roundtrip(
         source=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh_a"),
         destination=LocationKey(LocationType.IN_TRANSIT, "wh_a_to_b",
                                 state=MovementState.IN_TRANSIT),
+        # 5C-C21 F-13 (Р11): the receiving warehouse is named explicitly;
+        # it is credited only on acceptance.
+        transfer_target=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh_b"),
         quantity=Decimal("4"),
     ))
     env = disp.envelope

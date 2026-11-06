@@ -196,6 +196,10 @@ class CommandInput:
     corrects_movement_id: Optional[str] = None
     revision_evidence: Optional[Dict[str, Any]] = None
     occurred_at: Optional[str] = None
+    # 5C-C21 F-13 (Р11) — the warehouse a TRANSFER_WAREHOUSE_TO_WAREHOUSE
+    # is FOR. The transfer itself goes to in_transit; this warehouse is
+    # credited only by an ACCEPT_PROJECT_DELIVERY against the transfer.
+    transfer_target: Optional[LocationKey] = None
 
 
 # -----------------------------------------------------------------------
@@ -615,11 +619,19 @@ class CommandService:
         # directly. Normalized BEFORE the gate so the gate (and the
         # fingerprint) see the destination that is actually written.
         self._force_dispatch_into_transit(inp)
+        # 5C-C21 F-13 (Р11) — the same Rule B for warehouse→warehouse.
+        self._force_transfer_into_transit(inp)
+        # 5C-C21 F-12 (Р10) — a write-off from a project is project cost;
+        # the project scope is server-derived from the source bucket.
+        self._bind_write_off_project(inp)
 
-        # Permission (C06 — both source + destination + project scopes)
+        # Permission (C06 — both source + destination + project scopes).
+        # A transfer's physical destination is the TARGET warehouse even
+        # though the row goes to in_transit, so its scope is checked now.
         await self._gate.ensure(
             ctx, action=action, source=inp.source,
-            destination=inp.destination, project_id=inp.project_id,
+            destination=inp.transfer_target or inp.destination,
+            project_id=inp.project_id,
         )
 
         # Shape rules evaluated outside the tx so a malformed envelope
@@ -871,7 +883,11 @@ class CommandService:
         # Fingerprint ignores server-derived fields (envelope.py already
         # strips movement_id / recorded_at / occurred_at / audit_event_id)
         # — so a replay with identical client input matches.
-        fp = envelope_fingerprint(base_env)
+        fp = envelope_fingerprint(
+            base_env,
+            transfer_target=(inp.transfer_target.to_dict()
+                             if inp.transfer_target is not None else None),
+        )
 
         # Idempotency reservation (SAME session as the business write).
         idem = await _idem_begin_with_session(
@@ -924,6 +940,9 @@ class CommandService:
                 raise InvariantViolationError(
                     "accept_project_delivery requires dispatch_movement_id",
                     context={"action": action.value})
+            await self._enforce_transfer_acceptance_target(
+                tenant_collection, session=session, inp=inp,
+            )
             accepted_qty = Decimal(str(inp.accepted_quantity if inp.accepted_quantity is not None
                                         else inp.quantity))
             # Multi-partial acceptance uniqueness.
@@ -1062,6 +1081,8 @@ class CommandService:
         ledger_row["ledger_sequence"] = ledger_sequence
         if acceptance_line_id:
             ledger_row["acceptance_line_id"] = acceptance_line_id
+        if inp.transfer_target is not None:
+            ledger_row["transfer_target"] = inp.transfer_target.to_dict()
         await tenant_collection.insert_one(ledger_row, session=session)
 
         # If this is a dispatch, open a mirrored IN_TRANSIT inbound row
@@ -1161,6 +1182,8 @@ class CommandService:
                 "ledger_sequence": ledger_sequence,
                 "acceptance_line_id": acceptance_line_id,
                 "unresolved_discrepancy_movement_id": unresolved_mv_id,
+                "transfer_target": (inp.transfer_target.to_dict()
+                                    if inp.transfer_target is not None else None),
             },
         )
         chained = await _record_event_in_session(tenant_db, audit_event, session=session)
@@ -1186,6 +1209,8 @@ class CommandService:
             ]
         if acceptance_line_id:
             projection_hints["acceptance_line_id"] = acceptance_line_id
+        if inp.transfer_target is not None:
+            projection_hints["transfer_target"] = inp.transfer_target.to_dict()
         # CODEX C13.2 / C16 — carry the resolution set so the projector
         # can clear the active in-transit `unresolved_discrepancies`
         # map for this dispatch. ``resolved_discrepancy_movement_ids``
@@ -1221,6 +1246,8 @@ class CommandService:
 
         final = env.to_dict()
         final["ledger_sequence"] = ledger_sequence
+        if inp.transfer_target is not None:
+            final["transfer_target"] = inp.transfer_target.to_dict()
         if acceptance_line_id:
             final["acceptance_line_id"] = acceptance_line_id
         return ExecuteResult(
@@ -1269,6 +1296,133 @@ class CommandService:
             location_id="pending",
             state=MovementState.IN_TRANSIT,
         )
+
+    @staticmethod
+    def _force_transfer_into_transit(inp: CommandInput) -> None:
+        """5C-C21 F-13 (Р11) — Rule B for warehouse → warehouse transfers.
+
+        A transfer never credits the receiving warehouse directly: the
+        stock is "в път" (in_transit) and lands in the target warehouse
+        only through ACCEPT_PROJECT_DELIVERY against the transfer
+        (partial acceptances and discrepancies work exactly as for a
+        project dispatch). So:
+
+          * a non-transit `destination` (the old direct transfer) is
+            REFUSED — never silently converted;
+          * the receiving warehouse is named in `transfer_target`
+            (central/small warehouse, state free, not the source);
+          * the row's destination is forced to the server-issued transit
+            bucket (`pending` → the transfer's own movement_id, C11.9).
+        """
+        if inp.action != CanonicalAction.TRANSFER_WAREHOUSE_TO_WAREHOUSE:
+            if inp.transfer_target is not None:
+                raise InvariantViolationError(
+                    "transfer_target is only valid on transfer_warehouse_to_warehouse",
+                    context={"action": inp.action.value},
+                )
+            return
+        dest = inp.destination
+        if dest is not None and dest.location_type != LocationType.IN_TRANSIT:
+            raise InvariantViolationError(
+                "direct transfer_warehouse_to_warehouse is refused: the stock "
+                "goes to in_transit and the target warehouse is credited only "
+                "by accept_project_delivery (Rule B, Р11)",
+                context={"destination": dest.to_dict(),
+                         "required": {"destination": {"location_type": "in_transit",
+                                                      "location_id": "pending",
+                                                      "state": "in_transit"},
+                                      "transfer_target": "<warehouse>"}},
+            )
+        target = inp.transfer_target
+        warehouses = {LocationType.CENTRAL_WAREHOUSE, LocationType.SMALL_WAREHOUSE}
+        if target is None or target.location_type not in warehouses \
+                or target.state != MovementState.FREE or not target.location_id:
+            raise InvariantViolationError(
+                "transfer_warehouse_to_warehouse requires transfer_target: "
+                "a warehouse location in state free",
+                context={"transfer_target": None if target is None else target.to_dict()},
+            )
+        src = inp.source
+        if src is None or src.location_type not in warehouses:
+            raise InvariantViolationError(
+                "transfer_warehouse_to_warehouse must source from a warehouse",
+                context={"source": None if src is None else src.to_dict()},
+            )
+        if (src.location_type, src.location_id) == (target.location_type, target.location_id):
+            raise InvariantViolationError(
+                "transfer_target must differ from the source warehouse",
+                context={"source": src.to_dict(), "transfer_target": target.to_dict()},
+            )
+        inp.destination = LocationKey(
+            LocationType.IN_TRANSIT,
+            location_id="pending",
+            state=MovementState.IN_TRANSIT,
+        )
+
+    @staticmethod
+    def _bind_write_off_project(inp: CommandInput) -> None:
+        """5C-C21 F-12 (Р10) — a WRITE_OFF from a project bucket is project
+        cost (ред „фира“). The project it belongs to is derived from the
+        source bucket, never trusted from the body: for a PROJECT source
+        `project_id` is the source id (a different one is refused); a
+        SUBPROJECT source must name its project. A write-off from a
+        warehouse is not project cost and may not carry a project_id
+        (it would otherwise read as one).
+        """
+        if inp.action != CanonicalAction.WRITE_OFF:
+            return
+        src = inp.source
+        if src is None:
+            return  # refused later: outbound action requires a source
+        if src.location_type == LocationType.PROJECT:
+            if inp.project_id and inp.project_id != src.location_id:
+                raise InvariantViolationError(
+                    "write_off project_id must be the source project",
+                    context={"source": src.to_dict(), "project_id": inp.project_id},
+                )
+            inp.project_id = src.location_id
+        elif src.location_type == LocationType.SUBPROJECT:
+            if not inp.project_id:
+                raise InvariantViolationError(
+                    "write_off from a subproject requires its project_id",
+                    context={"source": src.to_dict()},
+                )
+        elif inp.project_id:
+            raise InvariantViolationError(
+                "a write_off from a non-project location is not project cost "
+                "and cannot carry a project_id",
+                context={"source": src.to_dict(), "project_id": inp.project_id},
+            )
+
+    async def _enforce_transfer_acceptance_target(
+        self, tenant_collection, *, session, inp: CommandInput,
+    ) -> None:
+        """5C-C21 F-13 — an acceptance against a warehouse transfer must land
+        in exactly the transfer's target warehouse (state free). The gate
+        already checked the destination scope the caller named; this pins
+        that destination to the one the transfer was made for."""
+        dispatch = await tenant_collection.find_one(
+            {"movement_id": inp.dispatch_movement_id},
+            {"action": 1, "transfer_target": 1, "_id": 0}, session=session,
+        )
+        if not dispatch or dispatch.get("action") != \
+                CanonicalAction.TRANSFER_WAREHOUSE_TO_WAREHOUSE.value:
+            return
+        target = dispatch.get("transfer_target") or {}
+        dest = inp.destination
+        if dest is None or dest.state != MovementState.FREE \
+                or dest.location_type.value != target.get("location_type") \
+                or dest.location_id != target.get("location_id"):
+            raise InvariantViolationError(
+                "acceptance of a warehouse transfer must land in its target warehouse",
+                context={"transfer_target": target,
+                         "destination": None if dest is None else dest.to_dict()},
+            )
+        if inp.project_id:
+            raise InvariantViolationError(
+                "acceptance of a warehouse transfer cannot carry a project_id",
+                context={"project_id": inp.project_id},
+            )
 
     def _enforce_state_rule_outside_tx(self, inp: CommandInput) -> None:
         action = inp.action

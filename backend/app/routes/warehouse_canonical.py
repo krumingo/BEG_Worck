@@ -97,6 +97,9 @@ class MovementCommandBody(BaseModel):
     corrects_movement_id: Optional[str] = None
     revision_evidence: Optional[Dict[str, Any]] = None
     occurred_at: Optional[str] = None
+    # 5C-C21 F-13 — the receiving warehouse of transfer_warehouse_to_warehouse
+    # (credited only on acceptance; `destination` stays in_transit).
+    transfer_target: Optional[LocationBody] = None
 
     @validator("action")
     def _known_action(cls, v: str) -> str:
@@ -212,6 +215,7 @@ async def post_movement(
             corrects_movement_id=body.corrects_movement_id,
             revision_evidence=body.revision_evidence,
             occurred_at=body.occurred_at,
+            transfer_target=body.transfer_target.to_key() if body.transfer_target else None,
             # C06: `confirmed_by`, `confirmed_at`, pending-mapping are
             # all SERVER-DERIVED by the command service — never
             # accepted from the request body.

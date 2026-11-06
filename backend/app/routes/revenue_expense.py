@@ -478,8 +478,12 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     # Enhanced material from material_entries if available
     from app.routes.material_smr import get_material_summary_for_project
     material_summary = await get_material_summary_for_project(org_id, project_id)
+    material_waste_cost = 0.0
     if material_summary["has_data"]:
         net_material_cost = material_summary["total_cost"]
+        # 5C-C21 F-12 — the „фира" share of that canonical total, shown
+        # as its own line; the total is still counted once.
+        material_waste_cost = material_summary.get("waste_cost", 0.0) or 0.0
 
     # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -584,7 +588,8 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         },
 
         "expenses": {
-            "material": net_material_cost,
+            "material": round(net_material_cost - material_waste_cost, 2),
+            "waste": round(material_waste_cost, 2),          # „фира" (5C-C21 F-12)
             "material_detail": material_summary if material_summary["has_data"] else None,
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),

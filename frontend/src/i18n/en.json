@@ -1546,6 +1546,7 @@
     "revenueBreakdown": "Revenue",
     "laborCost": "Labor",
     "materialCost": "Materials",
+    "materialWasteCost": "Material waste (write-off)",
     "subcontractorCost": "Subcontractors",
     "contractCost": "External Payments",
     "overhead": "Overhead",
