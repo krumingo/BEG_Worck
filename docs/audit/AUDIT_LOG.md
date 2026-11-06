@@ -11,7 +11,7 @@
 | #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `8aac73d` | **PASS** (R29 428 + C01A-1 fixed); low C01A-L1 (takeover race: writes then 409); INT: add/add conflict `frontend/src/lib/idempotency.js` with #69 | 2026-11-06 |
+| #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
 | #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1080,7 +1080,7 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #70 PAY-01 | `8aac73d` | **PASS** (R29 428 + C01A-1 fixed); low C01A-L1 (takeover race: writes then 409); INT: add/add conflict `frontend/src/lib/idempotency.js` with #69 | 2026-11-06 |
+| #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
 | #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
@@ -1324,8 +1324,8 @@ Merge-tree, `64418eb` against each:
 |---|---|
 | main | clean |
 | #67 | clean |
-| #70 PAY-01 | `8aac73d` | **PASS** (R29 428 + C01A-1 fixed); low C01A-L1 (takeover race: writes then 409); INT: add/add conflict `frontend/src/lib/idempotency.js` with #69 | 2026-11-06 |
-| #71 SEC-02 | `73b72b5` | **FINDINGS**: Addendum A closes D1/D9 + 2 scan hits; SEC02-1 remainder still open (work-sessions, site-workers, smr-groups, pulse, ocr-invoice) | 2026-11-06 |
+| #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
+| #71 SEC-02 | `ba29dac` | **PASS** for SEC-02 (SEC02-1 CLOSED, FG-15 replay strip OK, #69 merge kept behaviour); IDEM-IDX-1 applies (inherited from #69) | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 | conflict: catalog.py, procurement.py, sales.py |
 
@@ -1646,3 +1646,78 @@ INT-70x69:
   - #70 exports `createKeyHolder().get()/settle(err)`, which keeps the key only on a network error.
   - These are two different contracts at one path. One must win at merge, and the callers of the other must be ported.
   - The A1 inventory conflicts as well.
+
+
+## IDEM-IDX-1 (HIGH, blocking, money, cross-PR: main W0-04 + #69 + #70 + #71) — PROVED
+
+The W0-04 idempotency registry (`app/audit/idempotency.py` `begin_idempotent`) does find-then-insert. Its docstring says the key is "reserved atomically via a unique index". **No application code creates that index:**
+- not `server.py` startup (which creates `audit_logs` and `organizations` indexes only);
+- not tenant provisioning;
+- not ST-02 staging.
+
+Only the manual script `scripts/w0_04_bootstrap_audit_indexes.py --apply` creates it, and nothing in `ops/` calls that script. With database-per-tenant, every new tenant database starts without the index.
+
+Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
+
+| PR | Route | Without the index (as the app leaves it) | With `create_index("id", unique=True)` |
+|---|---|---|---|
+| #69 `07faab5` | `POST /api/subcontractor-payments` (probe `sec01/probe_sec01_c02_payments.py` P1c, `PROBE_CREATE_IDEM_INDEX=0/1`), 4 runs | ledger +1 / +2 / +4 / +2 rows | +1 in 4/4 runs |
+| #70 `42bbdfc` | `POST /api/finance/payments` (probe `pay01/probe_idem_index_race.py`), 4 runs | rows +6 / +2 / +3 / +2 (worst case: **6 payments from one key**) | +1 in 4/4 runs |
+
+- **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
+- **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
+- **Fix direction:**
+  - the app creates the `audit_idempotency.id` unique index (and the `audit_events` unique indexes) idempotently at startup and when a tenant database is provisioned;
+  - add a test that starts from a database with no indexes;
+  - the main debt "W0-04 `record_event` concurrency loses AuditEvents" probably has the same root cause (the `(tenant_id, sequence)` unique index is also script-only). That part is a suspicion.
+
+## #70 PAY-01-C01 D5 @ `42bbdfc` — 2026-11-06 ~22:50 UTC — FINDINGS (IDEM-IDX-1; D5-R pre-existing)
+
+Delta (D5):
+- every allocate item is validated before the first write (cumulatively per invoice);
+- uuid5 allocation ids per (tenant, payment, key, index), written with an upsert;
+- the "remaining" amounts are computed from active allocations, excluding this key's own rows.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_pay_01*.py` | **462 passed** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/206 |
+| A1 | 0/418 |
+
+R0: 814 on `8aac73d`. Not re-run on `42bbdfc`, because the delta is `finance.py` allocate only.
+
+Probes on `42bbdfc`:
+- `probe_pay01_c01a_source_module.py`: M1–M7 unchanged. M5 [200, 409], payment active (**C01A-1 still closed**). M7 same as C01A-L1.
+- `probe_pay01_r29_keys.py`: FAILS none.
+
+**D5-R1/R2 (HIGH, money, PRE-EXISTING on main `8e3b190`, not a regression): PROVED** with `probe_pay01_d5_race.py`.
+- R1: two concurrent allocates with *different* keys on a payment of 100 (80 each) → 200/200, **160 allocated on a 100 payment**, in 5/5 runs.
+- R2: two payments of 800 allocated concurrently to one invoice of total 1200 → 200/200, **1600 allocated on a 1200 invoice**, in 5/5 runs.
+- main gives the same result.
+- Validation reads a snapshot, and nothing serialises allocates on the same payment or invoice. The `_payment_lock` from C01A-1 is used only on the module-owned cancel path.
+- Recommendation: put allocate under the payment lock (and an invoice lock), or use conditional `$inc` counters. This is for Krum/orchestrator to decide whether it is in D5 scope.
+
+## #71 SEC-02-B @ `ba29dac` (merges #69 `07faab5`) — 2026-11-06 ~22:50 UTC — PASS (IDEM-IDX-1 inherited)
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo | **51 passed** on re-run; the first run had 1 failure that did not reproduce, and it was killed by a worker restart before I could read which test |
+| R0 | **814** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/207 |
+| A1 | 0/420 |
+
+Probes:
+- **SEC02-1 CLOSED (PROVED):** `probe_sec02_unregistered_money_gets.py` → `docs/audit/probes/sec02/scan_ba29dac.json`.
+  - Only non-money noise is left: `/billing/plans` public prices, `/organization` `vat_percent`, `/invoice-context` `default_vat_rate`.
+  - All of these are gone: work-sessions (+ summary/overtime), site-workers, smr-groups (+ tree), the pulse routes, ocr-invoice, subscription, warehouse/batches, activity budgets / budget-health / activities-overview, labor-warnings.
+- **FG-15 replay strip (PROVED),** `sec02/probe_sec02_fg15_replay.py`, in off and enforce:
+  - a member Technician POSTs `/labor-entries` twice with one key → 201/201, one row;
+  - neither the first response nor the replay has `hourly_rate`/`labor_cost`; the stored row keeps both;
+  - an Accountant's replay keeps the money.
+- **#69 behaviour after the merge:** sec01 siblings, r16 and sitemanager-loss all pass; c02_payments P2 (NaN/Inf → 422) and P3 (404) are unchanged. P1c varies only because of IDEM-IDX-1 (#69 alone shows the same).
