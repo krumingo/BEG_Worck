@@ -77,7 +77,35 @@ On main, `projects.py` and `pay_runs.py` contain no other reader of `finance_pay
 
 The 30 cases that pass on main are the regression checks that already held there: 403 for non-finance roles, cross-tenant 404, and project P&L 0 (on main the payment was deleted).
 
-The full DB-free baseline and both guards are in the HANDOFF message.
+Full DB-free suite (`PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider`):
+
+| Tree | Passed | Failed | Skipped |
+|---|---|---|---|
+| main 07da9ab | 1621 | 166 | 442 |
+| this branch | 1667 | 166 | 487 |
+
+- **Same environment for both:** this container, with `REACT_APP_BACKEND_URL` pointing at a closed local port.
+- **Errors:** the 993 errors are live-API tests that need a running server. They are identical on both trees.
+- **Failures:** the FAILED/ERROR set is **byte-identical** between main and the branch (`diff` is empty). The 15 failures in `test_w0_03e_legacy_routes.py` are among them.
+- **What the branch adds:** +46 passed and +45 skipped, all from the new PAY-01 tests (their real-Mongo cases skip when no URL is set).
+- **These are not the reference numbers:** they differ from the 1085 / 15 / 50 reference because this container collects more test files. The comparison that matters is main against branch on the same machine.
+
+Two existing files had to change because the contract changed:
+- `test_w0_03e_a1_collision_matrix.py`: the allocation DELETE now sends a reason. The isolation assertions are unchanged.
+- `docs/architecture/W0-03E-A1_INVENTORY.md`: regenerated with `scripts/w0_03e_a1_inventory.py`. It went from 359 to 362 accesses, all SAFE or FIXED, none UNSCOPED.
+
+Real Mongo (`mongo:7.0` replica set) results:
+
+| Files | Result |
+|---|---|
+| PAY-01, A1 real, A2B gate, A2C two-tenant boundary, R0-06 | 157 passed |
+
+Guards:
+
+| Guard | Result |
+|---|---|
+| `w0_03e_a2c_tenant_boundary_guard.py` | 205 modules, 0 violations |
+| `w0_03e_a1_tenant_access_guard.py` | 416 units, 0 violations |
 
 ## Rollback
 
