@@ -19,6 +19,9 @@ with TestClient(app, raise_server_exceptions=False) as tc:
     c = tc.portal.call(lambda: AsyncIOMotorClient(os.environ["MONGO_URL"])); op = c[os.environ["DB_NAME"]]
     q = lambda f: tc.portal.call(f)
     rep = q(lambda: seed_mod.seed(op, c[os.environ["BEG_SYSTEM_DB"]], PW))
+    if os.environ.get("PROBE_RUN_STARTUP_INDEXES") == "1":   # what server.startup does on #72
+        from app.audit.indexes import ensure_audit_indexes_for_installation
+        q(lambda: ensure_audit_indexes_for_installation(op, c[os.environ["BEG_SYSTEM_DB"]]))
     if os.environ.get("PROBE_CREATE_IDEM_INDEX") == "1":
         q(lambda: op["audit_idempotency"].create_index("id", unique=True))
     A = next(t for t in rep["tenants"] if t["key"] == "A"); U = {u["key"]: u for u in A["users"]}

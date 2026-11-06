@@ -11,7 +11,7 @@
 | #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
+| #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1080,7 +1080,7 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
+| #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
@@ -1324,7 +1324,7 @@ Merge-tree, `64418eb` against each:
 |---|---|
 | main | clean |
 | #67 | clean |
-| #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
+| #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #71 SEC-02 | `f17f7e5` | **FINDINGS: SEC02C-1 per-worker pay derivable from the SM pulse budget view**; scan clean | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
@@ -1662,7 +1662,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | PR | Route | Without the index (as the app leaves it) | With `create_index("id", unique=True)` |
 |---|---|---|---|
 | #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
-| #70 `42bbdfc` | `POST /api/finance/payments` (probe `pay01/probe_idem_index_race.py`), 4 runs | rows +6 / +2 / +3 / +2 (worst case: **6 payments from one key**) | +1 in 4/4 runs |
+| #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
+| #72 W0-04-C01 | `e733c66` | **PASS** (fixes IDEM-IDX-1; chain linear under 50 concurrent; #56 recipe verified); rollout risk: startup refuses on existing duplicates | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -1821,3 +1822,80 @@ Scan `scan_f17f7e5.json`: only the 3 noise routes are left (billing/plans, organ
   - drop `workers_count`, or suppress the per-SMR cost where it is fewer than 2 (k-anonymity);
   - or drop `worker_id` + `smr_types` + `hours` from `workers[]` for the budget view;
   - and use multi-day aggregates.
+
+
+## #72 W0-04-C01 @ `e733c66` — 2026-11-06/07 ~23:50 UTC — PASS
+
+What it does:
+- `app/audit/indexes.py` `ensure_audit_indexes` is idempotent and drops or deletes nothing. A conflicting index → `AuditIndexConflict`; existing duplicates → `AuditIndexDuplicates`. It is called by `server.startup` for the operational database plus every database named in the registry, and by `onboard_tenant` before its first write.
+- `record_event` retries a `(tenant_id, sequence)` collision from the new head: at most 100 attempts, with jitter.
+
+Probe `docs/audit/probes/w004/probe_w004_c01.py`. Real `server.app` startup (handlers **not** cleared), fresh databases with no indexes. All PROVED:
+
+| Case | Result |
+|---|---|
+| I1 | startup created the 4 unique indexes in the operational database **and** in the database named in the registry |
+| I2 | 6 concurrent `begin_idempotent`, one key → exactly 1 STARTED, 5 duplicate |
+| I3 | 50 concurrent `record_event` → 50 stored, sequences 1..50 distinct, `verify_chain` (True, None) |
+| I4 | existing non-unique `id_1` → `AuditIndexConflict`, the index is kept |
+| I5 | 2 duplicate idempotency rows → `AuditIndexDuplicates`, both rows kept |
+| I6 | indexes dropped, then `POST /api/billing/signup` → 200, and onboarding re-created the unique indexes |
+
+**IDEM-IDX-1 is resolved on the merge.**
+- On a scratch merge of #70 `31ed258` with #72 `e733c66`, `probe_idem_index_race.py` with `PROBE_RUN_STARTUP_INDEXES=1` (the startup function only, no manual index) gives 6 concurrent `POST /finance/payments` with one key → **+1 row in 4/4 runs**.
+- Before #72 the same probe gave up to +6.
+
+**The #56 merge recipe is verified.** Trial merge of `e733c66` with #56 `3234446`, `store.py` resolved as the HANDOFF says (`session` passed through; `if session is not None or not _is_sequence_collision(exc): raise`):
+- W0-04 + AUTH-02 + R0-04 tests: 83 passed; R0: 814.
+- Probe `w004/probe_w004_x56_tx_race.py`, 3 rounds of 20 transactional (`run_in_transaction`) + 20 plain appends on one tenant: **0 failures**, 120 stored, `verify_chain` True.
+- Under transactions the conflict surfaces as a transient write conflict that `with_transaction` retries.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_w0_04*` | 47 passed |
+| W0 | 1090/15/60, same 15 failures as main (+5 passed, +10 skipped are the new tests) |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | 814 |
+
+Merge-tree, `e733c66` against each:
+
+| Against | Result |
+|---|---|
+| #69, #70 | clean |
+| #56 | conflict: `store.py` (recipe above) + the A2B inventory |
+| #55, #71 | conflict: the A2B inventory only |
+
+**Rollout risk (not a code defect; for Krum).** If a production or staging database already has duplicate idempotency rows or `(tenant_id, sequence)` events, which are likely given IDEM-IDX-1 and the `record_event` debt, the **app refuses to start** after deploy, by design. Before deploying, run the dry run `scripts/w0_04_bootstrap_audit_indexes.py` against a copy of the data, as the HANDOFF says.
+
+## #70 PAY-01-C01 Addenda C + D @ `31ed258` — 2026-11-07 ~00:00 UTC — PASS
+
+Delta:
+- Addendum C: `_row_lock` (`allocation_lock` field) on the payment and on every invoice, taken in sorted order as a try-lock (409 `PAYMENT_BUSY` / `INVOICE_BUSY`), for allocate and quick-pay.
+- Addendum D (FG-50): `_require_tenant_project` on other-expense/income.
+
+Probes:
+
+| Probe | Result |
+|---|---|
+| `probe_pay01_d5_race.py` R1 | 2 × 80 on a payment of 100 → [200, 409], 80 allocated, in 5/5 runs. **D5-R1 FIXED** |
+| `probe_pay01_d5_race.py` R2 | 2 × 800 on an invoice of 1200 → [200, 409], 800 allocated, in 5/5 runs. **D5-R2 FIXED** |
+| `probe_pay01_fg50.py` | nonexistent, tenant B's and non-string `project_id` → 422, +0, on both routes; own project → 201. **FG-50 PROVED** |
+| `probe_pay01_c01a_source_module.py` | M5 [200, 409] (C01A-1 still closed); FAILS none |
+| `probe_pay01_r29_keys.py` | FAILS none |
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_pay_01*.py` | **510 passed** |
+| R0 | 814 |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/206 |
+| A1 | 0/418 |
+
+Info:
+- `allocation_lock` is a transient field written onto invoice and payment rows. A crash leaves it for up to 30 s (stale takeover).
+- List endpoints may show it; it is cosmetic.
