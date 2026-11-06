@@ -3,7 +3,7 @@
 > **Статус:** 100% — BUSINESS LOCK  
 > **Последна проверка:** 04.08.2026  
 > **Implementation Gate:** всяко решение се проверява технически чрез FLOW-042  
-> **Одобрени решения:** D-01–D-15
+> **Одобрени решения:** D-01–D-16
 
 ## Цел
 
@@ -111,6 +111,15 @@ BEG_Work се развива като Construction Operating System:
 
 Пълната спецификация е в [TENANCY_MODEL.md](../architecture/TENANCY_MODEL.md).
 
+## D-16 — Аварийно възстановяване на Owner достъп от сървъра
+
+Решено от Крум на 06.11.2026 (Р19, потвърдено като D-решение с Р24). Тясно изключение от FLOW-040 L5 само за един случай: Owner на tenant не може да влезе и паролата му се възстановява от сървъра чрез break-glass CLI.
+
+- изисква име на изпълняващия човек и причина;
+- не изисква двете предварителни независими одобрения от L5, защото Owner, който би одобрил, не може да влезе;
+- записва се canonical AuditEvent (R1 retention) и Owner получава известие;
+- не дава достъп до бизнес съдържание; всичко друго в L5 (incident/restore/support достъп) остава с две одобрения, срок и автоматичен revoke.
+
 ## Общ код и no-private-fork governance
 
 Всички tenant-и използват един общ код и Release Manifest. Позволената стълбица е:
@@ -146,4 +155,5 @@ BEG_Work се развива като Construction Operating System:
 - D-11: storage abstraction 15.07.2026; customer-managed storage уточнение 03.08.2026.
 - D-12–D-14: 16.07.2026.
 - D-15: tenancy решение 29.07.2026; no-fork/environments/retention синхронизация 04.08.2026.
+- D-16: решения Р19 и Р24 на Крум, 06.11.2026 (`docs/architecture/RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md`).
 - FLOW-050 и финалните architecture decision документи в Draft PR #2.
