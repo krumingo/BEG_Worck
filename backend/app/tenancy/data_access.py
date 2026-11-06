@@ -107,15 +107,17 @@ class TenantCollection:
         return self._scope._db[self.name]
 
     # ---------------------------------------------------------------- reads
-    async def get(self, record_id: Any, projection: Optional[Mapping] = None) -> Optional[Dict]:
+    async def get(self, record_id: Any, projection: Optional[Mapping] = None,
+                  **kw) -> Optional[Dict]:
         """The tenant's record with this ``id``; ``None`` when absent here.
 
         ``None`` also for an empty/absent id: a missing relation is never
-        resolved to anything.
+        resolved to anything. ``kw`` passes driver options (e.g. ``session``).
         """
         if record_id in (None, ""):
             return None
-        return await self._raw.find_one(self._scope.scoped({"id": record_id}), _proj(projection))
+        return await self._raw.find_one(self._scope.scoped({"id": record_id}), _proj(projection),
+                                        **kw)
 
     async def require(self, record_id: Any, projection: Optional[Mapping] = None,
                       detail: str = "Not found") -> Dict:
@@ -146,15 +148,17 @@ class TenantCollection:
         """A motor cursor over the tenant's matching documents."""
         return self._raw.find(self._scope.scoped(flt), _proj(projection), **kw)
 
-    async def count(self, flt: Optional[Mapping] = None) -> int:
-        return await self._raw.count_documents(self._scope.scoped(flt))
+    async def count(self, flt: Optional[Mapping] = None, **kw) -> int:
+        return await self._raw.count_documents(self._scope.scoped(flt), **kw)
 
-    async def count_documents(self, flt: Optional[Mapping] = None) -> int:
+    async def count_documents(self, flt: Optional[Mapping] = None, **kw) -> int:
         """The motor name, so a converted call site reads like the original."""
-        return await self.count(flt)
+        return await self.count(flt, **kw)
 
-    async def distinct(self, key: str, flt: Optional[Mapping] = None) -> List:
-        return await self._raw.distinct(key, self._scope.scoped(flt))
+    async def distinct(self, key: str, flt: Optional[Mapping] = None, **kw) -> List:
+        # 5C-C19 F-3: driver options (notably ``session``) pass through,
+        # in the same ``**kw`` style PR #56 uses for get/count.
+        return await self._raw.distinct(key, self._scope.scoped(flt), **kw)
 
     def aggregate(self, pipeline: List[Mapping]):
         """Aggregation restricted to the tenant; every join must be :meth:`TenantData.lookup`."""

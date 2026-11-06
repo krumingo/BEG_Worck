@@ -17,13 +17,37 @@ import {
   ACTIONS, LOCATION_TYPES, STATES,
   postMovement, readBalance, readHistory, readIntegrityWarnings,
 } from "@/lib/warehouseCanonicalApi";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  allowedCommandActions, canReadWarehouseHistory, canReadWarehouseStock,
+} from "@/lib/warehouseCanonicalAccess";
 
+// 5C-C19 F-6: each panel names the right it needs; the page shows only the
+// panels the session role holds (same catalog as the Permission Service).
 const PANELS = [
-  { id: "stock", label: "Наличност" },
-  { id: "history", label: "История" },
-  { id: "commands", label: "Движения" },
-  { id: "warnings", label: "Аларми" },
+  { id: "stock", label: "Наличност", needs: "stock" },
+  { id: "history", label: "История", needs: "history" },
+  { id: "commands", label: "Движения", needs: "write" },
+  { id: "warnings", label: "Аларми", needs: "stock" },
 ];
+
+/** The panels a role may open (5C-C19 F-6). */
+export function visiblePanels(role) {
+  const rights = {
+    stock: canReadWarehouseStock(role),
+    history: canReadWarehouseHistory(role),
+    write: allowedCommandActions(role).length > 0,
+  };
+  return PANELS.filter((p) => rights[p.needs]);
+}
+
+/** Render an API failure as `CODE: message` (never as an empty result). */
+function describeError(e) {
+  const code = e?.response?.data?.detail?.error_code
+    || (e?.response?.status ? `HTTP_${e.response.status}` : "NETWORK_ERROR");
+  const msg = e?.response?.data?.detail?.message || e?.message || "";
+  return msg ? `${code}: ${msg}` : code;
+}
 
 function Button({ children, onClick, disabled, variant = "primary" }) {
   const base = "wh-btn";
@@ -50,8 +74,11 @@ function Field({ label, children, hint }) {
  * CommandForm — the single form that posts any canonical movement.
  * Action is chosen first; the fields the action needs are shown.
  */
-function CommandForm({ onResult }) {
-  const [action, setAction] = useState(ACTIONS.RECEIVE_FROM_SUPPLIER);
+function CommandForm({ onResult, allowedActions }) {
+  // 5C-C19 F-6: only the canonical actions the role holds are offered.
+  const actions = allowedActions && allowedActions.length
+    ? allowedActions : Object.values(ACTIONS);
+  const [action, setAction] = useState(actions[0]);
   const [itemId, setItemId] = useState("");
   const [unit, setUnit] = useState("bag");
   const [quantity, setQuantity] = useState("");
@@ -61,6 +88,7 @@ function CommandForm({ onResult }) {
   const [destType, setDestType] = useState(LOCATION_TYPES.CENTRAL_WAREHOUSE);
   const [destId, setDestId] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [smrId, setSmrId] = useState("");
   const [dispatchMovementId, setDispatchMovementId] = useState("");
   const [acceptedQuantity, setAcceptedQuantity] = useState("");
   const [requestedQuantity, setRequestedQuantity] = useState("");
@@ -71,6 +99,12 @@ function CommandForm({ onResult }) {
   const [err, setErr] = useState("");
 
   const needsAcceptance = action === ACTIONS.ACCEPT_PROJECT_DELIVERY;
+  // 5C-C19 F-4: a dispatch always goes to in_transit/pending (Rule B); the
+  // project is credited only by its acceptance. The server enforces it; the
+  // form does not even offer another destination.
+  const isDispatch = action === ACTIONS.DISPATCH_WAREHOUSE_TO_PROJECT;
+  // 5C-C19 F-6: consumption is bound to an SMR.
+  const isConsume = action === ACTIONS.CONSUME_TO_SMR;
   const needsReason = action === ACTIONS.REVISION_ADJUSTMENT
     || action === ACTIONS.WRITE_OFF
     || action === ACTIONS.RETURN_TO_SUPPLIER;
@@ -100,11 +134,17 @@ function CommandForm({ onResult }) {
       if (sourceId) payload.source = {
         location_type: sourceType, location_id: sourceId, state: STATES.FREE,
       };
-      if (destId) payload.destination = {
+      if (isDispatch) {
+        payload.destination = {
+          location_type: LOCATION_TYPES.IN_TRANSIT, location_id: "pending",
+          state: STATES.IN_TRANSIT,
+        };
+      } else if (destId) payload.destination = {
         location_type: destType, location_id: destId,
         state: itemPending ? STATES.QUARANTINE : STATES.FREE,
       };
       if (projectId) payload.project_id = projectId;
+      if (isConsume && smrId) payload.smr_id = smrId.trim();
       if (dispatchMovementId) payload.dispatch_movement_id = dispatchMovementId;
       if (acceptedQuantity) payload.accepted_quantity = acceptedQuantity.toString();
       if (requestedQuantity) payload.requested_quantity = requestedQuantity.toString();
@@ -119,6 +159,7 @@ function CommandForm({ onResult }) {
       setDispatchMovementId("");
       setReason("");
       setNotes("");
+      setSmrId("");
     } catch (e) {
       const code = e?.response?.data?.detail?.error_code || "UNKNOWN";
       const msg = e?.response?.data?.detail?.message || e.message;
@@ -128,15 +169,17 @@ function CommandForm({ onResult }) {
       setBusy(false);
     }
   }, [action, itemId, unit, quantity, unitValue, sourceType, sourceId,
-      destType, destId, projectId, dispatchMovementId, acceptedQuantity,
-      requestedQuantity, reason, notes, itemPending, outbound, onResult]);
+      destType, destId, projectId, smrId, dispatchMovementId, acceptedQuantity,
+      requestedQuantity, reason, notes, itemPending, outbound, isDispatch,
+      isConsume, onResult]);
 
   return (
     <div className="wh-form">
       <Field label="Действие">
-        <select value={action} onChange={e => setAction(e.target.value)}>
-          {Object.entries(ACTIONS).map(([k, v]) =>
-            <option key={v} value={v}>{k.replace(/_/g, " ").toLowerCase()}</option>
+        <select value={action} onChange={e => setAction(e.target.value)}
+                data-testid="wh-action-select">
+          {actions.map((v) =>
+            <option key={v} value={v}>{v.replace(/_/g, " ")}</option>
           )}
         </select>
       </Field>
@@ -175,22 +218,39 @@ function CommandForm({ onResult }) {
         </div>
       </Field>
 
-      <Field label="Дестинация">
-        <div className="wh-row">
-          <select value={destType}
-                  onChange={e => setDestType(e.target.value)}>
-            {Object.entries(LOCATION_TYPES).map(([k, v]) =>
-              <option key={v} value={v}>{k.toLowerCase()}</option>)}
-          </select>
-          <input value={destId} onChange={e => setDestId(e.target.value)}
-                 placeholder="ID" />
-        </div>
-      </Field>
+      {isDispatch ? (
+        <Field label="Дестинация"
+               hint="Изпращането остава „в транзит“, докато обектът не го приеме (Rule B).">
+          <div className="wh-fixed" data-testid="wh-dispatch-in-transit">
+            in_transit · pending
+          </div>
+        </Field>
+      ) : (
+        <Field label="Дестинация">
+          <div className="wh-row">
+            <select value={destType}
+                    onChange={e => setDestType(e.target.value)}>
+              {Object.entries(LOCATION_TYPES).map(([k, v]) =>
+                <option key={v} value={v}>{k.toLowerCase()}</option>)}
+            </select>
+            <input value={destId} onChange={e => setDestId(e.target.value)}
+                   placeholder="ID" />
+          </div>
+        </Field>
+      )}
 
-      <Field label="Проект (ако е приложим)">
+      <Field label={isDispatch ? "Проект (за кой обект е изпращането)" : "Проект (ако е приложим)"}>
         <input value={projectId}
                onChange={e => setProjectId(e.target.value)} />
       </Field>
+
+      {isConsume && (
+        <Field label="СМР (smr_id)"
+               hint="Разходът се записва по тази СМР позиция.">
+          <input value={smrId} onChange={e => setSmrId(e.target.value)}
+                 data-testid="wh-smr-id" />
+        </Field>
+      )}
 
       {needsAcceptance && (
         <>
@@ -229,7 +289,8 @@ function CommandForm({ onResult }) {
 
       {err ? <div className="wh-error">{err}</div> : null}
 
-      <Button onClick={submit} disabled={busy || !itemId || !quantity}>
+      <Button onClick={submit}
+              disabled={busy || !itemId || !quantity || (isConsume && !smrId.trim())}>
         {busy ? "Запис..." : "Запиши движение"}
       </Button>
     </div>
@@ -241,12 +302,17 @@ function StockPanel() {
   const [itemId, setItemId] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const load = useCallback(async () => {
     if (!itemId) return;
     setLoading(true);
+    setError("");
     try {
       const d = await readBalance({ itemId: itemId.trim() });
       setRows(d.balances || []);
+    } catch (e) {
+      setRows([]);
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }
@@ -268,7 +334,10 @@ function StockPanel() {
             <div className="wh-stock-qty">{r.quantity}</div>
           </div>
         )}
-        {rows.length === 0 && !loading
+        {error
+          ? <div className="wh-error" role="alert">Наличността не е прочетена — {error}</div>
+          : null}
+        {rows.length === 0 && !loading && !error
           ? <div className="wh-empty">Няма налични наличности за артикула.</div>
           : null}
       </div>
@@ -282,11 +351,16 @@ function HistoryPanel() {
   const [projectId, setProjectId] = useState("");
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const load = useCallback(async () => {
     setLoading(true);
+    setError("");
     try {
       const d = await readHistory({ itemId: itemId.trim(), projectId: projectId.trim() || undefined });
       setRows(d.rows || []);
+    } catch (e) {
+      setRows([]);
+      setError(describeError(e));
     } finally {
       setLoading(false);
     }
@@ -302,6 +376,9 @@ function HistoryPanel() {
       <Button onClick={load} disabled={loading}>
         {loading ? "Четене..." : "Покажи история"}
       </Button>
+      {error
+        ? <div className="wh-error" role="alert">Историята не е прочетена — {error}</div>
+        : null}
       <div className="wh-hist-list">
         {rows.map((r) =>
           <div key={r.movement_id} className="wh-hist-row">
@@ -316,31 +393,60 @@ function HistoryPanel() {
 }
 
 
-function WarningsPanel() {
+/**
+ * WarningsPanel — FLOW-009 integrity alarms.
+ *
+ * 5C-C19 F-3: "no alarms" is shown ONLY for a successful answer that really
+ * carries an empty `warnings` list. A failed request (500, 403, network) or a
+ * malformed answer is an error state — never a false all-clear.
+ */
+export function WarningsPanel({ load = readIntegrityWarnings }) {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
+      setError("");
       try {
-        const d = await readIntegrityWarnings();
-        if (!cancelled) setData(d);
+        const d = await load();
+        if (cancelled) return;
+        if (!d || !Array.isArray(d.warnings)) {
+          setData(null);
+          setError("INVALID_RESPONSE: отговорът няма списък с аларми");
+        } else {
+          setData(d);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setData(null);
+          setError(describeError(e));
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
     return () => { cancelled = true; };
-  }, []);
-  if (loading && !data) return <div className="wh-panel">Четене...</div>;
-  const warnings = data?.warnings ?? [];
+  }, [load]);
+  if (loading) return <div className="wh-panel">Четене...</div>;
+  if (error) {
+    return (
+      <div className="wh-panel">
+        <div className="wh-error" role="alert" data-testid="wh-warnings-error">
+          Алармите не са проверени — състоянието е НЕИЗВЕСТНО. {error}
+        </div>
+      </div>
+    );
+  }
+  const warnings = data.warnings;
   return (
     <div className="wh-panel">
       <div className="wh-warnings-header">
-        <span>Актуализирано: {data?.fresh_at}</span>
+        <span>Актуализирано: {data.fresh_at}</span>
       </div>
       {warnings.length === 0
-        ? <div className="wh-empty">Няма активни аларми по интегритет.</div>
+        ? <div className="wh-empty" data-testid="wh-warnings-empty">Няма активни аларми по интегритет.</div>
         : warnings.map((w, i) =>
             <div key={i} className="wh-warning-row">
               <div className="wh-warning-code">{w.code}</div>
@@ -353,8 +459,13 @@ function WarningsPanel() {
 
 
 export default function CanonicalWarehousePage() {
-  const [tab, setTab] = useState("stock");
+  const { user } = useAuth();
+  const role = user?.role;
+  const panels = useMemo(() => visiblePanels(role), [role]);
+  const allowedActions = useMemo(() => allowedCommandActions(role), [role]);
+  const [tab, setTab] = useState(panels[0]?.id ?? "stock");
   const [lastResult, setLastResult] = useState(null);
+  const activeTab = panels.some((p) => p.id === tab) ? tab : panels[0]?.id;
   return (
     <div className="wh-canonical-page">
       <style>{CANONICAL_WAREHOUSE_CSS}</style>
@@ -363,19 +474,21 @@ export default function CanonicalWarehousePage() {
         <div className="wh-sub">FLOW-009 · TASK 5C · append-only ledger</div>
       </header>
       <nav className="wh-tabs" aria-label="warehouse panels">
-        {PANELS.map(p =>
-          <button key={p.id}
-                  className={`wh-tab ${tab === p.id ? "wh-tab-active" : ""}`}
+        {panels.map(p =>
+          <button key={p.id} data-testid={`wh-tab-${p.id}`}
+                  className={`wh-tab ${activeTab === p.id ? "wh-tab-active" : ""}`}
                   onClick={() => setTab(p.id)}>
             {p.label}
           </button>
         )}
       </nav>
       <main className="wh-main">
-        {tab === "stock" && <StockPanel />}
-        {tab === "history" && <HistoryPanel />}
-        {tab === "warnings" && <WarningsPanel />}
-        {tab === "commands" && <CommandForm onResult={setLastResult} />}
+        {activeTab === "stock" && <StockPanel />}
+        {activeTab === "history" && <HistoryPanel />}
+        {activeTab === "warnings" && <WarningsPanel />}
+        {activeTab === "commands" && allowedActions.length > 0 && (
+          <CommandForm onResult={setLastResult} allowedActions={allowedActions} />
+        )}
         {lastResult && (
           <div className={`wh-last-result ${lastResult.ok ? "ok" : "err"}`}>
             {lastResult.ok
@@ -411,6 +524,7 @@ const CANONICAL_WAREHOUSE_CSS = `
 .wh-btn-primary { background: #111; color: #fff; }
 .wh-btn-primary:disabled { background: #999; cursor: not-allowed; }
 .wh-btn-ghost { background: #fff; border: 1px solid #d1d5db; color: #111; }
+.wh-fixed { padding: 10px; border: 1px dashed #d1d5db; border-radius: 8px; font-size: 14px; color: #333; }
 .wh-checkbox { display: flex; gap: 8px; align-items: center; font-size: 13px; }
 .wh-error { background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b; padding: 10px; border-radius: 8px; font-size: 13px; }
 .wh-stock-list, .wh-hist-list { display: flex; flex-direction: column; gap: 6px; }

@@ -444,15 +444,38 @@ async def _record_event_in_session(tenant_db, event, *, session):
     if head is None:
         prev_sequence = 0
         prev_hash = None
-        prev_event = None
     else:
         prev_sequence = int(head.get("sequence", 0))
         prev_hash = head.get("integrity_hash")
-        # chain_hashes needs a minimal "previous event" shape.
-        prev_event = {"sequence": prev_sequence,
-                      "integrity_hash": prev_hash}
 
-    new_sequence = prev_sequence + 1
+    # 5C-C19 F-1 — ONE append-only AuditEvent sequence per tenant
+    # (CLAUDE.md §2.8). `audit_events` is shared with the W0-04 writer
+    # (`app.audit.store.record_event`: permission grants, master data,
+    # auth, ...), which appends after its own last event and never
+    # touches `audit_chain_head`. The head is therefore only the CAS
+    # pivot that serializes canonical writers; the true predecessor is
+    # the tenant's last stored event. Continue from whichever is
+    # further along (normally the tail), never from a fresh sequence 1
+    # and never as a second chain.
+    tail = await tenant_db[AUDIT_COLLECTION].find_one(
+        {"tenant_id": tenant_id},
+        {"_id": 0, "sequence": 1, "integrity_hash": 1},
+        sort=[("sequence", -1)],
+        session=session,
+    )
+    if tail is not None and int(tail.get("sequence") or 0) >= prev_sequence:
+        chain_sequence = int(tail.get("sequence") or 0)
+        chain_hash = tail.get("integrity_hash")
+    else:
+        chain_sequence = prev_sequence
+        chain_hash = prev_hash
+    # chain_hashes needs a minimal "previous event" shape.
+    prev_event = (
+        None if chain_sequence == 0
+        else {"sequence": chain_sequence, "integrity_hash": chain_hash}
+    )
+
+    new_sequence = chain_sequence + 1
 
     # 2. Compute the chained envelope.
     chained = chain_hashes(event, prev_event)
@@ -587,6 +610,11 @@ class CommandService:
         action = inp.action
         if action not in CanonicalAction:
             raise UnknownActionError(f"unknown action {action!r}")
+
+        # 5C-C19 F-4 — Rule B: a dispatch never credits its target
+        # directly. Normalized BEFORE the gate so the gate (and the
+        # fingerprint) see the destination that is actually written.
+        self._force_dispatch_into_transit(inp)
 
         # Permission (C06 — both source + destination + project scopes)
         await self._gate.ensure(
@@ -1210,6 +1238,37 @@ class CommandService:
                 context={"action": inp.action.value,
                          "supplied_unit_value": str(inp.unit_value)},
             )
+
+    @staticmethod
+    def _force_dispatch_into_transit(inp: CommandInput) -> None:
+        """5C-C19 F-4 — every dispatch goes to `in_transit` / `pending`.
+
+        Rule B (F-09=B): the project is credited only by
+        ACCEPT_PROJECT_DELIVERY. A dispatch whose destination is a
+        project (or any non-transit bucket) would put the stock on the
+        project before acceptance, so it is REFUSED, never silently
+        accepted. A missing destination, or an in-transit destination
+        with any client state / id, is forced to the server-issued
+        transit bucket (`pending` → the dispatch's own movement_id,
+        C11.9): the client never chooses the transit state or id.
+        """
+        if inp.action != CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT:
+            return
+        dest = inp.destination
+        if dest is not None and dest.location_type != LocationType.IN_TRANSIT:
+            raise InvariantViolationError(
+                "dispatch_warehouse_to_project must go to in_transit; "
+                "the project is credited only by accept_project_delivery",
+                context={"destination": dest.to_dict(),
+                         "required": {"location_type": "in_transit",
+                                      "location_id": "pending",
+                                      "state": "in_transit"}},
+            )
+        inp.destination = LocationKey(
+            LocationType.IN_TRANSIT,
+            location_id="pending",
+            state=MovementState.IN_TRANSIT,
+        )
 
     def _enforce_state_rule_outside_tx(self, inp: CommandInput) -> None:
         action = inp.action

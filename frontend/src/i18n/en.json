@@ -149,6 +149,7 @@
     "assetsBatchIntake": "Stock intake",
     "assetsIntakeReview": "Pending approval",
     "masterDataReview": "Master Data review",
+    "warehouseCanonical": "Warehouse (canonical)",
     "assetsItems": "Items",
     "assetsUnits": "Assets (QR)",
     "dashboard": "Dashboard",

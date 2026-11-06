@@ -396,6 +396,14 @@ async def startup():
     from app.services.fifo_service import ensure_indexes as ensure_fifo_indexes
     await ensure_fifo_indexes()
 
+    # 5C-C19 F-1b: canonical warehouse ledger / idempotency / AuditEvent
+    # indexes (TASK 5C). Idempotent; failure is logged and the command
+    # service stays fail-closed (INDEX_MISSING).
+    from app.services.warehouse_movements.indexes import (
+        ensure_required_indexes_at_startup as ensure_warehouse_canonical_indexes,
+    )
+    await ensure_warehouse_canonical_indexes(db)
+
     await db.users.create_index("email")
     await db.users.create_index("org_id")
     await db.organizations.create_index("id", unique=True)

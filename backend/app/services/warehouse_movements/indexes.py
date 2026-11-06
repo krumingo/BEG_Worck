@@ -20,6 +20,7 @@ by TASK 5C: "Verify indexes first and fail closed if absent".
 """
 from __future__ import annotations
 
+import logging
 from typing import Dict, List, Tuple
 
 from app.services.warehouse_movements.errors import IndexMissingError
@@ -211,6 +212,34 @@ async def ensure_required_indexes(db) -> List[str]:
             await db[coll_name].create_index(ri.keys, **options)
             created.append(ri.name)
     return created
+
+
+async def ensure_required_indexes_at_startup(db) -> Dict:
+    """5C-C19 F-1b — application-startup hook (`server.py`).
+
+    Before C19 `ensure_required_indexes` had no caller outside tests,
+    so a fresh enforce deploy answered 503 `INDEX_MISSING` on every
+    canonical write until something created the indexes by hand. The
+    canonical routes write to the request tenant's database handle
+    (`TenantData.for_user(db, user)._db`), i.e. the same `db` the other
+    startup indexes are created on, so this runs on that handle right
+    next to them.
+
+    Idempotent (existing matching indexes are skipped). It never drops
+    or rewrites an index and never touches documents. A failure (e.g.
+    pre-existing data violating a unique key) is logged and returned —
+    startup continues and the service stays FAIL-CLOSED: its own
+    `verify_required_indexes` still refuses writes with INDEX_MISSING.
+    """
+    log = logging.getLogger(__name__)
+    try:
+        created = await ensure_required_indexes(db)
+    except Exception as exc:  # noqa: BLE001 — logged, service stays fail-closed
+        log.error("warehouse canonical indexes not ensured: %s", exc)
+        return {"ok": False, "created": [], "error": str(exc)}
+    if created:
+        log.info("warehouse canonical indexes created: %s", created)
+    return {"ok": True, "created": created, "error": None}
 
 
 async def verify_required_indexes(db) -> None:

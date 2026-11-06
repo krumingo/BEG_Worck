@@ -71,6 +71,7 @@ import ProcurementPage from "@/pages/ProcurementPage";
 import InventoryDashboardPage from "@/pages/InventoryDashboardPage";
 // LIVE-OPS-01 / TASK 5C — Canonical warehouse page (FLOW-009).
 import CanonicalWarehousePage from "@/pages/CanonicalWarehousePage";
+import CanonicalWarehouseRoute from "@/components/CanonicalWarehouseRoute";
 import HistoricalOffersPage from "@/pages/HistoricalOffersPage";
 import EmployeeDetailPage from "@/pages/EmployeeDetailPage";
 import NovoSMRPage from "@/pages/NovoSMRPage";
@@ -232,7 +233,7 @@ function AppRoutes() {
       <Route path="/procurement" element={<AdminRoute><ProcurementPage /></AdminRoute>} />
       <Route path="/inventory" element={<AdminRoute><InventoryDashboardPage /></AdminRoute>} />
       {/* LIVE-OPS-01 / TASK 5C — Canonical warehouse surface */}
-      <Route path="/warehouse/canonical" element={<AdminRoute><CanonicalWarehousePage /></AdminRoute>} />
+      <Route path="/warehouse/canonical" element={<CanonicalWarehouseRoute><CanonicalWarehousePage /></CanonicalWarehouseRoute>} />
       <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
       <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
       <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />

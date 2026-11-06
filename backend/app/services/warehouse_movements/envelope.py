@@ -395,5 +395,14 @@ def envelope_fingerprint(env: MovementEnvelope) -> str:
     payload = env.to_dict()
     for key in ("movement_id", "recorded_at", "occurred_at", "audit_event_id"):
         payload.pop(key, None)
+    # 5C-C19 F-5 — `confirmed_at` is SERVER wall-clock (the service
+    # stamps it for consume / accept / transfers, C06), never caller
+    # input, so it must not decide replay vs conflict: an identical
+    # resend of a consume got a fresh timestamp and was refused as
+    # IDEMPOTENCY_CONFLICT. It is neutralized (not dropped) so the
+    # fingerprint of every action that never had a `confirmed_at`
+    # (receive, dispatch, ...) is byte-identical to before.
+    if "confirmed_at" in payload:
+        payload["confirmed_at"] = None
     canonical = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()

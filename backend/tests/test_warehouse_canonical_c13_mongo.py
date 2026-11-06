@@ -352,8 +352,10 @@ async def test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close(
             quantity=Decimal("10"),
             source=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh-1",
                                state=MovementState.FREE),
-            destination=LocationKey(LocationType.PROJECT, "p1",
-                                    state=MovementState.FREE),
+            # 5C-C19 F-4: a dispatch goes to in_transit/pending (Rule B);
+            # a project/free destination is now refused by the service.
+            destination=LocationKey(LocationType.IN_TRANSIT, "pending",
+                                    state=MovementState.IN_TRANSIT),
             project_id="p1",
             idempotency_key="disp:1", reason="dispatch 10", file_ids=["f"],
         ))
@@ -493,8 +495,10 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
             quantity=Decimal("5"),
             source=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh-1",
                                state=MovementState.FREE),
-            destination=LocationKey(LocationType.PROJECT, "p1",
-                                    state=MovementState.FREE),
+            # 5C-C19 F-4: a dispatch goes to in_transit/pending (Rule B);
+            # a project/free destination is now refused by the service.
+            destination=LocationKey(LocationType.IN_TRANSIT, "pending",
+                                    state=MovementState.IN_TRANSIT),
             project_id="p1",
             idempotency_key="disp:1", reason="d", file_ids=["f"],
         ))

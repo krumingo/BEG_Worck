@@ -60,6 +60,24 @@ from app.services.warehouse_movements.envelope import (
 
 
 BATCHES_COLLECTION = "warehouse_batches"
+
+
+def canonical_batch_number(movement_id: str, layer_sequence: int) -> str:
+    """5C-C19 F-2 — a non-null, per-layer-unique `batch_number`.
+
+    `warehouse_batches` carries the legacy unique index
+    `(org_id, batch_number)` (`fifo_service.ensure_indexes`). Canonical
+    projection rows used to leave `batch_number` absent, which Mongo
+    indexes as `null`, so the SECOND canonical layer of a tenant
+    collided with the first. Each projection row is already keyed by
+    `(movement_id, layer_sequence)`; deriving the batch number from
+    that key makes it unique and deterministic (a replay or a rebuild
+    writes the same value) without changing or dropping any index and
+    without touching existing data.
+    """
+    return f"CWS-{movement_id}-{int(layer_sequence)}"
+
+
 MATERIAL_ENTRIES_COLLECTION = "material_entries"
 IN_TRANSIT_COLLECTION = "warehouse_in_transit"
 
@@ -188,6 +206,7 @@ async def _open_batch(tenant_db, env: MovementEnvelope, *, session=None) -> None
         "movement_id": env.movement_id,
         "layer_source_movement_id": env.movement_id,
         "layer_sequence": 1,
+        "batch_number": canonical_batch_number(env.movement_id, 1),
         "item_id": env.item_id,
         "unit": env.unit,
         "quantity": str(env.quantity),
@@ -239,6 +258,7 @@ async def _open_destination_from_layers(
             "movement_id": env.movement_id,
             "layer_source_movement_id": env.movement_id,
             "layer_sequence": 1,
+            "batch_number": canonical_batch_number(env.movement_id, 1),
             "item_id": env.item_id,
             "unit": env.unit,
             "quantity": str(qty),
@@ -272,6 +292,7 @@ async def _open_destination_from_layers(
             "movement_id": env.movement_id,
             "layer_source_movement_id": src_mv,
             "layer_sequence": seq,
+            "batch_number": canonical_batch_number(env.movement_id, seq),
             "item_id": env.item_id,
             "unit": env.unit,
             "quantity": str(qty),

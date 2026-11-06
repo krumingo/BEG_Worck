@@ -55,6 +55,14 @@ jest.mock("@/lib/warehouseCanonicalApi", () => {
   };
 });
 
+// 5C-C19 F-6: the page now follows the session role's canonical rights.
+// These shape tests keep running as an Owner/Admin, who holds every action;
+// the per-role behaviour is pinned in CanonicalWarehousePage.c19.test.js.
+jest.mock("@/contexts/AuthContext", () => ({
+  __esModule: true,
+  useAuth: () => ({ user: { id: "u-admin", role: "Admin" }, loading: false }),
+}));
+
 import CanonicalWarehousePage from "@/pages/CanonicalWarehousePage";
 import { ACTIONS } from "@/lib/warehouseCanonicalApi";
 
