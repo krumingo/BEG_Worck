@@ -38,3 +38,7 @@ Draft PR, `HANDOFF SEC-02`, съобщение `SEC-02 DONE pr=<n> head=<sha> te
 - **FG-43:** activities-overview `actual_cost` — махни за Viewer/Technician/Driver; Accountant да вижда activity-budget-summary.
 - **Сливане с #69:** #69 вече е `07faab5`. Слей го в този клон с merge commit (без rebase), разреши конфликтите (full_cost, labor_smr, reports, subcontractors), после **FG-15**: POST `/labor-entries` и Idempotency replay от #69 (`labor_smr.py`) не връщат ставка/стойност на роли без финансово право. PM-01 матрицата — регенерирай с harness-а.
 `HANDOFF SEC-02-B`.
+
+## Допълнение C (06.11) — Р31 (FG-44)
+- За SiteManager „изхарчено“ за труд по СМР = сума на реалния трудов разход от **одобрени** отчети (FLOW-019; заплата → часове × ставка, акорд → одобрено количество × акордна цена по FLOW-028) срещу офертния трудов бюджет + остатък; престоят — отделен ред. Само агрегат по СМР/обект: без `hourly_rate`, `labor_cost` по човек, акордна цена или списък по работници с пари (activity-reports, site-workers, work-sessions и т.н.). Финансовите роли — пълно.
+- Ако в кода „изхарчено“ се смята от неодобрени отчети или без типа заплащане — опиши в HANDOFF като дълг (не пренаписвай изчислението тук), но скриването по човек е задължително.
