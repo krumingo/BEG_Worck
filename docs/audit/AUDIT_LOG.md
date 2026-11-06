@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 Склад 5C (C26) | `25e1bab` | PASS (internal; FG-17 resolved per canon, D-55-FG17 closed) — Codex still required | 2026-11-06 |
+| #55 5C | `64418eb` | **FINDINGS (blocking): C26B-1 Р27 bypass via subproject_id (cost on wrong project)**; C26A-1 leak FIXED | 2026-11-06 |
 | #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `61d45d3` | PASS (internal; C01 Part 1: PAY-N1/N2 fixed, 2 low notes) — Codex required; INT-70x69 open (Part 2) | 2026-11-06 |
@@ -1263,3 +1263,67 @@ Code read: `MoneyWrite` scopes the key as tenant + action + user (`money_input.p
 Siblings, r16 (SEC-R1) and sitemanager-loss probes: FAILS none.
 
 Action taken: updated the existing PR comment 6693570924 to mark the blockers resolved. No new comment.
+
+
+## #55 5C-C26 Addendum B + C26b + C26c @ `64418eb` — 2026-11-06 ~20:50 UTC — FINDINGS (blocking)
+
+Commits since `71c11da`:
+- `d2b9633`: dedicated `POST /warehouse/canonical/project-writeoff`, plus P&L input VAT by `allocations[]`.
+- `0beeb9d`: no money in command responses for non-finance roles.
+- `64418eb`: Р27 applied in off, shadow and enforce.
+
+Gates, from wt55/backend on the real Mongo RS:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + `test_codex_c23_independent.py` | **365 passed** |
+| R0 | **814 passed** |
+| W0 | 1085 passed / 15 failed / 50 skipped; FAILED list identical to `fail_56.txt` |
+| A2C | 0 / 220 |
+| A1 | 0 / 446 |
+
+Earlier probes, one test per process:
+- c24, c24b, c25 and c26 all pass.
+- `probe_pr55_c26a_value_leak.py`: **LEAKS: none**. The dispatch response has no money keys for the Warehousekeeper. **C26A-1 is FIXED (PROVED).**
+
+### C26B-1 (HIGH, blocking) — Р27 bypass through `subproject_id`; фира charged to the wrong project — PROVED
+
+Probe: `docs/audit/probes/pr55/test_probe_pr55_c26b_subproject.py`, real Mongo, production CommandService and Р27 policy.
+
+Setup:
+- The Technician is an in-date member of PROJECT only.
+- 5 units are accepted into subproject `sp-of-other-project`, which belongs to OTHER_PROJECT.
+
+Request: `POST /project-writeoff` with `{project_id: PROJECT, subproject_id: "sp-of-other-project", qty: 2}`.
+
+Result:
+- **201**.
+- Stock in OTHER_PROJECT's subproject goes from 5 to 3.
+- PROJECT's cost now shows `waste_cost 20` (фира, `pkg-c22`), on material that PROJECT never held. PROJECT's own stock is untouched.
+- OTHER_PROJECT keeps accepted cost 50 with no waste line, so its 2 units vanish without a cost line.
+
+Cause:
+- `warehouse_canonical.py:371-372` takes the source from `body.subproject_id`, but Р27 is decided on `body.project_id` (`_r27_decide`, and `service.py:668-670`).
+- `_bind_write_off_project` (`service.py:1622-1626`) only requires that *some* `project_id` is present for a SUBPROJECT source. It never checks that the subproject's parent is that project.
+- `projections._project_of` (`projections.py:441`) then trusts the body's project as the subproject's owner.
+
+Same root cause, pre-existing (suspicion, not separately probed):
+- The generic `POST /movements` WRITE_OFF has the same hole.
+- An acceptance into a SUBPROJECT target accepts any `project_id` (`service.py:1571-1575`).
+
+Self-correction: the hole was already present at C26A `189e8e5`, which I passed. My probes there covered only PROJECT sources.
+
+Fix direction: resolve the subproject server-side in the tenant (`projects` row with parent == `project_id`, or the subproject bucket's recorded project) and refuse a mismatch before Р27 and before any write.
+
+Not blocking:
+- `project_input_vat` falls back to the full VAT when any allocation has `qty=None`. That seems reasonable; no probe.
+
+Merge-tree, `64418eb` against each:
+
+| Against | Result |
+|---|---|
+| main | clean |
+| #67 | clean |
+| #70 | clean |
+| #56 | conflict: data_access.py, A2B inventory |
+| #69 | conflict: catalog.py, procurement.py, sales.py |
