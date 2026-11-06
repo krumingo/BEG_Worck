@@ -379,6 +379,16 @@ app.add_middleware(ErrorHandlerMiddleware)
 
 @app.on_event("startup")
 async def startup():
+    # W0-04-C01: every tenant database gets the unique audit / idempotency
+    # indexes before anything is written; a conflict or duplicate stops the
+    # start with a clear error instead of running unprotected.
+    from app.audit.indexes import ensure_audit_indexes_for_installation
+    from app.tenancy import registry as _tenant_registry
+    for _rep in await ensure_audit_indexes_for_installation(db, _tenant_registry.system_db):
+        if _rep["created"]:
+            logger.info("W0-04-C01 audit indexes created in %s: %s",
+                        _rep["database"], _rep["created"])
+
     await seed_data()
 
     # FIFO indexes (warehouse_batches)

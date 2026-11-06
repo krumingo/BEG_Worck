@@ -15,6 +15,10 @@ What it does NOT do:
 
 Idempotent: creating an existing index is a no-op.
 
+Since W0-04-C01 the application creates the same indexes itself at startup
+and at tenant onboarding (app/audit/indexes.py); this script remains for a
+manual check or an explicit run.
+
 Usage:
     python scripts/w0_04_bootstrap_audit_indexes.py            # dry run
     python scripts/w0_04_bootstrap_audit_indexes.py --apply    # create indexes
@@ -41,18 +45,10 @@ OPERATIONAL_DB = os.environ.get('DB_NAME', 'begwork')
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[OPERATIONAL_DB]
 
-PLANNED_INDEXES = [
-    (AUDIT_COLLECTION, [("event_id", 1)], {"unique": True}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("sequence", 1)], {"unique": True}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("occurred_at", -1)], {}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("actor_id", 1), ("occurred_at", -1)], {}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("entity_type", 1), ("entity_id", 1)], {}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("action", 1)], {}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("correlation_id", 1)], {}),
-    (AUDIT_COLLECTION, [("tenant_id", 1), ("retention_class", 1)], {}),
-    (IDEMPOTENCY_COLLECTION, [("id", 1)], {"unique": True}),
-    (IDEMPOTENCY_COLLECTION, [("tenant_id", 1), ("action", 1), ("key", 1)], {"unique": True}),
-]
+# W0-04-C01: one list, shared with the application startup
+# (app.audit.indexes.ensure_audit_indexes), so the script and the app can
+# never plan different indexes.
+from app.audit.indexes import PLANNED_INDEXES  # noqa: E402,F401
 
 
 async def run(apply: bool, verify_only: bool) -> int:
@@ -78,6 +74,26 @@ async def run(apply: bool, verify_only: bool) -> int:
                 return 2
     if verify_only:
         return 0
+
+    # W0-04-C01: list every group of records that would violate a planned
+    # unique index. Read only — duplicates are reported, never deleted.
+    blocked = False
+    for coll, keys, opts in PLANNED_INDEXES:
+        if not opts.get("unique"):
+            continue
+        group_id = {f: {"$ifNull": ["$" + f, None]} for f, _ in keys}
+        groups = await db[coll].aggregate([
+            {"$group": {"_id": group_id, "count": {"$sum": 1}, "ids": {"$push": "$_id"}}},
+            {"$match": {"count": {"$gt": 1}}},
+        ]).to_list(None)
+        for g in groups:
+            blocked = True
+            print(f"  DUPLICATE {coll} {keys}: {g['_id']} x{g['count']} "
+                  f"_ids={[str(i) for i in g['ids'][:10]]}")
+    if blocked:
+        print("\nDuplicates block a unique index. Nothing was created or deleted; "
+              "resolve them by hand first.")
+        return 3
 
     print("Planned indexes:")
     for coll, keys, opts in PLANNED_INDEXES:

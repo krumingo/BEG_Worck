@@ -1,0 +1,19 @@
+# W0-04-C01 checks (2026-11-06), parent 35ae10b + W0-04-C01 working tree, from backend/ with PYTHONPATH=.
+# real Mongo: disposable local mongo:7.0 replica set rs0 (docker, mirror.gcr.io), removed afterwards
+## baseline on 35ae10b: R0 814 passed; W0 DB-free 15 failed / 1085 passed / 50 skipped
+## A2C guard
+W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
+## R0 real mongo
+814 passed, 6 warnings in 148.08s (0:02:28)
+## W0 DB-free
+15 failed, 1090 passed, 60 skipped, 6 warnings in 69.79s (0:01:09)
+## W0-04 + C01 real mongo
+63 passed, 6 warnings in 17.08s
+## W0 DB-free delta vs baseline: +5 passed (pure C01 tests), +10 skipped (C01 real-Mongo tests without W0_03_REAL_MONGO_URL); the same 15 test_w0_03e_legacy_routes failures
+## negative controls (real Mongo rs0)
+old store.py (35ae10b) + unique indexes, test_parallel_record_event_*: FAILED — pymongo DuplicateKeyError tenant_id_1_sequence_1 (event lost)
+begin_idempotent, 6 parallel, same key, database WITHOUT indexes, 10 rounds: winners per round [6, 6, 6, 6, 6, 6, 6, 5, 6, 6]
+with ensure_audit_indexes: 1 winner per round (test_six_parallel_begin_with_one_key_have_exactly_one_winner, 5 rounds)
+## stability: -k parallel repeated 10x: 10/10 runs 3 passed

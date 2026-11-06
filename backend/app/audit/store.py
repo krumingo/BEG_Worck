@@ -15,8 +15,10 @@ per-tenant AuditEvent requirement of W0-01.
 
 This module is additive: nothing existing is imported from it yet.
 """
+import asyncio
 import hashlib
 import json
+import random
 from typing import Dict, Any, Optional, List, Tuple
 
 from app.audit.envelope import (
@@ -34,9 +36,30 @@ _HASH_EXCLUDED = {"_id", "integrity_hash"}
 
 GENESIS_HASH = "0" * 64
 
+# W0-04-C01 (FG-37): concurrent appends to one tenant chain race for the next
+# sequence. The unique (tenant_id, sequence) index lets exactly one win; the
+# others re-read the chain head and try again, a bounded number of times.
+CHAIN_APPEND_MAX_ATTEMPTS = 100
+_CHAIN_RETRY_MAX_DELAY_S = 0.05
+
 
 class AuditAppendOnlyViolation(RuntimeError):
     """Raised when code attempts to mutate an existing audit event."""
+
+
+class AuditChainContention(RuntimeError):
+    """The chain head kept moving for CHAIN_APPEND_MAX_ATTEMPTS tries; nothing was written."""
+
+
+def _is_sequence_collision(exc) -> bool:
+    """True when a DuplicateKeyError is the (tenant_id, sequence) race, not a
+    duplicate event_id (which is a real error and is never retried)."""
+    details = getattr(exc, "details", None) or {}
+    pattern = details.get("keyPattern") or {}
+    if pattern:
+        return "sequence" in pattern and "event_id" not in pattern
+    text = str(exc)
+    return "sequence" in text and "event_id" not in text
 
 
 def canonical_hash(event: Dict[str, Any]) -> str:
@@ -110,13 +133,30 @@ async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
 
     The event must come from build_event(). Returns the stored event
     including its sequence and hashes.
+
+    Concurrency (W0-04-C01): relies on the unique (tenant_id, sequence) index
+    that app.audit.indexes.ensure_audit_indexes creates at startup. A lost
+    race is retried from the new chain head, so no event is dropped and the
+    chain stays linear.
     """
     validate_event(event)
-    previous = await _last_event(db, event["tenant_id"])
-    chained = chain_hashes(event, previous)
-    await db[AUDIT_COLLECTION].insert_one(dict(chained))
-    chained.pop("_id", None)
-    return chained
+    from pymongo.errors import DuplicateKeyError
+    for attempt in range(1, CHAIN_APPEND_MAX_ATTEMPTS + 1):
+        previous = await _last_event(db, event["tenant_id"])
+        chained = chain_hashes(event, previous)
+        try:
+            await db[AUDIT_COLLECTION].insert_one(dict(chained))
+        except DuplicateKeyError as exc:
+            # Another append took this sequence: re-read the head and re-link.
+            if not _is_sequence_collision(exc):
+                raise
+            await asyncio.sleep(random.uniform(0, min(_CHAIN_RETRY_MAX_DELAY_S, 0.002 * attempt)))
+            continue
+        chained.pop("_id", None)
+        return chained
+    raise AuditChainContention(
+        "audit chain of tenant %s: no free sequence after %d attempts"
+        % (event["tenant_id"], CHAIN_APPEND_MAX_ATTEMPTS))
 
 
 # ---------------------------------------------------------------------------
