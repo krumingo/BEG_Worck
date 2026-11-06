@@ -56,3 +56,38 @@ def payment_counts(payment: Optional[Mapping]) -> bool:
 
 def opposite_direction(direction: str) -> str:
     return "Outflow" if direction == "Inflow" else "Inflow"
+
+
+# ── PAY-01-C01 Addendum A (FLOW Guard FG-45) ──────────────────────────────────
+# A payment written by another module must be reversed IN that module, or the module's
+# own register (pay run / advance / subcontractor package) and the Payment ledger
+# diverge (FLOW-006). Until the module has its own reversal, a finance reversal of such a
+# row is refused: 409 SOURCE_MODULE_REVERSAL_REQUIRED.
+#
+# The origin is read from the fields those modules write (on main, the only writers of
+# ``finance_payments`` outside finance.py):
+#   * subcontractors.py create payment   → ``subcontractor_payment_id``          → "subcontractor"
+#   * pay_runs.py _write_salary_outflows → ``category == "Заплата"`` (reference = run id) → "pay_run"
+#   * hr.py create advance / loan        → ``category in ("Аванс", "Заем")``      → "hr_advance"
+#   * hr.py loan repayment               → ``category == "Връщане заем"``         → "hr_advance"
+# ``pay_run_id`` / ``advance_id`` are honoured as well, should a module start linking by id.
+SOURCE_MODULE_REVERSAL_REQUIRED = "SOURCE_MODULE_REVERSAL_REQUIRED"
+_CATEGORY_SOURCE = {
+    "Заплата": "pay_run",
+    "Аванс": "hr_advance",
+    "Заем": "hr_advance",
+    "Връщане заем": "hr_advance",
+}
+
+
+def source_module(payment: Optional[Mapping]) -> Optional[str]:
+    """The module that owns this payment row, or None for a finance-owned (manual) payment."""
+    if not payment:
+        return None
+    if payment.get("subcontractor_payment_id"):
+        return "subcontractor"
+    if payment.get("pay_run_id"):
+        return "pay_run"
+    if payment.get("advance_id"):
+        return "hr_advance"
+    return _CATEGORY_SOURCE.get(payment.get("category") or "")

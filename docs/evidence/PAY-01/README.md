@@ -167,3 +167,46 @@ The rule lives in `backend/app/services/money_amount.py` (`positive_amount`). It
 ### Rollback
 
 Revert the commit. There is no data, schema or index change, and the rows written meanwhile are all valid amounts.
+
+## PAY-01-C01 Addendum A: payments owned by another module (FLOW Guard FG-45)
+
+Package addendum: `PAY-01-C01_AMOUNTS_REASON_SUBCONTRACTOR.md` §Допълнение A (branch `claude/happy-meitner-bmcnel` @ 9336d69).
+
+A `finance_payments` row written by another module must be reversed in that module. Otherwise the module's own register (pay run, advance, subcontractor package) and the Payment ledger diverge (FLOW-006). Until each module has its own reversal, Finance refuses: **409 `SOURCE_MODULE_REVERSAL_REQUIRED`**, with `source_module` in the detail and nothing written (no row, no AuditEvent, no idempotency key). For subcontractors, Part 2 (after #69) replaces this 409 with a real reversal in the module.
+
+### How the origin is detected
+
+The rule is `source_module()` in `backend/app/services/payment_state.py`. It is pure logic and reads the fields those modules write. On this branch they are the only writers of `finance_payments` outside `finance.py`:
+
+| Module (writer) | Field read | `source_module` |
+|---|---|---|
+| `subcontractors.py` create payment | `subcontractor_payment_id` | `subcontractor` |
+| `pay_runs.py` `_write_salary_outflows` | `category == "Заплата"` (`reference` = run id) | `pay_run` |
+| `hr.py` create advance / loan | `category` in `"Аванс"`, `"Заем"` | `hr_advance` |
+| `hr.py` loan repayment | `category == "Връщане заем"` | `hr_advance` |
+| (future link by id) | `pay_run_id` / `advance_id` | `pay_run` / `hr_advance` |
+
+Finance-owned rows stay reversible. These are manual payments, invoice quick-pay, transfers, account funding, other expense (`Други`) and other income (`Други приход`). A static test (`test_markers_written_by_source_modules`) fails if a module stops writing the field the rule reads.
+
+### Where it is enforced
+
+- **`DELETE /finance/payments/{id}`:** the check runs right after the reason check and before the idempotency key is taken.
+- **`DELETE /finance/invoices/{inv}/payments/{alloc}`:** the 409 applies only when this is the payment's **last** active allocation, because only then would the payment be reversed. Cancelling one of several allocations is still allowed.
+
+### Tests
+
+`backend/tests/test_pay_01_c01_source_module.py`: **62 cases**, on mongomock and real Mongo, in off, shadow and enforce.
+
+- **Payment reversal:** pay run, advance, loan, loan repayment and subcontractor → 409, with and without a key, 0 rows written.
+- **Allocation cancel:** cancelling the last allocation of such a payment → 409. A non-last allocation can still be cancelled.
+- **Control case:** a manual payment is still reversed.
+- **Pure rule and static markers:** `source_module()` is tested on its own, and `test_markers_written_by_source_modules` checks the module markers.
+
+| Run | Result |
+|---|---|
+| Addendum A + PAY-01-C01 + PAY-01 on this branch | 306 passed (62 + 153 + 91) |
+| Addendum A tests on 8910939 | **55 failed**, 7 passed (the pure rule, markers and manual-payment control tests are expected to pass) |
+
+**A1 inventory:** regenerated. The `remove_invoice_payment` `finance_payments` read moved one row, with the same content and FIXED status. Totals are unchanged: 362 accesses.
+
+**Rollback:** revert the commit. Nothing is written by this change.

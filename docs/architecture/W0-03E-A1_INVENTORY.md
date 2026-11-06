@@ -87,9 +87,9 @@
 | app/routes/finance.py:_reverse_one | (helper) | finance_payments | find_one_and_update(active_payments({'id': payment_id})) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | find_one(id, invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | finance_payments | get(id = alloc['payment_id']) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | update_one(active_allocations({'id': allocation_id,) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | count(active_allocations({'payment_id': alloc[) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | finance_payments | get(id = alloc['payment_id']) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_payments | GET /finance/payments | financial_accounts | get(id = pay.get('account_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_payments | GET /finance/payments | invoices | get(id = a.get('invoice_id')) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_payments | GET /finance/payments | payment_allocations | find(active_allocations({'payment_id': pay['i) | TenantData org_id (session) | BARE@base | FIXED |

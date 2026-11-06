@@ -18,8 +18,8 @@ from app.deps.modules import require_m5, enforce_limit
 from app.utils.audit import log_audit
 from app.services.money_amount import check_reason, positive_amount
 from app.services.payment_state import (
-    ALLOCATION_CANCELLED, PAYMENT_REVERSAL, PAYMENT_REVERSED,
-    active_allocations, active_payments, opposite_direction, payment_counts,
+    ALLOCATION_CANCELLED, PAYMENT_REVERSAL, PAYMENT_REVERSED, SOURCE_MODULE_REVERSAL_REQUIRED,
+    active_allocations, active_payments, opposite_direction, payment_counts, source_module,
 )
 from ..models.finance import (
     ACCOUNT_TYPES, INVOICE_DIRECTIONS, INVOICE_STATUSES,
@@ -1201,6 +1201,17 @@ class _Request:
         check_reason(self.reason)  # PAY-01-C01: ≤ 500 chars, no control/invisible chars → 400
 
 
+def _source_module_refusal(payment: Optional[dict]) -> Optional[HTTPException]:
+    """PAY-01-C01 Addendum A (FG-45): a payment owned by another module (pay run, hr
+    advance/loan/repayment, subcontractor) is reversed in that module, not here → 409."""
+    module = source_module(payment)
+    if module is None:
+        return None
+    return HTTPException(status_code=409, detail={
+        "error_code": SOURCE_MODULE_REVERSAL_REQUIRED, "source_module": module,
+        "message": "Плащането е създадено от друг модул (%s) — сторнирайте го там" % module})
+
+
 def _reversal_id(payment_id: str) -> str:
     """Deterministic id of THE reversal row of a payment — at most one per original."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-payment-reversal:%s" % payment_id))
@@ -1352,6 +1363,15 @@ async def remove_invoice_payment(invoice_id: str, allocation_id: str,
     if not alloc:
         raise HTTPException(status_code=404, detail="Разпределението не е намерено")
     req = _Request(body, reason, idempotency_key)
+    # FG-45: cancelling the LAST active allocation reverses the payment → refuse that for a
+    # payment another module owns (nothing written: checked before the idempotency key).
+    owner_payment = await tenant.finance_payments.get(alloc["payment_id"], {"_id": 0})
+    refusal = _source_module_refusal(owner_payment)
+    if refusal is not None:
+        others = await tenant.payment_allocations.count(active_allocations(
+            {"payment_id": alloc["payment_id"], "id": {"$ne": allocation_id}}))
+        if others == 0:
+            raise refusal
     action = "finance.allocation.cancel"
     retry, done = await _begin(user, req, action, {"allocation_id": allocation_id, "reason": req.reason})
     if done is not None:
@@ -1608,6 +1628,9 @@ async def delete_payment(payment_id: str,
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
     req = _Request(body, reason, idempotency_key)
+    refusal = _source_module_refusal(payment)   # FG-45: nothing written (before the key)
+    if refusal is not None:
+        raise refusal
     action = "finance.payment.reverse"
     retry, done = await _begin(user, req, action, {"payment_id": payment_id, "reason": req.reason})
     if done is not None:
