@@ -1664,6 +1664,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `e733c66` | **PASS** (fixes IDEM-IDX-1; chain linear under 50 concurrent; #56 recipe verified); rollout risk: startup refuses on existing duplicates | 2026-11-07 |
+| #73 LAB-01 | `709815d` | **PASS** (FG-48/51, no default rate, downtime apart, Pay Run == spent); notes: akord = 0 in production until quantity approval exists (declared); **merge notes incomplete** (labor_smr × #69/#71 FG-26 delete_many; project_pnl × #70) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -1899,3 +1900,57 @@ Gates:
 Info:
 - `allocation_lock` is a transient field written onto invoice and payment rows. A crash leaves it for up to 30 s (stale takeover).
 - List endpoints may show it; it is cosmetic.
+
+
+## #73 LAB-01 @ `709815d` — 2026-11-07 ~00:20 UTC — PASS (notes + merge risk)
+
+Delta:
+- New `app/services/labor_cost.py`: `compute_person_labor` and `project_labor_cost`.
+- Consumers moved onto it: Pay Run, the labor sync (Approved work_reports only), expected-actual "spent", activity budgets, P&L, all-reports.
+
+Probe `docs/audit/probes/lab01/probe_lab01.py`. Real `server.app` and `GET /pay-runs/generate`; report rows use the employee_daily_reports fields the normalizer reads. All PROVED:
+
+| Case | Result |
+|---|---|
+| L1 FG-48 | akord line, approved 120 m² × 5, at 40 h → **600**; the same line at 10 h → **600**. Hours never price akord |
+| L3 | Hourly profile with no rate → 0 + `MISSING_RATE` (no default 25) |
+| L4 FG-51 | Daily 120: 3 approved days → Pay Run earned **360**; the SUBMITTED day is excluded |
+| L5 | a DOWNTIME line on P1 is its own line: labor 180 + downtime 120 |
+| L6 | Pay Run earned 360.0 == spent P1 300.0 + P2 60.0. **Pay Run == "spent"** for the same person and period |
+
+Code read:
+- Confirmed or paid runs: PATCH is refused (`pay_runs.py:1431`, status must be draft/reopened); the stored fields are frozen.
+- A reopened run is recalculated only on an explicit PATCH, with `labor_recalc` history. This is declared.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*` | 18 passed |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | 814 |
+
+**LAB01-N1 (HIGH business impact; declared debt, canon-correct): PROVED.**
+- Nothing in the repository writes `approved_quantity`, `piece_rate` or line `pay_type`. The daily_reports writer stores only `hours_worked`, and nothing writes the package fields `labor_pay_type` / `labor_piece_rate` either.
+- So **every akord line in production prices to 0** + `AKORD_NO_APPROVED_QUANTITY`. Probe L2: Akord profile, 8 h, no quantity → total 0.0.
+- Before LAB-01, akord paid hours × hourly_rate.
+- FG-49 (pay type from the SMR line/package) is also effectively always the profile fallback, for the same reason.
+- Krum must decide whether LAB-01 may ship before the quantity-approval flow exists.
+
+**LAB01-M1 (merge risk, HIGH): the HANDOFF merge notes are incomplete.** merge-tree of `709815d` against each:
+
+| Against | Result |
+|---|---|
+| #71 `f17f7e5` | conflict: `all_reports.py`, **`labor_smr.py`**, A2B inventory |
+| #69 `6d43284` | conflict: **`labor_smr.py`** |
+| #70 `31ed258` | conflict: `project_pnl.py` |
+| #55, #72 | clean |
+
+- The HANDOFF names `expected_actual` / `activity_budgets` / `project_pnl` / `all_reports` with respect to #71 only.
+- It does not mention that `labor_smr.py` `sync-from-work-reports` was rewritten by both #69 and #73:
+  - #69 (FG-26) replaced `delete_many` with reversal rows and added the R16 guard + MoneyWrite;
+  - #73, branched from main, keeps `delete_many` (`labor_smr.py:126`) and has no SEC guard.
+- A merge that takes #73's version would bring back the hard delete of synced labor rows (CLAUDE.md §2.9) and drop the R16 guard.
+- The LAB-01 pricing must be ported into #69's reversal-based sync.
