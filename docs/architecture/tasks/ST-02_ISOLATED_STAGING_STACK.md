@@ -10,7 +10,7 @@
 1. `ops/staging/staging_up.sh` (или `.py`):
    - прави bundle с `ops/release/release_build.py` от **точен commit** (по подразбиране текущия `main`), проверява го с `release_verify.py`;
    - пуска **същите** `ops/synology/deploy/Dockerfile.*` и compose в отделен compose project (`begwork-staging`), отделна мрежа, отделни портове (проверка, че са свободни), собствен MongoDB **replica set** и празен volume; без production credentials, без реален SMTP/Stripe;
-   - `ENV=staging`, `PERMISSION_SERVICE_MODE` като параметър (по подразбиране `enforce` за staging; production не се пипа);
+   - `ENV=staging`, `PERMISSION_SERVICE_MODE` като параметър (по подразбиране `shadow` за staging по Р15; production не се пипа);
    - сийдва ST-01 тестовите фирми A/B и пуска `ops/staging/run_scenarios.py`;
    - записва manifest, SHA256SUMS, image ID-та и `/api/version` (трябва да е същият SHA като bundle-а).
 2. **Репетиция на rollback:** deploy на commit X → smoke → deploy на X+1 с **принудително провален smoke** → автоматичен rollback към **точните image ID-та** на X; синтетичните записи от X остават. Записва старите/новите image ID и резултата. Ползва логиката на `synology/release_deploy.sh`/`release_rollback.sh`, адаптирана за изолирания project, без да се променя production поведението им.
