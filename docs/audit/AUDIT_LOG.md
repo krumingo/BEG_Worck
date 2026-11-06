@@ -11,7 +11,7 @@
 | #55 Склад 5C (C26) | `25e1bab` | PASS (internal; FG-17 resolved per canon, D-55-FG17 closed) — Codex still required | 2026-11-06 |
 | #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `a0dec8b` | PASS (internal) — Codex required (money); INT-70x69 for whichever merges second | 2026-11-06 |
+| #70 PAY-01 | `61d45d3` | PASS (internal; C01 Part 1: PAY-N1/N2 fixed, 2 low notes) — Codex required; INT-70x69 open (Part 2) | 2026-11-06 |
 | #69 SEC-01 | `471eaaa` | **FINDINGS (blocking): C02-P2 NaN/Inf into ledger, C02-P1 duplicate ledger rows — unchanged**; SEC-R1 CLOSED | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1168,3 +1168,68 @@ Real `server.app`, ST-01 seed, **enforce**, real JWT. The Admin receives 10 @10 
 - Not checked (SUSPICION): Path B integrity warnings with value fields (none fired here). `strip_values` would not drop `counted_value` / `covered_value` if such keys reach that response.
 
 Gates not re-run for this intermediate head. They will run on the C26b head.
+
+
+---
+
+## 2026-11-06 ~21:20 — #70 @ `61d45d3` (PAY-01-C01 Part 1: finite positive amounts → 422, clean reversal reasons → 400)
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| `W0_03_REAL_MONGO_URL=… pytest --noconftest tests/test_pay_01_payment_reversal.py tests/test_pay_01_c01_amounts_reason.py` | **219 passed** |
+| R0 on real Mongo, first run (in parallel with W0 on the same Mongo) | 1 failed / 813 passed |
+| R0, two re-runs (`-x` and `-rf`) | **814 / 0 / 0**. The single failure did not reproduce: unreproduced flake, noted, not a finding |
+| W0 DB-free | same 15 ✔ |
+| A2C | 206 modules, 0 violations ✔ |
+| A1 | 418 units, 0 violations ✔ |
+| `yarn test src/pages/__tests__/` | 26 / 26 ✔ |
+
+### Probes
+
+`probe_pay01.py` re-run: **all PASS**, including Q6. NaN / Inf / -Inf / 1e309 on payment create and transfer → **422, ledger +0**; on allocate → 422, +0. On `a0dec8b` these were 500 with rows written.
+
+**New `probe_pay01_c01.py`** (real `server.app`, tenant A's Accountant). Hostile amounts `nan`, `inf`, `-inf`, `1e309`, `""`, `-1`, `0`, `true`, `"abc"` on every money route:
+
+| Route | Hostile amounts | Valid 12.5 |
+|---|---|---|
+| POST `/finance/transfers` | all 4xx, 0 rows ✔ | 201 |
+| POST `/finance/account-funding` | all 4xx, 0 rows ✔ | 201 |
+| POST `/finance/other-expense` | all 4xx, 0 rows ✔ | 201 |
+| POST `/finance/other-income` | all 4xx, 0 rows ✔ | 201 |
+| POST `/finance/invoices/{id}/payments` (quick-pay) | all 4xx, 0 rows ✔ | 201 |
+| POST `/finance/payments` | all 4xx, 0 rows, **except `true` → 201 (+1 row, amount 1.0)** | 201 |
+| POST `/finance/payments/{id}/allocate` | all 4xx, 0 rows, **except `true` → 200 (+1 allocation of 1.0)** | 200 |
+
+Reversal reason:
+
+| Reason | Result |
+|---|---|
+| 500 characters | 200 ✔ |
+| 501 characters | **400** ✔ |
+| ZWSP | **400** ✔ |
+| RLO | **400** ✔ |
+| NUL | **400** ✔ |
+| ESC | **400** ✔ |
+| soft hyphen U+00AD | 200 |
+| tag character U+E0041 | 200 |
+| line separator U+2028 | 200 |
+
+**PAY-N1 — CLOSED** for every finance money route. **PAY-N2 — CLOSED** for the length bound and the listed characters.
+
+**PAY-C01-L1 — LOW, PROVED.** JSON `true` is accepted as the amount `1.0` on the two pydantic-typed routes (`PaymentCreate.amount`, `AllocationInput.amount`: `float` coerces `true` to `1.0` **before** `positive_amount` sees it, so its "booleans refused" rule is bypassed). The dict-based routes refuse it. Fix: `StrictFloat` / `Union[StrictFloat, StrictInt, str]`, or a `mode="before"` validator.
+
+**PAY-C01-L2 — LOW, PROVED.** The reason filter refuses category Cc plus a fixed list, but accepts other invisible Cf characters: soft hyphen, the tag block, and U+2028/2029 (Zl/Zp). Suggest refusing categories Cf, Zl and Zp in general.
+
+### UI impact of 400 → 422 (read in code)
+
+- `PaymentsPage.js:274` filters `amount > 0` before allocate, so the stricter allocate (whole request 422 instead of silently skipping ≤ 0 lines) is not hit from the UI.
+- The amount error details are plain strings: `alert(detail)` shows them.
+- Reason errors are `{error_code, message}`: both reversal dialogs show `detail.message` (`PaymentsPage.js:252-253`, `InvoiceEditorPage.js:404-405`).
+- No UI path breaks.
+
+### Integration
+
+- #70 is clean against main, #55, #56, #67 and #69.
+- INT-70x69 (subcontractor payment not reversed with its ledger row) waits for Part 2, after #69.
