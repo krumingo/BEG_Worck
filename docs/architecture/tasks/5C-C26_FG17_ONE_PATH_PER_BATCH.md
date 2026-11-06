@@ -22,3 +22,9 @@ C25 замени `max(invoice, warehouse)` на main със **сума**. Сум
 - **FG-23 (канон Р20):** `/warehouse/canonical/stock` и `/history` не връщат `total_value`, `unit_value` и стойностни слоеве на роли без финансово право (warehouse, site_manager, technician, viewer, driver) — само количества. Owner/Admin/Accountant виждат всичко. procurement: не променяй, опиши в HANDOFF (не е в Р20). Екранът на склада да не чупи при липсващи стойности.
 - **FG-22** (Approval при съществена разлика): не се прави тук — няма Approval runtime (W0-07); запиши като дълг в HANDOFF.
 - Дребно (бот): на склада етикетите `in_transit` / `quarantine` да се показват като „в път“ / „карантина“.
+
+## Допълнение B (06.11) — Р27 докрай
+- HANDOFF @ 71c11da: Accountant и член-Technician още са спрени от route gate `warehouse.write_command` преди проверката по Р27 → Р27 не е изпълнено (fail-closed, но грешно спрямо решението).
+- Не променяй общото `warehouse.write_command` в каталога (то пази W0-02 `test_legacy_technician_reproduces_exact` и C19 F-6). Вместо това: **отделно действие само за отписване от обект** (напр. `warehouse.project_writeoff`) в каталога, с правилата на Р27, и route gate-ът на този endpoint да ползва него вместо `warehouse.write_command`. Останалите складови команди не се променят.
+- Тестове: Accountant навсякъде 201; Technician/SiteManager член 201, нечлен/изтекъл 403; project_manager свой 201 / чужд 403; Viewer/Driver/Warehousekeeper 403; нищо записано при 403; трите режима; W0-02 и C19 F-6 непроменени и зелени.
+- Дребно: P&L `input_vat` да избира по новото поле за разпределение, както останалите (C26 т.1); тест.
