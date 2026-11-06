@@ -148,3 +148,78 @@ def test_markers_written_by_source_modules():
     hr = (ROUTES / "hr.py").read_text(encoding="utf-8")
     assert '"category": type_label' in hr and 'type_label = "Заем" if is_loan else "Аванс"' in hr
     assert '"category": "Връщане заем"' in hr
+
+
+# ═══════════════════════════════════════════════════════════ C01A-1: concurrency
+RACE_ROUNDS = 10
+
+
+def test_c01a1_concurrent_cancels_never_reverse_a_module_payment(monkeypatch, backend, mode):
+    """Audit C01A-1: two CONCURRENT cancels of the two allocations of a "Заплата" payment.
+    Before the fix both returned 200 and the salary payment ended up REVERSED. Now at most
+    one cancel wins; the other gets 409 (SOURCE_MODULE_REVERSAL_REQUIRED or PAYMENT_BUSY);
+    the payment is never reversed and keeps an active allocation."""
+    import asyncio
+
+    async def scenario(c, op):
+        async def cancel(inv, al, key):
+            return await c.request("DELETE", "/api/finance/invoices/%s/payments/%s" % (inv, al),
+                                   json={"reason": "грешка"}, headers=hdr("acct-a", key))
+
+        for i in range(RACE_ROUNDS):
+            pid = "fp-race-%d" % i
+            await op.finance_payments.insert_one(dict(SOURCE_ROWS["pay_run"], id=pid))
+            for n, inv in ((1, "inv-a1"), (2, "inv-a2")):
+                await op.payment_allocations.insert_one({
+                    "id": "al-%d-%d" % (i, n), "org_id": ORG_A, "payment_id": pid, "invoice_id": inv,
+                    "amount_allocated": 5.0, "allocated_at": NOW})
+            r1, r2 = await asyncio.gather(cancel("inv-a1", "al-%d-1" % i, "k-race-%d-1" % i),
+                                          cancel("inv-a2", "al-%d-2" % i, "k-race-%d-2" % i))
+            codes = [r1.status_code, r2.status_code]
+            assert codes.count(200) <= 1, (i, r1.text, r2.text)
+            for r in (r1, r2):
+                if r.status_code != 200:
+                    assert r.status_code == 409, r.text
+                    assert r.json()["detail"]["error_code"] in (
+                        "SOURCE_MODULE_REVERSAL_REQUIRED", "PAYMENT_BUSY"), r.text
+            stored = await op.finance_payments.find_one({"id": pid}, {"_id": 0})
+            assert "status" not in stored, (i, stored)              # never reversed
+            assert "allocation_lock" not in stored                  # the lock is always released
+            assert await op.finance_payments.count_documents({"reverses_payment_id": pid}) == 0
+            active = await op.payment_allocations.count_documents(
+                {"payment_id": pid, "status": {"$ne": "cancelled"}})
+            assert active >= 1, i
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_c01a1_reverse_one_refuses_a_module_payment_for_any_caller(monkeypatch, backend, mode):
+    """The guard sits in the reversal path itself: calling it directly is refused too."""
+    async def scenario(c, op):
+        from fastapi import HTTPException
+        from app.routes import finance as r_finance
+        await op.finance_payments.insert_one(dict(SOURCE_ROWS["subcontractor"]))
+        user = {"id": "acct-a", "org_id": ORG_A, "role": "Accountant", "email": "acct-a@pay01.example"}
+        before = await snap(op)
+        with pytest.raises(HTTPException) as e:
+            await r_finance._reverse_one(r_finance._tenant(user), user, "fp-sub", "грешка", "k-direct")
+        assert e.value.status_code == 409
+        assert e.value.detail["error_code"] == "SOURCE_MODULE_REVERSAL_REQUIRED"
+        assert await snap(op) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_c01a1_stale_lock_is_taken_over(monkeypatch, backend, mode):
+    """A lock left by a crashed request (older than the stale limit) does not block forever."""
+    async def scenario(c, op):
+        row = dict(SOURCE_ROWS["pay_run"], allocation_lock={"token": "dead", "at": "2020-01-01T00:00:00+00:00"})
+        await op.finance_payments.insert_one(row)
+        for al, inv in (("al-s1", "inv-a1"), ("al-s2", "inv-a2")):
+            await op.payment_allocations.insert_one({
+                "id": al, "org_id": ORG_A, "payment_id": row["id"], "invoice_id": inv,
+                "amount_allocated": 5.0, "allocated_at": NOW})
+        r = await c.request("DELETE", "/api/finance/invoices/inv-a1/payments/al-s1",
+                            json={"reason": "грешка"}, headers=hdr("acct-a"))
+        assert r.status_code == 200, r.text
+        stored = await op.finance_payments.find_one({"id": row["id"]}, {"_id": 0})
+        assert "allocation_lock" not in stored and "status" not in stored
+    run(monkeypatch, backend, mode, scenario)

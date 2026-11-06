@@ -289,3 +289,33 @@ The A1 inventory was regenerated and is identical. The A1 and A2C guards report 
 - **PAY-01-C01-D4: a crash leaves the key stuck.** If the process dies after the business write and before `complete_idempotent`, the key stays `started`. Retries then get 409 IN_PROGRESS rather than a replay. Recovery needs a deterministic row id per key, or a check of the steps already done.
 - **PAY-01-C01-D5: allocate is not atomic** (this predates PAY-01). If one item of a multi-invoice allocate is refused after an earlier item was written, the earlier allocation stays. The key is marked failed, so retrying the same request writes that earlier allocation again. Fix: validate every item before the first insert. This needs Krum's confirmation (CLAUDE.md §18).
 - **PAY-01-C01-D6: live-API tests do not send the key.** `test_invoice_payments.py`, `test_invoice_workflow_p0.py` and `test_m5_finance.py` run against a deployed server and cannot run here. They do not send the key (nor the PAY-01 reason), so they need updating before they are run against this build.
+
+## Audit fix C01A-1: concurrent cancels must not reverse a module-owned payment
+
+**Finding (audit of 45768f3, MEDIUM-HIGH):** a "Заплата" payment has two allocations, and two requests cancel them concurrently. Before the fix both returned 200 and the payment ended up **reversed**. Two things allowed it:
+- The FG-45 pre-check counted the other allocations **before** cancelling.
+- The reversal that runs after the cancel had no source-module guard.
+
+**Fix**
+1. **Guard in the reversal path itself.** `_reverse_one()` refuses a module-owned payment, whoever calls it, with 409 `SOURCE_MODULE_REVERSAL_REQUIRED`, before any write. The origin fields are written once, at creation, so reading them cannot race.
+2. **Atomic last-allocation decision.** For a module-owned payment, the allocation cancel runs under `_payment_lock()`, a short exclusive lock on the payment row.
+   - It is taken with one conditional `update_one` that sets `allocation_lock {token, at}` only when no live lock is there.
+   - A second request gets 409 `PAYMENT_BUSY` and writes nothing.
+   - Under the lock, the route re-counts the other active allocations: none left → 409, nothing written; otherwise the cancel runs.
+   - The lock is always released (`finally`, `$unset` by token). A lock older than 30 s, left by a crashed request, can be taken over.
+   - Finance-owned payments do not take the lock; their behaviour is unchanged.
+
+**Tests** (in `test_pay_01_c01_source_module.py`; mongomock + real Mongo, three modes: 18 cases)
+- **The audit's probe:** 10 rounds of two concurrent cancels (`asyncio.gather`). At most one returns 200; the other gets 409 (SOURCE_MODULE_REVERSAL_REQUIRED or PAYMENT_BUSY). The payment is never reversed, it has no reversal row, it keeps at least one active allocation, and no lock is left on it.
+  - On 670b5b9 (before the fix) this probe **fails on real Mongo** in all three modes, which reproduces the finding. Mongomock does not interleave the two requests, so it cannot show the race.
+- **Direct call:** calling `_reverse_one()` on a subcontractor payment → 409, nothing written.
+- **Stale lock:** a lock older than 30 s is taken over, and the cancel succeeds.
+
+| Run | Result |
+|---|---|
+| All PAY-01* tests + A1 collision matrix | 449 passed |
+| A1 / A2C guards | 418 units / 206 modules, 0 violations |
+
+**A1 inventory:** regenerated. The cancel's writes moved into the helper `_cancel_allocation`, and the new `_payment_lock` and `_reverse_one` reads were added. Every new row is tenant-scoped (TenantData, SAFE). Totals: 367 accesses (FIXED 129, SAFE 238), up from 362. The one row that went from FIXED to SAFE only moved into the helper.
+
+**Known debt PAY-01-C01-D7:** the lock is a field on the `finance_payments` row (`allocation_lock`). While a cancel runs, it is visible to readers for a few milliseconds. It is never left behind except by a crash, and a crashed lock becomes stale after 30 s.

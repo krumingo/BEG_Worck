@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from contextlib import asynccontextmanager
 import uuid
 import io
 import logging
@@ -1347,11 +1348,44 @@ async def _ensure_reversal_row(tenant: TenantData, user: dict, original: dict, n
     return rev_id
 
 
+PAYMENT_LOCK_STALE_SECONDS = 30
+
+
+@asynccontextmanager
+async def _payment_lock(tenant: TenantData, payment_id: str):
+    """C01A-1: a short exclusive lock on one payment row (one atomic conditional write).
+    A second holder gets 409 PAYMENT_BUSY and writes nothing; a lock older than
+    PAYMENT_LOCK_STALE_SECONDS (a crashed holder) can be taken over. Always released."""
+    token = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    stale = (now - timedelta(seconds=PAYMENT_LOCK_STALE_SECONDS)).isoformat()
+    won = await tenant.finance_payments.update_one(
+        {"id": payment_id, "$or": [{"allocation_lock": {"$exists": False}},
+                                   {"allocation_lock.at": {"$lt": stale}}]},
+        {"$set": {"allocation_lock": {"token": token, "at": now.isoformat()}}})
+    if won.modified_count != 1:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_BUSY",
+            "message": "Плащането се обработва от друга заявка — опитайте отново"})
+    try:
+        yield
+    finally:
+        await tenant.finance_payments.update_one(
+            {"id": payment_id, "allocation_lock.token": token}, {"$unset": {"allocation_lock": ""}})
+
+
 async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: str,
                        idem_key: Optional[str]) -> Optional[dict]:
     """Reverse ONE active payment. One atomic conditional write decides the winner;
-    a payment already reversed (or a reversal row) matches nothing → None."""
+    a payment already reversed (or a reversal row) matches nothing → None.
+
+    C01A-1: a payment owned by another module is NEVER reversed here, whoever the caller is
+    (409 SOURCE_MODULE_REVERSAL_REQUIRED). The origin fields are written once, at creation,
+    so this read cannot race with the write below."""
     from pymongo import ReturnDocument
+    refusal = _source_module_refusal(await tenant.finance_payments.get(payment_id, {"_id": 0}))
+    if refusal is not None:
+        raise refusal
     now = datetime.now(timezone.utc).isoformat()
     rev_id = _reversal_id(payment_id)
     original = await tenant.finance_payments.find_one_and_update(
@@ -1451,11 +1485,24 @@ async def remove_invoice_payment(invoice_id: str, allocation_id: str,
     # payment another module owns (nothing written: checked before the idempotency key).
     owner_payment = await tenant.finance_payments.get(alloc["payment_id"], {"_id": 0})
     refusal = _source_module_refusal(owner_payment)
-    if refusal is not None:
+    if refusal is None:
+        return await _cancel_allocation(tenant, user, invoice_id, allocation_id, alloc, req)
+    # C01A-1: for a module-owned payment the "is this the last active allocation?" decision
+    # and the cancel run under a lock on the payment row, so two concurrent cancels cannot
+    # both see "another allocation remains" and together leave none.
+    async with _payment_lock(tenant, alloc["payment_id"]):
         others = await tenant.payment_allocations.count(active_allocations(
             {"payment_id": alloc["payment_id"], "id": {"$ne": allocation_id}}))
         if others == 0:
             raise refusal
+        return await _cancel_allocation(tenant, user, invoice_id, allocation_id, alloc, req)
+
+
+async def _cancel_allocation(tenant: TenantData, user: dict, invoice_id: str, allocation_id: str,
+                             alloc: dict, req: "_Request") -> dict:
+    """The write part of an allocation cancel (idempotency key, conditional cancel, AuditEvent,
+    reversal of a payment left with no active allocation, invoice recompute)."""
+    org_id = user["org_id"]
     action = "finance.allocation.cancel"
     retry, done = await _begin(user, req, action, {"allocation_id": allocation_id, "reason": req.reason})
     if done is not None:
