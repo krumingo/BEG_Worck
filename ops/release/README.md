@@ -22,6 +22,7 @@
 | Файл | Роля |
 |---|---|
 | `release_build.py` | прави bundle от commit (на release PC-то) |
+| `write_build_info.py` | RC-01: пише `BUILD_INFO.json` за backend/frontend от Git обекти или от bundle (§6a) |
 | `release_verify.py` | проверява bundle, дърво, manifest, record; редактира secrets от логове. Stdlib only |
 | `beg_release/gitobj.py` | артефакт от Git обекти, tree hash, безопасно разпъване, mode probe |
 | `beg_release/inputs.py` | inventory на build входовете, compose drift, `services_to_rebuild` |
@@ -133,9 +134,27 @@ evidence директорията на операцията (`/evid`) и, по �
 <release_id>/
   artifact.tar      exact Git tree
   manifest.json
-  SHA256SUMS        artifact.tar, manifest.json, tools/**
+  build_info.json   RC-01 build identity (beg.build-info/v1) — същият commit като manifest
+  SHA256SUMS        artifact.tar, manifest.json, build_info.json, tools/**
   tools/            release_verify.py, beg_release/, synology/*.sh, layout.json (от tools commit-а)
 ```
+
+### 6a. Build identity (RC-01)
+
+Commit не може да съдържа собствения си SHA, а артефактът трябва да остане байт-идентичен с
+Git дървото. Затова идентичността **не е в `artifact.tar`**, а до него:
+
+| Стъпка | Какво |
+|---|---|
+| `release_build.py` | пише `build_info.json` = `{schema: beg.build-info/v1, build_sha, build_time, source: git-objects}`; `build_sha` = `release.app.commit`, `build_time` = commit time (UTC). Влиза в `SHA256SUMS`. |
+| `write_build_info.py --from-bundle <bundle> --target <build context>` | проверява `build_info.json` == manifest commit и пише `backend/BUILD_INFO.json` и `frontend/BUILD_INFO.json` (git-ignored). |
+| `write_build_info.py --commit HEAD` | същото за локален build, директно от Git обекти; отказва при незаписани промени (освен `--allow-dirty`). |
+| backend | `GET /api/version` (без вход): `build_sha`, `build_time`, `environment_label`, `source`. Файлът печели пред `BUILD_SHA` env; разминаване → лог. Нищо → `unknown`. |
+| frontend | `craco.config.js` вгражда `frontend/BUILD_INFO.json` (иначе `REACT_APP_BUILD_SHA`, иначе `unknown`) като константа в bundle-а. UI показва първите 12 знака + предупреждение при разлика/`unknown`. |
+
+**Не е свързано със Synology deploy-а.** `release_deploy.sh` още не пише `BUILD_INFO.json` в
+`repo/` (а `verify_tree` би отказал допълнителен файл). Докато това не бъде одобрено отделно,
+Synology build показва `unknown` и видимо предупреждение — fail-visible, не тиха грешна версия.
 
 ## 7. Runbook
 

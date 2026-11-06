@@ -5,7 +5,10 @@
         --deployment-id synology-begwork --previous-manifest <current manifest.json> \
         --approval deploy:<reference> --out <dir>
 
-Output: <out>/<release_id>/{artifact.tar, manifest.json, SHA256SUMS, tools/...}
+Output: <out>/<release_id>/{artifact.tar, manifest.json, build_info.json, SHA256SUMS, tools/...}
+
+build_info.json (RC-01, beg.build-info/v1) carries the same commit as manifest.release.app.commit;
+write_build_info.py --from-bundle stamps a build context with it.
 
 Fails closed (exit 2) when the archive is not byte-identical to the Git tree, a build
 input is not versioned, the compose layout drifted, the target is not reachable from
@@ -25,6 +28,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from beg_release import TOOL_VERSION  # noqa: E402
+from beg_release import build_info as bi  # noqa: E402
 from beg_release import gitobj, inputs, manifest as mf  # noqa: E402
 from beg_release.gitobj import ReleaseError  # noqa: E402
 
@@ -211,8 +215,16 @@ def build(args):
     with open(os.path.join(bundle, "manifest.json"), "wb") as f:
         f.write(manifest_bytes)
 
+    # RC-01: build identity from the same Git objects; not inside the artifact (a commit
+    # cannot contain its own id), but next to it and covered by SHA256SUMS.
+    info = bi.make(commit, bi.utc(commit_time))
+    info_bytes = bi.to_bytes(info)
+    with open(os.path.join(bundle, bi.BUNDLE_FILE), "wb") as f:
+        f.write(info_bytes)
+
     sums = {"artifact.tar": release["artifact"]["sha256"],
-            "manifest.json": hashlib.sha256(manifest_bytes).hexdigest()}
+            "manifest.json": hashlib.sha256(manifest_bytes).hexdigest(),
+            bi.BUNDLE_FILE: hashlib.sha256(info_bytes).hexdigest()}
     sums.update(bundle_tools)
     with open(os.path.join(bundle, "SHA256SUMS"), "wb") as f:
         f.write("".join("%s  %s\n" % (sums[k], k) for k in sorted(sums)).encode("ascii"))
