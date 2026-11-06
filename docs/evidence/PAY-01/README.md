@@ -122,3 +122,46 @@ There is no schema change and no index.
 - **PAY-01-D1:** the business write and the AuditEvent are not in one transaction (W0-04).
 - **PAY-01-D2:** an invoice is treated as "used" only by allocations. Scan-doc links and procurement `source_invoice_id` are not checked.
 - **PAY-01-D3:** there is no Approval step for a reversal yet. The canonical DQ/Approval runtime comes with W0-07.
+
+## PAY-01-C01 Part 1: amounts and reasons
+
+Package: `docs/architecture/tasks/PAY-01-C01_AMOUNTS_REASON_SUBCONTRACTOR.md` (branch `claude/happy-meitner-bmcnel` @ 1f147de). Canon: CLAUDE.md §14 (validation/DQ), FLOW-006, R23. Part 2 (INT-70x69) waits for #69.
+
+### PAY-N1: an amount is a finite number > 0, otherwise 422 and nothing is written
+
+The rule lives in `backend/app/services/money_amount.py` (`positive_amount`). It is pure logic in its own module, so it does not conflict with SEC-01-C03 (#69), which applies the same rule to its own routes. The two are unified at merge.
+
+| Endpoint | Before | After |
+|---|---|---|
+| `POST /finance/payments` | NaN/inf/1e309 stored, then 500; -1 and 0 stored | 422, nothing written |
+| `POST /finance/invoices/{id}/payments` | NaN/inf stored, then 500 | 422 |
+| `POST /finance/transfers`, `/account-funding`, `/other-expense`, `/other-income` | NaN/inf stored (`round(nan) <= 0` is false); ≤ 0 → 400 | 422 for every bad amount, ≤ 0 included |
+| `POST /finance/payments/{id}/allocate` | NaN/inf allocated; ≤ 0 silently skipped | every item is checked **before the first write**: one bad item → 422, 0 rows |
+
+- **Refused values:** NaN, ±Infinity, 1e309 (parsed as inf), `""`, null, non-numeric text, -1 and 0. Booleans are refused on the dict-based routes; on the two Pydantic routes, Pydantic itself coerces `true` to 1.0, which is out of scope here.
+- **What is unchanged:** numeric strings such as `"12.50"` are still accepted, and the routes that rounded to 2 decimals still do (a value that rounds to 0 → 422).
+- **Error format:** the 422 `detail` is a plain Bulgarian message, because the finance pages show `err.response.data.detail` as it is.
+- **Order of checks:** permission is checked first, so a non-finance role still gets 403.
+
+### PAY-N2: reversal / cancellation reason
+
+`check_reason` is called from `_Request`, so it covers both `DELETE /finance/payments/{id}` and `DELETE /finance/invoices/{id}/payments/{alloc}`, with the reason in the body or in `?reason=`. A reason longer than 500 characters gets 400 `REASON_TOO_LONG`. A reason containing a control character (Unicode Cc: NUL, ESC, DEL, C1…), a bidi embedding, override or isolate, a zero-width character, a word joiner, a BOM or the Arabic letter mark gets 400 `REASON_INVALID_CHARS`. The check runs before the idempotency key is taken, so nothing is written: no row, no audit entry, no key. A reason of exactly 500 characters is accepted. The UI already shows `detail.message`.
+
+### Tests
+
+`backend/tests/test_pay_01_c01_amounts_reason.py` runs on mongomock and on real Mongo (`mongo:7.0`, `rs0`), in off, shadow and enforce: **128 cases**.
+
+| Run | Result |
+|---|---|
+| PAY-01-C01 + PAY-01 on this branch | 219 passed (128 + 91) |
+| PAY-01-C01 on a0dec8b (`finance.py` from before) | **114 failed**, 14 passed (the helper tests, 403 and the 500-character reason, which already held) |
+| R0 (`tests/test_r0_*.py`, real Mongo) | 814 passed |
+| W0 (`tests/test_w0_*.py`, real Mongo) | 1135 passed, 15 failed, all 15 in `test_w0_03e_legacy_routes.py` (the known baseline) |
+| `w0_03e_a2c_tenant_boundary_guard.py` | 206 modules, 0 violations |
+| `w0_03e_a1_tenant_access_guard.py` | 418 units, 0 violations |
+| A1 inventory regenerated | table byte-identical to `W0-03E-A1_INVENTORY.md` |
+| frontend `yarn test` | 5 suites, 92 passed |
+
+### Rollback
+
+Revert the commit. There is no data, schema or index change, and the rows written meanwhile are all valid amounts.
