@@ -361,3 +361,7 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# RC-01 build identity — generated per build, never committed (a commit cannot hold its own id)
+backend/BUILD_INFO.json
+frontend/BUILD_INFO.json

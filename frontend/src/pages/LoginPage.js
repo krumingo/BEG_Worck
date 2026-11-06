@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { HardHat, Loader2, AlertCircle } from "lucide-react";
+import BuildIdentity from "@/components/BuildIdentity";
 
 export default function LoginPage() {
   const { t } = useTranslation();
@@ -120,6 +121,9 @@ export default function LoginPage() {
             {t("auth.demo")}: admin@begwork.com / admin123
           </p>
         </div>
+
+        {/* RC-01: build identity */}
+        <BuildIdentity className="mt-4 text-center [&>div:first-child]:justify-center" />
       </div>
     </div>
   );

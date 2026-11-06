@@ -19,6 +19,7 @@ import ChangePasswordModal from "@/components/ChangePasswordModal";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetContent, SheetTrigger, SheetClose } from "@/components/ui/sheet";
+import BuildIdentity from "@/components/BuildIdentity";
 
 // ══════════════════════════════════════════════════════════════════
 // GROUPED NAVIGATION STRUCTURE
@@ -351,6 +352,7 @@ export default function DashboardLayout({ children }) {
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={handleLogout} data-testid="logout-button">
             <LogOut className="w-4 h-4 mr-2" />{t("auth.signOut")}
           </Button>
+          <BuildIdentity className="mt-3 px-2" />
         </div>
       </aside>
 
@@ -416,6 +418,7 @@ export default function DashboardLayout({ children }) {
                 <button onClick={handleLogout} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-destructive hover:bg-destructive/10" data-testid="mobile-logout">
                   <LogOut className="w-4 h-4 shrink-0" /><span>{t("auth.signOut")}</span>
                 </button>
+                <BuildIdentity className="px-3 pt-2 pb-1" />
               </div>
             </SheetContent>
           </Sheet>
