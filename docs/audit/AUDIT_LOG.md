@@ -9,7 +9,8 @@
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
 | #55 Склад 5C (C22) | `a427923` | PASS (internal) — Codex still required (money) | 2026-11-06 |
-| #67 ST-02 | `55ef71d` | PASS with 1 medium finding (ST02-1) | 2026-11-06 |
+| #67 ST-02 | `e987892` | PASS (ST02-1 fixed) | 2026-11-06 |
+| #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -536,3 +537,47 @@ The live rehearsal (docker build/deploy) was not re-run by the audit; the eviden
 **Integration:**
 - #67 is clean against main, #53, #54, #55, #56 and #64.
 - #55 is clean against main. It still conflicts with #56 (`data_access.py`, A2B inventory), #53/#64 (`App.js`) and #54 (`catalog.py`, `procurement.py`, `data_access.py`).
+
+
+---
+
+## 2026-11-06 ~17:20 — #67 → `e987892` (ST-02-C01), new #68 PM-01 @ `4e20084`; #55 and #56 unchanged
+
+### #67 ST-02-C01 (PROVED)
+
+- `pytest --noconftest tests/test_st_02_staging_stack.py` → 110 passed.
+- Probe `probe_st02_isolation.py`, extended to 18 hostile models, **all refused**. Two kinds of case:
+  - the original 9 from ST02-1;
+  - 9 new evasion attempts: `mongo.evil.com` prefix trick, a second host in the seed list, a userinfo trick, `BEGWORK` uppercase, `BEG_SYSTEM_DB=begwork_system`, frontend and mongo bind mounts of `/volume1/docker/begwork`, `cap_add SYS_ADMIN`, `pid: host`.
+- The probe baseline now uses `DB_NAME=st02_staging` (what `staging_up.py` writes). `begwork_staging` is now correctly refused as `begwork*`.
+- **ST02-1 is CLOSED.**
+
+### #68 PM-01 — role × endpoint × PERMISSION_SERVICE_MODE matrix (tests and docs only)
+
+**Scope (PROVED):** only `backend/tests/test_pm_01_permission_matrix.py`, `docs/architecture/PM-01_PERMISSION_MODE_REPORT.md` and `docs/evidence/PM-01/*`. No app code. No secrets: a synthetic password constant and a JWT secret that is random per run.
+
+**Tests (PROVED):**
+
+| Command | Result |
+|---|---|
+| DB-free | 5 passed, 1 skipped (the real-Mongo cell) |
+| With `W0_03_REAL_MONGO_URL` | **6 passed, 0 skipped (232 s)**. A fresh 18,048-call run gives the same status and the same wrote/not-wrote for every cell as the committed `matrix.csv` |
+
+**Independent check of the report against `matrix.csv` (PROVED, own script):**
+- 18,048 rows.
+- **0** cells where the status differs between off, shadow and enforce. This confirms the headline "the three modes give the same answer".
+- 18 cells where "wrote" differs between modes, all on `POST /api/users`, `PUT /api/users/{id}` and `POST /api/assets/intake/{id}/approve`. That matches report §2: AuditEvent on deny in enforce, plus RoleAssignment sync.
+- Viewer, Technician and Driver write in `off` on 27 distinct non-GET endpoints. That matches report §5.1 (28, counting `billing/signup` as public).
+- Report §5.1 lists them with the money-relevant ones:
+  - `POST /api/finance/cash-transactions`, `/bonus-payments`, `/overhead-transactions`;
+  - `PUT /api/price-modifiers/project/{id}`;
+  - `PATCH /api/projects/{id}/client-link`.
+- 66 GET calls write: invoice numbering and pulse caches. Not called out explicitly; low.
+
+**Main-level debt surfaced by PM-01 (NOT a #68 defect).** A Viewer can create cash, bonus and overhead transactions and change price modifiers, and that holds in every mode. This contradicts CLAUDE.md §8/§14 (permission check on every consequential write). The report already leaves the decision to Krum (§8), and per §18 it is debt until Krum confirms it hurts in real data. Flagged as **high-priority for Krum**.
+
+**Verdict:** PASS (internal). The report is accurate and reproducible.
+
+### Integration
+
+#68 is clean against main, #55, #56 and #67; #67 is clean against #55.
