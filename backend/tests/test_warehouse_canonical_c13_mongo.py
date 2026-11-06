@@ -454,6 +454,20 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
     """Two consecutive canonical rebuilds over the same ledger produce
     byte-identical canonical rows. Legacy rows (different projection
     source) are preserved and do not influence canonical readers.
+
+    5C-C18 (audit F-55-1) — which movement emits ``material_entries``.
+    Canon: CLAUDE.md §7 ("материалният разход се признава само веднъж:
+    складово изписване или директна доставка"), FLOW-043 D-04, FLOW-009
+    "Разход по обект — без двойно броене" Path A ("обектов разход възниква
+    само при изписване/консумация към обекта") and FLOW-009 "складов
+    материал става обектов разход само при изписване". This scenario is
+    Path A (supplier → central warehouse → dispatch → accept at project),
+    so the ACCEPT only moves stock into the project bucket; the project
+    cost row comes from CONSUME_TO_SMR (``projections._project_consumption``).
+    The C16/C17 expectation that ACCEPT emits ``material_entries`` was
+    wrong; the projector is right and is NOT changed. The test now
+    consumes 3 of the 5 accepted units and pins the exact canonical row,
+    so the parity check can never be a vacuous ``[] == []``.
     """
     client, db = canonical_mongo_db
     svc = CommandService(client, gate=allow_always_gate)
@@ -461,8 +475,9 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
         {"tenant_id": "T", "id": "I", "canonical_unit": "бр"}
     )
 
-    # Receive + dispatch + accept the whole lot so the projector
-    # emits one material_entries row via ACCEPT_PROJECT_DELIVERY.
+    # Receive + dispatch + accept the whole lot (Path A: stock moves to
+    # the project bucket, no project cost yet), then consume 3 to SMR —
+    # the ONE point where the project cost is recognised.
     await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
         action=CanonicalAction.RECEIVE_FROM_SUPPLIER,
         tenant_id="T", actor_id="u", item_id="I", unit="бр",
@@ -494,6 +509,24 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
         idempotency_key="acc:1", reason="a", file_ids=["f"],
     ))
 
+    # Accept alone must NOT recognise project cost (FLOW-009 Path A).
+    assert await db["material_entries"].count_documents(
+        {"tenant_id": "T",
+         "projection_source": "canonical_warehouse_service"}) == 0, (
+        "C13.4 regression: ACCEPT_PROJECT_DELIVERY recognised project cost; "
+        "warehouse material becomes project cost only at consumption."
+    )
+
+    consume = await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
+        action=CanonicalAction.CONSUME_TO_SMR,
+        tenant_id="T", actor_id="u", item_id="I", unit="бр",
+        quantity=Decimal("3"),
+        source=LocationKey(LocationType.PROJECT, "p1",
+                           state=MovementState.FREE),
+        project_id="p1", smr_id="smr-1",
+        idempotency_key="cons:1", reason="c", file_ids=["f"],
+    ))
+
     # Plant one LEGACY row (different projection_source). It must be
     # invisible to canonical readers and must NOT be deleted by the
     # canonical rebuild.
@@ -502,6 +535,8 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
         "projection_source": "legacy_pre_task5c",
         "qty": 999, "total_cost": 9999,
     })
+    legacy_before = await db["material_entries"].find_one(
+        {"id": "legacy_1"}, {"_id": 0})
 
     async def _snapshot():
         """C17: Motor cursors are async; materialise with ``to_list`` so the
@@ -524,20 +559,30 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
     assert first_snapshot == second_snapshot, (
         "C13.4 regression: rebuild-twice is not byte-identical"
     )
-    # Byte-identical rebuild parity also requires at least one canonical row
-    # to exist (otherwise the comparison would be trivially ``[] == []`` and
-    # could hide a projection outage). This asserts both the parity key and
-    # that the ACCEPT path actually emitted a canonical ``material_entries``
-    # row for the closed dispatch.
-    assert len(first_snapshot) >= 1, (
-        "C13.4 regression: canonical material_entries projection empty "
-        "after rebuild; expected at least one row from the closed accept."
+    # Byte-identical rebuild parity also requires the canonical row to
+    # exist (otherwise the comparison would be trivially ``[] == []`` and
+    # could hide a projection outage): exactly ONE row, from the
+    # consumption, with the FIFO value of the received layer (3 × 10).
+    assert len(first_snapshot) == 1, (
+        "C13.4 regression: expected exactly one canonical material_entries "
+        f"row (from CONSUME_TO_SMR); got {first_snapshot!r}"
     )
+    row = first_snapshot[0]
+    assert row["movement_id"] == consume.movement_id
+    assert row["id"] == f"me_{consume.movement_id}"
+    assert row["org_id"] == "T" and row["tenant_id"] == "T"
+    assert (row["project_id"], row["smr_id"], row["item_id"]) == ("p1", "smr-1", "I")
+    assert Decimal(row["quantity"]) == Decimal("3")
+    assert Decimal(row["unit_value"]) == Decimal("10")
+    assert Decimal(row["total_value"]) == Decimal("30")
 
-    # The legacy row still exists.
-    legacy = await db["material_entries"].find_one({"id": "legacy_1"})
+    # The legacy row still exists, byte-identical.
+    legacy = await db["material_entries"].find_one({"id": "legacy_1"}, {"_id": 0})
     assert legacy is not None, (
         "C13.4 regression: canonical rebuild clobbered a legacy row"
+    )
+    assert legacy == legacy_before, (
+        "C13.4 regression: canonical rebuild modified a legacy row"
     )
 
 

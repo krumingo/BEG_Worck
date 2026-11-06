@@ -96,6 +96,13 @@ class TenantCollection:
         self.name = name
 
     @property
+    def tenant(self) -> "TenantData":
+        """The tenant view this collection belongs to (5C-C18), so a service
+        handed one scoped collection can reach a sibling collection of the
+        SAME server-resolved tenant without touching the raw database."""
+        return self._scope
+
+    @property
     def _raw(self):
         return self._scope._db[self.name]
 

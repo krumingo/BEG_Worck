@@ -184,6 +184,7 @@ async def _open_batch(tenant_db, env: MovementEnvelope, *, session=None) -> None
         "projection_source": "canonical_warehouse_service",
         "projection_version": 2,
         "tenant_id": env.tenant_id,
+        "org_id": env.tenant_id,
         "movement_id": env.movement_id,
         "layer_source_movement_id": env.movement_id,
         "layer_sequence": 1,
@@ -200,7 +201,7 @@ async def _open_batch(tenant_db, env: MovementEnvelope, *, session=None) -> None
         "state": (env.destination or {}).get("state") if env.destination else None,
     }
     await tenant_db[BATCHES_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id, "movement_id": env.movement_id},
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "movement_id": env.movement_id},
         {"$set": doc, "$setOnInsert": {"opened_from": env.movement_id}},
         upsert=True,
         session=session,
@@ -234,6 +235,7 @@ async def _open_destination_from_layers(
             "projection_source": "canonical_warehouse_service",
             "projection_version": 2,
             "tenant_id": env.tenant_id,
+            "org_id": env.tenant_id,
             "movement_id": env.movement_id,
             "layer_source_movement_id": env.movement_id,
             "layer_sequence": 1,
@@ -249,7 +251,7 @@ async def _open_destination_from_layers(
             "received_at": env.recorded_at,
         }
         await tenant_db[BATCHES_COLLECTION].update_one(
-            {"tenant_id": env.tenant_id,
+            {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
              "movement_id": env.movement_id,
              "layer_sequence": 1},
             {"$set": doc},
@@ -266,6 +268,7 @@ async def _open_destination_from_layers(
             "projection_source": "canonical_warehouse_service",
             "projection_version": 2,
             "tenant_id": env.tenant_id,
+            "org_id": env.tenant_id,
             "movement_id": env.movement_id,
             "layer_source_movement_id": src_mv,
             "layer_sequence": seq,
@@ -281,7 +284,7 @@ async def _open_destination_from_layers(
             "received_at": env.recorded_at,
         }
         await tenant_db[BATCHES_COLLECTION].update_one(
-            {"tenant_id": env.tenant_id,
+            {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
              "movement_id": env.movement_id,
              "layer_sequence": seq},
             {"$set": doc},
@@ -306,16 +309,17 @@ async def _drain_batches(tenant_db, env: MovementEnvelope, *, session=None) -> N
         # `layer_source_movement_id` + `layer_sequence`. Earlier
         # ingestions wrote `movement_id=src_id` so support both shapes
         # for compatibility with pre-C11 rows.
-        q = {
-            "tenant_id": env.tenant_id,
-            "$or": [
-                {"movement_id": src_id, "layer_sequence": src_seq},
-                {"layer_source_movement_id": src_id, "layer_sequence": src_seq},
-                {"movement_id": src_id, "layer_sequence": {"$exists": False}},
-            ],
-        }
         batch = await tenant_db[BATCHES_COLLECTION].find_one(
-            q, {"quantity": 1, "consumed_quantity": 1, "_id": 1},
+            {
+                "tenant_id": env.tenant_id,
+                "org_id": env.tenant_id,
+                "$or": [
+                    {"movement_id": src_id, "layer_sequence": src_seq},
+                    {"layer_source_movement_id": src_id, "layer_sequence": src_seq},
+                    {"movement_id": src_id, "layer_sequence": {"$exists": False}},
+                ],
+            },
+            {"quantity": 1, "consumed_quantity": 1, "_id": 1},
             session=session,
         )
         if not batch:
@@ -325,7 +329,7 @@ async def _drain_batches(tenant_db, env: MovementEnvelope, *, session=None) -> N
         new_consumed = prior_consumed + qty
         new_remaining = max(total_qty - new_consumed, Decimal("0"))
         await tenant_db[BATCHES_COLLECTION].update_one(
-            {"_id": batch["_id"]},
+            {"_id": batch["_id"], "tenant_id": env.tenant_id, "org_id": env.tenant_id},
             {"$set": {
                 "consumed_quantity": str(new_consumed),
                 "remaining_quantity": str(new_remaining),
@@ -350,6 +354,7 @@ async def _project_consumption(
         "projection_source": "canonical_warehouse_service",
         "projection_version": 2,
         "tenant_id": env.tenant_id,
+        "org_id": env.tenant_id,
         "movement_id": env.movement_id,
         "project_id": env.project_id,
         "subproject_id": env.subproject_id,
@@ -367,7 +372,7 @@ async def _project_consumption(
     # Deterministic doc id so a projection rebuild is idempotent.
     row["id"] = f"me_{env.movement_id}"
     await tenant_db[MATERIAL_ENTRIES_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id, "movement_id": env.movement_id},
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "movement_id": env.movement_id},
         {"$set": row},
         upsert=True,
         session=session,
@@ -387,6 +392,7 @@ async def _open_in_transit(
         "projection_source": "canonical_warehouse_service",
         "projection_version": 2,
         "tenant_id": env.tenant_id,
+        "org_id": env.tenant_id,
         "dispatch_movement_id": env.movement_id,
         "item_id": env.item_id,
         "unit": env.unit,
@@ -402,7 +408,7 @@ async def _open_in_transit(
         "dispatched_at": env.recorded_at,
     }
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id, "dispatch_movement_id": env.movement_id},
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "dispatch_movement_id": env.movement_id},
         {"$set": row},
         upsert=True,
         session=session,
@@ -418,7 +424,8 @@ async def _close_in_transit(
         return
     accepted = Decimal(str(env.accepted_quantity or env.quantity or "0"))
     doc = await tenant_db[IN_TRANSIT_COLLECTION].find_one(
-        {"tenant_id": env.tenant_id, "dispatch_movement_id": dispatch_id},
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
+         "dispatch_movement_id": dispatch_id},
         session=session,
     )
     if not doc:
@@ -430,7 +437,7 @@ async def _close_in_transit(
     new_accepted = prior_accepted + accepted
     unresolved = max(dispatched - new_accepted, Decimal("0"))
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id, "dispatch_movement_id": dispatch_id},
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "dispatch_movement_id": dispatch_id},
         {"$set": {"accepted_quantity": str(new_accepted),
                   "unresolved_quantity": str(unresolved),
                   "last_accepted_at": env.recorded_at}},
@@ -457,7 +464,7 @@ async def _record_unresolved_layers(
     if not env.dispatch_movement_id:
         return
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id,
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
          "dispatch_movement_id": env.dispatch_movement_id},
         {"$set": {
             f"unresolved_discrepancies.{unresolved_movement_id}": {
@@ -494,7 +501,7 @@ async def _close_unresolved_discrepancies(
     if not unset_doc:
         return
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id,
+        {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
          "dispatch_movement_id": dispatch_movement_id},
         {"$unset": unset_doc,
          "$set": {
@@ -549,7 +556,7 @@ async def rebuild_from_ledger(tenant_db, *, tenant_id: str, session=None) -> Dic
             disc_mv_id = row.get("movement_id")
             if dispatch_mv_id and disc_mv_id:
                 await tenant_db[IN_TRANSIT_COLLECTION].update_one(
-                    {"tenant_id": tenant_id,
+                    {"tenant_id": tenant_id, "org_id": tenant_id,
                      "dispatch_movement_id": dispatch_mv_id},
                     {"$set": {
                         f"unresolved_discrepancies.{disc_mv_id}": {
@@ -566,7 +573,7 @@ async def rebuild_from_ledger(tenant_db, *, tenant_id: str, session=None) -> Dic
             resolved_mv_id = row.get("resolves_discrepancy_movement_id")
             if dispatch_mv_id and resolved_mv_id:
                 await tenant_db[IN_TRANSIT_COLLECTION].update_one(
-                    {"tenant_id": tenant_id,
+                    {"tenant_id": tenant_id, "org_id": tenant_id,
                      "dispatch_movement_id": dispatch_mv_id},
                     {"$unset": {
                         f"unresolved_discrepancies.{resolved_mv_id}": "",

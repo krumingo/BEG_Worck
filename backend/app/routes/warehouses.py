@@ -376,11 +376,17 @@ async def dev_reset_warehouses(request: Request, user: dict = Depends(get_curren
     if user["role"] not in ("Admin", "Owner"):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
 
-    # C08: refuse when any canonical ledger row exists for this tenant —
-    # the dev reset must never destroy auditable history.
+    # C08: refuse when any CANONICAL ledger row exists for this tenant —
+    # the dev reset must never destroy auditable history. A canonical row is
+    # one the TASK 5C command service appended: it always carries the
+    # server-allocated `ledger_sequence`. Legacy (pre-5C) transaction rows do
+    # not; for them the W0-03E behaviour from main is unchanged (a used
+    # warehouse is archived in MASTER_DATA_MODE=enforce, never deleted) —
+    # 5C-C18 / audit F-55-4.
     tenant = _tenant(user)
     ledger_count = await tenant.warehouse_transactions.count_documents({
         "org_id": user["org_id"],
+        "ledger_sequence": {"$exists": True},
     })
     if ledger_count > 0:
         raise HTTPException(status_code=409, detail={

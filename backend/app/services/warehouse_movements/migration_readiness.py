@@ -80,14 +80,20 @@ async def free_text_to_item_report(
 
 
 async def main_to_central_report(
-    tenant_db,
+    warehouses,
     *,
     tenant_id: str,
     session=None,
 ) -> Dict[str, Any]:
-    """List warehouses typed `main` (legacy only) and propose a rename."""
-    cursor = tenant_db[WAREHOUSES_COLLECTION].find(
-        {"tenant_id": tenant_id, "type": "main"},
+    """List warehouses typed `main` (legacy only) and propose a rename.
+
+    5C-C18 (A2C-IDENTITY): `warehouses` is an identity collection, so the
+    caller hands in the tenant-scoped `TenantData.warehouses` collection —
+    never the raw database. The scope adds the server-resolved `org_id`
+    (the key legacy warehouse rows carry); `tenant_id` is only echoed.
+    """
+    cursor = warehouses.find(
+        {"type": "main"},
         {"id": 1, "code": 1, "name": 1, "_id": 0},
         session=session,
     )

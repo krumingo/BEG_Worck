@@ -58,7 +58,7 @@ async def main_to_central(
 ) -> Dict[str, Any]:
     tenant = _tenant_for(user)
     return await main_to_central_report(
-        tenant._db, tenant_id=tenant.org_id,  # pylint: disable=protected-access
+        tenant.warehouses, tenant_id=tenant.org_id,
     )
 
 

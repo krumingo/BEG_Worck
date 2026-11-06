@@ -317,7 +317,7 @@ async def _idem_begin_with_session(
         raise ValueError("idempotency key must be non-empty")
     record_id = _idempotency_record_id(tenant_id, action, key)
     existing = await db[IDEMPOTENCY_COLLECTION].find_one(
-        {"id": record_id}, {"_id": 0}, session=session,
+        {"id": record_id, "tenant_id": tenant_id}, {"_id": 0}, session=session,
     )
     if existing is None:
         record = {
@@ -340,7 +340,7 @@ async def _idem_begin_with_session(
             if "duplicate" not in str(exc).lower() and type(exc).__name__ != "DuplicateKeyError":
                 raise
             existing = await db[IDEMPOTENCY_COLLECTION].find_one(
-                {"id": record_id}, {"_id": 0}, session=session,
+                {"id": record_id, "tenant_id": tenant_id}, {"_id": 0}, session=session,
             )
 
     if (
@@ -356,7 +356,7 @@ async def _idem_begin_with_session(
     if existing.get("status") == IDEMPOTENCY_FAILED:
         # Clean retry — reopen the reservation.
         await db[IDEMPOTENCY_COLLECTION].update_one(
-            {"id": record_id, "status": IDEMPOTENCY_FAILED},
+            {"id": record_id, "tenant_id": tenant_id, "status": IDEMPOTENCY_FAILED},
             {"$set": {"status": IDEMPOTENCY_STARTED,
                       "reserved_at": _now_iso(),
                       "completed_at": None,
@@ -364,7 +364,7 @@ async def _idem_begin_with_session(
             session=session,
         )
         refreshed = await db[IDEMPOTENCY_COLLECTION].find_one(
-            {"id": record_id}, {"_id": 0}, session=session,
+            {"id": record_id, "tenant_id": tenant_id}, {"_id": 0}, session=session,
         )
         return {"status": IDEMPOTENCY_STARTED, "record": refreshed,
                 "retry_of_failed": True}
@@ -383,6 +383,7 @@ async def _idem_complete_with_session(
 ) -> None:
     await db[IDEMPOTENCY_COLLECTION].update_one(
         {"id": _idempotency_record_id(tenant_id, action, key),
+         "tenant_id": tenant_id,
          "status": IDEMPOTENCY_STARTED},
         {"$set": {
             "status": IDEMPOTENCY_COMPLETED,
@@ -431,11 +432,13 @@ async def _record_event_in_session(tenant_db, event, *, session):
     from app.audit.store import AUDIT_COLLECTION, chain_hashes, canonical_hash
     validate_event(event)
 
-    chain_head_coll = tenant_db["audit_chain_head"]
+    # 5C-C18: `audit_chain_head` is a tenant_id-keyed audit store
+    # (ownership.TENANT_ID_KEYED, next to audit_events/audit_counters);
+    # every call names it directly with a literal `tenant_id` predicate.
     tenant_id = event["tenant_id"]
 
     # 1. Snapshot the chain head inside this session.
-    head = await chain_head_coll.find_one(
+    head = await tenant_db["audit_chain_head"].find_one(
         {"tenant_id": tenant_id}, session=session,
     )
     if head is None:
@@ -476,7 +479,7 @@ async def _record_event_in_session(tenant_db, event, *, session):
     }
     if head is None:
         try:
-            await chain_head_coll.insert_one(
+            await tenant_db["audit_chain_head"].insert_one(
                 {"tenant_id": tenant_id, **new_head_doc},
                 session=session,
             )
@@ -484,7 +487,7 @@ async def _record_event_in_session(tenant_db, event, *, session):
             # Re-raise so with_transaction retries from the top.
             raise
     else:
-        res = await chain_head_coll.update_one(
+        res = await tenant_db["audit_chain_head"].update_one(
             {"tenant_id": tenant_id,
              "sequence": prev_sequence,
              "integrity_hash": prev_hash},
@@ -1271,8 +1274,16 @@ class CommandService:
         monotonically distinct value with no gaps and no duplicates.
         """
         from pymongo import ReturnDocument
-        counters = tenant_collection._scope._db["warehouse_ledger_counters"]  # pylint: disable=protected-access
-        doc = await counters.find_one_and_update(
+        # 5C-C18 (A2C/A1): the counter is an org_id-keyed tenant collection;
+        # it is reached through the SAME TenantData that scopes the ledger
+        # collection (server-resolved tenant), so the filter and the upserted
+        # document carry `org_id` — never a raw handle.
+        tenant = tenant_collection.tenant
+        if tenant.org_id != tenant_id:
+            raise InvariantViolationError(
+                "ledger counter tenant does not match the command tenant",
+            )
+        doc = await tenant.warehouse_ledger_counters.find_one_and_update(
             {"tenant_id": tenant_id, "name": "ledger_sequence"},
             {"$inc": {"value": 1}},
             upsert=True,
