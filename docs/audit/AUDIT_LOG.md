@@ -111,3 +111,30 @@ Several may be safe in practice. For example, the idempotency `record_id` is der
 - Every result above is on the old base. After the merge with main (R0-01…R0-07, R0-03 identity), the guards and suites must be re-run.
 
 **Verdict: FINDINGS (blocking: F-55-1, F-55-2).**
+
+---
+
+## 2026-11-06 12:55 — Process change (R9, relayed by the orchestrator)
+
+This session is now the **primary reviewer** for every task except money/security; those also go to Codex. For each audited head, the suites are still run, and in addition I write adversarial probes in `docs/audit/probes/`: cross-tenant ids, role escalation, retries/duplicates, odd input, concurrency. Only proven failures become findings. Open heads are also checked for conflicts with each other.
+
+Queue: RC-01 (`claude/rc-01-build-identity`), ST-01 (`claude/st-01-staging-fixtures`), 5C-C18 (#55). **None of them has a new head yet** (12:55 UTC).
+
+### Integration check — `git merge-tree --write-tree` (PROVED)
+
+Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b`, #64 `3e0db8e`.
+
+| Pair | Conflicting files |
+|---|---|
+| main × #55 | `backend/app/routes/warehouses.py` |
+| #53 × #54 | `frontend/src/components/DashboardLayout.js` |
+| #53 × #55 | `frontend/src/App.js` |
+| #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
+| #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
+| #54 × #64 | `frontend/src/components/DashboardLayout.js` |
+| #55 × #56 | `backend/app/routes/warehouses.py`, `backend/app/tenancy/data_access.py` |
+| #55 × #64 | `backend/app/routes/warehouses.py`, `frontend/src/App.js` |
+
+Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
+
+**Hotspot:** `backend/app/tenancy/data_access.py` is touched by #54, #55 and #56. Whichever merges second must re-resolve it and re-run A2C/A1. Recommendation: merge #56 first, then rebase the work for #55 (C18) and #54 onto it.
