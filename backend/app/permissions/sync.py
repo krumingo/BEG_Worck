@@ -31,7 +31,7 @@ from datetime import datetime, timezone
 from app.tenancy import registry
 from app.tenancy.registry import ConcurrentAssignmentChange
 from app.permissions.catalog import (
-    LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
+    LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS, project_membership_actions,
 )
 from app.permissions.audit_hooks import audit_permission_change, _audit_db
 
@@ -259,8 +259,7 @@ async def sync_project_membership(ctx, user_id: str, member_role_id: str,
             await audit_permission_change(ctx, "revoked", rev or existing, before=existing, after=rev)
         return None
 
-    perms = list(PROJECT_MANAGER_ACTIONS if role_in_project == "SiteManager"
-                 else PROJECT_MEMBER_ACTIONS)
+    perms = project_membership_actions(member_role_id, role_in_project)   # SEC-01-C01 (R16)
 
     if existing is None:
         new = {

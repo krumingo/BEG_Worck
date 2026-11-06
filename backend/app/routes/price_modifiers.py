@@ -11,7 +11,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, OWNER_ADMIN_ROLES
 from app.services.price_modifiers import (
     get_effective_modifiers, apply_modifiers_to_price,
     DEFAULT_MODIFIERS, DEFAULT_AUTO_RULES, MODIFIER_KEYS,
@@ -50,7 +50,13 @@ async def get_org_modifiers(user: dict = Depends(require_m2)):
 
 
 @router.put("/price-modifiers/org")
-async def update_org_modifiers(data: ModifiersUpdate, user: dict = Depends(require_m2)):
+async def update_org_modifiers(
+    data: ModifiersUpdate,
+    _sec01: dict = Depends(require_money_write(
+        "pricing.org_modifier.update", module="M2", resource_type="price_modifiers_config",
+        roles=OWNER_ADMIN_ROLES)),  # SEC-01-C01: the existing Owner/Admin rule, all modes
+    user: dict = Depends(require_m2),
+):
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Admin only")
@@ -124,12 +130,25 @@ async def update_project_modifiers(
 
 
 @router.delete("/price-modifiers/project/{project_id}")
-async def delete_project_modifiers(project_id: str, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    await tenant.price_modifiers_config.delete_one(
-        {"org_id": user["org_id"], "scope": "project", "project_id": project_id}
-    )
-    return {"ok": True}
+async def delete_project_modifiers(
+    project_id: str,
+    _sec01: dict = Depends(require_money_write(
+        "pricing.project_modifier.delete", module="M2", resource_type="price_modifiers_config")),  # SEC-01-C01
+    user: dict = Depends(require_m2),
+):
+    """SEC-01-C01: refused — no hard delete of a financial record (CLAUDE.md §2.9).
+
+    The project price modifier config has no archive/version/reversal model
+    (``price_modifiers_config`` has no status field and ``get_effective_modifiers``
+    reads the row as is), so there is nothing to archive into. Every role is refused:
+    a non-finance role with 403 (above), a finance role with 409 — and nothing is
+    read or written. Debt SEC-01-C01-D2: a "reset to the company defaults" needs an
+    archive/version model (Krum decides). The frontend does not call this route.
+    """
+    raise HTTPException(status_code=409, detail={
+        "error_code": "HARD_DELETE_REFUSED",
+        "message": "Ценовите модификатори на обекта не се изтриват (няма модел за архив). "
+                   "Променете стойностите с PUT."})
 
 
 # ── Effective (merged with auto-rules) ─────────────────────────────

@@ -16,7 +16,7 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_field_cost_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -33,8 +33,9 @@ router = APIRouter(tags=["Labor by SMR"])
 @router.post("/labor-entries", status_code=201)
 async def create_labor_entry(
     data: dict,
-    _sec01: dict = Depends(require_money_write(
-        "labor.entry.create", module="M2", resource_type="labor_entry")),  # SEC-01: before any read/write
+    _sec01: dict = Depends(require_field_cost_write(
+        "labor.entry.create", module="M2", resource_type="labor_entry",
+        project_from="body")),  # SEC-01 + C01 (R16): before any read/write
     user: dict = Depends(require_m2),
 ):
     """Create a labor time entry linked to an execution package"""
@@ -71,7 +72,13 @@ async def create_labor_entry(
 
 
 @router.post("/labor-entries/sync-from-work-reports")
-async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(require_m2)):
+async def sync_labor_entries_from_work_reports(
+    data: dict,
+    _sec01: dict = Depends(require_field_cost_write(
+        "labor.work_report_sync.execute", module="M2", resource_type="labor_entry",
+        project_from="body")),  # SEC-01-C01 (R16): before any read/write
+    user: dict = Depends(require_m2),
+):
     """Sync labor entries from existing work reports for a project, with optional execution package mapping"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -165,7 +172,13 @@ async def list_labor_entries(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/execution-packages/recompute-labor/{project_id}")
-async def recompute_execution_package_labor(project_id: str, user: dict = Depends(require_m2)):
+async def recompute_execution_package_labor(
+    project_id: str,
+    _sec01: dict = Depends(require_field_cost_write(
+        "labor.package_recompute.execute", module="M2", resource_type="execution_package",
+        project_from="path")),  # SEC-01-C01 (R16): before any read/write
+    user: dict = Depends(require_m2),
+):
     """Recompute planned hours and labor budget for execution packages"""
     tenant = _tenant(user)
     org_id = user["org_id"]

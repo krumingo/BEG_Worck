@@ -295,7 +295,8 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
 # ═════════════════════════════════════════════════════════════════════ DB-free tests
 def test_the_catalog_grants_the_money_writes_to_owner_admin_accountant_only():
     from app.permissions.catalog import ACTIONS, PERMISSION_MATRIX, MONEY_WRITE_ACTIONS
-    assert MONEY_WRITE_ACTIONS == MONEY_ACTIONS
+    # SEC-01-C01 adds the other write routes on the same resources (superset).
+    assert MONEY_ACTIONS <= MONEY_WRITE_ACTIONS
     assert MONEY_ACTIONS <= ACTIONS
     holders = {rid for rid, acts in PERMISSION_MATRIX.items() if acts & MONEY_ACTIONS}
     assert holders == {"owner", "admin", "accountant"}
@@ -321,7 +322,9 @@ def _dep_calls(route):
     return [d.call for d in route.dependant.dependencies]
 
 
-def test_exactly_the_eight_routes_carry_the_sec01_dependency_before_any_other():
+def test_the_eight_routes_carry_the_sec01_dependency_before_any_other():
+    """SEC-01-C01 guards more routes; the complete list is asserted in
+    tests/test_sec_01_c01_all_money_writes.py."""
     found = {}
     for route in _routes():
         calls = _dep_calls(route)
@@ -329,7 +332,7 @@ def test_exactly_the_eight_routes_carry_the_sec01_dependency_before_any_other():
         for method in route.methods:
             if marked:
                 found[(method, route.path)] = route
-    assert set(found) == {(e[0], e[1]) for e in ENDPOINTS}, sorted(found)
+    assert {(e[0], e[1]) for e in ENDPOINTS} <= set(found), sorted(found)
     for key, route in found.items():
         calls = _dep_calls(route)
         first = calls[0]

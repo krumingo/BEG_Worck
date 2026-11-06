@@ -165,11 +165,15 @@ def test_the_bootstrap_derives_permissions_per_registry_tenant_only():
         plan = await boot.build_backfill()
         got = sorted((p["tenant_id"], p["user_id"], p["scope_id"], p["role_id"],
                       tuple(p["permissions"])) for p in plan)
-        from app.permissions.catalog import PROJECT_MANAGER_ACTIONS, PROJECT_MEMBER_ACTIONS
+        from app.permissions.catalog import (PROJECT_MANAGER_ACTIONS, PROJECT_MEMBER_ACTIONS,
+                                             FIELD_COST_WRITE_ACTIONS)
+        # SEC-01-C01 (R16): SiteManager/Technician members also get the field cost writes
+        # of that project; a Viewer member does not.
+        field = tuple(sorted(FIELD_COST_WRITE_ACTIONS))
         assert got == sorted([
-            ("TA", "u1", "P1", "LEGACY_TECHNICIAN", tuple(PROJECT_MEMBER_ACTIONS)),
+            ("TA", "u1", "P1", "LEGACY_TECHNICIAN", tuple(PROJECT_MEMBER_ACTIONS) + field),
             ("TB", "u1", "P1", "LEGACY_VIEWER", tuple(PROJECT_MEMBER_ACTIONS)),
-            ("TB", "u-sm", "P1", "site_manager", tuple(PROJECT_MANAGER_ACTIONS)),
+            ("TB", "u-sm", "P1", "site_manager", tuple(PROJECT_MANAGER_ACTIONS) + field),
         ]), got
         # the TX row (no registry tenant) derived nothing; A's u1 never got B's
         # SiteManager role and B's role id never came from A's user record

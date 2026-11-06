@@ -198,7 +198,7 @@ async def build_backfill() -> list:
     a value inferred from a user or project id.
     """
     from app.permissions.catalog import (
-        LEGACY_ROLE_MAP, PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS,
+        LEGACY_ROLE_MAP, project_membership_actions,
     )
     await _refuse_ownerless()
     out = []
@@ -210,14 +210,14 @@ async def build_backfill() -> list:
                 continue
             if not m.get("project_id"):
                 continue
-            is_mgr = m.get("role_in_project") == "SiteManager"
             role_id = LEGACY_ROLE_MAP.get(u.get("role", ""), "LEGACY_" + str(u.get("role", "")).upper())
             out.append({
                 "id": f"ra_{m['user_id']}_{tid}_proj_{m['project_id']}",
                 "user_id": m["user_id"], "tenant_id": tid,
                 "role_id": role_id,
                 "scope_type": "project", "scope_id": m["project_id"], "module": None,
-                "permissions": list(PROJECT_MANAGER_ACTIONS if is_mgr else PROJECT_MEMBER_ACTIONS),
+                # SEC-01-C01 (R16): + field cost writes for SiteManager/Technician members.
+                "permissions": project_membership_actions(role_id, m.get("role_in_project", "")),
                 "max_amount": None, "valid_from": now(), "valid_to": None,
                 "status": "active", "created_by": "system:migration", "approved_by": None,
                 "migrated_from": "project_team",
