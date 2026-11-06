@@ -75,7 +75,10 @@ CASES = [
     ("site_manager / member", [_assignment("site_manager")], {}, True),
     ("site_manager / non-member", [_assignment("site_manager")], None, False),
     ("site_manager / expired", [_assignment("site_manager")], {"to_date": "2021-01-01"}, False),
-    ("project_manager / own", [_assignment("project_manager", "project", PROJECT)], None, True),
+    # Р30: own project = team row as manager.
+    ("project_manager / own (team manager)", [_assignment("project_manager")], {}, True),
+    ("project_manager / team technician", [_assignment("project_manager")],
+     {"role_in_project": "Technician"}, False),
     ("project_manager / foreign", [_assignment("project_manager", "project", OTHER_PROJECT)],
      None, False),
     ("viewer / member", [_assignment("LEGACY_VIEWER")], {}, False),

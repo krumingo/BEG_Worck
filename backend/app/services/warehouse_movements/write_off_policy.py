@@ -4,8 +4,8 @@ off a PROJECT as „фира".
 
 Р27 follows Р16 (labor / material waste):
   * Owner / Admin / Accountant — on every project of the tenant;
-  * project_manager — only on their own projects (a RoleAssignment whose
-    scope covers the project, or an active, in-date project_team row);
+  * project_manager — only on their own projects: Р30 — an active, in-date
+    project_team row with role_in_project "SiteManager" (manager);
   * SiteManager / Technician — only on projects where they are members
     with valid dates (project_team row: ``active`` and
     ``from_date <= today <= to_date``; an open bound is open);
@@ -37,6 +37,8 @@ R27_EVERYWHERE = frozenset(r for r, k in PROJECT_WRITEOFF_RULE.items() if k == "
 R27_OWN_PROJECT = frozenset(r for r, k in PROJECT_WRITEOFF_RULE.items() if k == "own_project")
 R27_MEMBER_ONLY = frozenset(r for r, k in PROJECT_WRITEOFF_RULE.items() if k == "member")
 R27_REASON = "R27_WRITE_OFF_NOT_ALLOWED"
+# Р30 — the project_team role that makes a project "own" for a PM.
+PROJECT_MANAGER_TEAM_ROLE = "SiteManager"
 
 
 def _day(value: Any) -> Optional[date]:
@@ -66,6 +68,21 @@ def _member_in_date(row: Optional[dict], today: date) -> bool:
     except ValueError:
         return False
     return (start is None or start <= today) and (end is None or today <= end)
+
+
+async def member_in_date(tenant, user_id: str, project_id: str, *,
+                         now: Optional[datetime] = None,
+                         role_in_project: Optional[str] = None) -> bool:
+    """An active, in-date project_team row of THIS tenant (optionally with
+    the given role_in_project)."""
+    from app.tenancy import project_team
+    now = now or datetime.now(timezone.utc)
+    try:
+        row = await project_team.member_row(tenant, user_id, project_id,
+                                            role_in_project=role_in_project)
+    except Exception:
+        row = None
+    return _member_in_date(row, now.date())
 
 
 def _active_assignments(assignments: Iterable[dict], now: datetime) -> List[dict]:
@@ -117,21 +134,20 @@ async def ensure_project_write_off(ctx, tenant_db, *, org_id: str, project_id: s
     for a in active:
         if a.get("role_id") in R27_EVERYWHERE and _covers_project(a, project_id):
             return a["role_id"]
-    for a in active:
-        if a.get("role_id") in R27_OWN_PROJECT and _covers_project(a, project_id) \
-                and a.get("scope_type") == "project":
-            return a["role_id"]
-
-    needs_membership = roles & (R27_MEMBER_ONLY | R27_OWN_PROJECT)
-    if needs_membership:
-        tenant = TenantData.for_resolved_org(tenant_db, org_id)
-        try:
-            row = await project_team.member_row(tenant, user_id, project_id)
-        except Exception:
-            row = None
-        if _member_in_date(row, now.date()):
-            return sorted(needs_membership)[0]
-        raise _deny("not a member of the project with valid dates")
+    tenant = TenantData.for_resolved_org(tenant_db, org_id)
+    if roles & R27_MEMBER_ONLY:
+        if await member_in_date(tenant, user_id, project_id, now=now):
+            return sorted(roles & R27_MEMBER_ONLY)[0]
+    if roles & R27_OWN_PROJECT:
+        # Р30 (Крум 06.11.2026, FG-40): a project manager's own project is one
+        # where the team row names them the manager (role_in_project
+        # "SiteManager"), in date — not any team participation, and not a
+        # project-scope RoleAssignment by itself.
+        if await member_in_date(tenant, user_id, project_id, now=now,
+                                role_in_project=PROJECT_MANAGER_TEAM_ROLE):
+            return sorted(roles & R27_OWN_PROJECT)[0]
+    if roles & (R27_MEMBER_ONLY | R27_OWN_PROJECT):
+        raise _deny("not a member (manager for a PM) of the project with valid dates")
     raise _deny("role may not write off from a project")
 
 
@@ -168,11 +184,10 @@ async def ensure_project_write_off_legacy(user: dict, tenant_db, *, org_id: str,
         return role_id
     if role_id in R27_MEMBER_ONLY or role_id in R27_OWN_PROJECT:
         tenant = TenantData.for_resolved_org(tenant_db, org_id)
-        try:
-            row = await project_team.member_row(tenant, user_id, project_id)
-        except Exception:
-            row = None
-        if _member_in_date(row, now.date()):
+        if await member_in_date(
+                tenant, user_id, project_id, now=now,
+                role_in_project=(PROJECT_MANAGER_TEAM_ROLE if role_id in R27_OWN_PROJECT
+                                 else None)):
             return role_id
         raise _deny("not a member of the project with valid dates")
     raise _deny("role may not write off from a project")

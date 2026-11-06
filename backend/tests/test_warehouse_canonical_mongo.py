@@ -78,18 +78,34 @@ def _inp(action, tenant_id, **kw):
 # ---------------------------------------------------------------------
 # Enforce mode gate
 # ---------------------------------------------------------------------
-async def test_service_refuses_without_enforce_mode(canonical_mongo_db, allow_always_gate):
+async def test_r28_service_writes_in_shadow_by_legacy_role(canonical_mongo_db, allow_always_gate):
+    """5C-C26e — Р28 (Крум 06.11.2026) REPLACES the TASK 5C rule "canonical
+    writes only in enforce" (old test_service_refuses_without_enforce_mode):
+    the canonical warehouse writes in off / shadow / enforce; in off / shadow
+    the legacy session role decides with the same catalog rules. A role
+    without the action is still refused, nothing written. (Full matrix:
+    test_warehouse_canonical_c26e_r28_all_modes.py.)"""
+    from app.tenancy.guard import LegacyCompatContext
     client, db = canonical_mongo_db
     tenant = _tenant_data(db)
     os.environ["PERMISSION_SERVICE_MODE"] = "shadow"
     svc = CommandService(client, gate=allow_always_gate)
+    inp = lambda key: _inp(  # noqa: E731
+        CanonicalAction.RECEIVE_FROM_SUPPLIER, tenant_id="org_test",
+        source=LocationKey(LocationType.SUPPLIER, "sup_1"),
+        destination=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh_c1"),
+        unit_value=Decimal("10"), idempotency_key=key)
     try:
+        wk = LegacyCompatContext({"id": "u-wk", "org_id": "org_test",
+                                  "role": "Warehousekeeper"}, mode="shadow")
+        res = await svc.execute(wk, db, tenant.warehouse_transactions, inp("r28-wk"))
+        assert res.movement_id
+        viewer = LegacyCompatContext({"id": "u-v", "org_id": "org_test",
+                                      "role": "Viewer"}, mode="shadow")
         with pytest.raises(PermissionDeniedError):
-            await svc.execute(_Ctx("org_test"), db, tenant.warehouse_transactions, _inp(
-                CanonicalAction.RECEIVE_FROM_SUPPLIER, tenant_id="org_test",
-                source=LocationKey(LocationType.SUPPLIER, "sup_1"),
-                destination=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh_c1"),
-            ))
+            await svc.execute(viewer, db, tenant.warehouse_transactions, inp("r28-v"))
+        assert await tenant.warehouse_transactions.count_documents(
+            {"action": "receive_from_supplier"}) == 1
     finally:
         os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
 

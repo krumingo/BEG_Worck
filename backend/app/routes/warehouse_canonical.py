@@ -374,18 +374,6 @@ async def post_project_writeoff(
                 decision=_Decision(), request=request)
         raise _render_error(exc) from exc
 
-    if getattr(ctx, "mode", None) != MODE_ENFORCE:
-        # Р27 allowed the caller. The canonical ledger itself is written only
-        # with the Permission Service in enforce (TASK 5C contract,
-        # CommandService.execute / test_service_refuses_without_enforce_mode)
-        # — reported as its own reason, never as a Р27 denial.
-        raise HTTPException(status_code=503, detail={
-            "error_code": "CANONICAL_WRITES_REQUIRE_ENFORCE",
-            "message": "Р27 allows this write-off; the canonical warehouse "
-                       "writes only with PERMISSION_SERVICE_MODE=enforce",
-            "context": {"mode": getattr(ctx, "mode", None),
-                        "project_id": body.project_id}})
-
     source_type = LocationType.SUBPROJECT if body.subproject_id else LocationType.PROJECT
     source_id = body.subproject_id or body.project_id
     service = _service()

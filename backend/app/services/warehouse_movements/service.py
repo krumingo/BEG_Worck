@@ -337,6 +337,16 @@ def file_registry_available() -> bool:
     }
 
 
+def permission_mode_of(ctx) -> str:
+    """The Permission Service mode of THIS operation: the one the route's
+    dependency fixed on the context (PR-05), else the environment."""
+    mode = getattr(ctx, "mode", None)
+    if mode in ("off", "shadow", "enforce"):
+        return mode
+    from app.permissions.deps import current_mode
+    return current_mode()
+
+
 def permission_service_enforce() -> bool:
     return os.environ.get("PERMISSION_SERVICE_MODE", "").strip().lower() == "enforce"
 
@@ -654,11 +664,13 @@ class CommandService:
         tenant_collection,          # TenantCollection for warehouse_transactions
         inp: CommandInput,
     ) -> ExecuteResult:
-        if not permission_service_enforce():
-            raise PermissionDeniedError(
-                "PERMISSION_SERVICE_MODE=enforce is required for canonical writes",
-                context={"mode": os.environ.get("PERMISSION_SERVICE_MODE", "off")},
-            )
+        # 5C-C26e — Р28 (Крум 06.11.2026): the canonical warehouse writes in
+        # off / shadow / enforce alike (replaces the TASK 5C "enforce only"
+        # refusal). The mode only chooses WHO decides the rights: enforce →
+        # RoleAssignments (PermissionGate / Р27); off / shadow → the legacy
+        # session role with the same rules (legacy_gate); shadow also
+        # computes the enforce decision and only logs a mismatch.
+        mode = permission_mode_of(ctx)
 
         action = inp.action
         if action not in CanonicalAction:
@@ -687,16 +699,28 @@ class CommandService:
         # Permission (C06 — both source + destination + project scopes).
         # A transfer's physical destination is the TARGET warehouse even
         # though the row goes to in_transit, so its scope is checked now.
-        r27 = getattr(self._gate, "ensure_project_write_off", None)
-        if action == CanonicalAction.WRITE_OFF and inp.project_id and r27 is not None:
-            # 5C-C26 Addendum A — Р27: write-off from a project (фира).
-            await r27(ctx, tenant_db, org_id=inp.tenant_id, project_id=inp.project_id)
+        if mode == "enforce":
+            await self._enforce_gate(ctx, tenant_db, inp)
         else:
-            await self._gate.ensure(
-                ctx, action=action, source=inp.source,
-                destination=inp.transfer_target or inp.destination,
-                project_id=inp.project_id,
-            )
+            from app.services.warehouse_movements.legacy_gate import ensure_legacy
+            legacy_exc = None
+            try:
+                await ensure_legacy(ctx, tenant_db, inp)
+            except PermissionDeniedError as exc:
+                legacy_exc = exc
+            if mode == "shadow":
+                try:
+                    await self._enforce_gate(ctx, tenant_db, inp)
+                    new_allow = True
+                except Exception:                  # unverified counts as deny
+                    new_allow = False
+                if new_allow != (legacy_exc is None):
+                    logger.warning(
+                        "PERMISSION_SHADOW_MISMATCH action=%s legacy_allow=%s "
+                        "new_allow=%s project=%s", action.value,
+                        legacy_exc is None, new_allow, inp.project_id)
+            if legacy_exc is not None:
+                raise legacy_exc
 
         # Shape rules evaluated outside the tx so a malformed envelope
         # cannot reach Mongo.
@@ -1591,11 +1615,10 @@ class CommandService:
                 )
             inp.project_id = target.get("location_id")
         elif target.get("location_type") == LocationType.SUBPROJECT.value:
-            if not inp.project_id:
-                raise InvariantViolationError(
-                    "acceptance into a subproject requires its project_id",
-                    context={"transfer_target": target},
-                )
+            # 5C-C26d/e (FG-38, C26D-L1): the project is the subproject's
+            # parent from the database — bound (or a mismatch refused, 422)
+            # by _bind_subproject_parent right after this binding.
+            pass
         elif inp.project_id:
             raise InvariantViolationError(
                 "acceptance of a transfer into a warehouse cannot carry a project_id",
@@ -1619,6 +1642,19 @@ class CommandService:
                 "project_id": row.get("project_id"),
                 "dispatch_movement_id": dispatch_movement_id}
 
+    async def _enforce_gate(self, ctx, tenant_db, inp: CommandInput) -> None:
+        """The RoleAssignment decision (enforce; observed in shadow)."""
+        r27 = getattr(self._gate, "ensure_project_write_off", None)
+        if inp.action == CanonicalAction.WRITE_OFF and inp.project_id and r27 is not None:
+            # 5C-C26 Addendum A — Р27: write-off from a project (фира).
+            await r27(ctx, tenant_db, org_id=inp.tenant_id, project_id=inp.project_id)
+        else:
+            await self._gate.ensure(
+                ctx, action=inp.action, source=inp.source,
+                destination=inp.transfer_target or inp.destination,
+                project_id=inp.project_id,
+            )
+
     @staticmethod
     async def _bind_subproject_parent(tenant_db, inp: CommandInput) -> None:
         """5C-C26d — audit C26B-1 / FLOW Guard FG-38 (HIGH).
@@ -1636,25 +1672,35 @@ class CommandService:
                 if k is not None and k.location_type == LocationType.SUBPROJECT]
         if not subs:
             return
-        parents = []
-        for key in subs:
-            parents.append(await resolve_subproject_parent(
-                tenant_db, inp.tenant_id, key.location_id))
-        parent = parents[0]
+        parents = {}
+        for key in subs:                      # every subproject must resolve
+            parents[key.location_id] = await resolve_subproject_parent(
+                tenant_db, inp.tenant_id, key.location_id)
+        src = inp.source
+        if src is not None and src.location_type == LocationType.PROJECT:
+            # 5C-C26e (C26D-L1): the move LEAVES a project — its project is
+            # the source; a subproject target (of any project) only has to
+            # resolve in this tenant, it does not rebind project_id.
+            return
+        if src is not None and src.location_type == LocationType.SUBPROJECT:
+            decider = src
+        else:
+            decider = subs[0]                 # acceptance / direct delivery
+        parent = parents[decider.location_id]
         if inp.project_id and inp.project_id != parent:
             raise InvariantViolationError(
                 "project_id must be the parent project of the subproject",
-                context={"subproject_id": subs[0].location_id,
+                context={"subproject_id": decider.location_id,
                          "parent_project_id": parent,
                          "project_id": inp.project_id})
         inp.project_id = parent
         if not inp.subproject_id:
-            inp.subproject_id = subs[0].location_id
-        elif inp.subproject_id not in {k.location_id for k in subs}:
+            inp.subproject_id = decider.location_id
+        elif inp.subproject_id not in parents:
             raise InvariantViolationError(
                 "subproject_id must be the subproject bucket of the movement",
                 context={"subproject_id": inp.subproject_id,
-                         "buckets": [k.location_id for k in subs]})
+                         "buckets": sorted(parents)})
 
     @staticmethod
     def _bind_write_off_project(inp: CommandInput) -> None:

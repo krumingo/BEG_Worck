@@ -53,10 +53,10 @@ class _UserCtx(_Ctx):
 
 
 async def _member(db, *, project=PROJECT, active=True, from_date="2020-01-01",
-                  to_date=None, user=USER):
+                  to_date=None, user=USER, role_in_project="SiteManager"):
     await db["project_team"].insert_one({
-        "id": f"pt-{project}-{user}-{from_date}-{to_date}", "org_id": T,
-        "project_id": project, "user_id": user, "role_in_project": "SiteManager",
+        "id": f"pt-{project}-{user}-{from_date}-{to_date}-{role_in_project}", "org_id": T,
+        "project_id": project, "user_id": user, "role_in_project": role_in_project,
         "active": active, "from_date": from_date, "to_date": to_date})
 
 
@@ -90,11 +90,17 @@ CASES = [
     ("admin / non-member", [_assignment("admin")], None, True),
     ("accountant / non-member", [_assignment("accountant")], None, True),
     # project_manager — own projects only.
-    ("pm / own project (scope)", [_assignment("project_manager", "project", PROJECT)], None, True),
-    ("pm / member in date", [_assignment("project_manager", "project", OTHER_PROJECT)],
+    # Р30 (5C-C26e): own project = team row as manager (role_in_project
+    # "SiteManager"), in date — a scope assignment alone or any other team
+    # role is not enough.
+    ("pm / team manager in date", [_assignment("project_manager", "project", OTHER_PROJECT)],
      {}, True),
+    ("pm / scope assignment only (Р30)", [_assignment("project_manager", "project", PROJECT)],
+     None, False),
+    ("pm / team technician (Р30)", [_assignment("project_manager")],
+     {"role_in_project": "Technician"}, False),
     ("pm / other project", [_assignment("project_manager", "project", OTHER_PROJECT)], None, False),
-    ("pm / expired member", [_assignment("project_manager", "project", OTHER_PROJECT)],
+    ("pm / expired manager", [_assignment("project_manager", "project", OTHER_PROJECT)],
      {"to_date": "2021-01-01"}, False),
     # SiteManager / Technician — members with valid dates only.
     ("site_manager / member", [_assignment("site_manager")], {}, True),

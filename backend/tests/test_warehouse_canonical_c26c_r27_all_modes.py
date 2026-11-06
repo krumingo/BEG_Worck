@@ -6,11 +6,9 @@ SEC-01 ``require_money_write``, #69) with the catalog's PROJECT_WRITEOFF_RULE
 and the same in-date membership check; enforce decides from RoleAssignments.
 Shadow also computes the RoleAssignment decision and only logs a mismatch.
 
-The canonical ledger is written only in enforce (TASK 5C contract,
-test_warehouse_canonical_mongo.test_service_refuses_without_enforce_mode):
-in off / shadow an ALLOWED caller gets 503 CANONICAL_WRITES_REQUIRE_ENFORCE
-(Р27 passed), a DENIED caller 403 R27_WRITE_OFF_NOT_ALLOWED — never mixed,
-and nothing is written in either case.
+5C-C26e — Р28 (Крум 06.11.2026): the canonical ledger writes in all three
+modes, so an ALLOWED caller gets 201 in off / shadow / enforce alike; a
+DENIED caller 403 R27_WRITE_OFF_NOT_ALLOWED with nothing written.
 """
 from __future__ import annotations
 
@@ -75,19 +73,16 @@ async def test_r27_role_matrix_in_every_mode(
         await _member(db, **membership)
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
     before = await _ledger_count(db)
-    if allowed and mode == "enforce":
+    if allowed:                                   # Р28: every mode writes
         res = await _call(route, mode, legacy_role)
         assert res.envelope["action"] == "write_off"
         assert await _ledger_count(db) == before + 1
+        assert audits == []
         return
     with pytest.raises(HTTPException) as exc:
         await _call(route, mode, legacy_role)
-    if allowed:
-        assert exc.value.status_code == 503
-        assert exc.value.detail["error_code"] == "CANONICAL_WRITES_REQUIRE_ENFORCE"
-    else:
-        assert exc.value.status_code == 403
-        assert exc.value.detail["context"]["reason_code"] == "R27_WRITE_OFF_NOT_ALLOWED"
+    assert exc.value.status_code == 403
+    assert exc.value.detail["context"]["reason_code"] == "R27_WRITE_OFF_NOT_ALLOWED"
     assert await _ledger_count(db) == before                     # nothing written
     # The denial AuditEvent is an enforce-only write (W0-02).
     assert len(audits) == (1 if (mode == "enforce" and not allowed) else 0)
@@ -101,7 +96,6 @@ async def test_shadow_logs_a_mismatch_but_the_legacy_role_decides(
     route, _ = await _setup(client, allow_always_gate, db, monkeypatch, [])
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "shadow")
     with caplog.at_level(logging.WARNING):
-        with pytest.raises(HTTPException) as exc:
-            await _call(route, "shadow", "Accountant")
-    assert exc.value.detail["error_code"] == "CANONICAL_WRITES_REQUIRE_ENFORCE"
+        res = await _call(route, "shadow", "Accountant")
+    assert res.envelope["action"] == "write_off"                   # legacy decides
     assert "PERMISSION_SHADOW_MISMATCH action=warehouse.project_writeoff" in caplog.text
