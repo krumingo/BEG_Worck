@@ -8,10 +8,10 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C23) | `53dbd28` | **MISSED 2 P1** (found by Codex): see 18:30 entry; re-audit at C24 | 2026-11-06 |
+| #55 Склад 5C (C24) | `dbda909` | PASS (internal) + decision D-55-PRORATA — Codex still required | 2026-11-06 |
 | #67 ST-02 | `e987892` | PASS (ST02-1 fixed) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #69 SEC-01 | `e6c0e46` | PASS in scope; HIGH scope gap SEC-S1/S2 (sibling money writes still open) | 2026-11-06 |
+| #69 SEC-01 | `aee3169` | PASS (S1/S2 closed); MEDIUM SEC-R1 (ended membership still writes) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -689,3 +689,76 @@ Codex CHANGES_REQUESTED: https://github.com/krumingo/BEG_Worck/pull/55#issuecomm
 - **Value conservation:** mixed prices (at least two layers, different unit values), large quantities, odd decimals; assert value to the cent after every step (accept, partial accept, transfer, consume, rebuild).
 - **Real legacy shapes only:** build fixtures by copying the writer in `origin/main` field by field (cite file:line), insert ≥2 rows **before** index creation and startup hooks, then run the startup path and a canonical write.
 - **Startup on a populated DB:** drop the fixture's pre-created indexes before running startup-hook probes.
+
+
+---
+
+## 2026-11-06 ~19:10 — #55 @ `dbda909` (5C-C24) and #69 @ `aee3169` (SEC-01-C01)
+
+### #55 @ `dbda909` — exact FIFO layers after acceptance + partial movement-id index
+
+**Suites (PROVED):**
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix + `test_codex_c23_independent.py` | **236 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo | **881 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 219 modules, 0 violations ✔ |
+| A1 | 444 units, 0 violations ✔ |
+
+**Probes, real Mongo, one test per process:**
+
+| Probe | 53dbd28 | dbda909 |
+|---|---|---|
+| L-1: 2 legacy rows in main's `issue_to_project` shape before startup | FAIL (E11000) | **PASS** |
+| L-2 (new): 2× each of main's intake / issue / return shapes before startup, startup ×2, canonical write, legacy rows byte-identical, cutover = canonical row | — | **PASS** |
+| F-1: 10000@1 + 20000@2 → accept → consume | 50001 | **50000.0000** |
+| F-2: partial accepts | 50001 | **50000** |
+| F-3: W2W split accept | 50001 | **50000.0000** |
+| F-4: odd decimals | pass | pass |
+| F-5 (new): 3 prices, dispatch 15000, accept 9000 + 6000, consume 10000, write-off 5000; rebuild ×2 + sync | — | total **27000** stable everywhere; warehouse left **24150.0000** ✔ |
+| F-6 (new): prime pro-rata, dispatch 7 = 3@1 + 4@2, accept 3 + 2 + 2, consume 7 | — | layers exactly 3 / 4, cost **11.00** ✔ (no drift) |
+
+Other probes: C22 5/5, C23 1/1, C21 5/5. C19: only the known main W0-04 concurrency pair fails.
+
+**D-55-PRORATA — DECISION for Krum (valuation rule, PROVED behaviour, not a defect).**
+- A *partial* acceptance values the accepted part **pro-rata across the dispatched layers**. In the ledger, dispatch 15000 = 7000@1 + 8000@2.5, and accept 9000 = 4200@1 + 4800@2.5. FIFO would give 7000@1 + 2000@2.5.
+- The total is conserved: every probe sums exactly.
+- What changes is **which layers later consumption and write-off draw from**. In F-5: consumption 17200 and фира **9800** under pro-rata; consumption 14500 and фира **12500** under strict FIFO. Package and period attribution move the same way.
+- Pro-rata is defensible, since which physical units arrived is unknown, but it is a valuation rule. It should be written into the FLOW-009 canon.
+
+### #69 @ `aee3169` — SEC-01-C01 (every write on the money resources guarded; R16 for labor and waste)
+
+**Tests (PROVED):**
+
+| Command | Result |
+|---|---|
+| `W0_03_REAL_MONGO_URL=… pytest --noconftest tests/test_sec_01_c01_all_money_writes.py tests/test_sec_01_money_write_permissions.py tests/test_pm_01_permission_matrix.py` | **20 passed, 0 skipped** (245 s) |
+| R0 on real Mongo | **814 / 0 / 0** |
+| W0 DB-free | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+
+**Probes:**
+- `probe_sec01_siblings.py`: **now PASS in all three modes.** A Viewer's DELETE on project price modifiers → 403, config kept. A Viewer's labor sync → 403, 0 rows. **SEC-S1 and SEC-S2 are CLOSED.**
+- `probe_sec01_c01_r16.py` (new): R16 edge cases on the real app, three modes.
+
+| Check | off | shadow | enforce |
+|---|---|---|---|
+| R1: Technician added by Admin with `to_date` = **yesterday**; labor entry / material waste on that project | **201 / 201** | **201 / 201** | **201 / 201** |
+| R2: non-member SiteManager adds himself to the team | 403 ✔ | 403 ✔ | 403 ✔ |
+| R3: member posts a labor entry without `project_id` | 403 ✔ | 403 ✔ | 403 ✔ |
+
+**SEC-R1 — MEDIUM (security), PROVED.** R16 "member projects only" honours `active` but **not the membership period**.
+- `app/tenancy/project_team.py:93-107` `membership_filter` adds `active: True` only. `from_date`/`to_date` are stored but never checked, and the enforce RoleAssignment mirror does not cut it off either.
+- So a field worker whose assignment ended keeps writing labor cost and waste on that project until someone flips `active`.
+- The three modes agree, so this is not a parity bug. The same membership semantics already apply to `can_access_project` on main, so the root cause is pre-existing, and SEC-01-C01 now relies on it for money writes.
+- Fix: honour `from_date ≤ today ≤ to_date` in `membership_filter` (or in R16's legacy check plus the RA mirror's `valid_to`).
+
+Other notes:
+- DELETE price modifiers now refuses everyone (409 for finance roles: "no archive model"), recorded by the PR as debt C01-D2. Krum may want a correction/archive path.
+- `recompute-material` and `material-entries/sync` (#55) are still open to any M2 role, as the PR notes; they are deterministic rebuilds.
+
+**Integration:**
+- #69 conflicts with **#55** in `backend/app/permissions/catalog.py`; clean against the rest.
+- #55 still conflicts with **#56** (`data_access.py`, A2B inventory) and is clean against #67/#68.
