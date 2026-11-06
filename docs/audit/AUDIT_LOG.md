@@ -762,3 +762,35 @@ Other notes:
 **Integration:**
 - #69 conflicts with **#55** in `backend/app/permissions/catalog.py`; clean against the rest.
 - #55 still conflicts with **#56** (`data_access.py`, A2B inventory) and is clean against #67/#68.
+
+### Addendum — #69 @ `aee3169`: what each role LOSES (orchestrator request), PROVED
+
+**1. PM-01 matrix diff** (`git show pr/68:docs/evidence/PM-01/matrix.csv` against `git show pr/69:…`, 18,048 cells each, same keys)
+- Every cell that changed from <400 to 401/403/409 is listed below. **No role gained anything.**
+- 15 further changes are 400 → 403 on `sync-from-work-reports`: the refusal now comes before body validation.
+
+| Endpoint | Roles that lose it (all three modes) |
+|---|---|
+| POST `/api/finance/cash-transactions` | SiteManager, Technician, Warehousekeeper, Driver, Viewer |
+| POST `/api/finance/bonus-payments` | same |
+| POST `/api/finance/overhead-transactions` | same |
+| POST `/api/overhead-snapshots` | same |
+| PUT `/api/price-modifiers/project/{id}` | same |
+| PATCH `/api/projects/{id}/client-link` | same |
+| POST `/api/labor-entries` | same (R16: SiteManager/Technician keep it **on member projects**; the matrix caller is not a member) |
+| POST `/api/projects/{id}/material-waste` | same (R16 as above) |
+| POST `/api/execution-packages/recompute-labor/{id}` | same (R16) |
+| DELETE `/api/price-modifiers/project/{id}` | **everyone, Owner/Admin included** (409 for finance roles, debt C01-D2: no archive model) |
+
+**2. SiteManager on projects** (the implementer's claim), probe `docs/audit/probes/sec01/probe_sec01_c01_sitemanager_loss.py`
+- Setup: the SiteManager is a SiteManager member of the project (so `can_manage_project` is true), on main as the baseline and on #69.
+
+| Action | main | #69 (off / shadow / enforce) |
+|---|---|---|
+| create project without client | 201 | 201 (kept) |
+| create project **with** `owner_type/owner_id` | 201 | **403** (lost) |
+| PUT project, **change** `owner_id` | 200 | **403** (lost) |
+| PUT project, same `owner_id` + new name | 200 | 200 (kept) |
+| PUT project, name only | 200 | 200 (kept) |
+
+The implementer's claim is **confirmed and exact**: SiteManager loses only setting or changing the paying client of a project. Project create and edit otherwise stay. This is a business-visible change for Krum.
