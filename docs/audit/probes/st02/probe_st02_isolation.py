@@ -13,7 +13,7 @@ BASE = {
     "services": {
         "backend": {"container_name": P + "-backend", "networks": {"st02": None},
                     "environment": {"ENV": "staging", "PERMISSION_SERVICE_MODE": "enforce",
-                                    "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "begwork_staging",
+                                    "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "st02_staging",
                                     "JWT_SECRET": "x"}},
         "frontend": {"container_name": P + "-frontend", "networks": {"st02": None},
                      "ports": [{"host_ip": "127.0.0.1", "published": "18080", "target": 80}]},
@@ -51,6 +51,22 @@ cases = [
     ("mongo data on an EXTERNAL (production) volume",
      lambda m: m["volumes"]["st02-mongo-data"].update(external=True, name="begwork_mongo_data")),
     ("backend network_mode host", lambda m: m["services"]["backend"].update(network_mode="host")),
+    # extra cases added for ST-02-C01
+    ("backend MONGO_URL host 'mongo.evil.com' (prefix trick)",
+     lambda m: m["services"]["backend"]["environment"].update(MONGO_URL="mongodb://mongo.evil.com:27017/?replicaSet=rs0")),
+    ("backend MONGO_URL with second host in seed list",
+     lambda m: m["services"]["backend"]["environment"].update(MONGO_URL="mongodb://mongo:27017,10.0.0.5:27017/?replicaSet=rs0")),
+    ("backend MONGO_URL 'mongodb://user@...@prod' userinfo trick",
+     lambda m: m["services"]["backend"]["environment"].update(MONGO_URL="mongodb://mongo:x@prod.example.com:27017/")),
+    ("backend DB_NAME 'BEGWORK' (case)", lambda m: m["services"]["backend"]["environment"].update(DB_NAME="BEGWORK")),
+    ("backend BEG_SYSTEM_DB = begwork_system",
+     lambda m: m["services"]["backend"]["environment"].update(BEG_SYSTEM_DB="begwork_system")),
+    ("frontend bind-mounts /volume1/docker/begwork",
+     lambda m: m["services"]["frontend"].update(volumes=[{"type": "bind", "source": "/volume1/docker/begwork/x", "target": "/x"}])),
+    ("mongo bind-mounts the production mongo data dir",
+     lambda m: m["services"]["mongo"].update(volumes=[{"type": "bind", "source": "/volume1/docker/begwork/mongo", "target": "/data/db"}])),
+    ("backend cap_add SYS_ADMIN", lambda m: m["services"]["backend"].update(cap_add=["SYS_ADMIN"])),
+    ("backend pid: host", lambda m: m["services"]["backend"].update(pid="host")),
 ]
 missed = [d for d, f in cases if not mut(d, f)]
 print("MISSED:", missed or "none")
