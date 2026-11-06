@@ -16,6 +16,7 @@ from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData, assigned_project_ids
 from app.deps.modules import require_m5, enforce_limit
 from app.utils.audit import log_audit
+from app.services.money_amount import check_reason, positive_amount
 from app.services.payment_state import (
     ALLOCATION_CANCELLED, PAYMENT_REVERSAL, PAYMENT_REVERSED,
     active_allocations, active_payments, opposite_direction, payment_counts,
@@ -406,14 +407,9 @@ async def create_transfer(data: dict, user: dict = Depends(require_m5)):
     org = user["org_id"]
     from_id = data.get("from_account_id")
     to_id = data.get("to_account_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
     if not from_id or not to_id or from_id == to_id:
         raise HTTPException(status_code=400, detail="Изберете две различни сметки")
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
     tenant = _tenant(user)
     src = await tenant.financial_accounts.get(from_id)
     dst = await tenant.financial_accounts.get(to_id)
@@ -451,14 +447,9 @@ async def fund_account(data: dict, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     org = user["org_id"]
     to_id = data.get("account_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
     if not to_id:
         raise HTTPException(status_code=400, detail="Изберете сметка")
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
     tenant = _tenant(user)
     dst = await tenant.financial_accounts.get(to_id)
     if not dst:
@@ -487,12 +478,7 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     org = user["org_id"]
     project_id = data.get("project_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
     if not project_id:
         raise HTTPException(status_code=400, detail="Изберете обект")
     method = data.get("method") or "Cash"
@@ -526,12 +512,7 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     org = user["org_id"]
     project_id = data.get("project_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
     method = data.get("method") or "Cash"
     tenant = _tenant(user)
     account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
@@ -1137,9 +1118,7 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     if invoice["status"] in ["Draft", "Cancelled"]:
         raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
     
-    amount = float(data.get("amount", 0))
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
+    amount = positive_amount(data.get("amount"))  # PAY-01-C01: finite > 0, else 422
     
     remaining = invoice.get("remaining_amount", invoice["total"])
     if amount > remaining + 0.01:  # small tolerance for rounding
@@ -1219,6 +1198,7 @@ class _Request:
         if not self.reason:
             raise HTTPException(status_code=400, detail={
                 "error_code": "REASON_REQUIRED", "message": "Посочете причина за сторното"})
+        check_reason(self.reason)  # PAY-01-C01: ≤ 500 chars, no control/invisible chars → 400
 
 
 def _reversal_id(payment_id: str) -> str:
@@ -1477,6 +1457,7 @@ async def list_payments(
 async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+    amount = positive_amount(data.amount)  # PAY-01-C01: finite > 0, else 422, nothing written
     
     # Route to the correct account: cash → Каса, otherwise the chosen account.
     tenant = _tenant(user)
@@ -1490,7 +1471,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
         "id": str(uuid.uuid4()),
         "org_id": user["org_id"],
         "direction": data.direction,
-        "amount": data.amount,
+        "amount": amount,
         "currency": data.currency,
         "date": data.date,
         "method": data.method,
@@ -1504,7 +1485,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
     await tenant.finance_payments.insert_one(payment)
     
     await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
-                    {"amount": data.amount, "direction": data.direction, "account_id": account_id})
+                    {"amount": amount, "direction": data.direction, "account_id": account_id})
     
     return {k: v for k, v in payment.items() if k != "_id"}
 
@@ -1551,6 +1532,9 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
         raise HTTPException(status_code=404, detail="Payment not found")
     if not payment_counts(payment):
         raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
+    # PAY-01-C01: every amount is checked BEFORE the first allocation is written (422, 0 rows)
+    amounts = [positive_amount(a.amount, field="allocations[%d].amount" % i)
+               for i, a in enumerate(data.allocations)]
     
     # Get current allocations
     existing_allocs = await tenant.payment_allocations.find(active_allocations({"payment_id": payment_id})).to_list(100)
@@ -1560,12 +1544,9 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
     now = datetime.now(timezone.utc).isoformat()
     results = []
     
-    for alloc in data.allocations:
-        if alloc.amount <= 0:
-            continue
-        
+    for alloc, amount in zip(data.allocations, amounts):
         # Check payment has enough available
-        if alloc.amount > available:
+        if amount > available:
             raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({available})")
         
         # Check invoice exists and has remaining
@@ -1576,7 +1557,7 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
             raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
         
         remaining = invoice.get("remaining_amount", invoice["total"])
-        if alloc.amount > remaining:
+        if amount > remaining:
             raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({remaining})")
         
         # Check direction match
@@ -1590,13 +1571,13 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
             "org_id": user["org_id"],
             "payment_id": payment_id,
             "invoice_id": alloc.invoice_id,
-            "amount_allocated": alloc.amount,
+            "amount_allocated": amount,
             "allocated_at": now,
         }
         await tenant.payment_allocations.insert_one(allocation)
         results.append({k: v for k, v in allocation.items() if k != "_id"})
         
-        available -= alloc.amount
+        available -= amount
         
         # Update invoice status
         await update_invoice_status(tenant, alloc.invoice_id)
