@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C23) | `53dbd28` | PASS (internal) — Codex still required (money) | 2026-11-06 |
+| #55 Склад 5C (C23) | `53dbd28` | **MISSED 2 P1** (found by Codex): see 18:30 entry; re-audit at C24 | 2026-11-06 |
 | #67 ST-02 | `e987892` | PASS (ST02-1 fixed) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #69 SEC-01 | `e6c0e46` | PASS in scope; HIGH scope gap SEC-S1/S2 (sibling money writes still open) | 2026-11-06 |
@@ -665,3 +665,27 @@ Real `server.app`, ST-01 seed, real JWT, all three modes. **Both checks FAIL in 
 **Integration:**
 - #69 is clean against main, #56, #67 and #68.
 - It **conflicts with #55 in `backend/app/permissions/catalog.py`**: both add catalog actions. Resolve when the second one lands.
+
+
+---
+
+## 2026-11-06 ~18:30 — SELF-CORRECTION: two P1 defects on #55 @ `53dbd28` that this audit passed and Codex caught
+
+Codex CHANGES_REQUESTED: https://github.com/krumingo/BEG_Worck/pull/55#issuecomment-6691597676. My PASS on `53dbd28` (17:45 entry) was wrong on two counts. Both are now **reproduced by new probes** (`docs/audit/probes/pr55/test_probe_pr55_c24.py`, real Mongo, on `53dbd28`).
+
+| Probe | Result on 53dbd28 |
+|---|---|
+| **L-1** Two legacy issue rows in the **exact shape of `origin/main` `procurement.issue_to_project`** (no `tenant_id` / `movement_id`), then `ensure_required_indexes_at_startup` | **FAIL**: `E11000 … index wh_movements_unique_movement_id dup key { tenant_id: null, movement_id: null }`. The hook returns `ok: False`, so the service stays fail-closed: every canonical write is refused (INDEX_MISSING) on any real tenant with ≥2 legacy rows |
+| **F-1** receive 10000@1 + 20000@2 → dispatch 30000 → accept → consume | **FAIL**: project stock value **50001.0000**, cost **50001.0**, expected 50000 |
+| **F-2** the same with partial accepts 10000 + 20000 | **FAIL**: 50001.0 |
+| **F-3** W2W transfer of the mixed layers, accept 12345 + 17655 | **FAIL**: target value **50001.0000** |
+| F-4 odd prices, 3 @ 0.3333 + 7 @ 0.1429 | pass (2.00) |
+
+**Why my probes missed them (root cause):**
+1. Every earlier probe used a single price per flow (5@10, 10@10), and two-layer probes checked quantity, not value. A rounded-average layer can only show up with **mixed prices**.
+2. My "pre-existing data" probes inserted legacy rows that I made up myself (one row, or rows that already carried tenant fields), and I created indexes in the fixture on an empty DB. A unique-index collision needs **≥2 rows in main's real shape, present before index creation**.
+
+**Checklist additions (permanent):**
+- **Value conservation:** mixed prices (at least two layers, different unit values), large quantities, odd decimals; assert value to the cent after every step (accept, partial accept, transfer, consume, rebuild).
+- **Real legacy shapes only:** build fixtures by copying the writer in `origin/main` field by field (cite file:line), insert ≥2 rows **before** index creation and startup hooks, then run the startup path and a canonical write.
+- **Startup on a populated DB:** drop the fixture's pre-created indexes before running startup-hook probes.
