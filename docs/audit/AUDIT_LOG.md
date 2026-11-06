@@ -12,7 +12,7 @@
 | #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `61d45d3` | PASS (internal; C01 Part 1: PAY-N1/N2 fixed, 2 low notes) — Codex required; INT-70x69 open (Part 2) | 2026-11-06 |
-| #69 SEC-01 | `471eaaa` | **FINDINGS (blocking): C02-P2 NaN/Inf into ledger, C02-P1 duplicate ledger rows — unchanged**; SEC-R1 CLOSED | 2026-11-06 |
+| #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -1233,3 +1233,33 @@ Reversal reason:
 
 - #70 is clean against main, #55, #56, #67 and #69.
 - INT-70x69 (subcontractor payment not reversed with its ledger row) waits for Part 2, after #69.
+
+
+## #69 SEC-01-C03 @ `07faab5` — 2026-11-06 ~20:40 UTC — PASS
+
+Commands, from wt69/backend, real Mongo RS at 127.0.0.1:27019:
+- `PERMISSION_SERVICE_MODE=enforce MONGO_URL=...replicaSet=rs0 W0_03_REAL_MONGO_URL=... pytest --noconftest tests/test_sec_01_*.py` → **30 passed**
+- `pytest tests/test_r0_0*.py` (real Mongo) → **814 passed**
+- `pytest tests/test_w0_*.py` → **1085 passed / 15 failed / 50 skipped**. The FAILED list is identical to `fail_56.txt` (the 15 legacy_routes failures).
+- A2C guard 0/206; A1 guard 0/418.
+- Frontend yarn tests NOT run: there is no node_modules in the worktree.
+
+Probe `docs/audit/probes/sec01/probe_sec01_c02_payments.py`, extended with P1b/P1c. All results PROVED:
+
+| Probe | Request | Result |
+|---|---|---|
+| P1b | same Idempotency-Key, sent twice with the same body | 201/201, identical response JSON, ledger +1 |
+| P1b | same key, different body | 409 |
+| P1c | 6 concurrent requests, same key | [201, 409×5], ledger +1 |
+| P2 | nan / inf / -0 / 1e309 | 422, ledger +0 |
+| P3 | cross-tenant account | 404, ledger +0 |
+| P1 | two POSTs **without** a key | 201/201, 2 Outflow rows |
+
+The P1 result without a key is the documented legacy behaviour (`money_input.py:27`). The frontend now sends a key per payload (`lib/idempotency.js`).
+- Residual (NOT blocking): it is Krum's decision whether the money routes should require the key.
+
+Code read: `MoneyWrite` scopes the key as tenant + action + user (`money_input.py:113-118`). Key-derived ids allow resume after a FAILED attempt.
+
+Siblings, r16 (SEC-R1) and sitemanager-loss probes: FAILS none.
+
+Action taken: updated the existing PR comment 6693570924 to mark the blockers resolved. No new comment.

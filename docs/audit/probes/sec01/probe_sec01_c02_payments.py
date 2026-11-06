@@ -39,6 +39,25 @@ with TestClient(app, raise_server_exceptions=False) as tc:
     n = ledger()
     print("P1 identical POST x2 →", r1, r2, "ledger Outflow rows:", n)
     if n != 1: fails.append("P1 duplicate ledger rows=%d" % n)
+    # P1b (SEC-01-C03): with an Idempotency-Key — same key twice → 1 row; same key + other body → 409;
+    # 6 concurrent same-key requests → exactly 1 row.
+    from concurrent.futures import ThreadPoolExecutor
+    hk = dict(h, **{"Idempotency-Key": "k1-" + sfx})
+    b0 = ledger()
+    k1 = tc.post("/api/subcontractor-payments", json=dict(body, notes="k1"), headers=hk)
+    k2 = tc.post("/api/subcontractor-payments", json=dict(body, notes="k1"), headers=hk)
+    k3 = tc.post("/api/subcontractor-payments", json=dict(body, notes="k1", amount=101), headers=hk)
+    d1 = ledger() - b0
+    print("P1b same key x2 → %s %s same body=%s; other body → %s; ledger +%d" % (
+        k1.status_code, k2.status_code, k1.json() == k2.json(), k3.status_code, d1))
+    if not (k1.status_code == 201 and k2.status_code in (200, 201) and k1.json() == k2.json() and k3.status_code == 409 and d1 == 1):
+        fails.append("P1b")
+    hc = dict(h, **{"Idempotency-Key": "kc-" + sfx}); b0 = ledger()
+    with ThreadPoolExecutor(6) as ex:
+        res = list(ex.map(lambda i: tc.post("/api/subcontractor-payments", json=dict(body, notes="kc"), headers=hc).status_code, range(6)))
+    d2 = ledger() - b0
+    print("P1c 6 concurrent same key → %s ledger +%d" % (sorted(res), d2))
+    if d2 != 1: fails.append("P1c")
     for amt in ("nan", "inf", "-0", "1e309"):
         before = ledger()
         r = tc.post("/api/subcontractor-payments", json=dict(body, amount=amt, notes=amt), headers=h)
