@@ -300,6 +300,8 @@ def _assert_result(result):
             assert by_id[sc["id"]]["status"] == "blocked", sc["id"]
     assert result["summary"]["scenarios"]["pass"] == 0, "no scenario is complete on main"
     assert result["summary"]["scenarios"]["blocked"] == len(SCENARIOS["scenarios"])
+    # a live backend with passing API checks is evidence: exit 0 (ST-01-C01)
+    assert result["outcome"] == {"exit_code": runner.EXIT_OK, "status": "ok", "reasons": []}
     text = json.dumps(result, ensure_ascii=False)
     assert PASSWORD not in text and "password_hash" not in text and "token" not in text.lower()
 
@@ -389,6 +391,53 @@ def test_runner_reports_a_failed_assertion_and_an_unreachable_backend():
     assert steps[0]["status"] == "fail" and "503" in steps[0]["reason"]
     assert steps[1]["status"] == "blocked" and steps[1]["reason_code"] == "UNREACHABLE"
     assert result["scenarios"][0]["status"] == "fail"
+
+
+# ═══════════════════════════════════════════════════════════════ ST-01-C01 (audit PST-1)
+def _closed_local_port():
+    import socket
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sk:
+        sk.bind(("127.0.0.1", 0))
+        return sk.getsockname()[1]  # closed again on exit: nothing listens there
+
+
+def test_runner_against_a_dead_backend_exits_non_zero_and_says_why(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("ST01_SEED_PASSWORD", PASSWORD)
+    out = tmp_path / "result.json"
+    url = "http://127.0.0.1:%d" % _closed_local_port()
+    code = runner.main(["--base-url", url, "--out", str(out), "--timeout", "2"])
+    assert code == runner.EXIT_NO_EVIDENCE != runner.EXIT_OK
+    result = json.loads(out.read_text(encoding="utf-8"))
+    assert result["summary"]["steps"]["pass"] == 0 and result["summary"]["steps"]["fail"] == 0
+    verdict = result["outcome"]
+    assert verdict["exit_code"] == code and verdict["status"] == "no_evidence"
+    codes = [r["code"] for r in verdict["reasons"]]
+    assert codes == ["BACKEND_UNREACHABLE", "NOTHING_PASSED"], verdict
+    assert url in verdict["reasons"][0]["detail"] and "UNREACHABLE" in verdict["reasons"][0]["detail"]
+    assert "BACKEND_UNREACHABLE" in capsys.readouterr().err
+    assert PASSWORD not in out.read_text(encoding="utf-8")
+
+
+def test_runner_outcome_rules():
+    def sc(*steps):
+        return [{"steps": [dict(st) for st in steps]}]
+    ok = {"status": "pass"}
+    blocked = {"status": "blocked", "reason_code": "NO_SCREEN"}
+    down = {"status": "blocked", "reason_code": "UNREACHABLE", "reason": "UNREACHABLE: ConnectError"}
+    fail = {"status": "fail", "reason": "x"}
+    o = runner.outcome
+    assert o(sc(ok, blocked)) == {"exit_code": 0, "status": "ok", "reasons": []}
+    nothing = o(sc(blocked, blocked))  # all blocked, backend never asked: still no evidence
+    assert nothing["exit_code"] == runner.EXIT_NO_EVIDENCE
+    assert [r["code"] for r in nothing["reasons"]] == ["NOTHING_PASSED"]
+    assert o(sc())["exit_code"] == runner.EXIT_NO_EVIDENCE
+    partial = o(sc(ok, down), "http://127.0.0.1:8001")  # some passed, then the backend died
+    assert partial["exit_code"] == runner.EXIT_NO_EVIDENCE
+    assert [r["code"] for r in partial["reasons"]] == ["BACKEND_UNREACHABLE"]
+    assert "http://127.0.0.1:8001" in partial["reasons"][0]["detail"]
+    failed = o(sc(fail, down))  # a failed assertion stays exit 1, with every reason listed
+    assert failed["exit_code"] == runner.EXIT_FAILED and failed["status"] == "failed"
+    assert [r["code"] for r in failed["reasons"]] == ["STEP_FAILED", "BACKEND_UNREACHABLE", "NOTHING_PASSED"]
 
 
 def test_runner_refuses_a_non_local_base_url_without_the_flag(monkeypatch, tmp_path):

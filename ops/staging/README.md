@@ -74,8 +74,12 @@ ST01_SEED_PASSWORD='<same as the seed>' PYTHONPATH=. python ../ops/staging/run_s
     --base-url http://127.0.0.1:8001 --out /tmp/st01_result.json
 ```
 
-Exit 0 = `result.json` written and no step failed; 1 = a step failed; 2 = refused (non-local
-`--base-url` without `--allow-remote`, or no password). The runner **writes** synthetic
+Exit 0 = `result.json` written, no step failed, the backend answered and at least one step
+passed; 1 = a step failed; 2 = refused (non-local `--base-url` without `--allow-remote`, or no
+password); 3 = no evidence — the backend did not answer (any `UNREACHABLE` step) or no step
+passed (ST-01-C01). `result.json` → `outcome` holds the same `exit_code`, a `status`
+(`ok` / `failed` / `no_evidence`) and `reasons` (`STEP_FAILED`, `BACKEND_UNREACHABLE`,
+`NOTHING_PASSED`). The runner **writes** synthetic
 material requests into tenant A (tagged `ST-01 runner` in `notes`); rerunning adds more.
 
 `result.json`: per scenario and per step `pass` / `fail` / `blocked`, with `reason_code`

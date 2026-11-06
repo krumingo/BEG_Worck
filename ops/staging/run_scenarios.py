@@ -22,8 +22,15 @@ scenario list.
 The runner WRITES synthetic material requests into tenant A (it is a staging
 acceptance run). It refuses a non-local ``--base-url`` unless ``--allow-remote``
 is given. The password comes from ``$ST01_SEED_PASSWORD`` (or ``--password-env``)
-and is never written to the result. Exit 0 = result written and nothing
-failed; 1 = at least one step failed; 2 = refused.
+and is never written to the result.
+
+Exit codes (``result.json`` ``outcome`` states the same code and the reason):
+
+* 0 = result written, nothing failed, the backend answered and at least one step passed;
+* 1 = at least one step failed;
+* 2 = refused (nothing written);
+* 3 = no evidence: the backend could not be reached (any ``UNREACHABLE`` step) or no
+  step passed. A run that proves nothing is never reported as success (ST-01-C01).
 """
 from __future__ import annotations
 
@@ -45,7 +52,7 @@ DEFAULT_PASSWORD_ENV = "ST01_SEED_PASSWORD"
 LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 
 PASS, FAIL, BLOCKED = "pass", "fail", "blocked"
-EXIT_OK, EXIT_FAILED, EXIT_REFUSED = 0, 1, 2
+EXIT_OK, EXIT_FAILED, EXIT_REFUSED, EXIT_NO_EVIDENCE = 0, 1, 2, 3
 #: Roles that may not create a material request on main (Admin/Owner/SiteManager may).
 NON_REQUESTER_ROLES = ("denied", "viewer", "technician", "driver", "accountant", "warehousekeeper")
 
@@ -353,8 +360,36 @@ async def run(client, scenarios_doc: Dict[str, Any], fixture: Dict[str, Any],
             "base_url": base_url, "scope": "api", "scenario_source": scenarios_doc.get("source"),
             "summary": {"scenarios": counts, "steps": step_counts,
                         "total_scenarios": len(scenarios)},
+            "outcome": outcome(scenarios, base_url),
             "note": "blocked is not pass: the function/screen is missing or not run here",
             "scenarios": scenarios}
+
+
+def outcome(scenarios: List[Dict[str, Any]], base_url: str = "") -> Dict[str, Any]:
+    """Exit code and reasons for a run. Never more optimistic than the evidence:
+    a failed step → 1; otherwise an unreachable backend or zero passed steps → 3."""
+    steps = [st for sc in scenarios for st in sc["steps"]]
+    n_pass = sum(1 for st in steps if st["status"] == PASS)
+    n_fail = sum(1 for st in steps if st["status"] == FAIL)
+    unreachable = [st for st in steps if st.get("reason_code") == "UNREACHABLE"]
+    reasons = []
+    if n_fail:
+        reasons.append({"code": "STEP_FAILED", "detail": "%d step(s) failed" % n_fail})
+    if unreachable:
+        details = sorted({st.get("reason", "") for st in unreachable})
+        reasons.append({"code": "BACKEND_UNREACHABLE",
+                        "detail": "backend %s did not answer: %d step(s) UNREACHABLE (%s)"
+                                  % (base_url or "(test client)", len(unreachable), "; ".join(details))})
+    if n_pass == 0:
+        reasons.append({"code": "NOTHING_PASSED",
+                        "detail": "0 of %d step(s) passed: the run proves nothing" % len(steps)})
+    if n_fail:
+        code, status = EXIT_FAILED, "failed"
+    elif unreachable or n_pass == 0:
+        code, status = EXIT_NO_EVIDENCE, "no_evidence"
+    else:
+        code, status = EXIT_OK, "ok"
+    return {"exit_code": code, "status": status, "reasons": reasons}
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -389,7 +424,10 @@ def main(argv: Optional[List[str]] = None) -> int:
     result = asyncio.run(go())
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(json.dumps(result["summary"], ensure_ascii=False))
-    return EXIT_FAILED if result["summary"]["steps"][FAIL] else EXIT_OK
+    verdict = result["outcome"]
+    for r in verdict["reasons"]:
+        print("%s: %s" % (r["code"], r["detail"]), file=sys.stderr)
+    return verdict["exit_code"]
 
 
 if __name__ == "__main__":
