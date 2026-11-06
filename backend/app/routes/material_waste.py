@@ -1,7 +1,7 @@
 """
 Routes - Material Waste Tracking v1.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_field_cost_write
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 from app.services.material_waste import build_material_waste_summary
 from app.tenancy.data_access import TenantData
 
@@ -62,11 +63,17 @@ async def create_waste_entry(
     user: dict = Depends(require_field_cost_write(
         "material_waste.entry.create", module="M2", resource_type="material_waste_entry",
         project_from="path")),  # SEC-01 + C01 (R16)
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     tenant = _tenant(user)
+    qty = money_value(data.qty, "qty")  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "material_waste.entry.create", idempotency_key,
+                                {"project_id": project_id, **data.model_dump()})
+    if mw.replay_id:
+        return await tenant.material_waste_entries.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     entry = {
-        "id": str(uuid.uuid4()),
+        "id": mw.new_id("material_waste_entry"),
         "org_id": user["org_id"],
         "project_id": project_id,
         "material_name": data.material_name,
@@ -74,7 +81,7 @@ async def create_waste_entry(
         "activity_type": data.activity_type,
         "smr_type": data.smr_type,
         "location_id": data.location_id,
-        "qty": data.qty,
+        "qty": qty,
         "unit": data.unit,
         "waste_type": data.waste_type,
         "notes": data.notes,
@@ -83,7 +90,10 @@ async def create_waste_entry(
         "created_at": now,
         "updated_at": now,
     }
-    await tenant.material_waste_entries.insert_one(entry)
+    async with mw:
+        if await mw.needs_insert(tenant.material_waste_entries, entry["id"]):
+            await tenant.material_waste_entries.insert_one(entry)
+        mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 
 

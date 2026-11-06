@@ -6,7 +6,7 @@ Phase 3: Subcontractor Acts (Certified Expense)
 Phase 4: Subcontractor Payments
 Phase 5: Profit Integration (extends revenue_expense)
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional, List
 import logging
 
@@ -21,6 +21,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.permissions.money_write import require_money_write
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 
 router = APIRouter(tags=["Subcontractors"])
 
@@ -504,6 +505,7 @@ async def create_subcontractor_payment(
         "finance.subcontractor_payment.create", module="M2",
         resource_type="subcontractor_payment")),  # SEC-01-C02 (R14, FG-27): before any read
     user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """A real payment to a subcontractor (SEC-01-C02, FG-27).
 
@@ -514,20 +516,23 @@ async def create_subcontractor_payment(
     to ``finance_payments``; otherwise 409 BEFORE any write — never a payment that
     exists only in ``subcontractor_payments``. ``subcontractor_payments`` stays the
     package's allocation record (the row points to its ledger row), not a second ledger.
-    Debt SEC-01-C02-D1: not yet through a W0-05 write service, no idempotency key, no
-    Approval, no reversal API (W0-05 / R1 Payment).
+    SEC-01-C03: ``amount`` must be a finite number > 0 and ``vat_amount`` finite >= 0
+    (422 before any read or write); an ``Idempotency-Key`` replays the original payment
+    instead of writing a second Outflow (``app/permissions/money_input.py``).
+    Debt SEC-01-C02-D1 (remaining): not yet through a W0-05 write service, no Approval,
+    no reversal API (W0-05 / R1 Payment).
     """
+    amount = money_value(data.get("amount"))
+    vat_raw = data.get("vat_amount")
+    vat_amount = round(money_value(vat_raw, "vat_amount", allow_zero=True), 2) \
+        if vat_raw not in (None, "") else 0.0  # input VAT (без ДДС amount stays in `amount`)
+
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("package_id")
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
-
-    amount = float(data.get("amount", 0))
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    vat_amount = round(float(data.get("vat_amount", 0) or 0), 2)  # input VAT (без ДДС amount stays in `amount`)
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -547,8 +552,12 @@ async def create_subcontractor_payment(
                        "сметка (Каса/Банка)"})
     account_id = account["id"]
 
+    mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
+    if mw.replay_id:            # the same request again: the original payment, no new row
+        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
+
     payment = {
-        "id": str(uuid.uuid4()), "org_id": org_id,
+        "id": mw.new_id("subcontractor_payment"), "org_id": org_id,
         "project_id": pkg["project_id"], "subcontractor_id": pkg["subcontractor_id"],
         "package_id": pkg_id, "act_id": data.get("act_id"),
         "payment_no": await _get_next_pay_no(org_id),
@@ -564,27 +573,40 @@ async def create_subcontractor_payment(
 
     # The ledger row first (FG-27): the cash outflow from the chosen account (Каса/Банка)
     # in finance_payments; the package's allocation record points to it.
-    ledger_id = str(uuid.uuid4())
+    ledger_id = mw.new_id("finance_payment")
     payment["finance_payment_id"] = ledger_id
-    await tenant.finance_payments.insert_one({
-        "id": ledger_id, "org_id": org_id,
-        "direction": "Outflow", "amount": amount,
-        "currency": pkg.get("currency", "EUR"),
-        "date": payment["payment_date"],
-        "method": account.get("account_type", "Cash"),
-        "account_id": account_id,
-        "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
-        "reference": payment["payment_no"],
-        "note": "Подизпълнител/бригада плащане",
-        "project_id": pkg["project_id"],
-        "subcontractor_payment_id": payment["id"],
-        "created_at": now, "updated_at": now,
-    })
-    await tenant.subcontractor_payments.insert_one(payment)
-    await log_audit(org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
-                    "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
-                                           "subcontractor_payment_id": payment["id"],
-                                           "account_id": account_id})
+    async with mw:
+        await _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now)
+        mw.result_id = payment["id"]
+    return {k: v for k, v in payment.items() if k != "_id"}
+
+
+async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now):
+    """The writes of one subcontractor payment; each one done once per Idempotency-Key."""
+    org_id, pkg_id, amount = user["org_id"], payment["package_id"], payment["amount"]
+    account_id = account["id"]
+    if await mw.needs_insert(tenant.finance_payments, ledger_id):
+        await tenant.finance_payments.insert_one({
+            "id": ledger_id, "org_id": org_id,
+            "direction": "Outflow", "amount": amount,
+            "currency": pkg.get("currency", "EUR"),
+            "date": payment["payment_date"],
+            "method": account.get("account_type", "Cash"),
+            "account_id": account_id,
+            "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
+            "reference": payment["payment_no"],
+            "note": "Подизпълнител/бригада плащане",
+            "project_id": pkg["project_id"],
+            "subcontractor_payment_id": payment["id"],
+            "created_at": now, "updated_at": now,
+        })
+    if await mw.needs_insert(tenant.subcontractor_payments, payment["id"]):
+        await tenant.subcontractor_payments.insert_one(payment)
+    await mw.step("audit", lambda: log_audit(
+        org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
+        "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
+                               "subcontractor_payment_id": payment["id"],
+                               "account_id": account_id}))
 
     # Update package paid totals
     all_pays = await tenant.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)
@@ -595,8 +617,6 @@ async def create_subcontractor_payment(
     await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
         "paid_total": round(total_paid, 2), "payable_total": max(0, payable), "updated_at": now,
     }})
-
-    return {k: v for k, v in payment.items() if k != "_id"}
 
 
 @router.get("/subcontractor-payments")

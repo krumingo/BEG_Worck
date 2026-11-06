@@ -373,6 +373,12 @@ def test_the_fixture_has_no_project_membership():
     assert "project_team" not in src and "/team" not in src
 
 
+# SEC-01-C03: routes whose amount (hours) PM-01's minimal body leaves out.
+AMOUNT_REQUIRED = {"/api/finance/cash-transactions", "/api/finance/bonus-payments",
+                   "/api/finance/overhead-transactions", "/api/overhead-snapshots",
+                   "/api/labor-entries"}
+
+
 def test_the_pm01_matrix_shows_the_money_write_cells_closed():
     """PM-01 §5.1 re-run: for the eight endpoints, every non-finance role gets 403 and
     nothing of business is written, in every mode; the finance roles still write."""
@@ -383,7 +389,12 @@ def test_the_pm01_matrix_shows_the_money_write_cells_closed():
                 if (r["method"], r["path"]) in {(e[0], e[1]) for e in ENDPOINTS}]
     assert len(rows) == len(ENDPOINTS) * len(ROLE_KEYS) * len(MODES)
     for r in rows:
-        if r["legacy_role"] in ALLOWED_LEGACY:
+        if r["legacy_role"] in ALLOWED_LEGACY and r["path"] in AMOUNT_REQUIRED:
+            # SEC-01-C03: PM-01 sends only the required fields, i.e. NO amount -> 422 and
+            # nothing written (before C03: a 0-amount row). That the finance roles do
+            # write with a valid amount is the real-Mongo test below.
+            assert r["status"] == "422" and r["wrote"] == "no", r
+        elif r["legacy_role"] in ALLOWED_LEGACY:
             assert r["status"] == str(SUCCESS[r["path"]]) and r["wrote"] == "yes", r
             assert BUSINESS[r["path"]] in r["written"].split(";"), r
         else:

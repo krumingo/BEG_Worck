@@ -8,7 +8,7 @@ Phase 5: Profit by period + expected vs actual
 Phase 6: Core financial alerts
 Phase 7: Project risk summary
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -19,6 +19,7 @@ from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import require_money_write
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 from app.routes.labor_smr import ACTIVE_LABOR_ROW
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
@@ -110,17 +111,22 @@ async def create_overhead_snapshot(
     _sec01: dict = Depends(require_money_write(
         "finance.overhead_snapshot.create", module="M2", resource_type="overhead_snapshot")),  # SEC-01: before any read/write
     user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create an overhead period snapshot entry"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.overhead_snapshot.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.overhead_snapshots.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     entry = {
-        "id": str(uuid.uuid4()),
+        "id": mw.new_id("overhead_snapshot"),
         "org_id": user["org_id"],
         "category_code": data.get("category_code", "general"),
         "category_name": data.get("category_name", ""),
         "period_key": data.get("period_key", datetime.now().strftime("%Y-%m")),
-        "amount": float(data.get("amount", 0)),
+        "amount": amount,
         "currency": "EUR",
         "allocation_basis": data.get("allocation_basis", "labor_hours"),
         "notes": data.get("notes", ""),
@@ -128,7 +134,10 @@ async def create_overhead_snapshot(
         "created_at": now,
         "created_by": user["id"],
     }
-    await tenant.overhead_snapshots.insert_one(entry)
+    async with mw:
+        if await mw.needs_insert(tenant.overhead_snapshots, entry["id"]):
+            await tenant.overhead_snapshots.insert_one(entry)
+        mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
