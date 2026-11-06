@@ -20,38 +20,41 @@
 
 | ID | Тежест | Къде | Кратко | Доказателство | Статус |
 |---|---|---|---|---|---|
-| FG-1 | high | main `07da9ab` | `/labor-entries`: всеки потребител записва труд за всеки и чете ставките | PROVEN | open |
-| FG-2 | high | #67 `e987892` + пакет ST-02 | staging по подразбиране `enforce`, а Р15 казва `shadow` | PROVEN | open |
-| FG-3 | medium | #67 `e987892` | Release Manifest очаква един флаг, staging върви с друг; проверката е заобиколена | PROVEN | open |
-| FG-4 | medium | #67 `e987892` | deployed_by/approved_by = `unknown` | PROVEN | open |
-| FG-5 | medium | #67 `e987892` | isolation guard не проверява накъде сочат UI/API URL | PROVEN | open |
-| FG-6 | low | #67 `e987892` | `ST02_ALLOWED_MONGO_HOSTS` пуска всеки хост | PROVEN | open |
-| FG-7 | high | #56 `dae097b` | CLI за възстановяване = break-glass без Approval и без човек-актьор | PROVEN | open |
-| FG-8 | medium | #56 `dae097b` | „owner“ CLI сменя паролата на всяка роля | PROVEN | open |
-| FG-9 | medium | #56 `dae097b` | AuditEvent на възстановяването е R3, канонът иска R1 | PROVEN | open |
-| FG-10 | medium | #56 `dae097b` | security събитията се трият след 180 дни; канонът иска ≥ 2 години | SUSPECTED | open |
-| FG-11 | medium | #56 `dae097b` | admin set-password не прекъсва старите сесии и линкове | SUSPECTED | open |
-| FG-12 | medium | main `07da9ab` | Permission Service: обединение на правата срещу „по-ограниченото има предимство“ | SUSPECTED | open |
-| FG-13 | medium | пакет SEC-02 `ccb00ab` | конкретна матрица „роля × четене на финанси“, която каноничният текст не определя | SUSPECTED | open |
-| FG-14 | medium | пакет SEC-02 `ccb00ab` | SiteManager е наречен „проектна ръководна роля“; каталогът го води като Технически ръководител | SUSPECTED | open |
-| FG-15 | medium | пакет SEC-02 + main | Р16 дава на Technician запис на труд, а отговорът връща ставка и стойност; SEC-02 не го покрива | PROVEN | open |
-| FG-16 | low | #56 `dae097b` | твърд резервен HMAC ключ в кода | SUSPECTED | open |
-| FG-17 | **blocker** | #55 `53dbd28` | P&L на обекта: `max(фактури, склад)`; „фира" не увеличава разхода; справките дават различни суми | PROVEN | open |
-| FG-18 | high | #55 `53dbd28` | трансфер от обект пристига преди приемане; връщане в склад отива в свободна наличност, не в карантина | PROVEN | open |
-| FG-19 | medium | #55 `53dbd28` | наличност по локации: фантомно „в път" след пълно приемане без `source` | PROVEN | open |
-| FG-20 | high | #55 `53dbd28` + пакет 5C-C19 F-7 | кога материалът става разход на обекта: при консумация, а не при приемане; противоречи на собственото `RULE_B_COSTING_ACTIONS` | SUSPECTED | open |
+| FG-1 | high | main `07da9ab` | `/labor-entries`: всеки потребител записва труд за всеки и чете ставките | PROVEN | open (POST: resolved в #69 `f33b2ba`, PROVEN; GET: SEC-02) |
+| FG-2 | high | #67 `e987892` + пакет ST-02 | staging по подразбиране `enforce`, а Р15 казва `shadow` | PROVEN | resolved (#67 `98b18ec`) |
+| FG-3 | medium | #67 `e987892` | Release Manifest очаква един флаг, staging върви с друг; проверката е заобиколена | PROVEN | resolved (#67 `98b18ec`) |
+| FG-4 | medium | #67 `e987892` | deployed_by/approved_by = `unknown` | PROVEN | resolved (#67 `98b18ec`) |
+| FG-5 | medium | #67 `e987892` | isolation guard не проверява накъде сочат UI/API URL | PROVEN | resolved (#67 `98b18ec`) |
+| FG-6 | low | #67 `e987892` | `ST02_ALLOWED_MONGO_HOSTS` пуска всеки хост | PROVEN | resolved (#67 `98b18ec`) |
+| FG-7 | high | #56 `dae097b` | CLI за възстановяване = break-glass без Approval и без човек-актьор | PROVEN | resolved по Р19 (#56 `3234446`) — виж FG-33 |
+| FG-8 | medium | #56 `dae097b` | „owner“ CLI сменя паролата на всяка роля | PROVEN | resolved (#56 `3234446`) |
+| FG-9 | medium | #56 `dae097b` | AuditEvent на възстановяването е R3, канонът иска R1 | PROVEN | resolved (#56 `3234446`) |
+| FG-10 | medium | #56 `dae097b` | security събитията се трият след 180 дни; канонът иска ≥ 2 години | SUSPECTED | resolved (#56 `3234446`) |
+| FG-11 | medium | #56 `dae097b` | admin set-password не прекъсва старите сесии и линкове | SUSPECTED | open, low — остава собствената смяна на парола |
+| FG-12 | medium | main `07da9ab` | Permission Service: обединение на правата срещу „по-ограниченото има предимство“ | SUSPECTED | open — в пакета SEC-02 (добавка) |
+| FG-13 | medium | пакет SEC-02 `ccb00ab` | конкретна матрица „роля × четене на финанси“, която каноничният текст не определя | SUSPECTED | resolved по Р20 |
+| FG-14 | medium | пакет SEC-02 `ccb00ab` | SiteManager е наречен „проектна ръководна роля“; каталогът го води като Технически ръководител | SUSPECTED | resolved (добавка към SEC-02) |
+| FG-15 | medium | пакет SEC-02 + main | Р16 дава на Technician запис на труд, а отговорът връща ставка и стойност; SEC-02 не го покрива | PROVEN | open — в пакета SEC-02 (добавка) |
+| FG-16 | low | #56 `dae097b` | твърд резервен HMAC ключ в кода | SUSPECTED | resolved (#56 `3234446`) |
+| FG-17 | **blocker** | #55 `53dbd28` | P&L на обекта: `max(фактури, склад)`; „фира" не увеличава разхода; справките дават различни суми | PROVEN | open — пакет 5C-C25 |
+| FG-18 | high | #55 `53dbd28` | трансфер от обект пристига преди приемане; връщане в склад отива в свободна наличност, не в карантина | PROVEN | open — Р18 + пакет 5C-C25 |
+| FG-19 | medium | #55 `53dbd28` | наличност по локации: фантомно „в път" след пълно приемане без `source` | PROVEN | open — пакет 5C-C25 |
+| FG-20 | high | #55 `53dbd28` + пакет 5C-C19 F-7 | кога материалът става разход на обекта: при консумация, а не при приемане; противоречи на собственото `RULE_B_COSTING_ACTIONS` | SUSPECTED | open — канонът решен с Р17; кодът чака 5C-C25 |
 | FG-21 | high | #55 `53dbd28` | право за отписване (фира): project_manager да, SiteManager/Technician/Accountant не — срещу Р16/Р14 | SUSPECTED | open |
-| FG-22 | medium | #55 `53dbd28` | ревизия/отписване без Approval при съществена разлика | SUSPECTED | open |
-| FG-23 | medium | #55 `53dbd28` | складовите стойности се виждат от роли без финансово право | SUSPECTED | open |
-| FG-24 | **blocker** | #69 `e6c0e46` | труд и фира: член SiteManager/Technician получава 403 — срещу Р16; тестовете заковават грешното | PROVEN | open |
-| FG-25 | **blocker** | main `07da9ab` + #69 | Viewer hard-delete-ва ценовите модификатори на обект | PROVEN | open |
-| FG-26 | high | main `07da9ab` + #69 | Viewer трие и пресъздава труда през `sync-from-work-reports` (`delete_many`) | PROVEN | open |
-| FG-27 | **blocker** | main `07da9ab` + #69 | Viewer създава плащане към подизпълнител; пише `finance_payments` извън FLOW-006 | PROVEN | open |
+| FG-22 | medium | #55 `53dbd28` | ревизия/отписване без Approval при съществена разлика | SUSPECTED | open — пакет 5C-C25 |
+| FG-23 | medium | #55 `53dbd28` | складовите стойности се виждат от роли без финансово право | SUSPECTED | open — Р20 + пакет 5C-C25 |
+| FG-24 | **blocker** | #69 `e6c0e46` | труд и фира: член SiteManager/Technician получава 403 — срещу Р16; тестовете заковават грешното | PROVEN | resolved (#69 `aee3169`, PROVEN) |
+| FG-25 | **blocker** | main `07da9ab` + #69 | Viewer hard-delete-ва ценовите модификатори на обект | PROVEN | resolved (#69 `aee3169`, PROVEN) |
+| FG-26 | high | main `07da9ab` + #69 | Viewer трие и пресъздава труда през `sync-from-work-reports` (`delete_many`) | PROVEN | resolved (#69 `f33b2ba`, PROVEN) |
+| FG-27 | **blocker** | main `07da9ab` + #69 | Viewer създава плащане към подизпълнител; пише `finance_payments` извън FLOW-006 | PROVEN | resolved (#69 `f33b2ba`, PROVEN) |
 | FG-28 | medium | main + #69 | отказите в `off`/`shadow` не се одитират (а staging = `shadow` по Р15) | PROVEN | open |
 | FG-29 | medium | #69 `e6c0e46` | price-modifiers/material-waste приемат project_id без проверка, че обектът е на фирмата | SUSPECTED | open |
-| FG-30 | medium | main + #69 | други парични записи, достъпни за Viewer (актове, фактури, календар, overhead compute, OCR approve, sales commit) | SUSPECTED | open |
+| FG-30 | medium | main + #69 | други парични записи, достъпни за Viewer (актове, фактури, календар, overhead compute, OCR approve, sales commit) | SUSPECTED | resolved (#69 `f33b2ba`, guard-ове прочетени) |
 | FG-31 | medium | #68 `4e20084` | PM-01 §5.1 не е пълен списък (пропуска DELETE/плащане); ползва каталога като „трябва", въпреки Р16 | PROVEN | open |
 | FG-32 | low | пакети SEC-01 / SEC-01-C01 | Technician без канонично съответствие; липсват subcontractor-payments, client-acts/confirm и др. | SUSPECTED | open |
+| FG-33 | low | Р19 срещу FLOW-040 L5 | Р19 пуска break-glass без предварително одобрение; FLOW-040 L5 иска „две независими одобрения“ | SUSPECTED | open |
+| FG-34 | high | main `07da9ab` | плащания се изтриват окончателно (`DELETE /finance/payments/{id}`, премахване на разпределение) | SUSPECTED | open |
+| FG-35 | high | main `07da9ab` | каса, бонуси и режийни се пишат в отделни колекции извън `finance_payments` — втори паричен регистър | SUSPECTED | open |
 
 
 ---
@@ -79,7 +82,7 @@
 
 ## FG-2 — staging по подразбиране `enforce`, а Р15 казва `shadow`
 
-- **Тежест:** high. **Статус:** open. **PROVEN.**
+- **Тежест:** high. **Статус:** resolved (#67 `98b18ec`, проход 2). **PROVEN.**
 - **Канон:** Р15: „тестовата инсталация (staging) тръгва с `PERMISSION_SERVICE_MODE=shadow`.“
 - **Код (#67 `e987892`):**
   - `ops/staging/staging_up.py:597-598` има `default="enforce"`;
@@ -93,7 +96,7 @@
 
 ## FG-3 — Release Manifest очаква един флаг, staging върви с друг
 
-- **Тежест:** medium. **Статус:** open. **PROVEN** (от доказателствата на PR-а).
+- **Тежест:** medium. **Статус:** resolved (#67 `98b18ec`, проход 2). **PROVEN** (от доказателствата на PR-а).
 - **Канон:**
   - FLOW-042 §Release Manifest: „Липсващо или несъвпадащо поле блокира deployment-а.“
   - CLAUDE.md §6: всеки deployment пази „Feature Flags/Entitlements snapshot“.
@@ -105,7 +108,7 @@
 
 ## FG-4 — deployed_by/approved_by не се записват
 
-- **Тежест:** medium. **Статус:** open. **PROVEN.**
+- **Тежест:** medium. **Статус:** resolved (#67 `98b18ec`, проход 2). **PROVEN.**
 - **Канон:** FLOW-050: „Всеки deployment пази … deployed_by, approved_by, rollback target и post-deployment result.“
 - **Код (#67 `e987892`):**
   - трите `record.json:13` имат `"actor": "unknown"`;
@@ -115,7 +118,7 @@
 
 ## FG-5 — isolation guard не проверява накъде сочат UI/API URL
 
-- **Тежест:** medium. **Статус:** open. **PROVEN** (offline проба с променен compose модел).
+- **Тежест:** medium. **Статус:** resolved (#67 `98b18ec`, проход 2). **PROVEN** (offline проба с променен compose модел).
 - **Канон:**
   - CLAUDE.md §6: отделни среди; „Production data/secrets не се копират свободно в non-production“.
   - FLOW-042: „никога директно в production“.
@@ -126,7 +129,7 @@
 
 ## FG-6 — `ST02_ALLOWED_MONGO_HOSTS` пуска всеки хост
 
-- **Тежест:** low. **Статус:** open. **PROVEN.**
+- **Тежест:** low. **Статус:** resolved (#67 `98b18ec`, проход 2). **PROVEN.**
 - **Код (#67 `e987892`):** `isolation_check.py:60-71,206`, `staging_deploy.sh:100`. Стойност `nas-prod.lan` минава.
 - **Решение:** решение на Крум — допуска ли се staging Mongo извън локалната машина.
   - Ако не — опцията да се махне.
@@ -134,7 +137,7 @@
 
 ## FG-7 — CLI за възстановяване = break-glass без Approval и без човек-актьор
 
-- **Тежест:** high. Става blocker, ако Крум приеме, че CLI е L5 break-glass. **Статус:** open. **PROVEN.**
+- **Тежест:** high. Става blocker, ако Крум приеме, че CLI е L5 break-glass. **Статус:** resolved (#56 `3234446` по Р19, проход 2). **PROVEN.**
 - **Канон:**
   - FLOW-040 §10 L5: „Временен достъп при incident/restore/support, само към необходимия scope, с две независими одобрения, срок, автоматичен revoke и пълен audit.“
   - CLAUDE.md §8: Approval е задължителен за „Support/Partner/Break-glass access“.
@@ -150,21 +153,21 @@
 
 ## FG-8 — „owner“ CLI сменя паролата на всяка роля
 
-- **Тежест:** medium. **Статус:** open. **PROVEN** (същата проба: потребител Technician е reset-нат).
+- **Тежест:** medium. **Статус:** resolved (#56 `3234446`, проход 2). **PROVEN** (същата проба: потребител Technician е reset-нат).
 - **Канон:** CLAUDE.md §3: „temporary scoped Support/Break-glass access grants“. FLOW-040 §11: business content само „чрез break-glass, две одобрения и time-bound access“.
 - **Код (#56 `dae097b`):** `reset_user_password.py:190-204` няма проверка на роля. Покрива и `is_platform_admin`.
 - **Решение:** промяна в кода — само Owner, или изричен флаг + Approval за другите роли. Крум да реши кои роли покрива.
 
 ## FG-9 — AuditEvent на възстановяването е R3, канонът иска R1
 
-- **Тежест:** medium. **Статус:** open. **PROVEN** (пробата: `retention_class` = `R3`).
+- **Тежест:** medium. **Статус:** resolved (#56 `3234446`, проход 2). **PROVEN** (пробата: `retention_class` = `R3`).
 - **Канон:** FLOW-040 §R3: „Промени на права, break-glass и security incidents са R1.“
 - **Код (#56 `dae097b`):** `services/user_role_policy.py:205-209` слага твърдо `RETENTION_R3_SECURITY_ACCESS`; извиква се от `reset_user_password.py:132`.
 - **Решение:** промяна в кода — R1 за възстановяване през CLI. Зависи от отговора по FG-7.
 
 ## FG-10 — security събитията се трият след 180 дни; канонът иска ≥ 2 години
 
-- **Тежест:** medium. **Статус:** open. **SUSPECTED** (от кода; не е изпълнено).
+- **Тежест:** medium. **Статус:** resolved (#56 `3234446`, проход 2). **SUSPECTED** (от кода; не е изпълнено).
 - **Канон:** FLOW-040 §R3 (failed login, permission denied, session/device/IP metadata): „Минимално съхранение: **2 години** от събитието.“ CLAUDE.md §2.8: append-only AuditEvent.
 - **Код (#56 `dae097b`):**
   - `services/auth_events.py:35` `RETENTION = timedelta(days=180)` + TTL индекс (`:68`).
@@ -191,7 +194,7 @@
 
 ## FG-13 — SEC-02: матрица „роля × четене на финанси“, която каноничният текст не определя
 
-- **Тежест:** medium. **Статус:** open. **SUSPECTED** (пакет срещу канон, четене).
+- **Тежест:** medium. **Статус:** resolved (Р20, проход 2). **SUSPECTED** (пакет срещу канон, четене).
 - **Пакет:** `docs/architecture/tasks/SEC-02_FINANCE_READ_PER_CANON.md` @ `ccb00ab`. Пише: „Не е ново бизнес решение — прилагане на заключен канон“.
 - **Какво казва канонът:**
   - FLOW-002 дава модела (роля × обхват, „по-ограниченото …“), но не и таблица кой чете кои финанси.
@@ -208,7 +211,7 @@
 
 ## FG-14 — SEC-02: SiteManager е наречен „проектна ръководна роля“
 
-- **Тежест:** medium. **Статус:** open. **SUSPECTED.**
+- **Тежест:** medium. **Статус:** resolved (добавка към SEC-02 `73f1567`, проход 2). **SUSPECTED.**
 - **Пакет SEC-02 правило 2:** „**проектни ръководни роли** (SiteManager) — само на свои обекти …“.
 - **Код и канон:**
   - `backend/app/permissions/catalog.py:186` мапва `SiteManager → site_manager` = „Технически ръководител“ (`catalog.py:93`).
@@ -232,7 +235,7 @@
 
 ## FG-16 — твърд резервен HMAC ключ в кода
 
-- **Тежест:** low. **Статус:** open. **SUSPECTED.**
+- **Тежест:** low. **Статус:** resolved (#56 `3234446`, проход 2). **SUSPECTED.**
 - **Канон:** CLAUDE.md §16: „не записвай secrets в Git“.
 - **Код (#56 `dae097b`):** `services/auth_events.py:55-56`. Резервният литерал `dev-auth-event-key-NOT-FOR-PRODUCTION` се ползва, ако няма `AUTH_EVENT_HMAC_KEY`/`JWT_SECRET`.
 - **Решение:** промяна в кода — в production да отказва без ключ.
@@ -335,7 +338,7 @@
 
 ## FG-24 — SEC-01: член SiteManager/Technician получава 403 на труд и фира
 
-- **Тежест:** blocker. **Статус:** open. **PROVEN.**
+- **Тежест:** blocker. **Статус:** resolved (#69 `aee3169`, проход 2). **PROVEN.**
 - **Канон:**
   - Р16: „могат да въвеждат и **SiteManager и Technician, само за обекти, на които са членове**“.
   - Пакет SEC-01: „напр. SiteManager за труд на своя обект — тогава същото“.
@@ -355,7 +358,7 @@
 
 ## FG-25 — Viewer hard-delete-ва ценовите модификатори на обект
 
-- **Тежест:** blocker. **Статус:** open. **PROVEN.**
+- **Тежест:** blocker. **Статус:** resolved (#69 `aee3169`, проход 2). **PROVEN.**
 - **Канон:**
   - CLAUDE.md §2.9: „Няма hard delete на използвани, финансови … записи“.
   - Р14: ценови модификатори — само Owner/Admin/Accountant.
@@ -365,7 +368,7 @@
 
 ## FG-26 — Viewer трие и пресъздава труда през sync
 
-- **Тежест:** high. **Статус:** open. **PROVEN.**
+- **Тежест:** high. **Статус:** resolved (#69 `f33b2ba`, проход 2). **PROVEN.**
 - **Канон:** Р16; CLAUDE.md §2.9 (трудът е основа за заплата — FLOW-028).
 - **Код:** `backend/app/routes/labor_smr.py:73,102` (#69; същото на main) има само `require_m2` и `delete_many` върху синхронизираните редове. `recompute-labor` (`:167`) има същия отворен guard — SUSPECTED, че също пише.
 - **Проба:** Viewer → 200; съществуващият синхронизиран ред е изтрит (брой 0).
@@ -373,7 +376,7 @@
 
 ## FG-27 — Viewer създава плащане към подизпълнител извън FLOW-006
 
-- **Тежест:** blocker. **Статус:** open. **PROVEN.**
+- **Тежест:** blocker. **Статус:** resolved (#69 `f33b2ba`, проход 2). **PROVEN.**
 - **Канон:**
   - CLAUDE.md §2.5 и §7: „всички реални парични движения минават през FLOW-006“.
   - FLOW-002: „плащане“ е критично действие с изрични права и AuditEvent.
@@ -401,7 +404,7 @@
 
 ## FG-30 — други парични записи, до които Viewer стига
 
-- **Тежест:** medium. **Статус:** open. **SUSPECTED.** Матрицата на #69 показва, че handler-ът е достигнат (200/404, не 403).
+- **Тежест:** medium. **Статус:** resolved (#69 `f33b2ba`, проход 2). **SUSPECTED.** Матрицата на #69 показва, че handler-ът е достигнат (200/404, не 403).
 - **Endpoint-и:**
   - `POST /api/client-acts/{act_id}/confirm` (`revenue_expense.py:167`);
   - `PUT /api/supplier-invoices/{inv_id}`;
@@ -432,6 +435,93 @@
 - **Решение:**
   - Крум да каже на коя канонична роля отговаря Technician (Технически ръководител, Работник или друга).
   - Оркестраторът да допълни обхвата. Това не е промяна на FLOW.
+
+## FG-33 — Р19 пуска break-glass без предварително одобрение, а FLOW-040 L5 иска две
+
+- **Тежест:** low. **Статус:** open. **SUSPECTED** (решение срещу канон, четене).
+- **Канон:**
+  - FLOW-040 §10 L5: „… с две независими одобрения, срок, автоматичен revoke и пълен audit“.
+  - CLAUDE.md §8: Approval е задължителен за Break-glass access.
+  - CLAUDE.md §18: „заключен FLOW не се променя без изрично решение на Крум, записано в канона“.
+- **Решение на Крум:** Р19 (06.11.2026): „изисква **име на изпълняващия човек и причина** … Без предварително одобрение (Owner не може да влезе).“ Изпълнено в #56 `3234446`:
+  - `backend/scripts/reset_user_password.py` изисква `--operator`/`--reason`;
+  - само Owner;
+  - AuditEvent R1;
+  - известие към Owner.
+- **Защо е разминаване:** Р19 е изрично и по-късно решение на Крум, така че кодът е прав. Р19 обаче е записано в RECOVERY_EXECUTION_PROPOSAL, не във FLOW-043. Двата текста си противоречат, докато изключението не влезе в канона.
+- **Решение:** Крум да запише Р19 като D-решение (изключение от L5 за аварийно възстановяване на Owner) във FLOW-043. Кодът не се пипа.
+
+## FG-34 — плащания се изтриват окончателно
+
+- **Тежест:** high (Р3: пари). **Статус:** open. **SUSPECTED** (четене).
+- **Канон:**
+  - FLOW-006 „Корекции“: „След плащане няма тихо редактиране. Използват се: корекция, реверс, доплащане …“ и „Всички промени имат AuditEvent.“
+  - CLAUDE.md §2.9: няма hard delete на финансови записи.
+- **Код (main `07da9ab`):**
+  - `backend/app/routes/finance.py:1420-1435`: `DELETE /finance/payments/{payment_id}` прави `finance_payments.delete_one`, ако няма разпределения. Няма AuditEvent.
+  - `finance.py:1218-1223`: премахването на плащане от фактура трие разпределението и, ако е последно, самото плащане. Пише само legacy `log_audit`.
+  - Право имат финансовите роли (`finance_permission`).
+- **Свързано:** `hr.py:942` трие `contract_payments` само без платени транши — това е график на задължение, не плащане. Не е включено.
+- **Решение:** промяна в кода — реверс/анулиране със запис и canonical AuditEvent вместо `delete_one`. Влиза в W0-05 / R1 Payment. Ако трябва веднага (Р3) — отделен малък пакет.
+
+## FG-35 — втори паричен регистър: каса, бонуси и режийни извън `finance_payments`
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (четене).
+- **Канон:**
+  - FLOW-006 „Единен Payment ledger“: „Всички реални парични движения минават през един регистър.“
+  - CLAUDE.md §2.5 и §16: „не създавай втори ledger“.
+  - Изход R1: „няма нов паралелен ledger“.
+- **Код (main `07da9ab`):**
+  - `backend/app/routes/reports.py:939-960` `POST /finance/cash-transactions` пише `cash_transactions` (приход/разход в брой) без сметка, без основание и без връзка с `finance_payments`;
+  - същото за `bonus_payments` (`reports.py:1065`) и `overhead_transactions` (`:1012`);
+  - `dashboard.py:344,360,511,817` чете касата от `cash_transactions`;
+  - `IMPLEMENTATION_WAVES.md:47` казва „един `finance_payments` write service“.
+  - SEC-01 затвори кой може да пише (Р14), но не и къде се пише.
+- **Решение:** промяна в кода в W0-05 / R1 Payment — тези записи да станат движения в единния регистър (или задължения + плащане през FLOW-006), с миграция. До тогава оркестраторът да го води като дълг. Бизнес правилото е ясно, не е нужно ново решение.
+
+## Дневник на проходите
+
+### Проход 2 — 06.11.2026 18:50 UTC (периодичен)
+
+Нови SHA:
+
+- #55 `dbda909` (5C-C24);
+- #56 `3234446` (AUTH-02);
+- #67 `98b18ec` (ST-02-C02);
+- #69 `aee3169` (SEC-01-C01), после `f33b2ba` (SEC-01-C02);
+- пакети `071d19b` (Р17–Р20, 5C-C25, AUTH-02, SEC-01-C02, ST-02-C02);
+- main без промяна.
+
+Проверки:
+
+- **#67:** `PYTHONPATH=backend pytest backend/tests/test_st_02_staging_stack.py --noconftest` → 157 passed.
+  - FG-2: `DEFAULT_MODE = "shadow"` (`staging_up.py:65`, `isolation_check.py:64`).
+  - FG-3: наблюдаваният флаг се записва в `staging-deployment.json` и при разлика с параметъра deploy-ът се отказва (`staging_deploy.sh:107-142`). Production очакването в manifest-а е записано до него — обосновано.
+  - FG-4: `--deployed-by`/`--approved-by` са задължителни.
+  - FG-5: URL и bootstrap ключовете се проверяват.
+  - FG-6: allow-list-ът е премахнат.
+- **#56:** `pytest tests/test_auth_02_break_glass.py --noconftest` → 28 passed.
+  - FG-7: Р19 изпълнено.
+  - FG-8: само Owner.
+  - FG-9: R1.
+  - FG-10: `RETENTION = 730 дни`.
+  - FG-11: admin path с `auth_version` + отмяна на токените. Остава собствената смяна на парола (`auth.py:232-240`) без `auth_version` → low.
+  - FG-16: dev ключът само при изрично не-production `ENV`.
+- **#69:** пробата `probes69` (реален Mongo) на `aee3169` и `f33b2ba`:
+  - член SiteManager/Technician → 201 на труд и фира (FG-24 ✅);
+  - Viewer `DELETE` модификатори → 403, редът остава; Owner/финансови → 409 без триене (FG-25 ✅);
+  - Viewer sync → 403; `delete_many` в `labor_smr.py` вече го няма (FG-26 ✅);
+  - Viewer `POST /subcontractor-payments` → 403, 0 реда. Плащането отива в `finance_payments` според `IMPLEMENTATION_WAVES.md:47` (FG-27 ✅);
+  - отказ в `off` → 0 audit реда (FG-28 остава open);
+  - FG-30: guard-ове на всичките 8 endpoint-а прочетени (`require_money_write`);
+  - FG-24 за не-член не съм пробвал отделно. SEC-R1 (изтекло членство) е в SEC-01-C02 добавка A.
+- **#55 C24:** точни FIFO слоеве, partial index за legacy. Нищо не се трие и не се drop-ва. Ново разминаване няма; FG-17…FG-23 чакат 5C-C25.
+- **Нови решения Р17–Р20:** проверени срещу FLOW.
+  - Р17 (разход при приемане) съвпада с FLOW-008/009 Път Б → затваря въпроса по FG-20.
+  - Р18 (всяко преместване „в път“, връщане → карантина) съвпада с FLOW-009 → FG-18.
+  - Р20 (таблица за финанси) не противоречи на FLOW-002/010 → затваря FG-13/FG-14.
+  - Р19 → FG-33.
+- **Бавен преглед на main:** FLOW-006 → `COVERAGE.md`; нови FG-34, FG-35.
 
 ## Бележки, които не са разминавания
 

@@ -28,7 +28,6 @@
 | Крум вижда роли/временни/рискови права | ⏳ | Не е прегледан UI |
 | Промяна на права без AuditEvent е забранена | ✅ | `audit_hooks.py:59` `permission.role_assignment.*`. R0-03 (main) — смяна на роля с AuditEvent |
 
-Следващ FLOW в бавния преглед: **FLOW-006** (плащания).
 
 ## Странично покритие — FLOW-009 в PR #55 (`53dbd28`, не е на main)
 
@@ -51,3 +50,25 @@
 | AuditEvent в същата транзакция | ✅ | hash-chained |
 | Няма hard delete на официални записи | ✅ | `delete_many` само върху възстановимата проекция `material_entries` |
 | Плащания | ✅ | FLOW-006 не се пипа |
+
+## Проход 2 — FLOW-006 (Фактури / аванси / плащания / ДДС)
+
+- main @ `07da9ab`, 06.11.2026.
+- Прочетени: `backend/app/routes/finance.py`, `reports.py`, `hr.py`, `subcontractors.py`, `pay_runs.py`, `dashboard.py`.
+- Без проба (само четене).
+
+| Правило в FLOW-006 | Състояние | Къде / бележка |
+|---|---|---|
+| Единен Payment ledger | ❌ SUSPECTED | `finance_payments` е основният, но `cash_transactions`, `bonus_payments` и `overhead_transactions` са отделни парични записи (`reports.py:939-1065`), които dashboard чете → **FG-35** |
+| FLOW-021/028 създават задължения, FLOW-006 плаща | ⚠️ | Pay Run пише към `finance_payments` (`pay_runs.py:1349`, R0-05/R0-06). На main подизпълнителското плащане е отворено за всички (**FG-27**, поправено в #69) |
+| Фактурата не е плащане; отделни статуси (платено/частично/просрочено) | ✅ | `payment_allocations` + `update_invoice_status` (`finance.py:1218-1226`) |
+| Плащането винаги има каса/банка/източник | ⚠️ | `finance_payments` има метод/сметка. `cash_transactions` има само тип и категория, без сметка и основание (**FG-35**) |
+| Net / VAT / Gross отделно | ✅ | `finance.py:50-55` (subtotal, vat_amount, total) |
+| Аванси не изчезват при промяна на обхвата | ⏳ | Не е прегледано в този проход |
+| Корекции: без тихо редактиране, реверс, AuditEvent | ❌ SUSPECTED | `DELETE /finance/payments/{id}` и премахването на разпределение трият плащането (`finance.py:1223,1435`) → **FG-34** |
+| permission checks за плащане | ⚠️ | `finance_permission` = Admin/Owner/Accountant (`clients.py:26-28`). На main подизпълнителските плащания не се проверяват → **FG-27** (#69 ✅) |
+| idempotency за плащания | ❌ | В `finance.py`, `hr.py` и `reports.py` няма idempotency ключ. В `pay_runs.py` има (R0-06). Двойно изпратена заявка = двойно плащане. Gate изискване → кандидат за W0-05 |
+| двустепенно одобрение за критични суми | ⏳ | Няма. Зависи от W0-07 |
+| AI да не плаща сам | ✅ | Няма AI tool с право за плащане (`catalog.py:123`) |
+
+Следващ FLOW в бавния преглед: **FLOW-040** (AuditEvent).
