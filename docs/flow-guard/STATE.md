@@ -12,7 +12,7 @@
 | #67 `claude/st-02-staging-stack` | `98b18ec` | 2 | staging: FLOW-042/044/050, Р15 |
 | #68 `claude/pm-01-permission-matrix` | `4e20084` | 2 | отчет за права (FLOW-002) |
 | #69 `claude/sec-01-money-write-permissions` | `f33b2ba` | 2 | SEC-01 + C01 + C02 |
-| пакети (`claude/happy-meitner-bmcnel`) | `071d19b` | 2 | Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
+| пакети (`claude/happy-meitner-bmcnel`) | `b659a73` | 2b | Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
 ## Отворени PR, непрегледани в този проход
 
