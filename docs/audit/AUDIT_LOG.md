@@ -11,7 +11,7 @@
 | #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `8910939` | **PASS** (C01 L1/L2 closed); INT-70x69 still open (Part 2) | 2026-11-06 |
+| #70 PAY-01 | `45768f3` | **FINDINGS (blocking): C01A-1 concurrent allocation cancels reverse a module-owned payment**; FG-45 sequential paths PASS; INT-70x69 mitigated (409) | 2026-11-06 |
 | #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1080,7 +1080,7 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #70 × main `8e3b190` / #55 / #56 / #67 / #69 | **clean** |
+| #70 PAY-01 | `45768f3` | **FINDINGS (blocking): C01A-1 concurrent allocation cancels reverse a module-owned payment**; FG-45 sequential paths PASS; INT-70x69 mitigated (409) | 2026-11-06 |
 | #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
@@ -1324,7 +1324,7 @@ Merge-tree, `64418eb` against each:
 |---|---|
 | main | clean |
 | #67 | clean |
-| #70 | clean |
+| #70 PAY-01 | `45768f3` | **FINDINGS (blocking): C01A-1 concurrent allocation cancels reverse a module-owned payment**; FG-45 sequential paths PASS; INT-70x69 mitigated (409) | 2026-11-06 |
 | #71 SEC-02 | `73b72b5` | **FINDINGS**: Addendum A closes D1/D9 + 2 scan hits; SEC02-1 remainder still open (work-sessions, site-workers, smr-groups, pulse, ocr-invoice) | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 | conflict: catalog.py, procurement.py, sales.py |
@@ -1540,3 +1540,60 @@ Code read, no finding:
 - The decorator preserves the signature (+ `_sec02_request`) and requires a `user` kwarg.
 - It encodes with `jsonable_encoder` before stripping.
 - Handler HTTPExceptions propagate unchanged.
+
+
+## #70 PAY-01-C01 Addendum A @ `45768f3` — 2026-11-06 ~22:20 UTC — FINDINGS (1 blocking)
+
+Delta: `payment_state.source_module` identifies the owning module of a `finance_payments` row:
+- `subcontractor_payment_id` → subcontractor;
+- `pay_run_id`, or category "Заплата" → pay_run;
+- `advance_id`, or category "Аванс" / "Заем" / "Връщане заем" → hr_advance.
+
+The refusal is a 409 `SOURCE_MODULE_REVERSAL_REQUIRED`:
+- on `DELETE /finance/payments/{id}`;
+- on `DELETE /finance/invoices/{id}/payments/{alloc}` when the allocation being cancelled is the last active one.
+
+**Field mapping vs the real writers: PROVED it matches.**
+- `hr.py:282` (advance/loan: category = "Заем"/"Аванс").
+- `hr.py:373` (repay: "Връщане заем").
+- `pay_runs.py:1349` (salary upsert: "Заплата").
+- `subcontractors.py:535` (#70 base) and `#69 subcontractors.py:589` (C03): both write `subcontractor_payment_id`.
+- `PaymentCreate` has no `category` field, so a manual payment cannot spoof a module.
+- No other writer of `finance_payments` outside `finance.py`.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_pay_01*.py` | **306 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| `probe_pay01.py`, `probe_pay01_c01.py` | FAILS none |
+
+New probe `docs/audit/probes/pay01/probe_pay01_c01a_source_module.py`. Rows come from the real hr routes; pay-run and subcontractor rows are inserted with the exact writer field sets.
+
+| Case | Result |
+|---|---|
+| M1: DELETE of an Аванс / Заем / Връщане заем / Заплата / subcontractor row | **409 SOURCE_MODULE_REVERSAL_REQUIRED**; finance_payments, allocations and audit_events +0 |
+| M2: manual payment | 200 |
+| M3: cancel a non-last allocation of a module payment | 200 |
+| M3/M4: cancel the last allocation, same Idempotency-Key sent twice | 409 / 409, writes +0 |
+
+INT-70x69: scratch merge of `45768f3` with #69 `07faab5`. The FG-27 ledger reversal now returns **409**, so the ledger and the subcontractor module stay consistent: balance -300, `subcontractor_payments` completed, `paid_total` 300. **Mitigated** until the module has its own reversal.
+
+### C01A-1 (MEDIUM-HIGH, blocking, money) — time-of-check/time-of-use: concurrent cancels of a module payment's allocations reverse the payment — PROVED
+
+M5 in the same probe:
+- A "Заплата" row has 2 allocations. Both are cancelled concurrently (2 threads).
+- Result: **200 / 200**. The payment status becomes **reversed**, with 1 reversal row and 0 active allocations.
+- Reproduced on the first attempt.
+
+Cause:
+- The FG-45 pre-check (`finance.py:1368-1374`) counts the *other* active allocations **before** the cancel. Each request sees the other allocation still active.
+- After its own cancel, `remaining_allocs == 0` → `_reverse_one(...)` (`finance.py:1396-1398`) runs with **no source-module check**.
+
+Effect: the ledger reverses a salary, advance or subcontractor payment that the module still counts as paid. This is the FLOW-006 divergence FG-45 is meant to prevent; it needs two concurrent finance actions, for example a double submit or two tabs.
+
+Fix direction: guard the post-cancel reversal as well. If `source_module(payment)` is set, do not reverse; leave the payment active and unallocated, or refuse atomically. Alternatively, make "last allocation" an atomic decision.
