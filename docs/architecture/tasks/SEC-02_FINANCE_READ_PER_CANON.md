@@ -31,3 +31,10 @@ Draft PR, `HANDOFF SEC-02`, съобщение `SEC-02 DONE pr=<n> head=<sha> te
 - **FG-12 / D5 (deny-overrides):** не се прави тук — изисква назначение-забрана в Permission Service; остава дълг към W0-02.
 - PM-01 матрицата — регенерирай с harness-а; diff в HANDOFF. Тестове: всеки нов ред × 8 роли × 3 режима; UI не чупи при липсващи пари.
 `HANDOFF SEC-02-A`.
+
+## Допълнение B (06.11) — одит SEC02-1 и FLOW Guard FG-15/41/42/43
+Прилагане на Р20, FLOW-037 §3.4, FLOW-010 — без ново бизнес решение.
+- **SEC02-1 / FG-41 / FG-42:** към регистъра `finance_read.py`: `/work-sessions`, `/summary`, `/overtime`, `/{id}/detail` (labor_cost); `/projects/{id}/site-workers` (total_earned); `/projects/{id}/smr-groups` и `/tree` (total_cost, labor_price_per_unit); `/pulse/today`, `/sites/{id}/pulse` (total_budget — за SiteManager само свои обекти по Р20); `/ocr-invoice` (total_amount); `/projects/{id}/activity-reports/{smr}` (ставка), `/labor-warnings/{id}` (бюджет — и проверка за членство); `/subscription` plan_price (само Owner/Admin). Пусни отново скенера на одита (`docs/audit/probes/sec02/scan_6080165.json` на claude/audit-log) за всички GET × роли и докажи 0 пари за не-финансови роли.
+- **FG-43:** activities-overview `actual_cost` — махни за Viewer/Technician/Driver; Accountant да вижда activity-budget-summary.
+- **Сливане с #69:** #69 вече е `07faab5`. Слей го в този клон с merge commit (без rebase), разреши конфликтите (full_cost, labor_smr, reports, subcontractors), после **FG-15**: POST `/labor-entries` и Idempotency replay от #69 (`labor_smr.py`) не връщат ставка/стойност на роли без финансово право. PM-01 матрицата — регенерирай с harness-а.
+`HANDOFF SEC-02-B`.
