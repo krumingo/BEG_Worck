@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.deps.auth import get_current_user
 from app.db import db
+from app.services.slip_payment_state import effective_slips
 from app.tenancy.data_access import TenantData
 
 
@@ -132,6 +133,8 @@ async def my_pay_summary(user: dict = Depends(get_current_user)):
         {"org_id": user["org_id"], "employee_id": user["id"], "archived": {"$ne": True}},
         {"_id": 0},
     ).sort("created_at", -1).to_list(200)
+    # R0-06-C02: a slip is paid only when its Pay Run completed the payment.
+    slips = await effective_slips(tenant, slips)
     owed = 0.0
     out = []
     for s in slips:

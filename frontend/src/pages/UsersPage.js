@@ -108,7 +108,8 @@ export default function UsersPage() {
       setDialogOpen(false);
       await fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to save user");
+      const detail = err.response?.data?.detail;
+      alert(detail?.message || (typeof detail === "string" ? detail : "") || "Failed to save user");
     } finally {
       setSaving(false);
     }
@@ -120,7 +121,8 @@ export default function UsersPage() {
       await API.delete(`/users/${u.id}`);
       await fetchUsers();
     } catch (err) {
-      alert(err.response?.data?.detail || "Failed to delete user");
+      const detail = err.response?.data?.detail;
+      alert(detail?.message || (typeof detail === "string" ? detail : "") || "Failed to delete user");
     }
   };
 

@@ -28,6 +28,10 @@ from pydantic import BaseModel, EmailStr, field_validator
 from passlib.context import CryptContext
 
 from app.db import db
+from app.tenancy.identity import (
+    ERROR_EMAIL_EXISTS, ERROR_IDENTITY_CHECK_UNAVAILABLE, IdentityCheckUnavailable,
+    installation_databases, mask_email, normalize_email, users_with_email,
+)
 
 router = APIRouter(prefix="/api/platform", tags=["Platform Bootstrap"])
 
@@ -163,7 +167,8 @@ async def bootstrap_create_platform_admin(
     - Token comparison uses constant-time algorithm (timing attack protection)
     - Rate limited: 5 requests per 10 minutes per IP
     - Password is hashed with bcrypt (never stored in plaintext)
-    - Idempotent: if user exists, returns ok:true, created:false (no changes made)
+    - An email that already exists anywhere in the installation (any spelling)
+      -> 409 EMAIL_EXISTS, nothing written (R0-03-C01; was 200 created:false)
     - All actions logged to audit trail (no sensitive data)
     
     AFTER FIRST USE: Remove PLATFORM_BOOTSTRAP_TOKEN from production env vars!
@@ -175,11 +180,13 @@ async def bootstrap_create_platform_admin(
             -d '{"email": "admin@example.com", "password": "SecurePass123!"}'
     
     Responses:
-        200: Success (created:true or created:false)
+        200: Success (created:true)
         400: Invalid body / email / password
         401: Invalid bootstrap token
         403: Bootstrap disabled (env var not set)
         429: Rate limit exceeded
+        409: EMAIL_EXISTS (the email is already registered; nothing written)
+        503: IDENTITY_CHECK_UNAVAILABLE (the installation cannot be checked)
         500: Unexpected error
     """
     client_ip = get_client_ip(request)
@@ -237,48 +244,29 @@ async def bootstrap_create_platform_admin(
         )
     
     # ─────────────────────────────────────────────────────────────────────────
-    # STEP 4: Check if user already exists (idempotency)
+    # STEP 4: Refuse an email that already exists anywhere (R0-03-C01)
     # ─────────────────────────────────────────────────────────────────────────
-    existing_user = await db.users.find_one(
-        {"email": data.email},
-        {"_id": 0, "id": 1, "email": 1, "is_platform_admin": 1}
-    )
-    
-    if existing_user:
-        # User exists - DO NOT change password or roles
-        # Just log and return success with created:false
+    # R0-03 (Р6) + R0-03-C01 F-02: one email = one User in the WHOLE installation
+    # (global database and every tenant database, any spelling). An existing
+    # identity is refused with 409 and nothing is written — no user, no audit row,
+    # no firm named. An installation that cannot be fully checked is refused too.
+    email = normalize_email(data.email)
+    try:
+        taken = await users_with_email(await installation_databases(db), email)
+    except IdentityCheckUnavailable:
+        security_logger.warning(
+            f"SECURITY_EVENT: BOOTSTRAP_IDENTITY_CHECK_UNAVAILABLE | ip={client_ip} | timestamp={now}")
+        raise HTTPException(status_code=503, detail={
+            "error_code": ERROR_IDENTITY_CHECK_UNAVAILABLE,
+            "message": "The email cannot be checked right now; nothing was created"})
+    if taken:
         security_logger.info(
             f"SECURITY_EVENT: BOOTSTRAP_CREATE_PLATFORM_ADMIN | "
-            f"action=user_exists | ip={client_ip} | email={data.email} | "
+            f"action=email_exists | ip={client_ip} | email={mask_email(email)} | "
             f"created=false | timestamp={now}"
         )
-        
-        await db.audit_logs.insert_one({
-            "id": str(uuid.uuid4()),
-            "org_id": "SYSTEM",
-            "user_id": "BOOTSTRAP",
-            "user_email": "BOOTSTRAP",
-            "action": "BOOTSTRAP_CREATE_PLATFORM_ADMIN",
-            "entity_type": "user",
-            "entity_id": existing_user.get("id", "unknown"),
-            "changes": {
-                "email": data.email,
-                "ip": client_ip,
-                "created": False,
-                "reason": "user_already_exists"
-            },
-            "timestamp": now
-        })
-        
-        return {
-            "ok": True,
-            "created": False,
-            "message": f"Platform admin {data.email} already exists",
-            "next_steps": [
-                "1. Login at /platform/login",
-                "2. IMPORTANT: Remove PLATFORM_BOOTSTRAP_TOKEN from environment variables"
-            ]
-        }
+        raise HTTPException(status_code=409, detail={
+            "error_code": ERROR_EMAIL_EXISTS, "message": "This email is already registered"})
     
     # ─────────────────────────────────────────────────────────────────────────
     # STEP 5: Create new platform admin user
@@ -312,7 +300,7 @@ async def bootstrap_create_platform_admin(
         await db.users.insert_one({
             "id": user_id,
             "org_id": org_id,
-            "email": data.email,
+            "email": email,
             "password_hash": password_hash,
             "first_name": first_name,
             "last_name": last_name,

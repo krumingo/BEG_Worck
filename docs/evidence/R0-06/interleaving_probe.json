@@ -1,0 +1,202 @@
+{
+  "c01_head": {
+    "real": {
+      "reopen_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 409
+        },
+        "run_status": "reopened",
+        "paid_effects": null,
+        "allocation_statuses": [
+          "reversed"
+        ],
+        "slip_statuses": [
+          "superseded"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 0
+      },
+      "patch_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 409
+        },
+        "run_status": "confirmed",
+        "paid_effects": null,
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "confirmed"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 0
+      },
+      "fail_early": {
+        "http": {
+          "mark_paid": 500
+        },
+        "run_status": "payment_failed",
+        "paid_effects": "failed",
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "confirmed"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 0
+      }
+    },
+    "mongomock": {
+      "reopen_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 409
+        },
+        "run_status": "reopened",
+        "paid_effects": null,
+        "allocation_statuses": [
+          "reversed"
+        ],
+        "slip_statuses": [
+          "superseded"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 0
+      },
+      "patch_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 409
+        },
+        "run_status": "confirmed",
+        "paid_effects": null,
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "confirmed"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 0
+      },
+      "fail_early": {
+        "http": {
+          "mark_paid": 500
+        },
+        "run_status": "payment_failed",
+        "paid_effects": "failed",
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "confirmed"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 0
+      }
+    }
+  },
+  "r0_06_5eb0369": {
+    "real": {
+      "reopen_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 200
+        },
+        "run_status": "paid",
+        "paid_effects": "done",
+        "allocation_statuses": [
+          "reversed"
+        ],
+        "slip_statuses": [
+          "paid"
+        ],
+        "salary_outflows": 2,
+        "counted_as_paid_run": 1
+      },
+      "patch_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 200
+        },
+        "run_status": "paid",
+        "paid_effects": "done",
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "paid"
+        ],
+        "salary_outflows": 2,
+        "counted_as_paid_run": 1
+      },
+      "fail_early": {
+        "http": {
+          "mark_paid": 500
+        },
+        "run_status": "paid",
+        "paid_effects": "failed",
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "confirmed"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 1
+      }
+    },
+    "mongomock": {
+      "reopen_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 200
+        },
+        "run_status": "paid",
+        "paid_effects": "done",
+        "allocation_statuses": [
+          "reversed"
+        ],
+        "slip_statuses": [
+          "paid"
+        ],
+        "salary_outflows": 2,
+        "counted_as_paid_run": 1
+      },
+      "patch_first": {
+        "http": {
+          "first_op": 200,
+          "mark_paid": 200
+        },
+        "run_status": "paid",
+        "paid_effects": "done",
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "paid"
+        ],
+        "salary_outflows": 2,
+        "counted_as_paid_run": 1
+      },
+      "fail_early": {
+        "http": {
+          "mark_paid": 500
+        },
+        "run_status": "paid",
+        "paid_effects": "failed",
+        "allocation_statuses": [
+          "provisional"
+        ],
+        "slip_statuses": [
+          "confirmed"
+        ],
+        "salary_outflows": 0,
+        "counted_as_paid_run": 1
+      }
+    }
+  }
+}

@@ -40,9 +40,20 @@ async def seed_data() -> None:
         return
 
     # Idempotent check: skip if admin already exists
-    existing = await db.users.find_one({"email": seed_email})
+    # R0-03 (+ C01 F-02): the seed admin is one more creation path — normalized,
+    # any spelling, anywhere in the installation. Existing or uncheckable → skip,
+    # write nothing; the log never carries the full email.
+    from app.tenancy.identity import (
+        IdentityCheckUnavailable, installation_databases, mask_email, normalize_email,
+        users_with_email)
+    seed_email = normalize_email(seed_email)
+    try:
+        existing = await users_with_email(await installation_databases(db), seed_email)
+    except IdentityCheckUnavailable:
+        logger.warning("Seed skipped: the installation cannot be checked for %s", mask_email(seed_email))
+        return
     if existing:
-        logger.info(f"Seed data already exists for {seed_email}, skipping")
+        logger.info("Seed skipped: %s is already registered", mask_email(seed_email))
         return
 
     logger.info(f"Creating seed data with admin: {seed_email}")

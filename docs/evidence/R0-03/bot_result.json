@@ -1,0 +1,329 @@
+{
+  "started_at": "2026-10-19T05:12:09.779Z",
+  "steps": [
+    {
+      "step": "1 Accountant sees no edit button",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "1 /basic role=Admin -> 400",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "body": {
+          "detail": {
+            "error_code": "FIELD_NOT_ALLOWED",
+            "fields": [
+              "role"
+            ],
+            "message": "role and email cannot be changed here"
+          }
+        }
+      }
+    },
+    {
+      "step": "1 PUT /users self role=Admin -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "body": {
+          "detail": "Access denied"
+        }
+      }
+    },
+    {
+      "step": "1 /basic email -> 400",
+      "pass": true,
+      "detail": {
+        "status": 400,
+        "body": {
+          "detail": {
+            "error_code": "FIELD_NOT_ALLOWED",
+            "fields": [
+              "email"
+            ],
+            "message": "role and email cannot be changed here"
+          }
+        }
+      }
+    },
+    {
+      "step": "1 role and email unchanged",
+      "pass": true,
+      "detail": {
+        "role": "Accountant",
+        "email": "acct@r003a.test"
+      }
+    },
+    {
+      "step": "1 card still shows Accountant",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "1b edit form: role and email are locked",
+      "pass": true,
+      "detail": {
+        "roleLocked": true,
+        "emailLocked": true
+      }
+    },
+    {
+      "step": "1b UI save of name/phone works (no 400), role unchanged",
+      "pass": true,
+      "detail": {
+        "alertText": null,
+        "first_name": "Счетоводител-Бот",
+        "phone": "+359888000111",
+        "role": "Accountant"
+      }
+    },
+    {
+      "step": "2 dialog shows the refusal",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "2 API set-password on Owner -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "body": {
+          "detail": {
+            "error_code": "OWNER_CHANGE_REQUIRES_OWNER",
+            "message": "Only an Owner can change an Owner"
+          }
+        }
+      }
+    },
+    {
+      "step": "2 API demote Owner -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "body": {
+          "detail": {
+            "error_code": "OWNER_CHANGE_REQUIRES_OWNER",
+            "message": "Only an Owner can change an Owner"
+          }
+        }
+      }
+    },
+    {
+      "step": "2 API delete Owner -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "body": {
+          "detail": {
+            "error_code": "OWNER_CHANGE_REQUIRES_OWNER",
+            "message": "Only an Owner can change an Owner"
+          }
+        }
+      }
+    },
+    {
+      "step": "2 API grant Owner -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "body": {
+          "detail": {
+            "error_code": "ROLE_ABOVE_OWN_FORBIDDEN",
+            "message": "You cannot grant a role above your own"
+          }
+        }
+      }
+    },
+    {
+      "step": "2 Owner still logs in with the old password",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "has_token": true,
+        "detail": null
+      }
+    },
+    {
+      "step": "2 the attempted password does not work",
+      "pass": true,
+      "detail": {
+        "status": 401,
+        "has_token": false,
+        "detail": "Invalid credentials"
+      }
+    },
+    {
+      "step": "3 list shows the former Admin as Наблюдател",
+      "pass": true,
+      "detail": {
+        "row": "Admin R003\n\tadmin@r003a.test\tНаблюдател\tАктивен\t"
+      }
+    },
+    {
+      "step": "3 API role is Viewer",
+      "pass": true,
+      "detail": {
+        "role": "Viewer"
+      }
+    },
+    {
+      "step": "4 UI alert says the email is registered",
+      "pass": true,
+      "detail": {
+        "alertText": "This email is already registered"
+      }
+    },
+    {
+      "step": "4 API -> 409 EMAIL_EXISTS",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "body": {
+          "detail": {
+            "error_code": "EMAIL_EXISTS",
+            "message": "This email is already registered"
+          }
+        }
+      }
+    },
+    {
+      "step": "4 no firm is named in the answer",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "4 firm B still has 2 users",
+      "pass": true,
+      "detail": {
+        "n": 2
+      }
+    },
+    {
+      "step": "5 login page shows the identity message, no crash",
+      "pass": true,
+      "detail": {
+        "msg": "This account cannot sign in until its identity is resolved. Contact your administrator."
+      }
+    },
+    {
+      "step": "5 no token stored",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "5 API -> 409 DUPLICATE_IDENTITY, no token",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "has_token": false,
+        "detail": {
+          "error_code": "DUPLICATE_IDENTITY",
+          "message": "This account cannot sign in until its identity is resolved. Contact your administrator."
+        }
+      }
+    }
+  ],
+  "step1": {
+    "basic_role": {
+      "status": 400,
+      "body": {
+        "detail": {
+          "error_code": "FIELD_NOT_ALLOWED",
+          "fields": [
+            "role"
+          ],
+          "message": "role and email cannot be changed here"
+        }
+      }
+    },
+    "users_role": {
+      "status": 403,
+      "body": {
+        "detail": "Access denied"
+      }
+    },
+    "basic_email": {
+      "status": 400,
+      "body": {
+        "detail": {
+          "error_code": "FIELD_NOT_ALLOWED",
+          "fields": [
+            "email"
+          ],
+          "message": "role and email cannot be changed here"
+        }
+      }
+    }
+  },
+  "step2": {
+    "set_password": {
+      "status": 403,
+      "body": {
+        "detail": {
+          "error_code": "OWNER_CHANGE_REQUIRES_OWNER",
+          "message": "Only an Owner can change an Owner"
+        }
+      }
+    },
+    "demote_owner": {
+      "status": 403,
+      "body": {
+        "detail": {
+          "error_code": "OWNER_CHANGE_REQUIRES_OWNER",
+          "message": "Only an Owner can change an Owner"
+        }
+      }
+    },
+    "delete_owner": {
+      "status": 403,
+      "body": {
+        "detail": {
+          "error_code": "OWNER_CHANGE_REQUIRES_OWNER",
+          "message": "Only an Owner can change an Owner"
+        }
+      }
+    },
+    "grant_owner": {
+      "status": 403,
+      "body": {
+        "detail": {
+          "error_code": "ROLE_ABOVE_OWN_FORBIDDEN",
+          "message": "You cannot grant a role above your own"
+        }
+      }
+    }
+  },
+  "step3": {
+    "admin_after": {
+      "id": "96331ee8-85b8-481e-bcf3-29adfe4ecde1",
+      "role": "Viewer"
+    }
+  },
+  "step4": {
+    "create": {
+      "status": 409,
+      "body": {
+        "detail": {
+          "error_code": "EMAIL_EXISTS",
+          "message": "This email is already registered"
+        }
+      }
+    },
+    "ui_alert": "This email is already registered"
+  },
+  "step5": {
+    "ui_message": "This account cannot sign in until its identity is resolved. Contact your administrator.",
+    "api": {
+      "status": 409,
+      "has_token": false,
+      "detail": {
+        "error_code": "DUPLICATE_IDENTITY",
+        "message": "This account cannot sign in until its identity is resolved. Contact your administrator."
+      }
+    }
+  },
+  "finished_at": "2026-10-19T05:12:42.068Z",
+  "pass": true
+}

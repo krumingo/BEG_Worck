@@ -222,7 +222,9 @@ export default function EmployeeDetailPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await API.put(`/employees/${userId}/basic`, editBasic);
+      // R0-03: /basic no longer accepts role/email (400) — send only what it changes.
+      await API.put(`/employees/${userId}/basic`, {
+        first_name: editBasic.first_name, last_name: editBasic.last_name, phone: editBasic.phone });
       // Update profile via PUT
       await API.put(`/employees/${userId}`, {
         pay_type: editProfile.pay_type,
@@ -241,7 +243,8 @@ export default function EmployeeDetailPage() {
       setLoading(true);
       fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка при запис");
+      const detail = err.response?.data?.detail;
+      alert(detail?.message || (typeof detail === "string" ? detail : "") || "Грешка при запис");
     } finally { setSaving(false); }
   };
 
@@ -367,7 +370,7 @@ export default function EmployeeDetailPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Имейл</Label>
-              <Input type="email" value={editBasic.email} onChange={e => setEditBasic({...editBasic, email: e.target.value})} className="bg-background h-8 text-sm" data-testid="email-input" />
+              <Input type="email" value={editBasic.email} disabled title="Имейлът не се сменя оттук" className="bg-background h-8 text-sm" data-testid="email-input" />
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Длъжност</Label>
@@ -389,8 +392,8 @@ export default function EmployeeDetailPage() {
             </div>
             <div className="space-y-1">
               <Label className="text-xs">Роля</Label>
-              <Select value={editBasic.role || ""} onValueChange={v => setEditBasic({...editBasic, role: v})}>
-                <SelectTrigger className="bg-background h-8 text-sm"><SelectValue placeholder="Избери роля" /></SelectTrigger>
+              <Select value={editBasic.role || ""} disabled>
+                <SelectTrigger className="bg-background h-8 text-sm" title="Ролята се сменя от „Потребители“" data-testid="role-select"><SelectValue placeholder="Избери роля" /></SelectTrigger>
                 <SelectContent>
                   {roles.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                 </SelectContent>

@@ -25,6 +25,14 @@ const STATUS_CFG = {
   paid:      { label: "Платен",    cls: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" },
   reopened:  { label: "Отворен",   cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
   cancelled: { label: "Отменен",   cls: "bg-red-500/15 text-red-400 border-red-500/30" },
+  // R0-06-C01: a payment that has not completed is never shown as paid.
+  paying:         { label: "Плащане в процес",   cls: "bg-amber-500/15 text-amber-400 border-amber-500/30" },
+  payment_failed: { label: "НЕзавършено плащане", cls: "bg-red-500/20 text-red-300 border-red-500/50" },
+};
+
+const PAYMENT_WARNING = {
+  paying: "Плащането е в процес — не е завършено.",
+  payment_failed: "Плащането НЕ е завършено — нужна е проверка. Повторно плащане е блокирано.",
 };
 
 // P0-2A: Payroll status colors for calendar cells.
@@ -1283,7 +1291,7 @@ export default function PayRunsPage() {
                             <TableCell className="text-center text-xs font-mono">{w.approved_days}</TableCell>
                             <TableCell className="text-center text-xs font-mono text-emerald-400">{w.paid_now_amount?.toFixed(0)}</TableCell>
                             <TableCell className={`text-center text-xs font-mono ${w.remaining_after_payment > 0 ? "text-amber-400" : "text-emerald-400"}`}>{w.remaining_after_payment?.toFixed(0)}</TableCell>
-                            <TableCell><Badge variant="outline" className={`text-[8px] ${w.run_status === "paid" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : "bg-violet-500/15 text-violet-400 border-violet-500/30"}`}>{w.run_status === "paid" ? "Платен" : "Потвърден"}</Badge></TableCell>
+                            <TableCell><Badge variant="outline" className={`text-[8px] ${(STATUS_CFG[w.run_status] || STATUS_CFG.confirmed).cls}`}>{(STATUS_CFG[w.run_status] || STATUS_CFG.confirmed).label}</Badge></TableCell>
                             <TableCell>{w.slip_number ? <Badge variant="outline" className="text-[8px] cursor-pointer" onClick={() => { if (w.slip_id) API.get(`/payment-slips/${w.slip_id}`).then(r => setDetailSlip(r.data)).catch(()=>{}); }}>{w.slip_number}</Badge> : "—"}</TableCell>
                           </TableRow>
                         );
@@ -1486,6 +1494,11 @@ export default function PayRunsPage() {
                 <span>{detailRun.period_start} → {detailRun.period_end} | Сед. {detailRun.week_number}</span>
                 <Badge variant="outline" className={(STATUS_CFG[detailRun.status] || {}).cls}>{(STATUS_CFG[detailRun.status] || {}).label}</Badge>
               </div>
+              {(PAYMENT_WARNING[detailRun.status] || detailRun.op_lock) && (
+                <div className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-2 text-xs text-red-300" data-testid="payrun-incomplete-warning">
+                  {PAYMENT_WARNING[detailRun.status] || `Незавършена операция (${detailRun.op_lock?.op}) — Pay Run е блокиран, нужна е проверка.`}
+                </div>
+              )}
               <div className="rounded-lg border border-border overflow-hidden">
                 <Table>
                   <TableHeader><TableRow>
@@ -1517,7 +1530,8 @@ export default function PayRunsPage() {
                         <TableCell className="text-center text-xs font-mono text-emerald-400">{r.paid_now_amount?.toFixed(0)}</TableCell>
                         <TableCell className={`text-center text-xs font-mono font-bold bg-primary/5 ${r.remaining_after_payment > 0 ? "text-amber-400" : r.remaining_after_payment < 0 ? "text-red-400" : "text-emerald-400"}`}>{r.remaining_after_payment?.toFixed(0)}</TableCell>
                         <TableCell>
-                          {isPaid ? <Badge variant="outline" className="text-[8px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Платен</Badge>
+                          {PAYMENT_WARNING[detailRun.status] && r.paid_now_amount > 0 ? <Badge variant="outline" className="text-[8px] bg-red-500/20 text-red-300 border-red-500/50">Незавършено</Badge>
+                          : isPaid ? <Badge variant="outline" className="text-[8px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Платен</Badge>
                           : isPartial ? <Badge variant="outline" className="text-[8px] bg-amber-500/15 text-amber-400 border-amber-500/30">Частичен</Badge>
                           : r.paid_now_amount === 0 ? <Badge variant="outline" className="text-[8px] bg-gray-500/15 text-gray-400 border-gray-500/30">Неплатен</Badge>
                           : null}

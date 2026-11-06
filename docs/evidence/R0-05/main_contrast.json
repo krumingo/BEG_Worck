@@ -1,0 +1,21 @@
+{
+    "base": "main@41f2afff99ff8845dfba9396ef090426825b628d",
+    "same_seed": "seed_pay_run.py",
+    "request": "POST /api/pay-runs status=confirmed, rows=[Ivan Alpha paid_now_amount=500]",
+    "sent_rows": 1,
+    "run_rows": [
+        [
+            "Ivan Alpha",
+            500.0
+        ],
+        [
+            "Petar Bravo",
+            500.0
+        ],
+        [
+            "Georgi Charlie",
+            400.0
+        ]
+    ],
+    "totals_paid": 1400.0
+}

@@ -1,0 +1,104 @@
+{
+  "r0_06_head": {
+    "real": {
+      "codes": [
+        200,
+        409,
+        409,
+        409,
+        409,
+        409,
+        409,
+        409
+      ],
+      "finance_payments": 2,
+      "outflow_total": 750.0,
+      "advance_remaining": 150.0,
+      "advance_deductions": 1
+    },
+    "mongomock": {
+      "codes": [
+        200,
+        409,
+        409,
+        409,
+        409,
+        409,
+        409,
+        409
+      ],
+      "finance_payments": 2,
+      "outflow_total": 750.0,
+      "advance_remaining": 150.0,
+      "advance_deductions": 1
+    }
+  },
+  "main_078b8e7_run1": {
+    "real": {
+      "codes": [
+        200,
+        200,
+        200,
+        400,
+        400,
+        400,
+        400,
+        400
+      ],
+      "finance_payments": 6,
+      "outflow_total": 2250.0,
+      "advance_remaining": 150.0,
+      "advance_deductions": 3
+    },
+    "mongomock": {
+      "codes": [
+        200,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400
+      ],
+      "finance_payments": 2,
+      "outflow_total": 750.0,
+      "advance_remaining": 150.0,
+      "advance_deductions": 1
+    }
+  },
+  "main_078b8e7_run2": {
+    "real": {
+      "codes": [
+        200,
+        200,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400
+      ],
+      "finance_payments": 4,
+      "outflow_total": 1500.0,
+      "advance_remaining": 150.0,
+      "advance_deductions": 2
+    },
+    "mongomock": {
+      "codes": [
+        200,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400,
+        400
+      ],
+      "finance_payments": 2,
+      "outflow_total": 750.0,
+      "advance_remaining": 150.0,
+      "advance_deductions": 1
+    }
+  }
+}

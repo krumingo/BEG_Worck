@@ -1,0 +1,64 @@
+[
+  {
+    "tenant_id": "fb87abf3-7b35-4b6e-a431-17b2b219dcd8",
+    "occurred_at": "2026-10-19T05:12:30.260737+00:00",
+    "actor_id": "e12dd374-09eb-4906-b2a7-961839594ec0",
+    "action": "user.role_status_changed",
+    "entity_id": "96331ee8-85b8-481e-bcf3-29adfe4ecde1",
+    "structured_diff": {
+      "before": {
+        "role": "Admin"
+      },
+      "after": {
+        "role": "Viewer"
+      }
+    },
+    "retention_class": "R3",
+    "result": "success",
+    "error_code": null
+  },
+  {
+    "tenant_id": "a2b570b7-d9e9-459b-b398-d771890b6d1d",
+    "occurred_at": "2026-10-19T05:12:40.276273+00:00",
+    "actor_id": "auth.login",
+    "action": "auth.login_refused",
+    "entity_id": null,
+    "structured_diff": null,
+    "retention_class": "R3",
+    "result": "denied",
+    "error_code": "DUPLICATE_IDENTITY"
+  },
+  {
+    "tenant_id": "fb87abf3-7b35-4b6e-a431-17b2b219dcd8",
+    "occurred_at": "2026-10-19T05:12:40.283156+00:00",
+    "actor_id": "auth.login",
+    "action": "auth.login_refused",
+    "entity_id": null,
+    "structured_diff": null,
+    "retention_class": "R3",
+    "result": "denied",
+    "error_code": "DUPLICATE_IDENTITY"
+  },
+  {
+    "tenant_id": "a2b570b7-d9e9-459b-b398-d771890b6d1d",
+    "occurred_at": "2026-10-19T05:12:42.051382+00:00",
+    "actor_id": "auth.login",
+    "action": "auth.login_refused",
+    "entity_id": null,
+    "structured_diff": null,
+    "retention_class": "R3",
+    "result": "denied",
+    "error_code": "DUPLICATE_IDENTITY"
+  },
+  {
+    "tenant_id": "fb87abf3-7b35-4b6e-a431-17b2b219dcd8",
+    "occurred_at": "2026-10-19T05:12:42.058472+00:00",
+    "actor_id": "auth.login",
+    "action": "auth.login_refused",
+    "entity_id": null,
+    "structured_diff": null,
+    "retention_class": "R3",
+    "result": "denied",
+    "error_code": "DUPLICATE_IDENTITY"
+  }
+]

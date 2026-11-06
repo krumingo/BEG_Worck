@@ -1,0 +1,134 @@
+{
+  "c02_head": {
+    "real": {
+      "run_status": "payment_failed",
+      "raw_slip_statuses": [
+        "paid",
+        "paid"
+      ],
+      "hr_legacy_payslips": [
+        "Generated",
+        "Generated"
+      ],
+      "hr_legacy_payslip_one": [
+        "Generated",
+        "Generated"
+      ],
+      "api_payment_slips": [
+        "confirmed",
+        "confirmed"
+      ],
+      "api_payment_slips_status_paid_total": 0,
+      "api_payment_slip_one": [
+        "confirmed",
+        "confirmed"
+      ],
+      "payroll_weeks_slip_status": [
+        "confirmed"
+      ],
+      "my_pay_summary_owed": 450.0,
+      "cashflow_payroll_estimate": [
+        950.0
+      ],
+      "paid_labor_v3_rows": 0,
+      "paid_alloc_rows": 0
+    },
+    "mongomock": {
+      "run_status": "payment_failed",
+      "raw_slip_statuses": [
+        "paid",
+        "paid"
+      ],
+      "hr_legacy_payslips": [
+        "Generated",
+        "Generated"
+      ],
+      "hr_legacy_payslip_one": [
+        "Generated",
+        "Generated"
+      ],
+      "api_payment_slips": [
+        "confirmed",
+        "confirmed"
+      ],
+      "api_payment_slips_status_paid_total": 0,
+      "api_payment_slip_one": [
+        "confirmed",
+        "confirmed"
+      ],
+      "payroll_weeks_slip_status": [
+        "confirmed"
+      ],
+      "my_pay_summary_owed": 450.0,
+      "cashflow_payroll_estimate": [
+        950.0
+      ],
+      "paid_labor_v3_rows": 0,
+      "paid_alloc_rows": 0
+    }
+  },
+  "c01_f9fe490": {
+    "real": {
+      "run_status": "payment_failed",
+      "raw_slip_statuses": [
+        "paid",
+        "paid"
+      ],
+      "hr_legacy_payslips": [
+        "Paid",
+        "Paid"
+      ],
+      "hr_legacy_payslip_one": [
+        "Paid",
+        "Paid"
+      ],
+      "api_payment_slips": [
+        "paid",
+        "paid"
+      ],
+      "api_payment_slips_status_paid_total": 2,
+      "api_payment_slip_one": [
+        "paid",
+        "paid"
+      ],
+      "payroll_weeks_slip_status": [
+        "paid"
+      ],
+      "my_pay_summary_owed": 0.0,
+      "cashflow_payroll_estimate": [],
+      "paid_labor_v3_rows": 0,
+      "paid_alloc_rows": 0
+    },
+    "mongomock": {
+      "run_status": "payment_failed",
+      "raw_slip_statuses": [
+        "paid",
+        "paid"
+      ],
+      "hr_legacy_payslips": [
+        "Paid",
+        "Paid"
+      ],
+      "hr_legacy_payslip_one": [
+        "Paid",
+        "Paid"
+      ],
+      "api_payment_slips": [
+        "paid",
+        "paid"
+      ],
+      "api_payment_slips_status_paid_total": 2,
+      "api_payment_slip_one": [
+        "paid",
+        "paid"
+      ],
+      "payroll_weeks_slip_status": [
+        "paid"
+      ],
+      "my_pay_summary_owed": 0.0,
+      "cashflow_payroll_estimate": [],
+      "paid_labor_v3_rows": 0,
+      "paid_alloc_rows": 0
+    }
+  }
+}

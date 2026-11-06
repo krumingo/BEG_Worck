@@ -1,0 +1,33 @@
+{
+  "counts": {
+    "duplicated_emails": 1,
+    "users": 6,
+    "users_in_duplicates": 2,
+    "users_without_email": 0
+  },
+  "database": "r003_bot",
+  "duplicates": [
+    {
+      "count": 2,
+      "email_masked": "iv***@r003b.test",
+      "spellings_differ": true,
+      "users": [
+        {
+          "id": "2a01b5ff-2fcb-4a59-8cb6-9990a2819705",
+          "org_id": "a2b570b7-d9e9-459b-b398-d771890b6d1d"
+        },
+        {
+          "id": "eee0b881-808e-487a-bb01-573e209bcb21",
+          "org_id": "fb87abf3-7b35-4b6e-a431-17b2b219dcd8"
+        }
+      ]
+    }
+  ],
+  "generated_at": "2026-10-19T05:12:56.162316+00:00",
+  "notes": [
+    "Emails are compared as strip().lower(); only masked emails are printed.",
+    "No user is changed or merged here. Cleanup is a separate, approved step (R0-09)."
+  ],
+  "read_only": true,
+  "schema": "beg.r0-03-email-duplicates-report/v1"
+}

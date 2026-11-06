@@ -7,7 +7,7 @@ Security tests:
 1) Missing env var => 403 "Bootstrap disabled"
 2) Wrong token => 401 "Invalid bootstrap token"
 3) Valid token + new email => created:true
-4) Valid token + existing email => created:false (idempotent)
+4) Valid token + existing email => 409 EMAIL_EXISTS, nothing written (R0-03-C01)
 5) Password is hashed (not stored as plaintext)
 6) Weak password => 400
 7) Invalid email => 400
@@ -108,11 +108,11 @@ class TestBootstrapCreatePlatformAdmin:
         assert len(data["next_steps"]) == 2
 
     # ═══════════════════════════════════════════════════════════════════
-    # TEST 4: Valid token + existing email => created:false (idempotent)
+    # TEST 4: Valid token + existing email => 409 EMAIL_EXISTS (R0-03-C01)
     # ═══════════════════════════════════════════════════════════════════
 
-    def test_existing_user_returns_created_false(self):
-        """POST with valid token and existing email returns created:false"""
+    def test_existing_user_returns_409_email_exists(self):
+        """POST with valid token and an existing email (any spelling) -> 409 EMAIL_EXISTS"""
         # First, create a user
         test_email = f"bootstrap_exist_{uuid.uuid4().hex[:8]}@example.com"
         
@@ -124,18 +124,15 @@ class TestBootstrapCreatePlatformAdmin:
         assert resp1.status_code == 200
         assert resp1.json()["created"] == True
         
-        # Try to create again - should return created:false
+        # Try to create again (other case) - one email = one User: 409, nothing written
         resp2 = requests.post(
             self.endpoint,
             headers={"X-Bootstrap-Token": TEST_TOKEN},
-            json={"email": test_email, "password": "DifferentPass456!"}
+            json={"email": test_email.upper(), "password": "DifferentPass456!"}
         )
         
-        assert resp2.status_code == 200
-        data = resp2.json()
-        assert data["ok"] == True
-        assert data["created"] == False
-        assert "already exists" in data["message"]
+        assert resp2.status_code == 409
+        assert resp2.json()["detail"]["error_code"] == "EMAIL_EXISTS"
 
     # ═══════════════════════════════════════════════════════════════════
     # TEST 5: Password is hashed (verify bcrypt)
@@ -253,11 +250,7 @@ class TestBootstrapCreatePlatformAdmin:
             json={"email": "admin@begwork.com", "password": "ignored123!"}
         )
         
-        assert resp.status_code == 200
-        data = resp.json()
-        
-        # Verify exact shape
-        assert set(data.keys()) == {"ok", "created", "message", "next_steps"}
-        assert data["ok"] == True
-        assert data["created"] == False
-        assert "already exists" in data["message"]
+        # R0-03-C01: an existing email is refused, nothing written
+        assert resp.status_code == 409
+        assert set(resp.json()["detail"].keys()) == {"error_code", "message"}
+        assert resp.json()["detail"]["error_code"] == "EMAIL_EXISTS"

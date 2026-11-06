@@ -1,0 +1,140 @@
+{
+  "started_at": "2026-10-17T11:48:54.423Z",
+  "selected": {
+    "id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+    "name": "Ivan Alpha"
+  },
+  "unselected": [
+    {
+      "id": "53a2378b-1d5b-407f-928e-bc0fb20ba12e",
+      "name": "Petar Bravo"
+    },
+    {
+      "id": "9e6d8127-9603-476f-a86f-619e8262022e",
+      "name": "Georgi Charlie"
+    }
+  ],
+  "steps": [
+    {
+      "step": "1 preview grid lists all three employees",
+      "pass": true,
+      "detail": {
+        "shown": [
+          "Ivan Alpha",
+          "Petar Bravo",
+          "Georgi Charlie"
+        ]
+      }
+    },
+    {
+      "step": "2 grid has exactly one employee ticked",
+      "pass": true,
+      "detail": {
+        "ticked": [
+          "Ivan Alpha"
+        ]
+      }
+    },
+    {
+      "step": "2 UI sends exactly the one selected employee",
+      "pass": true,
+      "detail": {
+        "rows": [
+          {
+            "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+            "paid_now_amount": 500
+          }
+        ]
+      }
+    },
+    {
+      "step": "2 POST /api/pay-runs is 200",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "number": "PR-0001"
+      }
+    },
+    {
+      "step": "2 created run shows only the selected employee",
+      "pass": true,
+      "detail": {
+        "inModal": [
+          "Ivan Alpha"
+        ]
+      }
+    },
+    {
+      "step": "3 API: the Pay Run has exactly one row, the selected employee",
+      "pass": true,
+      "detail": {
+        "rows": 1,
+        "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4"
+      }
+    },
+    {
+      "step": "3 API: exactly one slip in the tenant, for the selected employee",
+      "pass": true,
+      "detail": {
+        "slips": 1
+      }
+    },
+    {
+      "step": "3 API: no allocation for the unselected employees",
+      "pass": true,
+      "detail": {
+        "allocations": [
+          "06e357b8-039e-48d2-8cf9-5b54c82c3ce4"
+        ]
+      }
+    }
+  ],
+  "create_request_rows": [
+    {
+      "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+      "paid_now_amount": 500,
+      "adjustments": [],
+      "notes": "",
+      "selected_report_ids": []
+    }
+  ],
+  "pay_run_id": "5c8fa5b6-73bb-42b9-805d-1d188696afb3",
+  "api_record": {
+    "pay_run": {
+      "id": "5c8fa5b6-73bb-42b9-805d-1d188696afb3",
+      "number": "PR-0001",
+      "status": "paid",
+      "totals": {
+        "employees": 1,
+        "hours": 40,
+        "earned": 500,
+        "bonuses": 0,
+        "deductions": 0,
+        "paid": 500,
+        "remaining": 0
+      },
+      "employee_rows": [
+        {
+          "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+          "name": "Ivan Alpha",
+          "earned_amount": 500,
+          "paid_now_amount": 500,
+          "remaining_after_payment": 0
+        }
+      ]
+    },
+    "payment_slips": [
+      {
+        "slip_number": "SL-00001",
+        "employee_id": "06e357b8-039e-48d2-8cf9-5b54c82c3ce4",
+        "pay_run_id": "5c8fa5b6-73bb-42b9-805d-1d188696afb3",
+        "paid_now_amount": 500
+      }
+    ],
+    "allocations_employee_ids": [
+      "06e357b8-039e-48d2-8cf9-5b54c82c3ce4"
+    ]
+  },
+  "finished_at": "2026-10-17T11:49:02.048Z",
+  "result": "PASS"
+}

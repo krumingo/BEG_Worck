@@ -24,7 +24,8 @@ export default function LoginPage() {
       await login(email, password);
       navigate("/");
     } catch (err) {
-      setError(err.response?.data?.detail || t("auth.loginFailed"));
+      const detail = err.response?.data?.detail;
+      setError(detail?.message || (typeof detail === "string" ? detail : "") || t("auth.loginFailed"));
     } finally {
       setLoading(false);
     }

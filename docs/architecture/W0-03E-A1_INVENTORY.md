@@ -297,6 +297,8 @@
 | app/services/paid_labor.py:paid_labor_v3 | (helper) | payment_slips | find(status, archived, paid_at) | TenantData org_id (session) | scoped@base | SAFE |
 | app/services/paid_labor.py:_paid_alloc_rows | (helper) | projects | find_one(name) | TenantData org_id (session) | scoped@base | SAFE |
 | app/services/paid_labor.py:_paid_alloc_rows | (helper) | pay_runs | find(status, archived) | TenantData org_id (session) | scoped@base | SAFE |
+| app/services/slip_payment_state.py:paid_run_ids | (helper) | pay_runs | distinct('id') | TenantData org_id (session) | new read | SAFE |
+| app/services/slip_payment_state.py:_run_statuses | (helper) | pay_runs | find(id) | TenantData org_id (session) | new read | SAFE |
 | app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/deps/modules.py:check_module_access_for_org | (helper) | subscriptions | update_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/deps/modules.py:get_plan_limits | (helper) | subscriptions | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
@@ -365,11 +367,11 @@
 | app/routes/auth.py:update_user | PUT /users/{user_id} | users | update_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/auth.py:delete_user | DELETE /users/{user_id} | users | get(id = user_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/auth.py:delete_user | DELETE /users/{user_id} | users | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/items.py:get_item | GET /items/{item_id} | items | find_one(id) | literal user['org_id'] | scoped@base | SAFE |
+| app/routes/items.py:get_item | GET /items/{item_id} | items | require(id = item_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/subcontractors.py:get_subcontractor | GET /subcontractors/{sub_id} | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | get(id = warehouse_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 357 accesses — FIXED 130, SAFE 227
+Totals: 359 accesses — FIXED 130, SAFE 229

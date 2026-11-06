@@ -148,7 +148,8 @@ export default function EmployeesPage() {
       toast.success("Служителят е създаден");
       navigate(`/employees/${newUserId}`);
     } catch (err) {
-      toast.error(err.response?.data?.detail || "Грешка при създаване");
+      const detail = err.response?.data?.detail;
+      toast.error(detail?.message || (typeof detail === "string" ? detail : "") || "Грешка при създаване");
     } finally { setSaving(false); }
   };
 

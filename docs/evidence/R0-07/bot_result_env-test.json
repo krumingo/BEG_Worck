@@ -1,0 +1,53 @@
+{
+  "started_at": "2026-10-18T11:09:48.186Z",
+  "run": "env-test",
+  "steps": [
+    {
+      "step": "2 Warehousekeeper, ENV=test -> 403",
+      "pass": true,
+      "detail": {
+        "status": 403,
+        "body": "{\"detail\":\"Insufficient permissions\"}"
+      }
+    },
+    {
+      "step": "2 nothing deleted by the 403",
+      "pass": true,
+      "detail": {}
+    },
+    {
+      "step": "2 list shows the three warehouses",
+      "pass": true,
+      "detail": {
+        "names": [
+          "Склад 1",
+          "Склад 2",
+          "Склад 3"
+        ]
+      }
+    },
+    {
+      "step": "2 Admin, ENV=test -> 200 with deleted_count 3",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "body": "{\"ok\":true,\"deleted_count\":3,\"message\":\"Deleted 3 warehouses for org a09d4269-a147-4bd3-badd-f9546ae418c3\"}"
+      }
+    },
+    {
+      "step": "2 list is empty after the reset",
+      "pass": true,
+      "detail": {}
+    }
+  ],
+  "keeper_response": {
+    "status": 403,
+    "body": "{\"detail\":\"Insufficient permissions\"}"
+  },
+  "admin_response": {
+    "status": 200,
+    "body": "{\"ok\":true,\"deleted_count\":3,\"message\":\"Deleted 3 warehouses for org a09d4269-a147-4bd3-badd-f9546ae418c3\"}"
+  },
+  "finished_at": "2026-10-18T11:09:56.204Z",
+  "pass": true
+}

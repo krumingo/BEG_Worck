@@ -1,0 +1,47 @@
+{
+  "started_at": "2026-10-18T11:09:32.573Z",
+  "run": "no-env",
+  "steps": [
+    {
+      "step": "1 list shows the three seeded warehouses",
+      "pass": true,
+      "detail": {
+        "names": [
+          "Склад 1",
+          "Склад 2",
+          "Склад 3"
+        ]
+      }
+    },
+    {
+      "step": "1 reset without ENV -> 404",
+      "pass": true,
+      "detail": {
+        "status": 404,
+        "body": "{\"detail\":\"Not Found\"}"
+      }
+    },
+    {
+      "step": "1 list unchanged after the 404",
+      "pass": true,
+      "detail": {
+        "names": [
+          "Склад 1",
+          "Склад 2",
+          "Склад 3"
+        ]
+      }
+    },
+    {
+      "step": "1 API list unchanged",
+      "pass": true,
+      "detail": {}
+    }
+  ],
+  "reset_response": {
+    "status": 404,
+    "body": "{\"detail\":\"Not Found\"}"
+  },
+  "finished_at": "2026-10-18T11:09:38.154Z",
+  "pass": true
+}

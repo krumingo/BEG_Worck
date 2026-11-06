@@ -141,6 +141,8 @@ PROTECTED_FUNCTIONS: Dict[str, Tuple[str, ...]] = {
 #: predicate (A1-UNSCOPED), so the helper cannot be a bare-id bypass.
 HELPER_MODULES: Tuple[str, ...] = (
     "app/services/paid_labor.py",
+    # R0-06-C03: the one slip-is-paid rule reads pay_runs (paid_run_ids, _run_statuses).
+    "app/services/slip_payment_state.py",
     "app/deps/modules.py",
     "app/utils/audit.py",
 )

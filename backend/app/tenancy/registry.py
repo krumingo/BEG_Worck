@@ -118,6 +118,14 @@ async def list_role_assignments(user_id: str, tenant_id: str) -> List[Dict[str, 
     ).to_list(200)
 
 
+async def list_tenant_role_assignments(tenant_id: str, role_id: str) -> List[Dict[str, Any]]:
+    """ALL assignments of one role inside one tenant, any status (R0-03-C01: the
+    enforce last-Owner count). The caller filters active/valid itself."""
+    return await tenant_role_assignments.find(
+        {"tenant_id": tenant_id, "role_id": role_id}, {"_id": 0}
+    ).to_list(1000)
+
+
 async def get_role_assignment(assignment_id: str) -> Optional[Dict[str, Any]]:
     return await tenant_role_assignments.find_one({"id": assignment_id}, {"_id": 0})
 

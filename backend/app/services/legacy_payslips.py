@@ -7,8 +7,12 @@ payroll_sync used to write into payslips:
     net_pay               = paid_now_amount
     net_period            = earned + bonuses - deductions  (expected net)
     status: confirmed→Generated, paid→Paid, reopened→Reversed
+R0-06-C02: the status is the EFFECTIVE one (slip_payment_state) — a slip is "Paid" only
+when its Pay Run completed the payment; otherwise it stays "Generated" (owed) and carries
+payment_incomplete.
 """
 from app.db import db
+from app.services.slip_payment_state import effective_slip_one, effective_slips, slip_status_clause
 from app.tenancy.data_access import TenantData
 
 _STATUS_V3_TO_V1 = {"confirmed": "Generated", "paid": "Paid", "reopened": "Reversed"}
@@ -49,6 +53,7 @@ def _to_v1(s: dict) -> dict:
         "approved_hours": s.get("approved_hours"),
         "overtime_hours": s.get("overtime_hours", 0),
         "frozen_hourly_rate": s.get("frozen_hourly_rate"),
+        "payment_incomplete": bool(s.get("payment_incomplete")),
     }
 
 
@@ -63,14 +68,15 @@ async def legacy_payslips(org_id, *, employee_id=None, pay_run_id=None,
         pid = str(pay_run_id)
         q["pay_run_id"] = pid[5:] if pid.startswith("sync_") else pid
     if v1_statuses:
-        v3 = list({_STATUS_V1_TO_V3.get(s, s) for s in v1_statuses})
-        q["status"] = {"$in": v3}
+        v3 = {_STATUS_V1_TO_V3.get(s, s) for s in v1_statuses}
+        q.update(await slip_status_clause(tenant, v3))
     slips = await tenant.payment_slips.find(q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-    return [_to_v1(s) for s in slips]
+    return [_to_v1(s) for s in await effective_slips(tenant, slips)]
 
 
 async def legacy_payslip_one(org_id, payslip_id):
     """Single v3 payment_slip reshaped to v1 shape (or None)."""
     tenant = TenantData.for_resolved_org(db, org_id)
     s = await tenant.payment_slips.find_one({"id": payslip_id, "org_id": org_id}, {"_id": 0})
+    s = await effective_slip_one(tenant, s)
     return _to_v1(s) if s else None

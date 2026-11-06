@@ -1,0 +1,122 @@
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"detail":"This endpoint is not available in production"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"detail":"This endpoint is not available in production"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"detail":"Insufficient permissions"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"detail":"Insufficient permissions"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+E       AssertionError: {"ok":true,"deleted_count":3,"message":"Deleted 3 warehouses for org ORG-R007-A"}
+tests/test_r0_07_dev_reset.py:100: AssertionError
+tests/test_r0_07_dev_reset.py:170: AssertionError
+tests/test_r0_07_dev_reset.py:170: AssertionError
+E       ImportError: cannot import name 'is_dev_or_test_env' from 'app.core.stripe_config' (/home/user/BEG_Worck/backend/app/core/stripe_config.py)
+tests/test_r0_07_dev_reset.py:179: ImportError
+FAILED tests/test_r0_07_dev_reset.py::test_01_env_unset_is_404[mongomock]
+FAILED tests/test_r0_07_dev_reset.py::test_01_env_unset_is_404[real]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-production]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-staging]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-prod]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-  ]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-dev]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-Production]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[mongomock-banana]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-production]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-staging]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-prod]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-  ]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-dev]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-Production]
+FAILED tests/test_r0_07_dev_reset.py::test_02_other_env_is_404[real-banana]
+FAILED tests/test_r0_07_dev_reset.py::test_03_old_environment_variable_is_no_bypass[mongomock-development]
+FAILED tests/test_r0_07_dev_reset.py::test_03_old_environment_variable_is_no_bypass[mongomock-test]
+FAILED tests/test_r0_07_dev_reset.py::test_03_old_environment_variable_is_no_bypass[mongomock-production]
+FAILED tests/test_r0_07_dev_reset.py::test_03_old_environment_variable_is_no_bypass[real-development]
+FAILED tests/test_r0_07_dev_reset.py::test_03_old_environment_variable_is_no_bypass[real-test]
+FAILED tests/test_r0_07_dev_reset.py::test_03_old_environment_variable_is_no_bypass[real-production]
+FAILED tests/test_r0_07_dev_reset.py::test_03b_environment_cannot_override_env[mongomock]
+FAILED tests/test_r0_07_dev_reset.py::test_03b_environment_cannot_override_env[real]
+FAILED tests/test_r0_07_dev_reset.py::test_05_other_roles_are_403[mongomock-sm-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05_other_roles_are_403[mongomock-wk-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05_other_roles_are_403[real-sm-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05_other_roles_are_403[real-wk-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[mongomock-sm-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[mongomock-wk-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[mongomock-tech-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[mongomock-admin-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[real-sm-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[real-wk-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[real-tech-a]
+FAILED tests/test_r0_07_dev_reset.py::test_05b_other_roles_are_404_outside_dev_test[real-admin-a]
+FAILED tests/test_r0_07_dev_reset.py::test_07_env_gate_runs_before_authentication[mongomock]
+FAILED tests/test_r0_07_dev_reset.py::test_07_env_gate_runs_before_authentication[real]
+FAILED tests/test_r0_07_dev_reset.py::test_08_helper_matches_billing_rule
+41 failed, 20 passed, 1 warning in 8.16s
