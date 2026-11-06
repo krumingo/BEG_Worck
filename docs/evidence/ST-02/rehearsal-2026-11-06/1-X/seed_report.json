@@ -1,0 +1,220 @@
+{
+  "schema": "beg.st-01-seed-report/v1",
+  "marker": "st-01",
+  "generated_at": "2026-11-06T15:22:21.532248+00:00",
+  "database": "st02_staging",
+  "system_database": "st02_staging_system",
+  "created": {
+    "tenants": 2,
+    "users": 20,
+    "memberships": 18,
+    "role_assignments": 18,
+    "projects": 2,
+    "warehouses": 2,
+    "subscriptions": 2
+  },
+  "updated": {
+    "tenants": 0,
+    "users": 0,
+    "memberships": 0,
+    "role_assignments": 0,
+    "projects": 0,
+    "warehouses": 0,
+    "subscriptions": 0
+  },
+  "unchanged": {
+    "tenants": 0,
+    "users": 2,
+    "memberships": 0,
+    "role_assignments": 0,
+    "projects": 0,
+    "warehouses": 0,
+    "subscriptions": 0
+  },
+  "tenants": [
+    {
+      "key": "A",
+      "tenant_id": "4840700d-2d3e-456f-b587-630f4b8c1f6d",
+      "name": "ST01 Synthetic Tenant A",
+      "slug": "st01-synthetic-tenant-a",
+      "users": [
+        {
+          "key": "owner",
+          "id": "20022986-f411-42e6-9a30-807fa215fb9c",
+          "email": "st01.owner@tenant-a.st01.test",
+          "role": "Owner",
+          "role_id": "owner",
+          "assumption": false
+        },
+        {
+          "key": "admin",
+          "id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+          "email": "st01.admin@tenant-a.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": false
+        },
+        {
+          "key": "requester",
+          "id": "6cfe542e-1709-524c-96c7-7feab0262d42",
+          "email": "st01.requester@tenant-a.st01.test",
+          "role": "SiteManager",
+          "role_id": "site_manager",
+          "assumption": true
+        },
+        {
+          "key": "approver",
+          "id": "3b9984de-750c-5190-88fd-0ef64572e6df",
+          "email": "st01.approver@tenant-a.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": true
+        },
+        {
+          "key": "denied",
+          "id": "99eac073-7e8b-5c10-8c02-3386f659bccd",
+          "email": "st01.denied@tenant-a.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": true
+        },
+        {
+          "key": "warehousekeeper",
+          "id": "462d068c-be9c-5d71-abfb-a474657f5886",
+          "email": "st01.warehousekeeper@tenant-a.st01.test",
+          "role": "Warehousekeeper",
+          "role_id": "warehouse",
+          "assumption": false
+        },
+        {
+          "key": "technician",
+          "id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+          "email": "st01.technician@tenant-a.st01.test",
+          "role": "Technician",
+          "role_id": "LEGACY_TECHNICIAN",
+          "assumption": false
+        },
+        {
+          "key": "accountant",
+          "id": "369712bd-f368-5d8d-bf43-0851f544db32",
+          "email": "st01.accountant@tenant-a.st01.test",
+          "role": "Accountant",
+          "role_id": "accountant",
+          "assumption": false
+        },
+        {
+          "key": "viewer",
+          "id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+          "email": "st01.viewer@tenant-a.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": false
+        },
+        {
+          "key": "driver",
+          "id": "033c2876-b271-5c1c-a703-8ec9c0ad0073",
+          "email": "st01.driver@tenant-a.st01.test",
+          "role": "Driver",
+          "role_id": "driver",
+          "assumption": false
+        }
+      ],
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "project_code": "ST01-A-001",
+      "warehouse_id": "bf8aa6c3-fade-5b51-9568-b21d52d0d2aa",
+      "warehouse_code": "ST01-A-W1"
+    },
+    {
+      "key": "B",
+      "tenant_id": "e810e3cc-3f85-4cea-baa1-9540bc0e584e",
+      "name": "ST01 Synthetic Tenant B",
+      "slug": "st01-synthetic-tenant-b",
+      "users": [
+        {
+          "key": "owner",
+          "id": "d6ab619b-1422-4f96-962b-86d46a2d1956",
+          "email": "st01.owner@tenant-b.st01.test",
+          "role": "Owner",
+          "role_id": "owner",
+          "assumption": false
+        },
+        {
+          "key": "admin",
+          "id": "1484d8c5-180f-5f27-8fbc-6f7b6c4d2be8",
+          "email": "st01.admin@tenant-b.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": false
+        },
+        {
+          "key": "requester",
+          "id": "ccd5b3cb-0ef4-5580-88fb-990007ff086a",
+          "email": "st01.requester@tenant-b.st01.test",
+          "role": "SiteManager",
+          "role_id": "site_manager",
+          "assumption": true
+        },
+        {
+          "key": "approver",
+          "id": "9eb8492c-5789-5b27-9e11-70883d1de3f5",
+          "email": "st01.approver@tenant-b.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": true
+        },
+        {
+          "key": "denied",
+          "id": "7f49b829-5ff5-540c-9cfa-6e95d511fc2d",
+          "email": "st01.denied@tenant-b.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": true
+        },
+        {
+          "key": "warehousekeeper",
+          "id": "22c6154d-5ed4-52ba-a6bf-df14dded9dee",
+          "email": "st01.warehousekeeper@tenant-b.st01.test",
+          "role": "Warehousekeeper",
+          "role_id": "warehouse",
+          "assumption": false
+        },
+        {
+          "key": "technician",
+          "id": "76e13e35-b362-5593-b92a-e3342cf6b3bf",
+          "email": "st01.technician@tenant-b.st01.test",
+          "role": "Technician",
+          "role_id": "LEGACY_TECHNICIAN",
+          "assumption": false
+        },
+        {
+          "key": "accountant",
+          "id": "2a4539a1-1174-5b64-9d40-de3fc9391ec4",
+          "email": "st01.accountant@tenant-b.st01.test",
+          "role": "Accountant",
+          "role_id": "accountant",
+          "assumption": false
+        },
+        {
+          "key": "viewer",
+          "id": "f279350a-2888-5e11-bd88-f115c5d05e08",
+          "email": "st01.viewer@tenant-b.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": false
+        },
+        {
+          "key": "driver",
+          "id": "aedfb392-c975-5161-b41f-5843af74c5d9",
+          "email": "st01.driver@tenant-b.st01.test",
+          "role": "Driver",
+          "role_id": "driver",
+          "assumption": false
+        }
+      ],
+      "project_id": "f98582a0-08fd-54a4-9ecb-ee7f268834b7",
+      "project_code": "ST01-B-001",
+      "warehouse_id": "b67ec7f4-ffa0-50fc-917f-b71fc7ab367e",
+      "warehouse_code": "ST01-B-W1"
+    }
+  ]
+}
