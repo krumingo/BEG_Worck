@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db
+from app.services.labor_cost import project_labor_cost
 from app.tenancy import project_team
 from app.deps.auth import get_current_user, can_access_project, can_manage_project
 from app.utils.audit import log_audit
@@ -216,33 +217,20 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
             if key not in spent_map:
                 spent_map[key] = {"labor": 0, "materials": 0}
             
-            spent_map[key]["labor"] += line.get("line_labor_cost", 0)
+            # LAB-01 / R31: an offer line's labor is the BUDGET, never labor spent.
             spent_map[key]["materials"] += line.get("line_material_cost", 0)
     
-    # 3. Also get labor spent from daily work logs if they have activity type
-    daily_logs = await tenant.daily_work_logs.find(
-        {"org_id": org_id, "site_id": project_id},
-        {"_id": 0, "entries": 1, "work_type_id": 1}
-    ).to_list(500)
-    
-    # Get work type -> activity type mapping if available
-    work_types = await tenant.work_types.find({"org_id": org_id}, {"_id": 0}).to_list(100)
-    work_type_map = {wt["id"]: wt for wt in work_types}
-    
-    for log in daily_logs:
-        # Map work_type to activity_type (use work type name as activity type)
-        wt = work_type_map.get(log.get("work_type_id"), {})
-        act_type = wt.get("activity_type", wt.get("name", "Общо"))
-        act_subtype = wt.get("activity_subtype", "")
-        key = (act_type, act_subtype)
-        
+    # 3. LAB-01 / R31 (FLOW-019): labor spent = real labor cost from APPROVED report lines
+    # (one labor calculation), keyed by the SMR the report names. No default rate 25 —
+    # a missing rate is a DQ warning with 0. DOWNTIME is its own row, not inside an SMR.
+    labor = await project_labor_cost(org_id, project_id)
+    for smr, v in labor["by_smr"].items():
+        if not (v["labor"] or v["hours"]):
+            continue
+        key = (smr, "")
         if key not in spent_map:
             spent_map[key] = {"labor": 0, "materials": 0}
-        
-        # Calculate labor cost from hours * hourly rate
-        hourly_rate = wt.get("default_hourly_rate", 25)
-        total_hours = sum(e.get("hours", 0) for e in log.get("entries", []))
-        spent_map[key]["labor"] += total_hours * hourly_rate
+        spent_map[key]["labor"] += v["labor"]
     
     # 4. Combine budgets and spent
     all_keys = set(budget_map.keys()) | set(spent_map.keys())
@@ -297,6 +285,8 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
     totals["percent_labor_used"] = round((totals["labor_spent"] / totals["labor_budget"] * 100), 1) if totals["labor_budget"] > 0 else 0
     totals["percent_materials_used"] = round((totals["materials_spent"] / totals["materials_budget"] * 100), 1) if totals["materials_budget"] > 0 else 0
     
+    totals["downtime_spent"] = labor["downtime_total"]  # LAB-01: apart from the SMR rows
+    totals["labor_dq_warning_count"] = len(labor["dq_warnings"])
     return {
         "items": result,
         "totals": totals,
@@ -353,14 +343,15 @@ async def compute_avg_daily_wage(org_id: str, project_id: str) -> float:
 
 async def get_work_session_burn(org_id: str, project_id: str, activity_type: str = None) -> dict:
     """Get actual labor cost/hours from work_sessions for a project (and optional activity filter)."""
-    tenant = TenantData.for_resolved_org(db, org_id)
-    query = {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}}
+    # LAB-01 / R31: real labor from APPROVED report lines via the one labor calculation
+    # (was work_sessions incl. unapproved time). DOWNTIME is not burn of an SMR budget;
+    # it is returned apart as downtime_cost (project level only).
+    labor = await project_labor_cost(org_id, project_id)
     if activity_type:
-        query["smr_type_id"] = activity_type
-    sessions = await tenant.work_sessions.find(query, {"_id": 0, "duration_hours": 1, "labor_cost": 1}).to_list(5000)
-    total_hours = sum(s.get("duration_hours", 0) for s in sessions)
-    total_cost = sum(s.get("labor_cost", 0) for s in sessions)
-    return {"actual_hours": round(total_hours, 2), "actual_cost": round(total_cost, 2)}
+        v = labor["by_smr"].get(activity_type) or {}
+        return {"actual_hours": round(v.get("hours", 0), 2), "actual_cost": round(v.get("labor", 0), 2)}
+    return {"actual_hours": round(labor["approved_hours"], 2), "actual_cost": labor["labor_total"],
+            "downtime_cost": labor["downtime_total"]}
 
 
 # ── Forecast Endpoint ──────────────────────────────────────────────

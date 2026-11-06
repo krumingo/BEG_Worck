@@ -18,6 +18,15 @@ from app.tenancy.data_access import TenantData
 
 NORMAL_DAY = 8
 
+# LAB-01: line-level labor terms (FLOW-028 pay type per SMR line, akord quantity/price,
+# FLOW-019 DOWNTIME). Passed through unchanged; priced only by app.services.labor_cost.
+LABOR_LINE_FIELDS = ("pay_type", "quantity", "approved_quantity", "unit", "piece_rate",
+                     "cost_type", "execution_package_id")
+
+
+def _labor_fields(src: dict) -> dict:
+    return {k: src.get(k) for k in LABOR_LINE_FIELDS}
+
 
 async def fetch_normalized_report_lines(
     org_id: str,
@@ -85,6 +94,7 @@ async def fetch_normalized_report_lines(
             "regular_hours": float(reg) if reg is not None else None,
             "overtime_hours": float(ot) if ot is not None else None,
             "overtime_coefficient": d.get("overtime_coefficient"),
+            **_labor_fields(d),
         })
 
     # ── B) Old-style (structured with employee_id + day_entries) ───
@@ -140,6 +150,7 @@ async def fetch_normalized_report_lines(
                 "regular_hours": None,
                 "overtime_hours": None,
                 "overtime_coefficient": None,
+                **_labor_fields(entry),
             })
 
     return lines

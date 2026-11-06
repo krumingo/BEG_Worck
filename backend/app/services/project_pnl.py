@@ -4,6 +4,7 @@ Aggregates data from ALL sources into a unified financial view.
 """
 from app.db import db
 from app.tenancy.data_access import TenantData
+from app.services.labor_cost import project_labor_cost
 
 
 async def compute_project_pnl(org_id: str, project_id: str) -> dict:
@@ -57,16 +58,17 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     total_revenue = round(invoiced_net, 2)  # NET basis (без ДДС) for management P&L / margin
 
-    # ── c. LABOR COST (from work_sessions) ─────────────────────────
-    # READS FROM: work_sessions — the source of truth for labor cost.
-    # See /app/memory/SOURCE_OF_TRUTH.md
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "labor_cost": 1, "duration_hours": 1, "is_overtime": 1},
-    ).to_list(5000)
-    labor_cost = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
-    labor_hours = round(sum(s.get("duration_hours", 0) for s in sessions), 2)
-    overtime_cost = round(sum(s.get("labor_cost", 0) for s in sessions if s.get("is_overtime")), 2)
+    # ── c. LABOR COST (LAB-01: approved report lines, one labor calculation) ──
+    # FLOW-019/028 + R31: real labor = approved daily-report lines priced by
+    # app.services.labor_cost (salary → approved hours × rate, akord → approved
+    # quantity × piece rate). DOWNTIME is a real cost: inside labor_cost, shown apart.
+    # (Before LAB-01: work_sessions incl. unapproved time.)
+    labor = await project_labor_cost(org_id, project_id)
+    labor_cost = labor["total"]
+    labor_hours = round(labor["approved_hours"] + labor.get("downtime_hours", 0), 2)
+    downtime_cost = labor["downtime_total"]
+    # overtime premium is not a separate cost line in approved reports (debt, HANDOFF LAB-01)
+    overtime_cost = 0.0
 
     # ── d. MATERIAL COST ───────────────────────────────────────────
     # From supplier invoices allocated to project — NET (без ДДС); their VAT = input VAT
@@ -155,6 +157,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "labor_cost": labor_cost,
             "labor_hours": labor_hours,
             "overtime_cost": overtime_cost,
+            "downtime_cost": downtime_cost,
+            "labor_source": "approved_daily_reports (LAB-01)",
             "material_cost": material_cost,
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
@@ -199,13 +203,11 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
         ).to_list(100)
         revenue = round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in inv if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]), 2)
 
-        # Expense (work sessions in this month)
-        sess = await tenant.work_sessions.find(
-            {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None},
-             "started_at": {"$gte": ms, "$lt": me}},
-            {"_id": 0, "labor_cost": 1},
-        ).to_list(1000)
-        expense = round(sum(s.get("labor_cost", 0) for s in sess), 2)
+        # Expense (LAB-01: labor of approved report lines dated in this month)
+        month_labor = await project_labor_cost(
+            org_id, project_id, m_start.strftime("%Y-%m-%d"),
+            (m_end - timedelta(days=1)).strftime("%Y-%m-%d"))
+        expense = month_labor["total"]
 
         profit = round(revenue - expense, 2)
         trend.append({"month": label, "revenue": revenue, "expense": expense, "profit": profit})

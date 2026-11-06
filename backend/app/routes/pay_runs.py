@@ -15,6 +15,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
+from app.services.labor_cost import compute_person_labor, load_smr_terms, person_summary_formula
 from app.services.slip_payment_state import effective_slip, effective_slip_one, effective_slips, slip_status_clause
 from app.tenancy.data_access import TenantData
 
@@ -218,16 +219,11 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
                 "formula": f"{ms} EUR/мес ÷ {wd}д = {daily} EUR/д × {approved_days}д"}
 
     elif pay == "Akord":
-        # Piecework: use approved_value if available, else hours × rate
-        if approved_value > 0:
-            earned = round(approved_value, 2)
-            formula = f"Одобрена стойност: {approved_value} EUR"
-        elif hr > 0:
-            earned = round(approved_hours * hr, 2)
-            formula = f"{approved_hours}ч × {hr} EUR/ч (акорд)"
-        else:
-            earned = 0
-            formula = "Няма ставка / стойност"
+        # LAB-01 (FG-48, FLOW-028, CLAUDE §7): akord = APPROVED quantity × piece rate,
+        # computed per report line by app.services.labor_cost — never hours × rate.
+        earned = round(approved_value, 2) if approved_value > 0 else 0
+        formula = (f"Одобрена стойност: {approved_value} EUR" if approved_value > 0
+                   else "акорд: одобрено количество × акордна цена (по редове)")
         return {"earned": earned, "rate": hr, "rate_type": "piecework",
                 "daily_rate": 0, "hourly_rate": hr, "formula": formula}
 
@@ -244,6 +240,37 @@ def calc_earned(profile: dict, approved_hours: float, approved_days: int,
             formula += f" + {overtime_h}ч OT × {effective_hr}×1.5"
         return {"earned": earned, "rate": daily, "rate_type": "mixed",
                 "daily_rate": daily, "hourly_rate": effective_hr, "formula": formula}
+
+
+def earned_from_labor(lc: dict) -> dict:
+    """LAB-01: the Pay Run earned block from the one labor calculation
+    (app.services.labor_cost.compute_person_labor) — same keys as calc_earned."""
+    pt = lc.get("primary_time") or {}
+    has_akord = lc.get("akord_total", 0) > 0 or any(
+        ln.get("pay_type") == "Akord" for ln in lc.get("lines", []))
+    rate_type = pt.get("rate_type") or ("piecework" if has_akord else "")
+    if has_akord and pt:
+        rate_type = "mixed_akord"
+    return {"earned": lc["total"], "rate": pt.get("rate", 0), "rate_type": rate_type,
+            "daily_rate": pt.get("daily_rate", 0), "hourly_rate": pt.get("hourly_rate", 0),
+            "formula": person_summary_formula(lc)}
+
+
+def _labor_row_fields(lc: dict) -> dict:
+    """LAB-01 fields of a Pay Run row: the split and the DQ warnings of the calculation."""
+    return {
+        "labor_amount": lc["labor_total"],
+        "akord_amount": lc["akord_total"],
+        "downtime_amount": lc["downtime_total"],
+        "labor_dq_warnings": lc["dq_warnings"],
+        "labor_calc": "LAB-01",
+    }
+
+
+def _frozen_labor_fields(row: dict) -> dict:
+    """LAB-01 fields frozen on a created/updated Pay Run row (never recomputed on read)."""
+    return {k: row.get(k) for k in ("labor_amount", "akord_amount", "downtime_amount",
+                                    "labor_dq_warnings", "labor_calc") if k in row}
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -402,10 +429,13 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
     sel = [enrich_hours(by_id[rid]) for rid in wanted]
 
     prof = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": eid}, {"_id": 0}) or {}
-    period_days = (datetime.strptime(period_end, "%Y-%m-%d") - datetime.strptime(period_start, "%Y-%m-%d")).days + 1
     total_hours = round(sum(ln["hours"] for ln in sel), 1)
     approved_days = len({ln["date"] for ln in sel})
-    e = calc_earned(prof, total_hours, approved_days, period_days)
+    # LAB-01: the one labor calculation, restricted to the selected reports
+    smr_terms = await load_smr_terms(tenant, org_id, [ln.get("execution_package_id") for ln in sel])
+    lc = compute_person_labor(prof, sel, smr_terms)
+    e = earned_from_labor(lc)
+    amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
 
     keep = set(wanted)
     day_cells = []
@@ -415,6 +445,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
             continue
         hours = sum(by_id[r["report_id"]]["hours"] for r in reports)
         rids = [r["report_id"] for r in reports]
+        reports = [dict(r, value=amount_by_id.get(r["report_id"], 0.0)) for r in reports]
         sites = []
         for r in reports:
             if r.get("project_name") and r["project_name"] not in sites:
@@ -422,7 +453,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         cell = dict(dc)
         cell.update({
             "hours": round(hours, 1),
-            "value": round(hours * e["hourly_rate"], 2),
+            "value": round(sum(r["value"] for r in reports), 2),
             "sites": sites,
             "report_ids": rids,
             "report_count": len(rids),
@@ -449,6 +480,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         "remaining_after_payment": round(e["earned"] - prev_paid, 2),
         "sites": sorted({s for dc in day_cells for s in dc["sites"]}),
         "day_cells": day_cells,
+        **_labor_row_fields(lc),
     })
     return out
 
@@ -509,6 +541,9 @@ async def generate_pay_run(
             by_emp[wid] = []
         by_emp[wid].append(ln)
 
+    # LAB-01: SMR/package terms (pay type, piece rate) of the lines' execution packages
+    smr_terms = await load_smr_terms(tenant, org_id, [ln.get("execution_package_id") for ln in lines])
+
     pids = list({ln["project_id"] for ln in lines if ln["project_id"]})
     proj_map = {}
     if pids:
@@ -566,7 +601,11 @@ async def generate_pay_run(
         days_set = {ln["date"] for ln in emp_lines}
         approved_days = len(days_set)
 
-        e = calc_earned(prof, total_hours, approved_days, period_days)
+        # LAB-01 (FG-48/49): one calculation per report line — salary by approved hours/days,
+        # akord by approved quantity × piece rate, DOWNTIME apart; no default rate.
+        lc = compute_person_labor(prof, emp_lines, smr_terms)
+        e = earned_from_labor(lc)
+        amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
         prev_paid = round(already_paid.get(wid, 0), 2)
         remaining = round(e["earned"] - prev_paid, 2)
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
@@ -608,7 +647,7 @@ async def generate_pay_run(
             is_locked_by_payroll = ln_payroll_status in ("paid", "batched")
             is_rejected = ln_report_status.upper() == "REJECTED"
             ln_hours = float(ln.get("hours") or 0)
-            ln_value = round(ln_hours * e["hourly_rate"], 2)
+            ln_value = round(amount_by_id.get(rid, 0.0), 2)
             by_day[d]["reports"].append({
                 "report_id": rid,
                 "project_id": ln.get("project_id", ""),
@@ -630,7 +669,7 @@ async def generate_pay_run(
         day_cells = []
         for d in sorted(by_day.keys()):
             dd = by_day[d]
-            day_val = round(dd["hours"] * e["hourly_rate"], 2)
+            day_val = round(sum(r["value"] for r in dd["reports"]), 2)
             # P0-2A: compute aggregate cell status.
             # Mixed-status precedence: if all paid → "paid"; if any paid + any not → "partially_paid";
             # else if any batched → "batched"; else "none" (unpaid/eligible).
@@ -696,6 +735,7 @@ async def generate_pay_run(
             "open_advances": adv_by_user.get(wid, []),
             "sites": sites,
             "day_cells": day_cells,
+            **_labor_row_fields(lc),
         })
 
     rows.sort(key=lambda r: (0 if r["earned_amount"] > 0 else 1, r["last_name"]))
@@ -810,6 +850,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "sites": row.get("sites", []),
             "day_cells": row.get("day_cells", []),
             "notes": notes,
+            "earned_formula": row.get("earned_formula", ""),
+            **_frozen_labor_fields(row),
             # P0-2A.2: explicit per-report selection. Empty means "use day-level fallback" (old behavior).
             "selected_report_ids": selected_report_ids,
         }
@@ -1400,6 +1442,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
     )
 
     employee_rows = []
+    labor_recalc = []
     grand = {"earned": 0, "bonuses": 0, "deductions": 0, "paid": 0, "remaining": 0}
 
     for row, ovr, selected_report_ids in selected_rows:
@@ -1437,7 +1480,16 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
             "sites": row.get("sites", []), "notes": ovr.notes,
             "day_cells": day_cells,
             "selected_report_ids": selected_report_ids,
+            "earned_formula": row.get("earned_formula", ""),
+            **_frozen_labor_fields(row),
         }
+        if not existing_row.get("labor_calc") and existing_row and \
+                round(_money_float(existing_row.get("earned_amount")) - row["earned_amount"], 2) != 0:
+            # LAB-01: an open run frozen before LAB-01 is re-priced only by this explicit
+            # edit; the old → new earned is kept visible in the run history.
+            labor_recalc.append({"employee_id": eid,
+                                 "old_earned": round(_money_float(existing_row.get("earned_amount")), 2),
+                                 "new_earned": row["earned_amount"], "calc": "LAB-01"})
         _validate_no_overpayment(frozen_row)
         employee_rows.append(frozen_row)
         grand["earned"] += row["earned_amount"]
@@ -1459,6 +1511,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
             "remaining": round(grand["remaining"], 2),
         },
     }
+    if labor_recalc:
+        history_entry["labor_recalc"] = labor_recalc
 
     # R0-06: written only while still editable, unpaid and free; takes the op lock
     # (R0-06-C01) until the slips and sync_on_confirm below are done.

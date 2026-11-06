@@ -16,6 +16,8 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.services.labor_cost import compute_person_labor, load_smr_terms
+from app.services.report_normalizer import LABOR_LINE_FIELDS
 
 
 def _tenant(user: dict) -> TenantData:
@@ -83,51 +85,80 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
         if name:
             pkg_by_name[name] = ep
 
-    # Load employee rates
-    profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
-    rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
-
-    # Load work reports
+    # LAB-01 (FG-51, FLOW-019/028): ONLY approved work reports; every line priced by the
+    # one labor calculation (salary → approved hours × rate, akord → approved quantity ×
+    # piece rate, DOWNTIME apart). No rate → labor_cost None + DQ, never a default.
     reports = await tenant.work_reports.find(
-        {"org_id": org_id, "project_id": project_id}, {"_id": 0}
+        {"org_id": org_id, "project_id": project_id,
+         "status": {"$in": ["Approved", "APPROVED", "approved"]}}, {"_id": 0}
     ).to_list(1000)
+    worker_ids = sorted({wr.get("user_id") for wr in reports if wr.get("user_id")})
+    profiles = await tenant.employee_profiles.find(
+        {"org_id": org_id, "user_id": {"$in": worker_ids}}, {"_id": 0}).to_list(len(worker_ids) or 1)
+    prof_map = {p["user_id"]: p for p in profiles}
 
-    # Clear old synced entries for this project
+    # normalized lines per worker (the shape app.services.labor_cost reads)
+    by_worker = {}
+    for wr in reports:
+        for i, line in enumerate(wr.get("lines", [])):
+            hours = float(line.get("hours", 0) or 0)
+            if hours <= 0 and line.get("approved_quantity") in (None, ""):
+                continue
+            act_name = line.get("activity_name", "")
+            matched_pkg = pkg_by_name.get(act_name.lower().strip())
+            nl = {
+                "id": f"{wr['id']}:{i}", "worker_id": wr["user_id"], "date": wr.get("date", ""),
+                "project_id": project_id, "smr_type": act_name, "hours": hours,
+                "status": "APPROVED", "note": line.get("note", ""),
+                "execution_package_id": line.get("execution_package_id") or (matched_pkg or {}).get("id"),
+                "offer_line_id": (matched_pkg or {}).get("offer_line_id"),
+                "work_report_id": wr["id"],
+            }
+            for k in LABOR_LINE_FIELDS:
+                if k != "execution_package_id":
+                    nl[k] = line.get(k)
+            by_worker.setdefault(wr["user_id"], []).append(nl)
+
+    smr_terms = await load_smr_terms(
+        tenant, org_id, [nl["execution_package_id"] for ls in by_worker.values() for nl in ls])
+
+    # Clear old synced entries for this project (a derived projection, rebuilt below)
     await tenant.labor_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "work_report_sync"})
 
     now = datetime.now(timezone.utc).isoformat()
     created = 0
+    dq_warnings = []
 
-    for wr in reports:
-        uid = wr["user_id"]
-        rate = rate_map.get(uid, 0)
-        for line in wr.get("lines", []):
-            hours = float(line.get("hours", 0))
-            if hours <= 0:
-                continue
-
-            act_name = line.get("activity_name", "")
-            act_lower = act_name.lower().strip()
-
-            # Try to match execution package
-            matched_pkg = pkg_by_name.get(act_lower)
-            ep_id = matched_pkg["id"] if matched_pkg else None
-            ol_id = matched_pkg.get("offer_line_id") if matched_pkg else None
-
+    for uid, lines in by_worker.items():
+        lc = compute_person_labor(prof_map.get(uid, {}), lines, smr_terms)
+        src = {nl["id"]: nl for nl in lines}
+        dq_warnings.extend(lc["dq_warnings"])
+        for rec in lc["lines"]:
+            nl = src[rec["report_id"]]
+            ep_id = nl["execution_package_id"]
+            priced = not rec["dq"] or rec["dq"] == ["DOWNTIME_UNCLASSIFIED"]
             entry = {
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
                 "project_id": project_id,
                 "employee_id": uid,
                 "execution_package_id": ep_id,
-                "offer_line_id": ol_id,
-                "work_report_id": wr["id"],
-                "date": wr.get("date", ""),
-                "hours": hours,
-                "activity_name": act_name,
-                "note": line.get("note", ""),
-                "hourly_rate": rate if rate > 0 else None,
-                "labor_cost": round(hours * rate, 2) if rate > 0 else None,
+                "offer_line_id": nl["offer_line_id"],
+                "work_report_id": nl["work_report_id"],
+                "date": nl["date"],
+                "hours": rec["hours"],
+                "activity_name": nl["smr_type"],
+                "note": nl["note"],
+                "cost_type": rec["cost_type"],
+                "pay_type": rec["pay_type"],
+                "pay_type_source": rec["pay_type_source"],
+                "approved_quantity": rec["approved_quantity"],
+                "piece_rate": rec["piece_rate"],
+                "hourly_rate": rec["rate"] if rec["pay_type"] != "Akord" and priced else None,
+                "labor_cost": rec["amount"] if priced else None,
+                "labor_formula": rec["formula"],
+                "dq_warnings": rec["dq"],
+                "labor_calc": "LAB-01",
                 "source": "work_report_sync",
                 "mapped": ep_id is not None,
                 "created_at": now,
@@ -135,7 +166,7 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
             await tenant.labor_entries.insert_one(entry)
             created += 1
 
-    return {"ok": True, "synced": created, "project_id": project_id}
+    return {"ok": True, "synced": created, "project_id": project_id, "dq_warnings": dq_warnings}
 
 
 @router.get("/labor-entries")
