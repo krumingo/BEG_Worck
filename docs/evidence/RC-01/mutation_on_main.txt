@@ -1,0 +1,2 @@
+# tests/test_rc_01_build_identity.py against main's app code (app/core/build_info.py, frontend/build-info.js and ops/release copied in; no /api/version route)
+28 failed, 3 passed, 7 warnings in 3.15s

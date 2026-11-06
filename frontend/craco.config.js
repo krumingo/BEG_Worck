@@ -2,6 +2,13 @@
 const path = require("path");
 require("dotenv").config();
 
+// RC-01: bake the build identity (frontend/BUILD_INFO.json from Git objects, else
+// REACT_APP_BUILD_SHA, else "unknown") into the bundle before CRA reads the env.
+const { resolveBuildInfo } = require("./build-info");
+const buildInfo = resolveBuildInfo(__dirname);
+process.env.REACT_APP_BUILD_SHA = buildInfo.build_sha;
+process.env.REACT_APP_BUILD_TIME = buildInfo.build_time;
+
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build,
 // and jest sets NODE_ENV=test. The visual-edit instrumentation wraps rendered

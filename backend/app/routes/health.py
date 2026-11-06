@@ -1,5 +1,5 @@
 """
-Health and misc routes - /api/health, /api/roles, /api/modules, /api/subscription
+Health and misc routes - /api/health, /api/version, /api/roles, /api/modules, /api/subscription
 """
 from fastapi import APIRouter, Depends
 
@@ -7,6 +7,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import SUBSCRIPTION_PLANS
 from app.constants import ROLES, MODULES
+from app.core.build_info import current_version
 from app.tenancy.data_access import TenantData
 
 
@@ -19,6 +20,11 @@ router = APIRouter(tags=["misc"])
 @router.get("/health")
 async def health():
     return {"status": "ok"}
+
+@router.get("/version")
+async def version():
+    """RC-01: build identity, no authentication. Allowlisted keys only (no secrets)."""
+    return current_version()
 
 @router.get("/roles")
 async def list_roles():
