@@ -12,6 +12,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.services.ai_proposal import get_ai_proposal as hybrid_ai_proposal
@@ -223,6 +224,7 @@ async def create_extra_work(data: ExtraWorkCreate, user: dict = Depends(require_
 
 
 @router.get("/extra-works")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_extra_works(
     project_id: Optional[str] = None,
     status: Optional[str] = None,
@@ -240,6 +242,7 @@ async def list_extra_works(
 
 
 @router.get("/extra-works/{draft_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_extra_work(draft_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     draft = await tenant.extra_work_drafts.find_one({"id": draft_id, "org_id": user["org_id"]}, {"_id": 0})
@@ -641,7 +644,10 @@ async def batch_save_drafts(data: dict, user: dict = Depends(require_m2)):
 # ── Hourly Rates Config ────────────────────────────────────────────
 
 @router.get("/ai-config/hourly-rates")
-async def get_hourly_rates(user: dict = Depends(require_m2)):
+async def get_hourly_rates(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.worker_hourly_rate.read", module="M2", resource_type="worker_hourly_rate")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     """Get worker hourly rate configuration (org-specific or DEMO)"""
     org_rates = await get_org_worker_rates(user["org_id"])
     if org_rates:

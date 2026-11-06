@@ -230,7 +230,11 @@ async def recalculate_with_modifiers(analysis_id: str, user: dict = Depends(requ
 
 
 @router.get("/smr-analyses/{analysis_id}/lines/{line_id}/modifier-breakdown")
-async def get_line_modifier_breakdown(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
+async def get_line_modifier_breakdown(
+    analysis_id: str, line_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.smr_modifier_breakdown.read", module="M2", resource_type="smr_modifier_breakdown")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Show step-by-step modifier breakdown for a specific line."""
     tenant = _tenant(user)
     doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})

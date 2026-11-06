@@ -55,6 +55,7 @@ R20_1 = "R20-1"
 R20_2 = "R20-2"
 R20_2B = "R20-2B"
 R20_5 = "R20-5"
+R20_5M = "R20-5M"
 
 RULE_TEXT: Dict[str, str] = {
     R20_1: "company finance: Owner/Admin/Accountant only",
@@ -62,6 +63,8 @@ RULE_TEXT: Dict[str, str] = {
     R20_2B: "project budget view: Owner/Admin/Accountant; site_manager on own (member) "
             "projects, client prices removed",
     R20_5: "shared screen: money values removed without finance right",
+    R20_5M: "mixed response (SEC-02-A, D1): money keys removed without finance right, "
+            "quantities / statuses stay",
 }
 
 # Canon sources quoted in the HANDOFF table.
@@ -73,6 +76,9 @@ CANON_SUBCONTRACT = "R20; FLOW-010 (payments to subcontractors)"
 CANON_PRICING = "R20 (no margin / client prices); SEC-02 rule 2 (pricing / price modifiers)"
 CANON_WAREHOUSE = "R20 (warehouse: quantities only); SEC-02 rule 4"
 CANON_HIDE = "R20; SEC-02 rule 5 (hide the values on a shared screen); FG-1/FG-15"
+CANON_D1 = "R20; FLOW-010; SEC-02 addendum A (D1: strip money, keep quantities/statuses)"
+CANON_D1_ONLY = "R20; FLOW-010; SEC-02 addendum A (D1: the response is money only)"
+CANON_D9 = "R20; FLOW-010; SEC-02 addendum A (D9: no-money file on own projects); rule 3"
 
 
 class FinanceRead(NamedTuple):
@@ -92,7 +98,9 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/billing/usage", "finance.billing_usage.read", R20_1, CANON_COMPANY),
     _E("GET", "/api/cashflow/forecast", "finance.cashflow_forecast.read", R20_1, CANON_COMPANY),
     _E("GET", "/api/cashflow/forecast/compact", "finance.cashflow_forecast_compact.read", R20_1, CANON_COMPANY),
-    _E("GET", "/api/employee-dossier/{worker_id}", "finance.employee_dossier.read", R20_1, CANON_PAY),
+    # SEC-02-A (D9): finance roles — the full file; SiteManager — the file WITHOUT money,
+    # report lines / calendar of his current member projects only; others 403.
+    _E("GET", "/api/employee-dossier/{worker_id}", "finance.employee_dossier.read", R20_2B, CANON_D9),
     _E("GET", "/api/employee-cost/{user_id}", "finance.employee_cost.read", R20_1, CANON_PAY),
     _E("GET", "/api/overhead-snapshots", "finance.overhead_snapshot.read", R20_1, CANON_COMPANY),
     _E("GET", "/api/overhead-snapshots/aggregate", "finance.overhead_snapshot_aggregate.read", R20_1, CANON_COMPANY),
@@ -179,6 +187,45 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/weekly-matrix", MONEY_VALUES_READ, R20_5, CANON_HIDE),
     _E("GET", "/api/labor-entries", MONEY_VALUES_READ, R20_5, CANON_HIDE + "; R16 (member projects)"),
     _E("POST", "/api/labor-entries", MONEY_VALUES_READ, R20_5, CANON_HIDE + "; R16"),
+    # ── SEC-02 addendum A (D1): the remaining money GETs ─────────────────────
+    # money only -> finance roles only
+    _E("GET", "/api/ai-config/hourly-rates", "finance.worker_hourly_rate.read", R20_1, CANON_D1_ONLY),
+    _E("GET", "/api/settings/sales-margins", "finance.sales_margin.read", R20_1, CANON_D1_ONLY),
+    _E("GET", "/api/sales/history", "finance.sales_history.read", R20_1, CANON_D1_ONLY),
+    _E("GET", "/api/clients/{client_id}/invoices", "finance.client_invoice.read", R20_1, CANON_D1_ONLY),
+    _E("GET", "/api/subcontractor-acts", "finance.subcontractor_act.read", R20_1, CANON_D1_ONLY),
+    _E("GET", "/api/projects/{project_id}/invoice-details", "finance.project_invoice_detail.read", R20_2, CANON_D1_ONLY),
+    _E("GET", "/api/smr-analyses/{analysis_id}/export-excel", "finance.smr_analysis.export", R20_2, CANON_D1_ONLY + " (file)"),
+    _E("GET", "/api/smr-analyses/{analysis_id}/lines/{line_id}/modifier-breakdown", "finance.smr_modifier_breakdown.read", R20_2, CANON_D1_ONLY),
+    _E("GET", "/api/offers/{offer_id}/pdf", "finance.offer_document.export", R20_2, CANON_D1_ONLY + " (file)"),
+    _E("GET", "/api/offers/{offer_id}/xlsx", "finance.offer_spreadsheet.export", R20_2, CANON_D1_ONLY + " (file)"),
+    # mixed -> money keys removed for non-finance callers (strip_money_for_non_finance)
+    _E("GET", "/api/subcontractor-packages", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/subcontractor-packages/{pkg_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/projects/{project_id}/dashboard", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/morning-briefing", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/morning-briefing/compact", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/budget-freezes/{project_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/budget-freezes/{project_id}/latest", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/progress-updates", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/progress-updates/{pkg_id}/latest", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/progress-updates/{pkg_id}/history", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/progress-comparison/{pkg_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/progress-warnings/{project_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/project-progress-summary/{project_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/material-entries", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/project-material-summary/{project_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/smr-analyses", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/smr-analyses/{analysis_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/smr-analyses/{analysis_id}/compare/{version}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/smr-analyses/{analysis_id}/diff/{version}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/offers", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/offers/{offer_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/offers/{offer_id}/versions", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/offers/{offer_id}/versions/{version_number}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/offers/{offer_id}/events", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/extra-works", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    _E("GET", "/api/extra-works/{draft_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
 ]
 
 # §5.2 endpoints that carry NO money and stay as they are (rule 3), with the reason.
@@ -192,7 +239,12 @@ NOT_MONEY: Dict[tuple, str] = {
 }
 
 FINANCE_READ_ACTIONS: Set[str] = {e.action for e in FINANCE_READS if e.rule in (R20_1, R20_2)}
-PROJECT_BUDGET_READ_ACTIONS: Set[str] = {e.action for e in FINANCE_READS if e.rule == R20_2B}
+# SEC-02-A (D9): the employee file is R20-2B-shaped (finance + SiteManager) but it is a
+# COMPANY-scope read for the SiteManager (the worker, not a project, is the subject); its
+# action is therefore a company action of finance + site_manager, see catalog.py.
+EMPLOYEE_FILE_ACTION = "finance.employee_dossier.read"
+PROJECT_BUDGET_READ_ACTIONS: Set[str] = {e.action for e in FINANCE_READS
+                                         if e.rule == R20_2B and e.action != EMPLOYEE_FILE_ACTION}
 
 # R20-2B: in expected-actual the SMR-GROUP and LOCATION "planned" amounts are summed from
 # smr_analyses.lines[].final_total — the price TO THE CLIENT (markup + risk,
@@ -209,6 +261,52 @@ REPORT_LINE_MONEY_FIELDS: FrozenSet[str] = frozenset(
 WEEKLY_MATRIX_MONEY_FIELDS: FrozenSet[str] = frozenset(
     {"pay_type", "hourly_rate", "labor_value", "net_pay", "value", "bonuses",
      "deductions"})
+
+
+# ── SEC-02-A: which keys are money (R20-5M) ─────────────────────────────────
+import re as _re
+
+# A key is money when its name says price / cost / amount / value / margin / budget /
+# pay / profit / revenue / VAT ...; quantities, hours, counts, ids, dates and statuses
+# are not. Checked against the real responses in tests/test_sec_02_finance_read.py.
+_MONEY_WORDS = _re.compile(
+    r"(price|cost|amount|value|margin|markup|budget|profit|revenue|income|expense|"
+    r"salary|wage|balance|subtotal|vat_|_vat|discount|earned|receivable|payable|payment|"
+    r"paid|unpaid|_pay|pay_|^pay$|advance|bonus|deduction|overhead|(^|_)rates?($|_)|"
+    r"logistics_pct|risk_pct|(^|_)eur($|_)|money|financ|total)")
+_NOT_MONEY = _re.compile(
+    r"(_qty$|^qty|_hours$|hours_|_count$|^count|_id$|_ids$|_at$|_date$|_status$|_number$|"
+    r"_no$|^total_(hours|qty|count|pages|rows|lines|entries|workers|employees|packages|"
+    r"items|days|planned_rows|returned_qty|issued_qty|certified_qty|qty_in_stock)$|"
+    r"^(days_total|vat_number|is_vat_registered|payroll_status|has_consumption_data|"
+    r"partial_cost_data|paid_hours|progress_rate|completion_rate|attendance_rate|"
+    r"burn_rate_hours|pay_type_label|money_hidden|client_price_fields_hidden)$|"
+    r"_pct_complete$|percent_complete)")
+# A pagination "total" (sibling of items/page) is a count, not money.
+_PAGINATION_KEYS = {"items", "page", "page_size", "total_pages"}
+
+
+def is_money_key(key: str, siblings=(), keep=()) -> bool:
+    if key in keep:
+        return False
+    k = key.lower()
+    if k == "total" and _PAGINATION_KEYS & set(siblings):
+        return False
+    return bool(_MONEY_WORDS.search(k)) and not _NOT_MONEY.search(k)
+
+
+def strip_money(value, keep=()):
+    """A copy of a JSON-like value with every money key removed, at any depth.
+
+    ``keep``: key names that are NOT money in this one response (e.g. a ``total`` that
+    counts warnings), declared next to the route."""
+    if isinstance(value, dict):
+        keys = list(value)
+        return {k: strip_money(v, keep) for k, v in value.items()
+                if not (isinstance(k, str) and is_money_key(k, keys, keep))}
+    if isinstance(value, list):
+        return [strip_money(v, keep) for v in value]
+    return value
 
 
 def by_route() -> Dict[tuple, FinanceRead]:

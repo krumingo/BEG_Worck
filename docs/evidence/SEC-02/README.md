@@ -187,6 +187,45 @@
 * **SEC-02-D9:** досието на служителя за SiteManager — 403 целият екран; версия „без пари“ (часове, присъствие) иска решение.
 * Остават: SEC-01-C02-D1…D6, FG-28.
 
+## Допълнение A (SEC-02-A, 06.11.2026) — D1 и D9
+
+Пакетът @ `3c9e57c`, Допълнение A: прилагане на Р20 и FLOW-010, без ново бизнес решение.
+
+### D1 — останалите GET-ове с пари (36 реда в същия регистър)
+
+**Само пари → само Owner/Admin/Accountant (R20-1/R20-2), 403 за всички други:** `/ai-config/hourly-rates`, `/settings/sales-margins`, `/sales/history`, `/clients/{id}/invoices`, `/subcontractor-acts`, `/projects/{id}/invoice-details`, `/smr-analyses/{id}/export-excel`, `/smr-analyses/{id}/lines/{line_id}/modifier-breakdown`, `/offers/{id}/pdf`, `/offers/{id}/xlsx` (трите файла са `.export` — отказът се одитира в enforce).
+
+**Смесени → правило R20-5M:** отговорът остава, както и досегашното правило за достъп на route-а (членство и т.н.); за роля без финансово право **се махат само ключовете с пари**. Количества, часове, статуси и бройки остават. Засегнати са `/subcontractor-packages(/{id})`, `/projects/{id}/dashboard`, `/morning-briefing(/compact)`, `/budget-freezes/{id}(/latest)`, `/progress-updates`, `/progress-updates/{pkg}/latest|history`, `/progress-comparison/{pkg}`, `/progress-warnings/{id}`, `/project-progress-summary/{id}`, `/material-entries`, `/project-material-summary/{id}`, `/smr-analyses`, `/smr-analyses/{id}`, `/compare/{v}`, `/diff/{v}`, `/offers`, `/offers/{id}`, `/offers/{id}/versions(/{n})`, `/offers/{id}/events`, `/extra-works(/{id})`.
+* Механизъм: декоратор `strip_money_for_non_finance` (`app/permissions/money_write.py`). Видимостта е `money_values_visible`: в off/shadow — legacy ролята, в enforce — Permission Service.
+* Кое е пари: `finance_read.is_money_key` — по името на ключа (цена, себестойност, сума, стойност, марж, надценка, бюджет, заплата, плащане, ДДС, общо…). Количества, часове, бройки, id, дати и статуси не се махат; `total` до `items`/`page` е бройка. Изключение за един route се записва до него (`/progress-warnings`: `total`, `packages_total` са бройки). Тест `test_the_money_key_rule`.
+* SiteManager тук не получава бюджетни суми. Бюджетът му е в R20-2B (`expected-actual`, `centralized-reports/activities`). Р20 е таван, не задължение.
+
+### D9 — досието на служителя без пари
+
+`GET /api/employee-dossier/{worker_id}`: финансовите роли — пълното досие. **SiteManager — версия без пари:** редовете с отчети и присъствията са само за обектите, където е член **днес** (датирано). Няма заплата, ставка, стойности, payroll, аванси, предупреждения за плащане и payroll статус (`money_hidden: true`). Всички други роли — 403. В enforce действието е фирмено за `accountant` и `site_manager`; Owner/Admin го имат чрез пълния набор.
+
+### Frontend (SEC-02-A)
+
+* Досието: SiteManager го отваря. Картите и колоните с пари и табовете „Заплати“, „Аванси и заеми“, „Фишове“ са само за финансовите роли.
+* Обект: картите „Баланс“ и „Фактури“ — само финансовите роли.
+* `formatCurrency(undefined)` показва „—“ вместо „0,00 €“, за всяка сума, която backend-ът не е изпратил.
+* Оферта и анализ на СМР: за роля без финансово право — **само за четене**. Иначе запис без цените би ги затрил. SiteManager вече не редактира оферти и не пуска ценови операции по анализа; това следва от Р20.
+
+### Резултат и PM-01
+
+* `results.json` — **8127 извиквания**: 123 проби × 8 роли × 2 фирми × P1/P2 × 3 режима + B→A. Нито един ключ с пари, нито цената 7777 от seed-а в отговор към не-финансова роля. Еднакво в трите режима.
+* PM-01 матрицата е регенерирана с harness-а. Спрямо SEC-02 @ `6080165` има **153 клетки**: 150 → 403 (10-те route-а „само пари“ × 5 роли × 3 режима; при трите `.export` в enforce — + `audit_events`) и 3 → 200 (SiteManager на досието). Спрямо базата #69 @ `471eaaa` — **1362 клетки** (`pm01_cells_changed.csv`).
+
+### FG-12 / D5
+
+Deny-overrides не се прави тук — остава дълг към W0-02 (Допълнение A).
+
+### Дълг (SEC-02-A)
+
+* D1 и D9 са закрити. D2 (SiteManager и оферти с цени към клиента) е закрит с „само четене“ в UI-а и без пари в GET-а. Backend записите в офертите и анализите за SiteManager обаче остават, както ги остави SEC-01 → **SEC-02-A-D1:** PUT/POST на оферти и анализи от роля, която не вижда цените, не е спрян в backend-а.
+* **SEC-02-A-D2:** правилото „кое е пари“ е по имена на ключове. Нов ключ с друго име на пари в тези отговори няма да бъде махнат, докато не се добави. Тестът за seed-а го хваща само за проверените стойности.
+* **SEC-02-A-D3:** `/offers/{id}` и `/offers/{id}/versions` пазят досегашното си правило за достъп (членство), затова Accountant без членство получава 403 (както и преди).
+
 ## Rollback
 
 Revert на commit-а. Няма миграция и няма запис в данни. Проектните назначения, синхронизирани след SEC-02, носят три допълнителни read действия; при стария код те просто не се ползват.

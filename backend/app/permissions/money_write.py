@@ -169,9 +169,14 @@ def require_field_cost_write(action: str, *, module: str, resource_type: str,
 # Nothing below is a second mechanism: R20-1/R20-2 IS require_money_write with a read
 # action, R20-2B IS the R16 member dependency with the Technical Manager only.
 
-def require_finance_read(action: str, *, module: Optional[str], resource_type: str):
-    """R20-1 / R20-2: Owner/Admin/Accountant only, company scope, all three modes."""
-    dependency = require_money_write(action, module=module, resource_type=resource_type)
+def require_finance_read(action: str, *, module: Optional[str], resource_type: str,
+                         roles=FINANCE_WRITE_ROLES):
+    """R20-1 / R20-2: Owner/Admin/Accountant only, company scope, all three modes.
+
+    ``roles`` (SEC-02-A, D9): the employee file also admits SiteManager, whose handler
+    then serves the no-money version."""
+    dependency = require_money_write(action, module=module, resource_type=resource_type,
+                                     roles=roles)
     dependency.sec02_action = action
     return dependency
 
@@ -212,3 +217,38 @@ def without_keys(value: Any, keys) -> Any:
     if isinstance(value, list):
         return [without_keys(v, keys) for v in value]
     return value
+
+
+def strip_money_for_non_finance(fn=None, *, keep=()):
+    """SEC-02-A (R20-5M, D1): decorator for a GET whose response MIXES money with
+    quantities / statuses. Placed under ``@router.get``. The handler runs as before; for a
+    caller without ``finance.money_values.read`` (off/shadow: legacy finance roles;
+    enforce: the Permission Service) every money key is removed from the response
+    (``finance_read.strip_money``). The handler must take the session user as ``user``.
+    ``keep``: key names that are counts, not money, in this response
+    (``@strip_money_for_non_finance(keep=("total",))``).
+    """
+    if fn is None:
+        return lambda f: strip_money_for_non_finance(f, keep=keep)
+    import functools
+    import inspect
+    from fastapi.encoders import jsonable_encoder
+    from app.permissions.finance_read import strip_money
+
+    sig = inspect.signature(fn)
+    if "user" not in sig.parameters:
+        raise TypeError("%s: strip_money_for_non_finance needs a 'user' parameter" % fn.__name__)
+    extra = inspect.Parameter("_sec02_request", inspect.Parameter.KEYWORD_ONLY,
+                              annotation=Request)
+
+    @functools.wraps(fn)
+    async def wrapper(*args, _sec02_request: Request, **kwargs):
+        result = await fn(*args, **kwargs)
+        if await money_values_visible(_sec02_request, kwargs["user"]):
+            return result
+        return strip_money(jsonable_encoder(result), keep)
+
+    wrapper.__signature__ = sig.replace(parameters=list(sig.parameters.values()) + [extra])
+    wrapper.sec02_strips_money = True
+    wrapper.sec02_keep = tuple(keep)
+    return wrapper

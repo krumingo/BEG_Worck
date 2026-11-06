@@ -1,6 +1,6 @@
-# SEC-02 test summaries (branch claude/sec-02-finance-read on PR #69 @ 471eaaa, local real MongoDB 7.0 replica set)
+# SEC-02 + SEC-02-A test summaries (branch claude/sec-02-finance-read on PR #69 @ 471eaaa, local real MongoDB 7.0 replica set)
 ## real Mongo (W0_03_REAL_MONGO_URL set), file by file
-tests/test_sec_02_finance_read.py: 13 passed
+tests/test_sec_02_finance_read.py: 14 passed (8127 harness calls)
 tests/test_sec_01_money_write_permissions.py: 8 passed
 tests/test_sec_01_c01_all_money_writes.py: 7 passed
 tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed
@@ -15,5 +15,5 @@ W0-03E-A1 tenant access guard: 418 unit(s) checked, 0 violation(s)
 W0-03E-A2C tenant boundary guard: 206 module(s) checked, 0 violation(s)
 ## Frontend
 yarn test: 7 suites, 98 passed; yarn build: compiled (warnings only in files not touched)
-## PM-01 matrix re-run (harness, not by hand): 1215 cells changed in 89 routes (docs/evidence/SEC-02/pm01_cells_changed.csv)
+## PM-01 matrix re-run (harness, not by hand): 1362 cells changed vs #69 base; 153 vs SEC-02 @ 6080165 (docs/evidence/SEC-02/pm01_cells_changed.csv)
 ## Environment note: mongod in this container must be run file by file (host nofile limit 20000; one run of all R0 files hit EMFILE in mongod)

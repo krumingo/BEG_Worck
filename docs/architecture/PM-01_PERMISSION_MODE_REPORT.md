@@ -177,7 +177,7 @@
 
 ### 5.2. Viewer чете финанси, заплати и печалба на ниво фирма
 
-> **SEC-02 (Р20):** всеки от 58-те endpoint-а в тази таблица вече има правило — 50 връщат 403 за всички роли освен Owner/Admin/Accountant (R20-1/R20-2), `expected-actual` (×2) и `centralized-reports/activities` пускат и SiteManager на обект, където е член днес (R20-2B, без цени към клиента), `all-reports` и `weekly-matrix` скриват ставките и стойностите (R20-5), а `/dashboard/stats`, `/worker-calendar` и `/billing/check-module/{code}` нямат пари и остават. Еднакво в трите режима. Регистърът: `backend/app/permissions/finance_read.py`; доказателството и таблицата endpoint → правило → източник: `docs/evidence/SEC-02/README.md`; разликата в матрицата: `docs/evidence/SEC-02/pm01_cells_changed.csv` (1215 клетки). Таблицата по-долу е състоянието преди SEC-02.
+> **SEC-02 (Р20):** всеки от 58-те endpoint-а в тази таблица вече има правило — 50 връщат 403 за всички роли освен Owner/Admin/Accountant (R20-1/R20-2), `expected-actual` (×2) и `centralized-reports/activities` пускат и SiteManager на обект, където е член днес (R20-2B, без цени към клиента), `all-reports` и `weekly-matrix` скриват ставките и стойностите (R20-5), а `/dashboard/stats`, `/worker-calendar` и `/billing/check-module/{code}` нямат пари и остават. Еднакво в трите режима. Регистърът: `backend/app/permissions/finance_read.py`; доказателството и таблицата endpoint → правило → източник: `docs/evidence/SEC-02/README.md`; разликата в матрицата: `docs/evidence/SEC-02/pm01_cells_changed.csv` (1362 клетки след SEC-02-A; там и досието — SiteManager получава версия без пари). Таблицата по-долу е състоянието преди SEC-02.
 
 Отговор 200 (данните в теста са празни, но достъпът е отворен):
 

@@ -2,13 +2,15 @@
 Routes — Employee Dossier (read-only aggregate view).
 Central view of all labor, payroll, and payment data per worker.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.permissions.money_write import require_finance_read
+from app.permissions.money_write import (require_finance_read, money_values_visible,
+                                         FINANCE_WRITE_ROLES)
+from app.permissions.finance_read import strip_money
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, enrich_hours_batch, NORMAL_DAY
 from app.tenancy.data_access import TenantData
 
@@ -36,14 +38,26 @@ def _calc_rate(profile: dict) -> float:
 @router.get("/employee-dossier/{worker_id}")
 async def get_employee_dossier(
     worker_id: str,
+    request: Request,
+    # SEC-02-A (D9; R20, FLOW-010): finance roles — the full file; the Technical Manager —
+    # the file WITHOUT money, only report lines / attendance days of his CURRENT member
+    # projects (rule 3); every other role 403. Before any read.
     _sec02: dict = Depends(require_finance_read(
-        "finance.employee_dossier.read", module=None, resource_type="employee_dossier")),  # SEC-02 (R20-1): before any read
+        "finance.employee_dossier.read", module=None, resource_type="employee_dossier",
+        roles=FINANCE_WRITE_ROLES + ("SiteManager",))),
     user: dict = Depends(get_current_user),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
 ):
     tenant = _tenant(user)
     org_id = user["org_id"]
+    show_money = await money_values_visible(request, user)
+    own_projects = None                       # None = every project (finance roles)
+    if not show_money:
+        from app.tenancy import project_team
+        team = project_team.tenant_for(db, user)
+        own_projects = {p for p in await project_team.assigned_project_ids(team, user["id"])
+                        if await project_team.is_member(team, user["id"], p)}
     if not date_from:
         date_from = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%d")
     if not date_to:
@@ -118,6 +132,9 @@ async def get_employee_dossier(
             "status": rl["status"],
             "payroll_status": rl["payroll_status"],
         })
+
+    if own_projects is not None:              # SEC-02-A (D9): own projects only
+        report_lines = [r for r in report_lines if r["project_id"] in own_projects]
 
     total_hours = round(sum(r["hours"] for r in report_lines), 1)
     total_value = round(sum(r["value"] for r in report_lines), 2)
@@ -302,7 +319,7 @@ async def get_employee_dossier(
     if no_payroll > 0:
         warnings.append({"type": "no_payroll", "text": f"{no_payroll} одобрени отчета без payroll статус"})
 
-    return {
+    result = {
         "header": header,
         "reports": {
             "lines": report_lines,
@@ -324,3 +341,21 @@ async def get_employee_dossier(
         "warnings": warnings,
         "period": {"date_from": date_from, "date_to": date_to},
     }
+    if show_money:
+        return result
+    # SEC-02-A (D9): the no-money file. No pay, payroll, advances or pay warnings; the
+    # attendance days not tied to one of his projects are blanked (date kept for the
+    # calendar layout); has_report is already computed from his projects' lines only.
+    for day in result["calendar"]:
+        if day.get("site_id") not in own_projects and not day.get("has_report"):
+            day.update({"status": "", "hours": 0, "overtime": 0, "has_report": False,
+                        "site_id": "", "site_name": ""})
+    for line in result["reports"]["lines"]:
+        line.pop("payroll_status", None)
+    for bucket in ("unpaid_approved", "paid", "batched"):
+        result["reports"]["buckets"].pop(bucket, None)
+    out = strip_money({k: v for k, v in result.items()
+                       if k not in ("payroll", "advances", "warnings")})
+    out["warnings"] = []
+    out["money_hidden"] = True
+    return out

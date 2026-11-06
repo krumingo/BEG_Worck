@@ -200,7 +200,9 @@ export default function SMRAnalysisPage() {
 
   useEffect(() => { load(); }, [load]);
 
-  const isLocked = analysis?.status === "locked";
+  // SEC-02-A (R20): without the finance right the prices are stripped by the backend, so
+  // the analysis is read-only here (saving would write it without them).
+  const isLocked = analysis?.status === "locked" || !canReadFinance(user?.role);
   const isDraft = analysis?.status === "draft";
 
   // Update a line field locally + send to server
@@ -333,6 +335,8 @@ export default function SMRAnalysisPage() {
             <Plus className="w-4 h-4 mr-1" /> {t("smrAnalysis.addLine")}
           </Button>
         )}
+        {/* SEC-02-A (R20): price operations — finance roles only */}
+        {canReadFinance(user?.role) && (<>
         <Button size="sm" variant="outline" onClick={handleRecalculate} disabled={actionLoading} data-testid="recalculate-btn">
           <RefreshCcw className="w-4 h-4 mr-1" /> {t("smrAnalysis.recalculate")}
         </Button>
@@ -357,6 +361,7 @@ export default function SMRAnalysisPage() {
         }} data-testid="export-excel-btn">
           <Download className="w-4 h-4 mr-1" /> Excel
         </Button>
+        </>)}
       </div>
 
       {/* Lines Table */}

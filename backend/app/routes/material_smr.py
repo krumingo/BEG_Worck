@@ -13,7 +13,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.permissions.money_write import require_finance_read
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -137,6 +137,7 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
 
 
 @router.get("/material-entries")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_material_entries(
     project_id: Optional[str] = None, execution_package_id: Optional[str] = None,
     planned_material_id: Optional[str] = None, user: dict = Depends(require_m2),

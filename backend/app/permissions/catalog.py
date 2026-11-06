@@ -127,10 +127,16 @@ ACTIONS: Set[str] = {
 # ---------------------------------------------------------------------------
 from app.permissions.finance_read import (                       # noqa: E402
     FINANCE_READ_ACTIONS, PROJECT_BUDGET_READ_ACTIONS, MONEY_VALUES_READ,
+    EMPLOYEE_FILE_ACTION,
 )
-ACTIONS |= FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
+ACTIONS |= (FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
+            | {EMPLOYEE_FILE_ACTION})
 SEC02_ACCOUNTANT_READ_ACTIONS: Set[str] = (
-    FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ})
+    FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
+    | {EMPLOYEE_FILE_ACTION})
+# SEC-02-A (D9): the Technical Manager opens the employee file at company scope; the
+# handler gives him the no-money version of his own projects only.
+SEC02_SITE_MANAGER_COMPANY_ACTIONS: Set[str] = {EMPLOYEE_FILE_ACTION}
 
 # SEC-01: the money-write actions above, granted to Accountant (Owner/Admin get them
 # through their full set).
@@ -222,7 +228,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
     "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      *SEC02_SITE_MANAGER_COMPANY_ACTIONS}},
     "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",

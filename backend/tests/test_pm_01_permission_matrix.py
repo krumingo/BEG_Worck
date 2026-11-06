@@ -626,6 +626,10 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/pricing/refresh"): "denial",
     # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
     ("GET", "/api/reports/company-finance-export"): "denial",
+    # SEC-02-A (D1): the money-only file exports (significant verb "export").
+    ("GET", "/api/smr-analyses/{analysis_id}/export-excel"): "denial",
+    ("GET", "/api/offers/{offer_id}/pdf"): "denial",
+    ("GET", "/api/offers/{offer_id}/xlsx"): "denial",
 }
 
 

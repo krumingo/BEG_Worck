@@ -54,7 +54,8 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.permissions.finance_read import (  # noqa: E402
-    FINANCE_READS, NOT_MONEY, R20_1, R20_2, R20_2B, R20_5, MONEY_VALUES_READ,
+    FINANCE_READS, NOT_MONEY, R20_1, R20_2, R20_2B, R20_5, R20_5M, MONEY_VALUES_READ,
+    EMPLOYEE_FILE_ACTION, is_money_key, strip_money,
     FINANCE_READ_ACTIONS, PROJECT_BUDGET_READ_ACTIONS, LABOR_MONEY_FIELDS,
     REPORT_LINE_MONEY_FIELDS, WEEKLY_MATRIX_MONEY_FIELDS, EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS,
 )
@@ -121,6 +122,8 @@ def probes() -> List[Dict[str, Any]]:
             continue
         out.append({"key": e.method + " " + e.path, "method": e.method, "path": e.path,
                     "rule": e.rule, "action": e.action})
+    # SEC-02-A: the R20-5M probes are already above (rule R20-5M); the employee file
+    # (D9) is the R20-2B row with EMPLOYEE_FILE_ACTION.
     for key, method, path, _q in SHARED_PROBES:
         out.append({"key": key, "method": method, "path": path, "rule": R20_5,
                     "action": MONEY_VALUES_READ})
@@ -152,6 +155,17 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "lines": [{"line_id": "l1", "group_id": sid(tkey, "grp1"), "is_active": True,
                        "smr_type": "Мазилка", "qty": 10, "final_total": 7777.0,
                        "labor_price_per_unit": 10}]})
+        await op_db.offers.insert_one({
+            "id": sid(tkey, "off1"), "org_id": org, "project_id": p1, "offer_no": "SEC02-1",
+            "status": "Draft", "currency": "EUR", "created_at": now, "updated_at": now,
+            "lines": [{"id": "ol1", "activity_name": "Мазилка", "unit": "m2", "qty": 10,
+                       "material_unit_cost": 3, "labor_unit_cost": 4, "unit_price": 777.7,
+                       "line_total": 7777.0}],
+            "subtotal": 7777.0, "vat_amount": 0, "total": 7777.0})
+        await op_db.material_entries.insert_one({
+            "id": sid(tkey, "me1"), "org_id": org, "project_id": p1, "material_name": "Probe",
+            "qty": 5, "unit": "kg", "unit_cost": 7777.0, "total_cost": 7777.0,
+            "date": "2026-11-02", "created_at": now})
         await op_db.work_sessions.insert_one({
             "id": sid(tkey, "ws1"), "org_id": org, "worker_id": tech, "site_id": p1,
             "smr_type_id": "Мазилка", "started_at": "2026-11-02T07:00:00",
@@ -168,7 +182,26 @@ def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:
             "client_id": t.get("company1_id", sid(tkey, "none")),
             "run_id": sid(tkey, "none"), "snapshot_id": sid(tkey, "none"),
             "act_id": c02.rid(tkey, "cact"), "pkg_id": "pm01probe-%s-ep1" % tkey,
-            "counterparty_id": sid(tkey, "none")}
+            "counterparty_id": sid(tkey, "none"),
+            "analysis_id": sid(tkey, "an1"), "version": "1", "offer_id": sid(tkey, "off1"),
+            "version_number": "1", "draft_id": sid(tkey, "none"), "module_code": "M2"}
+
+
+def body_money_keys(value: Any, keep=()) -> List[str]:
+    """Every money key (finance_read.is_money_key) anywhere in a JSON body."""
+    found = set()
+
+    def walk(v):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if isinstance(k, str) and is_money_key(k, list(v), keep):
+                    found.add(k)
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(value)
+    return sorted(found)
 
 
 def money_keys_in(value: Any, keys) -> List[str]:
@@ -199,6 +232,11 @@ def expected(p: Dict[str, Any], legacy_role: str, target: Optional[str]) -> Dict
     rule, key = p["rule"], p["key"]
     if rule in (R20_1, R20_2):
         return {"reached": fin, "money": None}
+    if p["action"] == EMPLOYEE_FILE_ACTION:                     # SEC-02-A, D9
+        ok = fin or legacy_role == "SiteManager"
+        return {"reached": ok, "money": fin if ok else None}
+    if rule == R20_5M:                                         # the route keeps its own
+        return {"reached": None, "money": fin}                 # access rule; money = fin
     if rule == R20_2B:
         return {"reached": fin or (legacy_role == "SiteManager" and target == "P1"),
                 "money": fin}
@@ -230,6 +268,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
     dbs = (op_name, sys_name)
     started = time.time()
     plist = probes()
+    keep_of = {r.path: getattr(r.endpoint, "sec02_keep", ()) for r in app.routes
+               if hasattr(r, "endpoint")}
 
     def short(ns: str) -> str:
         d, c = ns.split(".", 1)
@@ -330,6 +370,12 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     pids = {fx[data_tkey]["project_id"]: "P1", fx[tkey]["project2_id"]: "P2"}
                     row["row_projects"] = sorted({pids.get(x.get("project_id"), "other")
                                                   for x in body})
+            if (p["rule"] == R20_5M or p["action"] == EMPLOYEE_FILE_ACTION) \
+                    and resp.status_code == 200:
+                row["money_keys"] = body_money_keys(body, keep_of.get(p["path"], ()))
+                row["leaks_7777"] = "7777" in resp.text
+                if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
+                    row["has_payroll"] = "payroll" in body or "advances" in body
             if p["rule"] == R20_2B and resp.status_code == 200 and "expected-actual" in p["path"]:
                 groups = (body.get("groups") if "groups" in body
                           else body.get("top_overruns", {}).get("groups")) or []
@@ -417,7 +463,9 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
         exp = expected(p, r["legacy_role"], r["target"])
         business = [ns for ns in r["written"] if ns.split(".", 1)[1] not in AUDIT]
         assert r["foreign_ids"] is False, r                       # never A's record to B
-        if exp["reached"]:
+        if exp["reached"] is None:
+            pass                                                  # the route's own rule
+        elif exp["reached"]:
             assert r["status"] != 403, (exp, r)
         else:
             assert r["status"] == 403, (exp, r)
@@ -427,7 +475,11 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
             else:
                 assert r["written"] == [], r
         if r["status"] == 200 or r["status"] == 201:
-            if "money_keys" in r:
+            if "money_keys" in r and (r["rule"] == R20_5M or "has_payroll" in r):
+                if exp["money"] is False:                          # SEC-02-A: nothing leaks
+                    assert r["money_keys"] == [] and not r["leaks_7777"], r
+                    assert not r.get("has_payroll"), r
+            elif "money_keys" in r:
                 if exp["money"] is False:
                     assert r["money_keys"] == [], r               # R20-5: nothing leaks
                 elif exp["money"] and r["probe"] in ("labor_list", "labor_create") \
@@ -481,27 +533,33 @@ def test_every_guarded_read_carries_its_action_first():
     routes = _routes()
     for e in FINANCE_READS:
         route = routes[(e.method, e.path)]                    # served today
+        if e.rule == R20_5M:
+            assert getattr(route.endpoint, "sec02_strips_money", False), e
+            continue
         if e.rule == R20_5:
             src = Path(route.endpoint.__code__.co_filename).read_text(encoding="utf-8")
             assert "money_values_visible" in src, e
             continue
         first = route.dependant.dependencies[0].call
         assert getattr(first, "sec02_action", None) == e.action, e
-        assert (getattr(first, "sec01_rule", None) == "R20-2B") == (e.rule == R20_2B), e
+        assert (getattr(first, "sec01_rule", None) == "R20-2B") == (
+            e.rule == R20_2B and e.action != EMPLOYEE_FILE_ACTION), e
 
 
 def test_no_other_route_carries_a_sec02_action():
     marked = {k for k, r in _routes().items()
               if any(hasattr(d.call, "sec02_action") for d in r.dependant.dependencies)}
-    assert marked == {(e.method, e.path) for e in FINANCE_READS if e.rule != R20_5}
+    assert marked == {(e.method, e.path) for e in FINANCE_READS if e.rule not in (R20_5, R20_5M)}
+    stripped = {k for k, r in _routes().items() if getattr(r.endpoint, "sec02_strips_money", False)}
+    assert stripped == {(e.method, e.path) for e in FINANCE_READS if e.rule == R20_5M}
 
 
 def test_the_registry_has_one_action_per_endpoint_and_known_rules():
     keys = [(e.method, e.path) for e in FINANCE_READS]
     assert len(keys) == len(set(keys))
-    acts = [e.action for e in FINANCE_READS if e.rule != R20_5]
+    acts = [e.action for e in FINANCE_READS if e.rule not in (R20_5, R20_5M)]
     assert len(acts) == len(set(acts))
-    assert all(e.rule in (R20_1, R20_2, R20_2B, R20_5) and e.canon for e in FINANCE_READS)
+    assert all(e.rule in (R20_1, R20_2, R20_2B, R20_5, R20_5M) and e.canon for e in FINANCE_READS)
     assert not set(NOT_MONEY) & set(keys)
 
 
@@ -538,7 +596,11 @@ def test_the_catalog_grants():
             assert bool(acts & PROJECT_BUDGET_READ_ACTIONS) == (rid == "site_manager"), (rid, rip)
     # Only the export is audited on denial (a significant verb); plain reads are not.
     assert {a for a in reads | PROJECT_BUDGET_READ_ACTIONS if is_significant_action(a)} == \
-        {"finance.company_finance.export"}
+        {"finance.company_finance.export", "finance.smr_analysis.export",
+         "finance.offer_document.export", "finance.offer_spreadsheet.export"}
+    # SEC-02-A (D9): the employee file — finance roles and the Technical Manager only.
+    assert {rid for rid, acts in PERMISSION_MATRIX.items() if EMPLOYEE_FILE_ACTION in acts} == \
+        {"owner", "admin", "accountant", "site_manager"}
 
 
 def _decide(assignments, action, scope_type, scope_id):
@@ -617,6 +679,26 @@ def test_without_keys_and_the_budget_view(monkeypatch):
     assert v["summary"]["biggest_overrun_group"] is None and "7777" not in json.dumps(v)
     monkeypatch.setattr(expected_actual, "money_values_visible", yes)
     assert asyncio.run(expected_actual._budget_view(None, {}, full)) is full
+
+
+def test_the_money_key_rule():
+    """SEC-02-A (R20-5M): what a mixed response keeps and loses for a non-finance caller."""
+    money = ["unit_price", "line_total", "subtotal", "vat_amount", "total_cost", "labor_cost",
+             "hourly_rate", "rates", "markup_pct", "risk_pct", "margin_percent", "net_pay",
+             "payments", "advances", "material_budget", "labor_variance_value", "final_total",
+             "paid_amount", "unpaid", "overhead", "balance", "income", "certified_total",
+             "pay_type", "earned_amount", "monthly_salary", "price", "amount", "value"]
+    keep = ["qty", "unit", "name", "status", "date", "project_id", "total_hours", "total_qty",
+            "certified_qty", "progress_percent", "hours", "normal", "overtime", "currency",
+            "migrated_from", "generated_at", "payroll_status", "attendance_rate", "waste_pct",
+            "count", "days_total", "vat_number", "display_name", "activity_name"]
+    assert [k for k in money if not is_money_key(k)] == []
+    assert [k for k in keep if is_money_key(k)] == []
+    assert is_money_key("total") and not is_money_key("total", ["items", "total", "page"])
+    body = {"items": [{"name": "A", "qty": 2, "unit_price": 3, "lines": [{"line_total": 6,
+            "unit": "m2"}]}], "total": 1, "page": 1}
+    assert strip_money(body) == {"items": [{"name": "A", "qty": 2, "lines": [{"unit": "m2"}]}],
+                                 "total": 1, "page": 1}
 
 
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):

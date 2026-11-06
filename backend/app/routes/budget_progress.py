@@ -14,6 +14,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -105,6 +106,7 @@ async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = De
 
 
 @router.get("/budget-freezes/{project_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_budget_freezes(project_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"], "project_id": project_id}
@@ -113,6 +115,7 @@ async def list_budget_freezes(project_id: str, user: dict = Depends(require_m2))
 
 
 @router.get("/budget-freezes/{project_id}/latest")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_latest_budget_freeze(project_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     freeze = await tenant.budget_freezes.find_one(
@@ -172,6 +175,7 @@ async def create_progress_update(data: dict, user: dict = Depends(require_m2)):
 
 
 @router.get("/progress-updates")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_progress_updates(
     project_id: Optional[str] = None,
     execution_package_id: Optional[str] = None,
@@ -189,6 +193,7 @@ async def list_progress_updates(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/progress-updates/{pkg_id}/latest")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_latest_progress(pkg_id: str, user: dict = Depends(require_m2)):
     """Get latest progress update for an execution package"""
     tenant = _tenant(user)
@@ -202,6 +207,7 @@ async def get_latest_progress(pkg_id: str, user: dict = Depends(require_m2)):
 
 
 @router.get("/progress-updates/{pkg_id}/history")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_progress_history(pkg_id: str, user: dict = Depends(require_m2)):
     """Get full progress history for an execution package"""
     tenant = _tenant(user)
@@ -226,6 +232,7 @@ async def get_progress_history(pkg_id: str, user: dict = Depends(require_m2)):
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/progress-comparison/{pkg_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
     """Compare physical progress vs cost usage for an execution package"""
     tenant = _tenant(user)
@@ -298,6 +305,7 @@ async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/progress-warnings/{project_id}")
+@strip_money_for_non_finance(keep=("total", "packages_total"))   # SEC-02-A (R20-5M, D1): counts
 async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Progress deviation warnings for a project"""
     tenant = _tenant(user)
@@ -431,6 +439,7 @@ async def get_progress_risk(org_id: str, project_id: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-progress-summary/{project_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_project_progress_summary(project_id: str, user: dict = Depends(require_m2)):
     """Project-level progress summary across all execution packages"""
     tenant = _tenant(user)
