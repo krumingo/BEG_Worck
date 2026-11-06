@@ -211,9 +211,11 @@ async def _all_reports(tenant=T) -> dict:
     out["centralized_reports"] = (cr["finance"]["total_materials"], cr["finance"]["material_waste"])
 
     pbp = await revenue_snapshot.get_profit_by_period(PROJECT, user=u)
+    # 5C-C23 F-14: ``material`` is consumption only, ``waste`` is „фира".
     out["profit_by_period"] = (
-        round(sum(p["material"] for p in pbp["periods"]) + pbp["material_undated"], 2),
-        round(sum(p["waste"] for p in pbp["periods"]), 2))
+        round(sum(p["material"] + p["waste"] for p in pbp["periods"])
+              + pbp["material_undated"] + pbp["waste_undated"], 2),
+        round(sum(p["waste"] for p in pbp["periods"]) + pbp["waste_undated"], 2))
 
     mb = await materials_baseline.get_project_material_summary(PROJECT, user=u)
     out["materials_baseline"] = (mb["actual"]["net_material_cost"], mb["actual"]["waste_value"])
@@ -321,8 +323,10 @@ async def test_profit_by_period_splits_the_same_total_by_month(
     by = {p["period"]: p for p in pbp["periods"]}
     now = datetime.now(timezone.utc).strftime("%Y-%m")
     assert by["2026-01"]["material"] == pytest.approx(100.0)       # df48d68: no period
-    assert by[now]["material"] == pytest.approx(50.0)
+    # 5C-C23 F-14: material = consumption 30, „фира" 20 beside it, 50 together.
+    assert by[now]["material"] == pytest.approx(30.0)
     assert by[now]["waste"] == pytest.approx(20.0)
+    assert by[now]["material_total"] == pytest.approx(50.0)
     assert pbp["material_undated"] == 0
 
 

@@ -254,6 +254,8 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
             or row.get("item_id") or "",
             "package_id": resolve_execution_package(row, by_item, by_name),
             "at": at, "period": period_of(at), "ref": row.get("id"),
+            # 5C-C23 F-15 — shown by the „Материални отклонения" card.
+            "movement_id": row.get("movement_id"), "reason": row.get("reason"),
         })
 
     legacy_counted = 0.0
@@ -377,6 +379,13 @@ def cost_by_period(cost: Dict[str, Any]) -> Dict[Optional[str], Dict[str, float]
         for k in p:
             p[k] = round(p[k], 2)
     return out
+
+
+def waste_lines(cost: Dict[str, Any]) -> List[dict]:
+    """5C-C23 F-15 — the counted „фира" lines (canonical write-offs from the
+    project) of a ``project_material_cost`` result. Read-only view over the
+    same list every finance report sums; no second register."""
+    return [ln for ln in cost["lines"] if ln["waste"]]
 
 
 def cost_lines_between(cost: Dict[str, Any], start: Optional[Any],

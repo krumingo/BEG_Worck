@@ -179,10 +179,13 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
                 periods[pk]["labor"] += le["labor_cost"]
             periods[pk]["labor_hours"] += float(le.get("hours", 0))
 
+    # 5C-C23 F-14: ``material`` = consumption (+ pre-cutover legacy) and
+    # ``waste`` = „фира", the same meaning as in every other report; the
+    # period cost counts both once (material + waste = material total).
     for pk, mp in mat_by_period.items():
         if pk:
             ensure_period(pk)
-            periods[pk]["material"] += mp["total"]       # consumption + фира
+            periods[pk]["material"] += mp["material"]
             periods[pk]["waste"] = periods[pk].get("waste", 0) + mp["waste"]
 
     for sa in sub_acts:
@@ -199,9 +202,11 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
 
     # Calculate profits per period
     for pk, p in periods.items():
-        for k in ["earned", "billed", "collected", "material", "labor", "subcontract", "overhead", "labor_hours"]:
+        p["waste"] = p.get("waste", 0)
+        for k in ["earned", "billed", "collected", "material", "waste", "labor", "subcontract", "overhead", "labor_hours"]:
             p[k] = round(p[k], 2) if k != "labor_hours" else round(p[k], 1)
-        gross_cost = p["material"] + p["labor"] + p["subcontract"]
+        p["material_total"] = round(p["material"] + p["waste"], 2)
+        gross_cost = p["material"] + p["waste"] + p["labor"] + p["subcontract"]
         p["gross_cost"] = round(gross_cost, 2)
         p["total_cost"] = round(gross_cost + p["overhead"], 2)
         rev = p["earned"] if p["earned"] > 0 else p["billed"]
@@ -209,12 +214,14 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
         p["net_profit"] = round(rev - p["total_cost"], 2) if rev > 0 else None
 
     result = sorted(periods.values(), key=lambda x: x["period"], reverse=True)
-    for p in result:
-        p["waste"] = round(p.get("waste", 0), 2)
+    undated = mat_by_period.get(None) or {}
     return {"project_id": project_id, "currency": "EUR", "periods": result,
-            # 5C-C22 — Σ periods.material + material_undated == the project
-            # material total every other report shows.
-            "material_undated": (mat_by_period.get(None) or {}).get("total", 0.0),
+            # 5C-C23 F-14 — Σ periods.material + material_undated ==
+            # consumption_cost, Σ periods.waste + waste_undated == waste_cost,
+            # and the two together == the project material total every other
+            # report shows (material_cost_basis.total_cost).
+            "material_undated": undated.get("material", 0.0),
+            "waste_undated": undated.get("waste", 0.0),
             "material_cost_basis": cost_basis(mat_cost)}
 
 

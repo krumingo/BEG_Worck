@@ -1957,7 +1957,11 @@
     "notes": "Notes",
     "fillRequired": "Fill material and quantity",
     "added": "Entry added",
-    "noData": "No material data"
+    "noData": "No material data",
+    "manualEntries": "Manual entries",
+    "writeOffs": "Warehouse write-offs",
+    "writeOffsTitle": "Warehouse write-offs (waste)",
+    "writeOffBadge": "warehouse write-off"
   },
   "excelImportV2": {
     "title": "Import from Excel",
