@@ -16,8 +16,7 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import (require_field_cost_write, require_finance_read,
-                                         money_values_visible, without_keys)
+from app.permissions.money_write import (require_field_cost_write, require_finance_read, money_values_visible, without_keys, strip_money_for_non_finance)
 from app.permissions.finance_read import LABOR_MONEY_FIELDS
 from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 
@@ -450,8 +449,17 @@ async def get_labor_cost_by_exec_pkg(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-warnings/{project_id}")
-async def get_labor_warnings(project_id: str, user: dict = Depends(require_m2)):
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
+async def get_labor_warnings(project_id: str, request: Request,
+                             user: dict = Depends(require_m2)):
     """Get labor warnings for all execution packages in a project"""
+    # SEC-02-B (SEC02-1): the money is stripped by the decorator; a caller without the
+    # finance right also needs a CURRENT membership of the project.
+    if not await money_values_visible(request, user):
+        from app.tenancy import project_team
+        if not await project_team.is_member(project_team.tenant_for(db, user), user["id"],
+                                            project_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkgs = await tenant.execution_packages.find(

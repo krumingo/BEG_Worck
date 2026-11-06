@@ -226,6 +226,60 @@ Deny-overrides не се прави тук — остава дълг към W0-0
 * **SEC-02-A-D2:** правилото „кое е пари“ е по имена на ключове. Нов ключ с друго име на пари в тези отговори няма да бъде махнат, докато не се добави. Тестът за seed-а го хваща само за проверените стойности.
 * **SEC-02-A-D3:** `/offers/{id}` и `/offers/{id}/versions` пазят досегашното си правило за достъп (членство), затова Accountant без членство получава 403 (както и преди).
 
+## Допълнение B (SEC-02-B, 06.11.2026) — одит SEC02-1, FLOW Guard FG-15/41/42/43
+
+Пакетът @ `9336d69`, Допълнение B: прилагане на Р20, FLOW-037 §3.4, FLOW-010 — без ново бизнес решение.
+
+### Сливане с #69
+#69 @ `07faab5` (SEC-01-C03: сумата трябва да е крайна и > 0; Idempotency-Key на паричните POST) е слят в клона с **merge commit** `3562913` (без rebase). Конфликтите са само в import-ите на `full_cost.py`, `reports.py`, `subcontractors.py`, `labor_smr.py`; запазени са и двете страни.
+
+### FG-15 — повторение (replay) по Idempotency-Key
+`POST /api/labor-entries`: и първият отговор, и **повторението** със същия `Idempotency-Key` (редът се чете наново от базата) са без `hourly_rate`/`labor_cost` за роля без финансово право. Записът в базата ги пази. Доказателство: `results.json` → `labor_replay` — Technician, SiteManager и Accountant × 3 режима; същото id; финансовата роля вижда парите и в двата отговора.
+
+### SEC02-1 / FG-41 / FG-42 — нови редове в регистъра
+* **R20-5M (махат се само парите):**
+  * `/work-sessions`, `/work-sessions/summary`, `/work-sessions/overtime`, `/work-sessions/{id}/detail`;
+  * `/projects/{id}/site-workers`, `/projects/{id}/smr-groups`, `/smr-groups/tree`;
+  * `/pulse/today`, `/pulse/summary`, `/sites/{id}/pulse`, `/sites/{id}/pulse/range`;
+  * `/ocr-invoice`, `/projects/{id}/activity-reports/{smr}`;
+  * `/labor-warnings/{id}` — за роля без финансово право вече е нужно и **членство днес**, иначе 403;
+  * складът (правило 4, само количества): `/warehouse/batches`, `/warehouse/batches/{id}`, `/warehouse/items/{id}/batches`, `/warehouse/items/{id}/stock-summary`.
+* **`/subscription`:** `plan_price` само за Owner/Admin (`finance.subscription_price.read`).
+* В pulse SiteManager не получава `total_budget` за никой обект. Това е по-тясно от позволеното от Р20 (там е позволено за свои обекти). Бюджетът му е в R20-2B/R20-5B.
+
+### FG-43 — правило R20-5B (бюджетни екрани на обекта)
+`/projects/{id}/activities-overview`, `/activity-budget-summary`, а след скенера и `/activity-budgets`, `/budget-health` (закрива SEC-02-D4):
+* финансовите роли — всичко; Accountant чете двата FG-43 екрана **на всеки обект**;
+* SiteManager, член днес — бюджет + изхарчено + остатък, без `subcontractor_price` и цени към клиента;
+* Viewer/Technician/Driver членове — без пари (`actual_cost` и т.н. махнати).
+Механизъм: декоратор `strip_for_budget_view` (`money_write.py`).
+
+### Скенерът на одита — 0 пари
+`tools/sec02_money_scan.py` е копие на `docs/audit/probes/sec02/probe_sec02_unregistered_money_gets.py` (claude/audit-log). Регулярният израз за пари и seed-овете са същите. Разлика: **не пропуска регистрираните route-ове** и минава **всички** роли без финансово право (SiteManager, Technician, Warehousekeeper, Driver, Viewer) × off/shadow/enforce.
+
+Резултат `scan_sec02b.json`: **5640 извиквания, 0 попадения.** Отделно са изброени:
+* `allowed_budget_view` — само SiteManager на своя обект, само по R20-2B/R20-5B;
+* `judged_not_money` — с причина: публичният ценоразпис на плановете (`/billing/plans`) и ставката на ДДС (`/organization`, `/projects/{id}/invoice-context`);
+* `own_record` — Technician чете **собствения си** профил (`/employees/{user_id}` = той; FLOW-037 §3.4 забранява само чуждите заплати). Другите роли не получават неговата ставка.
+
+Тест: `test_the_audit_scan_finds_no_money_for_non_finance_roles`.
+
+### Технически поправки
+FastAPI подава само **един** `Request` на endpoint. Затова декораторите ползват собствения `request` на handler-а, ако го има. Иначе `/labor-warnings` даваше 500. Вземат потребителя от `user` или от W0-02 `ctx`, иначе `/activity-budgets` даваше 500. Скенерът и harness-ът не показват нито едно 500.
+
+### Резултат и PM-01
+* `results.json` — 9798 извиквания + `labor_replay` (9).
+* PM-01 матрицата е регенерирана с harness-а. Спрямо SEC-02-A @ `73b72b5` — **75 клетки**:
+  * 54 са от самия #69 (`201/404 → 422` при невалидна сума на паричните записи);
+  * 15 → 403 — `/labor-warnings` без членство;
+  * 6 → 200 — Accountant на двата FG-43 екрана.
+* Спрямо #69 @ `07faab5` — **1383 клетки** (`pm01_cells_changed.csv`).
+
+### Дълг (SEC-02-B)
+* **SEC-02-B-D1:** `/activity-budgets` и `/budget-health` пазят досегашното си правило за достъп (W0-02 `budget.read` / `can_access_project`), затова Accountant без членство получава 403. Р20 („навсякъде“) изисква разширяване на каталога за `accountant` — оставено, защото не е поискано.
+* **SEC-02-B-D2:** в pulse SiteManager не вижда бюджета на своите обекти (по-тясно от Р20).
+* Остават: SEC-02-A-D1…D3, FG-12 deny-overrides (W0-02).
+
 ## Rollback
 
 Revert на commit-а. Няма миграция и няма запис в данни. Проектните назначения, синхронизирани след SEC-02, носят три допълнителни read действия; при стария код те просто не се ползват.

@@ -54,7 +54,8 @@ if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
 
 from app.permissions.finance_read import (  # noqa: E402
-    FINANCE_READS, NOT_MONEY, R20_1, R20_2, R20_2B, R20_5, R20_5M, MONEY_VALUES_READ,
+    FINANCE_READS, NOT_MONEY, R20_1, R20_2, R20_2B, R20_5, R20_5M, R20_5B, MONEY_VALUES_READ,
+    BUDGET_VIEW_HIDDEN_FIELDS, SUBSCRIPTION_PRICE_FIELDS,
     EMPLOYEE_FILE_ACTION, is_money_key, strip_money,
     FINANCE_READ_ACTIONS, PROJECT_BUDGET_READ_ACTIONS, LABOR_MONEY_FIELDS,
     REPORT_LINE_MONEY_FIELDS, WEEKLY_MATRIX_MONEY_FIELDS, EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS,
@@ -87,6 +88,7 @@ SHARED_PROBES = (
     ("weekly_matrix", "GET", "/api/weekly-matrix", {"week_of": "2026-11-02"}),
     ("labor_list", "GET", "/api/labor-entries", {}),
     ("labor_create", "POST", "/api/labor-entries", {}),
+    ("subscription", "GET", "/api/subscription", {}),          # SEC-02-B: plan price
 )
 SHARED = {p[0]: p for p in SHARED_PROBES}
 
@@ -222,7 +224,8 @@ def money_keys_in(value: Any, keys) -> List[str]:
 
 def money_fields_of(key: str):
     return {"all_reports": REPORT_LINE_MONEY_FIELDS, "weekly_matrix": WEEKLY_MATRIX_MONEY_FIELDS,
-            "labor_list": LABOR_MONEY_FIELDS, "labor_create": LABOR_MONEY_FIELDS}[key]
+            "labor_list": LABOR_MONEY_FIELDS, "labor_create": LABOR_MONEY_FIELDS,
+            "subscription": SUBSCRIPTION_PRICE_FIELDS}[key]
 
 
 # ═════════════════════════════════════════════════════════════════ expected outcome
@@ -237,6 +240,15 @@ def expected(p: Dict[str, Any], legacy_role: str, target: Optional[str]) -> Dict
         return {"reached": ok, "money": fin if ok else None}
     if rule == R20_5M:                                         # the route keeps its own
         return {"reached": None, "money": fin}                 # access rule; money = fin
+    if rule == R20_5B:                                         # SEC-02-B, FG-43
+        sm = legacy_role == "SiteManager" and target == "P1"
+        # FG-43: Accountant reads the two activity budget screens on every project; the
+        # other R20-5B routes keep their own access rule (SEC-02-B-D1).
+        fg43 = p["path"].endswith(("/activities-overview", "/activity-budget-summary"))
+        return {"reached": True if (fin and fg43) else None, "money": fin,
+                "budget_view": sm}
+    if key == "subscription":
+        return {"reached": True, "money": legacy_role in ("Owner", "Admin")}
     if rule == R20_2B:
         return {"reached": fin or (legacy_role == "SiteManager" and target == "P1"),
                 "money": fin}
@@ -370,9 +382,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     pids = {fx[data_tkey]["project_id"]: "P1", fx[tkey]["project2_id"]: "P2"}
                     row["row_projects"] = sorted({pids.get(x.get("project_id"), "other")
                                                   for x in body})
-            if (p["rule"] == R20_5M or p["action"] == EMPLOYEE_FILE_ACTION) \
+            if (p["rule"] in (R20_5M, R20_5B) or p["action"] == EMPLOYEE_FILE_ACTION) \
                     and resp.status_code == 200:
                 row["money_keys"] = body_money_keys(body, keep_of.get(p["path"], ()))
+                if p["rule"] == R20_5B:
+                    row["hidden_budget_keys"] = money_keys_in(body, BUDGET_VIEW_HIDDEN_FIELDS)
                 row["leaks_7777"] = "7777" in resp.text
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
@@ -396,6 +410,24 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 if is_project(p["path"]):
                     for role in CROSS_ROLES:
                         rows.append(call(mode, "B", role, p, "XA"))
+        # SEC-02-B (FG-15): POST /labor-entries twice with the SAME Idempotency-Key — the
+        # replay (#69 SEC-01-C03) must not show the rate / cost either.
+        replay = []
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            for role in ("technician", "requester", "accountant"):
+                key = "sec02b-%s-%s" % (mode, role)
+                body = {"project_id": fx["A"]["project_id"], "hours": 1, "activity_name": "SEC02B",
+                        "employee_id": fx["A"]["users"]["technician"]["id"]}
+                hdr = {"Authorization": "Bearer " + tokens[("A", role)], "Idempotency-Key": key}
+                r1 = tc.post("/api/labor-entries", json=body, headers=hdr)
+                r2 = tc.post("/api/labor-entries", json=body, headers=hdr)
+                replay.append({"mode": mode, "role": role,
+                               "legacy_role": fx["A"]["users"][role]["role"],
+                               "first": r1.status_code, "replay": r2.status_code,
+                               "same_id": (r1.json() or {}).get("id") == (r2.json() or {}).get("id"),
+                               "first_money": money_keys_in(r1.json(), LABOR_MONEY_FIELDS),
+                               "replay_money": money_keys_in(r2.json(), LABOR_MONEY_FIELDS)})
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -406,6 +438,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "mongo": "local replica set (oplog)", "outbound_http": "closed local port",
         "seconds": round(time.time() - started, 1), "rows": rows,
         "site_manager_mirrors": mirrors,
+        "labor_replay": replay,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -475,7 +508,11 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
             else:
                 assert r["written"] == [], r
         if r["status"] == 200 or r["status"] == 201:
-            if "money_keys" in r and (r["rule"] == R20_5M or "has_payroll" in r):
+            if r["rule"] == R20_5B and "money_keys" in r and not exp["money"]:
+                assert r["hidden_budget_keys"] == [] and not r["leaks_7777"], r
+                if not exp["budget_view"]:
+                    assert r["money_keys"] == [], r              # FG-43: other members
+            elif "money_keys" in r and (r["rule"] == R20_5M or "has_payroll" in r):
                 if exp["money"] is False:                          # SEC-02-A: nothing leaks
                     assert r["money_keys"] == [] and not r["leaks_7777"], r
                     assert not r.get("has_payroll"), r
@@ -500,6 +537,18 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
         assert len({m["status"] for m in modes.values()}) == 1, (cell, modes)
         assert len({tuple(m.get("money_keys", [])) for m in modes.values()}) == 1, (cell, modes)
     assert {c[2] for c in by_cell} == set(plist)
+
+
+def check_replay(replay: List[Dict[str, Any]]) -> None:
+    """SEC-02-B (FG-15): neither the first answer nor the Idempotency-Key replay gives a
+    non-finance writer the rate or the cost; the finance role sees them in both."""
+    assert len(replay) == 3 * len(MODES)
+    for r in replay:
+        assert r["first"] == 201 and r["replay"] in (200, 201) and r["same_id"], r
+        if r["legacy_role"] in FINANCE:
+            assert r["first_money"] == r["replay_money"] == ["hourly_rate", "labor_cost"], r
+        else:
+            assert r["first_money"] == r["replay_money"] == [], r
 
 
 def check_mirrors(mirrors: List[Dict[str, Any]]) -> None:
@@ -533,8 +582,9 @@ def test_every_guarded_read_carries_its_action_first():
     routes = _routes()
     for e in FINANCE_READS:
         route = routes[(e.method, e.path)]                    # served today
-        if e.rule == R20_5M:
+        if e.rule in (R20_5M, R20_5B):
             assert getattr(route.endpoint, "sec02_strips_money", False), e
+            assert getattr(route.endpoint, "sec02_budget_view", False) == (e.rule == R20_5B), e
             continue
         if e.rule == R20_5:
             src = Path(route.endpoint.__code__.co_filename).read_text(encoding="utf-8")
@@ -549,17 +599,19 @@ def test_every_guarded_read_carries_its_action_first():
 def test_no_other_route_carries_a_sec02_action():
     marked = {k for k, r in _routes().items()
               if any(hasattr(d.call, "sec02_action") for d in r.dependant.dependencies)}
-    assert marked == {(e.method, e.path) for e in FINANCE_READS if e.rule not in (R20_5, R20_5M)}
+    assert marked == {(e.method, e.path) for e in FINANCE_READS
+                      if e.rule not in (R20_5, R20_5M, R20_5B)}
     stripped = {k for k, r in _routes().items() if getattr(r.endpoint, "sec02_strips_money", False)}
-    assert stripped == {(e.method, e.path) for e in FINANCE_READS if e.rule == R20_5M}
+    assert stripped == {(e.method, e.path) for e in FINANCE_READS if e.rule in (R20_5M, R20_5B)}
 
 
 def test_the_registry_has_one_action_per_endpoint_and_known_rules():
     keys = [(e.method, e.path) for e in FINANCE_READS]
     assert len(keys) == len(set(keys))
-    acts = [e.action for e in FINANCE_READS if e.rule not in (R20_5, R20_5M)]
+    acts = [e.action for e in FINANCE_READS if e.rule not in (R20_5, R20_5M, R20_5B)]
     assert len(acts) == len(set(acts))
-    assert all(e.rule in (R20_1, R20_2, R20_2B, R20_5, R20_5M) and e.canon for e in FINANCE_READS)
+    assert all(e.rule in (R20_1, R20_2, R20_2B, R20_5, R20_5M, R20_5B) and e.canon
+               for e in FINANCE_READS)
     assert not set(NOT_MONEY) & set(keys)
 
 
@@ -756,6 +808,28 @@ def test_the_committed_evidence_satisfies_the_package():
     assert [p[0] for p in data["probes"]] == [p["key"] for p in probes()]
     check_rows(data["rows"])
     check_mirrors(data["site_manager_mirrors"])
+    check_replay(data["labor_replay"])
+
+
+def test_the_audit_scan_finds_no_money_for_non_finance_roles():
+    """SEC-02-B: the audit scanner (tools/sec02_money_scan.py) over EVERY GET x SiteManager,
+    Technician, Warehousekeeper, Driver, Viewer x off/shadow/enforce found no money,
+    except the R20 budget view of the Technical Manager on his own project, the three
+    judged non-money rates/price lists, and a technician's OWN profile."""
+    from app.permissions.finance_read import (by_route, SCAN_JUDGED_NOT_MONEY,
+                                              SCAN_OWN_RECORD_PATHS)
+    scan = json.loads((EVIDENCE / "scan_sec02b.json").read_text(encoding="utf-8"))
+    assert scan["calls"] > 5000 and scan["modes"] == ["off", "shadow", "enforce"]
+    assert scan["hits"] == {}
+    reg = by_route()
+    for path, cells in scan["allowed_budget_view"].items():
+        e = reg[("GET", path)]
+        assert e.rule in (R20_2B, R20_5B) and e.action != EMPLOYEE_FILE_ACTION, path
+        assert {c.split("/")[1] for c in cells} == {"requester"}, (path, cells)
+    assert set(scan["judged_not_money"]) <= set(SCAN_JUDGED_NOT_MONEY)
+    assert set(scan["own_record"]) <= SCAN_OWN_RECORD_PATHS
+    for cells in scan["own_record"].values():
+        assert {c.split("/")[1] for c in cells} == {"technician"}
 
 
 # ═══════════════════════════════════════════════════════════════════ real-Mongo test
@@ -776,6 +850,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     data = json.loads(out.read_text(encoding="utf-8"))
     check_rows(data["rows"])
     check_mirrors(data["site_manager_mirrors"])
+    check_replay(data["labor_replay"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r.get("money_keys")) for r in data["rows"]} == \

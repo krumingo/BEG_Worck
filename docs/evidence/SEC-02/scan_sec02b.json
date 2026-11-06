@@ -1,0 +1,328 @@
+{
+ "calls": 5640,
+ "roles": [
+  "requester",
+  "technician",
+  "warehousekeeper",
+  "driver",
+  "viewer"
+ ],
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "hits": {},
+ "allowed_budget_view": {
+  "/api/projects/{project_id}/activities-overview": {
+   "off/requester": [
+    ".activities[].actual_cost",
+    ".activities[].labor_budget",
+    ".activities[].total_budget",
+    ".totals.total_actual_cost",
+    ".totals.total_labor_budget"
+   ],
+   "shadow/requester": [
+    ".activities[].actual_cost",
+    ".activities[].labor_budget",
+    ".activities[].total_budget",
+    ".totals.total_actual_cost",
+    ".totals.total_labor_budget"
+   ],
+   "enforce/requester": [
+    ".activities[].actual_cost",
+    ".activities[].labor_budget",
+    ".activities[].total_budget",
+    ".totals.total_actual_cost",
+    ".totals.total_labor_budget"
+   ]
+  },
+  "/api/projects/{project_id}/activity-budget-summary": {
+   "off/requester": [
+    ".items[].labor_budget",
+    ".totals.labor_budget"
+   ],
+   "shadow/requester": [
+    ".items[].labor_budget",
+    ".totals.labor_budget"
+   ],
+   "enforce/requester": [
+    ".items[].labor_budget",
+    ".totals.labor_budget"
+   ]
+  },
+  "/api/projects/{project_id}/activity-budgets": {
+   "off/requester": [
+    ".items[].labor_budget"
+   ],
+   "shadow/requester": [
+    ".items[].labor_budget"
+   ],
+   "enforce/requester": [
+    ".items[].labor_budget"
+   ]
+  },
+  "/api/projects/{project_id}/budget-health": {
+   "off/requester": [
+    ".activities[].budget",
+    ".total_budget"
+   ],
+   "shadow/requester": [
+    ".activities[].budget",
+    ".total_budget"
+   ],
+   "enforce/requester": [
+    ".activities[].budget",
+    ".total_budget"
+   ]
+  },
+  "/api/projects/{project_id}/centralized-reports/activities": {
+   "off/requester": [
+    ".activities[].clean_labor_cost",
+    ".activities[].labor_budget",
+    ".activities[].labor_cost_with_overhead",
+    ".activities[].total_budget"
+   ],
+   "shadow/requester": [
+    ".activities[].clean_labor_cost",
+    ".activities[].labor_budget",
+    ".activities[].labor_cost_with_overhead",
+    ".activities[].total_budget"
+   ],
+   "enforce/requester": [
+    ".activities[].clean_labor_cost",
+    ".activities[].labor_budget",
+    ".activities[].labor_cost_with_overhead",
+    ".activities[].total_budget"
+   ]
+  },
+  "/api/projects/{project_id}/expected-actual": {
+   "off/requester": [
+    ".activities[].actual_cost",
+    ".activities[].planned_cost",
+    ".activities[].variance_cost",
+    ".summary.total_actual_cost",
+    ".summary.total_planned_cost",
+    ".summary.variance_cost"
+   ],
+   "shadow/requester": [
+    ".activities[].actual_cost",
+    ".activities[].planned_cost",
+    ".activities[].variance_cost",
+    ".summary.total_actual_cost",
+    ".summary.total_planned_cost",
+    ".summary.variance_cost"
+   ],
+   "enforce/requester": [
+    ".activities[].actual_cost",
+    ".activities[].planned_cost",
+    ".activities[].variance_cost",
+    ".summary.total_actual_cost",
+    ".summary.total_planned_cost",
+    ".summary.variance_cost"
+   ]
+  },
+  "/api/projects/{project_id}/expected-actual/compact": {
+   "off/requester": [
+    ".summary.total_actual_cost",
+    ".summary.total_planned_cost",
+    ".summary.variance_cost",
+    ".top_overruns.activities[].actual_cost",
+    ".top_overruns.activities[].planned_cost",
+    ".top_overruns.activities[].variance_cost"
+   ],
+   "shadow/requester": [
+    ".summary.total_actual_cost",
+    ".summary.total_planned_cost",
+    ".summary.variance_cost",
+    ".top_overruns.activities[].actual_cost",
+    ".top_overruns.activities[].planned_cost",
+    ".top_overruns.activities[].variance_cost"
+   ],
+   "enforce/requester": [
+    ".summary.total_actual_cost",
+    ".summary.total_planned_cost",
+    ".summary.variance_cost",
+    ".top_overruns.activities[].actual_cost",
+    ".top_overruns.activities[].planned_cost",
+    ".top_overruns.activities[].variance_cost"
+   ]
+  }
+ },
+ "judged_not_money": {
+  "/api/billing/plans": {
+   "reason": "the public BEG_Work plan price list (the signup page shows it); not the tenant's money",
+   "seen": {
+    "off/requester": [
+     "[].price"
+    ],
+    "off/technician": [
+     "[].price"
+    ],
+    "off/warehousekeeper": [
+     "[].price"
+    ],
+    "off/driver": [
+     "[].price"
+    ],
+    "off/viewer": [
+     "[].price"
+    ],
+    "shadow/requester": [
+     "[].price"
+    ],
+    "shadow/technician": [
+     "[].price"
+    ],
+    "shadow/warehousekeeper": [
+     "[].price"
+    ],
+    "shadow/driver": [
+     "[].price"
+    ],
+    "shadow/viewer": [
+     "[].price"
+    ],
+    "enforce/requester": [
+     "[].price"
+    ],
+    "enforce/technician": [
+     "[].price"
+    ],
+    "enforce/warehousekeeper": [
+     "[].price"
+    ],
+    "enforce/driver": [
+     "[].price"
+    ],
+    "enforce/viewer": [
+     "[].price"
+    ]
+   }
+  },
+  "/api/organization": {
+   "reason": "vat_percent — the tax RATE of the company, no amount",
+   "seen": {
+    "off/requester": [
+     ".vat_percent"
+    ],
+    "off/technician": [
+     ".vat_percent"
+    ],
+    "off/warehousekeeper": [
+     ".vat_percent"
+    ],
+    "off/driver": [
+     ".vat_percent"
+    ],
+    "off/viewer": [
+     ".vat_percent"
+    ],
+    "shadow/requester": [
+     ".vat_percent"
+    ],
+    "shadow/technician": [
+     ".vat_percent"
+    ],
+    "shadow/warehousekeeper": [
+     ".vat_percent"
+    ],
+    "shadow/driver": [
+     ".vat_percent"
+    ],
+    "shadow/viewer": [
+     ".vat_percent"
+    ],
+    "enforce/requester": [
+     ".vat_percent"
+    ],
+    "enforce/technician": [
+     ".vat_percent"
+    ],
+    "enforce/warehousekeeper": [
+     ".vat_percent"
+    ],
+    "enforce/driver": [
+     ".vat_percent"
+    ],
+    "enforce/viewer": [
+     ".vat_percent"
+    ]
+   }
+  },
+  "/api/projects/{project_id}/invoice-context": {
+   "reason": "default_vat_rate — a tax rate, no amount",
+   "seen": {
+    "off/requester": [
+     ".default_vat_rate"
+    ],
+    "off/technician": [
+     ".default_vat_rate"
+    ],
+    "off/warehousekeeper": [
+     ".default_vat_rate"
+    ],
+    "off/driver": [
+     ".default_vat_rate"
+    ],
+    "off/viewer": [
+     ".default_vat_rate"
+    ],
+    "shadow/requester": [
+     ".default_vat_rate"
+    ],
+    "shadow/technician": [
+     ".default_vat_rate"
+    ],
+    "shadow/warehousekeeper": [
+     ".default_vat_rate"
+    ],
+    "shadow/driver": [
+     ".default_vat_rate"
+    ],
+    "shadow/viewer": [
+     ".default_vat_rate"
+    ],
+    "enforce/requester": [
+     ".default_vat_rate"
+    ],
+    "enforce/technician": [
+     ".default_vat_rate"
+    ],
+    "enforce/warehousekeeper": [
+     ".default_vat_rate"
+    ],
+    "enforce/driver": [
+     ".default_vat_rate"
+    ],
+    "enforce/viewer": [
+     ".default_vat_rate"
+    ]
+   }
+  }
+ },
+ "own_record": {
+  "/api/employees/{user_id}": {
+   "off/technician": [
+    ".profile.hourly_rate"
+   ],
+   "shadow/technician": [
+    ".profile.hourly_rate"
+   ],
+   "enforce/technician": [
+    ".profile.hourly_rate"
+   ]
+  },
+  "/api/employees/{user_id}/dashboard": {
+   "off/technician": [
+    ".profile.hourly_rate"
+   ],
+   "shadow/technician": [
+    ".profile.hourly_rate"
+   ],
+   "enforce/technician": [
+    ".profile.hourly_rate"
+   ]
+  }
+ }
+}

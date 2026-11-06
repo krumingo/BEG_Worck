@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 from app.services.pulse_generator import generate_pulse, generate_all_pulses
 from app.tenancy.data_access import TenantData
 
@@ -19,6 +20,7 @@ router = APIRouter(tags=["Site Pulse"])
 
 
 @router.get("/sites/{site_id}/pulse")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_site_pulse(site_id: str, date: Optional[str] = None, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -32,6 +34,7 @@ async def get_site_pulse(site_id: str, date: Optional[str] = None, user: dict = 
 
 
 @router.get("/sites/{site_id}/pulse/range")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_pulse_range(site_id: str, date_from: str = "", date_to: str = "", user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"], "site_id": site_id}
@@ -51,6 +54,7 @@ async def generate_site_pulse(site_id: str, date: Optional[str] = None, user: di
 
 
 @router.get("/pulse/today")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_today_pulses(user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -71,6 +75,7 @@ async def generate_all(date: Optional[str] = None, user: dict = Depends(get_curr
 
 
 @router.get("/pulse/summary")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_pulse_summary(date: Optional[str] = None, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")

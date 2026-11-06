@@ -127,10 +127,11 @@ ACTIONS: Set[str] = {
 # ---------------------------------------------------------------------------
 from app.permissions.finance_read import (                       # noqa: E402
     FINANCE_READ_ACTIONS, PROJECT_BUDGET_READ_ACTIONS, MONEY_VALUES_READ,
-    EMPLOYEE_FILE_ACTION,
+    EMPLOYEE_FILE_ACTION, SUBSCRIPTION_PRICE_READ,
 )
+# SUBSCRIPTION_PRICE_READ (SEC-02-B): Owner/Admin only — through their full set.
 ACTIONS |= (FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
-            | {EMPLOYEE_FILE_ACTION})
+            | {EMPLOYEE_FILE_ACTION, SUBSCRIPTION_PRICE_READ})
 SEC02_ACCOUNTANT_READ_ACTIONS: Set[str] = (
     FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
     | {EMPLOYEE_FILE_ACTION})

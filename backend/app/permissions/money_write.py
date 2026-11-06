@@ -190,7 +190,8 @@ def require_project_budget_read(action: str, *, module: Optional[str], resource_
     return dependency
 
 
-async def money_values_visible(request: Request, user: dict) -> bool:
+async def money_values_visible(request: Request, user: dict, *, action: Optional[str] = None,
+                               roles=FINANCE_WRITE_ROLES) -> bool:
     """R20-5: may this caller see money VALUES on a shared screen?
 
     off/shadow: the legacy finance roles (same list as the money writes). enforce: the
@@ -201,11 +202,11 @@ async def money_values_visible(request: Request, user: dict) -> bool:
     from app.permissions.deps import current_mode, MODE_ENFORCE
     from app.permissions.finance_read import MONEY_VALUES_READ
     if current_mode() != MODE_ENFORCE:
-        return user.get("role") in FINANCE_WRITE_ROLES
+        return user.get("role") in tuple(roles)
     from app.tenancy.guard import get_tenant_context
     from app.permissions.service import evaluate_permission
     ctx = await get_tenant_context(request, user)
-    decision = await evaluate_permission(ctx, MONEY_VALUES_READ, module=None,
+    decision = await evaluate_permission(ctx, action or MONEY_VALUES_READ, module=None,
                                          scope_type="company", scope_id=None)
     return bool(decision.allowed)
 
@@ -217,6 +218,25 @@ def without_keys(value: Any, keys) -> Any:
     if isinstance(value, list):
         return [without_keys(v, keys) for v in value]
     return value
+
+
+def _session_user(kwargs) -> dict:
+    """The session user of a handler: its ``user`` parameter, or its W0-02 ``ctx``."""
+    if "user" in kwargs:
+        return kwargs["user"]
+    return kwargs["ctx"].user
+
+
+def _request_param(sig):
+    """FastAPI injects ONE Request per endpoint: reuse the handler's own Request
+    parameter if it has one, else add a keyword-only ``_sec02_request``."""
+    import inspect
+    for name, p in sig.parameters.items():
+        if p.annotation is Request:
+            return name, list(sig.parameters.values())
+    extra = inspect.Parameter("_sec02_request", inspect.Parameter.KEYWORD_ONLY,
+                              annotation=Request)
+    return None, list(sig.parameters.values()) + [extra]
 
 
 def strip_money_for_non_finance(fn=None, *, keep=()):
@@ -236,19 +256,69 @@ def strip_money_for_non_finance(fn=None, *, keep=()):
     from app.permissions.finance_read import strip_money
 
     sig = inspect.signature(fn)
-    if "user" not in sig.parameters:
-        raise TypeError("%s: strip_money_for_non_finance needs a 'user' parameter" % fn.__name__)
-    extra = inspect.Parameter("_sec02_request", inspect.Parameter.KEYWORD_ONLY,
-                              annotation=Request)
+    if "user" not in sig.parameters and "ctx" not in sig.parameters:
+        raise TypeError("%s: strip_money_for_non_finance needs 'user' or 'ctx'" % fn.__name__)
+    own_request, params = _request_param(sig)
 
     @functools.wraps(fn)
-    async def wrapper(*args, _sec02_request: Request, **kwargs):
+    async def wrapper(*args, **kwargs):
+        request = kwargs[own_request] if own_request else kwargs.pop("_sec02_request")
         result = await fn(*args, **kwargs)
-        if await money_values_visible(_sec02_request, kwargs["user"]):
+        if await money_values_visible(request, _session_user(kwargs)):
             return result
         return strip_money(jsonable_encoder(result), keep)
 
-    wrapper.__signature__ = sig.replace(parameters=list(sig.parameters.values()) + [extra])
+    wrapper.__signature__ = sig.replace(parameters=params)
     wrapper.sec02_strips_money = True
     wrapper.sec02_keep = tuple(keep)
+    return wrapper
+
+
+async def budget_view_visible(request: Request, user: dict, project_id: str) -> bool:
+    """SEC-02-B (R20-5B, FG-43): is this a Technical Manager who is a CURRENT member of the
+    project? off/shadow: legacy SiteManager + date-aware project_team membership; enforce:
+    the R20-2B budget action on the project-scope assignment mirroring that membership."""
+    from app.permissions.deps import current_mode, MODE_ENFORCE
+    if current_mode() != MODE_ENFORCE:
+        if user.get("role") != "SiteManager" or not project_id:
+            return False
+        from app.tenancy import project_team
+        return await project_team.is_member(project_team.tenant_for(db, user), user["id"],
+                                            project_id)
+    from app.tenancy.guard import get_tenant_context
+    from app.permissions.service import evaluate_permission
+    ctx = await get_tenant_context(request, user)
+    decision = await evaluate_permission(ctx, "finance.project_budget_burn.read", module=None,
+                                         scope_type="project", scope_id=project_id)
+    return bool(decision.allowed)
+
+
+def strip_for_budget_view(fn):
+    """SEC-02-B (R20-5B, FG-43) decorator, under ``@router.get``: finance roles get the full
+    response; a Technical Manager member of ``{project_id}`` gets budget + spent +
+    remaining without client / subcontractor prices; every other caller no money."""
+    import functools
+    import inspect
+    from fastapi.encoders import jsonable_encoder
+    from app.permissions.finance_read import strip_money, BUDGET_VIEW_HIDDEN_FIELDS
+
+    sig = inspect.signature(fn)
+    own_request, params = _request_param(sig)
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        request = kwargs[own_request] if own_request else kwargs.pop("_sec02_request")
+        result = await fn(*args, **kwargs)
+        user = _session_user(kwargs)
+        if await money_values_visible(request, user):
+            return result
+        body = jsonable_encoder(result)
+        if await budget_view_visible(request, user, kwargs.get("project_id")):
+            return without_keys(body, BUDGET_VIEW_HIDDEN_FIELDS)
+        return strip_money(body)
+
+    wrapper.__signature__ = sig.replace(parameters=params)
+    wrapper.sec02_strips_money = True
+    wrapper.sec02_budget_view = True
+    wrapper.sec02_keep = ()
     return wrapper

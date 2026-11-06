@@ -22,7 +22,7 @@ from app.deps.auth import (
     can_access_project, can_manage_project, get_user_project_ids,
 )
 from app.deps.modules import enforce_limit
-from app.permissions.money_write import check_money_write, require_finance_read, strip_money_for_non_finance
+from app.permissions.money_write import (check_money_write, require_finance_read, strip_money_for_non_finance)
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
 
@@ -1882,6 +1882,7 @@ async def add_subproject_to_group(group_id: str, data: AddSubProjectRequest, use
 # ── Site Workers (filtered shortlist, no new table) ────────────────
 
 @router.get("/projects/{project_id}/site-workers")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_site_workers(project_id: str, user: dict = Depends(get_current_user)):
     """
     Historical shortlist of workers who have been on this site.

@@ -56,6 +56,7 @@ R20_2 = "R20-2"
 R20_2B = "R20-2B"
 R20_5 = "R20-5"
 R20_5M = "R20-5M"
+R20_5B = "R20-5B"
 
 RULE_TEXT: Dict[str, str] = {
     R20_1: "company finance: Owner/Admin/Accountant only",
@@ -65,6 +66,9 @@ RULE_TEXT: Dict[str, str] = {
     R20_5: "shared screen: money values removed without finance right",
     R20_5M: "mixed response (SEC-02-A, D1): money keys removed without finance right, "
             "quantities / statuses stay",
+    R20_5B: "project budget screen (SEC-02-B, FG-43): finance roles everything; SiteManager "
+            "member budget + spent + remaining without client/subcontractor prices; other "
+            "members no money",
 }
 
 # Canon sources quoted in the HANDOFF table.
@@ -78,6 +82,10 @@ CANON_WAREHOUSE = "R20 (warehouse: quantities only); SEC-02 rule 4"
 CANON_HIDE = "R20; SEC-02 rule 5 (hide the values on a shared screen); FG-1/FG-15"
 CANON_D1 = "R20; FLOW-010; SEC-02 addendum A (D1: strip money, keep quantities/statuses)"
 CANON_D1_ONLY = "R20; FLOW-010; SEC-02 addendum A (D1: the response is money only)"
+CANON_B = "R20; FLOW-037 §3.4; FLOW-010; SEC-02 addendum B (SEC02-1 / FG-41 / FG-42)"
+CANON_B43 = "R20 (budget + spent + remaining on own projects); SEC-02 addendum B (FG-43)"
+CANON_PLAN = "R20; FLOW-050 (subscription price: Owner/Admin); SEC-02 addendum B"
+SUBSCRIPTION_PRICE_READ = "finance.subscription_price.read"
 CANON_D9 = "R20; FLOW-010; SEC-02 addendum A (D9: no-money file on own projects); rule 3"
 
 
@@ -226,6 +234,34 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/offers/{offer_id}/events", MONEY_VALUES_READ, R20_5M, CANON_D1),
     _E("GET", "/api/extra-works", MONEY_VALUES_READ, R20_5M, CANON_D1),
     _E("GET", "/api/extra-works/{draft_id}", MONEY_VALUES_READ, R20_5M, CANON_D1),
+    # ── SEC-02 addendum B (audit SEC02-1, FLOW Guard FG-41/42/43) ────────────────
+    _E("GET", "/api/work-sessions", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/work-sessions/summary", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/work-sessions/overtime", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/work-sessions/{session_id}/detail", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/projects/{project_id}/site-workers", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/projects/{project_id}/smr-groups", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/projects/{project_id}/smr-groups/tree", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/pulse/today", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/pulse/summary", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/sites/{site_id}/pulse", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/sites/{site_id}/pulse/range", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/ocr-invoice", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/projects/{project_id}/activity-reports/{smr_type}", MONEY_VALUES_READ, R20_5M, CANON_B),
+    _E("GET", "/api/labor-warnings/{project_id}", MONEY_VALUES_READ, R20_5M,
+       CANON_B + "; non-finance: current member projects only"),
+    _E("GET", "/api/projects/{project_id}/activities-overview", MONEY_VALUES_READ, R20_5B, CANON_B43),
+    _E("GET", "/api/projects/{project_id}/activity-budget-summary", MONEY_VALUES_READ, R20_5B,
+       CANON_B43 + "; Accountant on every project"),
+    _E("GET", "/api/subscription", SUBSCRIPTION_PRICE_READ, R20_5, CANON_PLAN),
+    # found by the re-run of the audit scanner (tools/sec02_money_scan.py)
+    _E("GET", "/api/projects/{project_id}/activity-budgets", MONEY_VALUES_READ, R20_5B,
+       CANON_B43 + "; closes SEC-02-D4 (Viewer/Technician/Driver members saw the budget)"),
+    _E("GET", "/api/projects/{project_id}/budget-health", MONEY_VALUES_READ, R20_5B, CANON_B43),
+    _E("GET", "/api/warehouse/batches", MONEY_VALUES_READ, R20_5M, CANON_WAREHOUSE + "; addendum B"),
+    _E("GET", "/api/warehouse/batches/{batch_id}", MONEY_VALUES_READ, R20_5M, CANON_WAREHOUSE + "; addendum B"),
+    _E("GET", "/api/warehouse/items/{item_id}/batches", MONEY_VALUES_READ, R20_5M, CANON_WAREHOUSE + "; addendum B"),
+    _E("GET", "/api/warehouse/items/{item_id}/stock-summary", MONEY_VALUES_READ, R20_5M, CANON_WAREHOUSE + "; addendum B"),
 ]
 
 # §5.2 endpoints that carry NO money and stay as they are (rule 3), with the reason.
@@ -237,6 +273,16 @@ NOT_MONEY: Dict[tuple, str] = {
     ("GET", "/api/billing/check-module/{module_code}"): "module entitlement yes/no, used by "
                                      "every screen; no amount",
 }
+
+# SEC-02-B: hits of the audit scanner judged NOT company money (kept, with the reason).
+SCAN_JUDGED_NOT_MONEY: Dict[str, str] = {
+    "/api/billing/plans": "the public BEG_Work plan price list (the signup page shows it); "
+                          "not the tenant's money",
+    "/api/organization": "vat_percent — the tax RATE of the company, no amount",
+    "/api/projects/{project_id}/invoice-context": "default_vat_rate — a tax rate, no amount",
+}
+# SEC-02-B: a role reading ITS OWN record (FLOW-037 §3.4 forbids other people's pay only).
+SCAN_OWN_RECORD_PATHS = {"/api/employees/{user_id}", "/api/employees/{user_id}/dashboard"}
 
 FINANCE_READ_ACTIONS: Set[str] = {e.action for e in FINANCE_READS if e.rule in (R20_1, R20_2)}
 # SEC-02-A (D9): the employee file is R20-2B-shaped (finance + SiteManager) but it is a
@@ -253,6 +299,13 @@ PROJECT_BUDGET_READ_ACTIONS: Set[str] = {e.action for e in FINANCE_READS
 # is activity_budgets.labor_budget — an internal budget — and stays.
 EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS: FrozenSet[str] = frozenset(
     {"planned_cost", "actual_cost", "variance_cost", "status"})
+
+# R20-5B (FG-43): what the Technical Manager does NOT see on his budget screens.
+BUDGET_VIEW_HIDDEN_FIELDS: FrozenSet[str] = frozenset(
+    {"subcontractor_price", "sale_total", "final_total", "unit_price", "total_price",
+     "margin", "profit"})
+# /api/subscription: the plan price — Owner/Admin only.
+SUBSCRIPTION_PRICE_FIELDS: FrozenSet[str] = frozenset({"plan_price", "price"})
 
 # R20-5: the money keys removed from a shared response.
 LABOR_MONEY_FIELDS: FrozenSet[str] = frozenset({"hourly_rate", "labor_cost"})
@@ -273,7 +326,8 @@ _MONEY_WORDS = _re.compile(
     r"(price|cost|amount|value|margin|markup|budget|profit|revenue|income|expense|"
     r"salary|wage|balance|subtotal|vat_|_vat|discount|earned|receivable|payable|payment|"
     r"paid|unpaid|_pay|pay_|^pay$|advance|bonus|deduction|overhead|(^|_)rates?($|_)|"
-    r"logistics_pct|risk_pct|(^|_)eur($|_)|money|financ|total)")
+    r"logistics_pct|risk_pct|(^|_)eur($|_)|money|financ|total|spent|(^|_)remaining$|"
+    r"(^|_)salary)")
 _NOT_MONEY = _re.compile(
     r"(_qty$|^qty|_hours$|hours_|_count$|^count|_id$|_ids$|_at$|_date$|_status$|_number$|"
     r"_no$|^total_(hours|qty|count|pages|rows|lines|entries|workers|employees|packages|"

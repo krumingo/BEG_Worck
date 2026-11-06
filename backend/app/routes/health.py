@@ -1,7 +1,7 @@
 """
 Health and misc routes - /api/health, /api/version, /api/roles, /api/modules, /api/subscription
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.db import db
 from app.deps.auth import get_current_user
@@ -35,7 +35,7 @@ async def list_modules():
     return MODULES
 
 @router.get("/subscription")
-async def get_subscription(user: dict = Depends(get_current_user)):
+async def get_subscription(request: Request, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
     if sub:
@@ -44,4 +44,10 @@ async def get_subscription(user: dict = Depends(get_current_user)):
         sub["plan_price"] = plan["price"]
         sub["allowed_modules"] = plan["allowed_modules"]
         sub["limits"] = plan["limits"]
+    # SEC-02-B (R20, FLOW-050): the plan price — Owner/Admin only.
+    from app.permissions.money_write import money_values_visible
+    from app.permissions.finance_read import SUBSCRIPTION_PRICE_READ, SUBSCRIPTION_PRICE_FIELDS
+    if sub and not await money_values_visible(request, user, action=SUBSCRIPTION_PRICE_READ,
+                                              roles=("Owner", "Admin")):
+        sub = {k: v for k, v in sub.items() if k not in SUBSCRIPTION_PRICE_FIELDS}
     return sub
