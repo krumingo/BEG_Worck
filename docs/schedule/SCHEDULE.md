@@ -13,6 +13,26 @@ Claude програмира (до 3 паралелни сесии върху р�
 **Codex** — независимо re-review на точните глави: **#56 @ `dae097b`** (RC-AUTH-03) и **#55 @ `2bb81fc`** (C17). И двете чакат вердикт; няма нов Codex коментар след поправките.
 **Крум** — бележки по #54 (мобилен/права) и решение за #53.
 
+## Ред на интеграция (от audit merge-tree; файловете са моя проверка по diff срещу merge-base с main)
+
+1. **#56** се слива първи — след Codex PASS и „да“ от Крум.
+2. След това **#55 (C18)** и **#54** вземат main с **merge commit, никога rebase**.
+3. **#53, #54 и #64** пресичат `DashboardLayout.js` и `App.js`; **#53 и #64 вървят след #55**.
+
+Припокриващи се файлове (без docs/), по двойки:
+
+| Двойка | Общи файлове |
+|---|---|
+| #56 ∩ #55 | `backend/app/tenancy/data_access.py`, `tenancy/ownership.py`, `backend/server.py`, `frontend/src/App.js` |
+| #56 ∩ #54 | `backend/app/audit/store.py`, `tenancy/data_access.py`, `server.py`, `App.js`, `i18n/bg.json`, `i18n/en.json` |
+| #55 ∩ #54 | `permissions/catalog.py`, `routes/procurement.py`, `tenancy/data_access.py`, `server.py`, `App.js`, `pages/ProcurementPage.js` |
+| #54 ∩ #53 | `server.py`, `App.js`, `components/DashboardLayout.js`, `i18n/bg.json`, `i18n/en.json` |
+| #53 ∩ #64 | `routes/live_ops.py`, `server.py`, `App.js`, `DashboardLayout.js`, i18n, `LiveOpsControlCenterPage.js` и неговия тест, `test_live_ops_a_read_only.py` |
+| #54 ∩ #64 | `server.py`, `App.js`, `DashboardLayout.js`, i18n |
+| #56 ∩ #64, #55 ∩ #64, #56 ∩ #53, #55 ∩ #53 | `server.py`, `App.js` (+ i18n за #56) |
+
+`backend/server.py` и `frontend/src/App.js` са във всички пет PR — всяко сливане изисква ръчно разрешаване на регистрациите на routes. Решението за сливане е само на Крум.
+
 ## Задачи по ред
 
 | # | Задача | PR / клон | Отговорен | Статус | Head SHA | Блокира |
