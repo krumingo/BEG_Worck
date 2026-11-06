@@ -11,7 +11,7 @@
 | #55 5C | `64418eb` | **FINDINGS (blocking): C26B-1 Р27 bypass via subproject_id (cost on wrong project)**; C26A-1 leak FIXED | 2026-11-06 |
 | #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `61d45d3` | PASS (internal; C01 Part 1: PAY-N1/N2 fixed, 2 low notes) — Codex required; INT-70x69 open (Part 2) | 2026-11-06 |
+| #70 PAY-01 | `8910939` | **PASS** (C01 L1/L2 closed); INT-70x69 still open (Part 2) | 2026-11-06 |
 | #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1327,3 +1327,46 @@ Merge-tree, `64418eb` against each:
 | #70 | clean |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 | conflict: catalog.py, procurement.py, sales.py |
+
+
+## #70 PAY-01-C01 @ `8910939` — 2026-11-06 ~21:05 UTC — PASS
+
+Delta from `61d45d3`:
+- `strict_number` on the Pydantic `amount` fields of `PaymentCreate` and `AllocationInput`;
+- `positive_amount` accepts only JSON numbers;
+- the reason filter refuses the Unicode categories Cc, Cf, Zl, Zp and Cs.
+
+Gates, real Mongo:
+
+| Gate | Result |
+|---|---|
+| `tests/test_pay_01*.py` | **244 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50, same FAILED list as `fail_56.txt` |
+| A2C | 0/206 |
+| A1 | 0/418 |
+
+Probe results (PROVED):
+- `probe_pay01.py` Q1–Q8: FAILS none.
+- `probe_pay01_c01.py`, amounts:
+  - tested on all 7 money routes (payments, transfers, account-funding, other-expense, other-income, invoice quick-pay, allocate);
+  - hostile amounts `{nan, inf, -inf, 1e309, "", -1, 0, true, "abc"}` all get 4xx and write 0 rows; a valid 12.5 gets 201/200;
+  - **L1 closed:** `true` is now refused on the typed routes.
+- `probe_pay01_c01.py`, reasons:
+  - 500 characters → 200; 501 → 400;
+  - ZWSP, RLO, NUL, ESC → 400;
+  - soft hyphen, tag U+E0041 and U+2028 → 400 now. **L2 closed.**
+
+Frontend regression check: strings are now refused, so I checked every frontend caller of these routes. InvoiceEditor, Payments, Invoices and FinancialAccounts all send `parseFloat(...)` or an API number, so nothing breaks.
+
+Info, not a finding: these visually blank characters are still accepted in a reason, which the package does not require:
+- U+3164 Hangul filler;
+- U+2800 braille blank;
+- U+034F combining grapheme joiner;
+- U+FE0F variation selector;
+- NBSP and U+3000.
+
+INT-70x69: scratch merge of `8910939` with `07faab5`, clean. `probe_pay01_x_sec01_c02.py` gives the same result as before:
+- reversing the ledger row returns 200 and the account balance goes to 0;
+- but the `subcontractor_payments` row stays `completed`, and the package keeps `paid_total` 300.
+- This is still OPEN (HIGH) and planned for PAY-01 Part 2.
