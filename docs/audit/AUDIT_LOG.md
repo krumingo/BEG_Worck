@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C20) | `c0b3b4c` | FINDINGS (blocking: C20-1; decision: C20-2) | 2026-11-06 |
+| #55 Склад 5C (C21) | `df48d68` | C21 scope PASS; C20-1 still open (expected in C22) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -423,3 +423,35 @@ Flow: receive 5@10 → dispatch in_transit → accept 5 → consume 3. Canonical
 ### No manual sync (orchestrator question) — PROVED
 
 Every figure in the C20-A table was produced with no `POST /material-entries/sync` and no `recompute-material` call. The two canonical-aware readers show 30 directly from the consume-transaction projection row.
+
+
+---
+
+## 2026-11-06 ~15:45 — PR #55 @ `df48d68` (merge of main `07da9ab` incl. #65/#66 + 5C-C21: Р10 фира, Р11 Rule B for W2W)
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix (enforce) | **203 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo (now on the branch via main) | **881 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 219 modules, 0 violations ✔ |
+| A1 | 444 units, 0 violations ✔ |
+| `yarn test` CanonicalWarehousePage* + BuildIdentity | 26 / 26 ✔ |
+
+### Probes (`docs/audit/probes/pr55/test_probe_pr55_c21.py`, real Mongo, real CommandService) — **5 / 5 PASS**
+
+| Probe | Result |
+|---|---|
+| C21-1: receive 10@10 → project 10 → consume 3 → write-off 2 from the project | summary `(total, waste)` = **(50, 20)** after the projector, after sync, after rebuild ×2, and after re-sync + recompute; exactly **1** `write_off` cost row. Recognised once ✔ |
+| C21-2: project write-off of 9 when 5 are there | refused, no ledger row ✔ |
+| C21-3: W2W transfer 10 (layers 5@10 + 5@20), accept 6, then 5 | the 5 is refused (over-accept); accept 4 → wh_b holds 10; **0** `material_entries` (a transfer is not project cost) ✔ |
+| C21-4: accept a W2W transfer into a project bucket | refused ✔ |
+| C21-5: T2 accepts T's W2W transfer | refused; T2 has 0 rows ✔ |
+
+Re-runs of earlier probes:
+- C19: 6 / 8. The 2 failures are exactly `c19_3` and its control, the known **W0-04 `record_event` concurrency debt on main**. Not a #55 finding.
+- C20 report probe: **unchanged**. `project_financial_results`, `centralized_reports` and `profit_by_period` still show 0, or 100 with a legacy row, against 30. C20-1 stays open. The orchestrator says 5C-C22 ("all finance reports from one source" + the R13 cutover split) addresses it and C20-2.
+
+**Verdict:** C21 scope (Р10/Р11) PASS (internal). #55 as a whole is still FINDINGS until C22 closes C20-1. Money, so the Codex review is still required.
