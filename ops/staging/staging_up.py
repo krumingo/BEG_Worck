@@ -491,11 +491,11 @@ def cmd_rehearse(a):
     check("the failed attempt ran image IDs different from X", bool(failed.get("runtime_images"))
           and failed.get("runtime_images") != images_x, failed.get("runtime_images", ""))
     runtime["X+1 failed attempt (rolled back)"] = failed.get("runtime_images")
-    runtime["after rollback"] = running
     cur = state(base)
     check("current release is still X", cur.get("COMMIT") == commit_x, cur.get("RELEASE_ID", ""))
     running = ",".join("%s=%s" % (svc, run(["docker", "inspect", "-f", "{{.Image}}", "%s-%s" % (project, svc)]).stdout.strip())
                        for svc in ("backend", "frontend"))
+    runtime["after rollback"] = running
     check("running image IDs == recorded image IDs of X", running == images_x, running)
     ident_rb = identity(a.port, commit_x)
     (evid / "2-X+1-forced-failure" / "identity_after_rollback.json").write_text(json.dumps(ident_rb, indent=2) + "\n", encoding="utf-8")

@@ -109,3 +109,136 @@ PYTHONPATH=. pytest tests/test_st_01_staging_fixtures.py -v --noconftest
 Drop the two databases (`st01_staging`, `st01_staging_system`) or stop the container
 (`docker stop st01mongo`, started with `--rm`). Synthetic records carry
 `synthetic_fixture: "st-01"`.
+
+---
+
+# ST-02 — isolated staging stack from a release bundle + deploy/rollback rehearsal
+
+Package: `docs/architecture/tasks/ST-02_ISOLATED_STAGING_STACK.md` (approved by Krum, R9,
+06.11.2026). Source: PR #64 `02-release-gates.md` steps 5–6 and "Exercise W0-09A deploy →
+smoke → exact-image rollback in isolated staging". Evidence: `docs/evidence/ST-02/`.
+
+**Never Synology production, never `/volume1/docker/begwork`, never production data or
+secrets.** `ops/release/` and `ops/synology/` are not changed; production `layout.json` and
+flags are not touched.
+
+| File | What it is |
+|---|---|
+| `staging_up.py` | orchestrator: `up`, `deploy`, `rehearse`, `down` |
+| `staging_deploy.sh` | release_deploy.sh logic on the isolated project; sources the release's own `tools/synology/lib.sh` |
+| `deploy/docker-compose.staging.yml` | overlay on the **unchanged** production compose: own container names, port, network, MongoDB replica set, `ENV=staging`, flag parameter |
+| `isolation_check.py` | proves from `docker compose config` that the merged model is isolated (runs in the verifier image, `--network none`) |
+| `sandbox-base/prepare_sandbox_base_images.sh` | **cloud container only** — local base images so the production Dockerfiles build there (see below) |
+
+## How it works
+
+1. `release_build.py --environment staging --deployment-id staging-begwork` builds a bundle
+   from the **exact commit** (Git objects; `--reachable-from origin/main` by default) and
+   `release_verify.py bundle` verifies it.
+2. The staging layout root (`--base`, any directory outside the Git work tree) gets:
+   `docker-compose.yml`, `Dockerfile.backend`, `Dockerfile.frontend` **byte-identical from the
+   release artifact** (the verifier checks their sha256 against the manifest), the overlay, a
+   synthetic `.env` (random `JWT_SECRET`, `st02_staging` databases, no SMTP/Stripe/LLM keys,
+   mode 600), `staging.env` (project/port/flag — not secret) and `.st02-seed.env` (random ST-01
+   password, mode 600). None of these leave the layout root.
+3. Compose always runs as
+   `docker compose -p begwork-staging -f docker-compose.yml -f docker-compose.staging.yml`.
+   Containers `begwork-staging-{backend,frontend,mongo}`, network `begwork-staging_net`,
+   volume `begwork-staging_mongo_data`, only `127.0.0.1:<port>` → frontend:80 published
+   (MongoDB is not published). `staging_deploy.sh` refuses (exit 3) unless `isolation_check.py`
+   passes on the merged model. Needs Docker Compose ≥ 2.24 (`ports: !override`).
+4. `staging_deploy.sh` = precheck (bundle verify with `--base`, isolation, recorded current,
+   live tree, running images = recorded runtime, endpoints, gzip mongodump backup) → stage +
+   tree identity → RC-01 `write_build_info.py --from-bundle` (the two `BUILD_INFO.json` are the
+   only allowed extra files of the tree) → swap → `compose up --no-deps --build` → smoke →
+   record. On a smoke failure: automatic rollback to the recorded tree **and the exact image IDs**
+   (re-tag + `--no-build --force-recreate`, proved by `docker inspect .Image`) + post-rollback
+   smoke → record `ROLLED_BACK` / `EXACT_IMAGE`, exit 1. MongoDB is not part of a release and is
+   never recreated by deploy or rollback.
+5. Staging differences from production, all explicit in the log and record:
+   * container names / smoke URL / flag expectation of the manifest describe production; they
+     are mapped to the staging project and to `--permission-mode` (default `enforce`; the
+     production expectation `off` stays in the manifest, the flag is set by the overlay, not `.env`);
+   * every service is rebuilt (each image carries its own `BUILD_INFO.json`), the manifest's
+     `services_to_rebuild` is logged;
+   * `--force-smoke-fail` adds `GET /api/st02-forced-smoke-failure` (404) to the deploy smoke —
+     the controlled failure of the rehearsal. The post-rollback smoke never has it.
+6. Seed and scenarios run **inside the deployed backend image** on `begwork-staging_net`
+   (`seed_synthetic.py --allow-remote` against `mongo:27017`, `run_scenarios.py --base-url
+   http://frontend --allow-remote`) — no Python dependencies on the host.
+
+## Commands (cloud container)
+
+```bash
+# Docker daemon down?   (nohup dockerd >/tmp/dockerd.log 2>&1 &)
+# Cloud container only: Docker Hub 429 + TLS re-termination + no Debian mirror -> local base images
+bash ops/staging/sandbox-base/prepare_sandbox_base_images.sh --sandbox --ca /root/.ccr/ca-bundle.crt \
+     --report /tmp/st02/sandbox-base.txt
+
+# one exact commit: bundle, verify, deploy, /api/version == bundle, seed A/B, scenarios
+python3 ops/staging/staging_up.py up --base /tmp/st02/base --commit origin/main \
+     --port 18080 --permission-mode enforce --verify-image mirror.gcr.io/library/python:3.11-slim
+
+# next release on the running stack (optionally with the controlled smoke failure)
+python3 ops/staging/staging_up.py deploy --base /tmp/st02/base --commit <ref> [--force-smoke-fail] \
+     --verify-image mirror.gcr.io/library/python:3.11-slim
+
+# full rehearsal X -> X+1 (forced failure, exact-image rollback) -> X+1, evidence + summary.json
+python3 ops/staging/staging_up.py rehearse --base /tmp/st02/run --from <X> --to <X+1> \
+     --evidence /tmp/st02/evidence --verify-image mirror.gcr.io/library/python:3.11-slim \
+     --sandbox-base-report /tmp/st02/sandbox-base.txt
+
+python3 ops/staging/staging_up.py down --base /tmp/st02/base [--volumes]
+```
+
+`--port` must be free on 127.0.0.1 and is never 8080. `--project` must start with
+`begwork-staging`. Exit codes: `up`/`rehearse` 0 = all checks passed, 1 = a check failed,
+2 = refused; `deploy` returns `staging_deploy.sh`'s code (0 deployed, 1 rolled back, 2 precheck,
+3 isolation/usage, 4 rollback failed).
+
+### Why the sandbox base images (cloud container only)
+
+In the Claude Code cloud container Docker Hub answers 429, outbound TLS is re-terminated by
+the session proxy (pip/yarn inside a build do not trust it) and Debian apt mirrors are not
+reachable, so `apt-get install build-essential curl` in `Dockerfile.backend` cannot run.
+`prepare_sandbox_base_images.sh` tags local images under the names the Dockerfiles use:
+`python:3.11-slim` = official `python:3.11` (full image, toolchain and curl already installed)
++ session CA + `PIP_CERT` + a local `build-essential` metapackage that only depends on that
+toolchain; `node:20-alpine` = official + session CA; `nginx:alpine` = official. The Dockerfiles
+and compose stay byte-identical; the IDs and parents are in the evidence. **These are not the
+images a Synology build uses** — the rehearsal proves deploy/smoke/exact-image-rollback
+mechanics and build identity, not the production base images. The script refuses without
+`--sandbox` and wherever `/volume1` exists.
+
+## Later: Synology on a separate port (needs Krum's separate "да")
+
+Not done by ST-02. Requirements before it may run on the NAS:
+
+* own layout root, e.g. `/volume1/docker/begwork-staging` (never `/volume1/docker/begwork`);
+  own `--port` (free on the NAS), own project/containers/network/volume — the isolation check
+  refuses anything else;
+* official base images (no sandbox script; it refuses on `/volume1`), `VERIFY_IMAGE` resolved
+  locally as in §7.1 of `ops/release/README.md`;
+* Docker Compose ≥ 2.24 invoked as `docker compose` (Synology's legacy `docker-compose` 1.x
+  cannot merge `!override`);
+* `staging_up.py` needs Python 3 on the machine that runs it (or run it from the release PC
+  against a copied layout root); the NAS's thermal state checked before a heavy build;
+* production containers, images, `.env` and `layout.json` read before and after, unchanged.
+
+```bash
+python3 ops/staging/staging_up.py up --base /volume1/docker/begwork-staging --commit <exact sha> --port <free port>
+```
+
+## Tests
+
+```bash
+cd backend
+PYTHONPATH=. pytest tests/test_st_02_staging_stack.py -v --noconftest
+```
+
+Isolation rules (good model + 18 violations), staging_up guards (production base, Git work tree,
+project name, port 8080 / busy port, synthetic private `.env`, reuse refusal, secret scan),
+overlay content, production layout/flags unchanged, the real `docker compose config` of
+production compose + overlay passes and production compose alone is refused, staging_deploy.sh
+refusals before any Docker call, sandbox script refusal, `ops/release`/`ops/synology` unchanged
+versus `07da9ab`.
