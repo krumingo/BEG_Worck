@@ -44,6 +44,72 @@ class _OpenLayer:
     currency: str
 
 
+def inbound_layer_parts(doc: Dict[str, Any]) -> List[Tuple[int, Decimal, Decimal, str]]:
+    """5C-C24 F-55-C23-01 — the FIFO layers ONE inbound ledger row opens.
+
+    Returns `(part, quantity, unit_value, currency)` tuples; `part` is the
+    stable 1-based layer number inside the row, so a layer's identity is
+    `(movement_id, part)` — independent of any other row in the bucket and
+    identical to the `warehouse_batches` key (`movement_id`,
+    `layer_sequence`) the projector writes.
+
+      * A row that carries traced `layer_allocations` (an acceptance — it
+        lands the dispatched layers at the destination) opens ONE layer per
+        allocation, at that allocation's exact unit value. Part numbers
+        follow the allocation list, so they match the batch rows of
+        `projections._open_destination_from_layers`; zero-quantity parts are
+        skipped without renumbering.
+      * Any other inbound (supplier receive, direct delivery) opens a single
+        layer `(movement_id, 1)` at its own unit value.
+
+    The row's rounded weighted-average `unit_value` is never used as a
+    stock or cost basis when the exact allocations are present. If the
+    allocations do not add up to the row quantity the row is malformed for
+    expansion and is read as one layer (the pre-C24 reading).
+    """
+    qty = Decimal(str(doc.get("quantity", "0") or "0"))
+    currency = str(doc.get("currency", "BGN") or "BGN")
+    allocs = doc.get("layer_allocations") or []
+    if allocs:
+        parts = []
+        total = Decimal("0")
+        for part, a in enumerate(allocs, start=1):
+            a_qty = Decimal(str(a.get("quantity", "0") or "0"))
+            total += a_qty
+            if a_qty <= 0:
+                continue
+            parts.append((part, a_qty,
+                          Decimal(str(a.get("unit_value", "0") or "0")),
+                          str(a.get("currency", currency) or currency)))
+        if total == qty:
+            return parts
+    return [(1, qty, Decimal(str(doc.get("unit_value", "0") or "0")), currency)]
+
+
+def allocations_value(layer_allocations, *, fallback_quantity=None,
+                      fallback_unit_value=None) -> Decimal:
+    """5C-C24 F-55-C23-01 — exact value of a movement: Σ qty × unit_value of
+    its FIFO allocations (4 dp). Only when a row has no allocations does it
+    fall back to `quantity × unit_value`. Every cost/write-off projection,
+    the material sync and the stock reads use this, so ledger, stock,
+    batches and reports carry the same exact FIFO sum — never the rounded
+    weighted-average unit value × quantity.
+    """
+    allocs = list(layer_allocations or [])
+    if allocs:
+        total = Decimal("0")
+        for a in allocs:
+            if isinstance(a, LayerAllocation):
+                total += a.quantity * a.unit_value
+            else:
+                total += (Decimal(str(a.get("quantity", "0") or "0"))
+                          * Decimal(str(a.get("unit_value", "0") or "0")))
+        return total.quantize(Decimal("0.0001"))
+    q = Decimal(str(fallback_quantity or "0"))
+    u = Decimal(str(fallback_unit_value or "0"))
+    return (q * u).quantize(Decimal("0.0001"))
+
+
 async def _load_open_layers(
     tenant_collection,
     *,
@@ -54,8 +120,10 @@ async def _load_open_layers(
 ) -> List[_OpenLayer]:
     """Rebuild open FIFO layers for one (item, source location, state).
 
-    The projection is simple: every inbound to this bucket opens a layer,
-    every outbound from this bucket drains layers in order. The projection
+    The projection is simple: every inbound to this bucket opens its
+    layers (`inbound_layer_parts` — one per traced allocation for an
+    acceptance, 5C-C24), every outbound from this bucket drains layers in
+    order. The projection
     is bounded to this bucket — no 1000-row cap, no truncation.
 
     C09 — the order IS the ledger server-sequence, not wall-clock time
@@ -79,7 +147,7 @@ async def _load_open_layers(
     }
     cursor_in = tenant_collection.find(
         inbound_q, {"movement_id": 1, "quantity": 1, "unit_value": 1,
-                    "currency": 1, "recorded_at": 1,
+                    "currency": 1, "recorded_at": 1, "layer_allocations": 1,
                     "ledger_sequence": 1, "_id": 0},
         session=session,
     ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
@@ -93,17 +161,24 @@ async def _load_open_layers(
     ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
     outbound = [dict(doc) async for doc in cursor_out]
 
-    # Open each inbound as a layer with its full quantity.
+    # Open the layers of every inbound row (5C-C24 F-55-C23-01): stable
+    # identity `(inbound movement_id, part)`, exact per-part unit value.
     layers: Dict[Tuple[str, int], _OpenLayer] = {}
-    for seq, doc in enumerate(inbound, start=1):
-        key = (str(doc["movement_id"]), seq)
-        layers[key] = _OpenLayer(
-            source_movement_id=key[0],
-            layer_sequence=seq,
-            remaining=Decimal(str(doc.get("quantity", "0"))),
-            unit_value=Decimal(str(doc.get("unit_value", "0"))),
-            currency=str(doc.get("currency", "BGN")),
-        )
+    order: Dict[Tuple[str, int], Tuple[int, int]] = {}
+    parts_of: Dict[str, List[Tuple[str, int]]] = {}
+    for row_pos, doc in enumerate(inbound, start=1):
+        mv_id = str(doc["movement_id"])
+        for part, qty, unit_value, currency in inbound_layer_parts(doc):
+            key = (mv_id, part)
+            layers[key] = _OpenLayer(
+                source_movement_id=mv_id,
+                layer_sequence=part,
+                remaining=qty,
+                unit_value=unit_value,
+                currency=currency,
+            )
+            order[key] = (row_pos, part)
+            parts_of.setdefault(mv_id, []).append(key)
 
     # Drain layers in the order the outbound documents reference them.
     # C09 fail-closed: an allocation that references an unknown layer is
@@ -115,23 +190,32 @@ async def _load_open_layers(
                 int(alloc["layer_sequence"]),
             )
             if key not in layers:
-                raise NegativeStockError(
-                    "outbound allocation references an unknown source layer; "
-                    "projection is skewed from the canonical ledger",
-                    context={
-                        "item_id": item_id,
-                        "location": str(location),
-                        "missing_source": key[0],
-                        "missing_sequence": key[1],
-                        "outbound_movement_id": doc.get("movement_id"),
-                    },
-                )
+                # Pre-C24 allocations named a layer by its POSITION in the
+                # bucket. That is unambiguous only when the named inbound
+                # row opened exactly one layer — then its identity is
+                # `(movement_id, 1)`. Anything else stays fail-closed.
+                same_row = parts_of.get(key[0], [])
+                if len(same_row) == 1:
+                    key = same_row[0]
+                else:
+                    raise NegativeStockError(
+                        "outbound allocation references an unknown source layer; "
+                        "projection is skewed from the canonical ledger",
+                        context={
+                            "item_id": item_id,
+                            "location": str(location),
+                            "missing_source": key[0],
+                            "missing_sequence": key[1],
+                            "outbound_movement_id": doc.get("movement_id"),
+                        },
+                    )
             layers[key].remaining -= Decimal(str(alloc.get("quantity", "0")))
 
-    # Only keep positive-remaining layers, oldest first.
+    # Only keep positive-remaining layers, oldest first (ledger order of
+    # the inbound row, then the part inside it).
     sorted_keys = sorted(
         [k for k in layers if layers[k].remaining > 0],
-        key=lambda k: (k[1], k[0]),
+        key=lambda k: order[k],
     )
     return [layers[k] for k in sorted_keys]
 

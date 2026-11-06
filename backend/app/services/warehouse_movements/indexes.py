@@ -31,7 +31,8 @@ IDEMPOTENCY_COLLECTION = "audit_idempotency"
 
 
 class RequiredIndex:
-    __slots__ = ("name", "collection", "keys", "unique", "partial_filter")
+    __slots__ = ("name", "collection", "keys", "unique", "partial_filter",
+                 "stricter_full_unique_ok")
 
     def __init__(
         self,
@@ -41,12 +42,20 @@ class RequiredIndex:
         *,
         unique: bool = False,
         partial_filter: Dict | None = None,
+        stricter_full_unique_ok: bool = False,
     ) -> None:
         self.name = name
         self.collection = collection
         self.keys = keys
         self.unique = unique
         self.partial_filter = partial_filter
+        # 5C-C24 F-55-C23-02: a unique index WITHOUT a partial filter on the
+        # same keys is strictly stronger than the partial one (it covers
+        # every row, canonical ones included). Where this flag is set such
+        # an index — e.g. the pre-C24 `wh_movements_unique_movement_id`
+        # built on a database with no legacy rows — satisfies the
+        # requirement as-is; it is never dropped or rebuilt.
+        self.stricter_full_unique_ok = stricter_full_unique_ok
 
     def matches(self, mongo_index: Dict) -> bool:
         """Return True if `mongo_index` meets or exceeds our requirement.
@@ -76,7 +85,10 @@ class RequiredIndex:
         if self.unique and not mongo_index.get("unique", False):
             return False
         if self.partial_filter is not None:
-            if mongo_index.get("partialFilterExpression") != self.partial_filter:
+            got_filter = mongo_index.get("partialFilterExpression")
+            if got_filter is None and self.unique and self.stricter_full_unique_ok:
+                return True
+            if got_filter is None or dict(got_filter) != self.partial_filter:
                 return False
         return True
 
@@ -96,13 +108,29 @@ class RequiredIndex:
 # gets its own tenant-scoped uniqueness.
 AUDIT_EVENTS_COLLECTION = "audit_events"
 
+# 5C-C24 F-55-C23-02 — the rows the canonical movement-id uniqueness
+# applies to: exactly the canonical ledger rows (string `movement_id`).
+CANONICAL_MOVEMENT_FILTER: Dict = {"movement_id": {"$type": "string"}}
+
 REQUIRED_INDEXES: List[RequiredIndex] = [
     # --- warehouse_transactions ---
+    # 5C-C24 F-55-C23-02 — PARTIAL unique: canonical rows only.
+    # Real legacy history in `main`'s `procurement.issue_to_project` shape
+    # (`id`, `org_id`, `type`, `lines`; no `tenant_id`, no `movement_id`)
+    # indexed as `{tenant_id: null, movement_id: null}`, so the second
+    # legacy row failed the old full unique index with E11000 and the
+    # canonical writer stayed fail-closed. Every canonical row carries a
+    # string `movement_id` (envelope `mv_<uuid>`, server-issued), so the
+    # filter `{movement_id: {$type: "string"}}` covers ALL canonical
+    # movements and none of the legacy rows (absent or null id). History
+    # is neither deleted nor given fake canonical ids.
     RequiredIndex(
         name="wh_movements_unique_movement_id",
         collection=MOVEMENTS_COLLECTION,
         keys=[("tenant_id", 1), ("movement_id", 1)],
         unique=True,
+        partial_filter=CANONICAL_MOVEMENT_FILTER,
+        stricter_full_unique_ok=True,
     ),
     # Server-ledger sequence per tenant: stable FIFO ordering tie-break
     # (CODEX C09 — "FIFO ordering has stable canonical sequence tie-break").
@@ -196,6 +224,7 @@ async def ensure_required_indexes(db) -> List[str]:
     for ri in REQUIRED_INDEXES:
         by_collection.setdefault(ri.collection, []).append(ri)
 
+    conflicts: List[str] = []
     for coll_name, required in by_collection.items():
         existing = await db[coll_name].index_information()
         existing_list = [{"key": doc["key"], "unique": doc.get("unique", False),
@@ -204,6 +233,23 @@ async def ensure_required_indexes(db) -> List[str]:
         for ri in required:
             if any(ri.matches(ex) for ex in existing_list):
                 continue
+            if ri.name in existing:
+                # 5C-C24 F-55-C23-02 — an index with OUR name but other
+                # options (e.g. non-unique, or another partial filter). It
+                # is never dropped or rebuilt automatically: that is an
+                # operator migration step (CLAUDE.md §8). Record the
+                # conflict, create nothing under that name, and let the
+                # service stay fail-closed (INDEX_MISSING) until resolved.
+                doc = existing[ri.name]
+                conflicts.append(
+                    f"{coll_name}:{ri.name} exists with other options "
+                    f"(key={list(doc.get('key', []))}, "
+                    f"unique={doc.get('unique', False)}, "
+                    f"partialFilterExpression={doc.get('partialFilterExpression')}); "
+                    f"required unique={ri.unique}, "
+                    f"partialFilterExpression={ri.partial_filter}"
+                )
+                continue
             options: Dict = {"name": ri.name}
             if ri.unique:
                 options["unique"] = True
@@ -211,7 +257,19 @@ async def ensure_required_indexes(db) -> List[str]:
                 options["partialFilterExpression"] = ri.partial_filter
             await db[coll_name].create_index(ri.keys, **options)
             created.append(ri.name)
+    if conflicts:
+        raise IndexOptionsConflictError(conflicts, created)
     return created
+
+
+class IndexOptionsConflictError(Exception):
+    """5C-C24 F-55-C23-02 — a required index name is taken by an index with
+    other options. Carries the conflicts and whatever WAS created."""
+
+    def __init__(self, conflicts: List[str], created: List[str]) -> None:
+        super().__init__("index option conflict (not dropped): " + "; ".join(conflicts))
+        self.conflicts = conflicts
+        self.created = created
 
 
 async def ensure_required_indexes_at_startup(db) -> Dict:
@@ -226,7 +284,23 @@ async def ensure_required_indexes_at_startup(db) -> Dict:
     next to them.
 
     Idempotent (existing matching indexes are skipped). It never drops
-    or rewrites an index and never touches documents. A failure (e.g.
+    or rewrites an index and never touches documents.
+
+    5C-C24 F-55-C23-02 — the paths for `wh_movements_unique_movement_id`:
+      * absent → created PARTIAL (canonical rows only), so legacy
+        `procurement.issue_to_project` history (no tenant_id/movement_id)
+        is admitted untouched;
+      * present as the C24 partial index → skipped (repeated startup);
+      * present as the pre-C24 FULL unique index → accepted as is (it is
+        strictly stronger; it can only exist where no legacy rows were
+        present), never dropped;
+      * present under this name with any OTHER options → NOT dropped: the
+        result is `ok=False` with `conflicts` naming the index, its options
+        and the required ones; the writer stays fail-closed until an
+        operator replaces it under Approval (critical migration,
+        CLAUDE.md §8): inspect it, then — per tenant database, never
+        automatically — drop that one index and re-run this hook, which
+        creates the partial unique index. No document is touched. A failure (e.g.
     pre-existing data violating a unique key) is logged and returned —
     startup continues and the service stays FAIL-CLOSED: its own
     `verify_required_indexes` still refuses writes with INDEX_MISSING.
@@ -234,6 +308,10 @@ async def ensure_required_indexes_at_startup(db) -> Dict:
     log = logging.getLogger(__name__)
     try:
         created = await ensure_required_indexes(db)
+    except IndexOptionsConflictError as exc:
+        log.error("warehouse canonical indexes not ensured: %s", exc)
+        return {"ok": False, "created": exc.created, "error": str(exc),
+                "conflicts": exc.conflicts}
     except Exception as exc:  # noqa: BLE001 — logged, service stays fail-closed
         log.error("warehouse canonical indexes not ensured: %s", exc)
         return {"ok": False, "created": [], "error": str(exc)}

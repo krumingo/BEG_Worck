@@ -1599,8 +1599,12 @@ class CommandService:
         split: List[LayerAllocation] = []
         total_value = Decimal("0")
         total_qty = Decimal("0")
-        keys = sorted(remaining_per_layer.keys(),
-                      key=lambda k: (k[1], k[0]))
+        # 5C-C24 F-55-C23-01: keep the DISPATCH's own allocation order —
+        # that list is already in FIFO order. `layer_sequence` is the
+        # stable part number INSIDE one inbound row (every supplier receive
+        # is part 1), so sorting by it would order layers by movement-id
+        # text instead of by FIFO age.
+        keys = list(remaining_per_layer.keys())
         active = [k for k in keys if remaining_per_layer[k]["remaining"] > 0]
 
         for i, k in enumerate(active):
@@ -1699,7 +1703,8 @@ class CommandService:
                         remaining_per_layer[k]["remaining"] -= Decimal(
                             str(alloc["quantity"]))
 
-            for key in sorted(remaining_per_layer.keys(), key=lambda x: (x[1], x[0])):
+            # 5C-C24: dispatch allocation order (FIFO), see the split.
+            for key in remaining_per_layer.keys():
                 info = remaining_per_layer[key]
                 if info["remaining"] <= 0:
                     continue

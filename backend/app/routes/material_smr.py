@@ -39,6 +39,7 @@ from app.services.canonical_material_cost import (  # noqa: E402
     split_for_package,
     resolve_planned,
 )
+from app.services.warehouse_movements.fifo import allocations_value  # noqa: E402
 # 5C-C20 F-10 — every package/project material figure below is computed at
 # READ time from the canonical rows (consume rows of `material_entries`,
 # written by the command service inside the consume transaction). The
@@ -142,7 +143,13 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
         except (TypeError, ValueError):
             unit_value_f = None
         mv_id = row.get("movement_id")
-        movement_value = (unit_value_f * qty) if unit_value_f is not None else None
+        # 5C-C24 F-55-C23-01: the movement value is the EXACT sum of its
+        # FIFO layer allocations (same helper as the projector), never
+        # quantity × the rounded weighted-average unit value.
+        if row.get("layer_allocations"):
+            movement_value = float(allocations_value(row["layer_allocations"])) * sign
+        else:
+            movement_value = (unit_value_f * qty) if unit_value_f is not None else None
         # 5C-C19 F-7: only a consumption is project cost.
         # 5C-C21 F-12: a write-off only from a project bucket (Р10).
         cost_recognized = kind in COST_KINDS and (

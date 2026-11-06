@@ -57,6 +57,7 @@ from app.services.warehouse_movements.envelope import (
     MovementState,
     LocationType,
 )
+from app.services.warehouse_movements.fifo import allocations_value
 
 
 BATCHES_COLLECTION = "warehouse_batches"
@@ -77,6 +78,18 @@ def canonical_batch_number(movement_id: str, layer_sequence: int) -> str:
     """
     return f"CWS-{movement_id}-{int(layer_sequence)}"
 
+
+
+def movement_exact_value(env) -> Decimal:
+    """5C-C24 F-55-C23-01 — exact value of one outbound movement: the sum
+    of its FIFO `layer_allocations` (falls back to quantity × unit_value
+    only for a row without allocations). Works for a `MovementEnvelope`
+    (LayerAllocation objects or dicts) and for a rebuild `_RowShim`."""
+    return allocations_value(
+        getattr(env, "layer_allocations", None) or [],
+        fallback_quantity=getattr(env, "quantity", None),
+        fallback_unit_value=getattr(env, "unit_value", None),
+    )
 
 MATERIAL_ENTRIES_COLLECTION = "material_entries"
 IN_TRANSIT_COLLECTION = "warehouse_in_transit"
@@ -337,19 +350,27 @@ async def _drain_batches(tenant_db, env: MovementEnvelope, *, session=None) -> N
         # `layer_source_movement_id` + `layer_sequence`. Earlier
         # ingestions wrote `movement_id=src_id` so support both shapes
         # for compatibility with pre-C11 rows.
+        # 5C-C24 F-55-C23-01 — the FIFO layer identity is exactly the
+        # batch key (`movement_id`, `layer_sequence`), so that row is
+        # looked up FIRST. The older shapes are only a fallback: with a
+        # single `$or`, a warehouse allocation `(receive, 1)` could match a
+        # PROJECT acceptance batch whose `layer_source_movement_id` is that
+        # receive and drain the wrong bucket.
+        proj = {"quantity": 1, "consumed_quantity": 1, "_id": 1}
         batch = await tenant_db[BATCHES_COLLECTION].find_one(
-            {
-                "tenant_id": env.tenant_id,
-                "org_id": env.tenant_id,
-                "$or": [
-                    {"movement_id": src_id, "layer_sequence": src_seq},
-                    {"layer_source_movement_id": src_id, "layer_sequence": src_seq},
-                    {"movement_id": src_id, "layer_sequence": {"$exists": False}},
-                ],
-            },
-            {"quantity": 1, "consumed_quantity": 1, "_id": 1},
-            session=session,
-        )
+            {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
+             "movement_id": src_id, "layer_sequence": src_seq},
+            proj, session=session)
+        if not batch:
+            batch = await tenant_db[BATCHES_COLLECTION].find_one(
+                {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
+                 "movement_id": src_id, "layer_sequence": {"$exists": False}},
+                proj, session=session)
+        if not batch:
+            batch = await tenant_db[BATCHES_COLLECTION].find_one(
+                {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
+                 "layer_source_movement_id": src_id, "layer_sequence": src_seq},
+                proj, session=session)
         if not batch:
             continue
         prior_consumed = Decimal(str(batch.get("consumed_quantity") or "0"))
@@ -378,6 +399,9 @@ async def _project_consumption(
     """
     quantity = Decimal(str(env.quantity))
     unit_value = Decimal(str(env.unit_value))
+    # 5C-C24 F-55-C23-01: cost = exact Σ of the FIFO allocations, never
+    # quantity × the rounded weighted-average unit value.
+    total_value = movement_exact_value(env)
     row = {
         "projection_source": "canonical_warehouse_service",
         "projection_version": 2,
@@ -392,7 +416,7 @@ async def _project_consumption(
         "unit": env.unit,
         "quantity": str(quantity),
         "unit_value": str(unit_value),
-        "total_value": str((quantity * unit_value).quantize(Decimal("0.0001"))),
+        "total_value": str(total_value),
         "currency": env.currency,
         "consumed_at": env.recorded_at,
         "ledger_sequence": None,  # service patches on insert
@@ -431,6 +455,7 @@ async def _project_write_off(
     """
     quantity = Decimal(str(env.quantity))
     unit_value = Decimal(str(env.unit_value))
+    total_value = movement_exact_value(env)   # 5C-C24 F-55-C23-01
     project_id = env.project_id or (env.source or {}).get("location_id")
     row = {
         "projection_source": "canonical_warehouse_service",
@@ -446,7 +471,7 @@ async def _project_write_off(
         "unit": env.unit,
         "quantity": str(quantity),
         "unit_value": str(unit_value),
-        "total_value": str((quantity * unit_value).quantize(Decimal("0.0001"))),
+        "total_value": str(total_value),
         "currency": env.currency,
         "written_off_at": env.recorded_at,
         "reason": env.reason,
