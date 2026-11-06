@@ -127,6 +127,19 @@ def _service() -> CommandService:
     return CommandService(mongo_client)
 
 
+async def _response(ctx, result) -> "MovementCommandResponse":
+    """FG-23 (Р20) / audit C26A-1 — the command response is the stored
+    envelope (fresh or idempotent replay); a role without a finance right
+    gets it without money (unit_value, layer_allocations[*].unit_value, …)."""
+    from app.routes.warehouse_canonical_queries import _sees_values, strip_values
+    envelope = result.envelope
+    if not await _sees_values(ctx):
+        envelope = dict(strip_values(envelope or {}), values_hidden=True)
+    return MovementCommandResponse(
+        movement_id=result.movement_id, audit_event_id=result.audit_event_id,
+        replay=result.replay, envelope=envelope)
+
+
 def _tenant_for(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
@@ -232,12 +245,7 @@ async def post_movement(
         raise HTTPException(status_code=400, detail={"error_code": "BAD_REQUEST",
                                                      "message": str(exc)})
 
-    return MovementCommandResponse(
-        movement_id=result.movement_id,
-        audit_event_id=result.audit_event_id,
-        replay=result.replay,
-        envelope=result.envelope,
-    )
+    return await _response(ctx, result)
 
 
 # -----------------------------------------------------------------------
@@ -341,6 +349,4 @@ async def post_project_writeoff(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail={"error_code": "BAD_REQUEST",
                                                      "message": str(exc)})
-    return MovementCommandResponse(
-        movement_id=result.movement_id, audit_event_id=result.audit_event_id,
-        replay=result.replay, envelope=result.envelope)
+    return await _response(ctx, result)

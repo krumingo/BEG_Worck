@@ -8,6 +8,8 @@ location; a user with no read grant for a location receives 403.
 """
 from __future__ import annotations
 
+import re
+
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -173,7 +175,18 @@ FINANCE_VALUE_ROLES = frozenset({"owner", "admin", "accountant"})
 # keeps seeing values as before); recorded in HANDOFF 5C-C26 for Крум.
 UNCHANGED_VALUE_ROLES = frozenset({"procurement"})
 VALUE_KEYS = frozenset({"unit_value", "total_value", "movement_value", "value",
-                        "line_value", "layer_value"})
+                        "line_value", "layer_value",
+                        # 5C-C26 audit C26A-2 — Path B integrity warnings.
+                        "counted_value", "covered_value", "legacy_value"})
+# 5C-C26 audit C26A-1/2: any other money-named key is dropped too (the audit
+# probe's rule: value / cost / price / amount), so a new field cannot leak.
+_MONEY_KEY = re.compile(r"(value|cost|price|amount)", re.I)
+_NOT_MONEY = frozenset({"values_hidden"})
+
+
+def is_money_key(key: Any) -> bool:
+    return isinstance(key, str) and key not in _NOT_MONEY and (
+        key in VALUE_KEYS or bool(_MONEY_KEY.search(key)))
 
 
 async def _sees_values(ctx) -> bool:
@@ -184,8 +197,11 @@ async def _sees_values(ctx) -> bool:
     tenant_id = getattr(ctx, "tenant_id", None)
     if not user_id or not tenant_id:
         return False
-    active = _active_assignments(await perm._load_assignments(user_id, tenant_id),
-                                 datetime.now(timezone.utc))
+    try:
+        loaded = await perm._load_assignments(user_id, tenant_id)
+    except Exception:      # registry unreachable → no money (fail closed)
+        return False
+    active = _active_assignments(loaded, datetime.now(timezone.utc))
     return any(a.get("role_id") in FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
                for a in active)
 
@@ -193,7 +209,7 @@ async def _sees_values(ctx) -> bool:
 def strip_values(obj: Any) -> Any:
     """Drop every money key (recursively); quantities stay."""
     if isinstance(obj, dict):
-        return {k: strip_values(v) for k, v in obj.items() if k not in VALUE_KEYS}
+        return {k: strip_values(v) for k, v in obj.items() if not is_money_key(k)}
     if isinstance(obj, list):
         return [strip_values(v) for v in obj]
     return obj
@@ -260,12 +276,12 @@ async def read_balance_by_location(
     checkpoint = await ledger_checkpoint(
         tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
     )
-    return {
+    return await _values_for(ctx, {
         "tenant_id": ctx.tenant_id,
         "item_id": item_id,
         "balances": rows,
         "ledger_checkpoint": checkpoint,
-    }
+    })
 
 
 @router.get("/history")
@@ -325,6 +341,8 @@ async def read_integrity_warnings(
     # from the same helper every finance report uses.
     from app.services.canonical_material_cost import path_b_integrity_warnings
     data["warnings"].extend(await path_b_integrity_warnings(tenant, ctx.tenant_id))
+    # FG-23 (Р20) / audit C26A-2 — the Path B warnings carry money.
+    data = await _values_for(ctx, data)
     allowed = await _authorized_scope_locations(ctx, user=None)
     if allowed is not None:
         allowed_set = {tuple(x) for x in allowed}
