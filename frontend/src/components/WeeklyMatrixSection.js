@@ -88,7 +88,8 @@ export default function WeeklyMatrixPage() {
             <span>{t("weekly.totalHours")}: <strong className="text-foreground font-mono">{tot.hours}ч</strong></span>
             <span className="text-emerald-400">{t("weekly.normal")}: {tot.normal}ч</span>
             {tot.overtime > 0 && <span className="text-amber-400">{t("weekly.overtime")}: +{tot.overtime}ч</span>}
-            <span className="text-primary font-mono font-bold">{tot.value?.toFixed(0)} €</span>
+            {/* SEC-02 (R20-5): pay only when the backend sends it */}
+            {tot.value !== undefined && <span className="text-primary font-mono font-bold">{tot.value?.toFixed(0)} €</span>}
           </div>
         )}
       </div>
@@ -263,7 +264,7 @@ export default function WeeklyMatrixPage() {
               {/* Day value */}
               <div className="flex items-center justify-between pt-2 border-t border-border">
                 <span className="text-xs text-muted-foreground">{t("weekly.dayValue")}</span>
-                <span className="text-sm font-mono font-bold text-primary">{(dayDetail.day.hours * dayDetail.worker.hourly_rate).toFixed(2)} €</span>
+                <span className="text-sm font-mono font-bold text-primary">{dayDetail.worker.hourly_rate === undefined ? "—" : `${(dayDetail.day.hours * dayDetail.worker.hourly_rate).toFixed(2)} €`}</span>
               </div>
             </div>
           )}

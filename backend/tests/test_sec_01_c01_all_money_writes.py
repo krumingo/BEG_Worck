@@ -447,7 +447,10 @@ def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]
-        marked = [c for c in calls if hasattr(c, "sec01_action")]
+        # SEC-02 (R20): the money READ routes reuse the same dependency and carry
+        # sec02_action; they are checked by tests/test_sec_02_finance_read.py.
+        marked = [c for c in calls if hasattr(c, "sec01_action")
+                  and not hasattr(c, "sec02_action")]
         for method in route.methods:
             if marked and (method, route.path) not in c02:
                 found[(method, route.path)] = (calls, marked)
@@ -482,8 +485,10 @@ def test_the_catalog_r16_and_money_grants():
     assert FIELD_COST_WRITE_ACTIONS == {a for k, a in GUARDED_ROUTES.items() if k in R16_ROUTES}
     # project-scope mirror of a membership: R16 only for SiteManager/Technician
     field = sorted(FIELD_COST_WRITE_ACTIONS)
+    # SEC-02 (R20-2B): the Technical Manager also gets the budget view of THIS project.
+    from app.permissions.catalog import PROJECT_BUDGET_READ_ACTIONS
     assert project_membership_actions("site_manager", "SiteManager") == \
-        PROJECT_MANAGER_ACTIONS + field
+        PROJECT_MANAGER_ACTIONS + field + sorted(PROJECT_BUDGET_READ_ACTIONS)
     assert project_membership_actions("LEGACY_TECHNICIAN", "Technician") == \
         PROJECT_MEMBER_ACTIONS + field
     for rid in ("LEGACY_VIEWER", "driver", "warehouse", "accountant", "office", "worker"):

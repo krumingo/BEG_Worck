@@ -35,12 +35,12 @@ def today_str():
 
 
 def check_overhead_access(user: dict, write: bool = False) -> bool:
-    """Check if user has access to overhead cost system"""
-    if user["role"] in ["Admin", "Owner", "Accountant"]:
-        return True
-    if user["role"] == "SiteManager" and not write:
-        return True
-    return False
+    """Check if user has access to overhead cost system.
+
+    SEC-02 (R20-1, Krum 06.11.2026): overhead is company finance — Owner/Admin/Accountant
+    only, for reads too. The former SiteManager read is removed; ``write`` is kept for the
+    callers' signature (the write rule was already the same three roles)."""
+    return user["role"] in ["Admin", "Owner", "Accountant"]
 
 
 # ── Dashboard Stats ────────────────────────────────────────────────

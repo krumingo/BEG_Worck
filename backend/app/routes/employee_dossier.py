@@ -8,6 +8,7 @@ from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours, enrich_hours_batch, NORMAL_DAY
 from app.tenancy.data_access import TenantData
 
@@ -35,6 +36,8 @@ def _calc_rate(profile: dict) -> float:
 @router.get("/employee-dossier/{worker_id}")
 async def get_employee_dossier(
     worker_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.employee_dossier.read", module=None, resource_type="employee_dossier")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(get_current_user),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,

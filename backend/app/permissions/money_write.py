@@ -125,15 +125,21 @@ _PROJECT_SOURCES = {"path": _project_id_from_path, "body": _project_id_from_body
 
 
 def require_field_cost_write(action: str, *, module: str, resource_type: str,
-                             project_from: str):
-    """R16 dependency. ``project_from``: "path" ({project_id}) or "body" (JSON project_id)."""
+                             project_from: str, member_roles=FIELD_MEMBER_ROLES):
+    """R16 dependency. ``project_from``: "path" ({project_id}) or "body" (JSON project_id).
+
+    ``member_roles`` (SEC-02): the legacy roles that get the action on a project they are
+    a CURRENT member of (date-aware ``project_team.membership_filter``). R16 default:
+    SiteManager + Technician. SEC-02 R20-2B passes ("SiteManager",).
+    """
     get_project = _PROJECT_SOURCES[project_from]
+    member_roles = tuple(member_roles)
 
     async def legacy_check(user: dict, request: Request) -> bool:
         role = user.get("role")
         if role in FINANCE_WRITE_ROLES:
             return True
-        if role not in FIELD_MEMBER_ROLES:
+        if role not in member_roles:
             return False
         project_id = await get_project(request)
         if not project_id:
@@ -156,3 +162,53 @@ def require_field_cost_write(action: str, *, module: str, resource_type: str,
     dependency.sec01_action = action
     dependency.sec01_rule = "R16"
     return dependency
+
+
+# ── SEC-02 (R20): reading money ─────────────────────────────────────────────────
+# The registry (endpoint -> action -> rule -> canon) is app/permissions/finance_read.py.
+# Nothing below is a second mechanism: R20-1/R20-2 IS require_money_write with a read
+# action, R20-2B IS the R16 member dependency with the Technical Manager only.
+
+def require_finance_read(action: str, *, module: Optional[str], resource_type: str):
+    """R20-1 / R20-2: Owner/Admin/Accountant only, company scope, all three modes."""
+    dependency = require_money_write(action, module=module, resource_type=resource_type)
+    dependency.sec02_action = action
+    return dependency
+
+
+def require_project_budget_read(action: str, *, module: Optional[str], resource_type: str):
+    """R20-2B: finance roles everywhere; SiteManager only on a current member project."""
+    dependency = require_field_cost_write(action, module=module, resource_type=resource_type,
+                                          project_from="path", member_roles=("SiteManager",))
+    dependency.sec02_action = action
+    dependency.sec01_rule = "R20-2B"
+    return dependency
+
+
+async def money_values_visible(request: Request, user: dict) -> bool:
+    """R20-5: may this caller see money VALUES on a shared screen?
+
+    off/shadow: the legacy finance roles (same list as the money writes). enforce: the
+    Permission Service decides ``finance.money_values.read`` at company scope (Owner/Admin
+    full set, Accountant) — never a fallback to ``users.role``. No denial audit: a hidden
+    value is not a refused action.
+    """
+    from app.permissions.deps import current_mode, MODE_ENFORCE
+    from app.permissions.finance_read import MONEY_VALUES_READ
+    if current_mode() != MODE_ENFORCE:
+        return user.get("role") in FINANCE_WRITE_ROLES
+    from app.tenancy.guard import get_tenant_context
+    from app.permissions.service import evaluate_permission
+    ctx = await get_tenant_context(request, user)
+    decision = await evaluate_permission(ctx, MONEY_VALUES_READ, module=None,
+                                         scope_type="company", scope_id=None)
+    return bool(decision.allowed)
+
+
+def without_keys(value: Any, keys) -> Any:
+    """A copy of ``value`` with every dict key in ``keys`` removed, at any depth."""
+    if isinstance(value, dict):
+        return {k: without_keys(v, keys) for k, v in value.items() if k not in keys}
+    if isinstance(value, list):
+        return [without_keys(v, keys) for v in value]
+    return value

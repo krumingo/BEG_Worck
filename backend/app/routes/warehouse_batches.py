@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.services.fifo_service import (
     add_batch, consume_fifo, get_current_stock, get_stock_value,
     InsufficientStockError,
@@ -172,7 +173,10 @@ async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
 # ── Warehouse total value ──
 
 @router.get("/warehouse/value")
-async def warehouse_value(warehouse_id: str = "", user: dict = Depends(get_current_user)):
+async def warehouse_value(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.warehouse_value.read", module=None, resource_type="warehouse_value")),  # SEC-02 (R20-1): before any read
+    warehouse_id: str = "", user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     if not warehouse_id:
         # All warehouses

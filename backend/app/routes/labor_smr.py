@@ -6,7 +6,7 @@ Phase 3: Actual labor cost by execution package
 Phase 4: Variance + progress + warnings
 Phase 5: Project/profit integration
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -16,7 +16,9 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import require_field_cost_write
+from app.permissions.money_write import (require_field_cost_write, require_finance_read,
+                                         money_values_visible, without_keys)
+from app.permissions.finance_read import LABOR_MONEY_FIELDS
 
 
 def _tenant(user: dict) -> TenantData:
@@ -49,6 +51,7 @@ router = APIRouter(tags=["Labor by SMR"])
 @router.post("/labor-entries", status_code=201)
 async def create_labor_entry(
     data: dict,
+    request: Request,
     _sec01: dict = Depends(require_field_cost_write(
         "labor.entry.create", module="M2", resource_type="labor_entry",
         project_from="body")),  # SEC-01 + C01 (R16): before any read/write
@@ -84,7 +87,13 @@ async def create_labor_entry(
         entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
 
     await tenant.labor_entries.insert_one(entry)
-    return {k: v for k, v in entry.items() if k != "_id"}
+    out = {k: v for k, v in entry.items() if k != "_id"}
+    # SEC-02 (FG-15, R20-5): R16 lets a member Technician/SiteManager WRITE labor, but the
+    # employee's rate and the cost are money — the stored row keeps them, the response
+    # to a caller without the finance right does not.
+    if not await money_values_visible(request, user):
+        out = without_keys(out, LABOR_MONEY_FIELDS)
+    return out
 
 
 @router.post("/labor-entries/sync-from-work-reports")
@@ -218,17 +227,39 @@ async def sync_labor_entries_from_work_reports(
 
 @router.get("/labor-entries")
 async def list_labor_entries(
+    request: Request,
     project_id: Optional[str] = None,
     execution_package_id: Optional[str] = None,
     employee_id: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    """SEC-02 (FG-1 GET; R20-5, R16, FLOW-037 §3.4).
+
+    Finance roles: every row, with rate and cost (as before). Every other role: only the
+    rows of projects they are a CURRENT member of (date-aware project_team membership,
+    the same relation as R16), and never ``hourly_rate`` / ``labor_cost``. A project
+    filter on a project they are not a member of is a 403.
+    """
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
+    show_money = await money_values_visible(request, user)
+    if not show_money:
+        from app.tenancy import project_team
+        team = project_team.tenant_for(db, user)
+        if project_id:
+            if not await project_team.is_member(team, user["id"], project_id):
+                raise HTTPException(status_code=403, detail="Access denied")
+        else:
+            candidates = await project_team.assigned_project_ids(team, user["id"])
+            current = [p for p in candidates
+                       if await project_team.is_member(team, user["id"], p)]
+            q["project_id"] = {"$in": current}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if employee_id: q["employee_id"] = employee_id
     entries = await tenant.labor_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    if not show_money:
+        entries = without_keys(entries, LABOR_MONEY_FIELDS)
     return entries
 
 
@@ -327,7 +358,11 @@ async def recompute_execution_package_labor(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-cost/by-execution-package/{pkg_id}")
-async def get_labor_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(require_m2)):
+async def get_labor_cost_by_exec_pkg(
+    pkg_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_labor_cost.read", module="M2", resource_type="package_labor_cost")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Detailed labor cost breakdown for an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]

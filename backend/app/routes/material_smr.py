@@ -13,6 +13,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -339,7 +340,11 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
 
 
 @router.get("/execution-packages/financial-breakdown/{project_id}")
-async def get_project_package_breakdown(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_package_breakdown(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_financial_breakdown.read", module="M2", resource_type="package_financial_breakdown")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """All execution packages financial breakdown for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]

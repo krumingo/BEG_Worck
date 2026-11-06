@@ -4,6 +4,7 @@ import { AuthProvider, useAuth, PlatformAuthProvider, usePlatformAuth } from "@/
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/components/DashboardLayout";
 import PlatformAdminGuard from "@/components/PlatformAdminGuard";
+import { canReadFinance } from "@/lib/financeAccess";
 import PlatformLayout from "@/components/PlatformLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
@@ -135,6 +136,24 @@ function AdminRoute({ children }) {
   return <DashboardLayout>{children}</DashboardLayout>;
 }
 
+// SEC-02 (R20): company finance and project money screens — Owner/Admin/Accountant.
+// The backend refuses every other role (backend/app/permissions/finance_read.py);
+// this guard only avoids an empty screen with zeros. Others land on the dashboard.
+function FinanceRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!ADMIN_ROLES.includes(user.role)) return <Navigate to="/tech" replace />;
+  if (!canReadFinance(user.role)) return <Navigate to="/" replace />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
+
 // Field/phone route: authenticated but WITHOUT the desktop shell (clean full-screen)
 function FieldProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -234,21 +253,21 @@ function AppRoutes() {
       <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />
       <Route path="/brigades" element={<AdminRoute><BrigadesPage /></AdminRoute>} />
       <Route path="/projects/:projectId/novo-smr" element={<AdminRoute><NovoSMRPage /></AdminRoute>} />
-      <Route path="/projects/:projectId/financial" element={<AdminRoute><ProjectFinancialPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/financial" element={<FinanceRoute><ProjectFinancialPage /></FinanceRoute>} />
       <Route path="/projects/:projectId/progress" element={<AdminRoute><ProjectProgressPage /></AdminRoute>} />
-      <Route path="/projects/:projectId/operations" element={<AdminRoute><ProjectOperationsPage /></AdminRoute>} />
-      <Route path="/advances" element={<AdminRoute><AdvancesPage /></AdminRoute>} />
-      <Route path="/pay-runs" element={<AdminRoute><PayRunsPage /></AdminRoute>} />
-      <Route path="/finance" element={<AdminRoute><FinanceOverviewPage /></AdminRoute>} />
-      <Route path="/finance/accounts" element={<AdminRoute><FinancialAccountsPage /></AdminRoute>} />
-      <Route path="/finance/invoices" element={<AdminRoute><InvoicesPage /></AdminRoute>} />
-      <Route path="/finance/invoices/new" element={<AdminRoute><InvoiceEditorPage /></AdminRoute>} />
-      <Route path="/finance/invoices/:invoiceId" element={<AdminRoute><InvoiceEditorPage /></AdminRoute>} />
-      <Route path="/finance/invoices/:invoiceId/lines" element={<AdminRoute><InvoiceLinesPage /></AdminRoute>} />
-      <Route path="/finance/payments" element={<AdminRoute><PaymentsPage /></AdminRoute>} />
-      <Route path="/finance/payments/new" element={<AdminRoute><PaymentsPage /></AdminRoute>} />
-      <Route path="/overhead" element={<AdminRoute><OverheadPage /></AdminRoute>} />
-      <Route path="/overhead/snapshots/:snapshotId" element={<AdminRoute><OverheadSnapshotDetailPage /></AdminRoute>} />
+      <Route path="/projects/:projectId/operations" element={<FinanceRoute><ProjectOperationsPage /></FinanceRoute>} />
+      <Route path="/advances" element={<FinanceRoute><AdvancesPage /></FinanceRoute>} />
+      <Route path="/pay-runs" element={<FinanceRoute><PayRunsPage /></FinanceRoute>} />
+      <Route path="/finance" element={<FinanceRoute><FinanceOverviewPage /></FinanceRoute>} />
+      <Route path="/finance/accounts" element={<FinanceRoute><FinancialAccountsPage /></FinanceRoute>} />
+      <Route path="/finance/invoices" element={<FinanceRoute><InvoicesPage /></FinanceRoute>} />
+      <Route path="/finance/invoices/new" element={<FinanceRoute><InvoiceEditorPage /></FinanceRoute>} />
+      <Route path="/finance/invoices/:invoiceId" element={<FinanceRoute><InvoiceEditorPage /></FinanceRoute>} />
+      <Route path="/finance/invoices/:invoiceId/lines" element={<FinanceRoute><InvoiceLinesPage /></FinanceRoute>} />
+      <Route path="/finance/payments" element={<FinanceRoute><PaymentsPage /></FinanceRoute>} />
+      <Route path="/finance/payments/new" element={<FinanceRoute><PaymentsPage /></FinanceRoute>} />
+      <Route path="/overhead" element={<FinanceRoute><OverheadPage /></FinanceRoute>} />
+      <Route path="/overhead/snapshots/:snapshotId" element={<FinanceRoute><OverheadSnapshotDetailPage /></FinanceRoute>} />
       {/* Data Module Routes */}
       <Route path="/data/warehouses" element={<AdminRoute><WarehousesPage /></AdminRoute>} />
       <Route path="/assets/qr" element={<AdminRoute><AssetsQrBasePage /></AdminRoute>} />
@@ -261,24 +280,24 @@ function AppRoutes() {
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
       <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
       <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />
-      <Route path="/finance/analysis" element={<AdminRoute><FinanceAnalysisPage /></AdminRoute>} />
-      <Route path="/data/prices" element={<AdminRoute><PricesPage /></AdminRoute>} />
-      <Route path="/data/turnover" element={<AdminRoute><TurnoverPage /></AdminRoute>} />
+      <Route path="/finance/analysis" element={<FinanceRoute><FinanceAnalysisPage /></FinanceRoute>} />
+      <Route path="/data/prices" element={<FinanceRoute><PricesPage /></FinanceRoute>} />
+      <Route path="/data/turnover" element={<FinanceRoute><TurnoverPage /></FinanceRoute>} />
       <Route path="/data/clients" element={<AdminRoute><ClientsPage /></AdminRoute>} />
-      <Route path="/reports/finance-details" element={<AdminRoute><FinanceDetailsPage /></AdminRoute>} />
+      <Route path="/reports/finance-details" element={<FinanceRoute><FinanceDetailsPage /></FinanceRoute>} />
       {/* Work Logs Module */}
       <Route path="/daily-logs" element={<AdminRoute><DailyLogsPage /></AdminRoute>} />
       <Route path="/change-orders" element={<AdminRoute><ChangeOrdersPage /></AdminRoute>} />
       <Route path="/missing-smr" element={<AdminRoute><MissingSMRPage /></AdminRoute>} />
       <Route path="/smr-analyses" element={<AdminRoute><SMRAnalysisListPage /></AdminRoute>} />
       <Route path="/projects/:projectId/smr-analysis/:analysisId" element={<AdminRoute><SMRAnalysisPage /></AdminRoute>} />
-      <Route path="/pricing" element={<AdminRoute><MaterialCatalogPage /></AdminRoute>} />
-      <Route path="/contract-payments" element={<AdminRoute><ContractPaymentsPage /></AdminRoute>} />
+      <Route path="/pricing" element={<FinanceRoute><MaterialCatalogPage /></FinanceRoute>} />
+      <Route path="/contract-payments" element={<FinanceRoute><ContractPaymentsPage /></FinanceRoute>} />
       <Route path="/worker-calendar" element={<AdminRoute><WorkerCalendarPage /></AdminRoute>} />
       <Route path="/alarms" element={<AdminRoute><AlarmsDashboardPage /></AdminRoute>} />
       <Route path="/all-reports" element={<AdminRoute><AllReportsPage /></AdminRoute>} />
       <Route path="/clients/:clientId" element={<AdminRoute><ClientDetailPage /></AdminRoute>} />
-      <Route path="/ocr-invoices" element={<AdminRoute><OCRInvoicePage /></AdminRoute>} />
+      <Route path="/ocr-invoices" element={<FinanceRoute><OCRInvoicePage /></FinanceRoute>} />
       <Route path="/users" element={<AdminRoute><UsersPage /></AdminRoute>} />
       <Route path="/settings" element={<AdminRoute><CompanySettingsPage /></AdminRoute>} />
       

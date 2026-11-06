@@ -5,6 +5,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance } from "@/lib/financeAccess";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -173,6 +175,7 @@ function MaterialCostCell({ ln, isLocked, analysisId, onUpdate }) {
 }
 
 export default function SMRAnalysisPage() {
+  const { user } = useAuth();   // SEC-02 (R20)
   const { projectId, analysisId } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -446,7 +449,8 @@ export default function SMRAnalysisPage() {
       </Card>
 
       {/* Pricing Panels for lines with materials */}
-      {lines.filter(ln => ln.materials?.length > 0).map(ln => (
+      {/* SEC-02 (R20): material purchase prices are finance */}
+      {canReadFinance(user?.role) && lines.filter(ln => ln.materials?.length > 0).map(ln => (
         <Card key={`pricing-${ln.line_id}`}>
           <CardContent className="p-3">
             <p className="text-xs text-muted-foreground mb-2">{ln.smr_type}</p>

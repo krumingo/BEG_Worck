@@ -20,7 +20,7 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, require_finance_read
 
 router = APIRouter(tags=["Subcontractors"])
 
@@ -600,7 +600,10 @@ async def create_subcontractor_payment(
 
 
 @router.get("/subcontractor-payments")
-async def list_subcontractor_payments(project_id: Optional[str] = None, package_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_subcontractor_payments(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.subcontractor_payment.read", module="M2", resource_type="subcontractor_payment")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, package_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id

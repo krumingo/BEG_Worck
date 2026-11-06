@@ -102,6 +102,36 @@ ACTIONS: Set[str] = {
     "pricing.material_price_refresh.execute",  # POST /api/pricing/refresh
 }
 
+# ---------------------------------------------------------------------------
+# SEC-02 (R20, Krum 06.11.2026; FLOW-002, FLOW-010; PM-01 §5.2, FG-1/12/14/15):
+# reading money. The registry of every guarded GET is app/permissions/finance_read.py
+# (endpoint -> action -> rule -> canon source); the actions are listed here so the
+# catalog stays the one place that says who holds what.
+#
+#   FINANCE_READ_ACTIONS     company finance AND project money that only the finance
+#                            roles read (R20 rules 1 + 2): Owner/Admin (full set) and
+#                            Accountant, company scope. No other role, member or not.
+#   PROJECT_BUDGET_READ_ACTIONS
+#                            R20: the Technical Manager (canonical role_id
+#                            ``site_manager``, FG-14) reads budget + spent + remaining of
+#                            the projects they are a MEMBER of — granted only on the
+#                            project-scope assignment mirroring that membership
+#                            (project_membership_actions below), never company-wide.
+#                            Finance roles read it everywhere.
+#   MONEY_VALUES_READ        "may this caller see money values" on a shared screen whose
+#                            rule is "hide the values" (R20 rule 5; FG-1/FG-15 labor
+#                            rates, all-reports). Finance roles only, company scope.
+# FG-12: a project-scope assignment never carries a FINANCE_READ action or
+# MONEY_VALUES_READ, so combining a company role with project memberships can never
+# widen money reads beyond what the company role already gives.
+# ---------------------------------------------------------------------------
+from app.permissions.finance_read import (                       # noqa: E402
+    FINANCE_READ_ACTIONS, PROJECT_BUDGET_READ_ACTIONS, MONEY_VALUES_READ,
+)
+ACTIONS |= FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
+SEC02_ACCOUNTANT_READ_ACTIONS: Set[str] = (
+    FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ})
+
 # SEC-01: the money-write actions above, granted to Accountant (Owner/Admin get them
 # through their full set).
 MONEY_WRITE_ACTIONS: Set[str] = {
@@ -149,6 +179,8 @@ FIELD_COST_WRITE_ACTIONS: Set[str] = {
 }
 # role_id (canonical or legacy) of the company roles R16 lets write on member projects.
 FIELD_COST_MEMBER_ROLE_IDS: Set[str] = {"site_manager", "LEGACY_TECHNICIAN"}
+# SEC-02 (R20, FG-14): the company role that reads the budget view of member projects.
+PROJECT_BUDGET_MEMBER_ROLE_IDS: Set[str] = {"site_manager"}
 
 # SEC-01-C01: Owner/Admin only (the existing rule of PUT /price-modifiers/org,
 # routes/price_modifiers.py) — through their full set; granted to no other role.
@@ -198,7 +230,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
     "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read",
                                                                       "master_data.pending.read",
                                                                       "master_data.entity.read",
-                                                                      *MONEY_WRITE_ACTIONS}},
+                                                                      *MONEY_WRITE_ACTIONS,
+                                                                      *SEC02_ACCOUNTANT_READ_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read"}},
@@ -236,6 +269,10 @@ def project_membership_actions(role_id: str, role_in_project: str) -> list:
                 else PROJECT_MEMBER_ACTIONS)
     if role_id in FIELD_COST_MEMBER_ROLE_IDS:
         base += sorted(FIELD_COST_WRITE_ACTIONS)
+    # SEC-02 (R20, FG-14): budget + spent + remaining of THIS project, for the
+    # Technical Manager only (canonical role_id, not role_in_project).
+    if role_id in PROJECT_BUDGET_MEMBER_ROLE_IDS:
+        base += sorted(PROJECT_BUDGET_READ_ACTIONS)
     return base
 
 # ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { canReadFinance } from "@/lib/financeAccess";
 import AssetQrBlock from "@/components/AssetQrBlock";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
@@ -196,11 +197,15 @@ export default function EmployeeDetailPage() {
   }, [periodFrom]);
 
   // Load dossier data with period
+  // SEC-02 (R20-1): the dossier carries pay, payroll and advances — finance roles only;
+  // the backend refuses everyone else, so the UI does not ask.
+  const seesFinance = canReadFinance(user?.role);
   useEffect(() => {
+    if (!seesFinance) return;
     API.get(`/employee-dossier/${userId}?date_from=${periodFrom}&date_to=${periodTo}`)
       .then(r => setDossier(r.data))
       .catch(() => {});
-  }, [userId, periodFrom, periodTo]);
+  }, [userId, periodFrom, periodTo, seesFinance]);
 
   // Auto-calculation
   const updatePayField = (field, value) => {

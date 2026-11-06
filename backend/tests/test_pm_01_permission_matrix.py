@@ -624,6 +624,8 @@ ENFORCE_EXTRA_WRITES = {
     ("PUT", "/api/ocr-invoice/{intake_id}/approve"): "denial",
     ("POST", "/api/sales/commit"): "denial",
     ("POST", "/api/pricing/refresh"): "denial",
+    # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
+    ("GET", "/api/reports/company-finance-export"): "denial",
 }
 
 

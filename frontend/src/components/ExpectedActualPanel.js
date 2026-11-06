@@ -26,8 +26,10 @@ function ComparisonRow({ item }) {
       <span className="flex-1 truncate min-w-0">{item.name}</span>
       <span className="font-mono w-14 text-right text-muted-foreground">{item.planned_hours?.toFixed(0) || 0}ч</span>
       <span className="font-mono w-14 text-right">{item.actual_hours?.toFixed(0) || 0}ч</span>
+      {/* SEC-02 (R20-2B): group/location amounts are client prices — the backend omits
+          them for the Technical Manager; show a dash, not a fake 0. */}
       <span className={`font-mono w-16 text-right font-bold ${st.color}`}>
-        {item.variance_cost > 0 ? "+" : ""}{item.variance_cost?.toFixed(0) || 0}
+        {item.variance_cost === undefined ? "—" : <>{item.variance_cost > 0 ? "+" : ""}{item.variance_cost?.toFixed(0) || 0}</>}
       </span>
       <div className="w-20"><Progress value={Math.min(pct, 100)} className="h-1.5" /></div>
     </div>

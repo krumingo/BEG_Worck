@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useActiveProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance, canReadBudgetView } from "@/lib/financeAccess";
 import API from "@/lib/api";
 import AssetQrBlock from "@/components/AssetQrBlock";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
@@ -75,6 +77,11 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  // SEC-02 (R20): project money for Owner/Admin/Accountant; the Technical Manager sees
+  // only the budget view (budget + spent + remaining per SMR) of his own projects.
+  const { user } = useAuth();
+  const seesFinance = canReadFinance(user?.role);
+  const seesBudget = canReadBudgetView(user?.role);
 
   const { setActiveProject } = useActiveProject();
   const [loading, setLoading] = useState(true);
@@ -369,7 +376,7 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Card: Финансов статус */}
-            <ProjectFinanceCard projectId={projectId} onNavigateFinance={() => handleTabChange("finance")} />
+            {seesFinance && <ProjectFinanceCard projectId={projectId} onNavigateFinance={() => handleTabChange("finance")} />}
 
             {/* Card: Екип (compact) */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-team-compact">
@@ -401,9 +408,11 @@ export default function ProjectDetailPage() {
 
           {/* Sub-projects section */}
           {/* Centralized View */}
+          {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
             <CentralizedProjectView projectId={projectId} />
           </div>
+          )}
         </TabsContent>
 
         {/* ════ TAB: SMR ════ */}
@@ -441,7 +450,7 @@ export default function ProjectDetailPage() {
             onImported={() => { setShowExcelImport(false); fetchDashboard(); toast.success("КСС импортиран успешно"); }}
           />
 
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>
+          {seesBudget && <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRGroupsPanel projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRLocationMap projectId={projectId} /></div>
           {/* Aggregated SMR with to-offer flow */}
@@ -463,14 +472,16 @@ export default function ProjectDetailPage() {
         {/* ════ TAB: FINANCE ════ */}
         <TabsContent value="finance" className="space-y-4 mt-4">
           {/* Financial Results: Cash / Operating / Fully Loaded */}
+          {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <FinancialResultsCard projectId={projectId} />
           </div>
+          )}
 
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectPnLDashboard projectId={projectId} /></div>
+          {seesFinance && <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectPnLDashboard projectId={projectId} /></div>}
 
-          {/* Expected vs Actual */}
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ExpectedActualPanel projectId={projectId} /></div>
+          {/* Expected vs Actual — the R20 budget view (SiteManager too, own projects) */}
+          {seesBudget && <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ExpectedActualPanel projectId={projectId} /></div>}
 
           {/* Material Waste */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><MaterialWastePanel projectId={projectId} /></div>
@@ -609,9 +620,11 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
+          {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <ProjectPersonnelPanel projectId={projectId} />
           </div>
+          )}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <SiteWorkersPanel projectId={projectId} />
           </div>

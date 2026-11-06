@@ -1,0 +1,19 @@
+# SEC-02 test summaries (branch claude/sec-02-finance-read on PR #69 @ 471eaaa, local real MongoDB 7.0 replica set)
+## real Mongo (W0_03_REAL_MONGO_URL set), file by file
+tests/test_sec_02_finance_read.py: 13 passed
+tests/test_sec_01_money_write_permissions.py: 8 passed
+tests/test_sec_01_c01_all_money_writes.py: 7 passed
+tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed
+tests/test_pm_01_permission_matrix.py: 6 passed (fresh run reproduces the committed, regenerated matrix cell by cell)
+## tests/test_r0_0*.py (real Mongo, file by file)
+83 + 69 + 388 + 145 + 56 + 73 = 814 passed
+## W0 DB-free (tests/test_w0_*.py --noconftest)
+15 failed, 1085 passed, 50 skipped
+(the same 15 failures as main / SEC-01-C02: tests/test_w0_03e_legacy_routes.py, users/persons/companies/asset_items/asset_units)
+## Guards
+W0-03E-A1 tenant access guard: 418 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 206 module(s) checked, 0 violation(s)
+## Frontend
+yarn test: 7 suites, 98 passed; yarn build: compiled (warnings only in files not touched)
+## PM-01 matrix re-run (harness, not by hand): 1215 cells changed in 89 routes (docs/evidence/SEC-02/pm01_cells_changed.csv)
+## Environment note: mongod in this container must be run file by file (host nofile limit 20000; one run of all R0 files hit EMFILE in mongod)
