@@ -11,7 +11,7 @@
 | #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `45768f3` | **FINDINGS (blocking): C01A-1 concurrent allocation cancels reverse a module-owned payment**; FG-45 sequential paths PASS; INT-70x69 mitigated (409) | 2026-11-06 |
+| #70 PAY-01 | `8aac73d` | **PASS** (R29 428 + C01A-1 fixed); low C01A-L1 (takeover race: writes then 409); INT: add/add conflict `frontend/src/lib/idempotency.js` with #69 | 2026-11-06 |
 | #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1080,7 +1080,7 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #70 PAY-01 | `45768f3` | **FINDINGS (blocking): C01A-1 concurrent allocation cancels reverse a module-owned payment**; FG-45 sequential paths PASS; INT-70x69 mitigated (409) | 2026-11-06 |
+| #70 PAY-01 | `8aac73d` | **PASS** (R29 428 + C01A-1 fixed); low C01A-L1 (takeover race: writes then 409); INT: add/add conflict `frontend/src/lib/idempotency.js` with #69 | 2026-11-06 |
 | #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
@@ -1324,7 +1324,7 @@ Merge-tree, `64418eb` against each:
 |---|---|
 | main | clean |
 | #67 | clean |
-| #70 PAY-01 | `45768f3` | **FINDINGS (blocking): C01A-1 concurrent allocation cancels reverse a module-owned payment**; FG-45 sequential paths PASS; INT-70x69 mitigated (409) | 2026-11-06 |
+| #70 PAY-01 | `8aac73d` | **PASS** (R29 428 + C01A-1 fixed); low C01A-L1 (takeover race: writes then 409); INT: add/add conflict `frontend/src/lib/idempotency.js` with #69 | 2026-11-06 |
 | #71 SEC-02 | `73b72b5` | **FINDINGS**: Addendum A closes D1/D9 + 2 scan hits; SEC02-1 remainder still open (work-sessions, site-workers, smr-groups, pulse, ocr-invoice) | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 | conflict: catalog.py, procurement.py, sales.py |
@@ -1597,3 +1597,52 @@ Cause:
 Effect: the ledger reverses a salary, advance or subcontractor payment that the module still counts as paid. This is the FLOW-006 divergence FG-45 is meant to prevent; it needs two concurrent finance actions, for example a double submit or two tabs.
 
 Fix direction: guard the post-cancel reversal as well. If `source_module(payment)` is set, do not reverse; leave the payment active and unallocated, or refuse atomically. Alternatively, make "last allocation" an atomic decision.
+
+
+## #70 PAY-01-C01 Addendum B + C01A-1 fix @ `8aac73d` — 2026-11-06 ~22:25 UTC — PASS (1 low finding, 1 integration note)
+
+Delta:
+- `670b5b9` (R29): every money write needs an Idempotency-Key, else 428.
+- `8aac73d`:
+  - the source-module guard moved into `_reverse_one` (it applies to every caller);
+  - for a module-owned payment, the "last allocation?" check and the cancel run under `_payment_lock`: a conditional `allocation_lock` on the payment row; a busy lock → 409 `PAYMENT_BUSY`; a lock older than 30 s is taken over; the release is token-guarded.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_pay_01*.py` | **444 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/206 |
+| A1 | 0/418 |
+
+New probe `docs/audit/probes/pay01/probe_pay01_r29_keys.py` (PROVED):
+- payments, transfers, account-funding, other-expense, other-income, invoice quick-pay and allocate, without a key → **428 IDEMPOTENCY_KEY_REQUIRED, +0 writes**;
+- with a key → 201/200; replaying the same key + same body → identical response, +0; same key + other body → 409;
+- payment reversal and allocation cancel without a key → 428, +0.
+
+Frontend: every money POST/DELETE (InvoiceEditor, Payments, Invoices, FinancialAccounts) sends `idempotencyHeaders`.
+
+`probe_pay01_c01a_source_module.py` now adds an automatic key to each write, because R29 refuses keyless writes:
+
+| Case | Result |
+|---|---|
+| M1–M4 | unchanged, all ok |
+| **M5 (the C01A-1 race), 5 attempts** | **[200, 409]**; payment stays active, 0 reversal rows, 1 allocation left. **C01A-1 CLOSED (PROVED)** |
+| M6: fresh foreign lock (5 s) | 409 `PAYMENT_BUSY`, writes +0, the foreign lock is untouched |
+| M6: stale lock (31 s) | taken over, 200; the lock is released afterwards |
+| M7: forced takeover race (`PAYMENT_LOCK_STALE_SECONDS = -5`, every lock counts as stale) | see C01A-L1 |
+
+- **C01A-L1 (low): PROVED** only under the forced condition. In M7 the guard in `_reverse_one` held: the payment was never reversed, with 0 reversal rows. But **both** requests answered 409 `SOURCE_MODULE_REVERSAL_REQUIRED` **after** both allocations were cancelled and audited (0 active allocations left).
+  - So in a real takeover (a holder stalled for more than 30 s), the caller sees an error although the cancel was written.
+  - Its key is never completed, so a retry with the same key replays to the same 409.
+  - The ledger stays correct; the payment ends active with no allocations. This is low because it needs a stall of over 30 s.
+
+INT-70x69:
+- On the scratch merge with #69 `07faab5`, the ledger reversal is still refused; with no key it now returns 428 first.
+- **Integration note:** the merge now has an **add/add conflict in `frontend/src/lib/idempotency.js`** (and its test).
+  - #69 exports `createIdempotencyHolder().keyFor(endpoint, payload)`, which keeps the key per payload.
+  - #70 exports `createKeyHolder().get()/settle(err)`, which keeps the key only on a network error.
+  - These are two different contracts at one path. One must win at merge, and the callers of the other must be ported.
+  - The A1 inventory conflicts as well.

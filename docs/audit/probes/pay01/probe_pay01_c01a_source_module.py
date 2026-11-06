@@ -24,7 +24,18 @@ F = []
 def check(cond, label):
     print(("ok   " if cond else "FAIL ") + label)
     if not cond: F.append(label)
+AUTO_KEY = os.environ.get("PROBE_AUTO_KEY", "1") == "1"   # R29 (#70 8aac73d): money writes need a key
 with TestClient(app, raise_server_exceptions=False) as tc:
+    if AUTO_KEY:
+        _orig_request = tc.request
+        def _keyed(method, url, **kw):
+            if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+                h = dict(kw.get("headers") or {})
+                h.setdefault("Idempotency-Key", "auto-" + uuid.uuid4().hex)
+                kw["headers"] = h
+            return _orig_request(method, url, **kw)
+        tc.request = _keyed
+        tc.post = lambda url, **kw: _keyed("POST", url, **kw)
     c = tc.portal.call(lambda: AsyncIOMotorClient(os.environ["MONGO_URL"])); op = c[os.environ["DB_NAME"]]
     q = lambda f: tc.portal.call(f)
     rep = q(lambda: seed_mod.seed(op, c[os.environ["BEG_SYSTEM_DB"]], PW))
@@ -102,5 +113,44 @@ with TestClient(app, raise_server_exceptions=False) as tc:
             attempt, sorted(res), (prow or {}).get("status"), nrev, active))
         if nrev or (prow or {}).get("status") == "reversed":
             check(False, "M5 race reversed a module-owned payment"); break
+    # M6 lock: a FRESH foreign lock → 409 PAYMENT_BUSY, nothing written; a STALE one (31 s) → taken over.
+    import app.routes.finance as fin
+    from datetime import datetime, timezone, timedelta
+    def mk_sal():
+        pid = str(uuid.uuid4())
+        q(lambda: op.finance_payments.insert_one({"id": pid, "org_id": org, "direction": "Outflow", "amount": 900, "currency": "EUR",
+            "date": now[:10], "method": "Cash", "account_id": a1, "counterparty_name": "Служител", "user_id": U["technician"]["id"],
+            "reference": "run-z", "note": "Заплата 9", "category": "Заплата", "created_at": now, "updated_at": now}))
+        k1, k2 = inv("Received"), inv("Received")
+        tc.post("/api/finance/payments/%s/allocate" % pid, json={"allocations": [{"invoice_id": k1, "amount": 100}, {"invoice_id": k2, "amount": 100}]}, headers=H)
+        return pid, q(lambda: op.payment_allocations.find({"payment_id": pid}, {"_id": 0}).to_list(10))
+    cancel1 = lambda a: tc.request("DELETE", "/api/finance/invoices/%s/payments/%s" % (a["invoice_id"], a["id"]), json={"reason": "грешка"}, headers=H)
+    for label, age, expect in (("fresh 5s", 5, 409), ("stale 31s", 31, 200)):
+        pid, al = mk_sal()
+        at = (datetime.now(timezone.utc) - timedelta(seconds=age)).isoformat()
+        q(lambda: op.finance_payments.update_one({"id": pid}, {"$set": {"allocation_lock": {"token": "other", "at": at}}}))
+        b = snap(); r = cancel1(al[0]); d = tuple(x - y for x, y in zip(snap(), b))
+        code = (r.json().get("detail") or {}).get("error_code") if r.status_code == 409 else ""
+        lock = q(lambda: op.finance_payments.find_one({"id": pid}, {"_id": 0, "allocation_lock": 1}))
+        check(r.status_code == expect and (expect == 200 or (code == "PAYMENT_BUSY" and d == (0, 0, 0))),
+              "M6 %s foreign lock → %s %s writes %s; lock after: %s" % (label, r.status_code, code, d, lock))
+    # M7 takeover race: every lock counts as stale (a slow holder overtaken) → both concurrent cancels run.
+    # The guard in _reverse_one must still keep the module payment ACTIVE. What do the responses/state look like?
+    old = fin.PAYMENT_LOCK_STALE_SECONDS; fin.PAYMENT_LOCK_STALE_SECONDS = -5
+    try:
+        for attempt in range(5):
+            pid, al = mk_sal()
+            with ThreadPoolExecutor(2) as ex:
+                res = list(ex.map(lambda a: cancel1(a), al))
+            prow = q(lambda: op.finance_payments.find_one({"id": pid}, {"_id": 0, "status": 1}))
+            nrev = q(lambda: op.finance_payments.count_documents({"reverses_payment_id": pid}))
+            active = q(lambda: op.payment_allocations.count_documents({"payment_id": pid, "status": {"$ne": "cancelled"}}))
+            print("M7 attempt %d: %s payment status %s reversal rows %d active allocations %d" % (
+                attempt, sorted((x.status_code, ((x.json().get("detail") or {}) if x.status_code >= 400 else {}).get("error_code") if isinstance(x.json().get("detail"), dict) else None) for x in res),
+                (prow or {}).get("status"), nrev, active))
+            if nrev or (prow or {}).get("status") == "reversed":
+                check(False, "M7 takeover race reversed a module payment"); break
+    finally:
+        fin.PAYMENT_LOCK_STALE_SECONDS = old
     q(lambda: c.drop_database(os.environ["DB_NAME"])); q(lambda: c.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")
