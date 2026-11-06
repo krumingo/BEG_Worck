@@ -241,11 +241,16 @@ export default function PaymentsPage() {
 
   const handleDeletePayment = async (payment) => {
     if (!window.confirm(t("finance.confirmDeletePayment"))) return;
+    // PAY-01: a payment is reversed (сторно), never deleted — a reason is required.
+    const reason = (window.prompt("Причина за сторно на плащането:") || "").trim();
+    if (!reason) return;
+    const key = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     try {
-      await API.delete(`/finance/payments/${payment.id}`);
+      await API.delete(`/finance/payments/${payment.id}`, { data: { reason }, headers: { "Idempotency-Key": key } });
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      const d = err.response?.data?.detail;
+      alert((d && d.message) || d || t("toast.deleteFailed"));
     }
   };
 

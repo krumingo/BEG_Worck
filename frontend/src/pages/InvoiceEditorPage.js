@@ -393,11 +393,16 @@ export default function InvoiceEditorPage() {
 
   const handleRemovePayment = async (allocationId) => {
     if (!window.confirm(t("finance.confirmRemovePayment"))) return;
+    // PAY-01: the allocation is cancelled and its payment reversed (сторно) — a reason is required.
+    const reason = (window.prompt("Причина за отмяна на плащането:") || "").trim();
+    if (!reason) return;
+    const key = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     try {
-      await API.delete(`/finance/invoices/${invoiceId}/payments/${allocationId}`);
+      await API.delete(`/finance/invoices/${invoiceId}/payments/${allocationId}`, { data: { reason }, headers: { "Idempotency-Key": key } });
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка при премахване на плащане");
+      const d = err.response?.data?.detail;
+      alert((d && d.message) || d || "Грешка при премахване на плащане");
     }
   };
 
