@@ -1325,6 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 | clean |
+| #71 SEC-02 | `6080165` | **FINDINGS (blocking): SEC02-1 undeclared money GETs (work-sessions labor_cost, site-workers total_earned, smr-groups, pulse budget, ocr-invoice)**; registry itself PASS | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 | conflict: catalog.py, procurement.py, sales.py |
 
@@ -1406,3 +1407,62 @@ Note (info): the precheck also requires the **rollback target's** manifest to re
 Answer to @parent's #55 contract question:
 - At #55 `64418eb`, canonical writes are enforce-only: `routes/warehouse_canonical.py` `post_project_writeoff` returns 503 `CANONICAL_WRITES_REQUIRE_ENFORCE` in off/shadow (code read), and `CommandService.execute` refuses without enforce.
 - So a shadow staging (R15 default, recorded by R26) can hold **no canonical stock**. Any warehouse rehearsal on staging needs an explicit `--permission-mode enforce`.
+
+
+## #71 SEC-02 @ `6080165` — 2026-11-06 ~21:35 UTC — FINDINGS (1 blocking for completeness)
+
+Base: stacked on #69 @ `471eaaa`. #69 is now `07faab5`, so the merge-tree conflicts with #69 (full_cost, labor_smr, reports, subcontractors, PM-01 matrix). **A rebase onto C03 is needed.** Conflicts with #55 (catalog, procurement, sales, DashboardLayout). Clean with main, #56, #67 and #70.
+
+Gates, real Mongo:
+
+| Gate | Result |
+|---|---|
+| `test_sec_02_finance_read.py` (incl. the fresh real-Mongo two-tenant harness) + `test_sec_01_*` + `test_pm_01` | **43 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50, same FAILED list as `fail_56.txt` |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| sec01 siblings + r16 probes | FAILS none |
+
+The registry (87 routes), with my checks on the points @parent asked for:
+
+- **FG-12 part 1: PROVED it holds.**
+  - R20-1/R20-2 are decided at **company** scope (`require_finance_read` = `require_money_write`). `money_values_visible` is also company scope.
+  - My decision probes, on top of the PR's own `_decide`:
+
+    | Assignments | Request | Result |
+    |---|---|---|
+    | Viewer company + project-scope *accountant* on P1 | `project_profit` at company scope | **False** |
+    | same | `money_values` | **False** |
+    | Technician company + project mirror with explicit `money_values` | `money_values` | False |
+    | project_manager / procurement company | money | False |
+
+  - A project-scope accountant or explicit permission on a project returns True only for project-scope evaluation, which the R20 routes do not use.
+  - Deny-overrides is open, declared as D5.
+- **Expired membership:** a SiteManager mirror with `valid_to` in the past gets budget P1 → **False**. The harness covers expired and future dated memberships on P2.
+- **SiteManager R20-2B:**
+  - `expected-actual` removes group/location `planned_cost`/`actual_cost`/`variance_cost`/`status` (client-price sums).
+  - The summary totals come from activities (`labor_budget` and session labor cost), not from client prices (`services/expected_actual.py:147-150`). OK.
+  - Info: activity `planned_cost / planned_hours` gives the project's average hourly rate. This is inherent to the "budget + spent" view Krum chose.
+- **Labor (FG-1/FG-15):** `GET`/`POST /labor-entries` strip `hourly_rate`/`labor_cost` for non-finance roles, and the list is limited to current-member projects. OK.
+
+### SEC02-1 (HIGH, blocking for completeness) — money GETs outside the registry, NOT in the declared debt — PROVED
+
+Probe: `docs/audit/probes/sec02/probe_sec02_unregistered_money_gets.py`.
+- It reuses the SEC-02 harness seed, then calls every GET route not in the registry as a **non-member Warehousekeeper** and as a member Viewer, in **off and enforce**.
+- Raw output: `docs/audit/probes/sec02/scan_6080165.json`.
+
+Undeclared (not in D1/D3/D4); all return 200 with money to the **non-member Warehousekeeper in enforce**:
+- `GET /api/work-sessions` — `items[].labor_cost` (each worker's pay, FLOW-037 §3.4 / FLOW-010). The same data SEC-02 strips from `/labor-entries`, so the FG-15 goal is not met.
+- `GET /api/work-sessions/summary` (`total_cost`), `GET /api/work-sessions/overtime` (`workers[].total_cost`).
+- `GET /api/projects/{id}/site-workers` — `workers[].total_earned`, to a non-member.
+- `GET /api/projects/{id}/smr-groups` and `/smr-groups/tree` — `summary.total_cost` and `grand_total.total_cost` (group sums of the analysis lines, i.e. client prices per the PR's own D6 note), plus `labor_price_per_unit`. D1 names `/api/smr-analyses`, not these.
+- `GET /api/pulse/today`, `GET /api/sites/{id}/pulse`, `/pulse/range` — `budget_snapshot.total_budget`, to a non-member.
+- `GET /api/ocr-invoice` — `items[].reviewed_data.total_amount` (supplier invoice amounts).
+- Minor: `GET /api/subscription` `plan_price`. `/api/billing/subscription` is guarded as R20-1, but this sibling is not.
+
+Declared (D1/D3/D4) and seen by the scan: `/api/ai-config/hourly-rates`, `/api/smr-analyses`, `/api/warehouse/batches` (`unit_cost`, D3), and the Viewer-member activity budgets / activities-overview / budget-health (D4).
+
+Noise (not money): `/api/billing/plans` (public plan prices), `/api/organization` `vat_percent`, `/invoice-context` `default_vat_rate`.
+
+Recommendation: add the undeclared routes to Addendum A (D1), or record them as debt with Krum's decision.

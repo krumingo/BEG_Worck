@@ -1,0 +1,334 @@
+{
+ "/api/ai-config/hourly-rates": {
+  "off/warehousekeeper": [
+   ".rates.бояджия.hourly_rate",
+   ".rates.бояджия.min_job_price",
+   ".rates.вик.hourly_rate",
+   ".rates.вик.min_job_price",
+   ".rates.електротехник.hourly_rate",
+   ".rates.електротехник.min_job_price",
+   ".rates.майстор.hourly_rate",
+   ".rates.майстор.min_job_price"
+  ],
+  "off/viewer": [
+   ".rates.бояджия.hourly_rate",
+   ".rates.бояджия.min_job_price",
+   ".rates.вик.hourly_rate",
+   ".rates.вик.min_job_price",
+   ".rates.електротехник.hourly_rate",
+   ".rates.електротехник.min_job_price",
+   ".rates.майстор.hourly_rate",
+   ".rates.майстор.min_job_price"
+  ],
+  "enforce/warehousekeeper": [
+   ".rates.бояджия.hourly_rate",
+   ".rates.бояджия.min_job_price",
+   ".rates.вик.hourly_rate",
+   ".rates.вик.min_job_price",
+   ".rates.електротехник.hourly_rate",
+   ".rates.електротехник.min_job_price",
+   ".rates.майстор.hourly_rate",
+   ".rates.майстор.min_job_price"
+  ],
+  "enforce/viewer": [
+   ".rates.бояджия.hourly_rate",
+   ".rates.бояджия.min_job_price",
+   ".rates.вик.hourly_rate",
+   ".rates.вик.min_job_price",
+   ".rates.електротехник.hourly_rate",
+   ".rates.електротехник.min_job_price",
+   ".rates.майстор.hourly_rate",
+   ".rates.майстор.min_job_price"
+  ]
+ },
+ "/api/billing/plans": {
+  "off/warehousekeeper": [
+   "[].price"
+  ],
+  "off/viewer": [
+   "[].price"
+  ],
+  "enforce/warehousekeeper": [
+   "[].price"
+  ],
+  "enforce/viewer": [
+   "[].price"
+  ]
+ },
+ "/api/labor-warnings/{project_id}": {
+  "off/warehousekeeper": [
+   ".packages[].labor_budget"
+  ],
+  "off/viewer": [
+   ".packages[].labor_budget"
+  ],
+  "enforce/warehousekeeper": [
+   ".packages[].labor_budget"
+  ],
+  "enforce/viewer": [
+   ".packages[].labor_budget"
+  ]
+ },
+ "/api/ocr-invoice": {
+  "off/warehousekeeper": [
+   ".items[].reviewed_data.total_amount"
+  ],
+  "off/viewer": [
+   ".items[].reviewed_data.total_amount"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].reviewed_data.total_amount"
+  ],
+  "enforce/viewer": [
+   ".items[].reviewed_data.total_amount"
+  ]
+ },
+ "/api/organization": {
+  "off/warehousekeeper": [
+   ".vat_percent"
+  ],
+  "off/viewer": [
+   ".vat_percent"
+  ],
+  "enforce/warehousekeeper": [
+   ".vat_percent"
+  ],
+  "enforce/viewer": [
+   ".vat_percent"
+  ]
+ },
+ "/api/projects/{project_id}/invoice-context": {
+  "off/warehousekeeper": [
+   ".default_vat_rate"
+  ],
+  "off/viewer": [
+   ".default_vat_rate"
+  ],
+  "enforce/warehousekeeper": [
+   ".default_vat_rate"
+  ],
+  "enforce/viewer": [
+   ".default_vat_rate"
+  ]
+ },
+ "/api/projects/{project_id}/site-workers": {
+  "off/warehousekeeper": [
+   ".workers[].total_earned"
+  ],
+  "off/viewer": [
+   ".workers[].total_earned"
+  ],
+  "enforce/warehousekeeper": [
+   ".workers[].total_earned"
+  ],
+  "enforce/viewer": [
+   ".workers[].total_earned"
+  ]
+ },
+ "/api/projects/{project_id}/smr-groups": {
+  "off/warehousekeeper": [
+   ".items[].summary.total_cost"
+  ],
+  "off/viewer": [
+   ".items[].summary.total_cost"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].summary.total_cost"
+  ],
+  "enforce/viewer": [
+   ".items[].summary.total_cost"
+  ]
+ },
+ "/api/projects/{project_id}/smr-groups/tree": {
+  "off/warehousekeeper": [
+   ".grand_total.total_cost",
+   ".tree[].groups[].lines[].labor_price_per_unit",
+   ".tree[].groups[].summary.total_cost"
+  ],
+  "off/viewer": [
+   ".grand_total.total_cost",
+   ".tree[].groups[].lines[].labor_price_per_unit",
+   ".tree[].groups[].summary.total_cost"
+  ],
+  "enforce/warehousekeeper": [
+   ".grand_total.total_cost",
+   ".tree[].groups[].lines[].labor_price_per_unit",
+   ".tree[].groups[].summary.total_cost"
+  ],
+  "enforce/viewer": [
+   ".grand_total.total_cost",
+   ".tree[].groups[].lines[].labor_price_per_unit",
+   ".tree[].groups[].summary.total_cost"
+  ]
+ },
+ "/api/pulse/today": {
+  "off/warehousekeeper": [
+   ".items[].budget_snapshot.total_budget"
+  ],
+  "off/viewer": [
+   ".items[].budget_snapshot.total_budget"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].budget_snapshot.total_budget"
+  ],
+  "enforce/viewer": [
+   ".items[].budget_snapshot.total_budget"
+  ]
+ },
+ "/api/sites/{site_id}/pulse": {
+  "off/warehousekeeper": [
+   ".budget_snapshot.total_budget"
+  ],
+  "off/viewer": [
+   ".budget_snapshot.total_budget"
+  ],
+  "enforce/warehousekeeper": [
+   ".budget_snapshot.total_budget"
+  ],
+  "enforce/viewer": [
+   ".budget_snapshot.total_budget"
+  ]
+ },
+ "/api/sites/{site_id}/pulse/range": {
+  "off/warehousekeeper": [
+   ".items[].budget_snapshot.total_budget"
+  ],
+  "off/viewer": [
+   ".items[].budget_snapshot.total_budget"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].budget_snapshot.total_budget"
+  ],
+  "enforce/viewer": [
+   ".items[].budget_snapshot.total_budget"
+  ]
+ },
+ "/api/smr-analyses": {
+  "off/warehousekeeper": [
+   ".items[].lines[].labor_price_per_unit"
+  ],
+  "off/viewer": [
+   ".items[].lines[].labor_price_per_unit"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].lines[].labor_price_per_unit"
+  ],
+  "enforce/viewer": [
+   ".items[].lines[].labor_price_per_unit"
+  ]
+ },
+ "/api/subscription": {
+  "off/warehousekeeper": [
+   ".plan_price"
+  ],
+  "off/viewer": [
+   ".plan_price"
+  ],
+  "enforce/warehousekeeper": [
+   ".plan_price"
+  ],
+  "enforce/viewer": [
+   ".plan_price"
+  ]
+ },
+ "/api/warehouse/batches": {
+  "off/warehousekeeper": [
+   ".items[].unit_cost"
+  ],
+  "off/viewer": [
+   ".items[].unit_cost"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].unit_cost"
+  ],
+  "enforce/viewer": [
+   ".items[].unit_cost"
+  ]
+ },
+ "/api/work-sessions": {
+  "off/warehousekeeper": [
+   ".items[].labor_cost"
+  ],
+  "off/viewer": [
+   ".items[].labor_cost"
+  ],
+  "enforce/warehousekeeper": [
+   ".items[].labor_cost"
+  ],
+  "enforce/viewer": [
+   ".items[].labor_cost"
+  ]
+ },
+ "/api/work-sessions/overtime": {
+  "off/warehousekeeper": [
+   ".workers[].total_cost"
+  ],
+  "off/viewer": [
+   ".workers[].total_cost"
+  ],
+  "enforce/warehousekeeper": [
+   ".workers[].total_cost"
+  ],
+  "enforce/viewer": [
+   ".workers[].total_cost"
+  ]
+ },
+ "/api/work-sessions/summary": {
+  "off/warehousekeeper": [
+   ".total_cost"
+  ],
+  "off/viewer": [
+   ".total_cost"
+  ],
+  "enforce/warehousekeeper": [
+   ".total_cost"
+  ],
+  "enforce/viewer": [
+   ".total_cost"
+  ]
+ },
+ "/api/projects/{project_id}/activities-overview": {
+  "off/viewer": [
+   ".activities[].actual_cost",
+   ".activities[].labor_budget",
+   ".activities[].total_budget",
+   ".totals.total_actual_cost",
+   ".totals.total_labor_budget"
+  ],
+  "enforce/viewer": [
+   ".activities[].actual_cost",
+   ".activities[].labor_budget",
+   ".activities[].total_budget",
+   ".totals.total_actual_cost",
+   ".totals.total_labor_budget"
+  ]
+ },
+ "/api/projects/{project_id}/activity-budget-summary": {
+  "off/viewer": [
+   ".items[].labor_budget",
+   ".totals.labor_budget"
+  ],
+  "enforce/viewer": [
+   ".items[].labor_budget",
+   ".totals.labor_budget"
+  ]
+ },
+ "/api/projects/{project_id}/activity-budgets": {
+  "off/viewer": [
+   ".items[].labor_budget"
+  ],
+  "enforce/viewer": [
+   ".items[].labor_budget"
+  ]
+ },
+ "/api/projects/{project_id}/budget-health": {
+  "off/viewer": [
+   ".activities[].budget",
+   ".total_budget"
+  ],
+  "enforce/viewer": [
+   ".activities[].budget",
+   ".total_budget"
+  ]
+ }
+}
