@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C22) | `a427923` | PASS (internal) — Codex still required (money) | 2026-11-06 |
+| #55 Склад 5C (C23) | `53dbd28` | PASS (internal) — Codex still required (money) | 2026-11-06 |
 | #67 ST-02 | `e987892` | PASS (ST02-1 fixed) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
@@ -581,3 +581,36 @@ The live rehearsal (docker build/deploy) was not re-run by the audit; the eviden
 ### Integration
 
 #68 is clean against main, #55, #56 and #67; #67 is clean against #55.
+
+
+---
+
+## 2026-11-06 ~17:45 — PR #55 @ `53dbd28` (5C-C23: F-14 profit-by-period material/фира, F-15 waste card)
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix | **223 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo | **881 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 219 modules, 0 violations ✔ |
+| A1 | 444 units, 0 violations ✔ |
+| `yarn test` MaterialWastePanel | 3 / 3 ✔ |
+
+### Probes
+
+- **New C23-1** (`docs/audit/probes/pr55/test_probe_pr55_c23.py`). Flow: consume 3 + write-off 2 from the project + legacy 100 before cutover. Result: profit-by-period Σ material (+ undated) = **130**, Σ waste (+ undated) = **20**, Σ `material_total` = **150** = material summary total ✔. F-14 holds: фира is not inside "material", and the total is counted once.
+- **Re-runs:**
+  - C22-1…5: 5/5, one test per process;
+  - C21: 5/5;
+  - C19: 6/8, with only the known main W0-04 concurrency pair failing.
+
+### F-15 review (read)
+
+- The waste card adds canonical write-offs read through the shared helper, with no write on read and no second register.
+- It is a quantity card. Its totals feed no finance figure; the money side is the фира line of the C21/C22 reports.
+- Low note (SUSPICION, not a money defect): if a site logs the same loss in the manual register **and** as a warehouse write-off, the card's `wasted` quantity counts it twice. The two sources are shown apart (`manual_wasted_qty` / `written_off_qty`), so it is visible.
+- Label nit: write-offs from a **project** are labelled "отписване от склада".
+
+**Verdict:** PASS (internal). Codex review required (money).
