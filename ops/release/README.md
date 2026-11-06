@@ -52,7 +52,7 @@ build се хваща (`manifest was modified`). Validator-ът отхвърля
 | `deployment` | `id` (`synology-begwork`), `layout`, `tenant_scope` (`deployment-wide` днес) |
 | `schema_version` | `app_schema_version` (null — няма app schema version още), `migrations`: `declared`, `policy=NOT_RUN_BY_DEFAULT`, `approval_ref` (задължителен при declared) |
 | `configuration` | `version` (sha256 на layout файлове + env key names + flags + build args + smoke), `layout_source_commit`, `layout_files` (sha256), `required_env_keys` (само имена), `build_args` |
-| `feature_flags` | очаквани стойности (`PERMISSION_SERVICE_MODE: off`) — никога стойности от `.env` |
+| `feature_flags` | Feature Flags snapshot: очаквани стойности (`PERMISSION_SERVICE_MODE: off` от layout-а) — никога стойности от `.env`. **Р26 (ST-02-C03):** извън production `release_build.py --flag-override KEY=VALUE --flag-override-reason <текст>` записва стойността на deployment-а (напр. staging `PERMISSION_SERVICE_MODE=shadow`, R15) със `source` `deployment parameter (<env>): <причина>; layout default <v>; …`. Само за ключове от layout-а; `PERMISSION_SERVICE_MODE` ∈ off/shadow/enforce; за production се отказва (и validator-ът отхвърля такъв `source` в production manifest). Без override manifest-ът и `configuration.version` са същите като досега; схемата остава `beg.release-manifest/v1`. |
 | `entitlements` | `NOT_IMPLEMENTED` (W0-08), без snapshot |
 | `build` | tool версия, python, git, per-service inventory (`base_images`, `copy_sources`, `input_file_count`, `fingerprint`), `unpinned_base_images`, `rebuild_reason`, `tools_source_commit`, `tools` (sha256 на всеки tool файл в bundle-а) |
 | `services_to_rebuild` | само services с променен input fingerprint (всички, ако няма previous) |

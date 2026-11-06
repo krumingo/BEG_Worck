@@ -1,0 +1,21 @@
+# ST-02-C02 checks (2026-11-06), parent e987892, run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 204 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 414 unit(s) checked, 0 violation(s)
+## tests/test_r0_0*.py --noconftest (no Mongo)
+423 passed, 391 skipped, 6 warnings
+## tests/test_r0_0*.py --noconftest (MONGO_URL + W0_03_REAL_MONGO_URL = disposable local mongo:7.0 rs0, removed afterwards)
+814 passed, 6 warnings
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings
+  the same 15 failures as on e987892/cbb8bdb (tests-cbb8bdb.txt):
+  test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[{users,persons,companies,asset_items,asset_units}-{off,shadow}] (10)
+  test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[{users,persons,companies,asset_items,asset_units}] (5)
+## ST-02: tests/test_st_02_staging_stack.py --noconftest (real `docker compose config`, no daemon needed)
+157 passed
+## ops/release tests (pytest ops/release/tests)
+78 passed, 1 skipped, 52 subtests passed
+## Not re-run
+The Docker rehearsal (rehearsal-2026-11-06/) was produced with the old enforce default and without
+--deployed-by/--approved-by; it has not been re-run under shadow (see README.md).

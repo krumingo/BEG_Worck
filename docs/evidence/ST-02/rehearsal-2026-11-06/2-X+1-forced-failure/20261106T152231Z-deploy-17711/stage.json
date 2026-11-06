@@ -1,0 +1,45 @@
+{
+  "result": "PASS",
+  "checks": [
+    {
+      "check": "sha256sums.match",
+      "status": "PASS",
+      "detail": "19 files"
+    },
+    {
+      "check": "manifest.valid",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "tools.match_manifest",
+      "status": "PASS",
+      "detail": "16 tool files from 07da9aba0711"
+    },
+    {
+      "check": "artifact.sha256",
+      "status": "PASS",
+      "detail": "8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d"
+    },
+    {
+      "check": "artifact.tree_identity",
+      "status": "PASS",
+      "detail": "archive hashes to f08e24cc5c2fc628416bdb17934f9139c44184c2, manifest tree f08e24cc5c2fc628416bdb17934f9139c44184c2, 1282 files"
+    },
+    {
+      "check": "artifact.no_env_files",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "migrations.not_declared",
+      "status": "PASS",
+      "detail": "W0-09A never runs migrations; declared migrations need a separate approved step"
+    },
+    {
+      "check": "stage.tree_identity",
+      "status": "PASS",
+      "detail": "tree f08e24cc5c2fc628416bdb17934f9139c44184c2 verified (1282 files)"
+    }
+  ]
+}

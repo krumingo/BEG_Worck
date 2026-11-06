@@ -30,6 +30,8 @@ NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 ENV_KEY = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
 PATHLIKE = re.compile(r"^/[A-Za-z0-9._/-]*$")
 SAFE_VALUE = re.compile(r"^[A-Za-z0-9._:/@%+=,-]*$")
+# R26 (ST-02-C03): feature_flags source of a non-production deployment parameter (release_build --flag-override)
+FLAG_OVERRIDE_PREFIX = "deployment parameter ("
 
 SECRET_VALUE_PATTERNS = [
     re.compile(r"mongodb(\+srv)?://[^\s/]*:[^\s@]*@", re.I),
@@ -220,6 +222,11 @@ def validate_manifest(m):
             if not isinstance(spec, dict) or set(spec) != {"expected", "source"} \
                     or not isinstance(spec.get("expected"), str) or not SAFE_VALUE.match(spec.get("expected", "")):
                 v.err("release.feature_flags.%s" % key, "must be {expected: safe string, source: string}")
+            elif not isinstance(spec.get("source"), str):
+                v.err("release.feature_flags.%s" % key, "must be {expected: safe string, source: string}")
+            elif spec["source"].startswith(FLAG_OVERRIDE_PREFIX) and r.get("environment") == "production":
+                # R26: a deployment-parameter flag value is non-production only (production = versioned layout)
+                v.err("release.feature_flags.%s" % key, "a deployment-parameter override is not allowed in production")
     if v.obj(r["entitlements"], "release.entitlements", "entitlements"):
         if r["entitlements"]["status"] not in ("NOT_IMPLEMENTED", "SNAPSHOT"):
             v.err("release.entitlements.status", "must be NOT_IMPLEMENTED or SNAPSHOT")

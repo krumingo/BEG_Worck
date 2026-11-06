@@ -35,7 +35,7 @@
         "configuration": {"$ref": "#/$defs/configuration"},
         "feature_flags": {
           "type": "object",
-          "description": "Expected flag values only — never secrets, never values read from .env.",
+          "description": "Feature Flags snapshot: expected flag values only — never secrets, never values read from .env. Default source: the versioned layout. R26 (ST-02-C03): outside production, release_build.py --flag-override records the deployment's value with source 'deployment parameter (<environment>): <reason>; layout default <value>; ...'; the validator rejects that source in production.",
           "propertyNames": {"$ref": "#/$defs/env_key"},
           "additionalProperties": {
             "type": "object", "additionalProperties": false, "required": ["expected", "source"],
