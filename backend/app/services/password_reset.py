@@ -462,3 +462,57 @@ async def reset_password(db, token: str, new_password_hash: str,
                                  detail={"error": type(exc).__name__})
         raise ResetNotCompleted() from exc
     return user
+
+
+# ------------------------------------------------------------ admin reset
+class AdminResetNotCompleted(RuntimeError):
+    """The admin set-password transaction did not commit; nothing changed."""
+
+
+async def admin_set_password(db, tenant: TenantData, *, target: dict, new_password_hash: str,
+                             admin: dict, now: Optional[datetime] = None) -> None:
+    """AUTH-02 (FG-11): an Owner/Admin sets another user's password — atomically.
+
+    One transaction: the new hash, ``$inc auth_version`` (every session issued
+    before stops working, as after a self-service reset or a CLI recovery), the
+    user's open e-mail reset links revoked, the legacy audit row and the
+    canonical AuditEvent. All of it or none of it. The caller has already done
+    the tenant lookup, the Owner-only check and the strength check.
+
+    Raises :class:`AdminResetNotCompleted` when nothing was committed.
+    """
+    now = now or datetime.now(timezone.utc)
+    stamp = now.isoformat()
+    uid = target["id"]
+
+    async def body(session):
+        result = await tenant.users.update_one(
+            {"id": uid},
+            {"$set": {
+                "password_hash": new_password_hash,
+                "updated_at": stamp,
+                "password_reset_at": stamp,
+                "password_reset_by": admin["id"],
+            }, "$inc": {"auth_version": 1}}, session=session)
+        if result.matched_count != 1:
+            raise _ClaimLost()
+        await tenant.password_reset_tokens.update_many(
+            {"user_id": uid, "used_at": None},
+            {"$set": {"used_at": now, "revoked_reason": "admin_password_reset"}},
+            session=session)
+        await log_audit(admin["org_id"], admin["id"], admin["email"], "admin_password_reset",
+                        "user", uid, {"target_email": target.get("email"),
+                                      "reset_by_role": admin.get("role")},
+                        db_handle=db, session=session)
+        await audit_user_change(
+            db, tenant_id=admin["org_id"], actor_id=admin["id"],
+            action="user.admin_password_reset", target_id=uid,
+            reason="password set by an administrator (no hash recorded)",
+            tool_or_endpoint="POST /api/admin/set-password/{user_id}", session=session)
+
+    try:
+        await run_in_transaction(db, body)
+    except Exception as exc:
+        logger.error("ADMIN_PASSWORD_RESET_NOT_COMPLETED user_id=%s error=%s", uid,
+                     type(exc).__name__)
+        raise AdminResetNotCompleted() from exc

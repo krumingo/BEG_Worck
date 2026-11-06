@@ -93,7 +93,8 @@ async def _seed(op, sysdb):
 
 
 REAL_MONGO = bool(os.environ.get("W0_03_REAL_MONGO_URL", ""))
-_TX_COLLECTIONS = ("users", "password_reset_tokens", "audit_logs", "audit_events")
+_TX_COLLECTIONS = ("users", "password_reset_tokens", "audit_logs", "audit_events",
+                   "notifications")
 
 
 async def _snapshot_transaction(db, body):
@@ -160,6 +161,10 @@ def _app(monkeypatch, op, sysdb, outbox):
     from app.deps import auth as deps_auth
     from app.deps import modules as deps_modules
     from app.master_data.deps import ENV_MODE
+
+    # AUTH-02 (FG-16): no literal HMAC key on an unlabeled deployment — the test
+    # app gets an explicit, test-only one.
+    monkeypatch.setenv("AUTH_EVENT_HMAC_KEY", "auth01-test-only-hmac-key")
     from app.tenancy import registry
     import server  # noqa: F401 — billing imports server constants; load it first
     from app.routes import auth
@@ -640,9 +645,19 @@ def test_the_token_indexes(monkeypatch):
 
 
 # ═══════════════════════════════════════════════ 7. the local recovery CLI
+OPERATOR = "Иван Петров"
+REASON = "Owner locked out, support ticket 4711"
+
+
 def _cli_args(*argv):
+    """AUTH-02: a named operator and a reason unless the test passes its own."""
     from scripts.reset_user_password import parse_args
-    return parse_args(list(argv))
+    argv = list(argv)
+    if "--operator" not in argv:
+        argv += ["--operator", OPERATOR]
+    if "--reason" not in argv:
+        argv += ["--reason", REASON]
+    return parse_args(argv)
 
 
 def type_password(monkeypatch, *answers):

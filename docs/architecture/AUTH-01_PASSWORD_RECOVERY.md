@@ -9,12 +9,12 @@
 
 | Path | Who | What |
 |---|---|---|
-| `backend/scripts/reset_user_password.py` | operator, server shell only | sets ONE active user's password; dry run first; hidden prompt only |
+| `backend/scripts/reset_user_password.py` | operator, server shell only | break-glass: sets the OWNER's password (AUTH-02: Owner only, `--operator` + `--reason` required, Owner notified); dry run first; hidden prompt only |
 | `backend/scripts/r0_03_email_duplicates_report.py` (R0-03) | operator | READ-ONLY list of emails shared by several users |
 | `POST /api/auth/forgot-password` | anyone | always the same 200 answer; all account-dependent work runs after the response |
 | `POST /api/auth/reset-password` | holder of the link | consumes the token once and sets the password, atomically |
 | `POST /api/auth/change-password` | logged-in user | unchanged (does not end other sessions) |
-| `POST /api/admin/set-password/{id}` | Admin/Owner, for ANOTHER user | unchanged (self still refused; does not end sessions) |
+| `POST /api/admin/set-password/{id}` | Admin/Owner, for ANOTHER user | self still refused; AUTH-02 (FG-11): one transaction, ends the target's older sessions and revokes their open links |
 | `/forgot-password`, `/reset-password?token=…` | browser | screens; login shows "Забравена парола?", demo credentials removed |
 
 There is **no** HTTP recovery endpoint that bypasses the token. The CLI is the emergency path.
@@ -31,7 +31,8 @@ There is **no** HTTP recovery endpoint that bypasses the token. The CLI is the e
   knows one of the passwords) and now also writes a `login_ambiguous` security event; forgot-password
   answers the same generic 200, mints no token and writes `forgot_ambiguous`; the CLI exits 3.
   Forgot-password and the CLI read the same registry as login (the global `users` collection).
-* **Security events kept 180 days** (F-08, TTL).
+* **Security events kept 730 days** (F-08, TTL; AUTH-02 / FG-10: FLOW-040 §R3 requires ≥ 2 years — the earlier 180 days had no recorded decision).
+* **HMAC key** (AUTH-02 / FG-16): `AUTH_EVENT_HMAC_KEY` or `JWT_SECRET` must be set; the built-in dev key is used only when `ENV`/`ENVIRONMENT` explicitly label a non-production deployment, otherwise the auth surface fails closed.
 
 ## Atomicity (F-01) — MongoDB transactions
 
@@ -40,7 +41,8 @@ There is **no** HTTP recovery endpoint that bypasses the token. The CLI is the e
 | Operation | In one transaction |
 |---|---|
 | reset-password | conditional token claim · new hash · `$inc auth_version` · revoke remaining tokens · audit `password_reset_completed` · W0-04 AuditEvent `user.password_reset` |
-| recovery CLI | new hash + marker `LOCAL_RECOVERY_CLI` · `$inc auth_version` · revoke open tokens · audit `password_recovery_cli` · W0-04 AuditEvent `user.password_recovery_cli` |
+| recovery CLI | new hash + marker `LOCAL_RECOVERY_CLI` (filter: active **Owner**) · `$inc auth_version` · revoke open tokens · audit `password_recovery_cli` (with operator + reason) · W0-04 AuditEvent `user.password_recovery_cli` (`actor_type=human`, `actor_id=break_glass:<operator>`, reason, `source_channel=break_glass_cli`, **R1**) · one in-app notification per active Owner |
+| admin set-password (AUTH-02) | new hash · `$inc auth_version` · revoke the target's open tokens · audit `admin_password_reset` · W0-04 AuditEvent `user.admin_password_reset` |
 | forgot (mint) | insert `pending` token · audit `password_reset_requested` |
 | forgot (settle) | delivered: mark `sent` + revoke OLDER tokens + audit · not delivered: revoke ONLY the new token + audit |
 
@@ -77,14 +79,22 @@ this are both version 0 and keep working.
 Inside the backend container:
 
 ```
-python scripts/reset_user_password.py --email Krum@begfull.bg --dry-run   # look, write nothing
-python scripts/reset_user_password.py --email Krum@begfull.bg             # hidden prompt, twice
+python scripts/reset_user_password.py --email Krum@begfull.bg \
+    --operator "Иван Петров" --reason "Owner locked out, ticket 123" --dry-run   # look, write nothing
+python scripts/reset_user_password.py --email Krum@begfull.bg \
+    --operator "Иван Петров" --reason "Owner locked out, ticket 123"             # hidden prompt, twice
 ```
+
+AUTH-02 (Р19): `--operator` (2–120 chars) and `--reason` (10–500 chars) are required — blank, control
+characters, a password hash or the new password itself are refused before anything is written. Only an
+`Owner` can be recovered this way (FG-8); other users are reset by their Owner/Admin in the app. After the
+commit every active Owner of the tenant has an in-app notification (written in the same transaction) and,
+when SMTP is configured, an e-mail (best effort).
 
 The password can be entered **only** at the hidden prompt (F-07). There is no argument or stdin option,
 and the command refuses to run without a terminal: use `docker exec -it`. Exit codes: 0 ok · 1 usage/no
 terminal · 2 not found · 3 ambiguous · 4 disabled/unusable · 5 invalid password · 6 nothing changed (no
-commit) · 7 nothing changed (no transactions). It never prints the password or a hash.
+commit) · 7 nothing changed (no transactions) · 8 not an Owner (nothing changed). It never prints the password or a hash.
 
 Fast-path files for a container that does not yet include this PR: `scripts/reset_user_password.py`,
 `app/tenancy/identity.py` (R0-03), `app/services/auth_tx.py` and `app/services/user_role_policy.py`
@@ -126,7 +136,7 @@ everyone together.
 
 ## Security events (F-08)
 
-`app/services/auth_events.py` → `auth_security_events` (TECHNICAL, TTL 180 days): `id, ts, expires_at,
+`app/services/auth_events.py` → `auth_security_events` (TECHNICAL, TTL 730 days): `id, ts, expires_at,
 event, ip, subject (keyed HMAC of the email), token_ref (token row id or keyed HMAC), org_id, user_id,
 detail`. No email, token or password is stored. HMAC key: `AUTH_EVENT_HMAC_KEY`, else `JWT_SECRET`.
 

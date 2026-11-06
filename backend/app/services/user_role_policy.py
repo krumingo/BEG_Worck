@@ -193,10 +193,16 @@ async def audit_user_change(database, *, tenant_id: str, actor_id: str, action: 
                             reason: str, result: str = "success", actor_type: str = "human",
                             error_code: Optional[str] = None,
                             tool_or_endpoint: Optional[str] = None,
+                            retention_class: Optional[str] = None,
+                            source_channel: Optional[str] = None,
                             session=None) -> Dict[str, Any]:
     """One canonical W0-04 AuditEvent (FLOW-040, R3 security/access) in ``database``.
 
     ``session``: write inside the caller's MongoDB transaction (R0-04 reset/recovery).
+
+    ``retention_class``: R3 (security/access) unless the caller names another
+    class — the break-glass recovery CLI records R1 (FLOW-040 §R3: "break-glass
+    … са R1"; AUTH-02, FG-9).
 
     ``database`` is the same handle the business write used. ``diff`` carries
     before/after of role / is_active / email only — never a password or hash
@@ -206,7 +212,8 @@ async def audit_user_change(database, *, tenant_id: str, actor_id: str, action: 
     from app.audit.store import record_event
     event = build_event(
         tenant_id=tenant_id, actor_type=actor_type, actor_id=actor_id, action=action,
-        source_flow="FLOW-002", retention_class=RETENTION_R3_SECURITY_ACCESS, result=result,
-        entity_type="user", entity_id=target_id, structured_diff=diff, reason=reason,
-        error_code=error_code, tool_or_endpoint=tool_or_endpoint)
+        source_flow="FLOW-002", retention_class=retention_class or RETENTION_R3_SECURITY_ACCESS,
+        result=result, entity_type="user", entity_id=target_id, structured_diff=diff,
+        reason=reason, error_code=error_code, tool_or_endpoint=tool_or_endpoint,
+        source_channel=source_channel)
     return await record_event(database, event, session=session)

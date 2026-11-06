@@ -185,13 +185,15 @@ def test_f02_owner_recovery_ends_older_sessions(monkeypatch):
 
 
 def test_f02_change_password_and_admin_reset_keep_their_semantics(monkeypatch):
+    """AUTH-02 (FG-11) changed the admin half: an admin reset now ends the target's
+    older sessions. Change-password keeps the caller's own session (unchanged)."""
     async def body(op, c, outbox):
         tech = (await _login(c, TECH)).json()["token"]
         owner = (await _login(c, OWNER)).json()["token"]
         r = await c.post("/api/admin/set-password/u-tech", json={"new_password": NEW_PW},
                          headers=_auth(owner))
         assert r.status_code == 200
-        assert (await c.get("/api/auth/me", headers=_auth(tech))).status_code == 200
+        assert (await c.get("/api/auth/me", headers=_auth(tech))).status_code == 401
         r = await c.post("/api/auth/change-password",
                          json={"current_password": PW, "new_password": NEW_PW},
                          headers=_auth(owner))
@@ -470,7 +472,8 @@ def test_f08_every_denial_leaves_one_durable_event(monkeypatch):
         assert got == expected, got
         no_match = (await _events(op, "forgot_no_match"))[0]
         assert no_match["subject"] == keyed_ref("nobody@nowhere.bg")
-        assert no_match["expires_at"] - no_match["ts"] == timedelta(days=180)
+        # AUTH-02 (FG-10): FLOW-040 §R3 — at least 2 years
+        assert no_match["expires_at"] - no_match["ts"] == timedelta(days=730)
         replay = (await _events(op, "reset_token_replay"))[0]
         assert replay["user_id"] == "u-owner" and replay["org_id"] == ORG_A
     scenario(monkeypatch, body)

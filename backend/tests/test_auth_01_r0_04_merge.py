@@ -22,7 +22,8 @@ real driver on a replica set when ``W0_03_REAL_MONGO_URL`` is set):
 import json
 
 from tests.test_auth_01_password_recovery import (
-    NEW_PW, ORG_A, ORG_B, OWNER, PW, _cli_args, _forgot, _login, _reset, _user,
+    NEW_PW, OPERATOR, ORG_A, ORG_B, OWNER, PW, REASON, _cli_args, _forgot, _login, _reset,
+    _user,
     force_no_transactions, scenario, type_password,
 )
 
@@ -136,8 +137,11 @@ def test_recovery_cli_writes_one_canonical_audit_event(monkeypatch):
         events = await _canonical(op, "user.password_recovery_cli")
         assert len(events) == 1
         e = events[0]
+        # AUTH-02 (Р19, FG-9): a named human, the reason, retention R1
         assert (e["tenant_id"], e["actor_type"], e["actor_id"], e["entity_id"]) == \
-            (ORG_A, "system", cli.RECOVERY_MARKER, "u-owner")
+            (ORG_A, "human", "break_glass:" + OPERATOR, "u-owner")
+        assert (e["reason"], e["retention_class"], e["source_channel"]) == \
+            (REASON, "R1", "break_glass_cli")
         user = await op.users.find_one({"id": "u-owner"})
         _no_secret(events, NEW_PW, user["password_hash"])
         assert await op.audit_logs.count_documents({"action": "password_recovery_cli"}) == 1

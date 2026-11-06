@@ -681,39 +681,17 @@ async def admin_set_password(user_id: str, data: AdminSetPasswordRequest, reques
     if not is_valid:
         raise HTTPException(status_code=400, detail=error_msg)
     
-    # Update password
-    new_hash = hash_password(data.new_password)
-    now = datetime.now(timezone.utc).isoformat()
-    # W0-03E-A2C: the tenant predicate is in the WRITE filter. Proving the target
-    # exists in the admin's tenant above said nothing about which tenant's user
-    # `{"id": user_id}` alone would have reset once ids collide.
-    await tenant.users.update_one(
-        {"id": user_id},
-        {"$set": {
-            "password_hash": new_hash,
-            "updated_at": now,
-            "password_reset_at": now,
-            "password_reset_by": admin["id"]
-        }}
-    )
-    
-    # Audit log with detailed info (security event)
-    await log_audit(
-        admin["org_id"], 
-        admin["id"], 
-        admin["email"], 
-        "admin_password_reset", 
-        "user", 
-        user_id, 
-        {
-            "target_email": target_user["email"],
-            "reset_by_role": admin["role"]
-        }
-    )
-    await audit_user_change(db, tenant_id=admin["org_id"], actor_id=admin["id"],
-                            action="user.admin_password_reset", target_id=user_id,
-                            reason="password set by an administrator (no hash recorded)",
-                            tool_or_endpoint="POST /api/admin/set-password/{user_id}")
+    # AUTH-02 (FG-11): one transaction — new hash, auth_version bump (old sessions
+    # end), the user's open reset links revoked, legacy + canonical audit. The
+    # tenant predicate stays in every write (W0-03E-A2C): ``tenant`` scopes them.
+    try:
+        await password_reset.admin_set_password(
+            db, tenant, target=target_user, new_password_hash=hash_password(data.new_password),
+            admin=admin)
+    except password_reset.AdminResetNotCompleted:
+        raise HTTPException(status_code=503, detail={
+            "error_code": "RESET_NOT_COMPLETED",
+            "message": password_reset.RESET_NOT_COMPLETED_MESSAGE})
     
     return {"ok": True}
 

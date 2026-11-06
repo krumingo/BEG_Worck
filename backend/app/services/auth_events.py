@@ -8,7 +8,11 @@ can be correlated:
 
 * the email is never stored — ``subject`` is a keyed HMAC-SHA256 of the
   normalized email (key ``AUTH_EVENT_HMAC_KEY``, else ``JWT_SECRET``), so the
-  same address correlates across events without being readable;
+  same address correlates across events without being readable. AUTH-02
+  (FG-16): with neither set, a built-in development key is used ONLY on a
+  deployment explicitly labelled non-production (``ENV``/``ENVIRONMENT``, same
+  fail-closed rule as the reset-URL dev log); anywhere else
+  :class:`AuthEventKeyMissing` is raised — no literal key on production;
 * a token is never stored — ``token_ref`` is the stored token row's ``id`` when
   one was found, else a keyed HMAC of the presented token's hash;
 * no password, hash or response body is ever written.
@@ -16,7 +20,9 @@ can be correlated:
 The collection is installation-level security bookkeeping (an unknown email has
 no tenant), classified TECHNICAL in ``app.tenancy.ownership``. Tenant business
 history stays in that tenant's ``audit_logs``. Rows expire after
-:data:`RETENTION` (TTL index; owner decision 180 days).
+:data:`RETENTION` (TTL index). AUTH-02 (FG-10): FLOW-040 §R3 — failed login,
+permission denied, session/device/IP metadata: "минимално съхранение 2 години"
+— so 730 days. The earlier 180 days had no recorded decision.
 
 Writing an event never raises into the caller: a lost event is logged, the
 request outcome is unchanged.
@@ -32,7 +38,7 @@ from typing import Optional
 logger = logging.getLogger("beg.auth_events")
 
 COLLECTION = "auth_security_events"
-RETENTION = timedelta(days=180)
+RETENTION = timedelta(days=730)
 
 # event names
 FORGOT_NO_MATCH = "forgot_no_match"
@@ -51,9 +57,41 @@ DELIVERY_NOT_CONFIGURED = "reset_delivery_not_configured"
 LOGIN_AMBIGUOUS = "login_ambiguous"
 
 
+_PRODUCTION_ENV_VALUES = frozenset({"production", "prod", "live"})
+_NON_PRODUCTION_ENV_VALUES = frozenset(
+    {"development", "dev", "local", "test", "testing", "staging", "stage"}
+)
+_DEV_ONLY_KEY = "dev-auth-event-key-NOT-FOR-PRODUCTION"
+
+
+class AuthEventKeyMissing(RuntimeError):
+    """No HMAC key configured on a deployment not labelled non-production."""
+
+
+def explicitly_non_production() -> bool:
+    """True only when at least one of ``ENV``/``ENVIRONMENT`` is set and every set
+    value is a non-production label. Missing, unknown or production on either →
+    False (fail closed; the same rule as ``password_reset._dev_url_logging_enabled``,
+    RC-AUTH-02, without its opt-in flag)."""
+    seen = []
+    for key in ("ENV", "ENVIRONMENT"):
+        raw = (os.environ.get(key) or "").strip().lower()
+        if not raw:
+            continue
+        if raw in _PRODUCTION_ENV_VALUES or raw not in _NON_PRODUCTION_ENV_VALUES:
+            return False
+        seen.append(raw)
+    return bool(seen)
+
+
 def _key() -> bytes:
-    key = os.environ.get("AUTH_EVENT_HMAC_KEY") or os.environ.get("JWT_SECRET") \
-        or "dev-auth-event-key-NOT-FOR-PRODUCTION"
+    key = os.environ.get("AUTH_EVENT_HMAC_KEY") or os.environ.get("JWT_SECRET")
+    if not key:
+        if not explicitly_non_production():
+            raise AuthEventKeyMissing(
+                "AUTH_EVENT_HMAC_KEY (or JWT_SECRET) must be set outside an explicitly "
+                "non-production deployment")
+        key = _DEV_ONLY_KEY
     return key.encode("utf-8")
 
 
