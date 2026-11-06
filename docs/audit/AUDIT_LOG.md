@@ -8,11 +8,11 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
-| #69 SEC-01 | `07faab5` | **PASS** (C03 closes C02-P1 with key + C02-P2); residual: keyless POST stays legacy (by design) | 2026-11-06 |
+| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -137,8 +137,8 @@ Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b
 | #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #64 | `frontend/src/components/DashboardLayout.js` |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 
 Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
 
@@ -900,9 +900,9 @@ A comment was posted on #69 (CLAUDE AUDIT, internal).
 | Pair | Status |
 |---|---|
 | #56 × #55 | conflict (`data_access.py`, A2B inventory) |
-| #69 × #55 | conflict (`catalog.py`) |
+| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 | #56 × main / #67 / #68 / #69 | clean |
-| #69 × main / #56 / #67 / #68 | clean |
+| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 
 
 ---
@@ -1007,10 +1007,10 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
-| #69 × #56 | clean |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 
 
 ---
@@ -1081,7 +1081,7 @@ The comment on #69 still applies.
 | Pair | Status |
 |---|---|
 | #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
@@ -1123,10 +1123,10 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 
 | Pair | Status |
 |---|---|
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
-| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
 
 
 ---
@@ -1325,9 +1325,9 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `42bbdfc` | **FINDINGS (blocking, cross-PR): IDEM-IDX-1** idempotency unique index never created by the app; D5 retry PASS; D5-R1/R2 concurrent over-allocation (pre-existing on main) | 2026-11-06 |
-| #71 SEC-02 | `ba29dac` | **PASS** for SEC-02 (SEC02-1 CLOSED, FG-15 replay strip OK, #69 merge kept behaviour); IDEM-IDX-1 applies (inherited from #69) | 2026-11-06 |
+| #71 SEC-02 | `f17f7e5` | **FINDINGS: SEC02C-1 per-worker pay derivable from the SM pulse budget view**; scan clean | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
-| #69 | conflict: catalog.py, procurement.py, sales.py |
+| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 
 
 ## #70 PAY-01-C01 @ `8910939` — 2026-11-06 ~21:05 UTC — PASS
@@ -1661,7 +1661,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 
 | PR | Route | Without the index (as the app leaves it) | With `create_index("id", unique=True)` |
 |---|---|---|---|
-| #69 `07faab5` | `POST /api/subcontractor-payments` (probe `sec01/probe_sec01_c02_payments.py` P1c, `PROBE_CREATE_IDEM_INDEX=0/1`), 4 runs | ledger +1 / +2 / +4 / +2 rows | +1 in 4/4 runs |
+| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 | #70 `42bbdfc` | `POST /api/finance/payments` (probe `pay01/probe_idem_index_race.py`), 4 runs | rows +6 / +2 / +3 / +2 (worst case: **6 payments from one key**) | +1 in 4/4 runs |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -1721,3 +1721,103 @@ Probes:
   - neither the first response nor the replay has `hourly_rate`/`labor_cost`; the stored row keeps both;
   - an Accountant's replay keeps the money.
 - **#69 behaviour after the merge:** sec01 siblings, r16 and sitemanager-loss all pass; c02_payments P2 (NaN/Inf → 422) and P3 (404) are unchanged. P1c varies only because of IDEM-IDX-1 (#69 alone shows the same).
+
+
+## main @ `35ae10b` — 2026-11-06
+
+PR #67 (ST-02) merged. I audited `675faba` as PASS, with the low finding ST02-C03-L1.
+
+## #69 SEC-01-C03 Addendum A (R29) @ `6d43284` — 2026-11-06 ~23:30 UTC — PASS (IDEM-IDX-1 applies)
+
+Delta: `money_input.py` returns 428 when the key is missing.
+
+`probe_sec01_c02_payments.py` (run with `PROBE_CREATE_IDEM_INDEX=1`):
+- P1, keyless identical POST twice → **428 / 428, 0 rows**. This is now the intended R29 behaviour; the probe's "P1 duplicate" label is stale.
+- P1b: key replay → identical response, +1 row; other body → 409.
+- P1c: 6 concurrent requests → +1 row, but only with the index present (IDEM-IDX-1).
+- P2: NaN → 422.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_sec_01_*` | 30 passed |
+| W0 | 1085/15/50 |
+| A1 | 0/418 |
+| A2C | 0/206 |
+
+## #55 5C-C26e @ `4a3d15c` — 2026-11-06 ~23:20 UTC — FINDINGS (1 blocking)
+
+Delta:
+- Р28: canonical warehouse writes work in off and shadow too. The new `legacy_gate.ensure_legacy` maps the legacy role through `LEGACY_ROLE_MAP` to `role_actions`. Project-bound roles need an in-date `project_team` row on every project the command touches. Shadow logs mismatches.
+- Р30: a PM's own project = an in-date team row with `role_in_project` "SiteManager".
+- C26D-L1: the acceptance binding no longer requires the body `project_id`.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + c23 | **636 passed** (the C26e 243-case matrix is included) |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/221 |
+| A1 | 0/448 |
+| R0 | 814 on re-run; first run had 1 failure, the same unreproduced flake pattern |
+
+Probes:
+- c24, c24b, c25, c26, c26b, c26d: all pass, one test per process.
+- **C26D-L1 FIXED:** D1 (P1 → subproject of P2 with `project_id = P1`) is now OK.
+- Value leak: LEAKS none in enforce, off and shadow.
+
+**C26E-1 (HIGH, blocking): Р28 decisions differ between modes once the real RoleAssignments are used. PROVED** with `docs/audit/probes/pr55/test_probe_pr55_c26e_real_assignments.py`.
+- The product gives a legacy SiteManager a **company-scope** `site_manager` assignment with `permissions: []`. It is created by `sync.py` `grant_company_role`, called from `auth.py:334/380/440/463` and by the W0-02 bootstrap.
+- The evaluator reads `role_actions("site_manager")` (accept_delivery, consume_smr, transfer_project_to_*, ...) from it. `_scope_covers("company", …)` covers every project.
+- The `project_team` mirror only adds `budget.*`.
+- The C26e matrix instead hand-builds **project-scope** SiteManager assignments (`test_warehouse_canonical_c26e_r28_all_modes.py`, ROLES "SiteManager-member/non-member"). Those do not exist in the product.
+
+Result with the real assignment, SiteManager **not** a member of P1:
+
+| Command on P1 | off | enforce |
+|---|---|---|
+| accept | DENIED (`R28_LEGACY_ROLE_NOT_ALLOWED`) | **ALLOWED** (+2 rows) |
+| consume | DENIED | **ALLOWED** (+1 row) |
+| return_to_warehouse | DENIED | **ALLOWED** (+1 row) |
+
+- The catalog itself says "project scope is required" for these site_manager actions (`catalog.py:141-142`). So the enforce side is the hole; the legacy gate matches the intent.
+- The enforce behaviour predates C26e (TASK 5C), but Р28 ("the same rules in all three modes") is now false, and the test that claims it uses unreal assignments.
+- Fix direction:
+  - in the enforce gate, require the project relation for project-bound roles, as the legacy gate does; or stop granting company scope for site_manager warehouse actions;
+  - rebuild the matrix from assignments produced by the real `grant_company_role` + `sync_project_membership`.
+- Info: no legacy role maps to `project_manager` in `LEGACY_ROLE_MAP`, so the Р30 PM path of the legacy gate cannot be reached in off/shadow.
+
+## #71 SEC-02-C @ `f17f7e5` — 2026-11-06 ~23:25 UTC — FINDINGS (1)
+
+Delta:
+- R31: SiteManager labor spent per SMR only.
+- B-D2: `strip_pulse_for_non_finance` keeps `budget_snapshot`, `smr_summary` and `total_labor_cost` for a member SiteManager on his own site.
+- B-D1: Accountant gets `budget.read`.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo | **51 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50 |
+| A2C | 0/207 |
+| A1 | 0/420 |
+
+Scan `scan_f17f7e5.json`: only the 3 noise routes are left (billing/plans, organization, invoice-context).
+
+**SEC02C-1 (MEDIUM-HIGH): per-worker pay and hourly rate are derivable from the SiteManager pulse budget view. PROVED** with `docs/audit/probes/sec02/probe_sec02_c_pulse_derive.py`.
+- Setup: a member SiteManager; one day, two workers on two SMR types.
+- `GET /api/sites/{p1}/pulse?date=…` returns:
+  - `workers[]` with `worker_id`, `hours` and `smr_types` (money stripped, identity and hours kept);
+  - `smr_summary[]` with `total_cost` **and `workers_count`**;
+  - `total_labor_cost`.
+- Every SMR with `workers_count == 1` gives that worker's pay and rate: worker 1 → 200 / 25 per h, worker 2 → 210 / 35 per h.
+- A site with one worker that day also exposes it through `total_labor_cost`.
+- This is exactly the FLOW-037 §3.4 / R31 concern @parent asked about.
+- Fix direction:
+  - drop `workers_count`, or suppress the per-SMR cost where it is fewer than 2 (k-anonymity);
+  - or drop `worker_id` + `smr_types` + `hours` from `workers[]` for the budget view;
+  - and use multi-day aggregates.

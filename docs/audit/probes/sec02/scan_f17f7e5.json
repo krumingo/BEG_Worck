@@ -1,0 +1,44 @@
+{
+ "/api/billing/plans": {
+  "off/warehousekeeper": [
+   "[].price"
+  ],
+  "off/viewer": [
+   "[].price"
+  ],
+  "enforce/warehousekeeper": [
+   "[].price"
+  ],
+  "enforce/viewer": [
+   "[].price"
+  ]
+ },
+ "/api/organization": {
+  "off/warehousekeeper": [
+   ".vat_percent"
+  ],
+  "off/viewer": [
+   ".vat_percent"
+  ],
+  "enforce/warehousekeeper": [
+   ".vat_percent"
+  ],
+  "enforce/viewer": [
+   ".vat_percent"
+  ]
+ },
+ "/api/projects/{project_id}/invoice-context": {
+  "off/warehousekeeper": [
+   ".default_vat_rate"
+  ],
+  "off/viewer": [
+   ".default_vat_rate"
+  ],
+  "enforce/warehousekeeper": [
+   ".default_vat_rate"
+  ],
+  "enforce/viewer": [
+   ".default_vat_rate"
+  ]
+ }
+}
