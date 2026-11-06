@@ -34,15 +34,15 @@
 | FG-12 | medium | main `07da9ab` | Permission Service: обединение на правата срещу „по-ограниченото има предимство“ | SUSPECTED | open — в пакета SEC-02 (добавка) |
 | FG-13 | medium | пакет SEC-02 `ccb00ab` | конкретна матрица „роля × четене на финанси“, която каноничният текст не определя | SUSPECTED | resolved по Р20 |
 | FG-14 | medium | пакет SEC-02 `ccb00ab` | SiteManager е наречен „проектна ръководна роля“; каталогът го води като Технически ръководител | SUSPECTED | resolved (добавка към SEC-02) |
-| FG-15 | medium | пакет SEC-02 + main | Р16 дава на Technician запис на труд, а отговорът връща ставка и стойност; SEC-02 не го покрива | PROVEN | partial — #71 маха ставката от GET/POST; #69 `07faab5` още я връща, вкл. при replay (`labor_smr.py:91,97`) → риск при merge |
+| FG-15 | medium | пакет SEC-02 + main | Р16 дава на Technician запис на труд, а отговорът връща ставка и стойност; SEC-02 не го покрива | PROVEN | partial — resolved в #71 `f17f7e5` (PROVEN); #69 `6d43284` още връща ставката при POST и replay → не сливай #69 сам без поправката |
 | FG-16 | low | #56 `dae097b` | твърд резервен HMAC ключ в кода | SUSPECTED | resolved (#56 `3234446`) |
 | FG-17 | **blocker** | #55 `53dbd28` | P&L на обекта: `max(фактури, склад)`; „фира" не увеличава разхода; справките дават различни суми | PROVEN | resolved (#55 `64418eb`, PROVEN: 150 във всички справки; застъпване 100) |
 | FG-18 | high | #55 `53dbd28` | трансфер от обект пристига преди приемане; връщане в склад отива в свободна наличност, не в карантина | PROVEN | resolved (#55 `64418eb`, PROVEN) |
 | FG-19 | medium | #55 `53dbd28` | наличност по локации: фантомно „в път" след пълно приемане без `source` | PROVEN | resolved (#55 `64418eb`, PROVEN: 7) |
 | FG-20 | high | #55 `53dbd28` + пакет 5C-C19 F-7 | кога материалът става разход на обекта: при консумация, а не при приемане; противоречи на собственото `RULE_B_COSTING_ACTIONS` | SUSPECTED | resolved по Р17 (#55 `64418eb`, PROVEN: 50) |
-| FG-21 | high | #55 `53dbd28` | право за отписване (фира): project_manager да, SiteManager/Technician/Accountant не — срещу Р16/Р14 | SUSPECTED | partial по Р27 (#55 `64418eb`) — обход през подобект → FG-38 |
+| FG-21 | high | #55 `53dbd28` | право за отписване (фира): project_manager да, SiteManager/Technician/Accountant не — срещу Р16/Р14 | SUSPECTED | resolved по Р27 (#55 `4a3d15c`; обходът FG-38 затворен) |
 | FG-22 | medium | #55 `53dbd28` | ревизия/отписване без Approval при съществена разлика | SUSPECTED | open — дълг W0-07; записан само в commit `189e8e5`, не в HANDOFF/docs |
-| FG-23 | medium | #55 `53dbd28` | складовите стойности се виждат от роли без финансово право | SUSPECTED | partial по Р20 (#55 `64418eb`, enforce ✅) — off/shadow → FG-39 |
+| FG-23 | medium | #55 `53dbd28` | складовите стойности се виждат от роли без финансово право | SUSPECTED | resolved по Р20 (#55 `4a3d15c`, всички режими; Р32 → FG-56) |
 | FG-24 | **blocker** | #69 `e6c0e46` | труд и фира: член SiteManager/Technician получава 403 — срещу Р16; тестовете заковават грешното | PROVEN | resolved (#69 `aee3169`, PROVEN) |
 | FG-25 | **blocker** | main `07da9ab` + #69 | Viewer hard-delete-ва ценовите модификатори на обект | PROVEN | resolved (#69 `aee3169`, PROVEN) |
 | FG-26 | high | main `07da9ab` + #69 | Viewer трие и пресъздава труда през `sync-from-work-reports` (`delete_many`) | PROVEN | resolved (#69 `f33b2ba`, PROVEN) |
@@ -57,18 +57,25 @@
 | FG-35 | high | main `07da9ab` | каса, бонуси и режийни се пишат в отделни колекции извън `finance_payments` — втори паричен регистър | SUSPECTED | open — дълг за W0-05 (единен Payment core), записан от оркестратора |
 | FG-36 | low | #67 `675faba` | `approved_by: "krum"` е свободен текст, `approval_ref: null` — няма препратка към одобрението | PROVEN | open |
 | FG-37 | high | main `8e3b190` | AuditEvent hash chain се разклонява при едновременни записи (няма lock/уникален sequence) | PROVEN | open |
-| FG-38 | high | #55 `64418eb` | фира от подобект: `project_id` идва от клиента → обход на Р27 и разход на грешния обект | PROVEN | open |
-| FG-39 | medium | #55 `64418eb` | Р20 в off/shadow гледа само RoleAssignment → legacy Owner/Admin/Accountant губят стойностите | PROVEN | open |
-| FG-40 | low | #55 `64418eb` | project_manager „свой обект“ = всеки ред в екипа, независимо от ролята | SUSPECTED | open |
-| FG-41 | high | main / #71 `6080165` | `/work-sessions/overtime`, `/summary`, `/{id}/detail` връщат цената на чужд труд на всички роли | PROVEN | open |
-| FG-42 | high | main / #71 `6080165` | `/projects/{id}/activity-reports/{smr}` (ставка на работник) и `/labor-warnings/{id}` (бюджет) — и за не-членове | PROVEN | open |
-| FG-43 | medium | main / #71 `6080165` | activities-overview дава `actual_cost` на Viewer/Technician/Driver; Accountant получава 403 на activity-budget-summary | PROVEN | open |
-| FG-44 | medium | Р20 / #71 | „изхарчено“ срещу „себестойност“ не е определено: SiteManager вижда труд по ставки и може да изведе ставка | PROVEN | open |
-| FG-45 | high | #70 `8910939` | сторно на плащане от Pay Run / аванс / подизпълнител не обновява модула-източник | SUSPECTED | open |
-| FG-46 | medium | main / #70 | основните POST за плащания (`/finance/payments`, invoice payments, transfers…) без Idempotency-Key | PROVEN | open — дълг W0-05 (оркестратор) |
-| FG-47 | low | #69 `07faab5` / #70 `8910939` | различно правило за сума: #69 приема „12“ (низ), #70 — 422 | PROVEN | open |
+| FG-38 | high | #55 `64418eb` | фира от подобект: `project_id` идва от клиента → обход на Р27 и разход на грешния обект | PROVEN | resolved (#55 `4a3d15c`, PROVEN ×3 режима) |
+| FG-39 | medium | #55 `64418eb` | Р20 в off/shadow гледа само RoleAssignment → legacy Owner/Admin/Accountant губят стойностите | PROVEN | resolved (#55 `4a3d15c`, PROVEN) |
+| FG-40 | low | #55 `64418eb` | project_manager „свой обект“ = всеки ред в екипа, независимо от ролята | SUSPECTED | resolved по Р30 (#55 `4a3d15c`, PROVEN) |
+| FG-41 | high | main / #71 `6080165` | `/work-sessions/overtime`, `/summary`, `/{id}/detail` връщат цената на чужд труд на всички роли | PROVEN | resolved (#71 `f17f7e5`, PROVEN) |
+| FG-42 | high | main / #71 `6080165` | `/projects/{id}/activity-reports/{smr}` (ставка на работник) и `/labor-warnings/{id}` (бюджет) — и за не-членове | PROVEN | resolved (#71 `f17f7e5`, PROVEN) |
+| FG-43 | medium | main / #71 `6080165` | activities-overview дава `actual_cost` на Viewer/Technician/Driver; Accountant получава 403 на activity-budget-summary | PROVEN | resolved (#71 `f17f7e5`, PROVEN) |
+| FG-44 | medium | Р20 / #71 | „изхарчено“ срещу „себестойност“ не е определено: SiteManager вижда труд по ставки и може да изведе ставка | PROVEN | partial по Р31 — без разбивка по човек ✅ (#71); изчислението на „изхарчено“ = дълг SEC-02-C-D1 |
+| FG-45 | high | #70 `8910939` | сторно на плащане от Pay Run / аванс / подизпълнител не обновява модула-източник | SUSPECTED | resolved (#70 `42bbdfc`, PROVEN: 5 вида → 409) |
+| FG-46 | medium | main / #70 | основните POST за плащания (`/finance/payments`, invoice payments, transfers…) без Idempotency-Key | PROVEN | resolved по Р29 в #69 `6d43284` и #70 `42bbdfc` (PROVEN: 428, 0 реда); #71 → FG-52 |
+| FG-47 | low | #69 `07faab5` / #70 `8910939` | различно правило за сума: #69 приема „12“ (низ), #70 — 422 | PROVEN | open — PROVEN в #69/#71 срещу #70; правилото — решение на Крум/оркестратора |
 | FG-48 | high | main `35ae10b` | Pay Run: акорд без количество се плаща като часове × ставка | PROVEN | open |
 | FG-49 | medium | main `35ae10b` | Pay Run: типът заплащане идва само от профила, не от СМР реда/пакета | SUSPECTED | open |
+| FG-50 | medium | #70 `42bbdfc` (и main) | other-expense / other-income записват в регистъра към несъществуващ обект | PROVEN | open |
+| FG-51 | high | main / #71 `f17f7e5` | sync на труда от неодобрени отчети; акордът се смята по часове | SUSPECTED | open |
+| FG-52 | medium | #71 `f17f7e5` | #71 съдържа #69 @ `07faab5`, не `6d43284`: парични POST без Idempotency-Key минават (201) | PROVEN | open |
+| FG-53 | medium | #55 `4a3d15c` | consume/transfer от обект приемат различен `project_id` от тялото на заявката | PROVEN | open |
+| FG-54 | medium | #55 `4a3d15c` | каноничните четения на склада не се решават по роля в off/shadow (F-16) | SUSPECTED | open |
+| FG-55 | low | #55 `4a3d15c` | родителят на подобект се връща в грешката преди проверката на правата | PROVEN | open |
+| FG-56 | medium | #55 `4a3d15c` | Р32: складовият работник не вижда единичните цени (добавка E не е изпълнена) | PROVEN | open |
 
 
 ---
@@ -321,7 +328,7 @@
 
 ## FG-21 — право за отписване (фира) срещу Р16/Р14
 
-- **Тежест:** high. **Статус:** open. **SUSPECTED.**
+- **Тежест:** high. **Статус:** resolved по Р27 (#55 `4a3d15c`, проход 4). **SUSPECTED.**
 - **Канон:**
   - Р16: отпадък въвеждат SiteManager и Technician на свои обекти; Owner/Admin/Accountant навсякъде.
   - Р14: парични записи само Owner/Admin/Accountant.
@@ -343,7 +350,7 @@
 
 ## FG-23 — складовите стойности се виждат от роли без финансово право
 
-- **Тежест:** medium. **Статус:** open. **SUSPECTED.**
+- **Тежест:** medium. **Статус:** resolved по Р20 (#55 `4a3d15c`, проход 4). **SUSPECTED.**
 - **Канон:** пакет SEC-02 правило 4 („Склад: количества да, стойности/себестойност не“). Основата в канона е слаба — виж FG-13.
 - **Код (#55 `53dbd28`):**
   - `/warehouse/canonical/stock` и `/history` връщат `total_value`, `unit_value` и стойностни слоеве (`queries.py:81-90`) на всеки с `warehouse.read_stock`;
@@ -518,7 +525,7 @@
 
 ## FG-38 — фира от подобект: обход на Р27 и разход на грешния обект
 
-- **Тежест:** high. **Статус:** open. **PROVEN.**
+- **Тежест:** high. **Статус:** resolved (#55 `4a3d15c`, проход 4). **PROVEN.**
 - **Канон:**
   - Р27: „SiteManager и Technician — само на обекти, където са членове … останалите роли — 403“.
   - FLOW-008: разходът е на обекта, който е приел материала.
@@ -534,20 +541,20 @@
 
 ## FG-39 — Р20 в off/shadow гледа само RoleAssignment
 
-- **Тежест:** medium. **Статус:** open. **PROVEN** (registry loader без редове, както е в режим `off`).
+- **Тежест:** medium. **Статус:** resolved (#55 `4a3d15c`, проход 4). **PROVEN** (registry loader без редове, както е в режим `off`).
 - **Канон:** Р20: „Owner/Admin/Accountant виждат всичко“. 5C-C26c: еднакво решение в off/shadow/enforce. PR-05: `off` не пипа Permission Service.
 - **Код (#55 `64418eb`):** `backend/app/routes/warehouse_canonical_queries.py:192-207` (`_sees_values`) винаги чете `perm._load_assignments` и не гледа legacy ролята. В `off`/`shadow` без RoleAssignment legacy Owner/Admin/Accountant получават `sees_values=False`. Fail-closed — нищо не изтича, но финансовите роли губят стойностите.
 - **Решение:** промяна в кода — в off/shadow решение по legacy ролята през `LEGACY_ROLE_MAP` (като `ensure_project_write_off_legacy`); в shadow разликата да се логва. Тестове по режим.
 
 ## FG-40 — project_manager „свой обект“ = всеки ред в екипа
 
-- **Тежест:** low. **Статус:** open. **SUSPECTED.**
+- **Тежест:** low. **Статус:** resolved по Р30 (#55 `4a3d15c`, проход 4). **SUSPECTED.**
 - **Код (#55 `64418eb`):** `services/warehouse_movements/write_off_policy.py:118-130` приема всеки валиден ред в project_team, без значение `role_in_project`.
 - **Решение:** решение на Крум — „свой обект“ за project_manager значи ли всяко участие в екипа или само ролята ръководител.
 
 ## FG-41 — цената на чужд труд се вижда от всички роли
 
-- **Тежест:** high. **Статус:** open. **PROVEN.**
+- **Тежест:** high. **Статус:** resolved (#71 `f17f7e5`, проход 4). **PROVEN.**
 - **Канон:**
   - FLOW-037 §3.4: „Не вижда чужди заплати …“.
   - Р20: „Наблюдател, техник, шофьор, складов работник — без пари“.
@@ -560,7 +567,7 @@
 
 ## FG-42 — пари на обекта за не-членове
 
-- **Тежест:** high. **Статус:** open. **PROVEN.**
+- **Тежест:** high. **Статус:** resolved (#71 `f17f7e5`, проход 4). **PROVEN.**
 - **Канон:** FLOW-002: „директен URL да заобикаля правата“; Р20.
 - **Код (main и #71 `6080165`):**
   - `activity_budgets.py:807` `/projects/{id}/activity-reports/{smr}` връща `total_cost` и ставката на всеки работник (`hourly_rate_at_date`);
@@ -570,7 +577,7 @@
 
 ## FG-43 — activities-overview / activity-budget-summary
 
-- **Тежест:** medium. **Статус:** open. **PROVEN.**
+- **Тежест:** medium. **Статус:** resolved (#71 `f17f7e5`, проход 4). **PROVEN.**
 - **Код (main и #71 `6080165`):**
   - `activity_budgets.py:659` (activities-overview) дава `actual_cost`, `labor_budget` и `total_budget` на членове Viewer/Technician/Driver. Отчасти е дълг D4, но `actual_cost` отива по-далеч.
   - Обратното: Accountant получава **403** на `:168` activity-budget-summary и на activities-overview — по-тясно от Р20.
@@ -585,7 +592,7 @@
 
 ## FG-45 — сторно на плащане от друг модул не обновява модула
 
-- **Тежест:** high. **Статус:** open. **SUSPECTED** (четене).
+- **Тежест:** high. **Статус:** resolved (#70 `42bbdfc`, проход 4). **SUSPECTED** (четене).
 - **Канон:**
   - FLOW-006: „FLOW-021/028 → задължение, FLOW-006 → реално плащане“;
   - „Всички промени имат AuditEvent“;
@@ -595,7 +602,7 @@
 
 ## FG-46 — основните POST за плащания без Idempotency-Key
 
-- **Тежест:** medium. **Статус:** open — дълг W0-05 по решение на оркестратора. **PROVEN.**
+- **Тежест:** medium. **Статус:** resolved по Р29 (#69 `6d43284`, #70 `42bbdfc`, проход 4). **PROVEN.**
 - **Канон:** CLAUDE.md §14; FLOW-006 „idempotency за плащания“.
 - **Код (main и #70 `8910939`):** `finance.py:1456` `POST /finance/payments`, invoice payments (`:1106`), transfers (`:400`), funding, other-expense/income. Проба: същата заявка два пъти → 2 реда.
 - **Решение:** промяна в кода — PAY-01-C02 с MoneyWrite от #69, или в W0-05.
@@ -628,6 +635,63 @@
 - **Канон:** FLOW-028 „Видове заплащане“: „Типът заплащане се определя на ниво отчетен СМР ред/пакет, а не само в профила на човека.“
 - **Код (main `35ae10b`):** `pay_runs.py:191` `pay = profile.get("pay_type")`. Един човек със смесени СМР (часови и акордни) се изчислява изцяло по типа от профила.
 - **Решение:** промяна в кода — типът да се чете от отчетния ред/пакета, с профила само като подразбиране. Заедно с FG-48.
+
+## FG-50 — other-expense / other-income към несъществуващ обект
+
+- **Тежест:** medium. **Статус:** open. **PROVEN.**
+- **Канон:** FLOW-006 „разпределение към обект без проследимост“ е забранено; CLAUDE.md §14: tenant check, validation/DQ.
+- **Код (#70 `42bbdfc`, същото на main):** `backend/app/routes/finance.py:551-570`, `:579-616` — `project_id` от тялото, без проверка.
+- **Проба:** `POST other-expense` с `project_id="no-such-project"`, сума 12 → 201; ред във `finance_payments`, който влиза в P&L „other_cost“.
+- **Решение:** промяна в кода — обектът да съществува в tenant-а (404, нищо записано). Същият клас като FG-29.
+
+## FG-51 — sync на труда от неодобрени отчети, акордът по часове
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (четене).
+- **Канон:**
+  - FLOW-028: „Неодобреният отчет не създава официална заплата, P&L труд или трудов бюджет“;
+  - акорд = одобрено количество × единична цена;
+  - Р31: „изхарчено“ = от **одобрени** дневни отчети по типа заплащане.
+- **Код:**
+  - `backend/app/routes/labor_smr.py:91` (main `35ae10b`) / `:141` (#71 `f17f7e5`): `sync-from-work-reports` чете `work_reports` само по org и project, без `status == "Approved"`. Отчетите имат статуси Draft/Submitted/Approved/Rejected (`attendance.py:688-708`).
+  - Стойността винаги е часове × ставка.
+  - Тези `labor_entries` захранват трудовия разход по пакет и „изхарченото“ по СМР.
+- **Решение:** промяна в кода — само одобрени отчети; акорд по количество × цена или изрично записан дълг. Логично е да влезе в пакета за изчисление по Р31 (SEC-02-C-D1) заедно с FG-48.
+
+## FG-52 — #71 няма Р29
+
+- **Тежест:** medium. **Статус:** open. **PROVEN.**
+- **Канон:** Р29: „запис на пари без `Idempotency-Key` се отказва“.
+- **Код (#71 `f17f7e5`):** клонът съдържа #69 @ `07faab5` (преди Р29). `money_input.py:115` — „legacy behaviour“. Проба: cash-transactions, labor-entries и material-waste без ключ → 201/201/201, 3 реда.
+- **Решение:** процес — `6d43284` (и следващите поправки на #69) да влязат в #71 преди merge; PM-01 матрицата да се пусне отново.
+
+## FG-53 — consume/transfer от обект с чужд `project_id`
+
+- **Тежест:** medium. **Статус:** open. **PROVEN** за записа; SUSPECTED за ефекта в справките.
+- **Канон:** FLOW-009 / Р10: обектът се определя от източника на сървъра. CLAUDE.md §14: „Определи source of truth“.
+- **Код (#55 `4a3d15c`):** `services/warehouse_movements/service.py:1658-1703` проверява само подобекти; `_bind_write_off_project` (`:1720-1726`) покрива само WRITE_OFF. CONSUME_TO_SMR от `p-c22` с `project_id=p-other` минава, а `projections.py:536-540` пише разпределението по СМР под `p-other`.
+- **Проба:** записът носи `project_id=p-other` и в трите режима. Общият разход не се промени.
+- **Права:** не е ескалация — legacy gate-ът проверява всички засегнати обекти.
+- **Решение:** промяна в кода — `project_id` да се взема от източника-обект за всяко изходящо действие; различен → 422.
+
+## FG-54 — каноничните четения на склада не се решават по роля в off/shadow
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED.**
+- **Канон:** Р28: „правата се решават еднакво в трите [режима]“.
+- **Код (#55 `4a3d15c`):** `routes/warehouse_canonical_queries.py:242,268,307,335` викат `require_permission` без `legacy_check`; в `off` `permissions/deps.py:107-110` пуска всеки логнат потребител. Стойностите се крият (FG-39 ✅), но достъпът до самите четения не е по роля.
+- **Решение:** промяна в кода — четенията през legacy gate-а (добавка E към 5C-C26, F-16).
+
+## FG-55 — родителят на подобект се връща преди проверката на правата
+
+- **Тежест:** low. **Статус:** open. **PROVEN.**
+- **Код (#55 `4a3d15c`):** `routes/warehouse_canonical.py:343-360`. Не-член получава 422 с `parent_project_id` в контекста вместо 403. Разкрива се само id на обект, без пари.
+- **Решение:** промяна в кода — без родителя в грешката за неупълномощен, или първо проверката на правата.
+
+## FG-56 — Р32: складовият работник не вижда единичните цени
+
+- **Тежест:** medium. **Статус:** open (чака добавка E). **PROVEN.**
+- **Канон:** Р32: „складовият работник **може да вижда единичните цени на артикулите** в склада (приемане, наличност, история) и да въвежда единичната цена при приемане“.
+- **Код (#55 `4a3d15c`):** `warehouse_canonical_queries.py:173-176` — `warehouse` не е във `FINANCE_VALUE_ROLES` и не е в `UNCHANGED_VALUE_ROLES` → `sees_values=False` и в трите режима. Въведената от него цена при приемане се маха от отговора.
+- **Решение:** промяна в кода — добавка E към 5C-C26: единични цени в склада за `warehouse`, без финанси на обекти.
 
 ## Дневник на проходите
 
@@ -723,6 +787,30 @@
   - Собствени тестове: 124 passed, 120 skipped (real-Mongo вариантите ползват други префикси на бази).
 - **#71:** Viewer/Technician/SiteManager → 403 на финансовите GET от пробата; `/labor-entries` без ставки; Accountant вижда всичко. Собствени тестове: 12 passed, 1 skipped.
 - **Бавен преглед на main:** FLOW-040 → FG-37 (PROVEN).
+
+### Проход 4 — 06.11.2026 22:50 UTC (периодичен)
+
+Нови SHA:
+
+- main `35ae10b` (merge ST-02 #67 = `675faba`, проверен в проход 3);
+- #55 `4a3d15c` (C26d, C26e);
+- #69 `6d43284` (Р29);
+- #70 `42bbdfc` (PAY-01-C01 A/B, C01A-1, D5);
+- #71 `f17f7e5` (SEC-02-A/B/C);
+- пакети `15a72cf` (Р28–Р32).
+
+Проверки:
+
+- **Р28–Р32** — сверени с FLOW-009/019/028/037. Р31 следва FLOW-019/028/037 и затваря въпроса по FG-44. Р32 уточнява Р20.
+- **#55:** C26d + C26e → 269 passed (9 роли × 9 команди × 3 режима). Проби на реален Mongo:
+  - FG-38: 422/403, нищо не е записано;
+  - FG-39 и FG-40 — поправени;
+  - регресия FG-17…20: 150 / 100 / 40 / 7 / 50;
+  - Р28: 6 движения → 6 AuditEvent и в off/shadow.
+- **#69:** 26 passed, 4 skipped. **#70:** 156 passed, 153 skipped. **#71:** 14 passed, 1 skipped.
+  - Матрица на GET: 31 endpoint-а × 6 роли × off/enforce. Изтичанията на пари към не-финансови роли намаляват от 70 на 8; всичките 8 са SiteManager на позволените по Р20-2B бюджетни изгледи.
+  - Р29 → 428 и 0 реда в #69/#70.
+- **Бавен преглед на main:** FLOW-028 → FG-48 (PROVEN), FG-49.
 
 ## Бележки, които не са разминавания
 
