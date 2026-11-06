@@ -585,3 +585,84 @@ async def test_r17_r18_are_tenant_scoped(canonical_mongo_db, allow_always_gate, 
     assert (await other.cost(PROJECT_B))["total_cost"] == 0
     assert (await other.cost())["total_cost"] == 0
     assert (await run.cost())["total_cost"] == pytest.approx(100.0)
+
+
+# ═══════════════ Addendum A — Р21: partial accept per batch price ═══════════════
+
+async def test_r21_partial_accept_takes_dispatched_layers_oldest_first_f5(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """Audit probe F-5 (three prices). receive 7000@1 + 11000@2.5 + 5000@3.33;
+    dispatch 15000 (= 7000@1 + 8000@2.5 = 27000); accept 9000 + 6000; consume
+    10000; write-off 5000 from the project.
+    Р21: accept 9000 = 7000@1 + 2000@2.5 (dbda909 pro-rata: 4200@1 + 4800@2.5);
+    consume = 7000@1 + 3000@2.5 = 14500; „фира" = 5000@2.5 = 12500 (pro-rata:
+    9800); project cost 27000 unchanged; rebuild ×2 and sync stable."""
+    from app.routes import material_smr
+    client, db = canonical_mongo_db
+    _patch_dbs(monkeypatch, db)
+    monkeypatch.setenv("FILE_REGISTRY_ENABLED", "1")
+    await _seed(db)
+    run = _Run(client, allow_always_gate, db)
+    await run.receive("7000", "1")
+    await run.receive("11000", "2.5")
+    await run.receive("5000", "3.33")
+    disp = await run.dispatch("15000")
+    a1 = await run.accept(disp, "9000", requested_quantity=Decimal("15000"))
+    assert [(Decimal(a["quantity"]), Decimal(a["unit_value"]))
+            for a in a1.envelope["layer_allocations"]] == \
+        [(Decimal("7000"), Decimal("1")), (Decimal("2000"), Decimal("2.5"))]
+    # The unresolved remainder keeps the leftover layer: 6000@2.5.
+    disc = await db["warehouse_transactions"].find_one(
+        {"movement_id": a1.unresolved_discrepancy_movement_id}, {"_id": 0})
+    assert [(Decimal(a["quantity"]), Decimal(a["unit_value"]))
+            for a in disc["layer_allocations"]] == [(Decimal("6000"), Decimal("2.5"))]
+    assert Decimal(disc["total_value"]) == Decimal("15000")
+    a2 = await run.accept(disp, "6000", requested_quantity=Decimal("15000"))
+    assert [(Decimal(a["quantity"]), Decimal(a["unit_value"]))
+            for a in a2.envelope["layer_allocations"]] == [(Decimal("6000"), Decimal("2.5"))]
+    c = await run.consume("10000")
+    w = await run.write_off("5000")
+    from app.services.warehouse_movements.fifo import allocations_value
+    assert allocations_value(c.envelope["layer_allocations"]) == Decimal("14500")
+    assert allocations_value(w.envelope["layer_allocations"]) == Decimal("12500")
+
+    async def _numbers():
+        cost = await run.cost()
+        return (cost["total_cost"], cost["waste_cost"], cost["consumed_value"],
+                (await run.stock(WH))["total_value"], await _all_reports())
+
+    before = await _numbers()
+    assert before[:4] == (pytest.approx(27000.0), pytest.approx(12500.0),
+                          pytest.approx(14500.0), "24150.0000")
+    _assert_all(before[4], 27000.0, 12500.0)
+    live = (await _batches(db), await _entries(db), await _transit(db))
+    await rebuild_from_ledger(db, tenant_id=T)
+    first = (await _batches(db), await _entries(db), await _transit(db))
+    await rebuild_from_ledger(db, tenant_id=T)
+    second = (await _batches(db), await _entries(db), await _transit(db))
+    assert live == first == second
+    await material_smr.sync_material_entries(PROJECT, user=_user())
+    assert await _numbers() == before
+
+
+async def test_r21_simple_divisible_partials_do_not_drift(
+        canonical_mongo_db, allow_always_gate):
+    """dispatch 10 = 6@10 + 4@20; accept 5 + 3 + 2 → 5@10 | 1@10 + 2@20 | 2@20:
+    exact per batch price, 140 in total, no rounding drift; every layer used
+    exactly up to its dispatched quantity."""
+    client, db = canonical_mongo_db
+    run = _Run(client, allow_always_gate, db)
+    await run.receive("6", "10")
+    await run.receive("4", "20")
+    disp = await run.dispatch("10")
+    got = []
+    for q in ("5", "3", "2"):
+        acc = await run.accept(disp, q, requested_quantity=Decimal("10"))
+        got.append([(Decimal(a["quantity"]), Decimal(a["unit_value"]))
+                    for a in acc.envelope["layer_allocations"]])
+    assert got == [[(Decimal("5"), Decimal("10"))],
+                   [(Decimal("1"), Decimal("10")), (Decimal("2"), Decimal("20"))],
+                   [(Decimal("2"), Decimal("20"))]]
+    assert (await run.cost())["total_cost"] == pytest.approx(140.0)
+    assert Decimal((await run.stock(PRJ))["total_value"]) == Decimal("140")
+    assert not [k for k in await run.balances() if k[0] == "in_transit"]

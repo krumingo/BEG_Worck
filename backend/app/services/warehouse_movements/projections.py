@@ -661,9 +661,14 @@ async def _record_unresolved_layers(
     # 5C-C25 — live/rebuild parity: the entry carries the DISCREPANCY row's
     # own `recorded_at` (the rebuild only has that row). Before C25 the live
     # path stamped the acceptance's time, so a rebuild changed the entry.
+    # 5C-C25 Addendum A (Р21) — and the REMAINDER's own layers (the leftover
+    # dispatched layers stored on the discrepancy row), exactly what the
+    # rebuild replays; the accepted layers are not the remainder.
     disc_row = await tenant_db["warehouse_transactions"].find_one(
         {"tenant_id": env.tenant_id, "movement_id": unresolved_movement_id},
-        {"recorded_at": 1, "_id": 0}, session=session)
+        {"recorded_at": 1, "layer_allocations": 1, "_id": 0}, session=session)
+    if disc_row is not None:
+        layer_allocations = disc_row.get("layer_allocations") or []
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
         {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
          "dispatch_movement_id": env.dispatch_movement_id},
@@ -701,12 +706,21 @@ async def _close_unresolved_discrepancies(
     }
     if not unset_doc:
         return
+    # 5C-C25 — live/rebuild parity: the rebuild stamps `last_resolved_at`
+    # from the (last) `discrepancy_resolved` ledger row; the live path now
+    # reads the same row instead of using the acceptance's own time.
+    last_res = await tenant_db["warehouse_transactions"].find(
+        {"tenant_id": env.tenant_id, "action": "discrepancy_resolved",
+         "resolved_by_acceptance_movement_id": env.movement_id},
+        {"recorded_at": 1, "_id": 0}, session=session,
+    ).sort([("ledger_sequence", -1)]).limit(1).to_list(1)
+    resolved_at = last_res[0].get("recorded_at") if last_res else env.recorded_at
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
         {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
          "dispatch_movement_id": dispatch_movement_id},
         {"$unset": unset_doc,
          "$set": {
-             "last_resolved_at": env.recorded_at,
+             "last_resolved_at": resolved_at,
              "last_resolving_acceptance_movement_id": env.movement_id,
          }},
         session=session,

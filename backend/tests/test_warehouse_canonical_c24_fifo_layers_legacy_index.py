@@ -257,7 +257,11 @@ async def test_partial_accepts_then_consume_and_write_off_keep_the_exact_sum(
     a1 = await run.accept(disp, "5")
     v1 = _alloc_value(a1)
     assert Decimal((await run.stock(PRJ))["total_value"]) == v1
-    assert (await run.stock(PRJ))["layer_count"] == 2
+    # 5C-C25 Addendum A — Р21 (Крум 06.11.2026): a partial accept takes the
+    # dispatched layers oldest first (5 of the 7@1.13), not pro-rata from
+    # both — ONE layer, at its own price.
+    assert (await run.stock(PRJ))["layer_count"] == 1
+    assert v1 == Decimal("5") * Decimal("1.13")
     await _assert_agree(run, v1, v1, Decimal("0"))
 
     a2 = await run.accept(disp, "13")
@@ -292,10 +296,12 @@ async def test_rebuild_twice_and_sync_keep_exact_values(
     await run.accept(disp, "18000")
     await run.consume("15000")
     await run.write_off("5000")
-    # PRJ layers (FIFO): 4000@1, 8000@2 (accept 1) · 6000@1, 12000@2 (accept 2)
-    # consume 15000 = 4000@1 + 8000@2 + 3000@1 = 23000
-    # write-off 5000 = 3000@1 + 2000@2 = 7000 („фира")
-    # 5C-C25 (Р17): cost = the accepted 50000; 30000 allocated (23000 + 7000).
+    # 5C-C25 Addendum A — Р21: partial accepts take the dispatched layers
+    # oldest first (was pro-rata 4000@1 + 8000@2 · 6000@1 + 12000@2):
+    # PRJ layers (FIFO): 10000@1, 2000@2 (accept 1) · 18000@2 (accept 2)
+    # consume 15000 = 10000@1 + 2000@2 + 3000@2 = 20000
+    # write-off 5000 = 5000@2 = 10000 („фира"; pro-rata gave 7000)
+    # 5C-C25 (Р17): cost = the accepted 50000; 30000 allocated (20000 + 10000).
     expected_cost = Decimal("50000")
     expected_allocated = Decimal("30000")
     await _assert_agree(run, expected_cost, expected_cost - expected_allocated,
@@ -313,7 +319,7 @@ async def test_rebuild_twice_and_sync_keep_exact_values(
     await material_smr.sync_material_entries(PROJECT, user=_user())
     after = await _all_reports()
     assert before == after
-    _assert_all(after, 50000.0, 7000.0, package_total=30000.0)
+    _assert_all(after, 50000.0, 10000.0, package_total=30000.0)
     await _assert_agree(run, expected_cost, Decimal("20000"), expected_allocated)
 
 

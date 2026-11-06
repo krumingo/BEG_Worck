@@ -963,7 +963,7 @@ class CommandService:
         if action == CanonicalAction.ACCEPT_PROJECT_DELIVERY:
             # Rule B (C03): accept X units from a dispatch. The
             # dispatch's recorded layer_allocations are split
-            # proportionally: `accepted_units` fraction → destination,
+            # proportionally: `accepted_units` (Р21: oldest first, each at its own price) → destination,
             # remainder stays in-transit.
             if not inp.dispatch_movement_id:
                 raise InvariantViolationError(
@@ -1688,15 +1688,15 @@ class CommandService:
         self, tenant_collection, *, session, tenant_id: str,
         dispatch_movement_id: str, accepted_qty: Decimal,
     ):
-        """Rule B / F-09=B — split REMAINING dispatch layers proportionally
-        (CODEX C11.4 cumulative-partial correction).
+        """Rule B / F-09=B — take the REMAINING dispatch layers oldest first
+        (Р21, 5C-C25 Addendum A; CODEX C11.4 cumulative-partial correction).
 
         Semantics:
           * dispatch recorded N original layers summing to `dispatched_qty`;
           * prior partial acceptances against this dispatch consumed a
             subset of those layers (per their own `layer_allocations`);
           * this acceptance must take `accepted_qty` units from what is
-            LEFT, proportionally to each layer's REMAINING capacity.
+            LEFT, oldest layer first, each at its own price (Р21).
 
         A naive "accepted_qty / dispatched_qty" fraction (the C01 code)
         broke the second partial — e.g. 10 dispatched, accept 8 then
@@ -1773,30 +1773,26 @@ class CommandService:
                 context={"available": str(available),
                          "requested": str(accepted_qty)})
 
-        # Split proportionally over REMAINING layers (ordered by original
-        # layer_sequence so FIFO provenance is preserved).
+        # 5C-C25 Addendum A — Р21 (Крум 06.11.2026, D-55-PRORATA): no
+        # averaging between batches. The accepted quantity takes the
+        # REMAINING dispatched layers in their order, oldest first, each at
+        # its own price; the unaccepted remainder keeps the leftover layers
+        # (`_open_transit_discrepancy`). Before C25 the split was pro-rata
+        # across all remaining layers. The total is conserved either way.
+        # The dispatch's own allocation list is already in FIFO order
+        # (5C-C24: never re-sort by `layer_sequence`).
         split: List[LayerAllocation] = []
         total_value = Decimal("0")
         total_qty = Decimal("0")
-        # 5C-C24 F-55-C23-01: keep the DISPATCH's own allocation order —
-        # that list is already in FIFO order. `layer_sequence` is the
-        # stable part number INSIDE one inbound row (every supplier receive
-        # is part 1), so sorting by it would order layers by movement-id
-        # text instead of by FIFO age.
-        keys = list(remaining_per_layer.keys())
-        active = [k for k in keys if remaining_per_layer[k]["remaining"] > 0]
-
-        for i, k in enumerate(active):
+        for k in remaining_per_layer.keys():
             info = remaining_per_layer[k]
             rem = info["remaining"]
-            if i == len(active) - 1:
-                take = accepted_qty - total_qty
-            else:
-                # proportional share rounded to 4 dp; absorbed into last.
-                take = (rem * accepted_qty / available).quantize(Decimal("0.0001"))
-                take = min(take, rem)
-            if take <= 0:
+            need = accepted_qty - total_qty
+            if need <= 0:
+                break
+            if rem <= 0:
                 continue
+            take = min(rem, need)
             split.append(LayerAllocation(
                 source_movement_id=info["source_movement_id"],
                 layer_sequence=info["layer_sequence"],

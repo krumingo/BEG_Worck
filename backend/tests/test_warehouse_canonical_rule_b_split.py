@@ -97,9 +97,9 @@ def test_first_partial_8_of_10_takes_proportional_from_both_layers(shim):
         dispatch_movement_id="mv_disp_1",
         accepted_qty=Decimal("8"),
     ))
-    # Total accepted qty = 8 and must come from the two available
-    # layers proportionally: 6*(8/10)=4.8 from layer 1, remainder 3.2
-    # from layer 2 (last-layer absorbs any rounding).
+    # Total accepted qty = 8 and must come from the two available layers.
+    # 5C-C25 Addendum A — Р21 (Крум 06.11.2026): no pro-rata (was 4.8 + 3.2);
+    # the oldest layer first, each at its own price: 6@10 + 2@20 = 100.
     total_qty = sum(a.quantity for a in allocations)
     assert total_qty == Decimal("8")
     # Value conservation (not zero, carries real original layer values)
@@ -109,6 +109,8 @@ def test_first_partial_8_of_10_takes_proportional_from_both_layers(shim):
     l2 = next(a for a in allocations if a.layer_sequence == 2)
     assert l1.unit_value == Decimal("10")
     assert l2.unit_value == Decimal("20")
+    assert (l1.quantity, l2.quantity) == (Decimal("6"), Decimal("2"))
+    assert total_value == Decimal("100")
 
 
 def test_cumulative_partial_second_accept_2_of_remaining(shim):
