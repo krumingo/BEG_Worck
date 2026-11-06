@@ -11,6 +11,7 @@
 | #55 Склад 5C (C25+A) | `d8923d7` | PASS (internal; Р21 FIFO partial accept verified) + D-55-FG17 — Codex still required | 2026-11-06 |
 | #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
+| #70 PAY-01 | `a0dec8b` | PASS (internal) — Codex required (money); INT-70x69 for whichever merges second | 2026-11-06 |
 | #69 SEC-01 | `471eaaa` | **FINDINGS (blocking): C02-P2 NaN/Inf into ledger, C02-P1 duplicate ledger rows — unchanged**; SEC-R1 CLOSED | 2026-11-06 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1010,3 +1011,79 @@ The comment on #69 still applies.
 | #55 × #56 | **conflict**: `backend/app/tenancy/data_access.py`, `docs/architecture/W0-03E-A2B_INVENTORY.md` |
 | #69 × #56 | clean |
 | #55, #69, #56 × main | clean |
+
+
+---
+
+## 2026-11-06 ~20:30 — new PR #70 PAY-01 @ `a0dec8b` (payments reversed, never deleted; R23, FG-34). Base main `07da9ab`; main is now `8e3b190` (PM-01 merged)
+
+**Package:** `PAY-01_PAYMENT_REVERSAL_NO_HARD_DELETE.md`. **HANDOFF:** `docs/evidence/PAY-01/README.md`.
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| `W0_03_REAL_MONGO_URL=… pytest --noconftest tests/test_pay_01_payment_reversal.py` | **91 passed** |
+| R0 on real Mongo | **814 / 0 / 0** |
+| W0 DB-free | same 15 ✔ |
+| A2C | 205 modules, 0 violations ✔ |
+| A1 | 416 units, 0 violations ✔ |
+| `yarn test src/pages/__tests__/` | 26 / 26 ✔ |
+
+**No hard delete (PROVED by grep of the PR head):** no `delete_one`, `delete_many` or `find_one_and_delete` on `finance_payments` or `payment_allocations` anywhere in `backend/app`.
+
+**Readers (read in code):** every reader of both collections outside the write path uses `active_payments` / `active_allocations`:
+- account balances, `finance.py:381,385,1735`;
+- invoice paid/remaining, `update_invoice_status`;
+- invoice detail, invoice payments, cancel-invoice check;
+- the payments list (`include_reversed`) and the payment detail allocations;
+- allocate, which refuses a reversed payment or a reversal row;
+- P&L `other_cost`, `services/project_pnl.py:119`;
+- project payments, `projects.py:1273`.
+`delete_account` / `delete_invoice` count **all** rows, reversed ones included (used = history) → 409.
+
+### Probe `docs/audit/probes/pay01/probe_pay01.py` (real `server.app`, ST-01 seed, tenant A's Accountant)
+
+| # | Check | Result |
+|---|---|---|
+| Q1 | 6 concurrent DELETEs of one payment | statuses [200, 409×5]; **1** reversal row; **1** AuditEvent ✔ |
+| Q2 | 6 concurrent reversals of 6 different payments | 6 × 200; 6 reversed; 6 reversal rows; 6 AuditEvents ✔. The W0-04 audit race did not fire in this run; it remains main debt |
+| Q3 | Idempotency-Key | first 200; replay 200 with an identical body; same key + other reason → **409** ✔ |
+| Q4 | inflow 100, then reverse | balance 0 → 100 → **0**; the default list hides both rows; `include_reversed=true` shows the pair ✔ |
+| Q5 | own-account transfer of 50, reverse one leg | **both** legs `reversed`; both balances back ✔ |
+| Q7 | crash between writes (original `reversed`, no reversal row), then DELETE again | 409, but the pair is completed: exactly **1** reversal row ✔ |
+| Q8 | Viewer / SiteManager / Technician DELETE in off / shadow / enforce | **403** each, nothing written, the payment unchanged ✔ |
+| Q6 | hostile input | see the findings below |
+
+**Baseline on main `8e3b190`** (same probe, Q1): 6 concurrent DELETEs → 5 × 200 + 1 × 404. The payment is hard-deleted, with no reversal and no audit. That is exactly what PAY-01 fixes.
+
+### Findings
+
+**PAY-N1 — HIGH (money), PROVED, pre-existing on main (NOT a PAY-01 regression).** Non-finite amounts reach the payment ledger.
+- `POST /api/finance/payments` (pydantic `float` accepts `"nan"` / `"inf"`), `POST /api/finance/transfers` (`float(...) <= 0`) and `POST /api/finance/payments/{id}/allocate` (amount `"nan"`) each **write** the row, then fail with **500** (JSON serialisation).
+- Payment create + transfer give **+3 ledger rows** for NaN and +3 for Inf.
+- Identical on main `8e3b190` (`probe_amounts_baseline.py`). The same class as #69 C02-P2.
+- Recommendation: put one finite-positive-Decimal validator in the money-input layer and apply it to all of these routes. SEC-01-C03 is already on NaN for #69 and could cover these routes too.
+
+**PAY-N2 — LOW.** The reversal `reason` is unbounded and accepts control characters: a 5000-character reason and `a\x00b\x1b[31m` are both stored. It goes into the AuditEvent and the reversal row's note. An object `{"$ne": 1}` → 400 ✔.
+
+**INT-70x69 — HIGH (money, integration), PROVED on a local merge of #70 `a0dec8b` + #69 `471eaaa`** (scratch commit `be6879e`, not pushed). Probe: `docs/audit/probes/pay01/probe_pay01_x_sec01_c02.py`.
+- Steps: a subcontractor payment of 300 (FG-27 writes a `finance_payments` Outflow and a `subcontractor_payments` row), then `DELETE /api/finance/payments/{ledger id}` with a reason.
+- Results:
+  - the ledger reversal is 200 and the account balance goes back to 0;
+  - **but** `subcontractor_payments` stays `status: completed, amount: 300`;
+  - the package keeps `paid_total 300 / payable_total 700`.
+- So the package shows a payment that the ledger no longer has: two views of the same money disagree (CLAUDE.md §2.5/§7).
+- Neither PR alone has the defect. **Whichever of #69 and #70 merges second must handle it.** Either PAY-01 reverses the linked `subcontractor_payment_id` and recomputes the package, or FG-27's package totals are derived from the active ledger rows.
+
+### Integration (merge-tree)
+
+| Pair | Status |
+|---|---|
+| #70 × main `8e3b190` / #55 / #56 / #67 / #69 | **clean** |
+| #55 / #56 / #67 / #69 × main `8e3b190` | clean |
+
+- On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
+- The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
+
+**Verdict:** PAY-01 in its own scope: **PASS (internal)**. Money, so the Codex review is required. PAY-N1 is main debt. INT-70x69 is blocking for the second of #69 / #70 to merge.
