@@ -38,3 +38,8 @@ C25 замени `max(invoice, warehouse)` на main със **сума**. Сум
 - **Р28:** махни ограничението „canonical writes само в enforce“ (`CANONICAL_WRITES_REQUIRE_ENFORCE`); receive/dispatch/accept/write-off/transfer записват и в off/shadow, правата — еднакво в трите режима по legacy роля (същите правила като в enforce, както R27 в C26c; shadow само логва разминаване). Тестът `test_service_refuses_without_enforce_mode` се заменя с тест за новото решение (записан в HANDOFF като промяна по Р28, не отслабване). Пълна ролева матрица × 3 режима за всички складови команди; нищо записано при отказ.
 - **Р30:** project_manager — само обекти, където `role_in_project` е ръководител. Тестове.
 `HANDOFF 5C-C26e`.
+
+## Допълнение E (06.11) — бот 5C-C27 и Р32
+- **Р32:** warehousekeeper вижда единични цени/стойности в складовите екрани и API (stock, history, balance, batches, отговор на команда) и въвежда цена при приемане; без проектни финанси. Филтърът по FG-23 се променя за тази роля; тестовете за keeper се обновяват по Р32 (не отслабване — решение на Крум).
+- **F-16 (бот, shadow):** в off/shadow Technician и Viewer получават 200 на GET `/warehouse/canonical/balance`, `/stock`, `/history` (в enforce 403). Каноничните read маршрути да минават през същия legacy_gate като писането (Р28) — еднакво в трите режима. Тестове: роля × 3 режима за всички canonical GET.
+`HANDOFF 5C-C26f`.
