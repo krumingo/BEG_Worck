@@ -275,3 +275,8 @@ Scope: only `ops/staging/` and the test file, no business code ✔. Passwords co
 4. **Driver API on wrappers:** call every `TenantCollection` method with the kwargs the service passes (for example `distinct(..., session=)`).
 5. **Identical resend** of every command class (inbound and outbound) must return the original result, not 409.
 6. **Error-as-empty UI:** an API 500 must not render as "no alarms" or "no data".
+
+### Addendum — #55 @ `639ca80` R0 on real Mongo (PROVED)
+
+`W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27019/?directConnection=true PYTHONPATH=. pytest --noconftest -q tests/test_r0_0*.py`
+→ **814 passed / 0 failed / 0 skipped**. The merge with main keeps R0-01…R0-07 green. This does not change the #55 verdict: P55-1 and P55-2 still block.
