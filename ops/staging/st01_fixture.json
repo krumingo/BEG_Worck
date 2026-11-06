@@ -1,0 +1,34 @@
+{
+  "schema": "beg.st-01-synthetic-fixture/v1",
+  "marker": "st-01",
+  "notes": [
+    "Synthetic data only. No real person, company, EIK, IBAN or email.",
+    "Emails use the reserved .test domain (RFC 2606): no message can ever be delivered.",
+    "No password is stored here. The seed reads it from $ST01_SEED_PASSWORD or a prompt.",
+    "legacy_role is the users.role string the current code reads (off/shadow); role_id is the FLOW-002 RoleAssignment written next to it (enforce).",
+    "requester/approver/denied have no own role on main: their mapping is a staging assumption (assumption=true) until Krum confirms it."
+  ],
+  "tenants": [
+    {"key": "A", "name": "ST01 Synthetic Tenant A", "slug": "st01-synthetic-tenant-a", "email_domain": "tenant-a.st01.test",
+     "project": {"code": "ST01-A-001", "name": "ST01 A — синтетичен обект"},
+     "warehouse": {"code": "ST01-A-W1", "name": "ST01 A — синтетичен склад"}},
+    {"key": "B", "name": "ST01 Synthetic Tenant B", "slug": "st01-synthetic-tenant-b", "email_domain": "tenant-b.st01.test",
+     "project": {"code": "ST01-B-001", "name": "ST01 B — синтетичен обект"},
+     "warehouse": {"code": "ST01-B-W1", "name": "ST01 B — синтетичен склад"}}
+  ],
+  "roles": [
+    {"key": "owner",           "legacy_role": "Owner",           "role_id": "owner",             "assumption": false},
+    {"key": "admin",           "legacy_role": "Admin",           "role_id": "admin",             "assumption": false},
+    {"key": "requester",       "legacy_role": "SiteManager",     "role_id": "site_manager",      "assumption": true,
+     "why": "only Admin/Owner/SiteManager may create a material request on main"},
+    {"key": "approver",        "legacy_role": "Admin",           "role_id": "admin",             "assumption": true,
+     "why": "main has no request approval and no approver role; the office approver is Admin until Krum decides"},
+    {"key": "denied",          "legacy_role": "Viewer",          "role_id": "LEGACY_VIEWER",     "assumption": true,
+     "why": "the lowest role; used to prove a denied write writes nothing"},
+    {"key": "warehousekeeper", "legacy_role": "Warehousekeeper", "role_id": "warehouse",         "assumption": false},
+    {"key": "technician",      "legacy_role": "Technician",      "role_id": "LEGACY_TECHNICIAN", "assumption": false},
+    {"key": "accountant",      "legacy_role": "Accountant",      "role_id": "accountant",        "assumption": false},
+    {"key": "viewer",          "legacy_role": "Viewer",          "role_id": "LEGACY_VIEWER",     "assumption": false},
+    {"key": "driver",          "legacy_role": "Driver",          "role_id": "driver",            "assumption": false}
+  ]
+}
