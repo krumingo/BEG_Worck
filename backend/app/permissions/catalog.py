@@ -87,6 +87,10 @@ ACTIONS: Set[str] = {
     "warehouse.consume_smr",
     "warehouse.return_to_supplier",
     "warehouse.write_off",
+    # 5C-C26 Addendum B — Р27: the dedicated route gate of
+    # POST /warehouse/canonical/project-writeoff (write-off „фира" FROM A
+    # PROJECT only). Who holds it and on which projects: PROJECT_WRITEOFF_RULE.
+    "warehouse.project_writeoff",
     "warehouse.revision_adjustment",
     "warehouse.quarantine_entry",
     "warehouse.quarantine_release",
@@ -142,6 +146,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.transfer_project_to_warehouse",
                                                                       "warehouse.transfer_project_to_project",
                                                                       "warehouse.quarantine_entry",
+                                                                      # Р27: project write-off, member projects only.
+                                                                      "warehouse.project_writeoff",
                                                                       "warehouse.read_stock",
                                                                       "warehouse.read_history"}},
     "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
@@ -157,6 +163,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.quarantine_entry",
                                                                       "warehouse.quarantine_release",
                                                                       "warehouse.write_off",
+                                                                      # Р27: project write-off, own projects only.
+                                                                      "warehouse.project_writeoff",
                                                                       "warehouse.revision_adjustment",
                                                                       "warehouse.read_stock",
                                                                       "warehouse.read_history",
@@ -164,7 +172,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
     "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read",
                                                                       "master_data.pending.read",
                                                                       "master_data.entity.read",
-                                                                      # TASK 5C: accounting reads only, no stock writes.
+                                                                      # TASK 5C: accounting reads only, no stock writes —
+                                                                      # except Р27: project write-off („фира") everywhere.
+                                                                      "warehouse.project_writeoff",
                                                                       "warehouse.read_stock",
                                                                       "warehouse.read_history"}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
@@ -208,6 +218,27 @@ CANONICAL_ROLES: Dict[str, dict] = {
     "driver":          {"label_bg": "Шофьор",                 "actions": set()},
     # AI gets no blanket actions; it acts <= the delegating human (FLOW-002).
     "ai_service":      {"label_bg": "AI service role",        "actions": set()},
+}
+
+# 5C-C26 Addendum B — Р27 (Крум 06.11.2026, FG-21; follows Р16): who may
+# write off „фира" FROM A PROJECT, and where. Decided by
+# app/services/warehouse_movements/write_off_policy.py from the caller's
+# active RoleAssignments and project_team rows:
+#   everywhere  — on every project of the tenant;
+#   own_project — a project-scope assignment of the role on that project, or
+#                 an active, in-date project_team row;
+#   member      — only an active, in-date project_team row on that project.
+# The legacy Technician is entitled ONLY through membership (like
+# PROJECT_MEMBER_ACTIONS): its company-wide action set stays exactly
+# {"asset_intake.submit"} (W0-02 invariant). Every role not listed → 403.
+PROJECT_WRITEOFF_ACTION = "warehouse.project_writeoff"
+PROJECT_WRITEOFF_RULE: Dict[str, str] = {
+    "owner": "everywhere",
+    "admin": "everywhere",
+    "accountant": "everywhere",
+    "project_manager": "own_project",
+    "site_manager": "member",
+    "LEGACY_TECHNICIAN": "member",
 }
 
 # Project data actions granted per project_team membership (explicit permissions

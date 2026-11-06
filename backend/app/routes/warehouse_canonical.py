@@ -238,3 +238,109 @@ async def post_movement(
         replay=result.replay,
         envelope=result.envelope,
     )
+
+
+# -----------------------------------------------------------------------
+# 5C-C26 Addendum B — Р27: a dedicated endpoint for the write-off („фира")
+# FROM A PROJECT, gated by its own catalog action `warehouse.project_writeoff`
+# (PROJECT_WRITEOFF_RULE) instead of the coarse `warehouse.write_command`.
+# Every other warehouse command is unchanged.
+# -----------------------------------------------------------------------
+class ProjectWriteOffBody(BaseModel):
+    project_id: str = Field(..., min_length=1)
+    subproject_id: Optional[str] = None
+    item_id: str
+    unit: str
+    quantity: str
+    idempotency_key: str = Field(..., min_length=1)
+    reason: str = Field(..., min_length=1)
+    file_ids: List[str] = Field(..., min_items=1)
+    notes: Optional[str] = None
+    occurred_at: Optional[str] = None
+
+
+async def require_project_writeoff(
+    request: Request, user: dict = Depends(get_current_user),
+) -> TenantContext:
+    """Route gate of POST /project-writeoff.
+
+    off / shadow: canonical writes need the Permission Service in enforce
+    (same rule as every canonical command) → 403, nothing written.
+    enforce: Tenant Guard resolves the session; the Р27 decision itself needs
+    the project from the body and runs in the handler BEFORE any write
+    (``write_off_policy.ensure_project_write_off``, catalog
+    PROJECT_WRITEOFF_RULE). No fallback to ALLOW anywhere.
+    """
+    from app.permissions.deps import MODE_ENFORCE, current_mode
+    from app.permissions.catalog import PROJECT_WRITEOFF_ACTION
+    from app.tenancy.guard import get_tenant_context
+    mode = current_mode()
+    if mode != MODE_ENFORCE:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "reason": "ENFORCE_REQUIRED",
+            "action": PROJECT_WRITEOFF_ACTION})
+    ctx = await get_tenant_context(request, user)
+    ctx.mode = mode
+    return ctx
+
+
+@router.post("/project-writeoff", response_model=MovementCommandResponse,
+             status_code=201)
+async def post_project_writeoff(
+    body: ProjectWriteOffBody,
+    request: Request,
+    user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_project_writeoff),
+) -> MovementCommandResponse:
+    from app.permissions.audit_hooks import audit_permission_denied
+    from app.permissions.catalog import PROJECT_WRITEOFF_ACTION
+    from app.services.warehouse_movements.errors import PermissionDeniedError
+    from app.services.warehouse_movements.write_off_policy import (
+        ensure_project_write_off,
+    )
+    tenant = _tenant_for(user)
+    try:
+        await ensure_project_write_off(
+            ctx, tenant._db,                    # pylint: disable=protected-access
+            org_id=tenant.org_id, project_id=body.project_id)
+    except PermissionDeniedError as exc:
+        class _Decision:
+            allowed = False
+            reason_code = exc.context.get("reason_code", "DENIED")
+        await audit_permission_denied(
+            ctx, PROJECT_WRITEOFF_ACTION, module="warehouse",
+            resource_type="project", resource_id=body.project_id,
+            scope_type="project", scope_id=body.project_id,
+            decision=_Decision(), request=request)
+        raise _render_error(exc) from exc
+
+    source_type = LocationType.SUBPROJECT if body.subproject_id else LocationType.PROJECT
+    source_id = body.subproject_id or body.project_id
+    service = _service()
+    try:
+        result = await service.execute(
+            ctx=ctx,
+            tenant_db=tenant._db,            # pylint: disable=protected-access
+            tenant_collection=tenant.warehouse_transactions,
+            inp=CommandInput(
+                action=CanonicalAction.WRITE_OFF,
+                tenant_id=tenant.org_id,
+                actor_id=str(user.get("id") or user.get("_id") or "unknown"),
+                item_id=body.item_id, unit=body.unit,
+                quantity=Decimal(body.quantity),
+                source=LocationKey(source_type, source_id),
+                project_id=body.project_id,
+                subproject_id=body.subproject_id,
+                idempotency_key=body.idempotency_key,
+                file_ids=body.file_ids, reason=body.reason, notes=body.notes,
+                occurred_at=body.occurred_at,
+            ),
+        )
+    except WarehouseMovementError as exc:
+        raise _render_error(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error_code": "BAD_REQUEST",
+                                                     "message": str(exc)})
+    return MovementCommandResponse(
+        movement_id=result.movement_id, audit_event_id=result.audit_event_id,
+        replay=result.replay, envelope=result.envelope)

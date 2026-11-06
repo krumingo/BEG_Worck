@@ -15,6 +15,7 @@
       "warehouse.accept_delivery",
       "warehouse.consume_smr",
       "warehouse.dispatch_to_project",
+      "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
       "warehouse.quarantine_release",
       "warehouse.read_history",
@@ -35,6 +36,7 @@
       "warehouse.accept_delivery",
       "warehouse.consume_smr",
       "warehouse.dispatch_to_project",
+      "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
       "warehouse.quarantine_release",
       "warehouse.read_history",
@@ -54,6 +56,7 @@
     "site_manager": [
       "warehouse.accept_delivery",
       "warehouse.consume_smr",
+      "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
       "warehouse.read_history",
       "warehouse.read_stock",
@@ -63,6 +66,7 @@
     ],
     "project_manager": [
       "warehouse.consume_smr",
+      "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
       "warehouse.quarantine_release",
       "warehouse.read_history",
@@ -74,6 +78,7 @@
       "warehouse.write_off"
     ],
     "accountant": [
+      "warehouse.project_writeoff",
       "warehouse.read_history",
       "warehouse.read_stock"
     ],

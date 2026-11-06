@@ -81,12 +81,11 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     material_total = wh["material_cost"]
 
     # Input VAT on the supplier invoice lines allocated to the project (VAT
-    # only — the cost of those lines is inside the helper's total).
-    inv_lines = await tenant.invoice_lines.find(
-        {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
-        {"_id": 0, "vat_amount": 1},
-    ).to_list(500)
-    input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
+    # only — the cost of those lines is inside the helper's total). 5C-C26
+    # Addendum B: selected by the same allocation rule as Path B
+    # (allocations[] share; deprecated single allocation as a fallback).
+    from app.services.canonical_material_cost import project_input_vat
+    input_vat = await project_input_vat(tenant, org_id, project_id)
 
     # 5C-C21 F-12 (Р10) — „фира" is part of the total and is shown as its own
     # line: material_cost + material_waste_cost == the helper's total.

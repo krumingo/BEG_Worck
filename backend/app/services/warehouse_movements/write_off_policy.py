@@ -30,9 +30,12 @@ from typing import Any, Iterable, List, Optional
 
 from app.services.warehouse_movements.errors import PermissionDeniedError
 
-R27_EVERYWHERE = frozenset({"owner", "admin", "accountant"})
-R27_OWN_PROJECT = frozenset({"project_manager"})
-R27_MEMBER_ONLY = frozenset({"site_manager", "LEGACY_TECHNICIAN", "technician"})
+from app.permissions.catalog import PROJECT_WRITEOFF_RULE
+
+# 5C-C26 Addendum B — the table lives in the catalog (one source).
+R27_EVERYWHERE = frozenset(r for r, k in PROJECT_WRITEOFF_RULE.items() if k == "everywhere")
+R27_OWN_PROJECT = frozenset(r for r, k in PROJECT_WRITEOFF_RULE.items() if k == "own_project")
+R27_MEMBER_ONLY = frozenset(r for r, k in PROJECT_WRITEOFF_RULE.items() if k == "member")
 R27_REASON = "R27_WRITE_OFF_NOT_ALLOWED"
 
 

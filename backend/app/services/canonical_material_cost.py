@@ -301,6 +301,38 @@ async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[di
     return [row async for row in cursor]
 
 
+async def project_input_vat(tenant, org_id: str, project_id: str) -> float:
+    """5C-C26 Addendum B — input VAT of the supplier invoice lines allocated
+    to the project, selected by the SAME rule as Path B (``allocations[]``,
+    or the deprecated single allocation for a line without it): the line's
+    ``vat_amount`` × the share of its qty allocated to the project. A stale
+    deprecated ``allocation_type=project`` on a line re-allocated elsewhere
+    adds nothing. VAT is a tax fact of the allocation, not a cost lot, so a
+    canonical receipt of the line does not change it."""
+    cursor = tenant.invoice_lines.find(
+        {"org_id": org_id,
+         "$or": [
+             {"allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}},
+             {"allocation_type": "project", "allocation_ref_id": project_id},
+         ]},
+        {"_id": 0, "qty": 1, "vat_amount": 1, "allocations": 1,
+         "allocation_type": 1, "allocation_ref_id": 1},
+    )
+    total = 0.0
+    async for line in cursor:
+        vat = float(line.get("vat_amount", 0) or 0)
+        mine = [a for a in effective_allocations(line)
+                if a["type"] == "project" and a["ref_id"] == project_id]
+        if not mine:
+            continue
+        qty = _f(line.get("qty"))
+        if qty and qty > 0 and all(a["qty"] is not None for a in mine):
+            total += vat * min(sum(a["qty"] for a in mine), qty) / qty
+        else:
+            total += vat
+    return round(total, 2)
+
+
 async def ledger_invoice_line_links(tenant, org_id: str, ids: List[str]) -> Dict[str, List[dict]]:
     """Canonical ledger rows that reference each invoice line
     (``invoice_line_id``), tenant-scoped."""
