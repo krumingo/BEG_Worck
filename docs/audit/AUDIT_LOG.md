@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 Склад 5C (C25+A) | `d8923d7` | PASS (internal; Р21 FIFO partial accept verified) + D-55-FG17 — Codex still required | 2026-11-06 |
+| #55 Склад 5C (C26) | `25e1bab` | PASS (internal; FG-17 resolved per canon, D-55-FG17 closed) — Codex still required | 2026-11-06 |
 | #67 ST-02 | `98b18ec` | PASS (C02); rehearsal NOT re-run with shadow (open) | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `a0dec8b` | PASS (internal) — Codex required (money); INT-70x69 for whichever merges second | 2026-11-06 |
@@ -1087,3 +1087,43 @@ The comment on #69 still applies.
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
 
 **Verdict:** PAY-01 in its own scope: **PASS (internal)**. Money, so the Codex review is required. PAY-N1 is main debt. INT-70x69 is blocking for the second of #69 / #70 to merge.
+
+
+---
+
+## 2026-11-06 ~20:45 — #55 @ `25e1bab` (5C-C26: one path per lot between Path A and Path B; resolves D-55-FG17)
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix + `codex_c23_independent` | **264 / 0 / 0** |
+| R0 + RC-01 + ST-01 on real Mongo | **881 / 0 / 0** |
+| W0 DB-free | same 15 ✔ |
+| A2C / A1 | 0 / 0 ✔ |
+
+### Probes (`docs/audit/probes/pr55/test_probe_pr55_c26.py`, real Mongo)
+
+Invoice lines are built with **origin/main's own `compute_line_totals` + `compute_allocation_stats`** (real shape). **4 / 4 PASS:**
+
+| Probe | Result |
+|---|---|
+| C26-1: line 10 @10 split over `allocations[]` p1 5 / p2 5 | p1 **50**, p2 **50** (main's selection would have put 100 on p1) ✔ |
+| C26-2: line allocated 10 to p1 + canonical `receive_from_supplier` 10 with `invoice_line_id` → dispatch → accept at p1 | p1 **100** (one lot, not 200) ✔ |
+| C26-3: partial link (direct receipt to p1 of 4 with `invoice_line_id`) | p1 **100** = 40 canon + 60 line (not 140) ✔ |
+| C26-4: pre-cutover legacy issue (main's `issue_to_project` shape) of the same material + Path B line | sum unchanged (**200**); warning `PATH_B_LEGACY_OVERLAP_UNPROVEN` raised for T; tenant T2 sees **no** warnings ✔ |
+
+**Re-runs:** C24 L-1, L-2, F-1…F-6 and C25-1…5 are **13 / 13 ok** (C25-5: a line with no link is still a separate lot, total 150, as C26 intends).
+
+**Not probed, by design:** an allocation summing to more than the line quantity. `path_b_split` does not cap at the line total, but main's writers refuse it (`invoice_lines.py:326,413,507,568`). Under the real-shapes rule (18:30 entry) I do not probe with invented rows. Low note: if such data was ever imported, Path B would overcount.
+
+**D-55-FG17 is CLOSED** per the canon (FLOW-043 D-04, FLOW-009 Path A/B), as the orchestrator relayed. A lot is counted once when the link is proven; an unproven overlap stays summed but is surfaced as an integrity warning, not silently.
+
+### Integration
+
+| Pair | Status |
+|---|---|
+| #55 × main | clean |
+| #55 × #70 | clean |
+| #55 × #56 | conflict: `data_access.py`, A2B inventory |
+| #55 × #69 | conflict: `catalog.py`, `procurement.py`, `sales.py` |
