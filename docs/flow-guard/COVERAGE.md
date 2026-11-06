@@ -71,4 +71,27 @@
 | двустепенно одобрение за критични суми | ⏳ | Няма. Зависи от W0-07 |
 | AI да не плаща сам | ✅ | Няма AI tool с право за плащане (`catalog.py:123`) |
 
-Следващ FLOW в бавния преглед: **FLOW-040** (AuditEvent).
+
+## Проход 3 — FLOW-040 (AuditEvent / AI Audit Log)
+
+- main @ `8e3b190` (= `07da9ab` + PM-01 #68, без промяна в app кода), 06.11.2026.
+- Прочетени: `backend/app/audit/{envelope,store,idempotency}.py`, `app/utils/audit.py`, `app/services/audit.py`; извикванията на `record_event`.
+- Проба: `probes/fg37_audit_chain_race_probe.py`.
+
+| Правило в FLOW-040 | Състояние | Къде / бележка |
+|---|---|---|
+| Каноничен AuditEvent envelope (§3) | ✅ | `audit/envelope.py:120-205` — полетата от §3, вкл. retention_class, legal_hold, integrity_hash/previous_hash |
+| Append-only; без update/delete през API (§2, §8, §15) | ✅ | Няма `audit_events.update/delete` в `app/` |
+| Hash chain по tenant (§8) | ❌ PROVEN | `audit/store.py:107-119`: `_last_event` + `insert_one` без lock, транзакция или уникален индекс (tenant_id, sequence). 20 едновременни записа → 3 различни sequence, `verify_chain` = false → **FG-37** |
+| Един общ envelope, не паралелен регистър (§2; CLAUDE.md §2.8) | ⚠️ | Каноничният `audit_events` се ползва само от permissions, master_data, tenancy и `user_role_policy` (10 места). 22 route файла пишат legacy `audit_logs` (`utils/audit.py:78`, `services/audit.py:24`) — без hash, без retention_class. Това е дългът на W0-04; при пари/склад/заплати → FG-34, FG-1 |
+| Задължителни събития §4.1 (вход, права, permission denied) | ⚠️ | Промените на права — ✅ (`permissions/audit_hooks.py`). Permission denied — само в `enforce` (**FG-28**) |
+| §4.2 финансови (плащане, allocation, reversal, Pay Run) | ⚠️ | Pay Run (R0-05/06) — да. Плащания/allocation в `finance.py` — само legacy `log_audit` или нищо (**FG-34** → PAY-01 #70) |
+| §4.3 оперативни (склад, присъствие, отчети) | ⚠️ | Каноничният склад в #55 — да (hash chain в същата транзакция). Труд/отпадък на main — не (FG-1) |
+| Retention класове и минимални срокове (§6) | ⚠️ | Класовете са в envelope. Security събитията извън веригата (AUTH-01 #56) вече са 730 дни (FG-10 ✅) |
+| Без raw secret/token/password (§9, §15) | ✅ | `envelope.py:98-117 mask_sensitive`, `_assert_no_secrets` (`:241`) |
+| Immutable/WORM архив, signed manifest, integrity аларма (§8) | ⏳ | Няма в кода. W0-04 / FLOW-044 |
+| Видимост по роля L0–L5 (§10–11) | ⏳ | Няма audit UI/API по роли в този преглед |
+| Break-glass (L5) | ✅ на клона с пакетите | D-16 + AUTH-02 (#56) |
+| idempotency_key в event (§3) | ⚠️ | Поле има. `audit/idempotency.py` е само за части от кода; паричните записи на main нямат idempotency (FLOW-006 coverage) |
+
+Следващ FLOW в бавния преглед: **FLOW-028** (заплати / Pay Run).

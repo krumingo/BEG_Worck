@@ -55,6 +55,8 @@
 | FG-33 | low | Р19 срещу FLOW-040 L5 | Р19 пуска break-glass без предварително одобрение; FLOW-040 L5 иска „две независими одобрения“ | SUSPECTED | resolved (Р24 → FLOW-043 D-16 + бележка във FLOW-040 L5, `b659a73` на `claude/happy-meitner-bmcnel`; влиза в main с merge) |
 | FG-34 | high | main `07da9ab` | плащания се изтриват окончателно (`DELETE /finance/payments/{id}`, премахване на разпределение) | SUSPECTED | open — Р23, пакет PAY-01 (`b659a73`) одобрен и сверен с FLOW-006; кодът предстои |
 | FG-35 | high | main `07da9ab` | каса, бонуси и режийни се пишат в отделни колекции извън `finance_payments` — втори паричен регистър | SUSPECTED | open — дълг за W0-05 (единен Payment core), записан от оркестратора |
+| FG-36 | low | #67 `675faba` | `approved_by: "krum"` е свободен текст, `approval_ref: null` — няма препратка към одобрението | PROVEN | open |
+| FG-37 | high | main `8e3b190` | AuditEvent hash chain се разклонява при едновременни записи (няма lock/уникален sequence) | PROVEN | open |
 
 
 ---
@@ -478,6 +480,29 @@
   - `IMPLEMENTATION_WAVES.md:47` казва „един `finance_payments` write service“.
   - SEC-01 затвори кой може да пише (Р14), но не и къде се пише.
 - **Решение:** промяна в кода в W0-05 / R1 Payment — тези записи да станат движения в единния регистър (или задължения + плащане през FLOW-006), с миграция. До тогава оркестраторът да го води като дълг. Бизнес правилото е ясно, не е нужно ново решение.
+
+## FG-36 — staging: `approved_by` без препратка към одобрението
+
+- **Тежест:** low. **Статус:** open. **PROVEN** (доказателствата на PR-а).
+- **Канон:**
+  - CLAUDE.md §8: „Approval винаги сочи към exact version и evidence.“
+  - FLOW-050: всеки deployment пази „deployed_by, approved_by“.
+- **Код (#67 `675faba`):** `docs/evidence/ST-02/rehearsal-2026-11-06-c03/*/record.json:8-9` имат `deployed_by: "claude-st02-c03"`, `approved_by: "krum"`, а в manifest-а `approval_ref: null` (`:141,151`). Името на Крум е записано от агента, без връзка към решението (пакет ST-02-C03 / Р9).
+- **Решение:** промяна в кода — `--approved-by` да изисква и `--approval-ref` (пакет/съобщение/коментар), който да влезе в record и manifest. За production deploy-а това ще е задължително.
+
+## FG-37 — AuditEvent hash chain се разклонява при едновременни записи
+
+- **Тежест:** high. **Статус:** open. **PROVEN.**
+- **Известен дълг:** пакетът PAY-01 го споменава като „W0-04 е известен дълг за паралелни записи“. Тук е показан с проба.
+- **Канон:**
+  - FLOW-040 §8: „append-only primary event store; … hash chain или подписан batch manifest по tenant и период; … аларма при липсващ sequence, hash mismatch“.
+  - CLAUDE.md §2.8.
+- **Код (main `8e3b190`):** `backend/app/audit/store.py:107-119` (`record_event`) чете последното събитие и вмъква следващото без транзакция, lock или уникален индекс (tenant_id, sequence). Ползва се от `permissions/audit_hooks.py:70,118`, `master_data/*`, `tenancy/legacy_backfill.py:500`, `services/user_role_policy.py:209`.
+- **Проба:** `docs/flow-guard/probes/fg37_audit_chain_race_probe.py`. Реален Mongo, 20 едновременни `record_event` за един tenant:
+  - 20 събития, само **3** различни `sequence`;
+  - `verify_chain` → false, „sequence gap: expected 2, found 1“.
+- **Ефект:** при нормален паралелен трафик веригата става невалидна. Проверката на целостта би вдигала фалшиви аларми или би маскирала истинска подмяна.
+- **Решение:** промяна в кода (W0-04) — уникален индекс (tenant_id, sequence) + retry при конфликт, или запис в транзакция с броячен документ на tenant. Складът в #55 вече пише веригата в транзакция — да се провери дали ползва същия механизъм.
 
 ## Дневник на проходите
 
