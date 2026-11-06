@@ -322,3 +322,58 @@ def strip_for_budget_view(fn):
     wrapper.sec02_budget_view = True
     wrapper.sec02_keep = ()
     return wrapper
+
+
+# SEC-02-C (R20, R31; B-D2): what a Technical Manager keeps of a site pulse of HIS site —
+# the site's budget snapshot (budget / spent / remaining), the per-SMR totals and the site
+# labor total. Never the per-worker labor cost (FLOW-037 §3.4) or material values.
+PULSE_BUDGET_VIEW_KEYS = ("budget_snapshot", "smr_summary", "total_labor_cost")
+
+
+def strip_pulse_for_non_finance(fn):
+    """SEC-02-C decorator for the site pulse GETs (one pulse, or {"items": [pulses]}):
+    finance roles — everything; SiteManager, current member of the pulse's site — the
+    R20/R31 budget view of that site; every other caller (and SiteManager on other
+    sites) — no money."""
+    import functools
+    import inspect
+    from fastapi.encoders import jsonable_encoder
+    from app.permissions.finance_read import strip_money
+
+    sig = inspect.signature(fn)
+    own_request, params = _request_param(sig)
+
+    @functools.wraps(fn)
+    async def wrapper(*args, **kwargs):
+        request = kwargs[own_request] if own_request else kwargs.pop("_sec02_request")
+        result = await fn(*args, **kwargs)
+        user = _session_user(kwargs)
+        if await money_values_visible(request, user):
+            return result
+        body = jsonable_encoder(result)
+        own: dict = {}
+
+        async def view(pulse):
+            if not isinstance(pulse, dict):
+                return strip_money(pulse)
+            site = pulse.get("site_id")
+            if site not in own:
+                own[site] = await budget_view_visible(request, user, site)
+            out = strip_money(pulse)
+            if own[site]:
+                for key in PULSE_BUDGET_VIEW_KEYS:
+                    if key in pulse:
+                        out[key] = pulse[key]
+            return out
+
+        if isinstance(body, dict) and isinstance(body.get("items"), list):
+            items = [await view(p) for p in body["items"]]
+            return {**strip_money({k: v for k, v in body.items() if k != "items"}),
+                    "items": items}
+        return await view(body)
+
+    wrapper.__signature__ = sig.replace(parameters=params)
+    wrapper.sec02_strips_money = True
+    wrapper.sec02_budget_view = True
+    wrapper.sec02_keep = ()
+    return wrapper

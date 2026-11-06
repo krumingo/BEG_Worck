@@ -114,7 +114,7 @@ def sid(tkey: str, name: str) -> str:
 
 
 def is_project(path: str) -> bool:
-    return "{project_id}" in path
+    return "{project_id}" in path or "{site_id}" in path        # a site IS a project
 
 
 def probes() -> List[Dict[str, Any]]:
@@ -164,6 +164,18 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
                        "material_unit_cost": 3, "labor_unit_cost": 4, "unit_price": 777.7,
                        "line_total": 7777.0}],
             "subtotal": 7777.0, "vat_amount": 0, "total": 7777.0})
+        # SEC-02-C (R31): a stored site pulse of P1 with a per-worker labor cost of 7777 —
+        # the Technical Manager may see the site budget, never the 7777.
+        await op_db.site_pulses.insert_one({
+            "id": sid(tkey, "pulse1"), "org_id": org, "site_id": p1, "date": "2026-11-02",
+            "site_name": "P1", "generated_at": now, "total_workers": 1, "total_hours": 8,
+            "workers": [{"worker_id": tech, "worker_name": "T", "hours": 8, "labor_cost": 7777.0}],
+            "smr_summary": [{"smr_type": "Мазилка", "total_hours": 8, "total_cost": 3200.0,
+                             "workers_count": 1}],
+            "total_labor_cost": 3200.0, "materials_used": [], "total_material_cost": 0,
+            "budget_snapshot": {"total_budget": 5000.0, "total_spent": 3200.0,
+                                "remaining": 1800.0, "burn_pct": 64.0, "status": "ok"},
+            "alerts": []})
         await op_db.material_entries.insert_one({
             "id": sid(tkey, "me1"), "org_id": org, "project_id": p1, "material_name": "Probe",
             "qty": 5, "unit": "kg", "unit_cost": 7777.0, "total_cost": 7777.0,
@@ -241,10 +253,11 @@ def expected(p: Dict[str, Any], legacy_role: str, target: Optional[str]) -> Dict
     if rule == R20_5M:                                         # the route keeps its own
         return {"reached": None, "money": fin}                 # access rule; money = fin
     if rule == R20_5B:                                         # SEC-02-B, FG-43
-        sm = legacy_role == "SiteManager" and target == "P1"
-        # FG-43: Accountant reads the two activity budget screens on every project; the
-        # other R20-5B routes keep their own access rule (SEC-02-B-D1).
-        fg43 = p["path"].endswith(("/activities-overview", "/activity-budget-summary"))
+        sm = legacy_role == "SiteManager" and (target == "P1" or p["path"] == "/api/pulse/today")
+        # FG-43 + SEC-02-C (B-D1): Accountant reads the four project budget screens on
+        # every project; the pulse keeps its own (open) access rule.
+        fg43 = p["path"].endswith(("/activities-overview", "/activity-budget-summary",
+                                   "/activity-budgets", "/budget-health"))
         return {"reached": True if (fin and fg43) else None, "money": fin,
                 "budget_view": sm}
     if key == "subscription":
@@ -348,7 +361,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                    "P2": fx[tkey]["project2_id"], None: None}[target]
             url = p["path"]
             if pid:
-                url = url.replace("{project_id}", pid)
+                url = url.replace("{project_id}", pid).replace("{site_id}", pid)
             for name, value in url_values(fx, tkey).items():
                 url = url.replace("{%s}" % name, value)
             kwargs: Dict[str, Any] = {
@@ -387,6 +400,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 row["money_keys"] = body_money_keys(body, keep_of.get(p["path"], ()))
                 if p["rule"] == R20_5B:
                     row["hidden_budget_keys"] = money_keys_in(body, BUDGET_VIEW_HIDDEN_FIELDS)
+                if p["path"] == "/api/pulse/today" and isinstance(body, dict):
+                    sites = {fx[tkey]["project_id"]: "P1", fx[tkey]["project2_id"]: "P2"}
+                    row["sites_with_money"] = sorted({
+                        sites.get(it.get("site_id"), "other") for it in body.get("items", [])
+                        if body_money_keys(it)})
                 row["leaks_7777"] = "7777" in resp.text
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
@@ -510,6 +528,12 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
         if r["status"] == 200 or r["status"] == 201:
             if r["rule"] == R20_5B and "money_keys" in r and not exp["money"]:
                 assert r["hidden_budget_keys"] == [] and not r["leaks_7777"], r
+                if "sites_with_money" in r:                       # SEC-02-C: own site only
+                    assert set(r["sites_with_money"]) <= ({"P1"} if exp["budget_view"]
+                                                           else set()), r
+                # R31 (FLOW-037 §3.4): never a per-person rate or labor cost
+                assert not {"hourly_rate", "labor_cost", "rate", "daily_rate"} & \
+                    set(r["money_keys"]), r
                 if not exp["budget_view"]:
                     assert r["money_keys"] == [], r              # FG-43: other members
             elif "money_keys" in r and (r["rule"] == R20_5M or "has_payroll" in r):
@@ -826,6 +850,13 @@ def test_the_audit_scan_finds_no_money_for_non_finance_roles():
         e = reg[("GET", path)]
         assert e.rule in (R20_2B, R20_5B) and e.action != EMPLOYEE_FILE_ACTION, path
         assert {c.split("/")[1] for c in cells} == {"requester"}, (path, cells)
+    # R31 (FLOW-037 §3.4): what the Technical Manager keeps is per SMR / project only —
+    # no per-worker list, rate or piece-rate price in any allowed path.
+    for path, cells in scan["allowed_budget_view"].items():
+        for keys in cells.values():
+            for k in keys:
+                assert not re.search(r"worker|hourly_rate|\.rate$|daily_rate|akord|"
+                                     r"personnel", k), (path, k)
     assert set(scan["judged_not_money"]) <= set(SCAN_JUDGED_NOT_MONEY)
     assert set(scan["own_record"]) <= SCAN_OWN_RECORD_PATHS
     for cells in scan["own_record"].values():

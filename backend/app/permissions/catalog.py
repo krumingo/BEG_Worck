@@ -223,6 +223,8 @@ _ALL = set(ACTIONS)
 # from project_team membership (see the migration backfill). So company-scope
 # non-admin roles do NOT list budget.* — otherwise a company role would read
 # every project, which is broader than today's membership-based access.
+# Exception (SEC-02-C, R20, Krum 06.11.2026): Accountant holds budget.read (READ only)
+# company-wide — R20 gives the finance roles every project's money.
 CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
     "admin":           {"label_bg": "Администратор",          "actions": set(_ALL)},
@@ -239,7 +241,12 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "master_data.pending.read",
                                                                       "master_data.entity.read",
                                                                       *MONEY_WRITE_ACTIONS,
-                                                                      *SEC02_ACCOUNTANT_READ_ACTIONS}},
+                                                                      *SEC02_ACCOUNTANT_READ_ACTIONS,
+                                                                      # SEC-02-C (R20, B-D1): the
+                                                                      # finance role reads every
+                                                                      # project's budget — company
+                                                                      # scope, read only.
+                                                                      "budget.read"}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read"}},

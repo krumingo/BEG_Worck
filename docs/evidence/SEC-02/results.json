@@ -649,7 +649,7 @@
   ],
   [
    "GET /api/pulse/today",
-   "R20-5M",
+   "R20-5B",
    "finance.money_values.read"
   ],
   [
@@ -659,12 +659,12 @@
   ],
   [
    "GET /api/sites/{site_id}/pulse",
-   "R20-5M",
+   "R20-5B",
    "finance.money_values.read"
   ],
   [
    "GET /api/sites/{site_id}/pulse/range",
-   "R20-5M",
+   "R20-5B",
    "finance.money_values.read"
   ],
   [
@@ -750,7 +750,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 151.6,
+ "seconds": 117.3,
  "rows": [
   {
    "mode": "off",
@@ -17285,7 +17285,7 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17299,6 +17299,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -17308,7 +17313,7 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17322,6 +17327,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -17331,14 +17341,24 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1"
+   ],
    "leaks_7777": false
   },
   {
@@ -17347,7 +17367,7 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17355,6 +17375,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -17363,7 +17385,7 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17378,6 +17400,11 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
+   ],
    "leaks_7777": false
   },
   {
@@ -17386,7 +17413,7 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17394,6 +17421,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -17402,7 +17431,7 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17410,6 +17439,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -17418,7 +17449,7 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -17426,6 +17457,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -17555,8 +17588,8 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -17570,6 +17603,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17578,8 +17612,8 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -17593,6 +17627,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17601,14 +17636,21 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17617,14 +17659,15 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17633,8 +17676,8 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -17648,6 +17691,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17656,14 +17700,15 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17672,14 +17717,15 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17688,14 +17734,172 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17704,13 +17908,23 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "off",
@@ -17718,13 +17932,23 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "off",
@@ -17732,12 +17956,20 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17746,12 +17978,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17760,13 +17993,23 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "off",
@@ -17774,12 +18017,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17788,12 +18032,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -17802,12 +18047,133 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -19032,9 +19398,15 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "labor_budget",
+    "material_budget"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -19140,9 +19512,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -19266,9 +19641,18 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "spent",
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -19382,9 +19766,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -37372,7 +37763,7 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37386,6 +37777,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -37395,7 +37791,7 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37409,6 +37805,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -37418,14 +37819,24 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1"
+   ],
    "leaks_7777": false
   },
   {
@@ -37434,7 +37845,7 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37442,6 +37853,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -37450,7 +37863,7 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37465,6 +37878,11 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
+   ],
    "leaks_7777": false
   },
   {
@@ -37473,7 +37891,7 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37481,6 +37899,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -37489,7 +37909,7 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37497,6 +37917,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -37505,7 +37927,7 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -37513,6 +37935,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -37642,8 +38066,8 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -37657,6 +38081,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37665,8 +38090,8 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -37680,6 +38105,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37688,14 +38114,21 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37704,14 +38137,15 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37720,8 +38154,8 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -37735,6 +38169,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37743,14 +38178,15 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37759,14 +38195,15 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37775,14 +38212,172 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37791,13 +38386,23 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "off",
@@ -37805,13 +38410,23 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "off",
@@ -37819,12 +38434,20 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37833,12 +38456,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37847,13 +38471,23 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "off",
@@ -37861,12 +38495,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37875,12 +38510,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -37889,12 +38525,133 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -39119,9 +39876,15 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "labor_budget",
+    "material_budget"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -39227,9 +39990,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -39353,9 +40119,18 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "spent",
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -39469,9 +40244,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -43177,6 +43959,180 @@
    "tenant": "B",
    "role": "admin",
    "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
    "probe": "GET /api/projects/{project_id}/activity-reports/{smr_type}",
    "rule": "R20-5M",
    "target": "XA",
@@ -43493,9 +44449,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "XA",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -43560,9 +44519,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "XA",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -60133,7 +61099,7 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60147,6 +61113,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -60156,7 +61127,7 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60170,6 +61141,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -60179,14 +61155,24 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1"
+   ],
    "leaks_7777": false
   },
   {
@@ -60195,7 +61181,7 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60203,6 +61189,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -60211,7 +61199,7 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60226,6 +61214,11 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
+   ],
    "leaks_7777": false
   },
   {
@@ -60234,7 +61227,7 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60242,6 +61235,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -60250,7 +61245,7 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60258,6 +61253,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -60266,7 +61263,7 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -60274,6 +61271,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -60403,8 +61402,8 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -60418,6 +61417,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60426,8 +61426,8 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -60441,6 +61441,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60449,14 +61450,21 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60465,14 +61473,15 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60481,8 +61490,8 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -60496,6 +61505,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60504,14 +61514,15 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60520,14 +61531,15 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60536,14 +61548,172 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60552,13 +61722,23 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "shadow",
@@ -60566,13 +61746,23 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "shadow",
@@ -60580,12 +61770,20 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60594,12 +61792,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60608,13 +61807,23 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "shadow",
@@ -60622,12 +61831,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60636,12 +61846,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -60650,12 +61861,133 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -61880,9 +63212,15 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "labor_budget",
+    "material_budget"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -61988,9 +63326,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -62114,9 +63455,18 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "spent",
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -62230,9 +63580,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -80220,7 +81577,7 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80234,6 +81591,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -80243,7 +81605,7 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80257,6 +81619,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -80266,14 +81633,24 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1"
+   ],
    "leaks_7777": false
   },
   {
@@ -80282,7 +81659,7 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80290,6 +81667,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -80298,7 +81677,7 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80313,6 +81692,11 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
+   ],
    "leaks_7777": false
   },
   {
@@ -80321,7 +81705,7 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80329,6 +81713,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -80337,7 +81723,7 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80345,6 +81731,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -80353,7 +81741,7 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -80361,6 +81749,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -80490,8 +81880,8 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -80505,6 +81895,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80513,8 +81904,8 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -80528,6 +81919,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80536,14 +81928,21 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80552,14 +81951,15 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80568,8 +81968,8 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -80583,6 +81983,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80591,14 +81992,15 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80607,14 +82009,15 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80623,14 +82026,172 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80639,13 +82200,23 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "shadow",
@@ -80653,13 +82224,23 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "shadow",
@@ -80667,12 +82248,20 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80681,12 +82270,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80695,13 +82285,23 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "shadow",
@@ -80709,12 +82309,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80723,12 +82324,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -80737,12 +82339,133 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -81967,9 +83690,15 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "labor_budget",
+    "material_budget"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -82075,9 +83804,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -82201,9 +83933,18 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "spent",
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -82317,9 +84058,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -86025,6 +87773,180 @@
    "tenant": "B",
    "role": "admin",
    "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
    "probe": "GET /api/projects/{project_id}/activity-reports/{smr_type}",
    "rule": "R20-5M",
    "target": "XA",
@@ -86341,9 +88263,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "XA",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -86408,9 +88333,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "XA",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -103021,7 +104953,7 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103035,6 +104967,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -103044,7 +104981,7 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103058,6 +104995,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -103067,14 +105009,24 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1"
+   ],
    "leaks_7777": false
   },
   {
@@ -103083,7 +105035,7 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103091,6 +105043,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -103099,7 +105053,7 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103114,6 +105068,11 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
+   ],
    "leaks_7777": false
   },
   {
@@ -103122,7 +105081,7 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103130,6 +105089,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -103138,7 +105099,7 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103146,6 +105107,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -103154,7 +105117,7 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -103162,6 +105125,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -103291,8 +105256,8 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -103306,6 +105271,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103314,8 +105280,8 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -103329,6 +105295,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103337,14 +105304,21 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103353,14 +105327,15 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103369,8 +105344,8 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -103384,6 +105359,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103392,14 +105368,15 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103408,14 +105385,15 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103424,14 +105402,172 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103440,13 +105576,23 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "enforce",
@@ -103454,13 +105600,23 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "enforce",
@@ -103468,12 +105624,20 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103482,12 +105646,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103496,13 +105661,23 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "enforce",
@@ -103510,12 +105685,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103524,12 +105700,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -103538,12 +105715,133 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -104768,9 +107066,15 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "labor_budget",
+    "material_budget"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -104876,9 +107180,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -105006,9 +107313,18 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "spent",
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -105122,9 +107438,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -123168,7 +125491,7 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123182,6 +125505,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -123191,7 +125519,7 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123205,6 +125533,11 @@
     "total_labor_cost",
     "total_material_cost",
     "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
    ],
    "leaks_7777": false
   },
@@ -123214,14 +125547,24 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1"
+   ],
    "leaks_7777": false
   },
   {
@@ -123230,7 +125573,7 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123238,6 +125581,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -123246,7 +125591,7 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123261,6 +125606,11 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
+   "sites_with_money": [
+    "P1",
+    "P2"
+   ],
    "leaks_7777": false
   },
   {
@@ -123269,7 +125619,7 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123277,6 +125627,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -123285,7 +125637,7 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123293,6 +125645,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -123301,7 +125655,7 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/pulse/today",
-   "rule": "R20-5M",
+   "rule": "R20-5B",
    "target": null,
    "status": 200,
    "written": [
@@ -123309,6 +125663,8 @@
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "sites_with_money": [],
    "leaks_7777": false
   },
   {
@@ -123438,8 +125794,8 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -123453,6 +125809,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123461,8 +125818,8 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -123476,6 +125833,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123484,14 +125842,21 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123500,14 +125865,15 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123516,8 +125882,8 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
@@ -123531,6 +125897,7 @@
     "total_material_cost",
     "total_spent"
    ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123539,14 +125906,15 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123555,14 +125923,15 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123571,14 +125940,172 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [
     "op.site_pulses"
    ],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123587,13 +126114,23 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "enforce",
@@ -123601,13 +126138,23 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "enforce",
@@ -123615,12 +126162,20 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123629,12 +126184,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123643,13 +126199,23 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "budget_snapshot",
+    "labor_cost",
+    "remaining",
+    "total_budget",
+    "total_cost",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": true
   },
   {
    "mode": "enforce",
@@ -123657,12 +126223,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123671,12 +126238,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -123685,12 +126253,133 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "GET /api/sites/{site_id}/pulse/range",
-   "rule": "R20-5M",
-   "target": null,
+   "rule": "R20-5B",
+   "target": "P1",
    "status": 200,
    "written": [],
    "foreign_ids": false,
    "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
    "leaks_7777": false
   },
   {
@@ -124915,9 +127604,15 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "labor_budget",
+    "material_budget"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -125023,9 +127718,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -125153,9 +127851,18 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P1",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "spent",
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -125269,9 +127976,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "P2",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -128993,6 +131707,180 @@
    "tenant": "B",
    "role": "admin",
    "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget_snapshot",
+    "remaining",
+    "total_budget",
+    "total_labor_cost",
+    "total_material_cost",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [
+    "op.site_pulses"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/sites/{site_id}/pulse/range",
+   "rule": "R20-5B",
+   "target": "XA",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
    "probe": "GET /api/projects/{project_id}/activity-reports/{smr_type}",
    "rule": "R20-5M",
    "target": "XA",
@@ -129309,9 +132197,12 @@
    "probe": "GET /api/projects/{project_id}/activity-budgets",
    "rule": "R20-5B",
    "target": "XA",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -129378,9 +132269,16 @@
    "probe": "GET /api/projects/{project_id}/budget-health",
    "rule": "R20-5B",
    "target": "XA",
-   "status": 403,
+   "status": 200,
    "written": [],
-   "foreign_ids": false
+   "foreign_ids": false,
+   "money_keys": [
+    "total_budget",
+    "total_remaining",
+    "total_spent"
+   ],
+   "hidden_budget_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",

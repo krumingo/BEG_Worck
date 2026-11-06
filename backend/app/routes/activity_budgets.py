@@ -70,7 +70,9 @@ async def list_activity_budgets(
         "budget.read", module="M2", scope="project",
         scope_id_param="project_id", resource_type="activity_budget",
         # Legacy behavior (used in off/shadow): project_team membership.
-        legacy_check=lambda user, request: can_access_project(user, request.path_params["project_id"]),
+        # SEC-02-C (R20, B-D1): the finance roles read every project's budget.
+        legacy_check=lambda user, request: (user.get("role") in FINANCE_WRITE_ROLES
+                                            or can_access_project(user, request.path_params["project_id"])),
     )),
 ):
     """Get all activity budgets for a project."""
@@ -530,7 +532,8 @@ async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
 async def get_budget_health(project_id: str, user: dict = Depends(get_current_user)):
     """Aggregated burn for entire project across all activity budgets."""
     tenant = _tenant(user)
-    if not await can_access_project(user, project_id):
+    # SEC-02-C (R20, B-D1): the finance roles read every project's budget.
+    if user.get("role") not in FINANCE_WRITE_ROLES and not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     org_id = user["org_id"]

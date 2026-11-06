@@ -147,6 +147,45 @@
     ".top_overruns.activities[].planned_cost",
     ".top_overruns.activities[].variance_cost"
    ]
+  },
+  "/api/pulse/today": {
+   "off/requester": [
+    ".items[].budget_snapshot.total_budget"
+   ],
+   "shadow/requester": [
+    ".items[].budget_snapshot.total_budget"
+   ],
+   "enforce/requester": [
+    ".items[].budget_snapshot.total_budget"
+   ]
+  },
+  "/api/sites/{site_id}/pulse": {
+   "off/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/requester": [
+    ".budget_snapshot.total_budget"
+   ]
+  },
+  "/api/sites/{site_id}/pulse/range": {
+   "off/requester": [
+    ".items[].budget_snapshot.total_budget",
+    ".items[].smr_summary[].total_cost",
+    ".items[].total_labor_cost"
+   ],
+   "shadow/requester": [
+    ".items[].budget_snapshot.total_budget",
+    ".items[].smr_summary[].total_cost",
+    ".items[].total_labor_cost"
+   ],
+   "enforce/requester": [
+    ".items[].budget_snapshot.total_budget",
+    ".items[].smr_summary[].total_cost",
+    ".items[].total_labor_cost"
+   ]
   }
  },
  "judged_not_money": {
