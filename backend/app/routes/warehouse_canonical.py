@@ -353,8 +353,8 @@ async def post_project_writeoff(
                 from app.services.warehouse_movements.errors import InvariantViolationError
                 raise InvariantViolationError(
                     "project_id must be the parent project of the subproject",
+                    # FG-55: no parent id before the rights check.
                     context={"subproject_id": body.subproject_id,
-                             "parent_project_id": parent,
                              "project_id": body.project_id})
         except WarehouseMovementError as exc:
             raise _render_error(exc) from exc

@@ -6,7 +6,8 @@ legacy_gate; enforce: RoleAssignments). Р30: a PM's own project is one where
 the team row names them the manager. C26D-L1: a project → subproject-of-
 another-project transfer with project_id = the source project is accepted.
 
-Full matrix: 9 role cases × 9 warehouse commands × 3 modes. The expected
+Full matrix: 10 role cases × 9 warehouse commands × 3 modes, on the
+assignments the product really creates (company scope, 5C-C26f C26E-1). The expected
 outcome per role is written out below by hand (from the catalog and Р27),
 NOT computed by the code under test. Every refusal writes nothing.
 Real Mongo (replica set).
@@ -40,27 +41,34 @@ COMMANDS = ["receive", "receive_to_project", "dispatch", "accept", "consume",
             "transfer_w2w"]
 ALL = set(COMMANDS)
 WK = {"receive", "dispatch", "accept", "return_to_warehouse", "transfer_w2w"}
-SM_MEMBER = {"accept", "consume", "write_off_project"}
+SM_MEMBER = {"accept", "consume", "write_off_project", "return_to_warehouse"}
+
+# 5C-C26f (audit C26E-1): the enforce assignments are the ones the product
+# REALLY creates — permissions.sync.grant_company_role gives every legacy role
+# a COMPANY-scope assignment with permissions [] (catalog actions apply). The
+# project relation (in-date project_team row) is what makes a SiteManager a
+# member, in every mode.
+def _real(role_id):
+    return [{"id": f"ra-company-{role_id}", "user_id": USER, "tenant_id": T,
+             "role_id": role_id, "scope_type": "company", "scope_id": None,
+             "module": None, "permissions": [], "max_amount": None,
+             "valid_from": "2020-01-01T00:00:00+00:00", "valid_to": None,
+             "status": "active"}]
+
 
 # legacy role, enforce assignments, member of P1?, allowed commands
 ROLES = {
-    "Owner": ("Owner", [_assignment("owner")], False, ALL),
-    "Admin": ("Admin", [_assignment("admin")], False, ALL),
-    "Accountant": ("Accountant", [_assignment("accountant")], False, {"write_off_project"}),
-    "Warehousekeeper": ("Warehousekeeper", [_assignment("warehouse")], False, WK),
-    "SiteManager-member": ("SiteManager",
-                           [_assignment("site_manager", "project", PROJECT),
-                            dict(_assignment("site_manager", "location", PROJECT), id="ra-sm-loc")],
-                           True, SM_MEMBER),
-    "SiteManager-non-member": ("SiteManager",
-                               [_assignment("site_manager", "project", OTHER_PROJECT),
-                                dict(_assignment("site_manager", "location", OTHER_PROJECT),
-                                     id="ra-sm-loc")],
-                               False, set()),
-    "Technician-member": ("Technician", [_assignment("LEGACY_TECHNICIAN")], True,
+    "Owner": ("Owner", _real("owner"), False, ALL),
+    "Admin": ("Admin", _real("admin"), False, ALL),
+    "Accountant": ("Accountant", _real("accountant"), False, {"write_off_project"}),
+    "Warehousekeeper": ("Warehousekeeper", _real("warehouse"), False, WK),
+    "SiteManager-member": ("SiteManager", _real("site_manager"), True, SM_MEMBER),
+    "SiteManager-non-member": ("SiteManager", _real("site_manager"), False, set()),
+    "Technician-member": ("Technician", _real("LEGACY_TECHNICIAN"), True,
                           {"write_off_project"}),
-    "Viewer": ("Viewer", [_assignment("LEGACY_VIEWER")], True, set()),
-    "Driver": ("Driver", [_assignment("driver")], True, set()),
+    "Technician-non-member": ("Technician", _real("LEGACY_TECHNICIAN"), False, set()),
+    "Viewer": ("Viewer", _real("LEGACY_VIEWER"), True, set()),
+    "Driver": ("Driver", _real("driver"), True, set()),
 }
 
 

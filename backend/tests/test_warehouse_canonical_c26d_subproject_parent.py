@@ -105,7 +105,9 @@ async def test_member_of_p1_cannot_write_off_a_p2_subproject(
         await route.post_project_writeoff(_body(route, PROJECT, S2, "mismatch-" + mode),
                                           request=None, user=user, ctx=_ctx(mode, user))
     assert exc.value.status_code == 422
-    assert exc.value.detail["context"]["parent_project_id"] == P2
+    # 5C-C26f FG-55: the parent id is not disclosed before the rights check.
+    assert "parent_project_id" not in exc.value.detail["context"]
+    assert P2 not in str(exc.value.detail)
     with pytest.raises(HTTPException) as exc:
         await route.post_project_writeoff(_body(route, P2, S2, "real-" + mode),
                                           request=None, user=user, ctx=_ctx(mode, user))
@@ -217,7 +219,8 @@ async def test_foreign_tenant_subproject_has_no_parent_here(
 @pytest.mark.parametrize("mode", ["off", "shadow"])
 @pytest.mark.parametrize("legacy_role,sees", [
     ("Owner", True), ("Admin", True), ("Accountant", True),
-    ("Warehousekeeper", False), ("SiteManager", False), ("Technician", False),
+    ("Warehousekeeper", True),  # Р32 (5C-C26f): warehouse values
+    ("SiteManager", False), ("Technician", False),
     ("Viewer", False), ("Driver", False)])
 async def test_fg39_values_by_legacy_role(canonical_mongo_db, allow_always_gate,
                                           monkeypatch, mode, legacy_role, sees):

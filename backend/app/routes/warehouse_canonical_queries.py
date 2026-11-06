@@ -65,6 +65,12 @@ async def _authorized_scope_locations(ctx, user) -> Optional[List]:
     `[]` (deny-closed), never fall back to the user dict's embedded
     identity.
     """
+    # 5C-C26f (F-16, Р28) — off / shadow: the legacy role decides with the
+    # same rules; a granting role reads company-wide, as the real
+    # (company-scope) assignment does in enforce.
+    legacy = await _legacy_read(ctx, "warehouse.read_stock")
+    if legacy is not _ENFORCE:
+        return None
     from app.permissions.service import (
         _load_assignments, _evaluate_one, ALLOWED,
     )
@@ -118,6 +124,59 @@ async def _authorized_scope_locations(ctx, user) -> Optional[List]:
     return allowed
 
 
+_ENFORCE = object()
+
+
+async def _legacy_read(ctx, permission: str):
+    """5C-C26f (F-16) — in off / shadow the canonical GETs go through the
+    same legacy gate as the writes (Р28): 403 unless the legacy role holds
+    ``permission``; returns the granting roles. ``_ENFORCE`` in enforce (the
+    Permission Service decides)."""
+    from app.permissions.deps import MODE_OFF, MODE_SHADOW
+    if getattr(ctx, "mode", None) not in (MODE_OFF, MODE_SHADOW):
+        return _ENFORCE
+    from app.services.warehouse_movements.errors import PermissionDeniedError
+    from app.services.warehouse_movements.legacy_gate import legacy_read_roles
+    try:
+        return await legacy_read_roles(ctx, permission=permission)
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "action": permission,
+            "reason": exc.context.get("reason_code"), "decided_by": "legacy_role"})
+
+
+async def _read_project_relation(ctx, roles, *, location_type, location_id,
+                                 project_id) -> None:
+    """5C-C26f (C26E-1, F-16) — a project-filtered read by a caller whose
+    granting roles are all project-bound needs the in-date project relation,
+    in every mode (the same rule as the writes)."""
+    from app.services.warehouse_movements.errors import (
+        PermissionDeniedError, WarehouseMovementError,
+    )
+    from app.services.warehouse_movements.legacy_gate import ensure_project_relation
+    from app.services.warehouse_movements.service import resolve_subproject_parent
+    tenant = _tenant_from_ctx(ctx)
+    projects = set()
+    if project_id:
+        projects.add(project_id)
+    try:
+        if location_id and location_type == LocationType.PROJECT.value:
+            projects.add(location_id)
+        elif location_id and location_type == LocationType.SUBPROJECT.value:
+            projects.add(await resolve_subproject_parent(
+                tenant._db, ctx.org_id, location_id))  # pylint: disable=protected-access
+        if projects:
+            await ensure_project_relation(
+                tenant._db, ctx.org_id, ctx.user_id, roles, projects)  # pylint: disable=protected-access
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "reason": exc.context.get("reason_code"),
+            "scope_type": "project", "scope_id": exc.context.get("scope_id")})
+    except WarehouseMovementError:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "reason": "UNKNOWN_SCOPE"})
+
+
 async def _authorize_resource_scope(
     ctx: TenantContext, *, action: str,
     location_type: Optional[str], location_id: Optional[str],
@@ -138,6 +197,13 @@ async def _authorize_resource_scope(
         LocationType.SUPPLIER.value,
     }:
         scopes.append(("location", location_id))
+    # 5C-C26f (F-16, Р28) — off / shadow: the legacy role decides the read
+    # with the same rules as enforce (catalog action + project relation).
+    legacy = await _legacy_read(ctx, action)
+    if legacy is not _ENFORCE:
+        await _read_project_relation(ctx, legacy, location_type=location_type,
+                                     location_id=location_id, project_id=project_id)
+        return
     for scope_type, scope_id in scopes:
         decision = await evaluate_permission(
             ctx, action, module="warehouse",
@@ -150,6 +216,18 @@ async def _authorize_resource_scope(
                 "scope_type": scope_type,
                 "scope_id": scope_id,
             })
+    # 5C-C26f (C26E-1) — enforce: the same project relation for a caller
+    # whose granting roles are all project-bound (the real grant is
+    # company-scope, which the scope check alone does not narrow).
+    if scopes:
+        from app.services.warehouse_movements.legacy_gate import enforce_read_roles
+        try:
+            roles = await enforce_read_roles(ctx, permission=action)
+        except Exception:                       # registry unreachable → deny
+            raise HTTPException(status_code=403, detail={
+                "error_code": "PERMISSION_DENIED", "reason": "UNVERIFIED"})
+        await _read_project_relation(ctx, roles, location_type=location_type,
+                                     location_id=location_id, project_id=project_id)
 
 
 def _tenant_from_ctx(ctx: TenantContext) -> TenantData:
@@ -174,6 +252,11 @@ FINANCE_VALUE_ROLES = frozenset({"owner", "admin", "accountant"})
 # Package 5C-C26 Addendum A: procurement is NOT in Р20 — left unchanged (it
 # keeps seeing values as before); recorded in HANDOFF 5C-C26 for Крум.
 UNCHANGED_VALUE_ROLES = frozenset({"procurement"})
+# Р32 (Крум 06.11.2026, refines Р20 for the warehouse): the warehousekeeper
+# sees the unit prices / values of the WAREHOUSE (stock, balance, history,
+# the command response) and enters the price on receive — but no project
+# finance: the integrity warnings' Path B amounts stay hidden from them.
+WAREHOUSE_VALUE_ROLES = frozenset({"warehouse"})
 VALUE_KEYS = frozenset({"unit_value", "total_value", "movement_value", "value",
                         "line_value", "layer_value",
                         # 5C-C26 audit C26A-2 — Path B integrity warnings.
@@ -189,7 +272,17 @@ def is_money_key(key: Any) -> bool:
         key in VALUE_KEYS or bool(_MONEY_KEY.search(key)))
 
 
-async def _sees_values(ctx) -> bool:
+async def _sees_values(ctx, *, warehouse_values: bool = True) -> bool:
+    """True when the caller may see money here. ``warehouse_values`` — the
+    payload is warehouse stock / prices (Р32: the warehousekeeper too);
+    False for project finance (the Path B integrity warnings)."""
+    roles = FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
+    if warehouse_values:
+        roles = roles | WAREHOUSE_VALUE_ROLES
+    return await _role_in(ctx, roles)
+
+
+async def _role_in(ctx, roles) -> bool:
     from datetime import datetime, timezone
     from app.permissions import service as perm
     from app.services.warehouse_movements.write_off_policy import _active_assignments
@@ -202,7 +295,7 @@ async def _sees_values(ctx) -> bool:
         from app.permissions.catalog import LEGACY_ROLE_MAP
         user = getattr(ctx, "user", None) or {}
         role_id = LEGACY_ROLE_MAP.get(user.get("role") or "")
-        return role_id in FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
+        return role_id in roles
     user_id = getattr(ctx, "user_id", None)
     tenant_id = getattr(ctx, "tenant_id", None)
     if not user_id or not tenant_id:
@@ -212,8 +305,7 @@ async def _sees_values(ctx) -> bool:
     except Exception:      # registry unreachable → no money (fail closed)
         return False
     active = _active_assignments(loaded, datetime.now(timezone.utc))
-    return any(a.get("role_id") in FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
-               for a in active)
+    return any(a.get("role_id") in roles for a in active)
 
 
 def strip_values(obj: Any) -> Any:
@@ -225,8 +317,9 @@ def strip_values(obj: Any) -> Any:
     return obj
 
 
-async def _values_for(ctx, data: Dict[str, Any]) -> Dict[str, Any]:
-    if await _sees_values(ctx):
+async def _values_for(ctx, data: Dict[str, Any], *,
+                      warehouse_values: bool = True) -> Dict[str, Any]:
+    if await _sees_values(ctx, warehouse_values=warehouse_values):
         return data
     out = strip_values(data)
     out["values_hidden"] = True       # FG-23 / Р20 — the screen shows quantities only
@@ -352,7 +445,8 @@ async def read_integrity_warnings(
     from app.services.canonical_material_cost import path_b_integrity_warnings
     data["warnings"].extend(await path_b_integrity_warnings(tenant, ctx.tenant_id))
     # FG-23 (Р20) / audit C26A-2 — the Path B warnings carry money.
-    data = await _values_for(ctx, data)
+    # Р32: the Path B warnings are project finance — not for the keeper.
+    data = await _values_for(ctx, data, warehouse_values=False)
     allowed = await _authorized_scope_locations(ctx, user=None)
     if allowed is not None:
         allowed_set = {tuple(x) for x in allowed}

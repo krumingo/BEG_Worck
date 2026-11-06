@@ -219,7 +219,7 @@ async def resolve_subproject_parent(tenant_db, org_id: str, subproject_id: str) 
     if not await tenant.projects.find_one({"id": parent}, {"_id": 0, "id": 1}):
         raise InvariantViolationError(
             "the subproject's parent is not a project of this tenant",
-            context={"subproject_id": subproject_id, "parent_project_id": parent})
+            context={"subproject_id": subproject_id})
     return parent
 
 
@@ -1654,6 +1654,19 @@ class CommandService:
                 destination=inp.transfer_target or inp.destination,
                 project_id=inp.project_id,
             )
+            # 5C-C26f — audit C26E-1 (HIGH): the real grant gives a
+            # SiteManager a COMPANY-scope assignment, which the scope check
+            # alone lets onto every project. When only project-bound roles
+            # grant the action, the in-date project relation is required —
+            # the same rule as off / shadow (legacy_gate). Production gates
+            # only (a test gate with an injected evaluator has no registry).
+            if getattr(self._gate, "_r27", False):
+                from app.services.warehouse_movements.legacy_gate import (
+                    ensure_enforce_project_relation,
+                )
+                await ensure_enforce_project_relation(
+                    ctx, tenant_db, inp,
+                    load_assignments=getattr(self._gate, "_assignments_loader", None))
 
     @staticmethod
     async def _bind_subproject_parent(tenant_db, inp: CommandInput) -> None:
@@ -1668,6 +1681,18 @@ class CommandService:
         decides is the source (an outbound move), else the destination /
         transfer target (an acceptance, a direct delivery).
         """
+        # 5C-C26f — FG-53: a move FROM A PROJECT (consume, transfer, write-off,
+        # quarantine, …) belongs to the source project bucket — never to a
+        # body project_id; one naming another project → 422. (Whether a
+        # project bucket names an existing project is not checked here — the
+        # same as for a destination; recorded in HANDOFF 5C-C26f.)
+        src0 = inp.source
+        if src0 is not None and src0.location_type == LocationType.PROJECT:
+            if inp.project_id and inp.project_id != src0.location_id:
+                raise InvariantViolationError(
+                    "project_id must be the source project",
+                    context={"source": src0.to_dict(), "project_id": inp.project_id})
+            inp.project_id = src0.location_id
         subs = [k for k in (inp.source, inp.destination, inp.transfer_target)
                 if k is not None and k.location_type == LocationType.SUBPROJECT]
         if not subs:
@@ -1690,8 +1715,9 @@ class CommandService:
         if inp.project_id and inp.project_id != parent:
             raise InvariantViolationError(
                 "project_id must be the parent project of the subproject",
+                # FG-55: the parent id is not disclosed (the rights check
+                # has not run yet) — only what the caller sent.
                 context={"subproject_id": decider.location_id,
-                         "parent_project_id": parent,
                          "project_id": inp.project_id})
         inp.project_id = parent
         if not inp.subproject_id:

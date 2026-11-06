@@ -1,7 +1,8 @@
 """
 5C-C26b — audit C26A-1 / C26A-2 (probe
 docs/audit/probes/pr55/probe_pr55_c26a_value_leak.py @ claude/audit-log),
-FG-23 / Р20: a non-finance role (Warehousekeeper, role_id ``warehouse``)
+FG-23 / Р20: a non-finance role (SiteManager; the Warehousekeeper since Р32
+sees warehouse prices but no project finance)
 sees NO money on any canonical warehouse endpoint — GET stock / balance /
 history / integrity-warnings (incl. the Path B warnings' counted_value /
 covered_value / legacy_value) and the POST /movements and
@@ -99,12 +100,14 @@ async def _calls(client, gate, db, monkeypatch, role):
     return out
 
 
-async def test_c26a_1_2_warehousekeeper_sees_no_money_anywhere(
+async def test_c26a_1_2_non_finance_role_sees_no_money_anywhere(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """71c11da: POST dispatch envelope.unit_value + layer_allocations[*].unit_value;
-    integrity-warnings counted_value / legacy_value."""
+    """C26A-1/2 with a non-finance role (SiteManager). 71c11da: POST dispatch
+    envelope.unit_value + layer_allocations[*].unit_value; integrity-warnings
+    counted_value / legacy_value. (Р32 moved the Warehousekeeper out of this
+    case — see the next test.)"""
     client, db = canonical_mongo_db
-    out = await _calls(client, allow_always_gate, db, monkeypatch, "warehouse")
+    out = await _calls(client, allow_always_gate, db, monkeypatch, "site_manager")
     assert out["POST dispatch (replay)"]["replay"] is True
     leaks = {name: money_keys(body) for name, body in out.items() if money_keys(body)}
     assert leaks == {}, leaks
@@ -113,6 +116,25 @@ async def test_c26a_1_2_warehousekeeper_sees_no_money_anywhere(
     env = out["POST dispatch (response)"]["envelope"]
     assert env["values_hidden"] is True and env["quantity"] == "4"
     assert [a["quantity"] for a in env["layer_allocations"]] == ["4"]
+
+
+async def test_r32_warehousekeeper_sees_warehouse_prices_but_no_project_finance(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """Р32 (Крум 06.11.2026): the warehousekeeper sees unit prices / values in
+    stock, balance, history and the command response (and its replay); the
+    integrity warnings' Path B amounts (project finance) stay hidden."""
+    client, db = canonical_mongo_db
+    out = await _calls(client, allow_always_gate, db, monkeypatch, "warehouse")
+    env = out["POST dispatch (response)"]["envelope"]
+    assert Decimal(env["layer_allocations"][0]["unit_value"]) == Decimal("10")
+    assert "values_hidden" not in env
+    assert out["POST dispatch (replay)"]["envelope"]["layer_allocations"] == \
+        env["layer_allocations"]
+    assert Decimal(out["GET stock"]["total_value"]) == Decimal("100")
+    assert all("unit_value" in r for r in out["GET history"]["rows"])
+    warnings = out["GET integrity-warnings"]
+    assert warnings["values_hidden"] is True and money_keys(warnings) == []
+    assert "PATH_B_LEGACY_OVERLAP_UNPROVEN" in [w["code"] for w in warnings["warnings"]]
 
 
 async def test_finance_role_still_sees_the_values(

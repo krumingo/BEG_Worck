@@ -223,7 +223,9 @@ def _has_value_key(obj) -> bool:
     return False
 
 
-@pytest.mark.parametrize("role", ["warehouse", "site_manager", "LEGACY_TECHNICIAN",
+# Р32 (5C-C26f): the warehousekeeper sees warehouse values — moved to the
+# list below; the other non-finance roles stay quantities-only (Р20).
+@pytest.mark.parametrize("role", ["site_manager", "LEGACY_TECHNICIAN",
                                   "LEGACY_VIEWER", "driver"])
 async def test_fg23_non_finance_roles_see_quantities_only(
         canonical_mongo_db, allow_always_gate, monkeypatch, role):
@@ -242,7 +244,8 @@ async def test_fg23_non_finance_roles_see_quantities_only(
 
 
 # procurement: not in Р20 — unchanged (package 5C-C26 A), still sees values.
-@pytest.mark.parametrize("role", ["owner", "admin", "accountant", "procurement"])
+# warehouse: Р32 — sees the warehouse's unit prices / values.
+@pytest.mark.parametrize("role", ["owner", "admin", "accountant", "procurement", "warehouse"])
 async def test_fg23_finance_roles_see_values(
         canonical_mongo_db, allow_always_gate, monkeypatch, role):
     client, db = canonical_mongo_db
