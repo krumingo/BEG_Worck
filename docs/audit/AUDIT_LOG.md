@@ -9,8 +9,8 @@
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
 | #55 Склад 5C (C19) | `d8ac3a9` | PASS (internal) — Codex still required (money) | 2026-11-06 |
-| #65 RC-01 | `44c9c3cfa668cf9a601f65960680eac11ef70ec7` | FINDINGS (non-blocking, P1 medium) | 2026-11-06 |
-| #66 ST-01 | `9904524caba59038b3251d3cd468defbe6205d96` | PASS with 1 medium finding (PST-1) | 2026-11-06 |
+| #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
+| #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
 ## Environment
 
@@ -334,3 +334,34 @@ The earlier probes `test_probe_pr55_material_cost.py` P55-1/P55-3 now fail only 
   - #64 (`App.js`).
 
 **Verdict:** PASS (internal). Money-related, so the Codex review is still required.
+
+
+---
+
+## 2026-11-06 14:20 — check-in: #65 → `93965b0` (RC-01-C01), #66 → `ef69601` (ST-01-C01); #55 and #56 unchanged
+
+Both deltas touch only `ops/` scripts, their tests and READMEs, with no app or business code. So the full R0/W0 runs were not repeated; the 44c9c3c / 9904524 results still apply.
+
+### #65 RC-01-C01 (PROVED)
+
+- `PYTHONPATH=. pytest --noconftest tests/test_rc_01_build_identity.py` → 36 passed.
+- `pytest ops/release/tests` → 78 passed, 1 skipped, 52 subtests.
+- Probe P1 (`probe_rc01_write_build_info.sh`): **now PASS**. Tree at A with `--commit B` → exit 2, nothing written.
+- New probe `probe_rc01_c01.sh`, bypass attempts, **all PASS**:
+  - a plain copy (non-git) of tree A is refused;
+  - a linked worktree at A is refused;
+  - a non-toplevel subdirectory is refused;
+  - `--allow-dirty` does not allow another commit;
+  - positive: tree at B with `--commit B` → 0;
+  - a refusal leaves no `BUILD_INFO.json` or `.tmp`.
+- Remaining low note (pre-existing, SUSPICION): the dirty check uses `--untracked-files=no`, so an untracked file in the build context is not detected.
+
+### #66 ST-01-C01 (PROVED)
+
+- `W0_03_REAL_MONGO_URL=… pytest --noconftest tests/test_st_01_*.py` → 31 passed on real Mongo.
+- Probe PST-1: **now PASS**. A dead backend gives exit **3** (no_evidence), with `outcome.reasons` = BACKEND_UNREACHABLE and NOTHING_PASSED.
+- PST-2/3/4 still pass.
+
+### Integration
+
+#65 and #66 still merge cleanly with main and with #55 (checked at 14:05 on the previous heads). The deltas touch only `ops/release/*` and `ops/staging/*`, so there is no new overlap.
