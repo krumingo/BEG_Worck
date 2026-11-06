@@ -24,7 +24,9 @@ The canon and the models define no upper limit, so only finiteness is required.
   a FAILED attempt          -> the same request finishes it: the ids of a keyed write are
                                derived from the key and an insert already done is skipped, so
                                nothing is written twice;
-  no key                    -> accepted as before (every request is a new command).
+  no key                    -> 428 ``IDEMPOTENCY_KEY_REQUIRED``, nothing written
+                               (R29, Krum 06.11.2026: a money write without a key is refused;
+                               SEC-01-C03 addendum A).
 
 The key is scoped per tenant, per action and per user: another user's key never
 replays (or reveals) someone else's response.
@@ -44,6 +46,7 @@ from app.permissions.workflow import RecoverableWrite
 ERROR_AMOUNT_INVALID = "AMOUNT_INVALID"
 ERROR_IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS"
 ERROR_MONEY_WRITE_FAILED = "MONEY_WRITE_FAILED"
+ERROR_KEY_REQUIRED = "IDEMPOTENCY_KEY_REQUIRED"
 MAX_KEY_LENGTH = 200
 
 _NS = uuid.UUID("7d6c3f0e-5c1a-4f43-9a51-5ec01c03a001")
@@ -110,9 +113,13 @@ class MoneyWrite:
             raise HTTPException(status_code=422, detail={
                 "error_code": "IDEMPOTENCY_KEY_INVALID",
                 "message": "Idempotency-Key is longer than %d characters" % MAX_KEY_LENGTH})
-        mw = cls(user, action, ("%s:%s" % (user["id"], key)) if key else None)
-        if mw.key is None:
-            return mw                                    # no key: the legacy behaviour
+        if not key:
+            # R29 (Krum 06.11.2026): a money write without a key is refused — it could
+            # not be told apart from its own retry (a double payment). Nothing is written.
+            raise HTTPException(status_code=428, detail={
+                "error_code": ERROR_KEY_REQUIRED,
+                "message": "Записът на пари изисква заглавие Idempotency-Key"})
+        mw = cls(user, action, "%s:%s" % (user["id"], key))
         mw.wf = await RecoverableWrite(
             db, tenant_id=user["org_id"], action=action, key=mw.key,
             fingerprint=request_fingerprint(body)).begin()   # 409 on a different body

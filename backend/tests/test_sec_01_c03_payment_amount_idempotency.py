@@ -11,7 +11,8 @@ transactions, overhead snapshots, subcontractor payments, labor entries, materia
              NOTHING written (oplog); a valid amount -> 201.
   key        the same ``Idempotency-Key`` + the same body -> 201 with the ORIGINAL body,
              no new business row; the same key + a different body -> 409, nothing
-             written; no key -> accepted as before (two POSTs = two rows).
+             written; NO key -> 428 IDEMPOTENCY_KEY_REQUIRED, nothing written
+             (R29, Krum 06.11.2026 — addendum A).
   SEC-R1     confirmed on this head: an expired (P2, Technician) or future (P2,
              SiteManager) membership writes no labor/waste (403, nothing written); an
              active membership with no dates (P1) -> 201.
@@ -215,18 +216,19 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 for value in INVALID:
                     if key == "subpay_vat" and value in (0, "", "<missing>"):
                         continue                  # a zero/absent VAT is a valid payment
-                    res = post("accountant", key, with_value(base, field, value))
+                    res = post("accountant", key, with_value(base, field, value),
+                               uuid.uuid4().hex)
                     res.pop("body")
                     rows.append({"mode": mode, "probe": key, "field": field,
                                  "value": value, **res})
                     if res["written"]:
                         restore_all()
-                # valid, no key: the legacy behaviour (two POSTs = two rows)
+                # valid, no key: refused (R29), nothing written
                 n0 = count(colls[0])
-                first = post("accountant", key, base)
-                second = post("accountant", key, base)
+                nokey = post("accountant", key, base)
                 n_nokey = count(colls[0]) - n0
-                restore_all()
+                if nokey["written"]:
+                    restore_all()
                 # the same key twice, then the same key with a different body
                 idem = "c03-%s-%s-%s" % (mode, key, uuid.uuid4().hex[:8])
                 n0 = count(colls[0])
@@ -238,7 +240,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 restore_all()
                 sequences.append({
                     "mode": mode, "probe": key,
-                    "valid_no_key": [first["status"], second["status"]],
+                    "valid_no_key": {k: nokey[k] for k in
+                                     ("status", "error_code", "business_written")},
                     "rows_added_no_key": n_nokey,
                     "same_key_first": {k: k1[k] for k in ("status", "business_written")},
                     "same_key_replay": {k: k2[k] for k in ("status", "business_written")},
@@ -256,7 +259,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     body = body_for(key, fx["A"], c02)
                     if key == "labor":
                         body["project_id"] = pid
-                    res = post(ukey, key, body, project_id=pid)
+                    res = post(ukey, key, body, uuid.uuid4().hex, project_id=pid)
                     res.pop("body")
                     r1.append({"mode": mode, "user": ukey, "project": target, "probe": key, **res})
                     if res["written"]:
@@ -333,8 +336,9 @@ def check_result(result: Dict[str, Any]) -> None:
     seqs = result["idempotency_sequences"]
     assert {(s["mode"], s["probe"]) for s in seqs} == seen
     for s in seqs:
-        assert s["valid_no_key"] == [201, 201], s
-        assert s["rows_added_no_key"] == 2, s               # no key: legacy, two rows
+        assert s["valid_no_key"] == {"status": 428, "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+                                     "business_written": []}, s
+        assert s["rows_added_no_key"] == 0, s               # R29: no key, no row
         assert s["same_key_first"]["status"] == 201, s
         assert s["same_key_first"]["business_written"], s
         assert s["same_key_replay"] == {"status": 201, "business_written": []}, s
@@ -462,9 +466,13 @@ def test_money_write_replays_conflicts_refuses_in_progress_and_resumes(monkeypat
     business = _Coll()
 
     async def scenario():
-        # no key: a fresh id every time, no registry row
-        mw = await mi.MoneyWrite.begin(user, "a", None, {"amount": 1})
-        assert mw.wf is None and mw.new_id("x") != mw.new_id("x")
+        # no key (absent or blank): 428, before the registry (R29)
+        for missing in (None, "", "   "):
+            with pytest.raises(HTTPException) as exc:
+                await mi.MoneyWrite.begin(user, "a", missing, {"amount": 1})
+            assert exc.value.status_code == 428
+            assert exc.value.detail["error_code"] == "IDEMPOTENCY_KEY_REQUIRED"
+        assert fake.get("audit_idempotency") is None
         # first keyed attempt fails after its insert -> FAILED, then the same request
         # finishes it without a second row
         mw = await mi.MoneyWrite.begin(user, "a", "k1", {"amount": 1})

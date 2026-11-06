@@ -273,7 +273,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             body = body_for(key, fx[tkey], pid)
             before = tc.portal.call(lambda: pm._last_ts(oplog))
             kwargs: Dict[str, Any] = {
-                "headers": {"Authorization": "Bearer " + tokens[(tkey, role)]}}
+                "headers": {"Authorization": "Bearer " + tokens[(tkey, role)],
+                            # R29 / SEC-01-C03-A: every money POST carries a key
+                            "Idempotency-Key": uuid.uuid4().hex}}
             if body is not None:
                 kwargs["json"] = body
             resp = tc.request(method, url, **kwargs)
@@ -288,7 +290,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     "legacy_role": fx[tkey]["users"][role]["role"], "probe": key,
                     "method": method, "path": path, "target": target,
                     "status": resp.status_code,
-                    "written": sorted({short(n) for n, _o in written}),
+                    "written": sorted({short(n) for n, _o in written
+                                       if not n.endswith(".audit_idempotency")}),  # SEC-01-C03: the key registry is bookkeeping
                     "written_orgs": sorted(str(o) for o in orgs)}
 
         rows: List[Dict[str, Any]] = []

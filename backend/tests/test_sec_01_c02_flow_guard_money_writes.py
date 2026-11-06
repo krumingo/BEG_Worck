@@ -383,7 +383,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             body = body_for(key, fx[tkey], rec_tkey, pid)
             before = tc.portal.call(lambda: pm._last_ts(oplog))
             kwargs: Dict[str, Any] = {
-                "headers": {"Authorization": "Bearer " + tokens[(tkey, role)]}}
+                "headers": {"Authorization": "Bearer " + tokens[(tkey, role)],
+                            # R29 / SEC-01-C03-A: every money POST carries a key
+                            "Idempotency-Key": uuid.uuid4().hex}}
             if body is not None:
                 kwargs["json"] = body
             resp = tc.request(method, url, **kwargs)
@@ -402,7 +404,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     "error_code": ((resp.json() or {}).get("detail") or {}).get("error_code")
                     if resp.headers.get("content-type", "").startswith("application/json")
                     and isinstance((resp.json() or {}).get("detail"), dict) else None,
-                    "written": sorted({short(n) for n, _o in written}),
+                    "written": sorted({short(n) for n, _o in written
+                                       if not n.endswith(".audit_idempotency")}),  # SEC-01-C03: the key registry is bookkeeping
                     "written_orgs": sorted(str(o) for o in orgs),
                     "deleted": deleted}
 
@@ -452,7 +455,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         tc.portal.call(lambda: pm._restore(client, snap, [op_name + ".labor_entries"]))
         before = tc.portal.call(lambda: pm._last_ts(oplog))
         rp = tc.post("/api/subcontractor-payments", json=body_for("subpay", fx["A"], "A", None),
-                     headers={"Authorization": "Bearer " + tokens[("A", "accountant")]})
+                     headers={"Authorization": "Bearer " + tokens[("A", "accountant")],
+                              "Idempotency-Key": uuid.uuid4().hex})
         pay = tc.portal.call(lambda: op_db.subcontractor_payments.find_one(
             {"id": rp.json().get("id")}, {"_id": 0}))
         led = tc.portal.call(lambda: op_db.finance_payments.find_one(
