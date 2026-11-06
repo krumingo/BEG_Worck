@@ -389,6 +389,10 @@ async def _project_consumption(
         "currency": env.currency,
         "consumed_at": env.recorded_at,
         "ledger_sequence": None,  # service patches on insert
+        # 5C-C19 F-7: same reader contract as the material_smr rebuild —
+        # a consumption is the one row kind that is project cost.
+        "movement_kind": "consume",
+        "cost_recognized": True,
     }
     # Deterministic doc id so a projection rebuild is idempotent.
     row["id"] = f"me_{env.movement_id}"

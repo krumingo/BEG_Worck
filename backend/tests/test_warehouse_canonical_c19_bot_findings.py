@@ -498,3 +498,203 @@ def test_f6_route_is_no_longer_admin_route():
     app_js = (REPO / "frontend" / "src" / "App.js").read_text(encoding="utf-8")
     line = next(l for l in app_js.splitlines() if 'path="/warehouse/canonical"' in l)
     assert "CanonicalWarehouseRoute" in line and "AdminRoute" not in line
+
+
+# ═══════════════════════ F-7 / F-8 (C19 addendum) ═══════════════════════
+#
+# Internal audit of 639ca80 (docs/audit/AUDIT_LOG.md @ claude/audit-log
+# ffd543c, probe test_probe_pr55_material_cost.py): project material cost
+# was counted at ACCEPT and again at CONSUME (80 instead of 30), and seven
+# `await [row async for ...]` sites in material_smr.py raised TypeError.
+
+PROJECT = "p1"
+PKG = "pkg-c19"
+
+
+def _user(org=T):
+    return {"id": "u-" + org, "org_id": org, "role": "Owner", "email": org + "@x"}
+
+
+def _patch_route_dbs(monkeypatch, db):
+    """Point every route module these readers touch at the test database."""
+    import importlib
+    for name in ("material_smr", "full_cost", "revenue_expense", "labor_smr",
+                 "subcontractors"):
+        mod = importlib.import_module(f"app.routes.{name}")
+        monkeypatch.setattr(mod, "db", db)
+
+
+async def _receive_accept5_consume3(client, gate, db):
+    """receive 5 @10 → dispatch 5 → accept 5 → consume 3 (the audit flow)."""
+    coll = TenantData.for_resolved_org(db, T).warehouse_transactions
+    svc = await _svc(client, gate)
+    await svc.execute(_Ctx(), db, coll, _receive("5", "10"))
+    disp = await svc.execute(_Ctx(), db, coll, _inp(
+        CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT,
+        source=LocationKey(LocationType.CENTRAL_WAREHOUSE, "wh_1"),
+        quantity=Decimal("5"), project_id=PROJECT))
+    await svc.execute(_Ctx(), db, coll, _inp(
+        CanonicalAction.ACCEPT_PROJECT_DELIVERY,
+        destination=LocationKey(LocationType.PROJECT, PROJECT),
+        quantity=Decimal("5"), accepted_quantity=Decimal("5"),
+        dispatch_movement_id=disp.movement_id, project_id=PROJECT))
+    await svc.execute(_Ctx(), db, coll, _inp(
+        CanonicalAction.CONSUME_TO_SMR,
+        source=LocationKey(LocationType.PROJECT, PROJECT),
+        quantity=Decimal("3"), project_id=PROJECT, smr_id="smr-1"))
+
+
+async def _seed_project(db, *, mapped: bool):
+    await db["projects"].insert_one({"id": PROJECT, "org_id": T, "code": "P1", "name": "P1"})
+    await db["execution_packages"].insert_one({
+        "id": PKG, "org_id": T, "project_id": PROJECT, "activity_name": "Мазилка",
+        "sale_total": 100.0, "material_budget_total": 25.0, "budget_total": 60.0})
+    if mapped:
+        await db["planned_materials"].insert_one({
+            "id": "pm-1", "org_id": T, "project_id": PROJECT, "status": "active",
+            "item_id": "item_c19", "material_name": "item_c19",
+            "execution_package_id": PKG, "planned_total_cost": 25.0})
+
+
+async def test_f7_sync_recognises_project_material_cost_once(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """639ca80: the accept row (+50) and the consume row (+30) were both cost → 80."""
+    from app.routes import material_smr
+    _enforce_env()
+    client, db = canonical_mongo_db
+    _patch_route_dbs(monkeypatch, db)
+    await _seed_project(db, mapped=True)
+    await _receive_accept5_consume3(client, allow_always_gate, db)
+    out = await material_smr.sync_material_entries(PROJECT, user=_user())
+    assert out["synced"] == 2                      # accept + consume rows (quantity trail)
+
+    rows = await db["material_entries"].find(
+        {"org_id": T, "project_id": PROJECT,
+         "projection_source": "canonical_warehouse_service"}, {"_id": 0}).to_list(None)
+    by_kind = {r["movement_kind"]: r for r in rows}
+    assert set(by_kind) == {"accept", "consume"}
+    # The audit probe's sum over every kind the readers used to count:
+    probe_kinds = ["accept", "transfer_out", "write_off", "transfer", "consume"]
+    total = sum(float(r["total_value"]) for r in rows
+                if r["movement_kind"] in probe_kinds and r.get("total_value") is not None)
+    assert total == pytest.approx(30.0)
+    assert by_kind["consume"]["cost_recognized"] is True
+    assert float(by_kind["consume"]["total_value"]) == pytest.approx(30.0)
+    assert by_kind["accept"]["cost_recognized"] is False
+    assert float(by_kind["accept"]["total_value"]) == 0.0
+    assert float(by_kind["accept"]["movement_value"]) == pytest.approx(50.0)
+    # Rebuild parity: a second sync gives the same rows.
+    await material_smr.sync_material_entries(PROJECT, user=_user())
+    again = await db["material_entries"].find(
+        {"org_id": T, "project_id": PROJECT}, {"_id": 0}).sort("id", 1).to_list(None)
+    assert again == sorted(rows, key=lambda r: r["id"])
+
+
+async def test_f7_f8_every_report_shows_exactly_30(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """accept 5 + consume 3 @10 → project material cost 30 in every report,
+    and every material_smr reader runs (639ca80: TypeError on the seven
+    `await [async listcomp]` sites)."""
+    from app.routes import full_cost, material_smr, revenue_expense
+    _enforce_env()
+    client, db = canonical_mongo_db
+    _patch_route_dbs(monkeypatch, db)
+    await _seed_project(db, mapped=True)
+    await _receive_accept5_consume3(client, allow_always_gate, db)
+    await material_smr.sync_material_entries(PROJECT, user=_user())
+
+    summary = await material_smr.get_material_summary_for_project(T, PROJECT)
+    assert summary["total_cost"] == pytest.approx(30.0)
+    assert summary["mapped_cost"] == pytest.approx(30.0)
+    assert summary["unmapped_cost"] == 0
+    assert summary["budget_total"] == pytest.approx(25.0)
+    assert summary["variance_value"] == pytest.approx(5.0)
+    assert summary["has_data"] is True
+
+    by_pkg = await material_smr.get_material_cost_by_exec_pkg(PKG, user=_user())
+    assert by_pkg["material_actual_cost"] == pytest.approx(30.0)
+    assert by_pkg["material_variance"] == pytest.approx(5.0)
+    assert by_pkg["total_issued_qty"] == pytest.approx(5.0)
+    assert by_pkg["by_material"][0]["consumed_qty"] == pytest.approx(3.0)
+    assert by_pkg["by_material"][0]["net_cost"] == pytest.approx(30.0)
+
+    rec = await material_smr.recompute_execution_package_material(PROJECT, user=_user())
+    assert rec == {"ok": True, "updated": 1}
+    pkg = await db["execution_packages"].find_one({"id": PKG})
+    assert pkg["actual_material_cost"] == pytest.approx(30.0)
+    assert pkg["material_variance_value"] == pytest.approx(5.0)
+
+    fin = await material_smr.get_package_financial_summary(PKG, user=_user())
+    assert fin["actual"]["material"] == pytest.approx(30.0)
+    assert fin["actual"]["total"] == pytest.approx(30.0)
+    assert fin["margin"]["gross_margin"] == pytest.approx(70.0)
+
+    brk = await material_smr.get_project_package_breakdown(PROJECT, user=_user())
+    assert [p["material_actual"] for p in brk["packages"]] == [pytest.approx(30.0)]
+    assert brk["packages"][0]["gross_margin"] == pytest.approx(70.0)
+
+    warn = await material_smr.get_material_warnings(PROJECT, user=_user())
+    assert warn["total_entries"] == 2 and warn["unmapped_entries"] == 0
+    over = [w for w in warn["warnings"] if w["type"] == "over_material_budget"]
+    assert len(over) == 1 and "30" in over[0]["message"]
+
+    listed = await material_smr.list_material_entries(project_id=PROJECT, user=_user())
+    assert len(listed) == 2
+
+    net = await full_cost.get_project_net_profit(PROJECT, user=_user())
+    assert net["costs"]["material"] == pytest.approx(30.0)
+
+    profit = await revenue_expense.get_project_profit_summary(PROJECT, user=_user())
+    assert profit["expenses"]["material"] == pytest.approx(30.0)
+
+
+
+async def test_f7_unmapped_consumption_is_still_cost_once(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """No planned material → the rows are unmapped; still exactly 30."""
+    from app.routes import material_smr
+    _enforce_env()
+    client, db = canonical_mongo_db
+    _patch_route_dbs(monkeypatch, db)
+    await _seed_project(db, mapped=False)
+    await _receive_accept5_consume3(client, allow_always_gate, db)
+    await material_smr.sync_material_entries(PROJECT, user=_user())
+    summary = await material_smr.get_material_summary_for_project(T, PROJECT)
+    assert summary["total_cost"] == pytest.approx(30.0)
+    assert summary["unmapped_cost"] == pytest.approx(30.0)
+    warn = await material_smr.get_material_warnings(PROJECT, user=_user())
+    assert warn["unmapped_entries"] == 2
+
+
+async def test_f7_projector_consumption_row_is_read_as_cost_without_a_sync(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """The command service's own projection (no sync run) is already the
+    one cost row the readers count."""
+    from app.routes import material_smr
+    _enforce_env()
+    client, db = canonical_mongo_db
+    _patch_route_dbs(monkeypatch, db)
+    await _seed_project(db, mapped=False)
+    await _receive_accept5_consume3(client, allow_always_gate, db)
+    rows = await db["material_entries"].find({"org_id": T}, {"_id": 0}).to_list(None)
+    assert [r["movement_kind"] for r in rows] == ["consume"]
+    summary = await material_smr.get_material_summary_for_project(T, PROJECT)
+    assert summary["total_cost"] == pytest.approx(30.0)
+
+
+async def test_f7_sync_is_tenant_scoped(canonical_mongo_db, allow_always_gate, monkeypatch):
+    from app.routes import material_smr
+    _enforce_env()
+    client, db = canonical_mongo_db
+    _patch_route_dbs(monkeypatch, db)
+    await _receive_accept5_consume3(client, allow_always_gate, db)
+    out = await material_smr.sync_material_entries(PROJECT, user=_user("T2"))
+    assert out["synced"] == 0
+    assert await db["material_entries"].count_documents({"org_id": "T2"}) == 0
+    assert (await material_smr.get_material_summary_for_project("T2", PROJECT))["total_cost"] == 0
+
+
+def test_f8_no_await_on_an_async_list_comprehension():
+    import re
+    src = (BACKEND / "app" / "routes" / "material_smr.py").read_text(encoding="utf-8")
+    assert re.search(r"await\s*\[[^\]]*async\s+for", src) is None

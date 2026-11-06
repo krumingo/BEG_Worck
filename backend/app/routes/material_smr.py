@@ -23,6 +23,15 @@ def _tenant(user: dict) -> TenantData:
 
 router = APIRouter(tags=["Material Cost by SMR"])
 
+# 5C-C19 F-7 — project material cost is recognised ONCE, at consumption
+# (CLAUDE.md §7; FLOW-009 "Разход по обект — без двойно броене", Path A;
+# the C18 decision for C13.4). Accepting a delivery, a transfer, a return or
+# a write-off only moves stock between buckets: those `material_entries`
+# rows keep the quantity trail for the UI and the moved stock value in
+# `movement_value`, but carry `total_value = 0` and are never summed as cost.
+# Every cost reader in this module filters on COST_KINDS.
+COST_KINDS = ("consume",)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # PHASE 1 — MATERIAL ENTRY LINKAGE
@@ -118,7 +127,13 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
         except (TypeError, ValueError):
             unit_value_f = None
         mv_id = row.get("movement_id")
-        total_value = (unit_value_f * qty) if unit_value_f is not None else None
+        movement_value = (unit_value_f * qty) if unit_value_f is not None else None
+        # 5C-C19 F-7: only a consumption is project cost.
+        cost_recognized = kind in COST_KINDS
+        if cost_recognized:
+            total_value = movement_value
+        else:
+            total_value = 0.0
         entry = {
             # CODEX C11.3 / C12.6 / C13.4 — DETERMINISTIC id and
             # VOLATILE-FREE body. A rebuild on the same ledger yields
@@ -139,6 +154,9 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
             "quantity": qty,
             "unit_value": unit_value_f,
             "total_value": total_value,
+            "movement_value": movement_value,
+            "cost_recognized": cost_recognized,
+            "smr_id": row.get("smr_id"),
             "currency": row.get("currency") or "BGN",
             # UI linkage (not a parallel schema — purely additive):
             "execution_package_id": pm["execution_package_id"] if pm else None,
@@ -234,10 +252,12 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
             # Outflow — treated as a return/consumption in the UI.
             total_returned_qty += abs(qty)
 
-        if cost is not None:
-            total_cost += cost
-        elif mt in ("accept", "transfer", "transfer_out", "write_off", "consume"):
-            partial_cost = True
+        # 5C-C19 F-7: cost only from consumption rows.
+        if mt in COST_KINDS:
+            if cost is not None:
+                total_cost += float(cost)
+            else:
+                partial_cost = True
 
         if name not in by_material:
             by_material[name] = {"material_name": name, "unit": e.get("unit", ""),
@@ -245,12 +265,12 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
                                  "consumed_qty": 0, "net_cost": 0}
         if mt in ("accept", "transfer"):
             by_material[name]["issued_qty"] += qty
-            if cost: by_material[name]["net_cost"] += cost
         elif mt in ("transfer_out", "write_off"):
             by_material[name]["returned_qty"] += abs(qty)
-            if cost: by_material[name]["net_cost"] += cost
         elif mt == "consume":
             by_material[name]["consumed_qty"] += qty
+        if mt in COST_KINDS and cost is not None:
+            by_material[name]["net_cost"] += float(cost)
 
     for v in by_material.values():
         for k in ["issued_qty", "returned_qty", "consumed_qty", "net_cost"]:
@@ -284,12 +304,12 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
     """Recompute material budget and actual for execution packages"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await [row async for row in tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0})]
+    pkgs = [row async for row in tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0})]
     if not pkgs:
         return {"ok": True, "updated": 0}
 
     # Load planned materials for budget linkage
-    planned = await [row async for row in tenant.planned_materials.find(
+    planned = [row async for row in tenant.planned_materials.find(
         {"org_id": org_id, "project_id": project_id, "status": "active"},
         {"_id": 0, "execution_package_id": 1, "planned_total_cost": 1}
     )]
@@ -304,8 +324,7 @@ async def recompute_execution_package_material(project_id: str, user: dict = Dep
     _entries_cursor = tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id,
          "projection_source": "canonical_warehouse_service",
-         "movement_kind": {"$in": ["accept", "transfer_out", "write_off",
-                                   "transfer", "consume"]}},
+         "movement_kind": {"$in": list(COST_KINDS)}},
         {"_id": 0, "execution_package_id": 1, "total_value": 1},
     )
     entries = [row async for row in _entries_cursor]
@@ -353,7 +372,7 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
     lab_actual = pkg.get("actual_labor_cost", 0)
 
     # Subcontract for this package
-    sub_lines = await [row async for row in tenant.subcontractor_package_lines.find(
+    sub_lines = [row async for row in tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "execution_package_id": pkg_id},
         {"_id": 0, "certified_total": 1}
     )]
@@ -402,10 +421,10 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
     """All execution packages financial breakdown for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await [row async for row in tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0})]
+    pkgs = [row async for row in tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0})]
 
     # Load subcontract by package
-    sub_lines = await [row async for row in tenant.subcontractor_package_lines.find(
+    sub_lines = [row async for row in tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "execution_package_id": 1, "certified_total": 1}
     )]
@@ -455,7 +474,7 @@ async def get_material_warnings(project_id: str, user: dict = Depends(require_m2
     """Material cost warnings for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    pkgs = await [row async for row in tenant.execution_packages.find(
+    pkgs = [row async for row in tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     )]
 
@@ -498,8 +517,7 @@ async def get_material_summary_for_project(org_id: str, project_id: str) -> dict
         {"org_id": org_id, "project_id": project_id,
          "projection_source": "canonical_warehouse_service",
          "execution_package_id": {"$ne": None},
-         "movement_kind": {"$in": ["accept", "transfer_out", "write_off",
-                                   "transfer", "consume"]}},
+         "movement_kind": {"$in": list(COST_KINDS)}},
         {"_id": 0, "total_value": 1},
     )
     mapped = [row async for row in _mapped_cursor]
@@ -510,15 +528,14 @@ async def get_material_summary_for_project(org_id: str, project_id: str) -> dict
         {"org_id": org_id, "project_id": project_id,
          "projection_source": "canonical_warehouse_service",
          "execution_package_id": None,
-         "movement_kind": {"$in": ["accept", "transfer_out", "write_off",
-                                   "transfer", "consume"]}},
+         "movement_kind": {"$in": list(COST_KINDS)}},
         {"_id": 0, "total_value": 1},
     )
     unmapped = [row async for row in _unmapped_cursor]
     unmapped_cost = sum(float(e["total_value"]) for e in unmapped
                         if e.get("total_value") is not None)
 
-    pkgs = await [row async for row in tenant.execution_packages.find(
+    pkgs = [row async for row in tenant.execution_packages.find(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "material_budget_total": 1}
     )]
