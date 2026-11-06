@@ -1,0 +1,622 @@
+INFO:     Started server process [8158]
+INFO:     Waiting for application startup.
+2026-11-06 13:21:18,114 - app.core.seed - INFO - Creating seed data with admin: admin@bot-a.test
+2026-11-06 13:21:18,129 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/tmp/botvenv/lib/python3.13/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+2026-11-06 13:21:18,475 - app.core.seed - INFO - Seed data created successfully for: admin@bot-a.test
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8001 (Press CTRL+C to quit)
+INFO:     127.0.0.1:51946 - "GET /api/ HTTP/1.1" 404 Not Found
+/tmp/botvenv/lib/python3.13/site-packages/fastapi/openapi/utils.py:207: UserWarning: Duplicate Operation ID list_overhead_snapshots_api_overhead_snapshots_get for function list_overhead_snapshots at /tmp/botwt/639ca80/backend/app/routes/full_cost.py
+  warnings.warn(message, stacklevel=1)
+INFO:     127.0.0.1:51954 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58448 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45388 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58448 - "POST /api/users HTTP/1.1" 201 Created
+INFO:     127.0.0.1:45388 - "POST /api/users HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58448 - "POST /api/users HTTP/1.1" 201 Created
+INFO:     127.0.0.1:45388 - "POST /api/users HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58448 - "POST /api/projects HTTP/1.1" 201 Created
+INFO:     127.0.0.1:45388 - "POST /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/smr-groups HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58448 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45388 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58448 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45388 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58448 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45390 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45390 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45390 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45390 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45390 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45402 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45406 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45410 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45406 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "OPTIONS /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45406 - "POST /api/warehouse/canonical/movements HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:45406 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45406 - "POST /api/warehouse/canonical/movements HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:45406 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45406 - "OPTIONS /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42698 - "GET /api/warehouse/canonical/balance/it-keeper HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:45396 - "OPTIONS /api/warehouse/canonical/integrity-warnings HTTP/1.1" 200 OK
+2026-11-06 13:22:10,245 - app.middleware.error_handler - ERROR - Unhandled error: GET /api/warehouse/canonical/integrity-warnings
+2026-11-06 13:22:10,250 - app.middleware.error_handler - ERROR - Traceback (most recent call last):
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/base.py", line 159, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botvenv/lib/python3.13/site-packages/anyio/streams/memory.py", line 132, in receive
+    raise EndOfStream from None
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/botwt/639ca80/backend/app/middleware/error_handler.py", line 17, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/base.py", line 165, in call_next
+    raise app_exc
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 93, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 148, in simple_response
+    await self.app(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 72, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botvenv/lib/python3.13/site-packages/fastapi/routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        dependant=dependant, values=values, is_coroutine=is_coroutine
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/tmp/botvenv/lib/python3.13/site-packages/fastapi/routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botwt/639ca80/backend/app/routes/warehouse_canonical_queries.py", line 267, in read_integrity_warnings
+    data = await integrity_warnings(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/tmp/botwt/639ca80/backend/app/services/warehouse_movements/queries.py", line 309, in integrity_warnings
+    item_ids = await tenant_collection.distinct(
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        "item_id", {"tenant_id": tenant_id}, session=session,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: TenantCollection.distinct() got an unexpected keyword argument 'session'
+
+INFO:     127.0.0.1:42708 - "GET /api/warehouse/canonical/integrity-warnings HTTP/1.1" 500 Internal Server Error
+2026-11-06 13:22:11,748 - app.middleware.error_handler - ERROR - Unhandled error: GET /api/warehouse/canonical/integrity-warnings
+2026-11-06 13:22:11,749 - app.middleware.error_handler - ERROR - Traceback (most recent call last):
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/base.py", line 159, in call_next
+    message = await recv_stream.receive()
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botvenv/lib/python3.13/site-packages/anyio/streams/memory.py", line 132, in receive
+    raise EndOfStream from None
+anyio.EndOfStream
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/tmp/botwt/639ca80/backend/app/middleware/error_handler.py", line 17, in dispatch
+    response = await call_next(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/base.py", line 165, in call_next
+    raise app_exc
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/base.py", line 151, in coro
+    await self.app(scope, receive_or_disconnect, send_no_error)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/cors.py", line 85, in __call__
+    await self.app(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/middleware/exceptions.py", line 65, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 756, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 776, in app
+    await route.handle(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 297, in handle
+    await self.app(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 77, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 64, in wrapped_app
+    raise exc
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/_exception_handler.py", line 53, in wrapped_app
+    await app(scope, receive, sender)
+  File "/tmp/botvenv/lib/python3.13/site-packages/starlette/routing.py", line 72, in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botvenv/lib/python3.13/site-packages/fastapi/routing.py", line 278, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        dependant=dependant, values=values, is_coroutine=is_coroutine
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/tmp/botvenv/lib/python3.13/site-packages/fastapi/routing.py", line 191, in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/tmp/botwt/639ca80/backend/app/routes/warehouse_canonical_queries.py", line 267, in read_integrity_warnings
+    data = await integrity_warnings(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^
+        tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/tmp/botwt/639ca80/backend/app/services/warehouse_movements/queries.py", line 309, in integrity_warnings
+    item_ids = await tenant_collection.distinct(
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        "item_id", {"tenant_id": tenant_id}, session=session,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+TypeError: TenantCollection.distinct() got an unexpected keyword argument 'session'
+
+INFO:     127.0.0.1:42712 - "GET /api/warehouse/canonical/integrity-warnings HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:42714 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42716 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42716 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42714 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42714 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42716 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42716 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:42714 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59586 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "OPTIONS /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "OPTIONS /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59598 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59600 - "POST /api/warehouse/canonical/movements HTTP/1.1" 409 Conflict
+INFO:     127.0.0.1:59568 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59604 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pending-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59606 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/aggregate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59568 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/aggregate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59604 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pending-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59614 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59604 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59614 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59626 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59626 - "OPTIONS /api/assets/qr/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59614 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pnl/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59604 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/centralized-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59614 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/centralized-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59626 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pnl/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "POST /api/assets/qr/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59576 - "OPTIONS /api/assets/qr/QR-000001/svg?base=http%3A%2F%2F127.0.0.1%3A3000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59626 - "GET /api/assets/qr/QR-000001/svg?base=http%3A%2F%2F127.0.0.1%3A3000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58642 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58652 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58668 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pending-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58652 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/aggregate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58656 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pending-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58668 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/aggregate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58668 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58642 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/dashboard HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58642 - "OPTIONS /api/assets/qr/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pnl/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58668 - "OPTIONS /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/centralized-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "POST /api/assets/qr/generate HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/centralized-reports HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58638 - "OPTIONS /api/assets/qr/QR-000001/svg?base=http%3A%2F%2F127.0.0.1%3A3000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58642 - "GET /api/projects/ae9defb5-a708-4bbe-a49a-afef6bde91be/pnl/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58628 - "GET /api/assets/qr/QR-000001/svg?base=http%3A%2F%2F127.0.0.1%3A3000 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58670 - "POST /api/warehouse/canonical/movements HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58682 - "POST /api/warehouse/canonical/movements HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58670 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58682 - "POST /api/warehouse/canonical/movements HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58670 - "POST /api/warehouse/canonical/movements HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58682 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58670 - "POST /api/warehouse/canonical/movements HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58682 - "POST /api/warehouse/canonical/movements HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58670 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58682 - "POST /api/warehouse/canonical/movements HTTP/1.1" 403 Forbidden
+INFO:     127.0.0.1:58670 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58726 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "OPTIONS /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "OPTIONS /api/assets/units?location_type=employee&location_id=f373ce06-71d1-402d-ad43-eca1369fd3d2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "OPTIONS /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58742 - "OPTIONS /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "OPTIONS /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "OPTIONS /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "OPTIONS /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58726 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET /api/assets/units?location_type=employee&location_id=f373ce06-71d1-402d-ad43-eca1369fd3d2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58742 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58726 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58742 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "GET /api/assets/units?location_type=employee&location_id=f373ce06-71d1-402d-ad43-eca1369fd3d2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58740 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58742 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58726 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58724 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58710 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58804 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "OPTIONS /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "OPTIONS /api/assets/units?location_type=employee&location_id=7ef16bb0-6f5f-4153-8b94-e6099caf73e2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "OPTIONS /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58812 - "OPTIONS /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58804 - "OPTIONS /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "OPTIONS /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "OPTIONS /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58812 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58812 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58804 - "GET /api/assets/units?location_type=employee&location_id=7ef16bb0-6f5f-4153-8b94-e6099caf73e2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58804 - "GET /api/assets/units?location_type=employee&location_id=7ef16bb0-6f5f-4153-8b94-e6099caf73e2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58804 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58768 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58812 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58758 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58782 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58794 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35476 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "OPTIONS /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35476 - "OPTIONS /api/assets/units?location_type=employee&location_id=ce4b039f-7d6d-424f-84c0-4590cdf803b5&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "OPTIONS /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35502 - "OPTIONS /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "OPTIONS /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35498 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "OPTIONS /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35476 - "OPTIONS /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35502 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "GET /api/assets/units?location_type=employee&location_id=ce4b039f-7d6d-424f-84c0-4590cdf803b5&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35476 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35498 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35502 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35502 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35498 - "GET /api/assets/units?location_type=employee&location_id=ce4b039f-7d6d-424f-84c0-4590cdf803b5&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35502 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35456 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35502 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35498 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35476 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35460 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35484 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35528 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35528 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35528 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35542 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35558 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "OPTIONS /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35578 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35558 - "GET /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "OPTIONS /api/dashboard/activity?limit=3&page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "GET /api/dashboard/activity?limit=3&page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "OPTIONS /api/pulse/today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35558 - "OPTIONS /api/org/pnl-overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35578 - "OPTIONS /api/overhead/realtime HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35518 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35558 - "GET /api/overhead/realtime HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "GET /api/org/pnl-overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35542 - "GET /api/pulse/today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35542 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35542 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35542 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35570 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35542 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:35558 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39628 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "OPTIONS /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39628 - "OPTIONS /api/assets/units?location_type=employee&location_id=f373ce06-71d1-402d-ad43-eca1369fd3d2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "OPTIONS /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39644 - "OPTIONS /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39634 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "OPTIONS /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39628 - "OPTIONS /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "OPTIONS /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39644 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39634 - "GET /api/assets/units?location_type=employee&location_id=f373ce06-71d1-402d-ad43-eca1369fd3d2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39628 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39634 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39644 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39644 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39634 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "GET /api/assets/units?location_type=employee&location_id=f373ce06-71d1-402d-ad43-eca1369fd3d2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39628 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39634 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39644 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39622 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39608 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39634 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39628 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39630 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39644 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39664 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "OPTIONS /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39664 - "OPTIONS /api/assets/units?location_type=employee&location_id=7ef16bb0-6f5f-4153-8b94-e6099caf73e2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "OPTIONS /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39688 - "OPTIONS /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "OPTIONS /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "OPTIONS /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "OPTIONS /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39664 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39688 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "GET /api/assets/units?location_type=employee&location_id=7ef16bb0-6f5f-4153-8b94-e6099caf73e2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39664 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39688 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39688 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39664 - "GET /api/assets/units?location_type=employee&location_id=7ef16bb0-6f5f-4153-8b94-e6099caf73e2&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39688 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39652 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39658 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39684 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39664 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39688 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39674 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39726 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39726 - "OPTIONS /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "OPTIONS /api/assets/units?location_type=employee&location_id=ce4b039f-7d6d-424f-84c0-4590cdf803b5&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "OPTIONS /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39726 - "OPTIONS /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "OPTIONS /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "OPTIONS /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "OPTIONS /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "GET /api/assets/units?location_type=employee&location_id=ce4b039f-7d6d-424f-84c0-4590cdf803b5&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39726 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39726 - "GET /api/assets/units?location_type=employee&location_id=ce4b039f-7d6d-424f-84c0-4590cdf803b5&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "GET /api/technician/my-sites HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "GET /api/work-reports/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39704 - "GET /api/attendance/my-today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39726 - "GET /api/assets/custody/my-pending HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39714 - "GET /api/assets/intake/can-submit HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39730 - "GET /api/settings/workers-see-pay HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39706 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:39732 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37658 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37660 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37660 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37658 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37658 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37660 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37662 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "OPTIONS /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37674 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37658 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "GET /api/dashboard/stats HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37674 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "OPTIONS /api/dashboard/activity?limit=3&page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37674 - "GET /api/dashboard/activity?limit=3&page=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "OPTIONS /api/pulse/today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "OPTIONS /api/org/pnl-overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37658 - "OPTIONS /api/overhead/realtime HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37674 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37662 - "GET /api/pulse/today HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "GET /api/overhead/realtime HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "GET /api/org/pnl-overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37666 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37662 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37670 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37686 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37698 - "GET /api/warehouse/canonical/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37686 - "GET /api/warehouse/canonical/stock/it-cement?location_type=central_warehouse&location_id=CEN&state=free HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37698 - "POST /api/warehouse/canonical/movements HTTP/1.1" 422 Unprocessable Content
+INFO:     127.0.0.1:37710 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37710 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37710 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37710 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37710 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37722 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37730 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37740 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37730 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37718 - "OPTIONS /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:37730 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53510 - "OPTIONS /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53526 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53526 - "OPTIONS /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53510 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53510 - "OPTIONS /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53526 - "GET /api/organization HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53542 - "GET /api/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53542 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53526 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53510 - "OPTIONS /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53546 - "OPTIONS /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53542 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53558 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53546 - "GET /api/alarms?status=active&page_size=5 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53542 - "GET /api/alarms/count HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53542 - "OPTIONS /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53546 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53574 - "GET /api/warehouse/canonical/balance/it-cement HTTP/1.1" 200 OK

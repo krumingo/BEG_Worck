@@ -1,0 +1,453 @@
+{
+  "task": "5C-C18",
+  "sha": "639ca80",
+  "started": "2026-11-06T13:21:53.403Z",
+  "steps": [
+    {
+      "step": "0a AS-DEPLOYED (tenant already has one permission AuditEvent): UI receive 10 -> expected success",
+      "pass": false,
+      "detail": {
+        "status": 500,
+        "error_code": "AUDIT_CHAIN_WRITE_FAILED"
+      },
+      "screenshot": "01_0a_AS_DEPLOYED_tenant_already_has_one_pe.png"
+    },
+    {
+      "step": "1.1 [1280 UI] receive 10 to central warehouse -> 200 (first batch of the tenant)",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "02_1_1_1280_UI_receive_10_to_central_wareho.png"
+    },
+    {
+      "step": "1.1b AS-DEPLOYED: [1280 UI] second receive (other item, 5) -> expected 200",
+      "pass": false,
+      "detail": {
+        "status": 500,
+        "error_code": "AUDIT_CHAIN_WRITE_FAILED",
+        "message": "transaction failed: E11000 duplicate key error collection: bot_op.warehouse_batches index: org_id_1_batch_number_1 dup key: { org_id: \"d36e8a96-366b-4bde-abdf-6b5f346db244\", batch_number: null }, full error: {'index': 0,"
+      },
+      "screenshot": "03_1_1b_AS_DEPLOYED_1280_UI_second_receive_.png"
+    },
+    {
+      "step": "1.1c [1280 UI] after workaround 2: second receive (other item, 5) -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      },
+      "screenshot": "04_1_1c_1280_UI_after_workaround_2_second_r.png"
+    },
+    {
+      "step": "1.2 [1280 UI] stock panel shows 10 at central_warehouse:CEN",
+      "pass": true,
+      "detail": {
+        "rows": "central_warehouse:CEN (free)\n10"
+      },
+      "screenshot": "05_1_2_1280_UI_stock_panel_shows_10_at_cent.png"
+    },
+    {
+      "step": "1.3p PROBE [1280 UI] dispatch 1 to project with destination project/free: server must keep it in transit (not credit the project before acceptance)",
+      "pass": false,
+      "detail": {
+        "dispatch_status": 200,
+        "balances": [
+          "central_warehouse:free=4",
+          "project:free=1"
+        ]
+      },
+      "screenshot": "06_1_3p_PROBE_1280_UI_dispatch_1_to_project.png"
+    },
+    {
+      "step": "1.3 dispatch 10 to project -> 200 [via UI (dest=in_transit/pending, state sent as free)]",
+      "pass": true,
+      "screenshot": "07_1_3_dispatch_10_to_project_200_via_UI_de.png"
+    },
+    {
+      "step": "1.4 [1280 UI] accept 3 + 4 + 3 all -> 200",
+      "pass": true,
+      "detail": {
+        "accs": [
+          {
+            "q": 3,
+            "status": 200,
+            "open": 1
+          },
+          {
+            "q": 4,
+            "status": 200,
+            "open": 2
+          },
+          {
+            "q": 3,
+            "status": 200,
+            "open": 0
+          }
+        ]
+      },
+      "screenshot": "08_1_4_1280_UI_accept_3_4_3_all_200.png"
+    },
+    {
+      "step": "1.5 unresolved discrepancies after 3+4+3 == 0 (ledger query; requires all three accepts to have succeeded)",
+      "pass": true,
+      "detail": {
+        "open_after_each": [
+          1,
+          2,
+          0
+        ],
+        "in_transit": [
+          {
+            "unresolved": 0
+          }
+        ]
+      },
+      "screenshot": "09_1_5_unresolved_discrepancies_after_3_4_3.png"
+    },
+    {
+      "step": "1.6 [1280 UI] stock: project holds 10, central 0",
+      "pass": true,
+      "detail": {
+        "rows": [
+          "in_transit:pending (free)\n10",
+          "project:ae9defb5-a708-4bbe-a49a-afef6bde91be (free)\n10"
+        ]
+      },
+      "screenshot": "10_1_6_1280_UI_stock_project_holds_10_centr.png"
+    },
+    {
+      "step": "1.7 [1280 UI] integrity-warnings panel: API must answer 200; the panel must not show a false all-clear on error",
+      "pass": false,
+      "detail": {
+        "api_status": 500,
+        "api_error_type": "TypeError",
+        "panel_text": "Актуализирано: Няма активни аларми по интегритет."
+      },
+      "screenshot": "11_1_7_1280_UI_integrity_warnings_panel_API.png"
+    },
+    {
+      "step": "1.8 [1280] no horizontal scroll",
+      "pass": true,
+      "screenshot": "12_1_8_1280_no_horizontal_scroll.png"
+    },
+    {
+      "step": "2.1 [390 UI] receive 10 -> 200",
+      "pass": true,
+      "screenshot": "13_2_1_390_UI_receive_10_200.png"
+    },
+    {
+      "step": "2.2 dispatch 10 -> 200 [UI 390]",
+      "pass": true,
+      "screenshot": "14_2_2_dispatch_10_200_UI_390_.png"
+    },
+    {
+      "step": "2.3 [390 UI] accept 8 -> 200 and exactly 1 open discrepancy (2 missing)",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "open": 1
+      },
+      "screenshot": "15_2_3_390_UI_accept_8_200_and_exactly_1_op.png"
+    },
+    {
+      "step": "2.4 [390 UI] accept 2 -> 200 and zero unresolved discrepancies",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "open": 0
+      },
+      "screenshot": "16_2_4_390_UI_accept_2_200_and_zero_unresol.png"
+    },
+    {
+      "step": "2.5 [390 UI] stock panel readable on phone (project bucket)",
+      "pass": true,
+      "detail": {
+        "rows": [
+          "in_transit:pending (free)\n20",
+          "project:ae9defb5-a708-4bbe-a49a-afef6bde91be (free)\n20"
+        ]
+      },
+      "screenshot": "17_2_5_390_UI_stock_panel_readable_on_phone.png"
+    },
+    {
+      "step": "2.6 [390] no horizontal scroll",
+      "pass": true,
+      "screenshot": "18_2_6_390_no_horizontal_scroll.png"
+    },
+    {
+      "step": "2.7a consume 3 bound to an SMR: the canonical form has no SMR field (smr_id)",
+      "pass": false,
+      "status": "NO_SCREEN",
+      "note": "UI form can only post project-level consume; SMR binding done by API",
+      "api": {
+        "status": 200
+      }
+    },
+    {
+      "step": "2.7 [API] consume 3 to SMR -> 200",
+      "pass": true,
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "step": "2.8 exactly one project cost row (material_entries) for the consume, also after an identical resend",
+      "pass": true,
+      "detail": {
+        "rows_for_movement": [
+          {
+            "movement_id": "mv_45e656cd75c34a239c444381fbefc0ed",
+            "project_id": "ae9defb5-a708-4bbe-a49a-afef6bde91be",
+            "quantity": "3",
+            "smr_id": "65e88873-0321-44b7-815d-2ea499bfa814",
+            "total_value": "15.0000"
+          }
+        ],
+        "rows_for_smr": 1
+      }
+    },
+    {
+      "step": "2.8b identical resend of the consume (same idempotency key + body) returns the original movement (replay:true, 200)",
+      "pass": false,
+      "detail": {
+        "status": 409,
+        "error_code": "IDEMPOTENCY_CONFLICT",
+        "message": "Idempotency key 'consume-1793971338857-1' for action 'consume_to_smr' was already used with a different request payload"
+      }
+    },
+    {
+      "step": "2.9 [390] project page material ledger screen (cost/remaining)",
+      "pass": true,
+      "detail": {
+        "ledger_visible": false
+      },
+      "screenshot": "19_2_9_390_project_page_material_ledger_scr.png"
+    },
+    {
+      "step": "2.10 [1280] project page material ledger screen",
+      "pass": true,
+      "detail": {
+        "ledger_visible": false
+      },
+      "screenshot": "20_2_10_1280_project_page_material_ledger_s.png"
+    },
+    {
+      "step": "3.1 keeper (Warehousekeeper): receive 200, consume_to_smr 403, read 200",
+      "pass": true,
+      "detail": {
+        "receive": 200,
+        "consume": 403,
+        "read": 200
+      }
+    },
+    {
+      "step": "3.2 technician: receive 403, consume 403, read 403 (direct API)",
+      "pass": true,
+      "detail": {
+        "receive": 403,
+        "consume": 403,
+        "read": 403
+      }
+    },
+    {
+      "step": "3.3 viewer: receive 403, consume 403, read 403 (direct API)",
+      "pass": true,
+      "detail": {
+        "receive": 403,
+        "consume": 403,
+        "read": 403
+      }
+    },
+    {
+      "step": "3.4 accountant (read-only role): receive 403, read 200 (direct API)",
+      "pass": true,
+      "detail": {
+        "receive": 403,
+        "read": 200
+      }
+    },
+    {
+      "step": "3.5 [1280] keeper opens /warehouse/canonical -> must show NO write action (landed /tech, write tab hidden)",
+      "pass": true,
+      "screenshot": "21_3_5_1280_keeper_opens_warehouse_canonica.png"
+    },
+    {
+      "step": "3.5 [1280] technician opens /warehouse/canonical -> must show NO write action (landed /tech, write tab hidden)",
+      "pass": true,
+      "screenshot": "22_3_5_1280_technician_opens_warehouse_cano.png"
+    },
+    {
+      "step": "3.5 [1280] viewer opens /warehouse/canonical -> must show NO write action (landed /tech, write tab hidden)",
+      "pass": true,
+      "screenshot": "23_3_5_1280_viewer_opens_warehouse_canonica.png"
+    },
+    {
+      "step": "3.5 [1280] accountant opens /warehouse/canonical -> must show NO write action (landed /warehouse/canonical, write tab VISIBLE)",
+      "pass": false,
+      "screenshot": "24_3_5_1280_accountant_opens_warehouse_cano.png"
+    },
+    {
+      "step": "3.5 [390] keeper opens /warehouse/canonical -> must show NO write action (landed /tech, write tab hidden)",
+      "pass": true,
+      "screenshot": "25_3_5_390_keeper_opens_warehouse_canonical.png"
+    },
+    {
+      "step": "3.5 [390] technician opens /warehouse/canonical -> must show NO write action (landed /tech, write tab hidden)",
+      "pass": true,
+      "screenshot": "26_3_5_390_technician_opens_warehouse_canon.png"
+    },
+    {
+      "step": "3.5 [390] viewer opens /warehouse/canonical -> must show NO write action (landed /tech, write tab hidden)",
+      "pass": true,
+      "screenshot": "27_3_5_390_viewer_opens_warehouse_canonical.png"
+    },
+    {
+      "step": "3.5 [390] accountant opens /warehouse/canonical -> must show NO write action (landed /warehouse/canonical, write tab VISIBLE)",
+      "pass": false,
+      "screenshot": "28_3_5_390_accountant_opens_warehouse_canon.png"
+    },
+    {
+      "step": "3.6 keeper (allowed receive/dispatch/accept on API) has no warehouse screen: /warehouse/canonical is AdminRoute (Admin/Owner/SiteManager/Accountant only) and redirects to /tech",
+      "pass": false,
+      "status": "NO_SCREEN",
+      "note": "role has API rights but no UI",
+      "api": {
+        "landed": "/tech"
+      }
+    },
+    {
+      "step": "4.1 tenant B: balance of A item empty; history empty; stock zero",
+      "pass": true,
+      "detail": {
+        "bal": [],
+        "hist_rows": 0,
+        "stock": 200
+      }
+    },
+    {
+      "step": "4.2 tenant B cannot accept tenant A dispatch (write refused)",
+      "pass": true,
+      "detail": {
+        "status": 422,
+        "code": "ORIGIN_ACCEPTANCE_OVERRUN"
+      }
+    },
+    {
+      "step": "4.3 [1280 UI] tenant B stock panel for A's item shows empty",
+      "pass": true,
+      "detail": {
+        "rows": []
+      },
+      "screenshot": "29_4_3_1280_UI_tenant_B_stock_panel_for_A_s.png"
+    },
+    {
+      "step": "4.3 [390 UI] tenant B stock panel for A's item shows empty",
+      "pass": true,
+      "detail": {
+        "rows": []
+      },
+      "screenshot": "30_4_3_390_UI_tenant_B_stock_panel_for_A_s_.png"
+    },
+    {
+      "step": "4.4 control: tenant A still sees its own stock",
+      "pass": true,
+      "detail": {
+        "balances": [
+          {
+            "location_type": "in_transit",
+            "location_id": "pending",
+            "state": "free",
+            "quantity": "20"
+          },
+          {
+            "location_type": "project",
+            "location_id": "ae9defb5-a708-4bbe-a49a-afef6bde91be",
+            "state": "free",
+            "quantity": "17"
+          }
+        ]
+      }
+    }
+  ],
+  "notes": [
+    "workaround: audit_events/audit_counters of synthetic tenant A cleared ([4,4,0]); every later step is \"with workaround\"",
+    "workaround 2: legacy unique index warehouse_batches(org_id,batch_number) dropped on the synthetic tenant A DB ({\"nIndexesWas\":5,\"ok\":1,\"$clusterTime\":{\"clusterTime\":{\"$timestamp\":\"7705048157951885313\"},\"signature\":{\"hash\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAA=\",\"keyId\":{\"high\":0,\"low\":0,\"unsigned\":false}}},\"operationTime\":{\"$timestamp\":\"7705048157951885313\"}}); steps below are \"with workaround 1+2\""
+  ],
+  "pageErrors": [
+    "AxiosError: H"
+  ],
+  "ui_visibility": {
+    "keeper@1280": {
+      "url": "/tech",
+      "canonical_page": false
+    },
+    "technician@1280": {
+      "url": "/tech",
+      "canonical_page": false
+    },
+    "viewer@1280": {
+      "url": "/tech",
+      "canonical_page": false
+    },
+    "accountant@1280": {
+      "url": "/warehouse/canonical",
+      "canonical_page": true
+    },
+    "keeper@390": {
+      "url": "/tech",
+      "canonical_page": false
+    },
+    "technician@390": {
+      "url": "/tech",
+      "canonical_page": false
+    },
+    "viewer@390": {
+      "url": "/tech",
+      "canonical_page": false
+    },
+    "accountant@390": {
+      "url": "/warehouse/canonical",
+      "canonical_page": true
+    }
+  },
+  "facts": {
+    "project": "ae9defb5-a708-4bbe-a49a-afef6bde91be",
+    "smr": "65e88873-0321-44b7-815d-2ea499bfa814",
+    "smrReal": true,
+    "orgA": "d36e8a96-366b-4bde-abdf-6b5f346db244",
+    "blocker": {
+      "status": 500,
+      "code": "AUDIT_CHAIN_WRITE_FAILED"
+    },
+    "rows1": "central_warehouse:CEN (free)\n10",
+    "dispatchVia": "UI (dest=in_transit/pending, state sent as free)",
+    "disp1": "mv_7f2f3a55c3634688b3ae098002258a63",
+    "rows1b": [
+      "in_transit:pending (free)\n10",
+      "project:ae9defb5-a708-4bbe-a49a-afef6bde91be (free)\n10"
+    ],
+    "disp2": "mv_61558f562f5c478b87d053f4b3e364a6",
+    "rows2": [
+      "in_transit:pending (free)\n20",
+      "project:ae9defb5-a708-4bbe-a49a-afef6bde91be (free)\n20"
+    ]
+  },
+  "permission_http": {
+    "keeperReceive": "200",
+    "keeperConsume": "403 PERMISSION_DENIED",
+    "keeperRead": "200",
+    "techRecv": "403 PERMISSION_DENIED",
+    "techConsume": "403 PERMISSION_DENIED",
+    "techRead": "403 PERMISSION_DENIED",
+    "viewRecv": "403 PERMISSION_DENIED",
+    "viewConsume": "403 PERMISSION_DENIED",
+    "viewRead": "403 PERMISSION_DENIED",
+    "accRecv": "403 PERMISSION_DENIED",
+    "accRead": "200"
+  },
+  "passed": 33,
+  "total": 42,
+  "no_screen": 2,
+  "verdict": "FAIL",
+  "finished": "2026-11-06T13:23:05.646Z"
+}
