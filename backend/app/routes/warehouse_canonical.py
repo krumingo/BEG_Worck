@@ -340,6 +340,24 @@ async def post_project_writeoff(
     from app.services.warehouse_movements.errors import PermissionDeniedError
     from app.permissions.deps import MODE_ENFORCE
     tenant = _tenant_for(user)
+    # 5C-C26d (C26B-1 / FG-38): with a subproject source the project is the
+    # subproject's parent FROM THE DATABASE; a body project_id naming another
+    # project is refused (422) before Р27 and before any write. Р27 is then
+    # decided against the real project.
+    if body.subproject_id:
+        from app.services.warehouse_movements.service import resolve_subproject_parent
+        try:
+            parent = await resolve_subproject_parent(
+                tenant._db, tenant.org_id, body.subproject_id)  # pylint: disable=protected-access
+            if parent != body.project_id:
+                from app.services.warehouse_movements.errors import InvariantViolationError
+                raise InvariantViolationError(
+                    "project_id must be the parent project of the subproject",
+                    context={"subproject_id": body.subproject_id,
+                             "parent_project_id": parent,
+                             "project_id": body.project_id})
+        except WarehouseMovementError as exc:
+            raise _render_error(exc) from exc
     try:
         await _r27_decide(ctx, user, tenant, body.project_id, request)
     except PermissionDeniedError as exc:

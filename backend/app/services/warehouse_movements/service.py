@@ -203,6 +203,26 @@ class CommandInput:
     transfer_target: Optional[LocationKey] = None
 
 
+async def resolve_subproject_parent(tenant_db, org_id: str, subproject_id: str) -> str:
+    """5C-C26d (FG-38) — the parent project of a subproject of THIS tenant
+    (``projects.parent_project_id``). Unknown subproject, a top-level
+    project, or a parent that is not a project of the tenant → 422."""
+    from app.tenancy.data_access import TenantData
+    tenant = TenantData.for_resolved_org(tenant_db, org_id)
+    sub = await tenant.projects.find_one(
+        {"id": subproject_id}, {"_id": 0, "id": 1, "parent_project_id": 1})
+    parent = (sub or {}).get("parent_project_id")
+    if not parent:
+        raise InvariantViolationError(
+            "unknown subproject (no parent project in this tenant)",
+            context={"subproject_id": subproject_id})
+    if not await tenant.projects.find_one({"id": parent}, {"_id": 0, "id": 1}):
+        raise InvariantViolationError(
+            "the subproject's parent is not a project of this tenant",
+            context={"subproject_id": subproject_id, "parent_project_id": parent})
+    return parent
+
+
 # -----------------------------------------------------------------------
 # Permission adapter
 # -----------------------------------------------------------------------
@@ -660,6 +680,8 @@ class CommandService:
         await self._bind_acceptance_to_transit(tenant_collection, inp)
         # 5C-C21 F-12 (Р10) — a write-off from a project is project cost;
         # the project scope is server-derived from the source bucket.
+        # 5C-C26d (C26B-1 / FG-38) — a subproject's project is its parent.
+        await self._bind_subproject_parent(tenant_db, inp)
         self._bind_write_off_project(inp)
 
         # Permission (C06 — both source + destination + project scopes).
@@ -1596,6 +1618,43 @@ class CommandService:
         return {"action": row.get("action"), "location": row.get("source"),
                 "project_id": row.get("project_id"),
                 "dispatch_movement_id": dispatch_movement_id}
+
+    @staticmethod
+    async def _bind_subproject_parent(tenant_db, inp: CommandInput) -> None:
+        """5C-C26d — audit C26B-1 / FLOW Guard FG-38 (HIGH).
+
+        The project of an action that touches a SUBPROJECT bucket is the
+        subproject's PARENT, read from the tenant's ``projects`` collection
+        (``parent_project_id``) — never trusted from the body. A
+        ``project_id`` that names another project is refused (422) before
+        the permission gate and before any write; permissions (generic gate,
+        Р27) are then decided against the real project. The subproject that
+        decides is the source (an outbound move), else the destination /
+        transfer target (an acceptance, a direct delivery).
+        """
+        subs = [k for k in (inp.source, inp.destination, inp.transfer_target)
+                if k is not None and k.location_type == LocationType.SUBPROJECT]
+        if not subs:
+            return
+        parents = []
+        for key in subs:
+            parents.append(await resolve_subproject_parent(
+                tenant_db, inp.tenant_id, key.location_id))
+        parent = parents[0]
+        if inp.project_id and inp.project_id != parent:
+            raise InvariantViolationError(
+                "project_id must be the parent project of the subproject",
+                context={"subproject_id": subs[0].location_id,
+                         "parent_project_id": parent,
+                         "project_id": inp.project_id})
+        inp.project_id = parent
+        if not inp.subproject_id:
+            inp.subproject_id = subs[0].location_id
+        elif inp.subproject_id not in {k.location_id for k in subs}:
+            raise InvariantViolationError(
+                "subproject_id must be the subproject bucket of the movement",
+                context={"subproject_id": inp.subproject_id,
+                         "buckets": [k.location_id for k in subs]})
 
     @staticmethod
     def _bind_write_off_project(inp: CommandInput) -> None:

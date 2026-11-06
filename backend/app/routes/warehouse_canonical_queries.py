@@ -193,6 +193,16 @@ async def _sees_values(ctx) -> bool:
     from datetime import datetime, timezone
     from app.permissions import service as perm
     from app.services.warehouse_movements.write_off_policy import _active_assignments
+    # 5C-C26d (FG-39) — off / shadow have no RoleAssignments decision: the
+    # legacy session role decides, mapped by the catalog's LEGACY_ROLE_MAP
+    # onto the same role sets (the C26c Р27 pattern). Shadow does not let
+    # the new decision change the outcome.
+    from app.permissions.deps import MODE_OFF, MODE_SHADOW
+    if getattr(ctx, "mode", None) in (MODE_OFF, MODE_SHADOW):
+        from app.permissions.catalog import LEGACY_ROLE_MAP
+        user = getattr(ctx, "user", None) or {}
+        role_id = LEGACY_ROLE_MAP.get(user.get("role") or "")
+        return role_id in FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
     user_id = getattr(ctx, "user_id", None)
     tenant_id = getattr(ctx, "tenant_id", None)
     if not user_id or not tenant_id:
