@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `64418eb` | **FINDINGS (blocking): C26B-1 Р27 bypass via subproject_id (cost on wrong project)**; C26A-1 leak FIXED | 2026-11-06 |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `8910939` | **PASS** (C01 L1/L2 closed); INT-70x69 still open (Part 2) | 2026-11-06 |
@@ -137,8 +137,8 @@ Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b
 | #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #64 | `frontend/src/components/DashboardLayout.js` |
-| #55 × #56 | `backend/app/routes/warehouses.py`, `backend/app/tenancy/data_access.py` |
-| #55 × #64 | `backend/app/routes/warehouses.py`, `frontend/src/App.js` |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
 
@@ -1007,10 +1007,10 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #55 × #69 | **conflict**: `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/routes/sales.py` (grew: sales and procurement are new) |
-| #55 × #56 | **conflict**: `backend/app/tenancy/data_access.py`, `docs/architecture/W0-03E-A2B_INVENTORY.md` |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 | #69 × #56 | clean |
-| #55, #69, #56 × main | clean |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 
 ---
@@ -1081,7 +1081,7 @@ The comment on #69 still applies.
 | Pair | Status |
 |---|---|
 | #70 × main `8e3b190` / #55 / #56 / #67 / #69 | **clean** |
-| #55 / #56 / #67 / #69 × main `8e3b190` | clean |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
@@ -1123,10 +1123,10 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 
 | Pair | Status |
 |---|---|
-| #55 × main | clean |
-| #55 × #70 | clean |
-| #55 × #56 | conflict: `data_access.py`, A2B inventory |
-| #55 × #69 | conflict: `catalog.py`, `procurement.py`, `sales.py` |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
+| #55 5C | `103ecdc` | **PASS** (C26d closes C26B-1; FG-39 off/shadow values hidden); low C26D-L1 (P1→sub(P2) with project_id=P1 → 422) | 2026-11-06 |
 
 
 ---
@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 | clean |
-| #71 SEC-02 | `6080165` | **FINDINGS (blocking): SEC02-1 undeclared money GETs (work-sessions labor_cost, site-workers total_earned, smr-groups, pulse budget, ocr-invoice)**; registry itself PASS | 2026-11-06 |
+| #71 SEC-02 | `73b72b5` | **FINDINGS**: Addendum A closes D1/D9 + 2 scan hits; SEC02-1 remainder still open (work-sessions, site-workers, smr-groups, pulse, ocr-invoice) | 2026-11-06 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 | conflict: catalog.py, procurement.py, sales.py |
 
@@ -1466,3 +1466,77 @@ Declared (D1/D3/D4) and seen by the scan: `/api/ai-config/hourly-rates`, `/api/s
 Noise (not money): `/api/billing/plans` (public plan prices), `/api/organization` `vat_percent`, `/invoice-context` `default_vat_rate`.
 
 Recommendation: add the undeclared routes to Addendum A (D1), or record them as debt with Krum's decision.
+
+
+## main @ `8e3b190` — 2026-11-06
+
+PR #68 (PM-01) was merged; I had audited `4e20084` as PASS. No action needed.
+
+## #55 5C-C26d @ `103ecdc` — 2026-11-06 ~22:00 UTC — PASS (1 low finding)
+
+Delta:
+- `resolve_subproject_parent` reads the tenant's `projects.parent_project_id`.
+- `_bind_subproject_parent` runs in `execute` before the gate. A mismatched `project_id` → 422 before the gate and the write. The project-writeoff route checks the same before Р27.
+- `_sees_values` uses the legacy role in off/shadow (FG-39).
+
+Gates, real Mongo:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + c23 | **389 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50, same FAILED list as `fail_56.txt` |
+| A2C | 0/220 |
+| A1 | 0/446 |
+
+Probes, one test per process, all pass: c24, c24b, c25, c26, c26b (updated to seed the subproject row) and the new c26d.
+
+**C26B-1: CLOSED, PROVED.** In `test_probe_pr55_c26b_subproject.py`, a member of P1 writing off with `subproject_id` = a subproject of P2 now gets 422 (it was 201 at `64418eb`).
+
+`probe_pr55_c26a_value_leak.py` in enforce, off and shadow: LEAKS none for the Warehousekeeper (FG-39).
+
+New probe `test_probe_pr55_c26d_transfers.py`:
+
+| Case | Result |
+|---|---|
+| D2: subproject of P1 → subproject of P2 | OK; the gate is asked for project P1 + location S1 + location S2 |
+| D3 baseline: P1 → P2 (project) | cost P1 80 / P2 20, sum 100 |
+| D4: P1 → subproject of P2, no `project_id` | OK; cost P1 80 / P2 20, sum 100 (value conserved). The transfer row records `project_id = P2` (the target's parent) |
+| D1: P1 → subproject of P2 **with `project_id = P1`** | **422** "project_id must be the parent project of the subproject" |
+
+- **C26D-L1 (low): PROVED.** For a project→project transfer, `project_id` is the SOURCE project by convention (`return_to_warehouse` / `transfer_to_project` helpers, D3). When the target is a subproject, the binding uses the target's parent instead. Callers following the convention get 422; omitting `project_id` works, so this is an API inconsistency, not a permission hole.
+- In D4 the project scope checked by the gate flips to P2, and P1 is checked only as a location. No widening was observed.
+- Also: an acceptance into a subproject still requires the body `project_id` (`service.py:1595` runs before the binding). It must equal the parent.
+
+## #71 SEC-02 Addendum A @ `73b72b5` — 2026-11-06 ~22:00 UTC — FINDINGS (SEC02-1 remainder open)
+
+Delta:
+- 36 more registry rows (D1).
+- `strip_money_for_non_finance` decorator (R20-5M) on mixed GETs (offers and others).
+- The employee file without money for a SiteManager (D9): member-project lines only, no payroll or advances, money keys stripped.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo with the fresh harness | **44 passed** |
+| R0 | **814** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/206 |
+| A1 | 0/418 |
+
+Re-run of `probe_sec02_unregistered_money_gets.py` (raw output `docs/audit/probes/sec02/scan_73b72b5.json`):
+- **Closed:** `/api/ai-config/hourly-rates`, `/api/smr-analyses`.
+- **Still open** (SEC02-1; Addendum A was committed 21:04, before my comment at ~21:20):
+  - `/work-sessions` (+ `/summary`, `/overtime`) `labor_cost`;
+  - `/projects/{id}/site-workers` `total_earned`;
+  - `/projects/{id}/smr-groups` (+ `/tree`) `total_cost`;
+  - the pulse routes' `total_budget`;
+  - `/ocr-invoice` `total_amount`;
+  - `/subscription` `plan_price`.
+- Declared and still present: D3 `/warehouse/batches`, D4 activity budgets for a Viewer member.
+
+Code read, no finding:
+- The decorator preserves the signature (+ `_sec02_request`) and requires a `user` kwarg.
+- It encodes with `jsonable_encoder` before stripping.
+- Handler HTTPExceptions propagate unchanged.

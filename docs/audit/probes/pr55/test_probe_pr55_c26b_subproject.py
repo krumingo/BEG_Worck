@@ -21,6 +21,9 @@ async def test_member_of_p1_writes_off_from_subproject_of_p2(
     route, audits = await _setup(client, allow_always_gate, db, monkeypatch,
                                  [_assignment("LEGACY_TECHNICIAN")])
     await _member(db)                              # member of PROJECT only
+    # C26d: the subproject is a real projects row whose parent is OTHER_PROJECT
+    await db["projects"].insert_one({"id": SP_O, "org_id": T, "code": "SPO", "name": "SPO",
+                                     "status": "Active", "parent_project_id": OTHER_PROJECT})
     run = _Run(client, allow_always_gate, db)
     await run.receive("5", "10")
     d = await run.dispatch("5", project=OTHER_PROJECT)
