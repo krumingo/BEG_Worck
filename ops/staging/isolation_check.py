@@ -15,14 +15,20 @@ Rules:
 * the only published port is frontend 127.0.0.1:ST02_HTTP_PORT -> 80 (never 8080, never 0.0.0.0);
 * every service is only on the network ``<project>_net``; no external network, no host network;
 * MongoDB is a replica set (``--replSet``) on the named volume ``<project>_mongo_data``;
-* backend ENV=staging and PERMISSION_SERVICE_MODE=ST02_MODE;
+* backend ENV=staging and PERMISSION_SERVICE_MODE=ST02_MODE (ST-02-C02: an empty ST02_MODE means
+  ``shadow``, the R15 staging default; only off/shadow/enforce exist);
 * no backend environment key for real email, billing or LLM providers;
+* FG-5 (ST-02-C02): backend ``PUBLIC_URL`` (required) and every ``CORS_ORIGINS`` entry, and the
+  frontend build arg / environment ``REACT_APP_BACKEND_URL``, are exactly the staging address
+  ``http://127.0.0.1:ST02_HTTP_PORT`` (or ``http://localhost:ST02_HTTP_PORT``) — never a production
+  or other URL; no service carries a platform-bootstrap or seed-admin key
+  (``PLATFORM_BOOTSTRAP_TOKEN``, ``SEED_ADMIN_*``, any ``*BOOTSTRAP*`` key);
 * ST02-1 (ST-02-C01): the backend database must be the staging stack's own MongoDB. Every
   ``mongodb://`` value in the backend environment (``MONGO_URL`` is required) has the plain
   ``mongodb://`` scheme (never ``mongodb+srv``) and only the hosts ``mongo`` /
-  ``<project>-mongo``, or a host the staging configuration explicitly allows
-  (``ST02_ALLOWED_MONGO_HOSTS``, comma-separated hostnames; never an IP address, never a
-  wildcard); ``DB_NAME`` (required) and ``BEG_SYSTEM_DB`` are not production names
+  ``<project>-mongo`` (FG-6, ST-02-C02: the former ``ST02_ALLOWED_MONGO_HOSTS`` allow-list is
+  removed; a set value is refused until Krum decides that staging may use a MongoDB outside its
+  own stack); ``DB_NAME`` (required) and ``BEG_SYSTEM_DB`` are not production names
   (``begwork``, ``begwork_beg``, ``begwork_system``) and not in the ``begwork*`` family;
 * no service bind-mounts anything outside the staging root (``ST02_BASE``), anything under
   the production root ``/volume1/docker/begwork`` or a Docker socket; named volumes are the
@@ -50,25 +56,28 @@ PRODUCTION_DB_PREFIX = "begwork"
 PRODUCTION_BASE = "/volume1/docker/begwork"
 PRODUCTION_PORTS = {"80", "443", "8001", "8080", "27017"}
 DB_ENV_KEYS = ("DB_NAME", "BEG_SYSTEM_DB")
-HOSTNAME = re.compile(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$")
 IPV4 = re.compile(r"^\d{1,3}(\.\d{1,3}){3}$")
 DANGEROUS_KEYS = ("cap_add", "devices", "device_cgroup_rules")
 DOCKER_SOCKET_DIRS = {"/var/run", "/run", "/var/run/docker", "/run/docker"}
 HOST_NAMESPACES = ("pid", "ipc", "uts", "userns_mode", "cgroup")
+MODES = ("off", "shadow", "enforce")
+DEFAULT_MODE = "shadow"  # R15 (Krum, 06.11.2026): staging starts in shadow
+BOOTSTRAP_ENV = re.compile(r"(BOOTSTRAP|SEED_ADMIN)", re.I)
+URL_KEYS_BACKEND = ("PUBLIC_URL", "CORS_ORIGINS")
 
 
-def parse_allowed_hosts(raw):
-    """``ST02_ALLOWED_MONGO_HOSTS`` -> (set of hostnames, [errors]). Never an IP, never a wildcard."""
-    hosts, errors = set(), []
-    for h in (raw or "").split(","):
-        h = h.strip().lower()
-        if not h:
-            continue
-        if IPV4.match(h) or ":" in h or not HOSTNAME.match(h):
-            errors.append("ST02_ALLOWED_MONGO_HOSTS entry is not a plain hostname (IP addresses and wildcards are refused)")
-        else:
-            hosts.add(h)
-    return hosts, errors
+def staging_urls(port):
+    return {"http://127.0.0.1:%s" % port, "http://localhost:%s" % port}
+
+
+def url_problem(value, port):
+    """None if every comma-separated entry is the staging address, else a reason (never the value)."""
+    entries = [e.strip().rstrip("/") for e in str(value or "").split(",") if e.strip()]
+    if not entries:
+        return "is empty"
+    if any(e not in staging_urls(port) for e in entries):
+        return "is not the staging address http://127.0.0.1:<ST02_HTTP_PORT>"
+    return None
 
 
 def mongo_url_problem(value, allowed):
@@ -145,11 +154,15 @@ def volume_problems(name, svc, model, project, base):
     return out
 
 
-def check(model, project, port, mode, base=None, allowed_mongo_hosts=""):
+def check(model, project, port, mode=DEFAULT_MODE, base=None, allowed_mongo_hosts=""):
     errors = []
 
     def err(msg):
         errors.append(msg)
+
+    mode = mode or DEFAULT_MODE
+    if mode not in MODES:
+        err("ST02_MODE is not one of off/shadow/enforce")
 
     if not re.match(r"^begwork-staging[a-z0-9-]*$", project or ""):
         err("ST02_PROJECT %r is not a begwork-staging project" % project)
@@ -199,11 +212,40 @@ def check(model, project, port, mode, base=None, allowed_mongo_hosts=""):
     if bad:
         err("backend environment has real-provider keys: %s" % bad)
 
-    # ---- ST02-1: the database the backend writes to
-    allowed, host_errors = parse_allowed_hosts(allowed_mongo_hosts)
-    for e in host_errors:
-        err(e)
-    allowed |= {"mongo", "%s-mongo" % project}
+    # ---- FG-5: public/API URLs point to the staging address; no bootstrap/seed-admin keys
+    for key in URL_KEYS_BACKEND:
+        if env.get(key) is None:
+            if key == "PUBLIC_URL":
+                err("backend PUBLIC_URL is missing (it must be the staging address)")
+            continue
+        problem = url_problem(env.get(key), port)
+        if problem:
+            err("backend %s %s" % (key, problem))
+    front = services.get("frontend") or {}
+    build = front.get("build")
+    if isinstance(build, dict):
+        args = build.get("args") or {}
+        if "REACT_APP_BACKEND_URL" not in args:
+            err("frontend build arg REACT_APP_BACKEND_URL is missing (it must be the staging address)")
+        else:
+            problem = url_problem(args.get("REACT_APP_BACKEND_URL"), port)
+            if problem:
+                err("frontend build arg REACT_APP_BACKEND_URL %s" % problem)
+    fenv = front.get("environment") or {}
+    if fenv.get("REACT_APP_BACKEND_URL") is not None:
+        problem = url_problem(fenv.get("REACT_APP_BACKEND_URL"), port)
+        if problem:
+            err("frontend REACT_APP_BACKEND_URL %s" % problem)
+    for name, svc in sorted(services.items()):
+        boot = sorted(k for k in (svc.get("environment") or {}) if BOOTSTRAP_ENV.search(k))
+        if boot:
+            err("service %s environment has bootstrap/seed-admin keys: %s" % (name, boot))
+
+    # ---- ST02-1: the database the backend writes to (FG-6: only the stack's own MongoDB)
+    if str(allowed_mongo_hosts or "").strip():
+        err("ST02_ALLOWED_MONGO_HOSTS is not supported (FG-6): staging uses only its own MongoDB service "
+            "until Krum decides otherwise")
+    allowed = {"mongo", "%s-mongo" % project}
     if not str(env.get("MONGO_URL") or "").strip():
         err("backend MONGO_URL is missing (it must point to the staging MongoDB service)")
     for key in sorted(env):
@@ -249,16 +291,17 @@ def main():
         return 1
     project = os.environ.get("ST02_PROJECT", "")
     port = os.environ.get("ST02_HTTP_PORT", "")
-    mode = os.environ.get("ST02_MODE", "")
+    mode = os.environ.get("ST02_MODE", "") or DEFAULT_MODE
     errors = check(model, project, port, mode, base=os.environ.get("ST02_BASE", ""),
                    allowed_mongo_hosts=os.environ.get("ST02_ALLOWED_MONGO_HOSTS", ""))
     for e in errors:
         print("isolation: " + e)
     if not errors:
         print("isolation: project %s, containers %s-{backend,frontend,mongo}, only 127.0.0.1:%s->frontend:80, "
-              "network %s_net, mongo replica set on %s_mongo_data, ENV=staging, flag = parameter, "
+              "network %s_net, mongo replica set on %s_mongo_data, ENV=staging, flag = parameter (%s), "
+              "PUBLIC_URL/CORS/REACT_APP_BACKEND_URL = staging address, no bootstrap/seed-admin keys, "
               "no real-provider keys, backend database = staging MongoDB (not a production name), "
-              "no bind mount outside the staging root, no docker socket, not privileged" % (project, project, port, project, project))
+              "no bind mount outside the staging root, no docker socket, not privileged" % (project, project, port, project, project, mode))
     print("ISOLATION PASS" if not errors else "ISOLATION FAIL")
     return 0 if not errors else 1
 

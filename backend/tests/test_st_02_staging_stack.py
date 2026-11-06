@@ -37,15 +37,19 @@ iso = _load("st02_isolation_check", STAGING / "isolation_check.py")
 PROJECT = "begwork-staging"
 
 
-def good_model(project=PROJECT, port=18080, mode="enforce"):
+def good_model(project=PROJECT, port=18080, mode="shadow"):
     return {
         "name": project,
         "services": {
             "backend": {"container_name": project + "-backend", "networks": {"st02": None},
                         "environment": {"ENV": "staging", "PERMISSION_SERVICE_MODE": mode,
                                         "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "st02_staging",
-                                        "BEG_SYSTEM_DB": "st02_staging_system", "JWT_SECRET": "synthetic"}},
+                                        "BEG_SYSTEM_DB": "st02_staging_system", "JWT_SECRET": "synthetic",
+                                        "PUBLIC_URL": "http://127.0.0.1:%s" % port,
+                                        "CORS_ORIGINS": "http://127.0.0.1:%s" % port}},
             "frontend": {"container_name": project + "-frontend", "networks": {"st02": None},
+                         "build": {"context": "./repo", "dockerfile": "../Dockerfile.frontend",
+                                   "args": {"REACT_APP_BACKEND_URL": "http://127.0.0.1:%s" % port}},
                          "ports": [{"host_ip": "127.0.0.1", "published": str(port), "target": 80, "protocol": "tcp"}]},
             "mongo": {"container_name": project + "-mongo", "networks": {"st02": None},
                       "command": ["--replSet", "rs0", "--bind_ip_all"],
@@ -58,7 +62,7 @@ def good_model(project=PROJECT, port=18080, mode="enforce"):
 
 # ------------------------------------------------------------ isolation_check
 def test_isolation_good_model_passes():
-    assert iso.check(good_model(), PROJECT, "18080", "enforce") == []
+    assert iso.check(good_model(), PROJECT, "18080", "shadow") == []
 
 
 @pytest.mark.parametrize("mutate,needle", [
@@ -86,12 +90,12 @@ def test_isolation_good_model_passes():
 def test_isolation_violations_fail(mutate, needle):
     m = copy.deepcopy(good_model())
     mutate(m)
-    errors = iso.check(m, PROJECT, "18080", "enforce")
+    errors = iso.check(m, PROJECT, "18080", "shadow")
     assert errors and any(needle in e for e in errors), errors
 
 
 def test_isolation_refuses_non_staging_project():
-    assert any("not a begwork-staging" in e for e in iso.check(good_model("begwork"), "begwork", "18080", "enforce"))
+    assert any("not a begwork-staging" in e for e in iso.check(good_model("begwork"), "begwork", "18080", "shadow"))
 
 
 def test_isolation_main_never_prints_env_values(capsys, monkeypatch):
@@ -99,7 +103,7 @@ def test_isolation_main_never_prints_env_values(capsys, monkeypatch):
     m["services"]["backend"]["environment"]["JWT_SECRET"] = "SENTINEL-SECRET-VALUE"
     m["services"]["backend"]["environment"]["ENV"] = "SENTINEL-ENV-VALUE"
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(m)))
-    monkeypatch.setenv("ST02_PROJECT", PROJECT); monkeypatch.setenv("ST02_HTTP_PORT", "18080"); monkeypatch.setenv("ST02_MODE", "enforce")
+    monkeypatch.setenv("ST02_PROJECT", PROJECT); monkeypatch.setenv("ST02_HTTP_PORT", "18080"); monkeypatch.setenv("ST02_MODE", "shadow")
     assert iso.main() == 1
     out = capsys.readouterr().out
     assert "ISOLATION FAIL" in out and "SENTINEL" not in out
@@ -170,45 +174,41 @@ C01_CASES = [
 def test_c01_isolation_refuses_production_targets(mutate, needle):
     m = copy.deepcopy(good_model())
     m["services"]["backend"]["volumes"] = [{"type": "bind", "source": STAGING_ROOT + "/uploads", "target": "/app/backend/uploads"}]
-    assert iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT) == []
+    assert iso.check(m, PROJECT, "18080", "shadow", base=STAGING_ROOT) == []
     mutate(m)
-    errors = iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT)
+    errors = iso.check(m, PROJECT, "18080", "shadow", base=STAGING_ROOT)
     assert errors and any(needle in e for e in errors), errors
 
 
 @pytest.mark.parametrize("port", ["80", "443", "8001", "8080", "27017", "1023", "70000", "", "x"])
 def test_c01_isolation_refuses_production_ports(port):
     m = good_model(port=port)
-    assert any("production/privileged port" in e for e in iso.check(m, PROJECT, port, "enforce"))
+    assert any("production/privileged port" in e for e in iso.check(m, PROJECT, port, "shadow"))
 
 
 def test_c01_bind_mount_needs_known_staging_root():
     m = good_model()
     _bvol(m, STAGING_ROOT + "/uploads")
-    assert any("ST02_BASE" in e for e in iso.check(m, PROJECT, "18080", "enforce"))
-    assert iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT) == []
+    assert any("ST02_BASE" in e for e in iso.check(m, PROJECT, "18080", "shadow"))
+    assert iso.check(m, PROJECT, "18080", "shadow", base=STAGING_ROOT) == []
 
 
-def test_c01_allowed_staging_host_from_configuration():
+@pytest.mark.parametrize("allowed", ["nas-prod.lan", "staging-db.internal", "192.168.1.10", "*.mongodb.net", "mongo"])
+def test_c02_fg6_allowed_mongo_hosts_is_refused(allowed):
+    """FG-6: the allow-list let any hostname (e.g. nas-prod.lan) through; it is removed — a set value refuses."""
     m = good_model()
-    _benv(m, MONGO_URL="mongodb://staging-db.internal:27017/?replicaSet=rs0")
-    assert any("host other than" in e for e in iso.check(m, PROJECT, "18080", "enforce"))
-    assert iso.check(m, PROJECT, "18080", "enforce", allowed_mongo_hosts="staging-db.internal") == []
-    # the allow-list never admits srv, an IP or a wildcard, and does not relax the DB-name rule
-    _benv(m, MONGO_URL="mongodb+srv://staging-db.internal")
-    assert any("mongodb+srv" in e for e in iso.check(m, PROJECT, "18080", "enforce", allowed_mongo_hosts="staging-db.internal"))
-    for bad in ("192.168.1.10", "*.mongodb.net", "fd00::5"):
-        assert any("not a plain hostname" in e for e in iso.check(good_model(), PROJECT, "18080", "enforce",
-                                                                     allowed_mongo_hosts=bad)), bad
-    m2 = good_model(); _benv(m2, MONGO_URL="mongodb://staging-db.internal", DB_NAME="begwork")
-    assert any("production database name" in e for e in iso.check(m2, PROJECT, "18080", "enforce",
-                                                                     allowed_mongo_hosts="staging-db.internal"))
+    _benv(m, MONGO_URL="mongodb://%s:27017/?replicaSet=rs0" % ("nas-prod.lan" if allowed.startswith(("*", "1")) else allowed))
+    errors = iso.check(m, PROJECT, "18080", "shadow", allowed_mongo_hosts=allowed)
+    assert any("ST02_ALLOWED_MONGO_HOSTS is not supported" in e for e in errors), errors
+    # without the allow-list a foreign host stays refused, the own service passes
+    assert any("host other than" in e for e in iso.check(m, PROJECT, "18080", "shadow")) or allowed == "mongo"
+    assert iso.check(good_model(), PROJECT, "18080", "shadow", allowed_mongo_hosts="") == []
 
 
 def test_c01_project_mongo_container_name_and_credentials_pass():
     m = good_model()
     _benv(m, MONGO_URL="mongodb://user:p%40ss@begwork-staging-mongo:27017/st02_staging?replicaSet=rs0")
-    assert iso.check(m, PROJECT, "18080", "enforce") == []
+    assert iso.check(m, PROJECT, "18080", "shadow") == []
 
 
 def test_c01_main_refuses_with_nonzero_exit_and_never_prints_the_url(capsys, monkeypatch):
@@ -217,7 +217,7 @@ def test_c01_main_refuses_with_nonzero_exit_and_never_prints_the_url(capsys, mon
     _bvol(m, "/volume1/docker/begwork")
     m["services"]["backend"]["privileged"] = True
     monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(m)))
-    monkeypatch.setenv("ST02_PROJECT", PROJECT); monkeypatch.setenv("ST02_HTTP_PORT", "18080"); monkeypatch.setenv("ST02_MODE", "enforce")
+    monkeypatch.setenv("ST02_PROJECT", PROJECT); monkeypatch.setenv("ST02_HTTP_PORT", "18080"); monkeypatch.setenv("ST02_MODE", "shadow")
     monkeypatch.setenv("ST02_BASE", STAGING_ROOT)
     assert iso.main() == 1
     out = capsys.readouterr().out
@@ -244,7 +244,7 @@ def test_c01_audit_probe_model_is_fully_caught():
     ]
     for i, fn in enumerate(probe):
         m = copy.deepcopy(base); fn(m)
-        assert iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT), i
+        assert iso.check(m, PROJECT, "18080", "shadow", base=STAGING_ROOT), i
 
 
 def test_c01_staging_deploy_passes_root_and_allow_list_to_the_check():
@@ -261,7 +261,7 @@ _HAS_COMPOSE = shutil.which("docker") is not None and subprocess.run(
 
 def _real_staging_root(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "check_port", lambda port: None)
-    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555, "enforce")
+    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555, "shadow")
     for name in ("docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend"):
         shutil.copyfile(PROD_LAYOUT / name, base / name)
     return base
@@ -316,6 +316,173 @@ def test_c01_overlay_with_prod_bind_privileged_socket_refused(tmp_path, monkeypa
         assert needle in str(ei.value), str(ei.value)
 
 
+# ------------------------------------------------------------ ST-02-C02: R15 shadow default (FG-2)
+def _parsed(monkeypatch, argv):
+    got = []
+    for name in ("cmd_up", "cmd_deploy", "cmd_rehearse"):
+        monkeypatch.setattr(up, name, lambda a, _g=got: _g.append(a) or 0)
+    assert up.main(argv) == 0
+    return got[0]
+
+
+@pytest.mark.parametrize("argv", [
+    ["up", "--base", "/tmp/x"],
+    ["deploy", "--base", "/tmp/x", "--commit", "HEAD"],
+    ["rehearse", "--base", "/tmp/x", "--from", "A", "--to", "B", "--evidence", "/tmp/e"],
+])
+def test_c02_default_permission_mode_is_shadow(monkeypatch, argv):
+    assert up.DEFAULT_MODE == "shadow"
+    assert _parsed(monkeypatch, argv).permission_mode == "shadow"
+
+
+@pytest.mark.parametrize("mode", ["enforce", "off", "shadow"])
+def test_c02_other_modes_only_by_explicit_parameter(monkeypatch, mode):
+    assert _parsed(monkeypatch, ["up", "--base", "/tmp/x", "--permission-mode", mode]).permission_mode == mode
+
+
+def test_c02_prepare_base_default_is_shadow(tmp_path, monkeypatch):
+    monkeypatch.setattr(up, "check_port", lambda port: None)
+    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555)
+    assert up.read_kv(base / "staging.env")["ST02_PERMISSION_SERVICE_MODE"] == "shadow"
+    assert up.read_kv(base / ".env")["ST02_PERMISSION_SERVICE_MODE"] == "shadow"
+    with pytest.raises(up.Refused):
+        up.prepare_base(tmp_path / "st2", PROJECT, 18556, "on")
+
+
+def test_c02_explicit_enforce_is_kept_and_logged(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(up, "check_port", lambda port: None)
+    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555, up.check_mode("enforce"))
+    assert up.read_kv(base / "staging.env")["ST02_PERMISSION_SERVICE_MODE"] == "enforce"
+    assert "EXPLICIT --permission-mode" in capsys.readouterr().out
+    # a root prepared with enforce is not silently reused as shadow (and vice versa)
+    with pytest.raises(up.Refused):
+        up.prepare_base(base, PROJECT, 18555)
+
+
+def test_c02_isolation_default_mode_is_shadow(capsys, monkeypatch):
+    assert iso.DEFAULT_MODE == "shadow"
+    assert iso.check(good_model(mode="shadow"), PROJECT, "18080") == []
+    assert any("PERMISSION_SERVICE_MODE" in e for e in iso.check(good_model(mode="enforce"), PROJECT, "18080"))
+    assert any("off/shadow/enforce" in e for e in iso.check(good_model(mode="on"), PROJECT, "18080", "on"))
+    monkeypatch.delenv("ST02_MODE", raising=False)
+    monkeypatch.setenv("ST02_PROJECT", PROJECT); monkeypatch.setenv("ST02_HTTP_PORT", "18080")
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(good_model(mode="shadow"))))
+    assert iso.main() == 0 and "flag = parameter (shadow)" in capsys.readouterr().out
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(good_model(mode="enforce"))))
+    assert iso.main() == 1
+
+
+def test_c02_overlay_defaults_to_shadow_text():
+    text = (STAGING / "deploy" / "docker-compose.staging.yml").read_text()
+    assert "PERMISSION_SERVICE_MODE: ${ST02_PERMISSION_SERVICE_MODE:-shadow}" in text
+    readme = (STAGING / "README.md").read_text()
+    assert "default `enforce`" not in readme and "default `shadow`" in readme
+    src = (STAGING / "staging_up.py").read_text()
+    assert 'default="enforce"' not in src
+
+
+@pytest.mark.skipif(not _HAS_COMPOSE, reason="docker compose not installed")
+def test_c02_real_compose_without_mode_runs_shadow(tmp_path):
+    for name in ("docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend"):
+        shutil.copyfile(PROD_LAYOUT / name, tmp_path / name)
+    shutil.copyfile(STAGING / "deploy" / "docker-compose.staging.yml", tmp_path / "docker-compose.staging.yml")
+    (tmp_path / ".env").write_text("PUBLIC_URL=http://127.0.0.1:18555\nCORS_ORIGINS=http://127.0.0.1:18555\n"
+                                   "ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=18555\n"
+                                   "MONGO_URL=mongodb://mongo:27017/?replicaSet=rs0\nDB_NAME=st02_staging\n")
+    r = subprocess.run(["docker", "compose", "-p", PROJECT, "-f", "docker-compose.yml", "-f", "docker-compose.staging.yml",
+                        "config", "--format", "json"], cwd=tmp_path, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    model = json.loads(r.stdout)
+    assert model["services"]["backend"]["environment"]["PERMISSION_SERVICE_MODE"] == "shadow"
+    assert iso.check(model, PROJECT, "18555", "", base=str(tmp_path)) == []
+
+
+# ------------------------------------------------------------ ST-02-C02: FG-5 URLs and bootstrap keys
+FG5_CASES = [
+    ("public-url-prod", lambda m: _benv(m, PUBLIC_URL="https://begwork.example.com"), "backend PUBLIC_URL"),
+    ("public-url-other-port", lambda m: _benv(m, PUBLIC_URL="http://127.0.0.1:8080"), "backend PUBLIC_URL"),
+    ("public-url-lan", lambda m: _benv(m, PUBLIC_URL="http://192.168.1.10:8080"), "backend PUBLIC_URL"),
+    ("public-url-missing", lambda m: m["services"]["backend"]["environment"].pop("PUBLIC_URL"), "PUBLIC_URL is missing"),
+    ("cors-prod", lambda m: _benv(m, CORS_ORIGINS="https://begwork.example.com"), "backend CORS_ORIGINS"),
+    ("cors-mixed", lambda m: _benv(m, CORS_ORIGINS="http://127.0.0.1:18080,https://begwork.example.com"), "backend CORS_ORIGINS"),
+    ("cors-wildcard", lambda m: _benv(m, CORS_ORIGINS="*"), "backend CORS_ORIGINS"),
+    ("build-arg-prod", lambda m: m["services"]["frontend"]["build"]["args"].update(
+        REACT_APP_BACKEND_URL="https://begwork.example.com"), "REACT_APP_BACKEND_URL"),
+    ("build-arg-missing", lambda m: m["services"]["frontend"]["build"]["args"].pop("REACT_APP_BACKEND_URL"),
+     "REACT_APP_BACKEND_URL is missing"),
+    ("frontend-env-prod", lambda m: m["services"]["frontend"].update(
+        environment={"REACT_APP_BACKEND_URL": "https://begwork.example.com"}), "frontend REACT_APP_BACKEND_URL"),
+    ("bootstrap-token", lambda m: _benv(m, PLATFORM_BOOTSTRAP_TOKEN="x"), "bootstrap/seed-admin"),
+    ("seed-admin-email", lambda m: _benv(m, SEED_ADMIN_EMAIL="a@b.c"), "bootstrap/seed-admin"),
+    ("seed-admin-password", lambda m: _benv(m, SEED_ADMIN_PASSWORD="x"), "bootstrap/seed-admin"),
+    ("bootstrap-on-mongo", lambda m: m["services"]["mongo"].update(environment={"PLATFORM_BOOTSTRAP_TOKEN": "x"}),
+     "service mongo environment has bootstrap"),
+]
+
+
+@pytest.mark.parametrize("mutate,needle", [c[1:] for c in FG5_CASES], ids=[c[0] for c in FG5_CASES])
+def test_c02_fg5_urls_and_bootstrap_keys_refused(mutate, needle):
+    m = copy.deepcopy(good_model())
+    assert iso.check(m, PROJECT, "18080") == []
+    mutate(m)
+    errors = iso.check(m, PROJECT, "18080")
+    assert errors and any(needle in e for e in errors), errors
+    assert not any("begwork.example.com" in e or "192.168" in e for e in errors)
+
+
+def test_c02_fg5_localhost_and_trailing_slash_pass():
+    m = good_model()
+    _benv(m, PUBLIC_URL="http://localhost:18080/", CORS_ORIGINS="http://127.0.0.1:18080,http://localhost:18080")
+    assert iso.check(m, PROJECT, "18080") == []
+
+
+@pytest.mark.skipif(not _HAS_COMPOSE, reason="docker compose not installed")
+@pytest.mark.parametrize("edit,needle", [
+    ("PUBLIC_URL=https://begwork.example.com", "REACT_APP_BACKEND_URL"),
+    ("CORS_ORIGINS=https://begwork.example.com", "backend CORS_ORIGINS"),
+    ("PLATFORM_BOOTSTRAP_TOKEN=synthetic", "bootstrap/seed-admin"),
+])
+def test_c02_fg5_hand_edited_env_refused_before_anything_starts(tmp_path, monkeypatch, edit, needle):
+    base = _real_staging_root(tmp_path, monkeypatch)
+    key = edit.split("=", 1)[0]
+    lines = [l for l in (base / ".env").read_text().splitlines() if not l.startswith(key + "=")]
+    (base / ".env").write_text("\n".join(lines + [edit]) + "\n")
+    started = []
+    monkeypatch.setattr(up, "compose", lambda *a, **k: started.append(a))
+    monkeypatch.setattr(up, "run", lambda *a, **k: started.append(a))
+    with pytest.raises(up.Refused) as ei:
+        up.mongo_up(base, PROJECT)
+    assert needle in str(ei.value) and "begwork.example.com" not in str(ei.value)
+    assert started == []
+
+
+# ------------------------------------------------------------ ST-02-C02: FG-4 deployed_by / approved_by
+@pytest.mark.parametrize("argv", [
+    ["up", "--base", "/tmp/x"],
+    ["up", "--base", "/tmp/x", "--deployed-by", "krum"],
+    ["up", "--base", "/tmp/x", "--deployed-by", "unknown", "--approved-by", "krum"],
+    ["deploy", "--base", "/tmp/x", "--commit", "HEAD", "--deployed-by", "a b", "--approved-by", "krum"],
+    ["rehearse", "--base", "/tmp/x", "--from", "A", "--to", "B", "--evidence", "/tmp/e", "--approved-by", "krum"],
+])
+def test_c02_fg4_deployer_and_approver_required(argv, capsys):
+    assert up.main(argv) == 2
+    assert "is required" in capsys.readouterr().err
+
+
+def test_c02_fg4_build_bundle_names_deployer_and_approver(tmp_path, monkeypatch):
+    seen = []
+    monkeypatch.setattr(up, "run", lambda cmd, check=True, **k: seen.append(cmd) or (_ for _ in ()).throw(up.Refused("stop")))
+    with pytest.raises(up.Refused):
+        up.build_bundle(tmp_path, "HEAD", "origin/main", None, deployed_by="alice", approved_by="krum")
+    cmd = seen[0]
+    assert cmd[cmd.index("--created-by") + 1] == "alice"
+    assert "deploy:approved_by=krum" in cmd
+    with pytest.raises(up.Refused, match="--approved-by is required"):
+        up.build_bundle(tmp_path, "HEAD", "origin/main", None, deployed_by="alice")
+    with pytest.raises(up.Refused, match="--deployed-by is required"):
+        up.staging_deploy(tmp_path, tmp_path, "initial", approved_by="krum")
+
+
 # ------------------------------------------------------------ staging_up guards
 @pytest.mark.parametrize("bad", ["/volume1/docker/begwork", "/volume1/docker/begwork/", "/volume1/docker/begwork/sub", "/"])
 def test_base_refuses_production_and_root(bad):
@@ -362,7 +529,7 @@ def _free_port():
 
 def test_prepare_base_synthetic_private_values(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "check_port", lambda port: None)
-    base, created = up.prepare_base(tmp_path / "st", PROJECT, 18555, "enforce")
+    base, created = up.prepare_base(tmp_path / "st", PROJECT, 18555, "shadow")
     assert created and (base / up.MARKER).exists()
     env = up.read_kv(base / ".env")
     assert set(env) == {"MONGO_URL", "DB_NAME", "BEG_SYSTEM_DB", "PUBLIC_URL", "CORS_ORIGINS", "JWT_SECRET",
@@ -374,14 +541,14 @@ def test_prepare_base_synthetic_private_values(tmp_path, monkeypatch):
     for f in (".env", ".st02-seed.env"):
         assert stat.S_IMODE(os.stat(base / f).st_mode) == 0o600
     st = up.read_kv(base / "staging.env")
-    assert st == {"ST02_PERMISSION_SERVICE_MODE": "enforce", "ST02_HTTP_PORT": "18555", "ST02_PROJECT": PROJECT}
+    assert st == {"ST02_PERMISSION_SERVICE_MODE": "shadow", "ST02_HTTP_PORT": "18555", "ST02_PROJECT": PROJECT}
     assert (base / "docker-compose.staging.yml").read_bytes() == (STAGING / "deploy" / "docker-compose.staging.yml").read_bytes()
     # a second prepare with other parameters is refused; with the same ones it is reused
     with pytest.raises(up.Refused):
-        up.prepare_base(base, PROJECT, 18556, "enforce")
+        up.prepare_base(base, PROJECT, 18556, "shadow")
     with pytest.raises(up.Refused):
         up.prepare_base(base, PROJECT, 18555, "off")
-    assert up.prepare_base(base, PROJECT, 18555, "enforce") == (base, False)
+    assert up.prepare_base(base, PROJECT, 18555, "shadow") == (base, False)
     # the JWT secret is not regenerated on reuse
     assert up.read_kv(base / ".env")["JWT_SECRET"] == env["JWT_SECRET"]
 
@@ -390,12 +557,12 @@ def test_prepare_base_refuses_foreign_non_empty_dir(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "check_port", lambda port: None)
     (tmp_path / "x").mkdir(); (tmp_path / "x" / "docker-compose.yml").write_text("services: {}\n")
     with pytest.raises(up.Refused, match="not an ST-02 staging root"):
-        up.prepare_base(tmp_path / "x", PROJECT, 18555, "enforce")
+        up.prepare_base(tmp_path / "x", PROJECT, 18555, "shadow")
 
 
 def test_secret_scan_finds_leaks(tmp_path, monkeypatch):
     monkeypatch.setattr(up, "check_port", lambda port: None)
-    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555, "enforce")
+    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555, "shadow")
     evid = tmp_path / "evid"; evid.mkdir()
     (evid / "clean.log").write_text("nothing here\n")
     assert up.secret_scan(base, evid)["hits"] == []
@@ -432,20 +599,20 @@ def test_real_compose_model_of_overlay_is_isolated(tmp_path):
         shutil.copyfile(PROD_LAYOUT / name, tmp_path / name)
     shutil.copyfile(STAGING / "deploy" / "docker-compose.staging.yml", tmp_path / "docker-compose.staging.yml")
     (tmp_path / ".env").write_text("PUBLIC_URL=http://127.0.0.1:18555\nST02_PROJECT=begwork-staging\n"
-                                   "ST02_HTTP_PORT=18555\nST02_PERMISSION_SERVICE_MODE=enforce\n")
+                                   "ST02_HTTP_PORT=18555\nST02_PERMISSION_SERVICE_MODE=shadow\n")
     base_cmd = ["docker", "compose", "-p", PROJECT, "-f", "docker-compose.yml", "-f", "docker-compose.staging.yml"]
     with (tmp_path / ".env").open("a") as f:
         f.write("MONGO_URL=mongodb://mongo:27017/?replicaSet=rs0\nDB_NAME=st02_staging\n")
     r = subprocess.run(base_cmd + ["config", "--format", "json"], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     model = json.loads(r.stdout)
-    assert iso.check(model, PROJECT, "18555", "enforce", base=str(tmp_path)) == []
+    assert iso.check(model, PROJECT, "18555", "shadow", base=str(tmp_path)) == []
     assert model["services"]["backend"]["build"]["dockerfile"] == "../Dockerfile.backend"  # same production build
     # without the overlay the model is production-shaped and the check refuses it
     r2 = subprocess.run(["docker", "compose", "-p", PROJECT, "-f", "docker-compose.yml", "config", "--format", "json"],
                         cwd=tmp_path, capture_output=True, text=True)
     assert r2.returncode == 0, r2.stderr
-    errs = iso.check(json.loads(r2.stdout), PROJECT, "18555", "enforce", base=str(tmp_path))
+    errs = iso.check(json.loads(r2.stdout), PROJECT, "18555", "shadow", base=str(tmp_path))
     assert any("production container name" in e for e in errs) and any("8080" in e for e in errs)
 
 
@@ -456,8 +623,11 @@ def _fake_bundle(tmp_path):
     return b
 
 
-def _deploy(tmp_path, base, *args):
+def _deploy(tmp_path, base, *args, **extra_env):
     env = dict(os.environ, BEGWORK_BASE=str(base), DOCKER="/bin/false")
+    for k in ("ST02_DEPLOYED_BY", "ST02_APPROVED_BY", "SUDO_USER"):
+        env.pop(k, None)
+    env.update(extra_env)
     return subprocess.run(["bash", str(STAGING / "staging_deploy.sh"), "--bundle", str(_fake_bundle(tmp_path)), *args],
                           env=env, capture_output=True, text=True)
 
@@ -475,8 +645,8 @@ def test_deploy_refuses_base_without_marker(tmp_path):
 
 
 @pytest.mark.parametrize("staging_env,needle", [
-    ("ST02_PROJECT=begwork\nST02_HTTP_PORT=18080\nST02_PERMISSION_SERVICE_MODE=enforce\n", "begwork-staging"),
-    ("ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=8080\nST02_PERMISSION_SERVICE_MODE=enforce\n", "8080"),
+    ("ST02_PROJECT=begwork\nST02_HTTP_PORT=18080\nST02_PERMISSION_SERVICE_MODE=shadow\n", "begwork-staging"),
+    ("ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=8080\nST02_PERMISSION_SERVICE_MODE=shadow\n", "8080"),
     ("ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=18080\nST02_PERMISSION_SERVICE_MODE=on\n", "off, shadow or enforce"),
 ])
 def test_deploy_refuses_bad_staging_parameters(tmp_path, staging_env, needle):
@@ -484,6 +654,54 @@ def test_deploy_refuses_bad_staging_parameters(tmp_path, staging_env, needle):
     (base / "staging.env").write_text(staging_env)
     r = _deploy(tmp_path, base, "--initial")
     assert r.returncode == 3 and needle in r.stderr, r.stderr
+
+
+def _st_base(tmp_path, staging_env):
+    base = tmp_path / "st"; base.mkdir(); (base / ".st02-staging-root").write_text("x")
+    (base / "staging.env").write_text(staging_env)
+    (base / "docker-compose.yml").write_text("services: {}\n")
+    return base
+
+
+@pytest.mark.parametrize("who", [{}, {"ST02_DEPLOYED_BY": "alice"}, {"ST02_APPROVED_BY": "krum"},
+                                 {"ST02_DEPLOYED_BY": "unknown", "ST02_APPROVED_BY": "krum"},
+                                 {"ST02_DEPLOYED_BY": "alice", "ST02_APPROVED_BY": "a;rm"}])
+def test_c02_fg4_deploy_refuses_without_named_people(tmp_path, who):
+    base = _st_base(tmp_path, "ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=18080\n")
+    r = _deploy(tmp_path, base, "--initial", **who)
+    assert r.returncode == 3 and "is required" in r.stderr, r.stderr
+    assert not (base / "release-state").exists()  # refused before lib.sh created anything
+
+
+def test_c02_deploy_without_mode_runs_shadow_with_named_actor(tmp_path):
+    """staging.env without a mode: staging_deploy.sh takes shadow (R15 default), the actor is the named deployer."""
+    base = _st_base(tmp_path, "ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=18080\n")
+    r = _deploy(tmp_path, base, "--initial", ST02_DEPLOYED_BY="alice", ST02_APPROVED_BY="krum",
+                RELEASE_PY_MODE="local", RELEASE_PYTHON=sys.executable, USER="someone-else", SUDO_USER="root")
+    out = r.stdout + r.stderr
+    assert "PERMISSION_SERVICE_MODE=shadow (R15 default)" in out, out
+    assert "actor=alice" in out and "deployed_by=alice approved_by=krum" in out
+    assert r.returncode == 2  # then the (fake) bundle fails verification; nothing changed
+
+
+def test_c02_deploy_explicit_enforce_is_labelled(tmp_path):
+    base = _st_base(tmp_path, "ST02_PROJECT=begwork-staging\nST02_HTTP_PORT=18080\nST02_PERMISSION_SERVICE_MODE=enforce\n")
+    r = _deploy(tmp_path, base, "--initial", ST02_DEPLOYED_BY="alice", ST02_APPROVED_BY="krum",
+                RELEASE_PY_MODE="local", RELEASE_PYTHON=sys.executable)
+    assert "PERMISSION_SERVICE_MODE=enforce (explicit staging parameter)" in r.stdout + r.stderr
+
+
+def test_c02_fg3_observed_flag_is_checked_and_recorded():
+    """FG-3: after the smoke the running flag must equal the staging parameter (unset refused) and the
+    manifest expectation, parameter and observed value are written side by side."""
+    sh = (STAGING / "staging_deploy.sh").read_text()
+    assert 'observe_flag || initial_fail "$FLAG_FAIL"' in sh and 'observe_flag || auto_rollback "$FLAG_FAIL"' in sh
+    i_smoke = sh.index('smoke "$DEPLOY_SINCE" "$REBUILD" "$C_RUNTIME_IMAGES" || auto_rollback')
+    assert i_smoke < sh.index('observe_flag || auto_rollback') < sh.index("write_record deploy DEPLOYED")
+    assert 'OBSERVED_FLAG="UNSET"' in sh
+    for key in ('"manifest_expected"', '"staging_parameter"', '"observed_in_backend"', '"deployed_by"', '"approved_by"'):
+        assert key in sh
+    assert sh.index("write_record deploy DEPLOYED") < sh.index("staging_record DEPLOYED")
 
 
 def test_forced_failure_only_with_deploy(tmp_path):

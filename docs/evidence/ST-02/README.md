@@ -65,6 +65,10 @@
 * публикуван е само `127.0.0.1:18080 → frontend:80` (никога 8080); MongoDB не е публикуван;
 * собствена мрежа `begwork-staging_net`, собствен MongoDB replica set `rs0` на собствен volume;
 * `ENV=staging`, `PERMISSION_SERVICE_MODE=enforce` (параметър; production очакването `off` в layout.json е непроменено);
+  **ST-02-C02 (Р15):** тази репетиция е пусната с тогавашното подразбиране `enforce`. От ST-02-C02
+  подразбирането е `shadow`; `enforce` само с изричен `--permission-mode enforce`. Репетицията с `shadow`
+  (и с новите `--deployed-by`/`--approved-by`, FG-3 `staging-deployment.json`) **още не е пусната отново** —
+  `actor: "unknown"` в `record.json` по-долу е от старата версия (FG-4).
 * `.env` е синтетичен (случаен JWT secret, бази `st02_staging*`), без SMTP/Stripe/LLM ключове;
   secret scan на evidence: 0 съвпадения (JWT secret и seed парола).
 

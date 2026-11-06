@@ -11,6 +11,7 @@
 #   * network                own bridge network ${ST02_PROJECT}_net (no external network)
 #   * database               own MongoDB replica set (rs0) on an own named volume, not published
 #   * ENV / flag             ENV=staging, PERMISSION_SERVICE_MODE=${ST02_PERMISSION_SERVICE_MODE}
+#                            (default shadow per R15; enforce/off only as an explicit parameter)
 #
 # Values come from the staging layout root's .env (written by staging_up.py: synthetic values
 # only, never production credentials, no SMTP/Stripe/LLM keys). Requires Docker Compose >= 2.24
@@ -23,7 +24,7 @@ services:
     container_name: ${ST02_PROJECT}-backend
     environment:
       ENV: staging
-      PERMISSION_SERVICE_MODE: ${ST02_PERMISSION_SERVICE_MODE:?ST02_PERMISSION_SERVICE_MODE missing in .env}
+      PERMISSION_SERVICE_MODE: ${ST02_PERMISSION_SERVICE_MODE:-shadow}
     networks:
       - st02
 

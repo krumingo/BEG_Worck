@@ -153,9 +153,9 @@ flags are not touched.
    ST-02-C01 (audit ST02-1) — the check also refuses production targets:
    * backend `MONGO_URL` (required) and every other `mongodb…` value: only `mongodb://` to
      `mongo` / `<project>-mongo`:27017 — never `mongodb+srv`, an IP/LAN address, `localhost`,
-     `host.docker.internal` or any other host, unless that hostname is listed in
-     `ST02_ALLOWED_MONGO_HOSTS=<host>[,<host>]` in `staging.env` (plain hostnames only; an IP
-     or wildcard is refused; `mongodb+srv` stays refused);
+     `host.docker.internal` or any other host (ST-02-C02 / FG-6: the former
+     `ST02_ALLOWED_MONGO_HOSTS` allow-list is removed — a set value is refused — until Krum
+     decides whether staging may use a MongoDB outside its own stack);
    * `DB_NAME` (required) / `BEG_SYSTEM_DB` = `begwork`, `begwork_beg`, `begwork_system` or any
      `begwork*` name;
    * any bind mount outside the staging root, under `/volume1/docker/begwork`, of `/` or of a
@@ -163,6 +163,14 @@ flags are not touched.
    * `privileged`, `cap_add`, `devices`, an `unconfined`/disabled `security_opt`, host
      pid/ipc/uts/userns/cgroup, `network_mode` or a `host` network driver;
    * `ST02_HTTP_PORT` 80, 443, 8001, 8080, 27017 or below 1024.
+
+   ST-02-C02 (FG-5) — and the URLs/keys the stack is reached and bootstrapped with:
+   * backend `PUBLIC_URL` (required), every `CORS_ORIGINS` entry, the frontend build arg
+     `REACT_APP_BACKEND_URL` (required when the frontend is built) and a frontend
+     `REACT_APP_BACKEND_URL` environment value: only `http://127.0.0.1:<ST02_HTTP_PORT>` or
+     `http://localhost:<ST02_HTTP_PORT>` — never a production, LAN or other URL, never `*`;
+   * any `*BOOTSTRAP*` / `SEED_ADMIN*` environment key on any service
+     (`PLATFORM_BOOTSTRAP_TOKEN`, `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`).
    Reasons name the key, never its value.
 4. `staging_deploy.sh` = precheck (bundle verify with `--base`, isolation, recorded current,
    live tree, running images = recorded runtime, endpoints, gzip mongodump backup) → stage +
@@ -174,8 +182,22 @@ flags are not touched.
    never recreated by deploy or rollback.
 5. Staging differences from production, all explicit in the log and record:
    * container names / smoke URL / flag expectation of the manifest describe production; they
-     are mapped to the staging project and to `--permission-mode` (default `enforce`; the
-     production expectation `off` stays in the manifest, the flag is set by the overlay, not `.env`);
+     are mapped to the staging project and to `--permission-mode` — **default `shadow` (R15,
+     ST-02-C02)**; `enforce` or `off` only when passed explicitly (logged as
+     `EXPLICIT --permission-mode`). The production expectation `off` stays in the immutable
+     manifest; the flag is set by the overlay (`${ST02_PERMISSION_SERVICE_MODE:-shadow}`), not `.env`;
+     `staging_deploy.sh` also falls back to `shadow` when `staging.env` has no mode;
+   * FG-3: after the smoke `staging_deploy.sh` reads `PERMISSION_SERVICE_MODE` from the running
+     backend; it must equal the staging parameter (unset or different = initial failure /
+     automatic rollback). `staging-deployment.json` next to `record.json` keeps
+     `manifest_expected` (production layout), `staging_parameter` (+ source: R15 default or
+     explicit) and `observed_in_backend` side by side. Where a staging flag overlay should live in
+     the Release Manifest itself is a decision for Krum (the manifest is not changed by ST-02);
+   * FG-4: `--deployed-by` and `--approved-by` are **required** (plain identifiers, never
+     `unknown`/`none`/`root`; refused before anything is built). The deployer is the manifest's
+     `created_by` and the record's `actor`; the approver is a manifest approval
+     `deploy:approved_by=<name>`; both are in `staging-deployment.json`. `staging_deploy.sh`
+     refuses without `ST02_DEPLOYED_BY` / `ST02_APPROVED_BY`;
    * every service is rebuilt (each image carries its own `BUILD_INFO.json`), the manifest's
      `services_to_rebuild` is logged;
    * `--force-smoke-fail` adds `GET /api/st02-forced-smoke-failure` (404) to the deploy smoke —
@@ -194,15 +216,17 @@ bash ops/staging/sandbox-base/prepare_sandbox_base_images.sh --sandbox --ca /roo
 
 # one exact commit: bundle, verify, deploy, /api/version == bundle, seed A/B, scenarios
 python3 ops/staging/staging_up.py up --base /tmp/st02/base --commit origin/main \
-     --port 18080 --permission-mode enforce --verify-image mirror.gcr.io/library/python:3.11-slim
+     --port 18080 --deployed-by <who> --approved-by <who> \
+     --verify-image mirror.gcr.io/library/python:3.11-slim        # shadow (R15 default)
+# enforce/off only explicitly:  ... --permission-mode enforce
 
 # next release on the running stack (optionally with the controlled smoke failure)
 python3 ops/staging/staging_up.py deploy --base /tmp/st02/base --commit <ref> [--force-smoke-fail] \
-     --verify-image mirror.gcr.io/library/python:3.11-slim
+     --deployed-by <who> --approved-by <who> --verify-image mirror.gcr.io/library/python:3.11-slim
 
 # full rehearsal X -> X+1 (forced failure, exact-image rollback) -> X+1, evidence + summary.json
 python3 ops/staging/staging_up.py rehearse --base /tmp/st02/run --from <X> --to <X+1> \
-     --evidence /tmp/st02/evidence --verify-image mirror.gcr.io/library/python:3.11-slim \
+     --evidence /tmp/st02/evidence --deployed-by <who> --approved-by <who> --verify-image mirror.gcr.io/library/python:3.11-slim \
      --sandbox-base-report /tmp/st02/sandbox-base.txt
 
 python3 ops/staging/staging_up.py down --base /tmp/st02/base [--volumes]
@@ -243,7 +267,8 @@ Not done by ST-02. Requirements before it may run on the NAS:
 * production containers, images, `.env` and `layout.json` read before and after, unchanged.
 
 ```bash
-python3 ops/staging/staging_up.py up --base /volume1/docker/begwork-staging --commit <exact sha> --port <free port>
+python3 ops/staging/staging_up.py up --base /volume1/docker/begwork-staging --commit <exact sha> --port <free port> \
+     --deployed-by <who> --approved-by <who>
 ```
 
 ## Tests
@@ -260,4 +285,7 @@ project name, port 8080 / busy port, synthetic private `.env`, reuse refusal, se
 overlay content, production layout/flags unchanged, the real `docker compose config` of
 production compose + overlay passes and production compose alone is refused, staging_deploy.sh
 refusals before any Docker call, sandbox script refusal, `ops/release`/`ops/synology` unchanged
-versus `07da9ab`.
+versus `07da9ab`. ST-02-C02: default mode `shadow` (CLI, `prepare_base`, isolation check,
+overlay, real `compose config`, `staging_deploy.sh` without a mode), `enforce` only explicit,
+FG-3 observed-flag check/record, FG-4 deployer/approver refusals and `actor`, FG-5 URL and
+bootstrap-key refusals, FG-6 allow-list refused.

@@ -18,6 +18,13 @@
 #   * RC-01 build identity: write_build_info.py --from-bundle stamps backend/ and frontend/
 #     BUILD_INFO.json into the staged tree (declared as the only allowed extra files of the tree)
 #     and every service is rebuilt, so the UI and /api/version carry the bundle commit;
+#   * PERMISSION_SERVICE_MODE defaults to shadow (R15) when staging.env does not set it; enforce/off
+#     only as an explicit staging parameter (ST-02-C02, FG-2);
+#   * FG-3: after the smoke the flag value really running in the backend is read and must equal the
+#     staging parameter (unset = refused); staging-deployment.json next to record.json keeps the
+#     manifest expectation, the staging parameter and the observed value side by side;
+#   * FG-4: ST02_DEPLOYED_BY and ST02_APPROVED_BY are mandatory (refused otherwise); the deployer is
+#     the record's actor, both are in staging-deployment.json;
 #   * a gzip mongodump of the staging database is the pre-deploy backup;
 #   * --force-smoke-fail adds a controlled extra smoke path that must fail (rollback rehearsal);
 #     the post-rollback smoke never includes it.
@@ -58,14 +65,30 @@ SCRIPT_DIR="$(cd "$BUNDLE_ARG/tools/synology" && pwd)"
 read_kv "$STAGING_BASE/staging.env" ST || { echo "refused: $STAGING_BASE/staging.env is unreadable" >&2; exit 3; }
 [[ "${ST_ST02_PROJECT:-}" =~ ^begwork-staging[a-z0-9-]*$ ]] || { echo "refused: ST02_PROJECT must start with begwork-staging" >&2; exit 3; }
 [[ "${ST_ST02_HTTP_PORT:-}" =~ ^[0-9]{4,5}$ ]] && [ "$ST_ST02_HTTP_PORT" != 8080 ] || { echo "refused: ST02_HTTP_PORT must be a free port other than 8080" >&2; exit 3; }
-case "${ST_ST02_PERMISSION_SERVICE_MODE:-}" in off|shadow|enforce) ;; *) echo "refused: ST02_PERMISSION_SERVICE_MODE must be off, shadow or enforce" >&2; exit 3 ;; esac
+# R15: staging = shadow unless staging.env sets another mode explicitly (ST-02-C02 / FG-2)
+ST02_DEFAULT_MODE=shadow
+MODE_SOURCE="explicit staging parameter"
+[ -n "${ST_ST02_PERMISSION_SERVICE_MODE:-}" ] || { ST_ST02_PERMISSION_SERVICE_MODE="$ST02_DEFAULT_MODE"; MODE_SOURCE="R15 default"; }
+case "$ST_ST02_PERMISSION_SERVICE_MODE" in off|shadow|enforce) ;; *) echo "refused: ST02_PERMISSION_SERVICE_MODE must be off, shadow or enforce" >&2; exit 3 ;; esac
+# FG-4 (FLOW-050: deployed_by / approved_by): named people, never the "unknown" fallback
+PERSON_RE='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+for _who in ST02_DEPLOYED_BY ST02_APPROVED_BY; do
+  _val="${!_who:-}"
+  if ! [[ "$_val" =~ $PERSON_RE ]] || [[ "${_val,,}" =~ ^(unknown|none|root)$ ]]; then
+    echo "refused: $_who is required (plain identifier of the person, never unknown/none/root; FLOW-050 deployed_by/approved_by)" >&2; exit 3
+  fi
+done
+unset _who _val
+# lib.sh takes the record actor from SUDO_USER/USER; the named deployer replaces the login name
+unset SUDO_USER; export USER="$ST02_DEPLOYED_BY"
 PROJECT="$ST_ST02_PROJECT"
 export COMPOSE_BIN="docker compose -p $PROJECT -f docker-compose.yml -f docker-compose.staging.yml"
 export BEGWORK_BASE="$STAGING_BASE"
 rel_setup deploy
 trap 'lock_release' EXIT
 lock_acquire
-log "ST-02 staging $MODE: project=$PROJECT port=$ST_ST02_HTTP_PORT PERMISSION_SERVICE_MODE=$ST_ST02_PERMISSION_SERVICE_MODE force_smoke_fail=$FORCE_SMOKE_FAIL"
+log "ST-02 staging $MODE: project=$PROJECT port=$ST_ST02_HTTP_PORT PERMISSION_SERVICE_MODE=$ST_ST02_PERMISSION_SERVICE_MODE ($MODE_SOURCE) force_smoke_fail=$FORCE_SMOKE_FAIL"
+log "  deployed_by=$ST02_DEPLOYED_BY approved_by=$ST02_APPROVED_BY"
 
 FORCED_PATH="/api/st02-forced-smoke-failure"
 staging_overrides() { # staging_overrides [forced] : S_* production layout values -> staging project
@@ -79,6 +102,48 @@ staging_overrides() { # staging_overrides [forced] : S_* production layout value
     S_HTTP_PATHS="$S_HTTP_PATHS,$FORCED_PATH"
     log "  CONTROLLED SMOKE FAILURE armed: smoke also requires GET $FORCED_PATH (does not exist -> 404)"
   fi
+}
+
+# FG-3: the flag value the staging backend really runs with (the mode is not a secret).
+OBSERVED_FLAG=""; FLAG_FAIL=""
+observe_flag() {
+  if OBSERVED_FLAG="$("$DOCKER" exec "$PROJECT-backend" printenv PERMISSION_SERVICE_MODE 2>/dev/null)"; then
+    OBSERVED_FLAG="${OBSERVED_FLAG//$'\r'/}"
+  else
+    OBSERVED_FLAG="UNSET"
+  fi
+  [[ "$OBSERVED_FLAG" =~ ^(off|shadow|enforce|UNSET)$ ]] || OBSERVED_FLAG="INVALID"
+  [ "$OBSERVED_FLAG" = "$ST_ST02_PERMISSION_SERVICE_MODE" ] || {
+    FLAG_FAIL="PERMISSION_SERVICE_MODE running in $PROJECT-backend is $OBSERVED_FLAG, staging parameter is $ST_ST02_PERMISSION_SERVICE_MODE"; return 1; }
+  log "  flag PERMISSION_SERVICE_MODE observed in $PROJECT-backend = $OBSERVED_FLAG (= staging parameter, $MODE_SOURCE; manifest expectation ${P_FLAG_EXPECT_PERMISSION_SERVICE_MODE:-?} is the production layout's)"
+}
+
+# staging_record STATUS : staging-deployment.json next to lib.sh's record.json (FG-3 + FG-4)
+staging_record() {
+  local eq=false
+  [ "${OBSERVED_FLAG:-}" = "$ST_ST02_PERMISSION_SERVICE_MODE" ] && eq=true
+  cat > "$EVID/staging-deployment.json" <<JSON
+{
+  "schema": "beg.st02-staging-deployment/v1",
+  "status": "$1",
+  "release_id": "${P_RELEASE_ID:-}",
+  "deployment_id": "${P_DEPLOYMENT_ID:-}",
+  "environment": "${P_ENVIRONMENT:-}",
+  "project": "$PROJECT",
+  "deployed_by": "$ST02_DEPLOYED_BY",
+  "approved_by": "$ST02_APPROVED_BY",
+  "feature_flags": {
+    "PERMISSION_SERVICE_MODE": {
+      "manifest_expected": "${P_FLAG_EXPECT_PERMISSION_SERVICE_MODE:-}",
+      "manifest_expected_scope": "production layout (ops/release/synology/layout.json); staging overlay = staging_parameter",
+      "staging_parameter": "$ST_ST02_PERMISSION_SERVICE_MODE",
+      "staging_parameter_source": "$MODE_SOURCE",
+      "observed_in_backend": "${OBSERVED_FLAG:-NOT_OBSERVED}",
+      "observed_equals_parameter": $eq
+    }
+  }
+}
+JSON
 }
 
 STAGE_FAIL=""
@@ -242,6 +307,8 @@ auto_rollback() {
     write_record deploy ROLLBACK_FAILED P "$REBUILD" PASS FAIL "$reason; post-rollback smoke: $SMOKE_FAIL" "$C_RELEASE_ID" "$C_RELEASE_ID" "" "$RUNTIME_ROLLBACK"; exit 4
   fi
   runtime_snapshot || true
+  observe_flag || log "  WARNING after rollback: $FLAG_FAIL"
+  staging_record ROLLED_BACK
   if [ "$RUNTIME_ROLLBACK" = SOURCE_REBUILD ]; then
     log "ROLLED BACK (source-exact, NOT runtime-exact: recorded image was unavailable)"
   else
@@ -258,6 +325,7 @@ initial_fail() { # first release: there is nothing to roll back to; keep everyth
   log "STAGING INITIAL DEPLOY FAILED: $1"
   log "  containers and $BASE/repo are left as they are for inspection; nothing to roll back to"
   printf 'failed_at=%s\nreason=%s\n' "$(now)" "$(sanitize "$1")" > "$EVID/initial-failure.txt"
+  staging_record INITIAL_FAILED
   exit 4
 }
 
@@ -283,9 +351,11 @@ log "=== C) SMOKE ==="
 if [ "$FORCE_SMOKE_FAIL" = 1 ]; then staging_overrides forced; fi
 if [ "$MODE" = initial ]; then
   smoke "$DEPLOY_SINCE" "$REBUILD" "" || initial_fail "$SMOKE_FAIL"
+  observe_flag || initial_fail "$FLAG_FAIL"
   runtime_snapshot || initial_fail "cannot record the runtime images: $RUNTIME_FAIL"
 else
   smoke "$DEPLOY_SINCE" "$REBUILD" "$C_RUNTIME_IMAGES" || auto_rollback "$SMOKE_FAIL"
+  observe_flag || auto_rollback "$FLAG_FAIL"
   runtime_snapshot || auto_rollback "cannot record the runtime images of the new release: $RUNTIME_FAIL"
 fi
 NEW_IMAGES="$SNAP_IMAGES"; NEW_REFS="$SNAP_REFS"
@@ -310,5 +380,6 @@ cp "$BUNDLE/manifest.json" "$STATE/current.json.tmp" && mv -f "$STATE/current.js
 [ "$MODE" = initial ] || { [ -f "$STATE/manifests/$C_RELEASE_ID.json" ] && cp "$STATE/manifests/$C_RELEASE_ID.json" "$STATE/previous.json"; }
 write_markers P "${C_COMMIT:-NONE}" "${ROLLBACK_DIR:-NONE}" "$NEW_IMAGES"
 write_record deploy DEPLOYED P "$REBUILD" PASS PASS "" "$C_RELEASE_ID" "$C_RELEASE_ID" "$NEW_IMAGES" NOT_APPLICABLE
+staging_record DEPLOYED
 log "=== DEPLOYED $P_RELEASE_ID (${P_COMMIT}) on $PROJECT — rollback target ${C_RELEASE_ID}; migrations NOT_RUN ==="
 exit 0

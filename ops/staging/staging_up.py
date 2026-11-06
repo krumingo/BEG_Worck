@@ -60,6 +60,11 @@ DB_NAME = "st02_staging"
 SYSTEM_DB = "st02_staging_system"
 DEPLOYMENT_ID = "staging-begwork"
 MODES = ("off", "shadow", "enforce")
+# R15 (Krum, 06.11.2026): staging starts with PERMISSION_SERVICE_MODE=shadow. Any other mode only
+# through an explicit --permission-mode parameter (ST-02-C02, FLOW Guard FG-2).
+DEFAULT_MODE = "shadow"
+# FG-4 (FLOW-050: every deployment keeps deployed_by / approved_by): plain identifiers, never "unknown".
+PERSON_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 APPROVAL = "validation:ST-02-R9-2026-11-06"
 FORCED_PATH = "/api/st02-forced-smoke-failure"
 MARKER = ".st02-staging-root"
@@ -91,6 +96,23 @@ def check_project(project):
     if not re.match(r"^begwork-staging[a-z0-9-]*$", project):
         raise Refused("--project must start with begwork-staging (got %r)" % project)
     return project
+
+
+def check_person(value, option):
+    """FG-4: --deployed-by / --approved-by are mandatory, plain identifiers and never 'unknown'."""
+    v = (value or "").strip()
+    if not PERSON_RE.match(v) or v.lower() in ("unknown", "none", "root"):
+        raise Refused("%s is required: a plain identifier of the person (A-Z a-z 0-9 . _ -, max 64), never "
+                      "'unknown'/'none'/'root' (FLOW-050: every deployment keeps deployed_by and approved_by)" % option)
+    return v
+
+
+def check_mode(mode):
+    if mode not in MODES:
+        raise Refused("--permission-mode must be one of %s" % (MODES,))
+    if mode != DEFAULT_MODE:
+        log("PERMISSION_SERVICE_MODE=%s by EXPLICIT --permission-mode (R15 staging default is %s)" % (mode, DEFAULT_MODE))
+    return mode
 
 
 def port_free(port, host="127.0.0.1"):
@@ -144,9 +166,13 @@ def write_private(path: Path, text):
     os.chmod(str(path), 0o600)
 
 
-def prepare_base(base: Path, project, port, mode, restart_sample=None):
-    """Create (or re-check) the staging layout root. Synthetic values only."""
+def prepare_base(base: Path, project, port, mode=DEFAULT_MODE, restart_sample=None):
+    """Create (or re-check) the staging layout root. Synthetic values only.
+
+    ``mode`` defaults to shadow (R15); enforce/off only when the caller passes it explicitly."""
     base = check_base(base)
+    if mode not in MODES:
+        raise Refused("PERMISSION_SERVICE_MODE must be one of %s" % (MODES,))
     if (base / MARKER).exists():
         st = read_kv(base / "staging.env")
         if st.get("ST02_PROJECT") != project or st.get("ST02_HTTP_PORT") != str(port) \
@@ -256,9 +282,14 @@ def mongo_up(base: Path, project):
 
 
 # ---------------------------------------------------------------- release bundle
-def build_bundle(base: Path, commit, reachable_from, previous: Path | None, allow_unmerged=False):
+def build_bundle(base: Path, commit, reachable_from, previous: Path | None, allow_unmerged=False,
+                 deployed_by=None, approved_by=None):
+    """FG-4: the manifest's created_by is the named deployer and its approvals name the approver."""
+    deployed_by = check_person(deployed_by, "--deployed-by")
+    approved_by = check_person(approved_by, "--approved-by")
     cmd = [sys.executable, str(RELEASE_BUILD), "--repo", str(REPO), "--commit", commit, "--environment", "staging",
            "--deployment-id", DEPLOYMENT_ID, "--out", str(base / "releases"), "--approval", APPROVAL,
+           "--approval", "deploy:approved_by=%s" % approved_by, "--created-by", deployed_by,
            "--reachable-from", reachable_from]
     if allow_unmerged:
         cmd.append("--allow-unmerged")
@@ -275,8 +306,10 @@ def build_bundle(base: Path, commit, reachable_from, previous: Path | None, allo
     return bundle, summary
 
 
-def staging_deploy(base: Path, bundle: Path, mode, force_fail=False, verify_image=None):
-    env = dict(os.environ, BEGWORK_BASE=str(base), REQUIRE_BACKUP="1")
+def staging_deploy(base: Path, bundle: Path, mode, force_fail=False, verify_image=None, deployed_by=None, approved_by=None):
+    env = dict(os.environ, BEGWORK_BASE=str(base), REQUIRE_BACKUP="1",
+               ST02_DEPLOYED_BY=check_person(deployed_by, "--deployed-by"),
+               ST02_APPROVED_BY=check_person(approved_by, "--approved-by"))
     if verify_image:
         env["VERIFY_IMAGE"] = verify_image
     cmd = ["bash", str(DEPLOY_SH), "--bundle", str(bundle), "--" + mode] + (["--force-smoke-fail"] if force_fail else [])
@@ -397,22 +430,50 @@ def record_of(hist: Path):
     return json.loads(p.read_text(encoding="utf-8")) if p and p.exists() else None
 
 
+def staging_record_of(hist: Path):
+    p = hist / "staging-deployment.json" if hist else None
+    return json.loads(p.read_text(encoding="utf-8")) if p and p.exists() else {}
+
+
+def check_who_and_flag(check, label, hist: Path, a):
+    """FG-3/FG-4 assertions on one deployment's record + staging-deployment.json."""
+    rec, srec = record_of(hist) or {}, staging_record_of(hist)
+    flag = (srec.get("feature_flags") or {}).get("PERMISSION_SERVICE_MODE") or {}
+    check("%s record actor == --deployed-by" % label, rec.get("actor") == a.deployed_by, rec.get("actor", ""))
+    check("%s staging record names deployer and approver" % label,
+          srec.get("deployed_by") == a.deployed_by and srec.get("approved_by") == a.approved_by)
+    check("%s PERMISSION_SERVICE_MODE observed in backend == staging parameter (%s)" % (label, a.permission_mode),
+          flag.get("observed_in_backend") == a.permission_mode and flag.get("staging_parameter") == a.permission_mode,
+          "observed %s, manifest expectation %s" % (flag.get("observed_in_backend"), flag.get("manifest_expected")))
+
+
 def validate_record(path: Path):
     r = run([sys.executable, str(RELEASE_VERIFY), "record", "--record", str(path)], check=False)
     return r.returncode == 0 and "record VALID" in r.stdout
 
 
 # ---------------------------------------------------------------- commands
+def people(a):
+    """FG-4: refuse before anything is built or started when deployer/approver are missing."""
+    check_person(a.deployed_by, "--deployed-by")
+    check_person(a.approved_by, "--approved-by")
+
+
+def who(a):
+    return {"deployed_by": a.deployed_by, "approved_by": a.approved_by}
+
+
 def cmd_up(a):
-    base, _ = prepare_base(Path(a.base), check_project(a.project), a.port, a.permission_mode, a.restart_sample)
+    people(a)
+    base, _ = prepare_base(Path(a.base), check_project(a.project), a.port, check_mode(a.permission_mode), a.restart_sample)
     evid = Path(a.evidence or (base / "evidence" / ("up-" + utc_stamp())))
     evid.mkdir(parents=True, exist_ok=True)
     if state(base):
         raise Refused("a release is already deployed on %s; use `deploy`" % base)
-    bundle, summary = build_bundle(base, a.commit, a.reachable_from, None, a.allow_unmerged)
+    bundle, summary = build_bundle(base, a.commit, a.reachable_from, None, a.allow_unmerged, **who(a))
     install_layout_files(base, bundle)
     mongo_up(base, a.project)
-    rc, hist = staging_deploy(base, bundle, "initial", verify_image=a.verify_image)
+    rc, hist = staging_deploy(base, bundle, "initial", verify_image=a.verify_image, **who(a))
     copy_bundle_evidence(bundle, evid / ("bundle-" + summary["release_id"]))
     copy_history(hist, evid / "history")
     if rc != 0:
@@ -429,13 +490,14 @@ def cmd_up(a):
 
 
 def cmd_deploy(a):
-    base, _ = prepare_base(Path(a.base), check_project(a.project), a.port, a.permission_mode, a.restart_sample)
+    people(a)
+    base, _ = prepare_base(Path(a.base), check_project(a.project), a.port, check_mode(a.permission_mode), a.restart_sample)
     if not state(base):
         raise Refused("no release deployed on %s; use `up`" % base)
-    bundle, _ = build_bundle(base, a.commit, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged)
+    bundle, _ = build_bundle(base, a.commit, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged, **who(a))
     install_layout_files(base, bundle)
     assert_isolated(base, a.project)
-    rc, hist = staging_deploy(base, bundle, "deploy", force_fail=a.force_smoke_fail, verify_image=a.verify_image)
+    rc, hist = staging_deploy(base, bundle, "deploy", force_fail=a.force_smoke_fail, verify_image=a.verify_image, **who(a))
     log("staging deploy exit %d (record %s)" % (rc, hist / "record.json" if hist else None))
     return rc
 
@@ -452,7 +514,8 @@ def cmd_down(a):
 
 def cmd_rehearse(a):
     project = check_project(a.project)
-    base, _ = prepare_base(Path(a.base), project, a.port, a.permission_mode, a.restart_sample)
+    people(a)
+    base, _ = prepare_base(Path(a.base), project, a.port, check_mode(a.permission_mode), a.restart_sample)
     if state(base):
         raise Refused("rehearse needs a fresh --base (a release is already deployed there)")
     evid = Path(a.evidence).resolve()
@@ -473,10 +536,10 @@ def cmd_rehearse(a):
                                          check=False).returncode == 0, "%s -> %s" % (commit_x, commit_y))
 
     # --- 1. X: build, verify, initial deploy, identity, seed, scenarios
-    bx, sx = build_bundle(base, commit_x, a.reachable_from, None, a.allow_unmerged)
+    bx, sx = build_bundle(base, commit_x, a.reachable_from, None, a.allow_unmerged, **who(a))
     install_layout_files(base, bx)
     mongo_up(base, project)
-    rc, hist = staging_deploy(base, bx, "initial", verify_image=a.verify_image)
+    rc, hist = staging_deploy(base, bx, "initial", verify_image=a.verify_image, **who(a))
     copy_bundle_evidence(bx, evid / "1-X" / "bundle")
     (evid / "1-X" / "bundle" / "release_verify.txt").write_text(sx["verify_stdout"], encoding="utf-8")
     copy_history(hist, evid / "1-X")
@@ -486,6 +549,7 @@ def cmd_rehearse(a):
     images_x = state(base)["RUNTIME_IMAGES"]
     runtime["X"] = images_x
     check("X record is a valid beg.deployment-record/v1", validate_record(hist / "record.json"))
+    check_who_and_flag(check, "X", hist, a)
     ident_x = identity(a.port, commit_x)
     (evid / "1-X" / "identity.json").write_text(json.dumps(ident_x, indent=2) + "\n", encoding="utf-8")
     check("X /api/version build_sha == bundle commit", ident_x["api_build_sha_equals_bundle"], ident_x["api_version"].get("build_sha", ""))
@@ -499,11 +563,11 @@ def cmd_rehearse(a):
     mongo_id = run(["docker", "inspect", "-f", "{{.Id}}", project + "-mongo"]).stdout.strip()
 
     # --- 2. X+1 with a controlled smoke failure -> automatic exact-image rollback
-    by, sy = build_bundle(base, commit_y, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged)
+    by, sy = build_bundle(base, commit_y, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged, **who(a))
     install_layout_files(base, by)
     copy_bundle_evidence(by, evid / "2-X+1-forced-failure" / "bundle")
     (evid / "2-X+1-forced-failure" / "bundle" / "release_verify.txt").write_text(sy["verify_stdout"], encoding="utf-8")
-    rc, hist = staging_deploy(base, by, "deploy", force_fail=True, verify_image=a.verify_image)
+    rc, hist = staging_deploy(base, by, "deploy", force_fail=True, verify_image=a.verify_image, **who(a))
     copy_history(hist, evid / "2-X+1-forced-failure")
     rec = record_of(hist) or {}
     check("X+1 forced-failure deploy exit 1 (auto rollback)", rc == 1, "exit %d" % rc)
@@ -511,6 +575,7 @@ def cmd_rehearse(a):
           rec.get("status") == "ROLLED_BACK" and rec.get("runtime_rollback") == "EXACT_IMAGE",
           "%s / %s" % (rec.get("status"), rec.get("runtime_rollback")))
     check("rollback record is a valid beg.deployment-record/v1", validate_record(hist / "record.json"))
+    check_who_and_flag(check, "rolled-back X", hist, a)
     check("rollback reason is the controlled smoke failure", FORCED_PATH in rec.get("failure", ""), rec.get("failure", ""))
     log_text = (hist / "deploy.log").read_text(encoding="utf-8", errors="replace")
     built = re.findall(r"compose up -d --no-deps --build ([a-z, ]+) -> exit 0", log_text)
@@ -538,12 +603,13 @@ def cmd_rehearse(a):
     check("MongoDB container not recreated", run(["docker", "inspect", "-f", "{{.Id}}", project + "-mongo"]).stdout.strip() == mongo_id)
 
     # --- 3. X+1 without the failure
-    rc, hist = staging_deploy(base, by, "deploy", verify_image=a.verify_image)
+    rc, hist = staging_deploy(base, by, "deploy", verify_image=a.verify_image, **who(a))
     copy_history(hist, evid / "3-X+1-deploy")
     rec = record_of(hist) or {}
     check("X+1 deploy exit 0 (DEPLOYED)", rc == 0 and rec.get("status") == "DEPLOYED", "exit %d" % rc)
     if rc == 0:
         check("X+1 record is a valid beg.deployment-record/v1", validate_record(hist / "record.json"))
+        check_who_and_flag(check, "X+1", hist, a)
         images_y = state(base)["RUNTIME_IMAGES"]
         runtime["X+1"] = images_y
         check("X+1 runtime image IDs differ from X", images_y != images_x, images_y)
@@ -594,8 +660,11 @@ def main(argv=None):
         sp.add_argument("--base", required=True, help="own staging layout root (never %s)" % PRODUCTION_BASE)
         sp.add_argument("--project", default="begwork-staging")
         sp.add_argument("--port", type=int, default=18080, help="127.0.0.1 port of the staging frontend (checked free)")
-        sp.add_argument("--permission-mode", choices=MODES, default="enforce",
-                        help="PERMISSION_SERVICE_MODE of the staging backend (default enforce; production is not touched)")
+        sp.add_argument("--permission-mode", choices=MODES, default=DEFAULT_MODE,
+                        help="PERMISSION_SERVICE_MODE of the staging backend (default %s per R15; enforce/off only "
+                             "when passed explicitly; production is not touched)" % DEFAULT_MODE)
+        sp.add_argument("--deployed-by", help="REQUIRED: who deploys (manifest created_by, record actor; FG-4)")
+        sp.add_argument("--approved-by", help="REQUIRED: who approved this staging deployment (manifest approvals; FG-4)")
         sp.add_argument("--reachable-from", default="origin/main")
         sp.add_argument("--allow-unmerged", action="store_true", help="staging only: commit need not be on --reachable-from")
         sp.add_argument("--verify-image", default=None, help="verifier image (default: lib.sh VERIFY_IMAGE)")
