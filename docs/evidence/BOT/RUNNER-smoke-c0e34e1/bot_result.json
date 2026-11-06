@@ -1,0 +1,51 @@
+{
+  "task": "RUNNER-smoke",
+  "sha": "c0e34e1",
+  "started": "2026-11-06T12:31:52.743Z",
+  "steps": [
+    {
+      "step": "1280 login page renders",
+      "pass": true,
+      "screenshot": "01_1280_login_page_renders.png"
+    },
+    {
+      "step": "1280 login succeeds and leaves /login",
+      "pass": true,
+      "screenshot": "02_1280_login_succeeds_and_leaves_login.png"
+    },
+    {
+      "step": "1280 dashboard shows authenticated layout",
+      "pass": true,
+      "screenshot": "03_1280_dashboard_shows_authenticated_layou.png"
+    },
+    {
+      "step": "1280 logout returns to /login",
+      "pass": true,
+      "screenshot": "04_1280_logout_returns_to_login.png"
+    },
+    {
+      "step": "390 login page renders",
+      "pass": true,
+      "screenshot": "05_390_login_page_renders.png"
+    },
+    {
+      "step": "390 login succeeds and leaves /login",
+      "pass": true,
+      "screenshot": "06_390_login_succeeds_and_leaves_login.png"
+    },
+    {
+      "step": "390 dashboard shows authenticated layout",
+      "pass": true,
+      "screenshot": "07_390_dashboard_shows_authenticated_layout.png"
+    },
+    {
+      "step": "390 logout returns to /login",
+      "pass": true,
+      "screenshot": "08_390_logout_returns_to_login.png"
+    }
+  ],
+  "passed": 8,
+  "total": 8,
+  "verdict": "PASS",
+  "finished": "2026-11-06T12:31:58.626Z"
+}
