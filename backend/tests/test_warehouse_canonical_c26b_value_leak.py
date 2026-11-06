@@ -153,7 +153,9 @@ async def test_project_writeoff_response_has_no_money_for_a_member_site_manager(
                                    quantity="1", idempotency_key="leak-wo",
                                    reason="брак", file_ids=["f"])
     for _ in range(2):                                   # fresh + replay
+        ctx = _UserCtx()
+        ctx.mode = "enforce"
         res = (await cmd.post_project_writeoff(body, request=None, user=_user(),
-                                               ctx=_UserCtx())).dict()
+                                               ctx=ctx)).dict()
         assert money_keys(res) == []
         assert res["envelope"]["values_hidden"] is True

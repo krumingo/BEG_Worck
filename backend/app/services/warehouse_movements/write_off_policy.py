@@ -133,3 +133,46 @@ async def ensure_project_write_off(ctx, tenant_db, *, org_id: str, project_id: s
             return sorted(needs_membership)[0]
         raise _deny("not a member of the project with valid dates")
     raise _deny("role may not write off from a project")
+
+
+# ───────────── 5C-C26c — Р27 in every Permission Service mode ─────────────
+#
+# off / shadow have no RoleAssignments decision (W0-02: the legacy role
+# decides there — same pattern as SEC-01 ``require_money_write`` in #69).
+# The legacy session role is mapped with the catalog's LEGACY_ROLE_MAP and
+# the SAME PROJECT_WRITEOFF_RULE table is applied, with the same in-date
+# membership check. So Р27 gives the same answer in off, shadow and enforce.
+
+async def ensure_project_write_off_legacy(user: dict, tenant_db, *, org_id: str,
+                                          project_id: str,
+                                          now: Optional[datetime] = None) -> str:
+    """Р27 from the legacy session role (off / shadow)."""
+    from app.permissions.catalog import LEGACY_ROLE_MAP
+    from app.tenancy import project_team
+    from app.tenancy.data_access import TenantData
+
+    now = now or datetime.now(timezone.utc)
+    user_id = (user or {}).get("id")
+    role_id = LEGACY_ROLE_MAP.get((user or {}).get("role") or "")
+
+    def _deny(detail: str):
+        return PermissionDeniedError(
+            f"Р27: write-off from project denied ({detail})",
+            context={"action": "write_off", "reason_code": R27_REASON,
+                     "scope_type": "project", "scope_id": project_id,
+                     "decided_by": "legacy_role"})
+
+    if not user_id or not project_id:
+        raise _deny("no session identity")
+    if role_id in R27_EVERYWHERE:
+        return role_id
+    if role_id in R27_MEMBER_ONLY or role_id in R27_OWN_PROJECT:
+        tenant = TenantData.for_resolved_org(tenant_db, org_id)
+        try:
+            row = await project_team.member_row(tenant, user_id, project_id)
+        except Exception:
+            row = None
+        if _member_in_date(row, now.date()):
+            return role_id
+        raise _deny("not a member of the project with valid dates")
+    raise _deny("role may not write off from a project")

@@ -58,8 +58,9 @@ async def _post(route, key="k", project=PROJECT):
     body = route.ProjectWriteOffBody(
         project_id=project, item_id=ITEM, unit="bag", quantity="1",
         idempotency_key=f"c26b-{key}", reason="брак", file_ids=["f-c26b"])
-    return await route.post_project_writeoff(body, request=None, user=_user(),
-                                             ctx=_UserCtx())
+    ctx = _UserCtx()
+    ctx.mode = "enforce"          # what require_project_writeoff sets in enforce
+    return await route.post_project_writeoff(body, request=None, user=_user(), ctx=ctx)
 
 
 # (label, assignments, membership kwargs or None, allowed)
@@ -114,13 +115,14 @@ def test_endpoint_route_is_registered_with_201():
 
 
 @pytest.mark.parametrize("mode", ["off", "shadow"])
-async def test_off_and_shadow_refuse_before_anything(monkeypatch, mode):
+async def test_off_and_shadow_resolve_a_legacy_context(monkeypatch, mode):
+    """5C-C26c: the gate no longer refuses off / shadow — Р27 decides there
+    from the legacy role (test_warehouse_canonical_c26c_r27_all_modes.py)."""
     from app.routes import warehouse_canonical as route
+    from app.tenancy.guard import LegacyCompatContext
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    with pytest.raises(HTTPException) as exc:
-        await route.require_project_writeoff(request=None, user=_user())
-    assert exc.value.status_code == 403
-    assert exc.value.detail["reason"] == "ENFORCE_REQUIRED"
+    ctx = await route.require_project_writeoff(request=None, user=_user())
+    assert isinstance(ctx, LegacyCompatContext) and ctx.mode == mode
 
 
 async def test_enforce_resolves_the_tenant_context(monkeypatch):
