@@ -13,7 +13,8 @@ Two authoritative projections live here:
      LEDGER itself (C07); this projection is a convenience view only
      and can be rebuilt from the ledger at any time.
 
-  3. `material_entries` — project cost projection (`_project_consumption`).
+  3. `material_entries` — project cost projection (`material_cost_rows`,
+     5C-C25 / Р17: cost at acceptance, consumption = allocation only).
 
 The functions here never append to `warehouse_transactions` and never
 accept a client-supplied unit value: they derive both from the ledger
@@ -50,6 +51,7 @@ from app.services.warehouse_movements.actions import (
     CanonicalAction,
     OUTBOUND_ACTIONS,
     INBOUND_ACTIONS,
+    QUARANTINE_ACTIONS,
 )
 from app.services.warehouse_movements.envelope import (
     MovementEnvelope,
@@ -133,6 +135,10 @@ async def apply_projection(
     # write_off which are handled explicitly below).
     if act in {a.value for a in OUTBOUND_ACTIONS}:
         await _drain_batches(tenant_db, env, session=session)
+    # 1b. 5C-C25 (Р18) — a quarantine entry / release with a source moves
+    # traced FIFO layers between two states of one location: drain them.
+    if act in {a.value for a in QUARANTINE_ACTIONS} and env.layer_allocations:
+        await _drain_batches(tenant_db, env, session=session)
 
     # 2. Direct inbound (new layers from supplier etc.)
     if act in {a.value for a in INBOUND_ACTIONS}:
@@ -144,15 +150,22 @@ async def apply_projection(
         else:
             await _open_batch(tenant_db, env, session=session)
 
-    # 3. Consume → material_entries row
-    if act == CanonicalAction.CONSUME_TO_SMR.value:
-        await _project_consumption(tenant_db, env, session=session)
-
-    # 3b. 5C-C21 F-12 (Р10) — a write-off FROM A PROJECT bucket is project
-    # cost, recognised once, as the „фира" line. A warehouse write-off
-    # is not project cost and writes no material_entries row.
-    if act == CanonicalAction.WRITE_OFF.value and is_project_location(env.source):
-        await _project_write_off(tenant_db, env, session=session)
+    # 3. 5C-C25 (Р17) — project material cost rows (`material_entries`).
+    # Cost is recognised when material is ACCEPTED on a project (and on a
+    # direct supplier delivery to a project); a lot that leaves a project
+    # (return to a warehouse, transfer to another project) reduces that
+    # project's cost when it is accepted at its destination. Consumption
+    # per SMR and a project write-off („фира", Р10) are allocation rows
+    # only — never a second cost. One builder for live, rebuild and sync.
+    for row in material_cost_rows(
+            env, transit_origin=hints.get("transit_origin")
+            or getattr(env, "transit_origin", None)):
+        await tenant_db[MATERIAL_ENTRIES_COLLECTION].update_one(
+            {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "id": row["id"]},
+            {"$set": row},
+            upsert=True,
+            session=session,
+        )
 
     # 4. Dispatch / transfer open an in-transit bucket mirroring the
     # dispatched layers so a later acceptance can split them.
@@ -388,104 +401,172 @@ async def _drain_batches(tenant_db, env: MovementEnvelope, *, session=None) -> N
         )
 
 
-async def _project_consumption(
-    tenant_db, env: MovementEnvelope, *, session=None,
-) -> None:
-    """Rebuildable `material_entries` row for one consumption.
-
-    CODEX C11.3 — key is DETERMINISTIC: `tenant_id|movement_id`. A
-    re-run of the service inside the same tx (replay recovery) upserts
-    rather than inserting a duplicate.
-    """
-    quantity = Decimal(str(env.quantity))
-    unit_value = Decimal(str(env.unit_value))
-    # 5C-C24 F-55-C23-01: cost = exact Σ of the FIFO allocations, never
-    # quantity × the rounded weighted-average unit value.
-    total_value = movement_exact_value(env)
-    row = {
-        "projection_source": "canonical_warehouse_service",
-        "projection_version": 2,
-        "tenant_id": env.tenant_id,
-        "org_id": env.tenant_id,
-        "movement_id": env.movement_id,
-        "project_id": env.project_id,
-        "subproject_id": env.subproject_id,
-        "smr_id": env.smr_id,
-        "work_package_id": env.work_package_id,
-        "item_id": env.item_id,
-        "unit": env.unit,
-        "quantity": str(quantity),
-        "unit_value": str(unit_value),
-        "total_value": str(total_value),
-        "currency": env.currency,
-        "consumed_at": env.recorded_at,
-        "ledger_sequence": None,  # service patches on insert
-        # 5C-C19 F-7: same reader contract as the material_smr rebuild —
-        # a consumption is the one row kind that is project cost.
-        "movement_kind": "consume",
-        "cost_recognized": True,
-    }
-    # Deterministic doc id so a projection rebuild is idempotent.
-    row["id"] = f"me_{env.movement_id}"
-    await tenant_db[MATERIAL_ENTRIES_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "movement_id": env.movement_id},
-        {"$set": row},
-        upsert=True,
-        session=session,
-    )
-
-
 PROJECT_LOCATION_TYPES = (LocationType.PROJECT.value, LocationType.SUBPROJECT.value)
+WAREHOUSE_LOCATION_TYPES = (LocationType.CENTRAL_WAREHOUSE.value,
+                            LocationType.SMALL_WAREHOUSE.value)
+
+# 5C-C25 (Р17) — `movement_kind` of the rows that ARE project cost (signed
+# `total_value`) and of the rows that only ALLOCATE it (value in
+# `movement_value`, `total_value` 0).
+COST_ROW_KINDS = ("accept", "return", "transfer_out")
+ALLOCATION_ROW_KINDS = ("consume", "write_off")
 
 
 def is_project_location(loc: Optional[Dict[str, Any]]) -> bool:
     """True when a ledger location dict is a project / subproject bucket."""
-    return bool(loc) and loc.get("location_type") in PROJECT_LOCATION_TYPES
+    return bool(loc) and _loc_type(loc) in PROJECT_LOCATION_TYPES
 
 
-async def _project_write_off(
-    tenant_db, env: MovementEnvelope, *, session=None,
-) -> None:
-    """5C-C21 F-12 (Р10) — rebuildable `material_entries` row for one
-    write-off (брак / загуба) from a project bucket: project cost, shown
-    as the „фира" line. Same deterministic key as a consumption
-    (`me_<movement_id>`), so a replay or a sync upserts the SAME row and
-    the cost is recognised exactly once. Value is the server FIFO value
-    of the written-off layers (env.unit_value), never client input.
+def _loc_type(loc: Any) -> Optional[str]:
+    if loc is None:
+        return None
+    if isinstance(loc, dict):
+        return loc.get("location_type")
+    lt = getattr(loc, "location_type", None)
+    return getattr(lt, "value", lt)
+
+
+def _loc_id(loc: Any) -> Optional[str]:
+    if loc is None:
+        return None
+    if isinstance(loc, dict):
+        return loc.get("location_id")
+    return getattr(loc, "location_id", None)
+
+
+def _project_of(loc: Any, fallback_project_id: Optional[str]) -> Optional[str]:
+    """The project a project/subproject bucket belongs to."""
+    if _loc_type(loc) == LocationType.PROJECT.value:
+        return _loc_id(loc)
+    if _loc_type(loc) == LocationType.SUBPROJECT.value:
+        return fallback_project_id
+    return None
+
+
+def material_cost_rows(env, *, transit_origin: Optional[Dict[str, Any]] = None) -> list:
+    """5C-C25 (Р17, Крум 06.11.2026) — the `material_entries` rows one
+    canonical movement produces. Deterministic: the same ledger row always
+    yields the same rows (live projector, `rebuild_from_ledger` and
+    `/material-entries/sync` all call this). Values are the EXACT FIFO sum
+    of the movement's layer allocations (5C-C24), never client input.
+
+      * ACCEPT_PROJECT_DELIVERY landing on a project / subproject →
+        ``accept`` row, ``total_value = +V`` (cost of the whole accepted
+        quantity, at the traced layers' values).
+      * RECEIVE_FROM_SUPPLIER_TO_PROJECT (direct delivery) → ``accept`` row,
+        ``direct_delivery = true``, ``+V``.
+      * ACCEPT_PROJECT_DELIVERY of a lot whose transfer LEFT a project
+        (``transit_origin`` = project) → ``return`` (into a warehouse) or
+        ``transfer_out`` (into another project) row on the ORIGIN project,
+        ``total_value = −V``. Cost moves with the lot when it is accepted
+        (Р18: "кредитира се само при приемане"); an unaccepted remainder
+        stays the origin project's cost.
+      * CONSUME_TO_SMR → ``consume`` row: allocation per SMR / package only,
+        ``total_value = 0``, the value in ``movement_value``.
+      * WRITE_OFF from a project → ``write_off`` row („фира", Р10): the
+        written-off value in ``movement_value``; it is already part of the
+        accepted cost, so it is reported as its own line, never added.
     """
-    quantity = Decimal(str(env.quantity))
-    unit_value = Decimal(str(env.unit_value))
-    total_value = movement_exact_value(env)   # 5C-C24 F-55-C23-01
-    project_id = env.project_id or (env.source or {}).get("location_id")
-    row = {
+    act = env.action
+    rows = []
+    base = {
         "projection_source": "canonical_warehouse_service",
-        "projection_version": 2,
+        "projection_version": 3,
         "tenant_id": env.tenant_id,
         "org_id": env.tenant_id,
         "movement_id": env.movement_id,
-        "project_id": project_id,
         "subproject_id": env.subproject_id,
         "smr_id": env.smr_id,
         "work_package_id": env.work_package_id,
         "item_id": env.item_id,
         "unit": env.unit,
-        "quantity": str(quantity),
-        "unit_value": str(unit_value),
-        "total_value": str(total_value),
         "currency": env.currency,
-        "written_off_at": env.recorded_at,
-        "reason": env.reason,
+        "recorded_at": env.recorded_at,
         "ledger_sequence": None,
-        "movement_kind": "write_off",
-        "cost_recognized": True,
-        "id": f"me_{env.movement_id}",
     }
-    await tenant_db[MATERIAL_ENTRIES_COLLECTION].update_one(
-        {"tenant_id": env.tenant_id, "org_id": env.tenant_id, "movement_id": env.movement_id},
-        {"$set": row},
-        upsert=True,
-        session=session,
-    )
+
+    def _unit(v):
+        return str(Decimal(str(v if v is not None else "0")))
+
+    if act in (CanonicalAction.ACCEPT_PROJECT_DELIVERY.value,
+               CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value):
+        qty = Decimal(str(env.accepted_quantity if env.accepted_quantity is not None
+                          else env.quantity))
+        value = movement_exact_value(env)
+        dest = env.destination
+        dest_project = _project_of(dest, env.project_id)
+        if dest_project:
+            rows.append(dict(base, **{
+                "id": f"me_{env.movement_id}",
+                "project_id": dest_project,
+                "movement_kind": "accept",
+                "cost_recognized": True,
+                "direct_delivery": act == CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value,
+                "quantity": str(qty),
+                "unit_value": _unit(env.unit_value),
+                "total_value": str(value),
+                "movement_value": str(value),
+                "accepted_at": env.recorded_at,
+            }))
+        origin = transit_origin or {}
+        origin_loc = origin.get("location")
+        origin_project = _project_of(origin_loc, origin.get("project_id"))
+        if act == CanonicalAction.ACCEPT_PROJECT_DELIVERY.value and origin_project:
+            kind = "transfer_out" if dest_project else "return"
+            rows.append(dict(base, **{
+                "id": f"me_{env.movement_id}_out",
+                "project_id": origin_project,
+                "subproject_id": (_loc_id(origin_loc)
+                                  if _loc_type(origin_loc) == LocationType.SUBPROJECT.value
+                                  else None),
+                "smr_id": None, "work_package_id": None,
+                "movement_kind": kind,
+                "cost_recognized": True,
+                "quantity": str(-qty),
+                "unit_value": _unit(env.unit_value),
+                "total_value": str(-value),
+                "movement_value": str(-value),
+                "to_location": dest if isinstance(dest, dict) or dest is None
+                else dest.to_dict(),
+                "transfer_movement_id": origin.get("dispatch_movement_id"),
+                "accepted_at": env.recorded_at,
+            }))
+        return rows
+
+    if act == CanonicalAction.CONSUME_TO_SMR.value:
+        value = movement_exact_value(env)
+        rows.append(dict(base, **{
+            "id": f"me_{env.movement_id}",
+            "project_id": env.project_id or _project_of(env.source, env.project_id),
+            "movement_kind": "consume",
+            "cost_recognized": False,
+            "allocation_only": True,
+            "quantity": str(Decimal(str(env.quantity))),
+            "unit_value": _unit(env.unit_value),
+            "total_value": "0",
+            "movement_value": str(value),
+            "consumed_at": env.recorded_at,
+        }))
+        return rows
+
+    if act == CanonicalAction.WRITE_OFF.value and is_project_location(env.source):
+        value = movement_exact_value(env)
+        rows.append(dict(base, **{
+            "id": f"me_{env.movement_id}",
+            "project_id": env.project_id or _project_of(env.source, env.project_id),
+            "movement_kind": "write_off",
+            "cost_recognized": False,
+            "allocation_only": True,
+            "waste": True,
+            "quantity": str(Decimal(str(env.quantity))),
+            "unit_value": _unit(env.unit_value),
+            "total_value": "0",
+            "movement_value": str(value),
+            "written_off_at": env.recorded_at,
+            "reason": env.reason,
+        }))
+        return rows
+    return rows
 
 
 async def _open_in_transit(
@@ -577,13 +658,19 @@ async def _record_unresolved_layers(
     """
     if not env.dispatch_movement_id:
         return
+    # 5C-C25 — live/rebuild parity: the entry carries the DISCREPANCY row's
+    # own `recorded_at` (the rebuild only has that row). Before C25 the live
+    # path stamped the acceptance's time, so a rebuild changed the entry.
+    disc_row = await tenant_db["warehouse_transactions"].find_one(
+        {"tenant_id": env.tenant_id, "movement_id": unresolved_movement_id},
+        {"recorded_at": 1, "_id": 0}, session=session)
     await tenant_db[IN_TRANSIT_COLLECTION].update_one(
         {"tenant_id": env.tenant_id, "org_id": env.tenant_id,
          "dispatch_movement_id": env.dispatch_movement_id},
         {"$set": {
             f"unresolved_discrepancies.{unresolved_movement_id}": {
                 "layer_allocations": list(layer_allocations or []),
-                "recorded_at": env.recorded_at,
+                "recorded_at": (disc_row or {}).get("recorded_at") or env.recorded_at,
             },
         }},
         session=session,

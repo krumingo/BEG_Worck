@@ -558,7 +558,9 @@ async def _seed_project(db, *, mapped: bool):
 
 async def test_f7_sync_recognises_project_material_cost_once(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """639ca80: the accept row (+50) and the consume row (+30) were both cost → 80."""
+    """639ca80: the accept row (+50) and the consume row (+30) were both cost → 80.
+    5C-C25 (Р17, Крум 06.11.2026): the cost is the ACCEPTED lot (50), once;
+    the consume row is an allocation (value 30 in movement_value, total 0)."""
     from app.routes import material_smr
     _enforce_env()
     client, db = canonical_mongo_db
@@ -577,11 +579,13 @@ async def test_f7_sync_recognises_project_material_cost_once(
     probe_kinds = ["accept", "transfer_out", "write_off", "transfer", "consume"]
     total = sum(float(r["total_value"]) for r in rows
                 if r["movement_kind"] in probe_kinds and r.get("total_value") is not None)
-    assert total == pytest.approx(30.0)
-    assert by_kind["consume"]["cost_recognized"] is True
-    assert float(by_kind["consume"]["total_value"]) == pytest.approx(30.0)
-    assert by_kind["accept"]["cost_recognized"] is False
-    assert float(by_kind["accept"]["total_value"]) == 0.0
+    # 5C-C25 (Р17): still counted ONCE (never 80) — now at acceptance.
+    assert total == pytest.approx(50.0)
+    assert by_kind["consume"]["cost_recognized"] is False
+    assert float(by_kind["consume"]["total_value"]) == 0.0
+    assert float(by_kind["consume"]["movement_value"]) == pytest.approx(30.0)
+    assert by_kind["accept"]["cost_recognized"] is True
+    assert float(by_kind["accept"]["total_value"]) == pytest.approx(50.0)
     assert float(by_kind["accept"]["movement_value"]) == pytest.approx(50.0)
     # Rebuild parity: a second sync gives the same rows.
     await material_smr.sync_material_entries(PROJECT, user=_user())
@@ -594,7 +598,11 @@ async def test_f7_f8_every_report_shows_exactly_30(
         canonical_mongo_db, allow_always_gate, monkeypatch):
     """accept 5 + consume 3 @10 → project material cost 30 in every report,
     and every material_smr reader runs (639ca80: TypeError on the seven
-    `await [async listcomp]` sites)."""
+    `await [async listcomp]` sites).
+    5C-C25 (Р17, Крум 06.11.2026): the PROJECT cost is the accepted lot,
+    50, in every project report; the PACKAGE reports show the consumption
+    allocated to the package, 30 (allocation only, never a second cost);
+    the other 20 is unallocated (on site)."""
     from app.routes import full_cost, material_smr, revenue_expense
     _enforce_env()
     client, db = canonical_mongo_db
@@ -604,11 +612,12 @@ async def test_f7_f8_every_report_shows_exactly_30(
     await material_smr.sync_material_entries(PROJECT, user=_user())
 
     summary = await material_smr.get_material_summary_for_project(T, PROJECT)
-    assert summary["total_cost"] == pytest.approx(30.0)
+    # 5C-C25 (Р17): project cost 50; 30 allocated to the package, 20 not.
+    assert summary["total_cost"] == pytest.approx(50.0)
     assert summary["mapped_cost"] == pytest.approx(30.0)
-    assert summary["unmapped_cost"] == 0
+    assert summary["unmapped_cost"] == pytest.approx(20.0)
     assert summary["budget_total"] == pytest.approx(25.0)
-    assert summary["variance_value"] == pytest.approx(5.0)
+    assert summary["variance_value"] == pytest.approx(25.0)
     assert summary["has_data"] is True
 
     by_pkg = await material_smr.get_material_cost_by_exec_pkg(PKG, user=_user())
@@ -641,17 +650,19 @@ async def test_f7_f8_every_report_shows_exactly_30(
     listed = await material_smr.list_material_entries(project_id=PROJECT, user=_user())
     assert len(listed) == 2
 
+    # 5C-C25 (Р17): project reports — the accepted lot, 50.
     net = await full_cost.get_project_net_profit(PROJECT, user=_user())
-    assert net["costs"]["material"] == pytest.approx(30.0)
+    assert net["costs"]["material"] == pytest.approx(50.0)
 
     profit = await revenue_expense.get_project_profit_summary(PROJECT, user=_user())
-    assert profit["expenses"]["material"] == pytest.approx(30.0)
+    assert profit["expenses"]["material"] == pytest.approx(50.0)
 
 
 
 async def test_f7_unmapped_consumption_is_still_cost_once(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """No planned material → the rows are unmapped; still exactly 30."""
+    """No planned material → the rows are unmapped; still exactly 30.
+    5C-C25 (Р17): exactly 50 (the accepted lot), all of it unallocated."""
     from app.routes import material_smr
     _enforce_env()
     client, db = canonical_mongo_db
@@ -660,8 +671,8 @@ async def test_f7_unmapped_consumption_is_still_cost_once(
     await _receive_accept5_consume3(client, allow_always_gate, db)
     await material_smr.sync_material_entries(PROJECT, user=_user())
     summary = await material_smr.get_material_summary_for_project(T, PROJECT)
-    assert summary["total_cost"] == pytest.approx(30.0)
-    assert summary["unmapped_cost"] == pytest.approx(30.0)
+    assert summary["total_cost"] == pytest.approx(50.0)
+    assert summary["unmapped_cost"] == pytest.approx(50.0)
     warn = await material_smr.get_material_warnings(PROJECT, user=_user())
     assert warn["unmapped_entries"] == 2
 
@@ -669,7 +680,9 @@ async def test_f7_unmapped_consumption_is_still_cost_once(
 async def test_f7_projector_consumption_row_is_read_as_cost_without_a_sync(
         canonical_mongo_db, allow_always_gate, monkeypatch):
     """The command service's own projection (no sync run) is already the
-    one cost row the readers count."""
+    one cost row the readers count.
+    5C-C25 (Р17): that row is the acceptance (50); the consume row beside
+    it is an allocation row, not cost."""
     from app.routes import material_smr
     _enforce_env()
     client, db = canonical_mongo_db
@@ -677,9 +690,10 @@ async def test_f7_projector_consumption_row_is_read_as_cost_without_a_sync(
     await _seed_project(db, mapped=False)
     await _receive_accept5_consume3(client, allow_always_gate, db)
     rows = await db["material_entries"].find({"org_id": T}, {"_id": 0}).to_list(None)
-    assert [r["movement_kind"] for r in rows] == ["consume"]
+    assert sorted(r["movement_kind"] for r in rows) == ["accept", "consume"]
+    assert [r["movement_kind"] for r in rows if r["cost_recognized"]] == ["accept"]
     summary = await material_smr.get_material_summary_for_project(T, PROJECT)
-    assert summary["total_cost"] == pytest.approx(30.0)
+    assert summary["total_cost"] == pytest.approx(50.0)
 
 
 async def test_f7_sync_is_tenant_scoped(canonical_mongo_db, allow_always_gate, monkeypatch):

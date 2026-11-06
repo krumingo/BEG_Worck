@@ -199,7 +199,9 @@ async def test_f15_manual_entries_stay_beside_the_write_off(
 
 async def test_f15_no_second_register_is_written(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """Reading the card writes nothing; the write-off is one cost row only."""
+    """Reading the card writes nothing; the write-off is one cost row only.
+    5C-C25 (Р17): the write-off is one „фира" allocation row; the only cost
+    row is the acceptance."""
     from app.routes import material_waste
     client, db = canonical_mongo_db
     _patch_waste(monkeypatch, db)
@@ -210,7 +212,9 @@ async def test_f15_no_second_register_is_written(
     assert await db["material_waste_entries"].count_documents({}) == 0
     assert await db["material_entries"].count_documents({}) == before_me
     assert await db["material_entries"].count_documents(
-        {"org_id": T, "movement_kind": "write_off", "cost_recognized": True}) == 1
+        {"org_id": T, "movement_kind": "write_off", "waste": True}) == 1
+    assert await db["material_entries"].count_documents(
+        {"org_id": T, "cost_recognized": True}) == 1
 
 
 async def test_f15_date_filter_applies_to_write_offs(

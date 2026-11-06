@@ -69,27 +69,27 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     overtime_cost = round(sum(s.get("labor_cost", 0) for s in sessions if s.get("is_overtime")), 2)
 
     # ── d. MATERIAL COST ───────────────────────────────────────────
-    # From supplier invoices allocated to project — NET (без ДДС); their VAT = input VAT
-    inv_lines = await tenant.invoice_lines.find(
-        {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
-        {"_id": 0, "line_total_ex_vat": 1, "vat_amount": 1},
-    ).to_list(500)
-    material_cost_invoices = round(sum(l.get("line_total_ex_vat", 0) for l in inv_lines), 2)
-    input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
-
-    # From the warehouse path — 5C-C22: the ONE shared helper
-    # (app/services/canonical_material_cost.project_material_cost): canonical
-    # consumption + „фира", plus legacy issue rows dated before the tenant
-    # cutover (Р13); legacy rows after the cutover are never counted.
+    # 5C-C25 / FG-17 — ONE source: the shared helper
+    # (app/services/canonical_material_cost.project_material_cost). It
+    # already sums Path A (canonical: cost at acceptance, Р17; pre-cutover
+    # legacy issues, Р13) and Path B (invoice lines allocated to the project)
+    # as separate lots. The old `max(invoice, warehouse)` is gone: it made
+    # the P&L disagree with every other report (FG-17: 100 vs 50).
     from app.services.canonical_material_cost import project_warehouse_material_cost
     wh = await project_warehouse_material_cost(tenant, org_id, project_id)
-    material_cost_warehouse = wh["material_cost"]
+    material_cost_invoices = wh["invoice_cost"]
+    material_total = wh["material_cost"]
 
-    # 5C-C21 F-12 (Р10) — a project write-off is project cost, shown as its
-    # own „фира" line. It is part of the warehouse figure, so the existing
-    # max(invoice, warehouse) rule still sees it, and it is split out of the
-    # result: material_cost + material_waste_cost == the one material total.
-    material_total = max(material_cost_invoices, material_cost_warehouse)
+    # Input VAT on the supplier invoice lines allocated to the project (VAT
+    # only — the cost of those lines is inside the helper's total).
+    inv_lines = await tenant.invoice_lines.find(
+        {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
+        {"_id": 0, "vat_amount": 1},
+    ).to_list(500)
+    input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
+
+    # 5C-C21 F-12 (Р10) — „фира" is part of the total and is shown as its own
+    # line: material_cost + material_waste_cost == the helper's total.
     material_waste_cost = round(wh.get("waste_cost", 0.0) or 0.0, 2)
     material_cost = round(material_total - material_waste_cost, 2)
 
@@ -169,8 +169,15 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
         # 5C-C20 F-9 — where expense.material_cost came from (read-only provenance).
         "warehouse_cost_basis": {
             "warehouse": wh["source"],
-            "warehouse_material_cost": material_cost_warehouse,
+            "warehouse_material_cost": material_total,
             "invoice_cost": material_cost_invoices,
+            # 5C-C25 (Р17 / FG-17) — no max(): one helper total.
+            "cost_rule": wh["cost_rule"],
+            "accepted_cost": wh["accepted_cost"],
+            "returned_cost": wh["returned_cost"],
+            "invoice_linked_excluded_cost": wh["invoice_linked_excluded_cost"],
+            "allocated_cost": wh["allocated_cost"],
+            "unallocated_cost": wh["unallocated_cost"],
             "legacy_excluded_cost": wh["legacy_excluded_cost"],
             "consumed_qty": wh["consumed_qty"],
             "waste_cost": material_waste_cost,

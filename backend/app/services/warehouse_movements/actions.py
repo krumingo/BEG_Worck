@@ -77,9 +77,11 @@ QUARANTINE_ACTIONS: FrozenSet[CanonicalAction] = frozenset({
 # Rule B / F-09: destination acceptance costs the accepted quantity only.
 # Dispatch has no project cost; unresolved remainder stays in transit.
 # Owner decision: https://github.com/krumingo/BEG_Worck/issues/52#issuecomment-6100672841
+# 5C-C25 (Р17, Крум 06.11.2026): project cost is recognised at ACCEPT (and on
+# a direct delivery to the project). CONSUME_TO_SMR only allocates that cost
+# to SMR / packages, so it is NOT a costing action (resolves FG-20).
 RULE_B_COSTING_ACTIONS: FrozenSet[CanonicalAction] = frozenset({
     CanonicalAction.ACCEPT_PROJECT_DELIVERY,
-    CanonicalAction.CONSUME_TO_SMR,
     CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT,
 })
 

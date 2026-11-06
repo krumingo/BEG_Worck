@@ -207,12 +207,16 @@ async def test_f12_project_write_off_is_project_cost_once_as_fira_in_every_repor
     assert r["pnl"]["warehouse_cost_basis"]["waste_qty"] == pytest.approx(2.0)
     assert r["pnl"]["profit"]["gross_profit"] == pytest.approx(-50.0)
     assert r["pkg_fin"]["margin"]["gross_margin"] == pytest.approx(50.0)
-    # Exactly one cost row per movement: consume 30 + write_off 20.
+    # 5C-C25 (Р17, Крум 06.11.2026): exactly ONE cost row — the acceptance
+    # (5 × 10 = 50); consume (30) and write-off („фира" 20) are allocation
+    # rows (value in movement_value, total_value 0) — the total stays 50.
     rows = await db["material_entries"].find(
         {"org_id": T, "projection_source": "canonical_warehouse_service"},
         {"_id": 0}).to_list(None)
-    assert sorted((x["movement_kind"], float(x["total_value"])) for x in rows) == \
-        [("consume", 30.0), ("write_off", 20.0)]
+    assert sorted((x["movement_kind"], float(x["total_value"]), float(x["movement_value"]))
+                  for x in rows) == \
+        [("accept", 50.0, 50.0), ("consume", 0.0, 30.0), ("write_off", 0.0, 20.0)]
+    assert [x["movement_kind"] for x in rows if x["cost_recognized"]] == ["accept"]
     # The project quantity trail: 5 in, 3 consumed, 2 written off, 0 left.
     from app.routes import procurement
     [row] = (await procurement.get_project_material_ledger(PROJECT, user=_user()))["ledger"]
@@ -222,7 +226,10 @@ async def test_f12_project_write_off_is_project_cost_once_as_fira_in_every_repor
 
 async def test_f12_central_warehouse_write_off_is_not_project_cost(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """Write-off 2 from the central warehouse → 0 on the project (no row)."""
+    """Write-off 2 from the central warehouse → 0 on the project (no row).
+    5C-C25 (Р17): the project reports show the accepted lot (50); the package
+    reports show the 30 allocated by consumption. A warehouse write-off adds
+    nothing to either."""
     from app.routes import full_cost, material_smr, project_pnl, revenue_expense
     monkeypatch.setenv("FILE_REGISTRY_ENABLED", "1")
     client, db = canonical_mongo_db
@@ -235,7 +242,9 @@ async def test_f12_central_warehouse_write_off_is_not_project_cost(
 
     r = await _all_reports(material_smr, full_cost, revenue_expense, project_pnl, _user())
     assert _waste_lines(r) == {k: 0 for k in _waste_lines(r)}
-    assert _totals(r) == {k: pytest.approx(30.0) for k in _totals(r)}
+    package_level = {"pkg_fin", "pkg_brk", "pkg_net", "by_pkg"}
+    assert _totals(r) == {k: pytest.approx(30.0 if k in package_level else 50.0)
+                          for k in _totals(r)}
     assert await db["material_entries"].count_documents(
         {"org_id": T, "movement_kind": "write_off"}) == 0
 
@@ -310,8 +319,10 @@ async def test_f12_sync_rebuild_and_recompute_keep_fira_once(
     assert pkg["actual_material_waste_cost"] == pytest.approx(20.0)
     rows = await db["material_entries"].find(
         {"org_id": T, "movement_kind": "write_off"}, {"_id": 0}).to_list(None)
-    assert len(rows) == 1 and rows[0]["cost_recognized"] is True
-    assert float(rows[0]["total_value"]) == pytest.approx(20.0)
+    # 5C-C25 (Р17): the „фира" row is an allocation of the accepted cost.
+    assert len(rows) == 1 and rows[0]["cost_recognized"] is False
+    assert float(rows[0]["movement_value"]) == pytest.approx(20.0)
+    assert float(rows[0]["total_value"]) == 0.0
 
 
 async def test_f12_fira_is_tenant_scoped(canonical_mongo_db, allow_always_gate, monkeypatch):

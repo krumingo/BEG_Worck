@@ -202,21 +202,31 @@ def test_c13_3_sales_route_does_not_build_fake_ctx():
 def test_c13_4_material_entries_rebuild_uses_canonical_schema():
     """Rebuild endpoint emits `quantity`/`total_value`, not `qty`/`total_cost`."""
     src = Path("app/routes/material_smr.py").read_text()
-    # The canonical row written by the rebuild must have:
-    assert '"quantity": qty,' in src or '"quantity":  qty,' in src, (
+    # 5C-C25 (Р17): the rebuild no longer has its own row body — it writes
+    # the rows of the shared builder `projections.material_cost_rows`, the
+    # same function the live projector uses, so the two schemas cannot
+    # diverge. The canonical row written by that builder must have:
+    builder_src = Path("app/services/warehouse_movements/projections.py").read_text()
+    builder = builder_src[builder_src.index("def material_cost_rows"):]
+    assert "material_cost_rows(" in src, (
+        "C13.4 regression: the rebuild must write the projector's rows."
+    )
+    assert '"quantity": str(qty),' in builder, (
         "C13.4 regression: rebuild writes legacy `qty`, not canonical "
         "`quantity`. The projector and the rebuild would then be two "
         "incompatible schemas tagged canonical."
     )
-    assert '"total_value": total_value,' in src, (
+    assert '"total_value": str(value),' in builder, (
         "C13.4 regression: rebuild writes legacy `total_cost`, not "
         "canonical `total_value`."
     )
     # And the LEGACY fields are gone from the row body:
-    assert re.search(r'"qty":\s+qty,\s+"unit_cost"', src) is None, (
-        "C13.4 regression: the row still carries parallel legacy "
-        "names. UNIFY on canonical."
-    )
+    for text in (src, builder):
+        assert re.search(r'"qty":\s+qty,\s+"unit_cost"', text) is None, (
+            "C13.4 regression: the row still carries parallel legacy "
+            "names. UNIFY on canonical."
+        )
+        assert '"total_cost":' not in text.split("async def get_material_summary_for_project")[0]
 
 
 def test_c13_4_material_readers_use_canonical_names():
@@ -233,7 +243,11 @@ def test_c13_4_material_readers_use_canonical_names():
     assert "project_material_cost(" in src
     for text in (src, helper):
         assert '.get("total_cost")' not in text and '["total_cost"] for e' not in text
-    assert '"movement_kind"' in src and '"movement_kind"' in helper, (
+    # 5C-C25 (Р17): the row kinds are written by the shared builder the
+    # sync calls; the reader (helper) dispatches on them.
+    builder = Path("app/services/warehouse_movements/projections.py").read_text()
+    assert "material_cost_rows(" in src
+    assert '"movement_kind"' in builder and '"movement_kind"' in helper, (
         "C13.4 regression: readers must dispatch on `movement_kind`, "
         "not legacy `movement_type`."
     )

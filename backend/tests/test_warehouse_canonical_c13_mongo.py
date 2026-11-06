@@ -513,12 +513,16 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
         idempotency_key="acc:1", reason="a", file_ids=["f"],
     ))
 
-    # Accept alone must NOT recognise project cost (FLOW-009 Path A).
-    assert await db["material_entries"].count_documents(
+    # 5C-C25 (Р17, Крум 06.11.2026 — replaces the C18 reading above): the
+    # ACCEPT recognises the project cost of the whole accepted lot, exactly
+    # once: ONE canonical row, 5 × 10 = 50.
+    accept_rows = await db["material_entries"].find(
         {"tenant_id": "T",
-         "projection_source": "canonical_warehouse_service"}) == 0, (
-        "C13.4 regression: ACCEPT_PROJECT_DELIVERY recognised project cost; "
-        "warehouse material becomes project cost only at consumption."
+         "projection_source": "canonical_warehouse_service"}, {"_id": 0}).to_list(None)
+    assert [(r["movement_kind"], r["cost_recognized"], Decimal(r["total_value"]))
+            for r in accept_rows] == [("accept", True, Decimal("50"))], (
+        "C13.4/Р17 regression: ACCEPT_PROJECT_DELIVERY must recognise the "
+        f"accepted lot as project cost exactly once; got {accept_rows!r}"
     )
 
     consume = await svc.execute(_TestCtx("T"), db, _tenant_coll(db), CommandInput(
@@ -563,22 +567,32 @@ async def test_c13_4_material_entries_rebuild_twice_byte_parity(
     assert first_snapshot == second_snapshot, (
         "C13.4 regression: rebuild-twice is not byte-identical"
     )
-    # Byte-identical rebuild parity also requires the canonical row to
+    # Byte-identical rebuild parity also requires the canonical rows to
     # exist (otherwise the comparison would be trivially ``[] == []`` and
-    # could hide a projection outage): exactly ONE row, from the
-    # consumption, with the FIFO value of the received layer (3 × 10).
-    assert len(first_snapshot) == 1, (
-        "C13.4 regression: expected exactly one canonical material_entries "
-        f"row (from CONSUME_TO_SMR); got {first_snapshot!r}"
+    # could hide a projection outage). 5C-C25 (Р17): exactly TWO rows — the
+    # acceptance (the cost, 5 × 10 = 50) and the consumption (allocation to
+    # SMR only: its FIFO value 3 × 10 = 30 in ``movement_value``, ``total_value``
+    # 0, never a second cost).
+    assert len(first_snapshot) == 2, (
+        "C13.4 regression: expected exactly two canonical material_entries "
+        f"rows (ACCEPT + CONSUME_TO_SMR); got {first_snapshot!r}"
     )
-    row = first_snapshot[0]
+    by_kind = {r["movement_kind"]: r for r in first_snapshot}
+    assert set(by_kind) == {"accept", "consume"}
+    acc_row = by_kind["accept"]
+    assert acc_row["cost_recognized"] is True
+    assert Decimal(acc_row["total_value"]) == Decimal("50")
+    assert acc_row["project_id"] == "p1"
+    row = by_kind["consume"]
     assert row["movement_id"] == consume.movement_id
     assert row["id"] == f"me_{consume.movement_id}"
     assert row["org_id"] == "T" and row["tenant_id"] == "T"
     assert (row["project_id"], row["smr_id"], row["item_id"]) == ("p1", "smr-1", "I")
     assert Decimal(row["quantity"]) == Decimal("3")
     assert Decimal(row["unit_value"]) == Decimal("10")
-    assert Decimal(row["total_value"]) == Decimal("30")
+    assert row["cost_recognized"] is False
+    assert Decimal(row["total_value"]) == Decimal("0")
+    assert Decimal(row["movement_value"]) == Decimal("30")
 
     # The legacy row still exists, byte-identical.
     legacy = await db["material_entries"].find_one({"id": "legacy_1"}, {"_id": 0})

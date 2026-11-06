@@ -115,17 +115,43 @@ async def _batches_value(db, loc: LocationKey) -> Decimal:
     return total.quantize(Q4)
 
 
+# 5C-C25 (Р17, Крум 06.11.2026): the project cost is recognised at
+# ACCEPTANCE (Σ exact allocations of the acceptances landing on the
+# project); consumption and write-off only ALLOCATE it. Both sides are
+# checked: cost (ledger acceptances ↔ cost rows ↔ helper) and allocation
+# (ledger consume/write-off ↔ allocation rows).
+
 async def _cost_entries(db) -> Decimal:
     total = Decimal("0")
     async for e in db["material_entries"].find({
         "tenant_id": T, "projection_source": "canonical_warehouse_service",
-        "movement_kind": {"$in": ["consume", "write_off"]}, "cost_recognized": True,
+        "cost_recognized": True,
     }):
         total += Decimal(str(e["total_value"]))
     return total.quantize(Q4)
 
 
 async def _ledger_cost(db) -> Decimal:
+    total = Decimal("0")
+    async for row in db["warehouse_transactions"].find({
+        "tenant_id": T, "action": "accept_project_delivery",
+        "destination.location_type": "project",
+    }):
+        total += allocations_value(row["layer_allocations"])
+    return total.quantize(Q4)
+
+
+async def _allocation_entries(db) -> Decimal:
+    total = Decimal("0")
+    async for e in db["material_entries"].find({
+        "tenant_id": T, "projection_source": "canonical_warehouse_service",
+        "movement_kind": {"$in": ["consume", "write_off"]}, "cost_recognized": False,
+    }):
+        total += Decimal(str(e["movement_value"]))
+    return total.quantize(Q4)
+
+
+async def _ledger_allocated(db) -> Decimal:
     total = Decimal("0")
     async for row in db["warehouse_transactions"].find({
         "tenant_id": T, "action": {"$in": ["consume_to_smr", "write_off"]},
@@ -148,14 +174,20 @@ async def _projection_snapshot(db):
     return batches, entries
 
 
-async def _assert_agree(run: _Run, expected_cost: Decimal, expected_stock: Decimal):
-    """ledger ↔ stock ↔ batches ↔ material_entries ↔ shared cost helper."""
+async def _assert_agree(run: _Run, expected_cost: Decimal, expected_stock: Decimal,
+                        expected_allocated: Decimal):
+    """ledger ↔ stock ↔ batches ↔ material_entries ↔ shared cost helper.
+    5C-C25 (Р17): cost = accepted value; allocation = consumed + written off."""
     db = run.db
     prj = await run.stock(PRJ)
     assert Decimal(prj["total_value"]) == expected_stock
     assert await _batches_value(db, PRJ) == expected_stock
     assert await _ledger_cost(db) == expected_cost
     assert await _cost_entries(db) == expected_cost
+    assert await _ledger_allocated(db) == expected_allocated
+    assert await _allocation_entries(db) == expected_allocated
+    # Nothing is created or lost: stock on site + allocated = accepted cost.
+    assert expected_stock + expected_allocated == expected_cost
     cost = await project_material_cost(TenantData.for_resolved_org(db, T), T, PROJECT)
     # the report helper presents money in stotinki (2 dp); the basis above is exact
     assert cost["total_cost"] == pytest.approx(round(float(expected_cost), 2), abs=1e-9)
@@ -206,10 +238,10 @@ async def test_mixed_prices_full_accept_keeps_two_exact_layers_in_fifo_order(
     # FIFO consume takes the @1 layer first.
     c1 = await run.consume("10000")
     assert _alloc_value(c1) == Decimal("10000")
-    await _assert_agree(run, Decimal("10000"), Decimal("40000"))
+    await _assert_agree(run, Decimal("50000"), Decimal("40000"), Decimal("10000"))
     c2 = await run.consume("20000")
     assert _alloc_value(c2) == Decimal("40000")
-    await _assert_agree(run, Decimal("50000"), Decimal("0"))
+    await _assert_agree(run, Decimal("50000"), Decimal("0"), Decimal("50000"))
 
 
 async def test_partial_accepts_then_consume_and_write_off_keep_the_exact_sum(
@@ -226,19 +258,19 @@ async def test_partial_accepts_then_consume_and_write_off_keep_the_exact_sum(
     v1 = _alloc_value(a1)
     assert Decimal((await run.stock(PRJ))["total_value"]) == v1
     assert (await run.stock(PRJ))["layer_count"] == 2
-    await _assert_agree(run, Decimal("0"), v1)
+    await _assert_agree(run, v1, v1, Decimal("0"))
 
     a2 = await run.accept(disp, "13")
     v2 = _alloc_value(a2)
     assert v1 + v2 == received                        # nothing created or lost
-    await _assert_agree(run, Decimal("0"), received)
+    await _assert_agree(run, received, received, Decimal("0"))
 
     c1 = await run.consume("4")
     w1 = await run.write_off("6")
     cost = _alloc_value(c1) + _alloc_value(w1)
-    await _assert_agree(run, cost, received - cost)
+    await _assert_agree(run, received, received - cost, cost)
     c2 = await run.consume("8")
-    await _assert_agree(run, cost + _alloc_value(c2), Decimal("0"))
+    await _assert_agree(run, received, Decimal("0"), cost + _alloc_value(c2))
     assert cost + _alloc_value(c2) == received        # 30.68 exactly
 
     # the „фира" line is exact too
@@ -263,8 +295,11 @@ async def test_rebuild_twice_and_sync_keep_exact_values(
     # PRJ layers (FIFO): 4000@1, 8000@2 (accept 1) · 6000@1, 12000@2 (accept 2)
     # consume 15000 = 4000@1 + 8000@2 + 3000@1 = 23000
     # write-off 5000 = 3000@1 + 2000@2 = 7000 („фира")
-    expected_cost = Decimal("30000")
-    await _assert_agree(run, expected_cost, Decimal("50000") - expected_cost)
+    # 5C-C25 (Р17): cost = the accepted 50000; 30000 allocated (23000 + 7000).
+    expected_cost = Decimal("50000")
+    expected_allocated = Decimal("30000")
+    await _assert_agree(run, expected_cost, expected_cost - expected_allocated,
+                        expected_allocated)
 
     live = await _projection_snapshot(db)
     await rebuild_from_ledger(db, tenant_id=T)
@@ -272,14 +307,14 @@ async def test_rebuild_twice_and_sync_keep_exact_values(
     await rebuild_from_ledger(db, tenant_id=T)
     second = await _projection_snapshot(db)
     assert live == first == second
-    await _assert_agree(run, expected_cost, Decimal("20000"))
+    await _assert_agree(run, expected_cost, Decimal("20000"), expected_allocated)
 
     before = await _all_reports()
     await material_smr.sync_material_entries(PROJECT, user=_user())
     after = await _all_reports()
     assert before == after
-    _assert_all(after, 30000.0, 7000.0)
-    await _assert_agree(run, expected_cost, Decimal("20000"))
+    _assert_all(after, 50000.0, 7000.0, package_total=30000.0)
+    await _assert_agree(run, expected_cost, Decimal("20000"), expected_allocated)
 
 
 async def test_consume_from_a_mixed_bucket_follows_fifo_across_rows(
@@ -363,7 +398,9 @@ async def test_legacy_rows_startup_twice_then_canonical_write(fresh_db, allow_al
 async def test_real_legacy_shape_counts_before_the_cutover_on_every_report(
         canonical_mongo_db, allow_always_gate, monkeypatch):
     """C22's 100 + 30 = 130, with the legacy row in its REAL shape (no
-    invented ``movement_id``) under the C24 index."""
+    invented ``movement_id``) under the C24 index.
+    5C-C25 (Р17): 100 + the accepted 50 = 150 on the project; the package
+    allocation is 100 + the consumed 30 = 130."""
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
     await _seed(db)
@@ -374,7 +411,7 @@ async def test_real_legacy_shape_counts_before_the_cutover_on_every_report(
     disp = await run.dispatch("5")
     await run.accept(disp, "5")
     await run.consume("3")
-    _assert_all(await _all_reports(), 130.0, 0.0)
+    _assert_all(await _all_reports(), 150.0, 0.0, package_total=130.0)
     stored = await db.warehouse_transactions.find_one({"id": legacy["id"]}, {"_id": 0})
     assert "movement_id" not in stored and "tenant_id" not in stored
 

@@ -91,6 +91,8 @@ function CommandForm({ onResult, allowedActions }) {
   const [smrId, setSmrId] = useState("");
   const [dispatchMovementId, setDispatchMovementId] = useState("");
   const [acceptedQuantity, setAcceptedQuantity] = useState("");
+  // 5C-C25 (Р18): a returned lot is accepted into the warehouse QUARANTINE.
+  const [acceptState, setAcceptState] = useState(STATES.FREE);
   const [requestedQuantity, setRequestedQuantity] = useState("");
   const [reason, setReason] = useState("");
   const [notes, setNotes] = useState("");
@@ -103,10 +105,20 @@ function CommandForm({ onResult, allowedActions }) {
   // project is credited only by its acceptance. The server enforces it; the
   // form does not even offer another destination.
   const isDispatch = action === ACTIONS.DISPATCH_WAREHOUSE_TO_PROJECT;
-  // 5C-C21 F-13 (Р11): a warehouse→warehouse transfer is in transit too; the
-  // receiving warehouse is the `transfer_target`, credited only on acceptance.
+  // 5C-C21 F-13 (Р11) + 5C-C25 (Р18): EVERY transfer (warehouse→warehouse,
+  // project→warehouse, project→project) is in transit; the receiving
+  // location is the `transfer_target`, credited only on acceptance. A return
+  // to a warehouse targets its QUARANTINE (quality check before reuse).
   const isWhTransfer = action === ACTIONS.TRANSFER_WAREHOUSE_TO_WAREHOUSE;
-  const inTransit = isDispatch || isWhTransfer;
+  const isReturn = action === ACTIONS.TRANSFER_PROJECT_TO_WAREHOUSE;
+  const isProjectTransfer = action === ACTIONS.TRANSFER_PROJECT_TO_PROJECT;
+  const isTransfer = isWhTransfer || isReturn || isProjectTransfer;
+  const inTransit = isDispatch || isTransfer;
+  const targetTypes = isProjectTransfer
+    ? [LOCATION_TYPES.PROJECT, LOCATION_TYPES.SUBPROJECT]
+    : [LOCATION_TYPES.CENTRAL_WAREHOUSE, LOCATION_TYPES.SMALL_WAREHOUSE];
+  const targetType = targetTypes.includes(destType) ? destType : targetTypes[0];
+  const targetState = isReturn ? STATES.QUARANTINE : STATES.FREE;
   // 5C-C19 F-6: consumption is bound to an SMR.
   const isConsume = action === ACTIONS.CONSUME_TO_SMR;
   const needsReason = action === ACTIONS.REVISION_ADJUSTMENT
@@ -143,12 +155,13 @@ function CommandForm({ onResult, allowedActions }) {
           location_type: LOCATION_TYPES.IN_TRANSIT, location_id: "pending",
           state: STATES.IN_TRANSIT,
         };
-        if (isWhTransfer && destId) payload.transfer_target = {
-          location_type: destType, location_id: destId, state: STATES.FREE,
+        if (isTransfer && destId) payload.transfer_target = {
+          location_type: targetType, location_id: destId, state: targetState,
         };
       } else if (destId) payload.destination = {
         location_type: destType, location_id: destId,
-        state: itemPending ? STATES.QUARANTINE : STATES.FREE,
+        state: (itemPending || (needsAcceptance && acceptState === STATES.QUARANTINE))
+          ? STATES.QUARANTINE : STATES.FREE,
       };
       if (projectId) payload.project_id = projectId;
       if (isConsume && smrId) payload.smr_id = smrId.trim();
@@ -178,7 +191,8 @@ function CommandForm({ onResult, allowedActions }) {
   }, [action, itemId, unit, quantity, unitValue, sourceType, sourceId,
       destType, destId, projectId, smrId, dispatchMovementId, acceptedQuantity,
       requestedQuantity, reason, notes, itemPending, outbound, isDispatch,
-      isWhTransfer, inTransit, isConsume, onResult]);
+      isTransfer, targetType, targetState, acceptState, needsAcceptance,
+      inTransit, isConsume, onResult]);
 
   return (
     <div className="wh-form">
@@ -227,21 +241,25 @@ function CommandForm({ onResult, allowedActions }) {
 
       {inTransit ? (
         <Field label="Дестинация"
-               hint={isWhTransfer
-                 ? "Трансферът остава „в транзит“, докато целевият склад не го приеме (Rule B)."
+               hint={isTransfer
+                 ? "Трансферът остава „в транзит“, докато целта не го приеме (Rule B, Р18)."
                  : "Изпращането остава „в транзит“, докато обектът не го приеме (Rule B)."}>
           <div className="wh-fixed" data-testid="wh-dispatch-in-transit">
             in_transit · pending
           </div>
         </Field>
       ) : null}
-      {isWhTransfer ? (
-        <Field label="Целеви склад (кредитира се само при приемане)">
+      {isTransfer ? (
+        <Field label={isProjectTransfer
+                 ? "Целеви обект (кредитира се само при приемане)"
+                 : "Целеви склад (кредитира се само при приемане)"}
+               hint={isReturn
+                 ? "Връщането влиза в КАРАНТИНА на склада (проверка на качеството, Р18)."
+                 : undefined}>
           <div className="wh-row">
-            <select value={destType} data-testid="wh-transfer-target-type"
+            <select value={targetType} data-testid="wh-transfer-target-type"
                     onChange={e => setDestType(e.target.value)}>
-              <option value={LOCATION_TYPES.CENTRAL_WAREHOUSE}>central_warehouse</option>
-              <option value={LOCATION_TYPES.SMALL_WAREHOUSE}>small_warehouse</option>
+              {targetTypes.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             <input value={destId} onChange={e => setDestId(e.target.value)}
                    placeholder="ID" data-testid="wh-transfer-target-id" />
@@ -284,6 +302,14 @@ function CommandForm({ onResult, allowedActions }) {
             <input type="number" step="0.0001" inputMode="decimal"
                    value={acceptedQuantity}
                    onChange={e => setAcceptedQuantity(e.target.value)} />
+          </Field>
+          <Field label="Приемане в"
+                 hint="Върнат от обект материал се приема в карантина (Р18).">
+            <select value={acceptState} data-testid="wh-accept-state"
+                    onChange={e => setAcceptState(e.target.value)}>
+              <option value={STATES.FREE}>свободна наличност</option>
+              <option value={STATES.QUARANTINE}>карантина</option>
+            </select>
           </Field>
           <Field label="Количество заявено">
             <input type="number" step="0.0001" inputMode="decimal"

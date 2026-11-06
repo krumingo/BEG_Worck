@@ -23,23 +23,20 @@ def _tenant(user: dict) -> TenantData:
 
 router = APIRouter(tags=["Material Cost by SMR"])
 
-# 5C-C19 F-7 — project material cost is recognised ONCE, at consumption
-# (CLAUDE.md §7; FLOW-009 "Разход по обект — без двойно броене", Path A;
-# the C18 decision for C13.4). Accepting a delivery, a transfer, a return or
-# a write-off only moves stock between buckets: those `material_entries`
-# rows keep the quantity trail for the UI and the moved stock value in
-# `movement_value`, but carry `total_value = 0` and are never summed as cost.
-# Every cost reader in this module filters on COST_KINDS.
+# 5C-C25 (Р17, Крум 06.11.2026; replaces 5C-C19 F-7 "cost at consumption"):
+# project material cost is recognised ONCE, when the material is ACCEPTED on
+# the project (whole accepted quantity, exact FIFO layers). A lot accepted
+# away from the project (return / transfer) reduces it. Consumption per SMR
+# and „фира" are ALLOCATION rows (`total_value = 0`, value in
+# `movement_value`) — used for package reports and budgets, never as a
+# second cost. Every cost reader goes through `project_material_cost`.
 from app.services.canonical_material_cost import (  # noqa: E402
-    COST_KINDS,
     canonical_project_trail,
-    is_project_location,
     package_material_split,
     project_material_cost,
     split_for_package,
     resolve_planned,
 )
-from app.services.warehouse_movements.fifo import allocations_value  # noqa: E402
 # 5C-C20 F-10 — every package/project material figure below is computed at
 # READ time from the canonical rows (consume rows of `material_entries`,
 # written by the command service inside the consume transaction). The
@@ -115,92 +112,43 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
     # `projection_version`. UI linkage fields (`execution_package_id`,
     # `planned_material_id`, `material_name`) are additive linkage,
     # not alternate names for the same quantity/value scalars.
-    CANONICAL_ACTIONS = {
-        "accept_project_delivery": ("accept", 1),
-        "consume_to_smr": ("consume", 1),
-        "transfer_project_to_warehouse": ("transfer_out", -1),
-        "transfer_project_to_project": ("transfer", 1),
-        "revision_adjustment": ("revision", 1),
-        # 5C-C21 F-12: a project write-off is cost (фира), so it is +1
-        # like a consumption (both leave the project as cost).
-        "write_off": ("write_off", 1),
-    }
-
+    # 5C-C25 (Р17) — the rows are built by THE SAME function as the live
+    # projector and `rebuild_from_ledger` (`projections.material_cost_rows`):
+    # an acceptance on the project is cost, a lot accepted away from it
+    # reduces it, a consumption / write-off is an allocation row. So sync,
+    # rebuild and the live write give the same rows and change no number.
+    from app.services.warehouse_movements.projections import (
+        _RowShim, material_cost_rows)
     cursor = tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id,
-         "action": {"$in": list(CANONICAL_ACTIONS.keys())}},
+        {"org_id": org_id, "action": {"$exists": True},
+         "$or": [{"project_id": project_id},
+                 {"destination.location_id": project_id},
+                 {"source.location_id": project_id},
+                 {"transit_origin.project_id": project_id},
+                 {"transit_origin.location.location_id": project_id}]},
         {"_id": 0},
     ).sort([("ledger_sequence", 1), ("recorded_at", 1), ("movement_id", 1)])
     async for row in cursor:
-        action = row.get("action")
-        kind, sign = CANONICAL_ACTIONS[action]
-        qty = float(row.get("accepted_quantity") or row.get("quantity") or 0) * sign
-        pm = (planned_by_item.get(row.get("item_id"))
-              or planned_by_name.get((row.get("item_id") or "").lower().strip()))
-        unit_value = row.get("unit_value")
-        try:
-            unit_value_f = float(unit_value) if unit_value is not None else None
-        except (TypeError, ValueError):
-            unit_value_f = None
-        mv_id = row.get("movement_id")
-        # 5C-C24 F-55-C23-01: the movement value is the EXACT sum of its
-        # FIFO layer allocations (same helper as the projector), never
-        # quantity × the rounded weighted-average unit value.
-        if row.get("layer_allocations"):
-            movement_value = float(allocations_value(row["layer_allocations"])) * sign
-        else:
-            movement_value = (unit_value_f * qty) if unit_value_f is not None else None
-        # 5C-C19 F-7: only a consumption is project cost.
-        # 5C-C21 F-12: a write-off only from a project bucket (Р10).
-        cost_recognized = kind in COST_KINDS and (
-            kind != "write_off" or is_project_location(row.get("source")))
-        if cost_recognized:
-            total_value = movement_value
-        else:
-            total_value = 0.0
-        entry = {
-            # CODEX C11.3 / C12.6 / C13.4 — DETERMINISTIC id and
-            # VOLATILE-FREE body. A rebuild on the same ledger yields
-            # byte-identical rows (modulo Mongo's own _id).
-            # `created_at` is NOT written; `recorded_at` is the only
-            # time the projection carries.
-            "id": f"me_{mv_id}",
-            # CANONICAL identity (matches _project_consumption):
-            "tenant_id": org_id,
-            "org_id": org_id,                 # alias for legacy query
-            "project_id": project_id,
-            "movement_id": mv_id,
-            "item_id": row.get("item_id"),
-            "unit": row.get("unit"),
-            # CANONICAL quantity/value fields (match
-            # _project_consumption). Signed `quantity` carries the Rule
-            # B direction via `kind`.
-            "quantity": qty,
-            "unit_value": unit_value_f,
-            "total_value": total_value,
-            "movement_value": movement_value,
-            "cost_recognized": cost_recognized,
-            "smr_id": row.get("smr_id"),
-            "currency": row.get("currency") or "BGN",
-            # UI linkage (not a parallel schema — purely additive):
-            "execution_package_id": pm["execution_package_id"] if pm else None,
-            "planned_material_id": pm["id"] if pm else None,
-            "offer_line_id": pm.get("offer_line_id") if pm else None,
-            "material_name": pm.get("material_name") if pm else row.get("item_id"),
-            "movement_kind": kind,
-            "mapped": pm is not None,
-            # Ledger provenance:
-            "ledger_sequence": row.get("ledger_sequence"),
-            "recorded_at": row.get("recorded_at"),
-            # Projection tagging:
-            "projection_source": "canonical_warehouse_service",
-            "projection_version": 2,
-        }
-        # Upsert on deterministic id so re-run is pure replay parity.
-        await tenant.material_entries.update_one(
-            {"id": entry["id"]}, {"$set": entry}, upsert=True,
-        )
-        created += 1
+        for entry in material_cost_rows(_RowShim(row),
+                                        transit_origin=row.get("transit_origin")):
+            if entry.get("project_id") != project_id:
+                continue
+            pm = (planned_by_item.get(entry.get("item_id"))
+                  or planned_by_name.get((entry.get("item_id") or "").lower().strip()))
+            entry.update({
+                # UI linkage (additive, not a parallel schema):
+                "execution_package_id": pm["execution_package_id"] if pm else None,
+                "planned_material_id": pm["id"] if pm else None,
+                "offer_line_id": pm.get("offer_line_id") if pm else None,
+                "material_name": pm.get("material_name") if pm else entry.get("item_id"),
+                "mapped": pm is not None,
+                "ledger_sequence": row.get("ledger_sequence"),
+            })
+            # Upsert on deterministic id so re-run is pure replay parity.
+            await tenant.material_entries.update_one(
+                {"org_id": org_id, "id": entry["id"]}, {"$set": entry}, upsert=True,
+            )
+            created += 1
 
     return {
         "ok": True,
@@ -264,9 +212,10 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
                 "returned_qty": 0, "consumed_qty": 0, "waste_qty": 0,
                 "waste_cost": 0, "net_cost": 0})
 
-        # 5C-C22 — the counted cost lines of the ONE helper (canonical
-        # consumption + „фира" + pre-cutover legacy issues, Р13).
-        for e in cost["lines"]:
+        # 5C-C22 / 5C-C25 (Р17) — the package ALLOCATION lines of the ONE
+        # helper (consumption per SMR + „фира" + pre-cutover legacy issues,
+        # Р13). Sums to the helper's ``by_package``.
+        for e in cost["package_lines"]:
             if e["package_id"] != pkg_id:
                 continue
             entries_count += 1

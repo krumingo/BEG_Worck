@@ -318,14 +318,14 @@ async def get_project_material_summary(project_id: str, user: dict = Depends(req
     ).to_list(100)
     purchased_value = sum(si.get("subtotal", 0) or sum(l.get("total_price", 0) for l in si.get("lines", [])) for si in sinvs)
 
-    # Warehouse material cost — 5C-C22: the ONE shared helper (canonical
-    # consumption + „фира" + legacy issues dated before the tenant cutover,
-    # Р13). Legacy return rows never carried a price (value 0), and a
-    # canonical return is not cost, so returned_value is 0 by the canon.
+    # Warehouse material cost — the ONE shared helper. 5C-C25 (Р17): cost
+    # is what was accepted on the project (+ pre-cutover legacy, Р13, + Path B
+    # invoice lines, FG-17); a lot accepted back in a warehouse (or on another
+    # project) reduces it. Legacy return rows never carried a price.
     from app.services.canonical_material_cost import project_material_cost, cost_basis
     _mat = await project_material_cost(tenant, org_id, project_id)
-    issued_value = _mat["total_cost"]
-    returned_value = 0.0
+    returned_value = _mat["returned_cost"]
+    issued_value = round(_mat["total_cost"] + returned_value, 2)
     net_material_cost = round(issued_value - returned_value, 2)
     variance_to_plan = round(planned_value - purchased_value, 2) if planned_value > 0 else None
 
@@ -333,7 +333,7 @@ async def get_project_material_summary(project_id: str, user: dict = Depends(req
         "planned_materials": len(planned) > 0,
         "purchases": len(sinvs) > 0,
         "warehouse_issues": _mat["has_data"],
-        "warehouse_returns": False,
+        "warehouse_returns": _mat["returned_cost"] > 0,
     }
 
     return {

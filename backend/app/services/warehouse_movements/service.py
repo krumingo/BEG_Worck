@@ -64,6 +64,7 @@ from app.services.warehouse_movements.actions import (
     CanonicalAction,
     OUTBOUND_ACTIONS,
     INBOUND_ACTIONS,
+    QUARANTINE_ACTIONS,
     EVIDENCE_REQUIRED_ACTIONS,
     permission_action_for,
     RULE_B_COSTING_ACTIONS,
@@ -568,6 +569,13 @@ async def _resolve_item_identity(
     return {"item_id": item_id, "unit": None, "pending": False, "found": False}
 
 
+def _action_or_none(value: Any) -> Optional[CanonicalAction]:
+    try:
+        return CanonicalAction(value)
+    except ValueError:
+        return None
+
+
 # -----------------------------------------------------------------------
 # Command service
 # -----------------------------------------------------------------------
@@ -620,7 +628,15 @@ class CommandService:
         # fingerprint) see the destination that is actually written.
         self._force_dispatch_into_transit(inp)
         # 5C-C21 F-13 (Р11) — the same Rule B for warehouse→warehouse.
+        # 5C-C25 (Р18) — and for project→project / project→warehouse.
         self._force_transfer_into_transit(inp)
+        # 5C-C25 (Р18) — quarantine is a STATE change at one location,
+        # never a move between locations.
+        self._refuse_quarantine_move(inp)
+        # 5C-C25 (FG-19, Р18) — an acceptance always drains the in-transit
+        # bucket of its own dispatch; for a transfer it lands exactly in the
+        # transfer's target (a returned lot in quarantine).
+        await self._bind_acceptance_to_transit(tenant_collection, inp)
         # 5C-C21 F-12 (Р10) — a write-off from a project is project cost;
         # the project scope is server-derived from the source bucket.
         self._bind_write_off_project(inp)
@@ -637,6 +653,7 @@ class CommandService:
         # Shape rules evaluated outside the tx so a malformed envelope
         # cannot reach Mongo.
         self._refuse_client_value_on_outbound(inp)
+        self._refuse_client_value_on_quarantine(inp)
         self._enforce_state_rule_outside_tx(inp)
 
         # Fail-closed when W0-06 File Registry evidence is required and
@@ -931,6 +948,18 @@ class CommandService:
                 quantity=envelope_quantity, session=session,
             )
 
+        # 5C-C25 (Р18) — a quarantine entry / release with a source moves
+        # traced FIFO layers between the free and the quarantine state of
+        # ONE location: value and layers are conserved (server FIFO, never a
+        # client value). Before C25 they carried no allocations, so a
+        # released lot came back at value 0.
+        if action in QUARANTINE_ACTIONS and inp.source is not None:
+            allocations, outbound_value = await allocate_outbound(
+                tenant_collection, tenant_id=tenant_id,
+                item_id=identity["item_id"], source=inp.source,
+                quantity=envelope_quantity, session=session,
+            )
+
         if action == CanonicalAction.ACCEPT_PROJECT_DELIVERY:
             # Rule B (C03): accept X units from a dispatch. The
             # dispatch's recorded layer_allocations are split
@@ -1022,7 +1051,7 @@ class CommandService:
                     context={"source": None if inp.source is None else inp.source.to_dict()})
 
         # Server-side value: weighted-average unit_value for outbound.
-        if action in OUTBOUND_ACTIONS and allocations:
+        if (action in OUTBOUND_ACTIONS or action in QUARANTINE_ACTIONS) and allocations:
             qty = sum((a.quantity for a in allocations), Decimal("0"))
             unit_value = (outbound_value / qty).quantize(Decimal("0.0001")) if qty > 0 else Decimal("0")
 
@@ -1083,6 +1112,17 @@ class CommandService:
             ledger_row["acceptance_line_id"] = acceptance_line_id
         if inp.transfer_target is not None:
             ledger_row["transfer_target"] = inp.transfer_target.to_dict()
+        # 5C-C25 (Р17) — where the accepted lot came from (server-derived
+        # from the dispatch row). The projector moves project cost with it:
+        # a lot that leaves a project stops being that project's cost when
+        # it is accepted at its destination. Stored on the row so a rebuild
+        # derives exactly the same cost rows.
+        transit_origin = None
+        if action == CanonicalAction.ACCEPT_PROJECT_DELIVERY:
+            transit_origin = await self._transit_origin(
+                tenant_collection, session=session,
+                dispatch_movement_id=inp.dispatch_movement_id)
+            ledger_row["transit_origin"] = transit_origin
         await tenant_collection.insert_one(ledger_row, session=session)
 
         # If this is a dispatch, open a mirrored IN_TRANSIT inbound row
@@ -1211,6 +1251,8 @@ class CommandService:
             projection_hints["acceptance_line_id"] = acceptance_line_id
         if inp.transfer_target is not None:
             projection_hints["transfer_target"] = inp.transfer_target.to_dict()
+        if transit_origin is not None:
+            projection_hints["transit_origin"] = transit_origin
         # CODEX C13.2 / C16 — carry the resolution set so the projector
         # can clear the active in-transit `unresolved_discrepancies`
         # map for this dispatch. ``resolved_discrepancy_movement_ids``
@@ -1248,6 +1290,8 @@ class CommandService:
         final["ledger_sequence"] = ledger_sequence
         if inp.transfer_target is not None:
             final["transfer_target"] = inp.transfer_target.to_dict()
+        if transit_origin is not None:
+            final["transit_origin"] = transit_origin
         if acceptance_line_id:
             final["acceptance_line_id"] = acceptance_line_id
         return ExecuteResult(
@@ -1297,60 +1341,101 @@ class CommandService:
             state=MovementState.IN_TRANSIT,
         )
 
-    @staticmethod
-    def _force_transfer_into_transit(inp: CommandInput) -> None:
-        """5C-C21 F-13 (Р11) — Rule B for warehouse → warehouse transfers.
+    # 5C-C25 (Р18) — every move between locations goes "в път" and lands
+    # only on acceptance. Per transfer kind: the source location types it
+    # may leave, the target location types it may be for, and the state the
+    # target is credited in.
+    _WAREHOUSES = frozenset({LocationType.CENTRAL_WAREHOUSE, LocationType.SMALL_WAREHOUSE})
+    _PROJECTS = frozenset({LocationType.PROJECT, LocationType.SUBPROJECT})
+    TRANSFER_RULES = {
+        # Р11 / 5C-C21 F-13
+        CanonicalAction.TRANSFER_WAREHOUSE_TO_WAREHOUSE: (_WAREHOUSES, _WAREHOUSES, MovementState.FREE),
+        # Р18 — a return to a warehouse lands in quality quarantine first
+        # (FLOW-009 „Връщане и карантина"); it is reused only after a
+        # quarantine_release to free stock.
+        CanonicalAction.TRANSFER_PROJECT_TO_WAREHOUSE: (_PROJECTS, _WAREHOUSES, MovementState.QUARANTINE),
+        # Р18 — project → project
+        CanonicalAction.TRANSFER_PROJECT_TO_PROJECT: (_PROJECTS, _PROJECTS, MovementState.FREE),
+    }
 
-        A transfer never credits the receiving warehouse directly: the
-        stock is "в път" (in_transit) and lands in the target warehouse
-        only through ACCEPT_PROJECT_DELIVERY against the transfer
-        (partial acceptances and discrepancies work exactly as for a
-        project dispatch). So:
+    @classmethod
+    def _force_transfer_into_transit(cls, inp: CommandInput) -> None:
+        """5C-C21 F-13 (Р11) + 5C-C25 (Р18) — Rule B for EVERY transfer
+        (warehouse→warehouse, project→warehouse, project→project).
+
+        A transfer never credits its receiving location directly: the stock
+        is "в път" (in_transit) and lands in the target only through
+        ACCEPT_PROJECT_DELIVERY against the transfer (partial acceptances
+        and discrepancies work exactly as for a project dispatch). So:
 
           * a non-transit `destination` (the old direct transfer) is
             REFUSED — never silently converted;
-          * the receiving warehouse is named in `transfer_target`
-            (central/small warehouse, state free, not the source);
+          * the receiving location is named in `transfer_target`; its
+            type and state are fixed per kind (`TRANSFER_RULES`): a
+            project→warehouse return targets the warehouse's QUARANTINE
+            state (Р18), the other two target free stock;
+          * the target must differ from the source;
           * the row's destination is forced to the server-issued transit
             bucket (`pending` → the transfer's own movement_id, C11.9).
         """
-        if inp.action != CanonicalAction.TRANSFER_WAREHOUSE_TO_WAREHOUSE:
+        rule = cls.TRANSFER_RULES.get(inp.action)
+        if rule is None:
             if inp.transfer_target is not None:
                 raise InvariantViolationError(
-                    "transfer_target is only valid on transfer_warehouse_to_warehouse",
+                    "transfer_target is only valid on a transfer action",
                     context={"action": inp.action.value},
                 )
             return
+        sources, targets, target_state = rule
         dest = inp.destination
         if dest is not None and dest.location_type != LocationType.IN_TRANSIT:
             raise InvariantViolationError(
-                "direct transfer_warehouse_to_warehouse is refused: the stock "
-                "goes to in_transit and the target warehouse is credited only "
-                "by accept_project_delivery (Rule B, Р11)",
+                f"direct {inp.action.value} is refused: the stock goes to "
+                "in_transit and the target is credited only by "
+                "accept_project_delivery (Rule B, Р11/Р18)",
                 context={"destination": dest.to_dict(),
                          "required": {"destination": {"location_type": "in_transit",
                                                       "location_id": "pending",
                                                       "state": "in_transit"},
-                                      "transfer_target": "<warehouse>"}},
+                                      "transfer_target": {
+                                          "location_type": sorted(t.value for t in targets),
+                                          "state": target_state.value}}},
             )
         target = inp.transfer_target
-        warehouses = {LocationType.CENTRAL_WAREHOUSE, LocationType.SMALL_WAREHOUSE}
-        if target is None or target.location_type not in warehouses \
-                or target.state != MovementState.FREE or not target.location_id:
+        if target is None or target.location_type not in targets \
+                or not target.location_id:
             raise InvariantViolationError(
-                "transfer_warehouse_to_warehouse requires transfer_target: "
-                "a warehouse location in state free",
+                f"{inp.action.value} requires transfer_target: one of "
+                f"{sorted(t.value for t in targets)} in state {target_state.value}",
                 context={"transfer_target": None if target is None else target.to_dict()},
             )
-        src = inp.source
-        if src is None or src.location_type not in warehouses:
+        if target.state != target_state:
+            if target_state == MovementState.QUARANTINE:
+                raise QuarantineStateViolationError(
+                    "a return to a warehouse goes through quality quarantine "
+                    "before reuse (Р18): transfer_target.state must be quarantine",
+                    context={"transfer_target": target.to_dict(),
+                             "required_state": target_state.value},
+                )
             raise InvariantViolationError(
-                "transfer_warehouse_to_warehouse must source from a warehouse",
+                f"{inp.action.value} transfer_target must be in state {target_state.value}",
+                context={"transfer_target": target.to_dict()},
+            )
+        src = inp.source
+        if src is None or src.location_type not in sources:
+            raise InvariantViolationError(
+                f"{inp.action.value} must source from one of "
+                f"{sorted(t.value for t in sources)}",
                 context={"source": None if src is None else src.to_dict()},
+            )
+        if src.state != MovementState.FREE:
+            raise InvariantViolationError(
+                f"{inp.action.value} moves free stock only",
+                context={"source": src.to_dict()},
             )
         if (src.location_type, src.location_id) == (target.location_type, target.location_id):
             raise InvariantViolationError(
-                "transfer_target must differ from the source warehouse",
+                "transfer_target must differ from the source",
                 context={"source": src.to_dict(), "transfer_target": target.to_dict()},
             )
         inp.destination = LocationKey(
@@ -1358,6 +1443,133 @@ class CommandService:
             location_id="pending",
             state=MovementState.IN_TRANSIT,
         )
+
+    @staticmethod
+    def _refuse_quarantine_move(inp: CommandInput) -> None:
+        """5C-C25 (Р18) — QUARANTINE_ENTRY / QUARANTINE_RELEASE change the
+        STATE of stock at ONE location (FLOW-009: quarantine is a state,
+        never another location). With a source at another location they
+        would be a direct move that skips "в път" and acceptance, so they
+        are refused. A returned lot reaches the warehouse quarantine only
+        through transfer_project_to_warehouse + acceptance."""
+        if inp.action not in QUARANTINE_ACTIONS:
+            return
+        src, dest = inp.source, inp.destination
+        if src is None or dest is None:
+            return
+        if (src.location_type, src.location_id) != (dest.location_type, dest.location_id):
+            raise InvariantViolationError(
+                f"{inp.action.value} changes the state at one location; a move "
+                "between locations goes through a transfer in transit (Р18)",
+                context={"source": src.to_dict(), "destination": dest.to_dict()},
+            )
+
+    def _refuse_client_value_on_quarantine(self, inp: CommandInput) -> None:
+        """5C-C25 — a quarantine move with a source carries server FIFO
+        layers; a client value is refused like on any outbound."""
+        if inp.action in QUARANTINE_ACTIONS and inp.source is not None \
+                and inp.unit_value and Decimal(str(inp.unit_value)) > 0:
+            raise ValueFromClientRefusedError(
+                "unit_value is server-derived for quarantine moves",
+                context={"action": inp.action.value,
+                         "supplied_unit_value": str(inp.unit_value)},
+            )
+
+    async def _bind_acceptance_to_transit(self, tenant_collection, inp: CommandInput) -> None:
+        """5C-C25 — server-side binding of an acceptance to its dispatch.
+
+        * FG-19: the source is ALWAYS the in-transit bucket of the named
+          dispatch (`in_transit/<dispatch movement_id>/in_transit`). Before
+          C25 an acceptance without `source` credited the destination but
+          never drained transit, so the location view showed phantom
+          "в път" stock. A client source naming anything else is refused.
+        * Р18: an acceptance of a TRANSFER must land in exactly the
+          transfer's target (location and state — a return lands in
+          quarantine). For a project→project transfer the acceptance's
+          project is the target project; for a transfer into a warehouse
+          it carries no project. Done BEFORE the permission gate so the
+          gate checks the scopes that are actually written; re-checked in
+          the transaction (`_enforce_transfer_acceptance_target`).
+        """
+        if inp.action != CanonicalAction.ACCEPT_PROJECT_DELIVERY:
+            return
+        if not inp.dispatch_movement_id:
+            return  # refused later: acceptance requires dispatch_movement_id
+        transit = LocationKey(LocationType.IN_TRANSIT,
+                              location_id=inp.dispatch_movement_id,
+                              state=MovementState.IN_TRANSIT)
+        src = inp.source
+        if src is not None and (src.location_type, src.location_id, src.state) != \
+                (transit.location_type, transit.location_id, transit.state):
+            raise InvariantViolationError(
+                "an acceptance drains the in-transit bucket of its own dispatch",
+                context={"source": src.to_dict(), "required": transit.to_dict()},
+            )
+        inp.source = transit
+        dispatch = await tenant_collection.find_one(
+            {"movement_id": inp.dispatch_movement_id},
+            {"action": 1, "transfer_target": 1, "project_id": 1, "_id": 0},
+        )
+        if not dispatch:
+            return  # refused in the transaction (unknown dispatch)
+        rule = self.TRANSFER_RULES.get(_action_or_none(dispatch.get("action")))
+        if rule is None:
+            return
+        self._check_transfer_acceptance(inp, dispatch)
+
+    @staticmethod
+    def _check_transfer_acceptance(inp: CommandInput, dispatch: Dict[str, Any]) -> None:
+        target = dispatch.get("transfer_target") or {}
+        dest = inp.destination
+        if dest is None or dest.location_type.value != target.get("location_type") \
+                or dest.location_id != target.get("location_id") \
+                or dest.state.value != target.get("state"):
+            if dest is not None and target.get("state") == MovementState.QUARANTINE.value \
+                    and dest.location_id == target.get("location_id"):
+                raise QuarantineStateViolationError(
+                    "a returned lot is accepted into quarantine first (Р18)",
+                    context={"transfer_target": target, "destination": dest.to_dict()},
+                )
+            raise InvariantViolationError(
+                "acceptance of a transfer must land in its target",
+                context={"transfer_target": target,
+                         "destination": None if dest is None else dest.to_dict()},
+            )
+        if target.get("location_type") == LocationType.PROJECT.value:
+            if inp.project_id and inp.project_id != target.get("location_id"):
+                raise InvariantViolationError(
+                    "acceptance of a project transfer carries the target project",
+                    context={"project_id": inp.project_id, "transfer_target": target},
+                )
+            inp.project_id = target.get("location_id")
+        elif target.get("location_type") == LocationType.SUBPROJECT.value:
+            if not inp.project_id:
+                raise InvariantViolationError(
+                    "acceptance into a subproject requires its project_id",
+                    context={"transfer_target": target},
+                )
+        elif inp.project_id:
+            raise InvariantViolationError(
+                "acceptance of a transfer into a warehouse cannot carry a project_id",
+                context={"project_id": inp.project_id},
+            )
+
+    @staticmethod
+    async def _transit_origin(tenant_collection, *, session,
+                              dispatch_movement_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """5C-C25 (Р17) — the origin of the lot an acceptance lands:
+        the dispatch/transfer action, its source location and project."""
+        if not dispatch_movement_id:
+            return None
+        row = await tenant_collection.find_one(
+            {"movement_id": dispatch_movement_id},
+            {"action": 1, "source": 1, "project_id": 1, "_id": 0}, session=session,
+        )
+        if not row:
+            return None
+        return {"action": row.get("action"), "location": row.get("source"),
+                "project_id": row.get("project_id"),
+                "dispatch_movement_id": dispatch_movement_id}
 
     @staticmethod
     def _bind_write_off_project(inp: CommandInput) -> None:
@@ -1397,32 +1609,19 @@ class CommandService:
     async def _enforce_transfer_acceptance_target(
         self, tenant_collection, *, session, inp: CommandInput,
     ) -> None:
-        """5C-C21 F-13 — an acceptance against a warehouse transfer must land
-        in exactly the transfer's target warehouse (state free). The gate
-        already checked the destination scope the caller named; this pins
-        that destination to the one the transfer was made for."""
+        """5C-C21 F-13 / 5C-C25 (Р18) — an acceptance against ANY transfer
+        must land in exactly the transfer's target (location and state).
+        Re-checked inside the transaction against the dispatch row read in
+        the same session (the pre-gate binding read it outside)."""
         dispatch = await tenant_collection.find_one(
             {"movement_id": inp.dispatch_movement_id},
-            {"action": 1, "transfer_target": 1, "_id": 0}, session=session,
+            {"action": 1, "transfer_target": 1, "project_id": 1, "_id": 0},
+            session=session,
         )
-        if not dispatch or dispatch.get("action") != \
-                CanonicalAction.TRANSFER_WAREHOUSE_TO_WAREHOUSE.value:
+        if not dispatch or self.TRANSFER_RULES.get(
+                _action_or_none(dispatch.get("action"))) is None:
             return
-        target = dispatch.get("transfer_target") or {}
-        dest = inp.destination
-        if dest is None or dest.state != MovementState.FREE \
-                or dest.location_type.value != target.get("location_type") \
-                or dest.location_id != target.get("location_id"):
-            raise InvariantViolationError(
-                "acceptance of a warehouse transfer must land in its target warehouse",
-                context={"transfer_target": target,
-                         "destination": None if dest is None else dest.to_dict()},
-            )
-        if inp.project_id:
-            raise InvariantViolationError(
-                "acceptance of a warehouse transfer cannot carry a project_id",
-                context={"project_id": inp.project_id},
-            )
+        self._check_transfer_acceptance(inp, dispatch)
 
     def _enforce_state_rule_outside_tx(self, inp: CommandInput) -> None:
         action = inp.action
@@ -1446,30 +1645,10 @@ class CommandService:
                 raise QuarantineStateViolationError(
                     "quarantine_release destination must leave quarantine",
                 )
-        # Project → warehouse returns MUST land in quarantine first
-        # (C04 / FLOW-009 "Връщане и карантина"). The caller uses
-        # QUARANTINE_ENTRY for an inspection-required return. The
-        # TRANSFER_PROJECT_TO_WAREHOUSE action is reserved for an
-        # already-canonical straight transfer; destination MUST be a
-        # real warehouse location in FREE state.
-        if action == CanonicalAction.TRANSFER_PROJECT_TO_WAREHOUSE:
-            if dest is None:
-                raise InvariantViolationError(
-                    "transfer_project_to_warehouse requires a destination",
-                )
-            if dest.state == MovementState.QUARANTINE:
-                raise QuarantineStateViolationError(
-                    "transfer_project_to_warehouse cannot target quarantine; "
-                    "use quarantine_entry for inspection-required returns",
-                )
-            if dest.location_type not in {
-                LocationType.CENTRAL_WAREHOUSE,
-                LocationType.SMALL_WAREHOUSE,
-            }:
-                raise InvariantViolationError(
-                    "transfer_project_to_warehouse destination must be a warehouse",
-                    context={"destination": dest.to_dict()},
-                )
+        # 5C-C25 (Р18) — project → warehouse returns go "в път" and are
+        # accepted into the warehouse QUARANTINE state; the shape is
+        # enforced by `_force_transfer_into_transit` / the acceptance
+        # binding, before this point.
 
     async def _next_ledger_sequence(
         self, tenant_collection, *, tenant_id: str, session,

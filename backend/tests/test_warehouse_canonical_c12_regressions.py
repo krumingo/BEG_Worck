@@ -214,10 +214,17 @@ def test_c12_6_material_entries_projection_is_deterministic():
         "which breaks byte-identical rebuild and double-count-free "
         "replay."
     )
-    assert '"projection_version": 2' in src, (
+    # 5C-C25 (Р17): the sync writes the rows of the ONE shared builder
+    # (`projections.material_cost_rows`, also used by the live projector and
+    # `rebuild_from_ledger`). The schema changed meaning (cost at acceptance),
+    # so the advertised version is 3; the builder must carry it and the sync
+    # must call the builder (no second row schema in material_smr).
+    builder = Path("app/services/warehouse_movements/projections.py").read_text()
+    assert '"projection_version": 3' in builder and "material_cost_rows(" in src, (
         "C12.6 regression: material_entries must advertise its new "
         "projection version so legacy rows are not read back in."
     )
+    assert '"created_at"' not in builder[builder.index("def material_cost_rows"):]
     # Readers filter by projection_source:
     assert 'projection_source="canonical_warehouse_service"' in src or \
            'projection_source=\'canonical_warehouse_service\'' in src or \

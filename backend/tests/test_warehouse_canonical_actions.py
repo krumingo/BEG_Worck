@@ -60,7 +60,10 @@ def test_rule_b_zero_cost_covers_dispatch_only():
 
 def test_rule_b_costing_covers_acceptance_and_consume():
     assert CanonicalAction.ACCEPT_PROJECT_DELIVERY in RULE_B_COSTING_ACTIONS
-    assert CanonicalAction.CONSUME_TO_SMR in RULE_B_COSTING_ACTIONS
+    # 5C-C25 (Р17, Крум 06.11.2026): consumption only allocates the cost
+    # recognised at acceptance — it is no longer a costing action.
+    assert CanonicalAction.CONSUME_TO_SMR not in RULE_B_COSTING_ACTIONS
+    assert CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT in RULE_B_COSTING_ACTIONS
 
 
 def test_evidence_required_includes_revision_and_write_off_and_supplier_return():

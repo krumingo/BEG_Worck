@@ -41,6 +41,24 @@ command service writes inside the write-off transaction — and is reported as
 its own line, „фира" (``waste_cost``). Readers keep ``material`` = consumption
 and add ``waste`` beside it; every total includes both exactly once. A
 write-off from a warehouse is not project cost (no row is written).
+
+5C-C25 (Р17, Крум 06.11.2026 — replaces "cost at consumption" of 5C-C18…C24):
+project material cost is recognised when the material is ACCEPTED on the
+project — the whole accepted quantity, at the exact FIFO layers of 5C-C24
+(and on a direct supplier delivery to the project). A return to a warehouse
+(or a transfer to another project) reduces it when the lot is accepted at
+its destination (Р18). CONSUME_TO_SMR is NOT cost: it only ALLOCATES the
+project's cost to SMR / execution packages for reports and budgets. A
+write-off from the project („фира", Р10) is already part of the accepted
+cost; it stays its own line by reclassifying that value out of „material".
+
+FG-17 (5C-C25): Path B — supplier invoice lines allocated straight to the
+project (``invoice_lines`` ``allocation_type=project``) — is part of THIS
+helper too, summed with Path A as separate lots. An invoice line that a
+canonical ledger row references (``invoice_line_id``) is the same lot as
+that movement and is counted only through the canon (reported as
+``invoice_linked_excluded_cost``). The P&L no longer takes
+``max(invoice, warehouse)``.
 """
 from __future__ import annotations
 
@@ -49,9 +67,13 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 CANONICAL_SOURCE = "canonical_warehouse_service"
 
-# 5C-C19 F-7 — project material cost is recognised ONCE, at consumption.
-# 5C-C21 F-12 (Р10) — and at a write-off from a project („фира").
-COST_KINDS: Tuple[str, ...] = ("consume", "write_off")
+# 5C-C25 (Р17) — the `material_entries` kinds that ARE project cost
+# (signed `total_value`): acceptance / direct delivery (+), a lot accepted
+# away from the project (−).
+COST_KINDS: Tuple[str, ...] = ("accept", "return", "transfer_out")
+# Allocation-only kinds (value in `movement_value`): consumption per SMR and
+# the „фира" line (Р10). Never added to the cost a second time.
+ALLOCATION_KINDS: Tuple[str, ...] = ("consume", "write_off")
 WASTE_KINDS: Tuple[str, ...] = ("write_off",)
 WASTE_LABEL = "фира"
 
@@ -168,15 +190,38 @@ async def tenant_cutover(tenant, org_id: str) -> Dict[str, Any]:
 # ───────────────────────────── cost (F-9/F-10, C22) ─────────────────────────────
 
 async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
-    """Canonical cost rows (consumptions + project write-offs), tenant-scoped."""
+    """Canonical rows of a project, tenant-scoped: the R17 cost rows
+    (accept / return / transfer_out) and the allocation rows (consume /
+    write_off)."""
     cursor = tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id,
          "projection_source": CANONICAL_SOURCE,
-         "movement_kind": {"$in": list(COST_KINDS)},
-         "cost_recognized": True},
+         "movement_kind": {"$in": list(COST_KINDS) + list(ALLOCATION_KINDS)}},
         {"_id": 0},
     )
     return [row async for row in cursor]
+
+
+async def project_invoice_lines(tenant, org_id: str, project_id: str) -> List[dict]:
+    """FG-17 — Path B: supplier invoice lines allocated to the project (the
+    same selection the P&L always used)."""
+    cursor = tenant.invoice_lines.find(
+        {"org_id": org_id, "allocation_type": "project", "allocation_ref_id": project_id},
+        {"_id": 0, "id": 1, "line_total_ex_vat": 1, "description": 1, "unit": 1,
+         "qty": 1, "created_at": 1, "invoice_id": 1},
+    )
+    return [row async for row in cursor]
+
+
+async def ledger_invoice_line_ids(tenant, org_id: str, ids: List[str]) -> set:
+    """Invoice line ids that a canonical ledger row references."""
+    if not ids:
+        return set()
+    out = await tenant.warehouse_transactions.distinct(
+        "invoice_line_id",
+        {"org_id": org_id, "action": {"$exists": True}, "invoice_line_id": {"$in": ids}},
+    )
+    return {x for x in out if x}
 
 
 async def legacy_issue_rows(tenant, org_id: str, project_id: str) -> List[dict]:
@@ -224,16 +269,22 @@ def period_of(moment: Optional[datetime]) -> Optional[str]:
 
 
 async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[str, Any]:
-    """THE project material cost (5C-C22): one helper for every finance
-    report — project, package and period.
+    """THE project material cost (5C-C22, 5C-C25/Р17): one helper for every
+    finance report — project, package and period.
 
-    * canonical cost rows (consumption + „фира", recognised once);
-    * PLUS legacy issue rows dated BEFORE the tenant cutover (Р13);
-    * legacy rows at/after the cutover are reported as ``legacy_excluded_cost``
-      and never counted (no double count).
+    ``lines`` — every COUNTED cost line (all totals and the period / day
+    splits are sums over it):
+      * canonical acceptance / direct delivery (+) and a lot accepted away
+        from the project (−) — Р17;
+      * „фира" (Р10): a write-off moves its value from „material" to the
+        „фира" line — a pair (+V waste, −V material) with total effect 0;
+      * legacy issue rows dated BEFORE the tenant cutover (Р13);
+      * Path B invoice lines allocated to the project (FG-17).
 
-    ``lines`` is the normalised list of every COUNTED cost line; all totals,
-    package and period splits are sums over it, so they always agree.
+    ``package_lines`` — the ALLOCATION of the cost to SMR / execution
+    packages (consumption per SMR, „фира", pre-cutover legacy issues by
+    name). ``by_package`` sums them; ``unallocated_cost`` is the rest of the
+    project cost (material on site, not yet consumed, or unmapped).
     """
     rows = await project_cost_rows(tenant, org_id, project_id)
     by_item, by_name = await load_planned_mapping(tenant, org_id, project_id)
@@ -241,22 +292,49 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
     cutover = _moment(cut["cutover_at"])
 
     lines: List[dict] = []
+    package_lines: List[dict] = []
+    accepted_cost = returned_cost = 0.0
+    consumed_value = 0.0
     for row in rows:
         at = canonical_moment(row)
+        kind = row.get("movement_kind")
         pm = resolve_planned(row.get("item_id"), by_item, by_name)
-        lines.append({
-            "source": "canonical", "kind": row.get("movement_kind"),
-            "waste": row.get("movement_kind") in WASTE_KINDS,
-            "value": _f(row.get("total_value")),
+        common = {
+            "source": "canonical", "kind": kind,
             "qty": _f(row.get("quantity")) or 0.0,
             "item_id": row.get("item_id"), "unit": row.get("unit"),
             "material_name": row.get("material_name") or (pm or {}).get("material_name")
             or row.get("item_id") or "",
-            "package_id": resolve_execution_package(row, by_item, by_name),
             "at": at, "period": period_of(at), "ref": row.get("id"),
             # 5C-C23 F-15 — shown by the „Материални отклонения" card.
             "movement_id": row.get("movement_id"), "reason": row.get("reason"),
-        })
+        }
+        if kind in COST_KINDS:
+            value = _f(row.get("total_value"))
+            lines.append(dict(common, waste=False, value=value, package_id=None,
+                              direct_delivery=bool(row.get("direct_delivery"))))
+            if value is not None:
+                if value >= 0:
+                    accepted_cost += value
+                else:
+                    returned_cost += -value
+            continue
+        value = _f(row.get("movement_value"))
+        package_id = resolve_execution_package(row, by_item, by_name)
+        if kind in WASTE_KINDS:
+            # Р10 „фира": a reclassification inside the accepted cost.
+            lines.append(dict(common, waste=True, value=value, package_id=package_id))
+            lines.append(dict(common, kind="write_off_reclass", waste=False,
+                              value=None if value is None else -value,
+                              package_id=None))
+            package_lines.append(dict(common, waste=True, value=value,
+                                      package_id=package_id))
+        else:
+            # Consumption: allocation per SMR / package only (Р17).
+            package_lines.append(dict(common, waste=False, value=value,
+                                      package_id=package_id))
+            if value is not None:
+                consumed_value += value
 
     legacy_counted = 0.0
     legacy_excluded = 0.0
@@ -278,21 +356,56 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
             legacy_qty += qty
             name = ln.get("material_name") or ""
             pm = by_name.get(name.lower().strip())
-            lines.append({
+            line = {
                 "source": "legacy", "kind": "issue", "waste": False,
                 "value": round(value, 4), "qty": qty, "item_id": None,
                 "unit": ln.get("unit"), "material_name": name,
                 "package_id": (pm or {}).get("execution_package_id"),
                 "at": at, "period": period_of(at), "ref": txn.get("id"),
-            })
+            }
+            lines.append(line)
+            package_lines.append(line)
 
-    total = waste = qty = waste_qty = unmapped_cost = 0.0
+    # FG-17 — Path B: invoice lines allocated to the project.
+    inv_rows = await project_invoice_lines(tenant, org_id, project_id)
+    linked = await ledger_invoice_line_ids(
+        tenant, org_id, [r.get("id") for r in inv_rows if r.get("id")])
+    invoice_cost = invoice_linked_excluded = 0.0
+    for il in inv_rows:
+        value = float(il.get("line_total_ex_vat", 0) or 0)
+        if il.get("id") in linked:
+            invoice_linked_excluded += value
+            continue
+        invoice_cost += value
+        at = _moment(il.get("created_at"))
+        lines.append({
+            "source": "invoice", "kind": "invoice_line", "waste": False,
+            "value": round(value, 4), "qty": _f(il.get("qty")) or 0.0,
+            "item_id": None, "unit": il.get("unit"),
+            "material_name": il.get("description") or "",
+            "package_id": None, "at": at, "period": period_of(at),
+            "ref": il.get("id"),
+        })
+
+    total = waste = 0.0
     canonical_cost = 0.0
     partial = False
+    for ln in lines:
+        value = ln["value"]
+        if value is None:
+            partial = True
+            continue
+        total += value
+        if ln["source"] == "canonical":
+            canonical_cost += value
+        if ln["waste"]:
+            waste += value
+
+    qty = waste_qty = 0.0
     by_package: Dict[str, float] = {}
     waste_by_package: Dict[str, float] = {}
     qty_by_package: Dict[str, float] = {}
-    for ln in lines:
+    for ln in package_lines:
         q = ln["qty"]
         pkg_id = ln["package_id"]
         if ln["waste"]:
@@ -305,17 +418,11 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         if value is None:
             partial = True
             continue
-        total += value
-        if ln["source"] == "canonical":
-            canonical_cost += value
-        if ln["waste"]:
-            waste += value
         if pkg_id:
             by_package[pkg_id] = by_package.get(pkg_id, 0.0) + value
             if ln["waste"]:
                 waste_by_package[pkg_id] = waste_by_package.get(pkg_id, 0.0) + value
-        else:
-            unmapped_cost += value
+    allocated = sum(by_package.values())
 
     has_canonical = len(rows) > 0
     has_legacy = any(ln["source"] == "legacy" for ln in lines)
@@ -323,20 +430,31 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
               "canonical" if has_canonical else
               "legacy" if has_legacy or legacy_rows else "none")
     return {
-        # total_cost = consumption + фира + pre-cutover legacy, each once.
+        # total_cost = accepted − returned (canonical, Р17) + pre-cutover
+        # legacy (Р13) + Path B invoice lines (FG-17), each lot once.
+        # „фира" is a part of it, never added on top.
         "total_cost": round(total, 2),
-        "consumption_cost": round(total - waste, 2),
+        "consumption_cost": round(total - waste, 2),   # „material" (non-фира) part
+        "material_cost": round(total - waste, 2),
         "waste_cost": round(waste, 2),
         "waste_qty": round(waste_qty, 4),
         "waste_label": WASTE_LABEL,
         "waste_by_package": {k: round(v, 2) for k, v in waste_by_package.items()},
         "consumed_qty": round(qty, 4),
-        "mapped_cost": round(total - unmapped_cost, 2),
-        "unmapped_cost": round(unmapped_cost, 2),
+        "consumed_value": round(consumed_value, 2),     # allocation, not cost
+        "accepted_cost": round(accepted_cost, 2),
+        "returned_cost": round(returned_cost, 2),
+        "invoice_cost": round(invoice_cost, 2),
+        "invoice_linked_excluded_cost": round(invoice_linked_excluded, 2),
+        "allocated_cost": round(allocated, 2),
+        "unallocated_cost": round(total - allocated, 2),
+        "mapped_cost": round(allocated, 2),
+        "unmapped_cost": round(total - allocated, 2),
         "by_package": {k: round(v, 2) for k, v in by_package.items()},
         "qty_by_package": {k: round(v, 4) for k, v in qty_by_package.items()},
         "partial_cost_data": partial,
-        "has_data": len(lines) > 0,
+        "has_data": len(lines) > 0 or len(package_lines) > 0,
+        "cost_rule": COST_RULE,
         # Р13 basis — visible on every report that embeds it.
         "source": source,
         "canonical_cost": round(canonical_cost, 2),
@@ -348,10 +466,14 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         "cutover_source": cut["cutover_source"],
         "cutover_movement_id": cut["cutover_movement_id"],
         "lines": lines,
+        "package_lines": package_lines,
         "rows": rows,
         "by_item": by_item,
         "by_name": by_name,
     }
+
+
+COST_RULE = "R17_cost_at_acceptance"
 
 
 def cost_basis(cost: Dict[str, Any]) -> Dict[str, Any]:
@@ -359,7 +481,11 @@ def cost_basis(cost: Dict[str, Any]) -> Dict[str, Any]:
     keys = ("total_cost", "consumption_cost", "waste_cost", "source",
             "canonical_cost", "legacy_cost", "legacy_excluded_cost",
             "legacy_undated_cost", "cutover_at", "cutover_source",
-            "partial_cost_data")
+            "partial_cost_data",
+            # 5C-C25 (Р17, FG-17)
+            "cost_rule", "accepted_cost", "returned_cost", "invoice_cost",
+            "invoice_linked_excluded_cost", "allocated_cost",
+            "unallocated_cost", "consumed_value")
     return {k: cost.get(k) for k in keys}
 
 
@@ -406,8 +532,9 @@ def cost_lines_between(cost: Dict[str, Any], start: Optional[Any],
 
 
 async def package_material_actual(tenant, org_id: str, pkg: dict) -> float:
-    """Material actual of one execution package (read time):
-    consumption + фира (+ pre-cutover legacy) of the package."""
+    """Material actual of one execution package (read time): the project
+    cost ALLOCATED to the package — consumption + фира (+ pre-cutover
+    legacy) — Р17: allocation, not a second cost."""
     split = await package_material_split(tenant, org_id, pkg)
     return split["total"]
 
@@ -436,6 +563,7 @@ async def project_warehouse_material_cost(tenant, org_id: str, project_id: str) 
     out.update({
         "material_cost": cost["total_cost"],
         "waste_qty": cost["waste_qty"],
+        "invoice_cost": cost["invoice_cost"],
         "consumed_qty": cost["consumed_qty"],
     })
     return out

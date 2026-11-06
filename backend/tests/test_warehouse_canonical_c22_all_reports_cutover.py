@@ -225,10 +225,25 @@ async def _all_reports(tenant=T) -> dict:
     return out
 
 
-def _assert_all(reports: dict, total: float, waste: float):
+# 5C-C25 (Р17, Крум 06.11.2026): the PROJECT cost is the accepted lot; the
+# PACKAGE / SMR reports show the part of it ALLOCATED to the package by
+# consumption („фира" and pre-cutover legacy included). The two differ only
+# by the unallocated stock still on site (helper ``unallocated_cost``).
+PACKAGE_LEVEL = frozenset({"package_financial", "package_breakdown",
+                           "by_execution_package", "package_net", "smr_view",
+                           "progress_vs_cost"})
+
+
+def _assert_all(reports: dict, total: float, waste: float, package_total: float = None):
+    package_total = total if package_total is None else package_total
+
+    def _want(k):
+        return package_total if k in PACKAGE_LEVEL else total
     bad = {k: v for k, v in reports.items()
-           if v[0] != pytest.approx(total) or (v[1] is not None and v[1] != pytest.approx(waste))}
-    assert not bad, f"expected {total} (фира {waste}) on every report, got {bad}"
+           if v[0] != pytest.approx(_want(k))
+           or (v[1] is not None and v[1] != pytest.approx(waste))}
+    assert not bad, (f"expected {total} / package {package_total} (фира {waste}) "
+                     f"on every report, got {bad}")
 
 
 # ═══════════════════════════════ tests ═══════════════════════════════
@@ -241,24 +256,28 @@ async def test_canonical_only_is_30_on_every_report(
     await _scenario(client, allow_always_gate, db)
     reports = await _all_reports()
     assert len(reports) == 16
-    _assert_all(reports, 30.0, 0.0)          # df48d68: financial_results/centralized/... 0
+    # 5C-C25 (Р17): project 50 (accepted 5 × 10), package 30 (consumed 3).
+    _assert_all(reports, 50.0, 0.0, package_total=30.0)   # df48d68: financial_results/centralized/... 0
 
 
 async def test_mixed_history_is_130_on_every_report(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """Р13: 100 legacy BEFORE the cutover + 30 canonical after = 130."""
+    """Р13: 100 legacy BEFORE the cutover + 30 canonical after = 130.
+    5C-C25 (Р17): the canonical part is the accepted lot, 50 → 150; the
+    package allocation is 100 + 30 = 130."""
     from app.services.canonical_material_cost import project_material_cost
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
     await _seed(db)
     await _legacy_issue(db, value=100.0, created_at=BEFORE)
     await _scenario(client, allow_always_gate, db)
-    _assert_all(await _all_reports(), 130.0, 0.0)     # df48d68: P&L 30, centralized 100, ...
+    _assert_all(await _all_reports(), 150.0, 0.0, package_total=130.0)   # df48d68: P&L 30, centralized 100, ...
 
     cost = await project_material_cost(TenantData.for_resolved_org(db, T), T, PROJECT)
     assert cost["source"] == "mixed"
     assert cost["legacy_cost"] == pytest.approx(100.0)
-    assert cost["canonical_cost"] == pytest.approx(30.0)
+    assert cost["canonical_cost"] == pytest.approx(50.0)
+    assert cost["unallocated_cost"] == pytest.approx(20.0)
     assert cost["legacy_excluded_cost"] == 0
     # The cutover is the tenant's first canonical ledger row (receive).
     first = await db["warehouse_transactions"].find(
@@ -272,7 +291,8 @@ async def test_mixed_history_is_130_on_every_report(
 async def test_legacy_row_after_the_cutover_is_never_counted(
         canonical_mongo_db, allow_always_gate, monkeypatch):
     """A legacy row dated after the cutover is not counted twice: 100 + 30 = 130,
-    the 70 after the cutover is reported as excluded."""
+    the 70 after the cutover is reported as excluded.
+    5C-C25 (Р17): 100 + 50 accepted = 150 (package 130); 70 still excluded."""
     from app.routes import project_pnl
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
@@ -280,13 +300,13 @@ async def test_legacy_row_after_the_cutover_is_never_counted(
     await _legacy_issue(db, value=100.0, created_at=BEFORE)
     await _scenario(client, allow_always_gate, db)
     await _legacy_issue(db, value=70.0, created_at=AFTER)
-    _assert_all(await _all_reports(), 130.0, 0.0)
+    _assert_all(await _all_reports(), 150.0, 0.0, package_total=130.0)
     pnl = await project_pnl.get_project_pnl(PROJECT, user=_user())
     basis = pnl["warehouse_cost_basis"]
     assert basis["warehouse"] == "mixed"
     assert basis["legacy_cost"] == pytest.approx(100.0)
     assert basis["legacy_excluded_cost"] == pytest.approx(70.0)
-    assert basis["canonical_cost"] == pytest.approx(30.0)
+    assert basis["canonical_cost"] == pytest.approx(50.0)
 
 
 async def test_write_off_fira_is_included_on_every_report(
@@ -341,7 +361,11 @@ async def test_pulse_shows_the_material_cost_of_its_day(
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     p_today = await pulse_generator.generate_pulse(T, PROJECT, today)
     assert p_today["total_material_cost"] == pytest.approx(50.0)  # df48d68: 0
-    assert sorted(m["kind"] for m in p_today["materials_used"]) == ["consume", "фира"]
+    # 5C-C25 (Р17): the day's cost lines are the acceptance (+50) and the
+    # „фира" reclassification (+20 фира / −20 material, net 0); consumption
+    # is allocation, not a cost line.
+    assert sorted(m["kind"] for m in p_today["materials_used"]) == \
+        ["accept", "write_off_reclass", "фира"]
     p_legacy = await pulse_generator.generate_pulse(T, PROJECT, BEFORE[:10])
     assert p_legacy["total_material_cost"] == pytest.approx(100.0)
 
@@ -356,7 +380,8 @@ async def test_cutover_is_per_tenant(canonical_mongo_db, allow_always_gate, monk
     await _scenario(client, allow_always_gate, db, tenant=T2)
     await _legacy_issue(db, tenant=T, value=100.0, created_at=AFTER)
     _assert_all(await _all_reports(T), 100.0, 0.0)
-    _assert_all(await _all_reports(T2), 30.0, 0.0)
+    # 5C-C25 (Р17): accepted 50 on the project, 30 allocated to the package.
+    _assert_all(await _all_reports(T2), 50.0, 0.0, package_total=30.0)
 
 
 async def test_legacy_dates_and_value_shapes(canonical_mongo_db, allow_always_gate, monkeypatch):
@@ -372,7 +397,8 @@ async def test_legacy_dates_and_value_shapes(canonical_mongo_db, allow_always_ga
     await _legacy_issue(db, value=60.0, created_at=None)          # undated
     await _scenario(client, allow_always_gate, db)
     await _legacy_issue(db, value=70.0, created_at=None, issue_date="2099-01-01")
-    _assert_all(await _all_reports(), 130.0, 0.0)
+    # 5C-C25 (Р17): 100 legacy + 50 accepted = 150; package 100 + 30 = 130.
+    _assert_all(await _all_reports(), 150.0, 0.0, package_total=130.0)
     cost = await project_material_cost(TenantData.for_resolved_org(db, T), T, PROJECT)
     assert cost["legacy_cost"] == pytest.approx(100.0)
     assert cost["legacy_undated_cost"] == pytest.approx(60.0)

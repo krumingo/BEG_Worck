@@ -117,10 +117,11 @@ async def _seed(db, tenant=T, *, mapped=True):
 
 
 async def _no_manual_sync_was_needed(db):
-    """The only canonical material_entries row is the projector's own one."""
+    """The only canonical material_entries rows are the projector's own ones.
+    5C-C25 (Р17): the acceptance (the cost) and the consumption (allocation)."""
     rows = await db["material_entries"].find({"org_id": T}, {"_id": 0}).to_list(None)
-    assert [r["movement_kind"] for r in rows] == ["consume"]
-    assert "execution_package_id" not in rows[0]          # no sync ran
+    assert sorted(r["movement_kind"] for r in rows) == ["accept", "consume"]
+    assert all("execution_package_id" not in r for r in rows)   # no sync ran
     pkg = await db["execution_packages"].find_one({"id": PKG})
     assert pkg["actual_material_cost"] == 0               # no recompute ran
 
@@ -136,22 +137,24 @@ async def test_f9_project_pnl_summary_breakdown_show_canonical_30(
     await _scenario(client, allow_always_gate, db)
     await _no_manual_sync_was_needed(db)
 
+    # 5C-C25 (Р17, Крум 06.11.2026): the project cost is the accepted lot,
+    # 5 × 10 = 50 (was: consumption 30). Consumption stays visible (3 units).
     pnl = await project_pnl.get_project_pnl(PROJECT, user=_user())
-    assert pnl["expense"]["material_cost"] == pytest.approx(30.0)      # d8ac3a9: 0
-    assert pnl["expense"]["total_expense"] == pytest.approx(30.0)      # d8ac3a9: 0
+    assert pnl["expense"]["material_cost"] == pytest.approx(50.0)      # d8ac3a9: 0
+    assert pnl["expense"]["total_expense"] == pytest.approx(50.0)      # d8ac3a9: 0
     basis = pnl["warehouse_cost_basis"]
     assert basis["warehouse"] == "canonical"
     assert basis["consumed_qty"] == pytest.approx(3.0)
     assert basis["legacy_excluded_cost"] == 0
 
     summary = await project_pnl.get_pnl_summary(PROJECT, user=_user())
-    assert summary["total_expense"] == pytest.approx(30.0)
-    assert summary["material_cost"] == pytest.approx(30.0)
-    assert summary["gross_profit"] == pytest.approx(-30.0)
+    assert summary["total_expense"] == pytest.approx(50.0)
+    assert summary["material_cost"] == pytest.approx(50.0)
+    assert summary["gross_profit"] == pytest.approx(-50.0)
 
     brk = await project_pnl.get_pnl_breakdown(PROJECT, user=_user())
-    assert brk["expense"]["material_cost"] == pytest.approx(30.0)
-    assert brk["expense"]["total_expense"] == pytest.approx(30.0)
+    assert brk["expense"]["material_cost"] == pytest.approx(50.0)
+    assert brk["expense"]["total_expense"] == pytest.approx(50.0)
 
 
 async def test_f9_legacy_issue_rows_are_not_added_on_top_of_the_canon(
@@ -161,7 +164,8 @@ async def test_f9_legacy_issue_rows_are_not_added_on_top_of_the_canon(
     5C-C22 / Р13: the legacy row is dated AFTER the tenant cutover (the first
     canonical ledger row), so it is never added on top of the canon. (A
     legacy row dated BEFORE the cutover counts — 100 + 30 = 130 — see
-    test_warehouse_canonical_c22_all_reports_cutover.py.)"""
+    test_warehouse_canonical_c22_all_reports_cutover.py.)
+    5C-C25 (Р17): the canonical part is the accepted lot, 50 (was 30)."""
     from app.routes import project_pnl
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
@@ -174,13 +178,13 @@ async def test_f9_legacy_issue_rows_are_not_added_on_top_of_the_canon(
                    "qty_issued": 5, "unit_cost": 10}]})
 
     pnl = await project_pnl.get_project_pnl(PROJECT, user=_user())
-    assert pnl["expense"]["material_cost"] == pytest.approx(30.0)
+    assert pnl["expense"]["material_cost"] == pytest.approx(50.0)
     assert pnl["warehouse_cost_basis"]["warehouse"] == "canonical"
     assert pnl["warehouse_cost_basis"]["legacy_excluded_cost"] == pytest.approx(50.0)
     # And the other project profit report gives the same single number.
     from app.routes import revenue_expense
     profit = await revenue_expense.get_project_profit_summary(PROJECT, user=_user())
-    assert profit["expenses"]["material"] == pytest.approx(30.0)
+    assert profit["expenses"]["material"] == pytest.approx(50.0)
 
 
 async def test_f9_pre_canon_project_keeps_its_legacy_figure(
@@ -199,9 +203,11 @@ async def test_f9_pre_canon_project_keeps_its_legacy_figure(
     assert pnl["warehouse_cost_basis"]["warehouse"] == "legacy"
 
 
-async def test_f9_accept_without_consume_is_not_cost(
+async def test_f9_accept_without_consume_is_cost_r17(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """Stock accepted on the project but not consumed is not project cost (F-7 rule)."""
+    """Stock accepted on the project but not consumed is not project cost (F-7 rule).
+    5C-C25 (Р17, Крум 06.11.2026 — replaces the F-7 rule): it IS project
+    cost, the whole accepted quantity, at acceptance: 5 × 10 = 50."""
     from app.routes import project_pnl
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
@@ -224,7 +230,7 @@ async def test_f9_accept_without_consume_is_not_cost(
         quantity=Decimal("5"), accepted_quantity=Decimal("5"),
         dispatch_movement_id=disp.movement_id, project_id=PROJECT))
     pnl = await project_pnl.get_project_pnl(PROJECT, user=_user())
-    assert pnl["expense"]["material_cost"] == 0
+    assert pnl["expense"]["material_cost"] == pytest.approx(50.0)
 
 
 # ═══════════════════════════════ F-10 ═══════════════════════════════
@@ -259,20 +265,22 @@ async def test_f10_package_reports_show_30_without_sync_or_recompute(
     assert by_pkg["by_material"][0]["consumed_qty"] == pytest.approx(3.0)
     assert by_pkg["by_material"][0]["net_cost"] == pytest.approx(30.0)
 
+    # 5C-C25 (Р17): project cost 50 (accepted lot); the package reports above
+    # show the 30 consumed and ALLOCATED to the package; 20 is unallocated.
     summary = await material_smr.get_material_summary_for_project(T, PROJECT)
-    assert summary["total_cost"] == pytest.approx(30.0)
+    assert summary["total_cost"] == pytest.approx(50.0)
     assert summary["mapped_cost"] == pytest.approx(30.0)               # d8ac3a9: 0 (unmapped)
-    assert summary["unmapped_cost"] == 0
+    assert summary["unmapped_cost"] == pytest.approx(20.0)
 
     warn = await material_smr.get_material_warnings(PROJECT, user=_user())
     over = [w for w in warn["warnings"] if w["type"] == "over_material_budget"]
     assert len(over) == 1 and "30" in over[0]["message"]
 
     proj_net = await full_cost.get_project_net_profit(PROJECT, user=_user())
-    assert proj_net["costs"]["material"] == pytest.approx(30.0)
+    assert proj_net["costs"]["material"] == pytest.approx(50.0)
     from app.routes import revenue_expense
     profit = await revenue_expense.get_project_profit_summary(PROJECT, user=_user())
-    assert profit["expenses"]["material"] == pytest.approx(30.0)
+    assert profit["expenses"]["material"] == pytest.approx(50.0)
 
 
 async def test_f10_reports_unchanged_after_sync_and_recompute(
@@ -296,8 +304,10 @@ async def test_f10_reports_unchanged_after_sync_and_recompute(
         )
 
     before = await _numbers()
-    assert before == (pytest.approx(30.0), pytest.approx(30.0), pytest.approx(30.0),
-                      [pytest.approx(30.0)], pytest.approx(30.0), pytest.approx(30.0))
+    # 5C-C25 (Р17): project figures = accepted lot 50; package figures = the
+    # 30 allocated by consumption.
+    assert before == (pytest.approx(50.0), pytest.approx(30.0), pytest.approx(30.0),
+                      [pytest.approx(30.0)], pytest.approx(30.0), pytest.approx(50.0))
     await material_smr.sync_material_entries(PROJECT, user=_user())
     await material_smr.recompute_execution_package_material(PROJECT, user=_user())
     await material_smr.sync_material_entries(PROJECT, user=_user())
@@ -400,9 +410,9 @@ async def test_c20_reads_are_tenant_scoped(
     assert (await full_cost.get_package_net_financial(PKG + "-b", user=b))["costs"]["material"] == 0
     assert (await material_smr.get_material_summary_for_project(T2, PROJECT))["total_cost"] == 0
     assert (await procurement.get_project_material_ledger(PROJECT, user=b))["ledger"] == []
-    # And tenant A still sees its own 30.
+    # And tenant A still sees its own cost (5C-C25 / Р17: the accepted 50).
     assert (await project_pnl.get_project_pnl(PROJECT, user=_user()))["expense"]["material_cost"] \
-        == pytest.approx(30.0)
+        == pytest.approx(50.0)
 
 
 def test_c20_no_report_reads_the_cached_package_material_actual():
