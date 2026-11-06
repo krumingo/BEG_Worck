@@ -203,7 +203,37 @@ def compose(base: Path, project, *args, check=True):
                 *args], cwd=str(base), check=check)
 
 
+def _isolation_module():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("st02_isolation_check_gate", str(HERE / "isolation_check.py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def assert_isolated(base: Path, project):
+    """ST-02-C01: the merged compose model passes isolation_check BEFORE any container starts.
+
+    Raises Refused (nothing started) with the check's reasons; never prints an env value."""
+    st = read_kv(base / "staging.env")
+    r = subprocess.run(["docker", "compose", "-p", project, "-f", "docker-compose.yml", "-f", "docker-compose.staging.yml",
+                        "config", "--format", "json"], cwd=str(base), stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                       universal_newlines=True)  # stderr dropped: it may echo .env lines
+    if r.returncode != 0:
+        raise Refused("docker compose config failed for %s; nothing was started" % base)
+    try:
+        model = json.loads(r.stdout)
+    except ValueError:
+        raise Refused("docker compose config output is not JSON; nothing was started")
+    errors = _isolation_module().check(model, project, st.get("ST02_HTTP_PORT", ""), st.get("ST02_PERMISSION_SERVICE_MODE", ""),
+                                       base=str(base), allowed_mongo_hosts=st.get("ST02_ALLOWED_MONGO_HOSTS", ""))
+    if errors:
+        raise Refused("ISOLATION FAIL, nothing was started:\n  " + "\n  ".join(errors))
+    log("isolation of the merged compose model: ISOLATION PASS (before any container starts)")
+
+
 def mongo_up(base: Path, project):
+    assert_isolated(base, project)
     compose(base, project, "up", "-d", "--no-deps", "mongo")
     c = project + "-mongo"
     for _ in range(60):
@@ -404,6 +434,7 @@ def cmd_deploy(a):
         raise Refused("no release deployed on %s; use `up`" % base)
     bundle, _ = build_bundle(base, a.commit, a.reachable_from, base / "release-state" / "current.json", a.allow_unmerged)
     install_layout_files(base, bundle)
+    assert_isolated(base, a.project)
     rc, hist = staging_deploy(base, bundle, "deploy", force_fail=a.force_smoke_fail, verify_image=a.verify_image)
     log("staging deploy exit %d (record %s)" % (rc, hist / "record.json" if hist else None))
     return rc

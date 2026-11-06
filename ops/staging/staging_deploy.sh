@@ -89,12 +89,15 @@ staging_fail() { # precheck-type refusal: nothing was changed
   exit 2
 }
 
-# assert_isolated: the merged compose model must be the staging project and nothing else.
+# assert_isolated: the merged compose model must be the staging project and nothing else
+# (ST-02-C01: incl. the backend database target, bind mounts, docker socket and privileges).
 assert_isolated() {
-  local out
+  local out root
+  root="$(cd "$BASE" && pwd)" || return 1   # the path compose resolves ./uploads etc. against
   out="$( (cd "$BASE" && "${COMPOSE_CMD[@]}" config --format json) 2>/dev/null \
     | "$DOCKER" run --rm -i --pull never --network none --read-only --security-opt no-new-privileges \
         -e ST02_PROJECT="$PROJECT" -e ST02_HTTP_PORT="$ST_ST02_HTTP_PORT" -e ST02_MODE="$ST_ST02_PERMISSION_SERVICE_MODE" \
+        -e ST02_BASE="$root" -e ST02_ALLOWED_MONGO_HOSTS="${ST_ST02_ALLOWED_MONGO_HOSTS:-}" \
         -v "$ST02_DIR/isolation_check.py:/isolation_check.py:ro" \
         "$VERIFIER_IMAGE" python3 /isolation_check.py 2>&1 | tr -d '\r')"
   printf '%s\n' "$out" | sed 's/^/    /'

@@ -146,7 +146,24 @@ flags are not touched.
    Containers `begwork-staging-{backend,frontend,mongo}`, network `begwork-staging_net`,
    volume `begwork-staging_mongo_data`, only `127.0.0.1:<port>` → frontend:80 published
    (MongoDB is not published). `staging_deploy.sh` refuses (exit 3) unless `isolation_check.py`
-   passes on the merged model. Needs Docker Compose ≥ 2.24 (`ports: !override`).
+   passes on the merged model; `staging_up.py` runs the same check before it starts the
+   staging MongoDB (and before every `deploy`), so a refusal starts nothing. Needs Docker
+   Compose ≥ 2.24 (`ports: !override`).
+
+   ST-02-C01 (audit ST02-1) — the check also refuses production targets:
+   * backend `MONGO_URL` (required) and every other `mongodb…` value: only `mongodb://` to
+     `mongo` / `<project>-mongo`:27017 — never `mongodb+srv`, an IP/LAN address, `localhost`,
+     `host.docker.internal` or any other host, unless that hostname is listed in
+     `ST02_ALLOWED_MONGO_HOSTS=<host>[,<host>]` in `staging.env` (plain hostnames only; an IP
+     or wildcard is refused; `mongodb+srv` stays refused);
+   * `DB_NAME` (required) / `BEG_SYSTEM_DB` = `begwork`, `begwork_beg`, `begwork_system` or any
+     `begwork*` name;
+   * any bind mount outside the staging root, under `/volume1/docker/begwork`, of `/` or of a
+     Docker socket; a named volume that is external or not `<project>_*`;
+   * `privileged`, `cap_add`, `devices`, an `unconfined`/disabled `security_opt`, host
+     pid/ipc/uts/userns/cgroup, `network_mode` or a `host` network driver;
+   * `ST02_HTTP_PORT` 80, 443, 8001, 8080, 27017 or below 1024.
+   Reasons name the key, never its value.
 4. `staging_deploy.sh` = precheck (bundle verify with `--base`, isolation, recorded current,
    live tree, running images = recorded runtime, endpoints, gzip mongodump backup) → stage +
    tree identity → RC-01 `write_build_info.py --from-bundle` (the two `BUILD_INFO.json` are the
@@ -236,7 +253,9 @@ cd backend
 PYTHONPATH=. pytest tests/test_st_02_staging_stack.py -v --noconftest
 ```
 
-Isolation rules (good model + 18 violations), staging_up guards (production base, Git work tree,
+Isolation rules (good model + 18 violations; ST-02-C01: 40 production-target cases, production
+ports, the allow-list, the nine audit-probe mutations, the default `staging_up` root passing the
+real `compose config`, and a hand-edited `.env`/overlay refused before anything starts), staging_up guards (production base, Git work tree,
 project name, port 8080 / busy port, synthetic private `.env`, reuse refusal, secret scan),
 overlay content, production layout/flags unchanged, the real `docker compose config` of
 production compose + overlay passes and production compose alone is refused, staging_deploy.sh

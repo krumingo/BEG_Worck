@@ -42,8 +42,9 @@ def good_model(project=PROJECT, port=18080, mode="enforce"):
         "name": project,
         "services": {
             "backend": {"container_name": project + "-backend", "networks": {"st02": None},
-                        "environment": {"ENV": "staging", "PERMISSION_SERVICE_MODE": mode, "MONGO_URL": "x",
-                                        "JWT_SECRET": "synthetic"}},
+                        "environment": {"ENV": "staging", "PERMISSION_SERVICE_MODE": mode,
+                                        "MONGO_URL": "mongodb://mongo:27017/?replicaSet=rs0", "DB_NAME": "st02_staging",
+                                        "BEG_SYSTEM_DB": "st02_staging_system", "JWT_SECRET": "synthetic"}},
             "frontend": {"container_name": project + "-frontend", "networks": {"st02": None},
                          "ports": [{"host_ip": "127.0.0.1", "published": str(port), "target": 80, "protocol": "tcp"}]},
             "mongo": {"container_name": project + "-mongo", "networks": {"st02": None},
@@ -102,6 +103,217 @@ def test_isolation_main_never_prints_env_values(capsys, monkeypatch):
     assert iso.main() == 1
     out = capsys.readouterr().out
     assert "ISOLATION FAIL" in out and "SENTINEL" not in out
+
+
+# ------------------------------------------------------------ ST-02-C01 (audit ST02-1): production targets refused
+STAGING_ROOT = "/srv/st02/begwork-staging"
+
+
+def _benv(m, **kv):
+    m["services"]["backend"]["environment"].update(kv)
+
+
+def _bvol(m, src, svc="backend", vtype="bind"):
+    m["services"][svc].setdefault("volumes", []).append({"type": vtype, "source": src, "target": "/x"})
+
+
+C01_CASES = [
+    # MONGO_URL: external / LAN / srv / localhost / host gateway / other port / other host
+    ("srv-cluster", lambda m: _benv(m, MONGO_URL="mongodb+srv://u:p@prod-cluster.abcde.mongodb.net/begwork"), "mongodb+srv"),
+    ("srv-no-creds", lambda m: _benv(m, MONGO_URL="mongodb+srv://cluster0.mongodb.net"), "mongodb+srv"),
+    ("lan-ip", lambda m: _benv(m, MONGO_URL="mongodb://192.168.1.10:27017"), "LAN address"),
+    ("lan-ip-in-replset", lambda m: _benv(m, MONGO_URL="mongodb://mongo:27017,10.0.0.5:27017/?replicaSet=rs0"), "LAN address"),
+    ("ipv6", lambda m: _benv(m, MONGO_URL="mongodb://[fd00::5]:27017"), "IP address"),
+    ("localhost", lambda m: _benv(m, MONGO_URL="mongodb://localhost:27017"), "LAN address"),
+    ("host-gateway", lambda m: _benv(m, MONGO_URL="mongodb://host.docker.internal:27017"), "LAN address"),
+    ("prod-container", lambda m: _benv(m, MONGO_URL="mongodb://begwork-mongo:27017"), "host other than"),
+    ("nas-hostname", lambda m: _benv(m, MONGO_URL="mongodb://nas.local:27017"), "host other than"),
+    ("other-port", lambda m: _benv(m, MONGO_URL="mongodb://mongo:27018"), "port other than"),
+    ("creds-to-lan", lambda m: _benv(m, MONGO_URL="mongodb://admin:pw@192.168.1.10/begwork"), "LAN address"),
+    ("bad-scheme", lambda m: _benv(m, MONGO_URL="http://mongo:27017"), "scheme"),
+    ("missing-url", lambda m: m["services"]["backend"]["environment"].pop("MONGO_URL"), "MONGO_URL is missing"),
+    ("second-url-key", lambda m: _benv(m, LEGACY_MONGO_URL="mongodb+srv://prod.mongodb.net"), "LEGACY_MONGO_URL"),
+    # DB names
+    ("db-begwork", lambda m: _benv(m, DB_NAME="begwork"), "production database name"),
+    ("db-begwork-beg", lambda m: _benv(m, DB_NAME="begwork_beg"), "production database name"),
+    ("db-begwork-family", lambda m: _benv(m, DB_NAME="begwork_staging_copy"), "production database name"),
+    ("db-case", lambda m: _benv(m, DB_NAME="BEGWORK"), "production database name"),
+    ("system-db", lambda m: _benv(m, BEG_SYSTEM_DB="begwork_system"), "BEG_SYSTEM_DB is a production"),
+    ("missing-db", lambda m: m["services"]["backend"]["environment"].pop("DB_NAME"), "DB_NAME is missing"),
+    # mounts
+    ("bind-prod-root", lambda m: _bvol(m, "/volume1/docker/begwork"), "production root"),
+    ("bind-prod-sub", lambda m: _bvol(m, "/volume1/docker/begwork/uploads"), "production root"),
+    ("bind-prod-frontend", lambda m: _bvol(m, "/volume1/docker/begwork/.env", svc="frontend"), "production root"),
+    ("bind-outside-root", lambda m: _bvol(m, "/home/user/data"), "outside the staging root"),
+    ("bind-escape", lambda m: _bvol(m, STAGING_ROOT + "/../../etc"), "outside the staging root"),
+    ("bind-root-itself", lambda m: _bvol(m, STAGING_ROOT), "outside the staging root"),
+    ("bind-host-root", lambda m: _bvol(m, "/"), "host root"),
+    ("docker-sock", lambda m: _bvol(m, "/var/run/docker.sock"), "Docker socket"),
+    ("docker-sock-run", lambda m: _bvol(m, "/run/docker.sock", svc="mongo"), "Docker socket"),
+    ("docker-run-dir", lambda m: _bvol(m, "/var/run"), "Docker socket"),
+    ("external-volume", lambda m: (_bvol(m, "prod", vtype="volume"),
+                                   m["volumes"].update(prod={"name": "begwork_uploads", "external": True})), "not an own"),
+    ("anonymous-volume", lambda m: _bvol(m, "", vtype="volume"), "undeclared"),
+    # privileges / host namespaces / network
+    ("privileged", lambda m: m["services"]["backend"].update(privileged=True), "privileged"),
+    ("privileged-mongo", lambda m: m["services"]["mongo"].update(privileged=True), "privileged"),
+    ("cap-add", lambda m: m["services"]["backend"].update(cap_add=["SYS_ADMIN"]), "cap_add"),
+    ("devices", lambda m: m["services"]["backend"].update(devices=[{"source": "/dev/sda", "target": "/dev/sda"}]), "devices"),
+    ("seccomp-unconfined", lambda m: m["services"]["backend"].update(security_opt=["seccomp:unconfined"]), "security_opt"),
+    ("pid-host", lambda m: m["services"]["backend"].update(pid="host"), "pid"),
+    ("host-network-mode", lambda m: m["services"]["frontend"].update(network_mode="host"), "network_mode"),
+    ("host-network-driver", lambda m: m["networks"]["st02"].update(driver="host"), "host driver"),
+]
+
+
+@pytest.mark.parametrize("mutate,needle", [c[1:] for c in C01_CASES], ids=[c[0] for c in C01_CASES])
+def test_c01_isolation_refuses_production_targets(mutate, needle):
+    m = copy.deepcopy(good_model())
+    m["services"]["backend"]["volumes"] = [{"type": "bind", "source": STAGING_ROOT + "/uploads", "target": "/app/backend/uploads"}]
+    assert iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT) == []
+    mutate(m)
+    errors = iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT)
+    assert errors and any(needle in e for e in errors), errors
+
+
+@pytest.mark.parametrize("port", ["80", "443", "8001", "8080", "27017", "1023", "70000", "", "x"])
+def test_c01_isolation_refuses_production_ports(port):
+    m = good_model(port=port)
+    assert any("production/privileged port" in e for e in iso.check(m, PROJECT, port, "enforce"))
+
+
+def test_c01_bind_mount_needs_known_staging_root():
+    m = good_model()
+    _bvol(m, STAGING_ROOT + "/uploads")
+    assert any("ST02_BASE" in e for e in iso.check(m, PROJECT, "18080", "enforce"))
+    assert iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT) == []
+
+
+def test_c01_allowed_staging_host_from_configuration():
+    m = good_model()
+    _benv(m, MONGO_URL="mongodb://staging-db.internal:27017/?replicaSet=rs0")
+    assert any("host other than" in e for e in iso.check(m, PROJECT, "18080", "enforce"))
+    assert iso.check(m, PROJECT, "18080", "enforce", allowed_mongo_hosts="staging-db.internal") == []
+    # the allow-list never admits srv, an IP or a wildcard, and does not relax the DB-name rule
+    _benv(m, MONGO_URL="mongodb+srv://staging-db.internal")
+    assert any("mongodb+srv" in e for e in iso.check(m, PROJECT, "18080", "enforce", allowed_mongo_hosts="staging-db.internal"))
+    for bad in ("192.168.1.10", "*.mongodb.net", "fd00::5"):
+        assert any("not a plain hostname" in e for e in iso.check(good_model(), PROJECT, "18080", "enforce",
+                                                                     allowed_mongo_hosts=bad)), bad
+    m2 = good_model(); _benv(m2, MONGO_URL="mongodb://staging-db.internal", DB_NAME="begwork")
+    assert any("production database name" in e for e in iso.check(m2, PROJECT, "18080", "enforce",
+                                                                     allowed_mongo_hosts="staging-db.internal"))
+
+
+def test_c01_project_mongo_container_name_and_credentials_pass():
+    m = good_model()
+    _benv(m, MONGO_URL="mongodb://user:p%40ss@begwork-staging-mongo:27017/st02_staging?replicaSet=rs0")
+    assert iso.check(m, PROJECT, "18080", "enforce") == []
+
+
+def test_c01_main_refuses_with_nonzero_exit_and_never_prints_the_url(capsys, monkeypatch):
+    m = good_model()
+    _benv(m, MONGO_URL="mongodb+srv://SENTINEL-USER:SENTINEL-PW@prod-cluster.mongodb.net", DB_NAME="begwork")
+    _bvol(m, "/volume1/docker/begwork")
+    m["services"]["backend"]["privileged"] = True
+    monkeypatch.setattr(sys, "stdin", __import__("io").StringIO(json.dumps(m)))
+    monkeypatch.setenv("ST02_PROJECT", PROJECT); monkeypatch.setenv("ST02_HTTP_PORT", "18080"); monkeypatch.setenv("ST02_MODE", "enforce")
+    monkeypatch.setenv("ST02_BASE", STAGING_ROOT)
+    assert iso.main() == 1
+    out = capsys.readouterr().out
+    assert out.strip().endswith("ISOLATION FAIL")
+    for needle in ("mongodb+srv", "production database name", "production root", "privileged"):
+        assert needle in out, out
+    assert "SENTINEL" not in out and "prod-cluster" not in out
+
+
+def test_c01_audit_probe_model_is_fully_caught():
+    """The nine hostile mutations of docs/audit/probes/st02/probe_st02_isolation.py are all refused."""
+    base = good_model()
+    base["services"]["backend"]["environment"]["DB_NAME"] = "st02_staging"
+    probe = [
+        lambda m: _benv(m, MONGO_URL="mongodb+srv://u:p@prod-cluster.mongodb.net"),
+        lambda m: _benv(m, MONGO_URL="mongodb://192.168.1.10:27017"),
+        lambda m: _benv(m, DB_NAME="begwork"),
+        lambda m: m["services"]["backend"].update(volumes=[{"type": "bind", "source": "/volume1/docker/begwork", "target": "/data"}]),
+        lambda m: m["services"]["backend"].update(volumes=[{"type": "bind", "source": "/var/run/docker.sock", "target": "/var/run/docker.sock"}]),
+        lambda m: m["services"]["backend"].update(privileged=True),
+        lambda m: m["services"]["mongo"].update(ports=[{"host_ip": "", "published": "27017", "target": 27017}]),
+        lambda m: m["volumes"]["st02-mongo-data"].update(external=True, name="begwork_mongo_data"),
+        lambda m: m["services"]["backend"].update(network_mode="host"),
+    ]
+    for i, fn in enumerate(probe):
+        m = copy.deepcopy(base); fn(m)
+        assert iso.check(m, PROJECT, "18080", "enforce", base=STAGING_ROOT), i
+
+
+def test_c01_staging_deploy_passes_root_and_allow_list_to_the_check():
+    sh = (STAGING / "staging_deploy.sh").read_text()
+    assert '-e ST02_BASE="$root"' in sh and "ST02_ALLOWED_MONGO_HOSTS" in sh
+    # the check runs before any container action and a refusal exits 3
+    i_iso = sh.index('assert_isolated || {'); i_up = sh.index('compose_up "$REBUILD"')
+    assert i_iso < i_up and "exit 3; }" in sh[i_iso:i_iso + 120]
+
+
+_HAS_COMPOSE = shutil.which("docker") is not None and subprocess.run(
+    ["docker", "compose", "version"], capture_output=True).returncode == 0
+
+
+def _real_staging_root(tmp_path, monkeypatch):
+    monkeypatch.setattr(up, "check_port", lambda port: None)
+    base, _ = up.prepare_base(tmp_path / "st", PROJECT, 18555, "enforce")
+    for name in ("docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend"):
+        shutil.copyfile(PROD_LAYOUT / name, base / name)
+    return base
+
+
+@pytest.mark.skipif(not _HAS_COMPOSE, reason="docker compose not installed")
+def test_c01_default_staging_up_root_passes(tmp_path, monkeypatch):
+    """The layout root exactly as staging_up.py prepares it passes the full check (real compose config)."""
+    base = _real_staging_root(tmp_path, monkeypatch)
+    up.assert_isolated(base, PROJECT)  # does not raise
+    calls = []
+    monkeypatch.setattr(up, "compose", lambda *a, **k: calls.append(a) or subprocess.CompletedProcess(a, 0, "", ""))
+    monkeypatch.setattr(up, "run", lambda cmd, check=True, **k: subprocess.CompletedProcess(cmd, 0, "1" if "ping" in str(cmd) else "true", ""))
+    up.mongo_up(base, PROJECT)  # the gate passes, then mongo would start
+    assert calls and calls[0][2:] == ("up", "-d", "--no-deps", "mongo")
+
+
+@pytest.mark.skipif(not _HAS_COMPOSE, reason="docker compose not installed")
+@pytest.mark.parametrize("edit,needle", [
+    ("MONGO_URL=mongodb+srv://u:p@prod-cluster.mongodb.net/begwork", "mongodb+srv"),
+    ("MONGO_URL=mongodb://192.168.1.10:27017", "LAN address"),
+    ("DB_NAME=begwork", "production database name"),
+])
+def test_c01_hand_edited_env_refused_before_anything_starts(tmp_path, monkeypatch, edit, needle):
+    """A copied/hand-edited production .env: up refuses BEFORE the staging MongoDB starts."""
+    base = _real_staging_root(tmp_path, monkeypatch)
+    key = edit.split("=", 1)[0]
+    lines = [l for l in (base / ".env").read_text().splitlines() if not l.startswith(key + "=")]
+    (base / ".env").write_text("\n".join(lines + [edit]) + "\n")
+    started = []
+    monkeypatch.setattr(up, "compose", lambda *a, **k: started.append(a))
+    monkeypatch.setattr(up, "run", lambda *a, **k: started.append(a))
+    with pytest.raises(up.Refused) as ei:
+        up.mongo_up(base, PROJECT)
+    msg = str(ei.value)
+    assert "ISOLATION FAIL, nothing was started" in msg and needle in msg
+    assert "prod-cluster" not in msg and "192.168" not in msg
+    assert started == []
+
+
+@pytest.mark.skipif(not _HAS_COMPOSE, reason="docker compose not installed")
+def test_c01_overlay_with_prod_bind_privileged_socket_refused(tmp_path, monkeypatch):
+    base = _real_staging_root(tmp_path, monkeypatch)
+    text = (base / "docker-compose.staging.yml").read_text().replace(
+        "  backend:\n    container_name: ${ST02_PROJECT}-backend\n",
+        "  backend:\n    container_name: ${ST02_PROJECT}-backend\n    privileged: true\n    volumes:\n"
+        "      - /volume1/docker/begwork:/prod\n      - /var/run/docker.sock:/var/run/docker.sock\n")
+    (base / "docker-compose.staging.yml").write_text(text)
+    with pytest.raises(up.Refused) as ei:
+        up.assert_isolated(base, PROJECT)
+    for needle in ("privileged", "production root", "Docker socket"):
+        assert needle in str(ei.value), str(ei.value)
 
 
 # ------------------------------------------------------------ staging_up guards
@@ -222,16 +434,18 @@ def test_real_compose_model_of_overlay_is_isolated(tmp_path):
     (tmp_path / ".env").write_text("PUBLIC_URL=http://127.0.0.1:18555\nST02_PROJECT=begwork-staging\n"
                                    "ST02_HTTP_PORT=18555\nST02_PERMISSION_SERVICE_MODE=enforce\n")
     base_cmd = ["docker", "compose", "-p", PROJECT, "-f", "docker-compose.yml", "-f", "docker-compose.staging.yml"]
+    with (tmp_path / ".env").open("a") as f:
+        f.write("MONGO_URL=mongodb://mongo:27017/?replicaSet=rs0\nDB_NAME=st02_staging\n")
     r = subprocess.run(base_cmd + ["config", "--format", "json"], cwd=tmp_path, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     model = json.loads(r.stdout)
-    assert iso.check(model, PROJECT, "18555", "enforce") == []
+    assert iso.check(model, PROJECT, "18555", "enforce", base=str(tmp_path)) == []
     assert model["services"]["backend"]["build"]["dockerfile"] == "../Dockerfile.backend"  # same production build
     # without the overlay the model is production-shaped and the check refuses it
     r2 = subprocess.run(["docker", "compose", "-p", PROJECT, "-f", "docker-compose.yml", "config", "--format", "json"],
                         cwd=tmp_path, capture_output=True, text=True)
     assert r2.returncode == 0, r2.stderr
-    errs = iso.check(json.loads(r2.stdout), PROJECT, "18555", "enforce")
+    errs = iso.check(json.loads(r2.stdout), PROJECT, "18555", "enforce", base=str(tmp_path))
     assert any("production container name" in e for e in errs) and any("8080" in e for e in errs)
 
 
