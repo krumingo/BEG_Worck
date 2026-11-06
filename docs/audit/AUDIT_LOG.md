@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01 | `dae097bb46691a8d7cf5b55c6526b32ba597b03d` | PASS (minor notes) | 2026-11-06 |
-| #55 Склад 5C (C18) | `639ca80e89db3d603d17cdded769b01aa4c92bd9` | FINDINGS (blocking: P55-1, P55-2) | 2026-11-06 |
+| #55 Склад 5C (C19) | `d8ac3a9` | PASS (internal) — Codex still required (money) | 2026-11-06 |
 | #65 RC-01 | `44c9c3cfa668cf9a601f65960680eac11ef70ec7` | FINDINGS (non-blocking, P1 medium) | 2026-11-06 |
 | #66 ST-01 | `9904524caba59038b3251d3cd468defbe6205d96` | PASS with 1 medium finding (PST-1) | 2026-11-06 |
 
@@ -280,3 +280,57 @@ Scope: only `ops/staging/` and the test file, no business code ✔. Passwords co
 
 `W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27019/?directConnection=true PYTHONPATH=. pytest --noconftest -q tests/test_r0_0*.py`
 → **814 passed / 0 failed / 0 skipped**. The merge with main keeps R0-01…R0-07 green. This does not change the #55 verdict: P55-1 and P55-2 still block.
+
+
+---
+
+## 2026-11-06 ~14:30 — PR #55 @ `d8ac3a9` (5C-C19: Bot F-1…F-6 + audit F-7/F-8)
+
+### Suites (PROVED)
+
+| Command | Result |
+|---|---|
+| Warehouse real-Mongo matrix (`PERMISSION_SERVICE_MODE=enforce WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1`) | **176 passed / 0 failed / 0 skipped** |
+| R0 on real Mongo (`W0_03_REAL_MONGO_URL=…`) | **814 / 0 / 0** |
+| W0 DB-free | 1085 / 15 / 50, same 15 ✔ |
+| A2C | 217 modules, 0 violations ✔ |
+| A1 | 440 units, 0 violations ✔ |
+| `yarn test` CanonicalWarehouseRoute + CanonicalWarehousePage (+c19) | 30 / 30 ✔ |
+
+### Probes (`docs/audit/probes/pr55/test_probe_pr55_c19.py`, real Mongo, real CommandService)
+
+| Probe | Result |
+|---|---|
+| C19-1: receive 5@10 → dispatch **in_transit** → accept 5 → consume 3 → return 2 to warehouse | **PASS**. Summary 30 before and after sync; exactly one `consume` row. P55-1 is closed. P55-2 is closed too: the summary no longer raises. |
+| C19-2: W0-04 event → canonical → W0-04 → canonical → W0-04 | **PASS**. One chain, sequences 1..n, `verify_chain` OK (Bot F-1 closed). |
+| C19-4: legacy unique `warehouse_batches(org_id, batch_number)`, 3 receives + dispatch + accept + rebuild ×2 | **PASS**. No null `batch_number` (Bot F-2 closed). |
+| C19-5: identical resend of consume after an unrelated consume | **PASS**. Original `movement_id` returned, 2 ledger rows; same key with a different qty is refused (Bot F-5 closed). |
+| C19-6: dispatch → project | **PASS**. Refused (Rule B, F-4); T2 cannot accept T's dispatch; T2 has 0 rows. |
+| C19-7: `integrity_warnings` with and without a session | **PASS** (Bot F-3 closed). |
+
+Further checks:
+- **Startup:** `server.py` startup now calls `ensure_required_indexes_at_startup(db)` (F-1b). Failure is logged and the service stays fail-closed.
+- **UI:** a failed alarms or stock read now renders an error with a code, never "no alarms" (F-3 UI, read in code).
+- **Frontend catalog copy:** `warehouseCanonicalAccess.json` is a UI copy of the catalog. It is covered by a parity test against `catalog.py`, so it is not a second source of truth.
+
+The earlier probes `test_probe_pr55_material_cost.py` P55-1/P55-3 now fail only because they dispatch straight to the project, which F-4 refuses by design. They are superseded by C19-1/C19-6 and kept for history.
+
+### Debt on main (NOT a #55 finding), PROVED
+
+**C19-3 / control:** concurrent W0-04 `app.audit.store.record_event` calls lose events with `DuplicateKeyError`.
+- The writer reads the tail and inserts sequence+1 with no retry or transaction.
+- 6 concurrent W0-04-only writers → 3–4 failures, over 3 of 3 runs. The same happens with canonical writers interleaved (canonical: 0 failures; it retries inside its transaction).
+- This is on `main`, unchanged by #55.
+- Impact: an AuditEvent can be lost under concurrent permission / master-data / auth writes. It is the caller's exception, so no silent loss in the store itself, but the business action may already be committed (CLAUDE.md §2.8).
+- Per §18 this is recorded as debt and not fixed; for Krum to prioritise.
+
+### Integration (merge-tree)
+
+- #55 is now clean against main, #65 and #66.
+- It still conflicts with:
+  - #53 (`frontend/src/App.js`);
+  - #54 (`catalog.py`, `procurement.py`, `data_access.py`);
+  - #56 (`data_access.py`, `W0-03E-A2B_INVENTORY.md`);
+  - #64 (`App.js`).
+
+**Verdict:** PASS (internal). Money-related, so the Codex review is still required.
