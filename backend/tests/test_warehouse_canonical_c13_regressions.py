@@ -222,11 +222,18 @@ def test_c13_4_material_entries_rebuild_uses_canonical_schema():
 def test_c13_4_material_readers_use_canonical_names():
     """Readers aggregate `quantity`/`total_value`, not `qty`/`total_cost`."""
     src = Path("app/routes/material_smr.py").read_text()
-    # The two cost reader paths must each query `total_value` + `movement_kind`.
-    assert 'e.get("total_value")' in src, (
+    # 5C-C22: the cost reader path lives in the ONE shared helper that
+    # material_smr (and every other finance report) calls; it must read
+    # `total_value` + `movement_kind`, and neither file may read the
+    # legacy `total_cost` scalar of a material_entries row.
+    helper = Path("app/services/canonical_material_cost.py").read_text()
+    assert 'row.get("total_value")' in helper, (
         "C13.4 regression: readers still read legacy `total_cost`."
     )
-    assert '"movement_kind"' in src, (
+    assert "project_material_cost(" in src
+    for text in (src, helper):
+        assert '.get("total_cost")' not in text and '["total_cost"] for e' not in text
+    assert '"movement_kind"' in src and '"movement_kind"' in helper, (
         "C13.4 regression: readers must dispatch on `movement_kind`, "
         "not legacy `movement_type`."
     )

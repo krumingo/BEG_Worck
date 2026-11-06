@@ -318,28 +318,22 @@ async def get_project_material_summary(project_id: str, user: dict = Depends(req
     ).to_list(100)
     purchased_value = sum(si.get("subtotal", 0) or sum(l.get("total_price", 0) for l in si.get("lines", [])) for si in sinvs)
 
-    # Warehouse issue value
-    wh_issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "total": 1, "lines": 1}
-    ).to_list(None)
-    issued_value = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
-
-    # Returns value
-    wh_returns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "return"},
-        {"_id": 0, "lines": 1}
-    ).to_list(None)
-    returned_value = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
-
+    # Warehouse material cost — 5C-C22: the ONE shared helper (canonical
+    # consumption + „фира" + legacy issues dated before the tenant cutover,
+    # Р13). Legacy return rows never carried a price (value 0), and a
+    # canonical return is not cost, so returned_value is 0 by the canon.
+    from app.services.canonical_material_cost import project_material_cost, cost_basis
+    _mat = await project_material_cost(tenant, org_id, project_id)
+    issued_value = _mat["total_cost"]
+    returned_value = 0.0
     net_material_cost = round(issued_value - returned_value, 2)
     variance_to_plan = round(planned_value - purchased_value, 2) if planned_value > 0 else None
 
     metrics_available = {
         "planned_materials": len(planned) > 0,
         "purchases": len(sinvs) > 0,
-        "warehouse_issues": len(wh_issues) > 0,
-        "warehouse_returns": len(wh_returns) > 0,
+        "warehouse_issues": _mat["has_data"],
+        "warehouse_returns": False,
     }
 
     return {
@@ -358,6 +352,8 @@ async def get_project_material_summary(project_id: str, user: dict = Depends(req
             "issued_value": round(issued_value, 2),
             "returned_value": round(returned_value, 2),
             "net_material_cost": net_material_cost,
+            "waste_value": _mat["waste_cost"],          # „фира", part of net
+            "material_cost_basis": cost_basis(_mat),
         },
 
         "variance": {

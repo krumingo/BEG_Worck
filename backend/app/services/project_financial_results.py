@@ -73,17 +73,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # reported labor is operational value, NOT cash out
     effective_cash_labor = paid_labor_expense
 
-    # Supplier/material payments
-    # CODEX C12.10 — no silent cap on canonical ledger reads.
-    paid_materials = 0
-    _cursor = tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "lines": 1},
-    )
-    async for t in _cursor:
-        for ln in t.get("lines", []):
-            paid_materials += float(ln.get("unit_cost", 0)) * float(ln.get("qty_issued", 0))
-    paid_materials = round(paid_materials, 2)
+    # Material cost — 5C-C22: the ONE shared helper (canonical consumption
+    # + „фира" + legacy issues dated before the tenant cutover, Р13). Same
+    # number as the P&L warehouse figure and every other finance report.
+    from app.services.canonical_material_cost import project_material_cost, cost_basis
+    _mat = await project_material_cost(tenant, org_id, project_id)
+    paid_materials = _mat["total_cost"]
+    material_cost_basis = cost_basis(_mat)
 
     # Subcontractor payments
     sub_payments = await tenant.subcontractor_payments.find(
@@ -124,6 +120,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
             "paid_subcontractors": paid_subcontractors,
             "paid_contracts": paid_contracts,
         },
+        "material_cost_basis": material_cost_basis,
     }
 
     # ── LABOR SUMMARY ──

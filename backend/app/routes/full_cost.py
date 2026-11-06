@@ -433,10 +433,14 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 
     # Margin drop check
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_material_cost": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
+    # 5C-C22 — package material actual from the ONE shared helper (read
+    # time), not the `actual_material_cost` cache.
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
     for pkg in pkgs:
         sale = pkg.get("sale_total", 0)
-        actual = (pkg.get("actual_material_cost", 0) or 0) + (pkg.get("actual_labor_cost", 0) or 0)
+        actual = split_for_package(mat_cost, pkg["id"])["total"] + (pkg.get("actual_labor_cost", 0) or 0)
         if sale > 0 and actual > sale * 0.9:
             alerts.append({"type": "margin_drop", "severity": "critical", "package_id": pkg["id"], "message": f"{pkg.get('activity_name', '')}: разходи {round(actual, 2)} / продажба {sale} EUR"})
 

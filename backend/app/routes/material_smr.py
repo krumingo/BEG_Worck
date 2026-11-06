@@ -32,13 +32,11 @@ router = APIRouter(tags=["Material Cost by SMR"])
 # Every cost reader in this module filters on COST_KINDS.
 from app.services.canonical_material_cost import (  # noqa: E402
     COST_KINDS,
-    WASTE_KINDS,
     canonical_project_trail,
     is_project_location,
     package_material_split,
     project_material_cost,
     split_for_package,
-    resolve_execution_package,
     resolve_planned,
 )
 # 5C-C20 F-10 — every package/project material figure below is computed at
@@ -259,27 +257,31 @@ async def get_material_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(requir
                 "returned_qty": 0, "consumed_qty": 0, "waste_qty": 0,
                 "waste_cost": 0, "net_cost": 0})
 
-        for e in cost["rows"]:
-            if resolve_execution_package(e, by_item, by_name) != pkg_id:
+        # 5C-C22 — the counted cost lines of the ONE helper (canonical
+        # consumption + „фира" + pre-cutover legacy issues, Р13).
+        for e in cost["lines"]:
+            if e["package_id"] != pkg_id:
                 continue
             entries_count += 1
-            pm = resolve_planned(e.get("item_id"), by_item, by_name)
-            name = e.get("material_name") or (pm or {}).get("material_name") or e.get("item_id") or ""
-            m = _row(name, e.get("unit"))
-            qty = float(e.get("quantity") or 0)
-            is_waste = e.get("movement_kind") in WASTE_KINDS
+            m = _row(e["material_name"], e.get("unit"))
+            qty = float(e["qty"] or 0)
+            is_waste = e["waste"]
             if is_waste:
                 # 5C-C21 F-12 — the „фира" line; its quantity is already in
                 # the trail's written_off (returned_qty) below.
                 m["waste_qty"] += qty
                 total_waste_qty += qty
-            else:
+            elif e["source"] == "canonical":
                 m["consumed_qty"] += qty
                 total_returned_qty += abs(qty)
-            if e.get("total_value") is None:
+            else:
+                # Pre-cutover legacy issue: issued to the project.
+                m["issued_qty"] += qty
+                total_issued_qty += qty
+            if e["value"] is None:
                 partial_cost = True
             else:
-                value = float(e["total_value"])
+                value = float(e["value"])
                 total_cost += value
                 m["net_cost"] += value
                 if is_waste:
@@ -573,4 +575,10 @@ async def get_material_summary_for_project(org_id: str, project_id: str) -> dict
         "variance_value": round(total - budget, 2) if budget > 0 else None,
         "currency": "EUR",
         "has_data": cost["has_data"],
+        # 5C-C22 / Р13 — the cutover split behind total_cost.
+        "source": cost["source"],
+        "canonical_cost": cost["canonical_cost"],
+        "legacy_cost": cost["legacy_cost"],
+        "legacy_excluded_cost": cost["legacy_excluded_cost"],
+        "cutover_at": cost["cutover_at"],
     }

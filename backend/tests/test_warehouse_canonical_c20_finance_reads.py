@@ -156,16 +156,22 @@ async def test_f9_project_pnl_summary_breakdown_show_canonical_30(
 
 async def test_f9_legacy_issue_rows_are_not_added_on_top_of_the_canon(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """Legacy issue 5 @10 (=50) + canonical consume 3 @10 (=30) → 30, not 80/50."""
+    """Legacy issue 5 @10 (=50) + canonical consume 3 @10 (=30) → 30, not 80/50.
+
+    5C-C22 / Р13: the legacy row is dated AFTER the tenant cutover (the first
+    canonical ledger row), so it is never added on top of the canon. (A
+    legacy row dated BEFORE the cutover counts — 100 + 30 = 130 — see
+    test_warehouse_canonical_c22_all_reports_cutover.py.)"""
     from app.routes import project_pnl
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
     await _seed(db)
+    await _scenario(client, allow_always_gate, db)
     await db["warehouse_transactions"].insert_one({
         "id": "legacy-issue-1", "org_id": T, "project_id": PROJECT, "type": "issue",
+        "created_at": "2099-01-01T00:00:00+00:00",
         "lines": [{"material_name": "Лепило", "unit": "bag",
                    "qty_issued": 5, "unit_cost": 10}]})
-    await _scenario(client, allow_always_gate, db)
 
     pnl = await project_pnl.get_project_pnl(PROJECT, user=_user())
     assert pnl["expense"]["material_cost"] == pytest.approx(30.0)

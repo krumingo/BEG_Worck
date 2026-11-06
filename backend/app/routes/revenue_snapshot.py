@@ -130,11 +130,13 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
         {"_id": 0, "date": 1, "labor_cost": 1, "hours": 1}
     ).to_list(5000)
 
-    # Material by month (from material_entries issues + returns)
-    mat_entries = await tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id, "movement_type": {"$in": ["issue", "return"]}},
-        {"_id": 0, "date": 1, "total_cost": 1}
-    ).to_list(None)
+    # Material by month — 5C-C22: the ONE shared helper (canonical
+    # consumption + „фира" + legacy issues dated before the tenant cutover,
+    # Р13), split by the month of each counted cost line.
+    from app.services.canonical_material_cost import (
+        project_material_cost, cost_by_period, cost_basis)
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+    mat_by_period = cost_by_period(mat_cost)
 
     # Subcontract by month (from acts)
     sub_acts = await tenant.subcontractor_acts.find(
@@ -177,11 +179,11 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
                 periods[pk]["labor"] += le["labor_cost"]
             periods[pk]["labor_hours"] += float(le.get("hours", 0))
 
-    for me in mat_entries:
-        pk = (me.get("date") or "")[:7]
-        if pk and me.get("total_cost") is not None:
+    for pk, mp in mat_by_period.items():
+        if pk:
             ensure_period(pk)
-            periods[pk]["material"] += me["total_cost"]
+            periods[pk]["material"] += mp["total"]       # consumption + фира
+            periods[pk]["waste"] = periods[pk].get("waste", 0) + mp["waste"]
 
     for sa in sub_acts:
         pk = (sa.get("act_date") or "")[:7]
@@ -207,7 +209,13 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
         p["net_profit"] = round(rev - p["total_cost"], 2) if rev > 0 else None
 
     result = sorted(periods.values(), key=lambda x: x["period"], reverse=True)
-    return {"project_id": project_id, "currency": "EUR", "periods": result}
+    for p in result:
+        p["waste"] = round(p.get("waste", 0), 2)
+    return {"project_id": project_id, "currency": "EUR", "periods": result,
+            # 5C-C22 — Σ periods.material + material_undated == the project
+            # material total every other report shows.
+            "material_undated": (mat_by_period.get(None) or {}).get("total", 0.0),
+            "material_cost_basis": cost_basis(mat_cost)}
 
 
 # ═══════════════════════════════════════════════════════════════════

@@ -25,14 +25,15 @@ read time, nothing is stored):
     arriving at the project (acceptance / direct delivery), material
     leaving it (consume / write-off / transfer / quarantine / return).
 
-Legacy rule (F-9, "не се броят два пъти"): legacy ``warehouse_transactions``
-rows (``type`` + ``lines``, no ``action``) predate the canon — their writers
-are retired (410). A project that has ANY canonical cost row reads its
-warehouse material cost from the canon ONLY; legacy issue rows are then
-reported as ``excluded`` and never added. A project with no canonical cost
-row keeps its historical legacy figure. This is the same rule
-``/project-profit`` (``revenue_expense``) already applies via
-``get_material_summary_for_project().has_data``.
+Legacy rule — 5C-C22 / Р13 (Крум, 06.11.2026), replaces the C20 "any
+canonical row → drop all legacy" rule: legacy ``warehouse_transactions``
+issue rows (``type`` + ``lines``, no ``action``; their writers are retired,
+410) count when they are dated BEFORE the tenant cutover (the first
+canonical ledger row, see ``tenant_cutover``); at/after it only canonical
+rows count and the legacy amount is reported as ``legacy_excluded_cost``.
+Example: 100 legacy before + 30 canonical after = 130, everywhere.
+``project_material_cost`` is the ONE helper every finance report uses for
+project, package and period material cost.
 
 5C-C21 F-12 (Р10, Крум 06.11.2026): a write-off (брак / загуба) FROM A
 PROJECT bucket is project cost — recognised once, by the projector row the
@@ -43,6 +44,7 @@ write-off from a warehouse is not project cost (no row is written).
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 CANONICAL_SOURCE = "canonical_warehouse_service"
@@ -100,10 +102,73 @@ def resolve_execution_package(entry: dict, by_item: dict, by_name: dict) -> Opti
     return pm.get("execution_package_id") if pm else None
 
 
-# ───────────────────────────── cost (F-9/F-10) ─────────────────────────────
+# ─────────────────────── cutover (5C-C22, Р13) ───────────────────────
+#
+# Р13 (Крум, 06.11.2026): with a mixed history the project material cost is
+# split by the moment the tenant moved to the canonical warehouse. Legacy
+# rows BEFORE that moment count; after it only the canonical rows count.
+#
+# HOW THE CUTOVER MOMENT IS DETERMINED (one rule, read time, nothing stored):
+#   cutover_at = ``recorded_at`` of the tenant's FIRST canonical warehouse
+#   ledger row (``warehouse_transactions`` with ``action`` set), any action,
+#   any location, tenant-scoped.
+# Why this source (and not a new stored setting):
+#   * the canonical ledger is append-only and ``recorded_at`` is stamped by
+#     the server (envelope ``_now_iso``), never by the client — the moment
+#     cannot be edited, back-dated or diverge between readers;
+#   * it is per tenant (CLAUDE.md §3, database-per-tenant): the legacy
+#     writers are retired (410, v6 §12.1) for the whole tenant, so from the
+#     first canonical movement on, material can reach a project only through
+#     the canon (Rule B accept / direct delivery) — a canonical consumption
+#     can never re-cost a legacy issue, so the split is disjoint by time;
+#   * no migration, no backfill, no second source of truth: an explicit,
+#     hand-set date would be a new consequential write (permission +
+#     Approval + AuditEvent) and is NOT introduced here.
+# A tenant with no canonical row has no cutover: all its legacy rows count.
+
+CUTOVER_SOURCE = "first_canonical_ledger_row"
+
+
+def _moment(value: Any) -> Optional[datetime]:
+    """ISO string / date string / datetime → aware UTC datetime (or None)."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        text = str(value).strip()
+        try:
+            if len(text) == 10:          # YYYY-MM-DD (legacy issue_date)
+                dt = datetime.strptime(text, "%Y-%m-%d")
+            else:
+                dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+async def tenant_cutover(tenant, org_id: str) -> Dict[str, Any]:
+    """Р13 cutover of one tenant: its first canonical ledger row."""
+    cursor = tenant.warehouse_transactions.find(
+        {"org_id": org_id, "action": {"$exists": True},
+         "recorded_at": {"$exists": True}},
+        {"_id": 0, "recorded_at": 1, "movement_id": 1, "action": 1},
+    ).sort([("recorded_at", 1), ("ledger_sequence", 1), ("movement_id", 1)]).limit(1)
+    rows = [row async for row in cursor]
+    if not rows:
+        return {"cutover_at": None, "cutover_source": CUTOVER_SOURCE,
+                "cutover_movement_id": None}
+    return {"cutover_at": rows[0].get("recorded_at"),
+            "cutover_source": CUTOVER_SOURCE,
+            "cutover_movement_id": rows[0].get("movement_id")}
+
+
+# ───────────────────────────── cost (F-9/F-10, C22) ─────────────────────────────
 
 async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
-    """Canonical cost rows (consumptions) of one project, tenant-scoped."""
+    """Canonical cost rows (consumptions + project write-offs), tenant-scoped."""
     cursor = tenant.material_entries.find(
         {"org_id": org_id, "project_id": project_id,
          "projection_source": CANONICAL_SOURCE,
@@ -114,44 +179,149 @@ async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
     return [row async for row in cursor]
 
 
+async def legacy_issue_rows(tenant, org_id: str, project_id: str) -> List[dict]:
+    """Legacy (pre-canon) issue rows of a project: ``type=issue``, no ``action``."""
+    cursor = tenant.warehouse_transactions.find(
+        {"org_id": org_id, "project_id": project_id, "type": "issue",
+         "action": {"$exists": False}},
+        {"_id": 0, "id": 1, "lines": 1, "created_at": 1, "issue_date": 1},
+    )
+    return [row async for row in cursor]
+
+
+def legacy_line_value(line: dict) -> float:
+    """Value of one legacy issue line. The retired writer stored
+    ``total_price`` (= qty_issued × unit_price); older rows carry
+    ``unit_cost``. One rule for every reader."""
+    if line.get("total_price") is not None:
+        return float(line.get("total_price") or 0)
+    unit = line.get("unit_cost")
+    if unit is None:
+        unit = line.get("unit_price")
+    return float(unit or 0) * float(line.get("qty_issued", 0) or 0)
+
+
+def legacy_issue_cost(txns: Iterable[dict]) -> float:
+    total = 0.0
+    for txn in txns:
+        for line in txn.get("lines", []) or []:
+            total += legacy_line_value(line)
+    return round(total, 2)
+
+
+def legacy_moment(txn: dict) -> Optional[datetime]:
+    """When a legacy row happened: server ``created_at``, else ``issue_date``."""
+    return _moment(txn.get("created_at")) or _moment(txn.get("issue_date"))
+
+
+def canonical_moment(row: dict) -> Optional[datetime]:
+    return (_moment(row.get("recorded_at")) or _moment(row.get("consumed_at"))
+            or _moment(row.get("written_off_at")))
+
+
+def period_of(moment: Optional[datetime]) -> Optional[str]:
+    return moment.strftime("%Y-%m") if moment else None
+
+
 async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[str, Any]:
-    """Canonical material cost of a project, with package attribution."""
+    """THE project material cost (5C-C22): one helper for every finance
+    report — project, package and period.
+
+    * canonical cost rows (consumption + „фира", recognised once);
+    * PLUS legacy issue rows dated BEFORE the tenant cutover (Р13);
+    * legacy rows at/after the cutover are reported as ``legacy_excluded_cost``
+      and never counted (no double count).
+
+    ``lines`` is the normalised list of every COUNTED cost line; all totals,
+    package and period splits are sums over it, so they always agree.
+    """
     rows = await project_cost_rows(tenant, org_id, project_id)
     by_item, by_name = await load_planned_mapping(tenant, org_id, project_id)
-    total = 0.0
-    waste = 0.0
-    qty = 0.0
-    waste_qty = 0.0
+    cut = await tenant_cutover(tenant, org_id)
+    cutover = _moment(cut["cutover_at"])
+
+    lines: List[dict] = []
+    for row in rows:
+        at = canonical_moment(row)
+        pm = resolve_planned(row.get("item_id"), by_item, by_name)
+        lines.append({
+            "source": "canonical", "kind": row.get("movement_kind"),
+            "waste": row.get("movement_kind") in WASTE_KINDS,
+            "value": _f(row.get("total_value")),
+            "qty": _f(row.get("quantity")) or 0.0,
+            "item_id": row.get("item_id"), "unit": row.get("unit"),
+            "material_name": row.get("material_name") or (pm or {}).get("material_name")
+            or row.get("item_id") or "",
+            "package_id": resolve_execution_package(row, by_item, by_name),
+            "at": at, "period": period_of(at), "ref": row.get("id"),
+        })
+
+    legacy_counted = 0.0
+    legacy_excluded = 0.0
+    legacy_undated = 0.0
+    legacy_qty = 0.0
+    legacy_rows = await legacy_issue_rows(tenant, org_id, project_id)
+    for txn in legacy_rows:
+        at = legacy_moment(txn)
+        counted = cutover is None or at is None or at < cutover
+        for ln in txn.get("lines", []) or []:
+            value = legacy_line_value(ln)
+            if not counted:
+                legacy_excluded += value
+                continue
+            legacy_counted += value
+            if at is None:
+                legacy_undated += value
+            qty = float(ln.get("qty_issued", 0) or 0)
+            legacy_qty += qty
+            name = ln.get("material_name") or ""
+            pm = by_name.get(name.lower().strip())
+            lines.append({
+                "source": "legacy", "kind": "issue", "waste": False,
+                "value": round(value, 4), "qty": qty, "item_id": None,
+                "unit": ln.get("unit"), "material_name": name,
+                "package_id": (pm or {}).get("execution_package_id"),
+                "at": at, "period": period_of(at), "ref": txn.get("id"),
+            })
+
+    total = waste = qty = waste_qty = unmapped_cost = 0.0
+    canonical_cost = 0.0
     partial = False
     by_package: Dict[str, float] = {}
     waste_by_package: Dict[str, float] = {}
     qty_by_package: Dict[str, float] = {}
-    unmapped_cost = 0.0
-    for row in rows:
-        value = _f(row.get("total_value"))
-        q = _f(row.get("quantity")) or 0.0
-        is_waste = row.get("movement_kind") in WASTE_KINDS
-        pkg_id = resolve_execution_package(row, by_item, by_name)
-        if is_waste:
+    for ln in lines:
+        q = ln["qty"]
+        pkg_id = ln["package_id"]
+        if ln["waste"]:
             waste_qty += q
-        else:
+        elif ln["source"] == "canonical":
             qty += q
             if pkg_id:
                 qty_by_package[pkg_id] = qty_by_package.get(pkg_id, 0.0) + q
+        value = ln["value"]
         if value is None:
             partial = True
             continue
         total += value
-        if is_waste:
+        if ln["source"] == "canonical":
+            canonical_cost += value
+        if ln["waste"]:
             waste += value
         if pkg_id:
             by_package[pkg_id] = by_package.get(pkg_id, 0.0) + value
-            if is_waste:
+            if ln["waste"]:
                 waste_by_package[pkg_id] = waste_by_package.get(pkg_id, 0.0) + value
         else:
             unmapped_cost += value
+
+    has_canonical = len(rows) > 0
+    has_legacy = any(ln["source"] == "legacy" for ln in lines)
+    source = ("mixed" if has_canonical and has_legacy else
+              "canonical" if has_canonical else
+              "legacy" if has_legacy or legacy_rows else "none")
     return {
-        # total_cost = consumption + фира (each recognised once).
+        # total_cost = consumption + фира + pre-cutover legacy, each once.
         "total_cost": round(total, 2),
         "consumption_cost": round(total - waste, 2),
         "waste_cost": round(waste, 2),
@@ -164,16 +334,71 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         "by_package": {k: round(v, 2) for k, v in by_package.items()},
         "qty_by_package": {k: round(v, 4) for k, v in qty_by_package.items()},
         "partial_cost_data": partial,
-        "has_data": len(rows) > 0,
+        "has_data": len(lines) > 0,
+        # Р13 basis — visible on every report that embeds it.
+        "source": source,
+        "canonical_cost": round(canonical_cost, 2),
+        "legacy_cost": round(legacy_counted, 2),
+        "legacy_issued_qty": round(legacy_qty, 4),
+        "legacy_excluded_cost": round(legacy_excluded, 2),
+        "legacy_undated_cost": round(legacy_undated, 2),
+        "cutover_at": cut["cutover_at"],
+        "cutover_source": cut["cutover_source"],
+        "cutover_movement_id": cut["cutover_movement_id"],
+        "lines": lines,
         "rows": rows,
         "by_item": by_item,
         "by_name": by_name,
     }
 
 
+def cost_basis(cost: Dict[str, Any]) -> Dict[str, Any]:
+    """The JSON-safe Р13 basis of a cost result (for report payloads)."""
+    keys = ("total_cost", "consumption_cost", "waste_cost", "source",
+            "canonical_cost", "legacy_cost", "legacy_excluded_cost",
+            "legacy_undated_cost", "cutover_at", "cutover_source",
+            "partial_cost_data")
+    return {k: cost.get(k) for k in keys}
+
+
+def cost_by_period(cost: Dict[str, Any]) -> Dict[Optional[str], Dict[str, float]]:
+    """{'YYYY-MM' | None: {material, waste, total}} over the counted lines."""
+    out: Dict[Optional[str], Dict[str, float]] = {}
+    for ln in cost["lines"]:
+        if ln["value"] is None:
+            continue
+        p = out.setdefault(ln["period"], {"material": 0.0, "waste": 0.0, "total": 0.0})
+        p["total"] += ln["value"]
+        if ln["waste"]:
+            p["waste"] += ln["value"]
+        else:
+            p["material"] += ln["value"]
+    for p in out.values():
+        for k in p:
+            p[k] = round(p[k], 2)
+    return out
+
+
+def cost_lines_between(cost: Dict[str, Any], start: Optional[Any],
+                       end: Optional[Any]) -> List[dict]:
+    """Counted cost lines whose moment lies in [start, end] (inclusive)."""
+    lo, hi = _moment(start), _moment(end)
+    out = []
+    for ln in cost["lines"]:
+        at = ln["at"]
+        if at is None:
+            continue
+        if lo is not None and at < lo:
+            continue
+        if hi is not None and at > hi:
+            continue
+        out.append(ln)
+    return out
+
+
 async def package_material_actual(tenant, org_id: str, pkg: dict) -> float:
-    """Canonical material actual of one execution package (read time):
-    consumption + фира of the package."""
+    """Material actual of one execution package (read time):
+    consumption + фира (+ pre-cutover legacy) of the package."""
     split = await package_material_split(tenant, org_id, pkg)
     return split["total"]
 
@@ -194,40 +419,17 @@ def split_for_package(cost: Dict[str, Any], pkg_id: str) -> Dict[str, float]:
             "total": round(total, 2)}
 
 
-def legacy_issue_cost(txns: Iterable[dict]) -> float:
-    total = 0.0
-    for txn in txns:
-        for line in txn.get("lines", []) or []:
-            total += float(line.get("unit_cost", 0) or 0) * float(line.get("qty_issued", 0) or 0)
-    return round(total, 2)
-
-
 async def project_warehouse_material_cost(tenant, org_id: str, project_id: str) -> Dict[str, Any]:
-    """Warehouse-path material cost for the project P&L (F-9).
-
-    Canonical consumption when the project has any; otherwise the legacy
-    (pre-canon) issue figure. Never both.
-    """
-    canonical = await project_material_cost(tenant, org_id, project_id)
-    legacy_txns = [t async for t in tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "lines": 1},
-    )]
-    legacy = legacy_issue_cost(legacy_txns)
-    if canonical["has_data"]:
-        return {"material_cost": canonical["total_cost"], "source": "canonical",
-                "canonical_cost": canonical["total_cost"],
-                "consumption_cost": canonical["consumption_cost"],
-                "waste_cost": canonical["waste_cost"],
-                "waste_qty": canonical["waste_qty"],
-                "legacy_cost": 0.0, "legacy_excluded_cost": legacy,
-                "consumed_qty": canonical["consumed_qty"],
-                "partial_cost_data": canonical["partial_cost_data"]}
-    return {"material_cost": legacy, "source": "legacy" if legacy_txns else "none",
-            "canonical_cost": 0.0, "legacy_cost": legacy,
-            "consumption_cost": legacy, "waste_cost": 0.0, "waste_qty": 0.0,
-            "legacy_excluded_cost": 0.0, "consumed_qty": 0.0,
-            "partial_cost_data": False}
+    """Warehouse-path material cost for the project P&L — a thin view over
+    ``project_material_cost`` (5C-C22: the same number every report shows)."""
+    cost = await project_material_cost(tenant, org_id, project_id)
+    out = cost_basis(cost)
+    out.update({
+        "material_cost": cost["total_cost"],
+        "waste_qty": cost["waste_qty"],
+        "consumed_qty": cost["consumed_qty"],
+    })
+    return out
 
 
 # ───────────────────────── quantity trail (F-11) ─────────────────────────

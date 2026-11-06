@@ -314,16 +314,11 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     draft_clean = round(sum(e["amount_clean_labor"] for e in entries if e["approval_status"] == "draft"), 2)
     draft_oh = round(sum(e["amount_overhead"] for e in entries if e["approval_status"] == "draft"), 2)
 
-    # Materials from warehouse — CODEX C12.10 no silent cap.
-    total_materials = 0
-    _cursor = tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "lines": 1},
-    )
-    async for t in _cursor:
-        for ln in t.get("lines", []):
-            total_materials += float(ln.get("unit_cost", 0)) * float(ln.get("qty_issued", 0))
-    total_materials = round(total_materials, 2)
+    # Materials — 5C-C22: the ONE shared helper (canonical consumption +
+    # „фира" + legacy issues dated before the tenant cutover, Р13).
+    from app.services.canonical_material_cost import project_material_cost, cost_basis
+    _mat = await project_material_cost(tenant, org_id, project_id)
+    total_materials = _mat["total_cost"]
 
     # Revenue from invoices
     invoices = await tenant.invoices.find(
@@ -344,6 +339,8 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "draft_clean_labor": draft_clean,
         "draft_overhead": draft_oh,
         "total_materials": total_materials,
+        "material_waste": _mat["waste_cost"],         # „фира", part of total_materials
+        "material_cost_basis": cost_basis(_mat),
         "total_expense": total_expense,
         "total_revenue": total_revenue,
         "balance": balance,

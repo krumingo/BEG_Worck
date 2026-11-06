@@ -77,11 +77,10 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     material_cost_invoices = round(sum(l.get("line_total_ex_vat", 0) for l in inv_lines), 2)
     input_vat = round(sum(l.get("vat_amount", 0) or 0 for l in inv_lines), 2)
 
-    # From the warehouse path — 5C-C20 F-9: the canonical `material_entries`
-    # consumption rows are the ONE source (cost recognised once, at
-    # consumption). Legacy `warehouse_transactions` issue rows count only for
-    # a project with no canonical cost row (pre-canon history) and are never
-    # added on top of the canon. See app/services/canonical_material_cost.py.
+    # From the warehouse path — 5C-C22: the ONE shared helper
+    # (app/services/canonical_material_cost.project_material_cost): canonical
+    # consumption + „фира", plus legacy issue rows dated before the tenant
+    # cutover (Р13); legacy rows after the cutover are never counted.
     from app.services.canonical_material_cost import project_warehouse_material_cost
     wh = await project_warehouse_material_cost(tenant, org_id, project_id)
     material_cost_warehouse = wh["material_cost"]
@@ -177,6 +176,12 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "waste_cost": material_waste_cost,
             "waste_qty": wh.get("waste_qty", 0.0),
             "partial_cost_data": wh["partial_cost_data"],
+            # 5C-C22 / Р13 — the cutover split behind the warehouse figure.
+            "canonical_cost": wh["canonical_cost"],
+            "legacy_cost": wh["legacy_cost"],
+            "legacy_undated_cost": wh["legacy_undated_cost"],
+            "cutover_at": wh["cutover_at"],
+            "cutover_source": wh["cutover_source"],
         },
         "profit": {
             "gross_profit": gross_profit,

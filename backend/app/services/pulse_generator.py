@@ -56,23 +56,21 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         smr_map[st]["workers"].add(s["worker_id"])
     smr_summary = [{"smr_type": k, "total_hours": round(v["hours"], 2), "total_cost": round(v["cost"], 2), "workers_count": len(v["workers"])} for k, v in smr_map.items()]
 
-    # c. Materials from warehouse transactions — CODEX C13.6
-    # no silent cap on canonical ledger reads that feed cost math.
-    _txns_cursor = tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": site_id, "type": "issue",
-         "created_at": {"$gte": ds, "$lte": de}},
-        {"_id": 0, "lines": 1},
-    )
-    txns = [row async for row in _txns_cursor]
+    # c. Materials of the day — 5C-C22: the counted cost lines of the ONE
+    # shared helper (canonical consumption + „фира" + legacy issues dated
+    # before the tenant cutover, Р13) whose moment falls on this day.
+    from app.services.canonical_material_cost import project_material_cost, cost_lines_between
+    _mat = await project_material_cost(tenant, org_id, site_id)
     materials = []
     mat_cost = 0
-    for t in txns:
-        for ln in t.get("lines", []):
-            qty = float(ln.get("qty_issued", 0))
-            uc = float(ln.get("unit_cost", 0))
-            cost = round(qty * uc, 2)
-            materials.append({"item_name": ln.get("material_name", ""), "qty": qty, "unit": ln.get("unit", ""), "cost": cost, "source": "warehouse"})
-            mat_cost += cost
+    for ln in cost_lines_between(_mat, ds, de + ".999999"):
+        cost = round(ln["value"] or 0.0, 2)
+        materials.append({"item_name": ln["material_name"], "qty": ln["qty"],
+                          "unit": ln.get("unit") or "", "cost": cost,
+                          "source": "warehouse",
+                          "kind": "фира" if ln["waste"] else ln["kind"],
+                          "ledger": ln["source"]})
+        mat_cost += cost
     mat_cost = round(mat_cost, 2)
 
     # d. Budget snapshot
