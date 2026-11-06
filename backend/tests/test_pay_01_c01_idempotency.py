@@ -175,3 +175,72 @@ def test_r29_non_finance_role_still_403_first(monkeypatch, backend, mode):
         assert r.status_code == 403, r.text
         assert await snap(op) == before
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════ D5: allocate is atomic
+def test_d5_refused_item_leaves_no_allocation(monkeypatch, backend, mode):
+    """A multi-invoice allocate whose 2nd item is refused wrote the 1st allocation before
+    (8aac73d), and every retry with the same (failed) key wrote it AGAIN. Now: nothing."""
+    async def scenario(c, op):
+        pid = await pay(c, 300.0)
+        body = {"allocations": [{"invoice_id": "inv-a1", "amount": 10},
+                                {"invoice_id": "inv-a2", "amount": 150}]}     # inv-a2 total is 100
+        for attempt in range(3):
+            r = await c.post("/api/finance/payments/%s/allocate" % pid, json=body,
+                             headers=hdr("acct-a", "k-d5-refused"))
+            assert r.status_code == 400, (attempt, r.text)
+            assert await op.payment_allocations.count_documents({"payment_id": pid}) == 0, attempt
+        inv = await op.invoices.find_one({"id": "inv-a1"}, {"_id": 0})
+        assert inv["remaining_amount"] == 100.0 and inv["paid_amount"] == 0
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_d5_failed_key_retry_never_duplicates(monkeypatch, backend, mode):
+    """A failure AFTER the first allocation row was written (here: the invoice recompute
+    raises once) marks the key failed; the retry of the same key must not add a 2nd row."""
+    async def scenario(c, op):
+        from app.routes import finance as r_finance
+        pid = await pay(c, 300.0)
+        real = r_finance.update_invoice_status
+        calls = {"n": 0}
+
+        async def flaky(tenant, invoice_id):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("simulated failure between the writes")
+            return await real(tenant, invoice_id)
+        monkeypatch.setattr(r_finance, "update_invoice_status", flaky)
+
+        body = {"allocations": [{"invoice_id": "inv-a1", "amount": 10},
+                                {"invoice_id": "inv-a2", "amount": 20}]}
+        with pytest.raises(RuntimeError):
+            await c.post("/api/finance/payments/%s/allocate" % pid, json=body,
+                         headers=hdr("acct-a", "k-d5-retry"))
+        rec = await op.audit_idempotency.find_one({"key": "k-d5-retry"}, {"_id": 0})
+        assert rec["status"] == "failed"
+        r = await c.post("/api/finance/payments/%s/allocate" % pid, json=body,
+                         headers=hdr("acct-a", "k-d5-retry"))
+        assert r.status_code == 200, r.text
+        rows = await op.payment_allocations.find({"payment_id": pid}, {"_id": 0}).to_list(None)
+        assert sorted((a["invoice_id"], a["amount_allocated"]) for a in rows) == [("inv-a1", 10), ("inv-a2", 20)]
+        assert sorted(a["id"] for a in rows) == sorted(a["id"] for a in r.json()["allocations"])
+        for inv_id, paid in (("inv-a1", 10), ("inv-a2", 20)):
+            inv = await op.invoices.find_one({"id": inv_id}, {"_id": 0})
+            assert inv["paid_amount"] == paid and inv["remaining_amount"] == 100 - paid
+        # a replay of the completed key changes nothing
+        before = await snap(op)
+        r2 = await c.post("/api/finance/payments/%s/allocate" % pid, json=body,
+                          headers=hdr("acct-a", "k-d5-retry"))
+        assert r2.json() == r.json() and await snap(op) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_d5_two_items_on_one_invoice_are_checked_together(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        pid = await pay(c, 300.0)
+        body = {"allocations": [{"invoice_id": "inv-a1", "amount": 60},
+                                {"invoice_id": "inv-a1", "amount": 60}]}     # 120 > 100
+        r = await c.post("/api/finance/payments/%s/allocate" % pid, json=body, headers=hdr("acct-a"))
+        assert r.status_code == 400, r.text
+        assert await op.payment_allocations.count_documents({"payment_id": pid}) == 0
+    run(monkeypatch, backend, mode, scenario)

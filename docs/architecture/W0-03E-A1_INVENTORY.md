@@ -106,9 +106,10 @@
 | app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | invoices | get(id = alloc.get('invoice_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | payment_allocations | find(active_allocations({'payment_id': paymen) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | finance_payments | get(id = payment_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | invoices | get(id = alloc.invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | insert_one(allocation) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | find(active_allocations({'payment_id': paymen) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | invoices | get(id = alloc.invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | find(active_allocations({'invoice_id': alloc.) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | get(id = payment_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | payment_allocations | count(active_allocations({'payment_id': leg['i) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | find(active_payments({'transfer_id': payment[) | TenantData org_id (session) | BARE@base | FIXED |
@@ -382,4 +383,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 367 accesses — FIXED 129, SAFE 238
+Totals: 368 accesses — FIXED 130, SAFE 238

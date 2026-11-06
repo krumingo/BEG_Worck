@@ -1297,6 +1297,12 @@ def _source_module_refusal(payment: Optional[dict]) -> Optional[HTTPException]:
         "message": "Плащането е създадено от друг модул (%s) — сторнирайте го там" % module})
 
 
+def _allocation_id(org_id: str, payment_id: str, idem_key: str, index: int) -> str:
+    """D5: deterministic id of the index-th allocation of an allocate request — one per key."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL,
+                          "beg-payment-allocation:%s:%s:%s:%d" % (org_id, payment_id, idem_key, index)))
+
+
 def _reversal_id(payment_id: str) -> str:
     """Deterministic id of THE reversal row of a payment — at most one per original."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-payment-reversal:%s" % payment_id))
@@ -1688,62 +1694,72 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                for i, a in enumerate(data.allocations)]
 
     async def work():
+        """D5 (CLAUDE.md §14, FLOW-006): an allocate request is all-or-nothing and can never
+        count a payment twice.
+          1. every item is validated (payment available, invoice remaining — cumulative
+             within the request) BEFORE the first write: a refusal leaves no allocation;
+          2. each allocation id is derived from (tenant, payment, idempotency key, item
+             index) and written with an upsert: a retry of the same key (after a failure
+             between the writes) finds the rows it already wrote and never adds a second."""
         tenant = _tenant(user)
         payment = await tenant.finance_payments.get(payment_id)
         if not payment:
             raise HTTPException(status_code=404, detail="Payment not found")
         if not payment_counts(payment):
             raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
-    
-        # Get current allocations
-        existing_allocs = await tenant.payment_allocations.find(active_allocations({"payment_id": payment_id})).to_list(100)
-        current_allocated = sum(a.get("amount_allocated", 0) for a in existing_allocs)
-        available = payment["amount"] - current_allocated
-    
-        now = datetime.now(timezone.utc).isoformat()
-        results = []
-    
+
+        own_ids = [_allocation_id(user["org_id"], payment_id, key, i) for i in range(len(amounts))]
+        # rows this same key already wrote (a failed earlier attempt) do not count against it
+        existing_allocs = await tenant.payment_allocations.find(
+            active_allocations({"payment_id": payment_id, "id": {"$nin": own_ids}})).to_list(1000)
+        available = payment["amount"] - sum(a.get("amount_allocated", 0) for a in existing_allocs)
+
+        # 1. validate everything first
+        planned_by_invoice = {}
+        invoices = {}
         for alloc, amount in zip(data.allocations, amounts):
-            # Check payment has enough available
-            if amount > available:
-                raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({available})")
-        
-            # Check invoice exists and has remaining
-            invoice = await tenant.invoices.get(alloc.invoice_id)
+            if amount > available + 1e-9:
+                raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({round(available, 2)})")
+            invoice = invoices.get(alloc.invoice_id) or await tenant.invoices.get(alloc.invoice_id)
             if not invoice:
                 raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
             if invoice["status"] == "Cancelled":
                 raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
-        
-            remaining = invoice.get("remaining_amount", invoice["total"])
-            if amount > remaining:
-                raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({remaining})")
-        
-            # Check direction match
             expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
             if payment["direction"] != expected_dir:
                 raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
-        
-            # Create allocation
+            if alloc.invoice_id not in invoices:
+                invoices[alloc.invoice_id] = invoice
+                paid = await tenant.payment_allocations.find(active_allocations(
+                    {"invoice_id": alloc.invoice_id, "id": {"$nin": own_ids}})).to_list(1000)
+                invoice["_remaining"] = round(invoice["total"] - sum(a.get("amount_allocated", 0) for a in paid), 2)
+            remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
+            if amount > remaining + 1e-9:
+                raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
+            planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount
+            available -= amount
+
+        # 2. write: deterministic ids, upsert (a retry of the same key never duplicates)
+        now = datetime.now(timezone.utc).isoformat()
+        results = []
+        for i, (alloc, amount) in enumerate(zip(data.allocations, amounts)):
             allocation = {
-                "id": str(uuid.uuid4()),
+                "id": own_ids[i],
                 "org_id": user["org_id"],
                 "payment_id": payment_id,
                 "invoice_id": alloc.invoice_id,
                 "amount_allocated": amount,
                 "allocated_at": now,
             }
-            await tenant.payment_allocations.insert_one(allocation)
-            results.append({k: v for k, v in allocation.items() if k != "_id"})
-        
-            available -= amount
-        
-            # Update invoice status
-            await update_invoice_status(tenant, alloc.invoice_id)
-    
+            await tenant.payment_allocations.update_one(
+                {"id": own_ids[i]}, {"$setOnInsert": dict(allocation)}, upsert=True)
+            results.append(allocation)
+        for invoice_id in planned_by_invoice:
+            await update_invoice_status(tenant, invoice_id)
+
         await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
                         {"allocations": len(results)})
-    
+
         return {"ok": True, "allocations": results}
 
     return await _once(user, key, "finance.payment.allocate", {"payment_id": payment_id, "body": data.model_dump()}, work)

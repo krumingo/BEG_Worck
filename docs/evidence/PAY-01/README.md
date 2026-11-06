@@ -287,7 +287,7 @@ The A1 inventory was regenerated and is identical. The A1 and A2C guards report 
 ### Known debt (recorded, not fixed)
 
 - **PAY-01-C01-D4: a crash leaves the key stuck.** If the process dies after the business write and before `complete_idempotent`, the key stays `started`. Retries then get 409 IN_PROGRESS rather than a replay. Recovery needs a deterministic row id per key, or a check of the steps already done.
-- **PAY-01-C01-D5: allocate is not atomic** (this predates PAY-01). If one item of a multi-invoice allocate is refused after an earlier item was written, the earlier allocation stays. The key is marked failed, so retrying the same request writes that earlier allocation again. Fix: validate every item before the first insert. This needs Krum's confirmation (CLAUDE.md §18).
+- **PAY-01-C01-D5: allocate was not atomic. FIXED, see §D5 below.** The coordinator ruled that CLAUDE.md §14 (idempotency plus a domain transaction for every money write) and FLOW-006 (a payment is never counted twice) already require the fix, so it needed no new decision.
 - **PAY-01-C01-D6: live-API tests do not send the key.** `test_invoice_payments.py`, `test_invoice_workflow_p0.py` and `test_m5_finance.py` run against a deployed server and cannot run here. They do not send the key (nor the PAY-01 reason), so they need updating before they are run against this build.
 
 ## Audit fix C01A-1: concurrent cancels must not reverse a module-owned payment
@@ -319,3 +319,36 @@ The A1 inventory was regenerated and is identical. The A1 and A2C guards report 
 **A1 inventory:** regenerated. The cancel's writes moved into the helper `_cancel_allocation`, and the new `_payment_lock` and `_reverse_one` reads were added. Every new row is tenant-scoped (TenantData, SAFE). Totals: 367 accesses (FIXED 129, SAFE 238), up from 362. The one row that went from FIXED to SAFE only moved into the helper.
 
 **Known debt PAY-01-C01-D7:** the lock is a field on the `finance_payments` row (`allocation_lock`). While a cancel runs, it is visible to readers for a few milliseconds. It is never left behind except by a crash, and a crashed lock becomes stale after 30 s.
+
+## D5: allocate is atomic and cannot count a payment twice
+
+**Before (8aac73d)**
+- The items of `POST /finance/payments/{id}/allocate` were written one by one, each with a random id.
+- If item 2 was refused (for example, more than the invoice's remaining amount), the allocation for item 1 stayed.
+- The key was marked failed, and every retry with the same key wrote item 1 **again**.
+- The same happened when a failure came after the first write.
+
+**Now**
+1. **Validate first.** Every item is checked before the first write:
+   - the amount available on the payment, the invoice's existence, a cancelled invoice and the direction;
+   - the invoice's remaining amount, counted together across items on the same invoice.
+
+   A refused request leaves no allocation.
+2. **Deterministic upsert.** Each allocation id is `uuid5(tenant, payment, idempotency key, item index)`, written with `update_one(..., $setOnInsert, upsert=True)`.
+   - A retry of the same key after a failure finds the rows it already wrote and never adds a second.
+   - Rows this key already wrote do not count against its own available or remaining amounts.
+   - The invoice remaining amount is computed from the active allocations, the same rule as `update_invoice_status`.
+   - Invoice statuses are recomputed once per invoice, after all the writes.
+
+**Tests** (`test_pay_01_c01_idempotency.py`; mongomock + real Mongo, three modes: 18 cases)
+- **Refused item:** a refused second item → 400 and 0 allocations, on three retries with the same key.
+- **Failure after the writes:** the invoice recompute raises once and the key is marked failed. The retry → 200 with exactly one row per item, and the invoice paid and remaining amounts are correct. A replay changes nothing.
+- **Two items on one invoice:** they are checked together; 60 + 60 > 100 → 400 with 0 rows.
+
+| Run | Result |
+|---|---|
+| D5 tests on 8aac73d | **18 failed** (the duplicate and partial-write cases are reproduced) |
+| All `test_pay_01*` + A1 collision matrix | 467 passed |
+| A1 / A2C guards | 0 violations |
+
+**A1 inventory:** regenerated. The allocate insert became a tenant-scoped upsert, and a per-invoice active-allocation read was added. Totals: 368 accesses (FIXED 130, SAFE 238).
