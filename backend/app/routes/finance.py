@@ -38,6 +38,60 @@ def _tenant(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
 
+IDEMPOTENCY_KEY_REQUIRED = "IDEMPOTENCY_KEY_REQUIRED"
+
+
+def _require_key(header: Optional[str]) -> str:
+    """R29 (Krum, 06.11.2026; PAY-01-C01 Addendum B): a money write without an
+    Idempotency-Key is refused — 428, before anything is read or written."""
+    key = header.strip() if isinstance(header, str) else ""
+    if not key:
+        raise HTTPException(status_code=428, detail={
+            "error_code": IDEMPOTENCY_KEY_REQUIRED,
+            "message": "Липсва Idempotency-Key — заявката не е записана"})
+    return key
+
+
+async def _once(user: dict, key: str, action: str, fingerprint: dict, work):
+    """Run the money write ``work()`` at most once per (tenant, action, key) — W0-04 registry.
+
+    * a new key → ``work()`` runs; its result is stored with the key;
+    * the same key and the same request again → the stored result, nothing written;
+    * the same key with a different request → 409 IDEMPOTENCY_KEY_REUSED;
+    * the same key while the first attempt has not finished → 409 IDEMPOTENCY_IN_PROGRESS;
+    * ``work()`` raised → the key is marked failed, so a clean retry may run it again."""
+    import json
+    from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
+                                       IdempotencyConflict, begin_idempotent,
+                                       complete_idempotent, fail_idempotent, request_fingerprint)
+    tenant_id = user["org_id"]
+    try:
+        state = await begin_idempotent(db, tenant_id=tenant_id, key=key, action=action,
+                                       request_fingerprint=request_fingerprint(fingerprint))
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "IDEMPOTENCY_KEY_REUSED",
+            "message": "Този Idempotency-Key вече е използван за друга заявка"})
+    if state["status"] == IDEMPOTENCY_DUPLICATE:
+        if state.get("prior_status") == IDEMPOTENCY_COMPLETED:
+            return json.loads(state["result_reference"])
+        raise HTTPException(status_code=409, detail={
+            "error_code": "IDEMPOTENCY_IN_PROGRESS",
+            "message": "Заявка с този Idempotency-Key още се обработва"})
+    try:
+        result = await work()
+    except HTTPException as exc:
+        await fail_idempotent(db, tenant_id=tenant_id, key=key, action=action,
+                              error_code="HTTP_%d" % exc.status_code)
+        raise
+    except Exception:
+        await fail_idempotent(db, tenant_id=tenant_id, key=key, action=action, error_code="ERROR")
+        raise
+    stored = json.dumps(result, sort_keys=True, default=str)
+    await complete_idempotent(db, tenant_id=tenant_id, key=key, action=action, result_reference=stored)
+    return json.loads(stored)          # the first response is byte-for-byte what a replay returns
+
+
 def finance_permission(user: dict) -> bool:
     """Check if user has finance access"""
     return user["role"] in ["Admin", "Owner", "Accountant"]
@@ -398,141 +452,165 @@ async def list_accounts(user: dict = Depends(require_m5)):
 
 
 @router.post("/finance/transfers", status_code=201)
-async def create_transfer(data: dict, user: dict = Depends(require_m5)):
+async def create_transfer(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Move money between two own accounts (e.g. Bank → Cash withdrawal).
     Creates two linked finance_payments: an Outflow from the source and an Inflow to the
     destination. Net effect on total cash is zero; each account balance adjusts. No P&L impact."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    from_id = data.get("from_account_id")
-    to_id = data.get("to_account_id")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
-    if not from_id or not to_id or from_id == to_id:
-        raise HTTPException(status_code=400, detail="Изберете две различни сметки")
-    tenant = _tenant(user)
-    src = await tenant.financial_accounts.get(from_id)
-    dst = await tenant.financial_accounts.get(to_id)
-    if not src or not dst:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    note = data.get("note", "")
-    transfer_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    out_entry = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
-        "currency": src.get("currency", "EUR"), "date": date, "method": "Transfer",
-        "account_id": from_id, "counterparty_name": f"Прехвърляне към {dst.get('name', '')}",
-        "reference": transfer_id, "note": note, "transfer_id": transfer_id,
-        "created_at": now, "updated_at": now,
-    }
-    in_entry = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
-        "currency": dst.get("currency", "EUR"), "date": date, "method": "Transfer",
-        "account_id": to_id, "counterparty_name": f"Прехвърляне от {src.get('name', '')}",
-        "reference": transfer_id, "note": note, "transfer_id": transfer_id,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_many([out_entry, in_entry])
-    await log_audit(org, user["id"], user["email"], "transfer_created", "transfer", transfer_id,
-                    {"amount": amount, "from": from_id, "to": to_id})
-    return {"transfer_id": transfer_id, "amount": amount, "from_account_id": from_id, "to_account_id": to_id}
+
+    async def work():
+        org = user["org_id"]
+        from_id = data.get("from_account_id")
+        to_id = data.get("to_account_id")
+        if not from_id or not to_id or from_id == to_id:
+            raise HTTPException(status_code=400, detail="Изберете две различни сметки")
+        tenant = _tenant(user)
+        src = await tenant.financial_accounts.get(from_id)
+        dst = await tenant.financial_accounts.get(to_id)
+        if not src or not dst:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        note = data.get("note", "")
+        transfer_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        out_entry = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
+            "currency": src.get("currency", "EUR"), "date": date, "method": "Transfer",
+            "account_id": from_id, "counterparty_name": f"Прехвърляне към {dst.get('name', '')}",
+            "reference": transfer_id, "note": note, "transfer_id": transfer_id,
+            "created_at": now, "updated_at": now,
+        }
+        in_entry = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+            "currency": dst.get("currency", "EUR"), "date": date, "method": "Transfer",
+            "account_id": to_id, "counterparty_name": f"Прехвърляне от {src.get('name', '')}",
+            "reference": transfer_id, "note": note, "transfer_id": transfer_id,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_many([out_entry, in_entry])
+        await log_audit(org, user["id"], user["email"], "transfer_created", "transfer", transfer_id,
+                        {"amount": amount, "from": from_id, "to": to_id})
+        return {"transfer_id": transfer_id, "amount": amount, "from_account_id": from_id, "to_account_id": to_id}
+
+    return await _once(user, key, "finance.transfer.create", {"body": data}, work)
 
 
 @router.post("/finance/account-funding", status_code=201)
-async def fund_account(data: dict, user: dict = Depends(require_m5)):
+async def fund_account(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Top up an account with outside cash (capital injection). Inflow only.
     This is NOT revenue — it does not feed P&L; it only raises the account balance."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    to_id = data.get("account_id")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
-    if not to_id:
-        raise HTTPException(status_code=400, detail="Изберете сметка")
-    tenant = _tenant(user)
-    dst = await tenant.financial_accounts.get(to_id)
-    if not dst:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
-        "currency": dst.get("currency", "EUR"), "date": date, "method": "Funding",
-        "account_id": to_id, "counterparty_name": "Захранване на сметка",
-        "reference": "", "note": data.get("note", ""), "is_funding": True,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
-    await log_audit(org, user["id"], user["email"], "account_funded", "payment", payment["id"],
-                    {"amount": amount, "account_id": to_id})
-    return {"id": payment["id"], "amount": amount, "account_id": to_id}
+
+    async def work():
+        org = user["org_id"]
+        to_id = data.get("account_id")
+        if not to_id:
+            raise HTTPException(status_code=400, detail="Изберете сметка")
+        tenant = _tenant(user)
+        dst = await tenant.financial_accounts.get(to_id)
+        if not dst:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+            "currency": dst.get("currency", "EUR"), "date": date, "method": "Funding",
+            "account_id": to_id, "counterparty_name": "Захранване на сметка",
+            "reference": "", "note": data.get("note", ""), "is_funding": True,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
+        await log_audit(org, user["id"], user["email"], "account_funded", "payment", payment["id"],
+                        {"amount": amount, "account_id": to_id})
+        return {"id": payment["id"], "amount": amount, "account_id": to_id}
+
+    return await _once(user, key, "finance.account_funding.create", {"body": data}, work)
 
 
 @router.post("/finance/other-expense", status_code=201)
-async def create_other_expense(data: dict, user: dict = Depends(require_m5)):
+async def create_other_expense(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Documentless cash expense (food, small/second-hand purchases) booked to a project.
     Creates a finance_payments Outflow (cash out of Каса/Банка) tagged category='Други' and a
     project_id, so it is counted as that project's expense in P&L (additive 'other_cost' line)."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    project_id = data.get("project_id")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
-    if not project_id:
-        raise HTTPException(status_code=400, detail="Изберете обект")
-    method = data.get("method") or "Cash"
-    tenant = _tenant(user)
-    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
-        "currency": account.get("currency", "EUR"), "date": date, "method": method,
-        "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
-        "reference": "", "note": data.get("note", ""),
-        "project_id": project_id, "category": "Други", "is_expense": True,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
-    await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
-                    {"amount": amount, "project_id": project_id})
-    return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+    async def work():
+        org = user["org_id"]
+        project_id = data.get("project_id")
+        if not project_id:
+            raise HTTPException(status_code=400, detail="Изберете обект")
+        method = data.get("method") or "Cash"
+        tenant = _tenant(user)
+        account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
+            "currency": account.get("currency", "EUR"), "date": date, "method": method,
+            "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
+            "reference": "", "note": data.get("note", ""),
+            "project_id": project_id, "category": "Други", "is_expense": True,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
+        await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
+                        {"amount": amount, "project_id": project_id})
+        return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+    return await _once(user, key, "finance.other_expense.create", {"body": data}, work)
 
 
 @router.post("/finance/other-income", status_code=201)
-async def create_other_income(data: dict, user: dict = Depends(require_m5)):
+async def create_other_income(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Documentless cash income (proforma / deposit / cash receipt without a regular invoice).
     Creates a finance_payments Inflow into Каса/Банка tagged category='Други приход'. It is NOT
     P&L revenue (revenue comes from invoices) — it only affects cash."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    project_id = data.get("project_id")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
-    method = data.get("method") or "Cash"
-    tenant = _tenant(user)
-    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
-        "currency": account.get("currency", "EUR"), "date": date, "method": method,
-        "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
-        "reference": "", "note": data.get("note", ""),
-        "project_id": project_id, "category": "Други приход", "is_revenue": False,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
-    await log_audit(org, user["id"], user["email"], "other_income_created", "payment", payment["id"],
-                    {"amount": amount, "project_id": project_id})
-    return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+    async def work():
+        org = user["org_id"]
+        project_id = data.get("project_id")
+        method = data.get("method") or "Cash"
+        tenant = _tenant(user)
+        account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+            "currency": account.get("currency", "EUR"), "date": date, "method": method,
+            "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
+            "reference": "", "note": data.get("note", ""),
+            "project_id": project_id, "category": "Други приход", "is_revenue": False,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
+        await log_audit(org, user["id"], user["email"], "other_income_created", "payment", payment["id"],
+                        {"amount": amount, "project_id": project_id})
+        return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+    return await _once(user, key, "finance.other_income.create", {"body": data}, work)
 
 
 @router.post("/finance/accounts", status_code=201)
@@ -1104,84 +1182,89 @@ async def list_invoice_payments(invoice_id: str, user: dict = Depends(require_m5
 
 
 @router.post("/finance/invoices/{invoice_id}/payments", status_code=201)
-async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(require_m5)):
+async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Quick-pay: create a payment and allocate it to this invoice in one step"""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    org_id = user["org_id"]
-    tenant = _tenant(user)
-    invoice = await tenant.invoices.get(invoice_id)
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    
-    if invoice["status"] in ["Draft", "Cancelled"]:
-        raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
-    
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.get("amount"))  # PAY-01-C01: finite > 0, else 422
+
+    async def work():
+        org_id = user["org_id"]
+        tenant = _tenant(user)
+        invoice = await tenant.invoices.get(invoice_id)
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
     
-    remaining = invoice.get("remaining_amount", invoice["total"])
-    if amount > remaining + 0.01:  # small tolerance for rounding
-        raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
+        if invoice["status"] in ["Draft", "Cancelled"]:
+            raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
     
-    method = data.get("method") or data.get("payment_method", "BankTransfer")
-    # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
-    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
     
-    payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
-    payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
-    reference = data.get("reference") or data.get("payment_reference", "")
-    note = data.get("note") or data.get("notes", "")
+        remaining = invoice.get("remaining_amount", invoice["total"])
+        if amount > remaining + 0.01:  # small tolerance for rounding
+            raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
     
-    now = datetime.now(timezone.utc).isoformat()
+        method = data.get("method") or data.get("payment_method", "BankTransfer")
+        # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
+        account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
     
-    # Create payment
-    payment = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "direction": payment_direction,
-        "amount": amount,
-        "currency": invoice.get("currency", "EUR"),
-        "date": payment_date,
-        "method": method,
-        "account_id": account_id,
-        "counterparty_name": invoice.get("counterparty_name", ""),
-        "reference": reference,
-        "note": note or f"Плащане по ф-ра {invoice.get('invoice_no', '')}",
-        "created_at": now,
-        "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
+        payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
+        payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        reference = data.get("reference") or data.get("payment_reference", "")
+        note = data.get("note") or data.get("notes", "")
     
-    # Create allocation
-    allocation = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "payment_id": payment["id"],
-        "invoice_id": invoice_id,
-        "amount_allocated": amount,
-        "allocated_at": now,
-    }
-    await tenant.payment_allocations.insert_one(allocation)
+        now = datetime.now(timezone.utc).isoformat()
     
-    # Update invoice status
-    await update_invoice_status(tenant, invoice_id)
+        # Create payment
+        payment = {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "direction": payment_direction,
+            "amount": amount,
+            "currency": invoice.get("currency", "EUR"),
+            "date": payment_date,
+            "method": method,
+            "account_id": account_id,
+            "counterparty_name": invoice.get("counterparty_name", ""),
+            "reference": reference,
+            "note": note or f"Плащане по ф-ра {invoice.get('invoice_no', '')}",
+            "created_at": now,
+            "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
     
-    await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
-                    {"amount": amount, "payment_id": payment["id"]})
+        # Create allocation
+        allocation = {
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "payment_id": payment["id"],
+            "invoice_id": invoice_id,
+            "amount_allocated": amount,
+            "allocated_at": now,
+        }
+        await tenant.payment_allocations.insert_one(allocation)
     
-    # Return updated invoice
-    updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
-    return {
-        "ok": True,
-        "payment_id": payment["id"],
-        "allocation_id": allocation["id"],
-        "amount": amount,
-        "invoice": updated_invoice,
-    }
+        # Update invoice status
+        await update_invoice_status(tenant, invoice_id)
+    
+        await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
+                        {"amount": amount, "payment_id": payment["id"]})
+    
+        # Return updated invoice
+        updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
+        return {
+            "ok": True,
+            "payment_id": payment["id"],
+            "allocation_id": allocation["id"],
+            "amount": amount,
+            "invoice": updated_invoice,
+        }
+
+    return await _once(user, key, "finance.invoice_payment.create", {"invoice_id": invoice_id, "body": data}, work)
 
 
 # ── PAY-01: reversal instead of delete (FLOW-006 §Корекции, FG-34) ──────────────
@@ -1199,6 +1282,7 @@ class _Request:
             raise HTTPException(status_code=400, detail={
                 "error_code": "REASON_REQUIRED", "message": "Посочете причина за сторното"})
         check_reason(self.reason)  # PAY-01-C01: ≤ 500 chars, no control/invisible chars → 400
+        self.key = _require_key(self.key)  # R29: a reversal/cancel without a key → 428
 
 
 def _source_module_refusal(payment: Optional[dict]) -> Optional[HTTPException]:
@@ -1474,40 +1558,45 @@ async def list_payments(
 
 
 @router.post("/finance/payments", status_code=201)
-async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
+async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.amount)  # PAY-01-C01: finite > 0, else 422, nothing written
+
+    async def work():
+        # Route to the correct account: cash → Каса, otherwise the chosen account.
+        tenant = _tenant(user)
+        account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
     
-    # Route to the correct account: cash → Каса, otherwise the chosen account.
-    tenant = _tenant(user)
-    account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()),
+            "org_id": user["org_id"],
+            "direction": data.direction,
+            "amount": amount,
+            "currency": data.currency,
+            "date": data.date,
+            "method": data.method,
+            "account_id": account_id,
+            "counterparty_name": data.counterparty_name,
+            "reference": data.reference,
+            "note": data.note,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
     
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "direction": data.direction,
-        "amount": amount,
-        "currency": data.currency,
-        "date": data.date,
-        "method": data.method,
-        "account_id": account_id,
-        "counterparty_name": data.counterparty_name,
-        "reference": data.reference,
-        "note": data.note,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
+        await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
+                        {"amount": amount, "direction": data.direction, "account_id": account_id})
     
-    await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
-                    {"amount": amount, "direction": data.direction, "account_id": account_id})
-    
-    return {k: v for k, v in payment.items() if k != "_id"}
+        return {k: v for k, v in payment.items() if k != "_id"}
+
+    return await _once(user, key, "finance.payment.create", {"body": data.model_dump()}, work)
 
 
 @router.get("/finance/payments/{payment_id}")
@@ -1542,70 +1631,75 @@ async def get_payment(payment_id: str, user: dict = Depends(require_m5)):
 
 
 @router.post("/finance/payments/{payment_id}/allocate")
-async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: dict = Depends(require_m5)):
+async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    tenant = _tenant(user)
-    payment = await tenant.finance_payments.get(payment_id)
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-    if not payment_counts(payment):
-        raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     # PAY-01-C01: every amount is checked BEFORE the first allocation is written (422, 0 rows)
     amounts = [positive_amount(a.amount, field="allocations[%d].amount" % i)
                for i, a in enumerate(data.allocations)]
+
+    async def work():
+        tenant = _tenant(user)
+        payment = await tenant.finance_payments.get(payment_id)
+        if not payment:
+            raise HTTPException(status_code=404, detail="Payment not found")
+        if not payment_counts(payment):
+            raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
     
-    # Get current allocations
-    existing_allocs = await tenant.payment_allocations.find(active_allocations({"payment_id": payment_id})).to_list(100)
-    current_allocated = sum(a.get("amount_allocated", 0) for a in existing_allocs)
-    available = payment["amount"] - current_allocated
+        # Get current allocations
+        existing_allocs = await tenant.payment_allocations.find(active_allocations({"payment_id": payment_id})).to_list(100)
+        current_allocated = sum(a.get("amount_allocated", 0) for a in existing_allocs)
+        available = payment["amount"] - current_allocated
     
-    now = datetime.now(timezone.utc).isoformat()
-    results = []
+        now = datetime.now(timezone.utc).isoformat()
+        results = []
     
-    for alloc, amount in zip(data.allocations, amounts):
-        # Check payment has enough available
-        if amount > available:
-            raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({available})")
+        for alloc, amount in zip(data.allocations, amounts):
+            # Check payment has enough available
+            if amount > available:
+                raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({available})")
         
-        # Check invoice exists and has remaining
-        invoice = await tenant.invoices.get(alloc.invoice_id)
-        if not invoice:
-            raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
-        if invoice["status"] == "Cancelled":
-            raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
+            # Check invoice exists and has remaining
+            invoice = await tenant.invoices.get(alloc.invoice_id)
+            if not invoice:
+                raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
+            if invoice["status"] == "Cancelled":
+                raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
         
-        remaining = invoice.get("remaining_amount", invoice["total"])
-        if amount > remaining:
-            raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({remaining})")
+            remaining = invoice.get("remaining_amount", invoice["total"])
+            if amount > remaining:
+                raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({remaining})")
         
-        # Check direction match
-        expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
-        if payment["direction"] != expected_dir:
-            raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
+            # Check direction match
+            expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
+            if payment["direction"] != expected_dir:
+                raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
         
-        # Create allocation
-        allocation = {
-            "id": str(uuid.uuid4()),
-            "org_id": user["org_id"],
-            "payment_id": payment_id,
-            "invoice_id": alloc.invoice_id,
-            "amount_allocated": amount,
-            "allocated_at": now,
-        }
-        await tenant.payment_allocations.insert_one(allocation)
-        results.append({k: v for k, v in allocation.items() if k != "_id"})
+            # Create allocation
+            allocation = {
+                "id": str(uuid.uuid4()),
+                "org_id": user["org_id"],
+                "payment_id": payment_id,
+                "invoice_id": alloc.invoice_id,
+                "amount_allocated": amount,
+                "allocated_at": now,
+            }
+            await tenant.payment_allocations.insert_one(allocation)
+            results.append({k: v for k, v in allocation.items() if k != "_id"})
         
-        available -= amount
+            available -= amount
         
-        # Update invoice status
-        await update_invoice_status(tenant, alloc.invoice_id)
+            # Update invoice status
+            await update_invoice_status(tenant, alloc.invoice_id)
     
-    await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
-                    {"allocations": len(results)})
+        await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
+                        {"allocations": len(results)})
     
-    return {"ok": True, "allocations": results}
+        return {"ok": True, "allocations": results}
+
+    return await _once(user, key, "finance.payment.allocate", {"payment_id": payment_id, "body": data.model_dump()}, work)
 
 
 @router.delete("/finance/payments/{payment_id}")

@@ -210,3 +210,82 @@ Finance-owned rows stay reversible. These are manual payments, invoice quick-pay
 **A1 inventory:** regenerated. The `remove_invoice_payment` `finance_payments` read moved one row, with the same content and FIXED status. Totals are unchanged: 362 accesses.
 
 **Rollback:** revert the commit. Nothing is written by this change.
+
+## PAY-01-C01 Addendum B: Idempotency-Key required on money writes (decision R29)
+
+Package addendum: `PAY-01-C01_AMOUNTS_REASON_SUBCONTRACTOR.md` §Допълнение B (branch `claude/happy-meitner-bmcnel` @ 48af2ea). Р29 was decided by Krum on 06.11.2026 (`RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md`).
+
+### Backend (`finance.py`)
+
+| Write | Action (W0-04 registry) | Before | After |
+|---|---|---|---|
+| `POST /finance/payments` | `finance.payment.create` | no key support | key **required** |
+| `POST /finance/invoices/{id}/payments` (quick-pay) | `finance.invoice_payment.create` | none | required |
+| `POST /finance/transfers` | `finance.transfer.create` | none | required |
+| `POST /finance/account-funding` | `finance.account_funding.create` | none | required |
+| `POST /finance/other-expense` | `finance.other_expense.create` | none | required |
+| `POST /finance/other-income` | `finance.other_income.create` | none | required |
+| `POST /finance/payments/{id}/allocate` | `finance.payment.allocate` | none | required |
+| `DELETE /finance/payments/{id}` (reversal) | `finance.payment.reverse` | optional | required |
+| `DELETE /finance/invoices/{inv}/payments/{alloc}` (cancel) | `finance.allocation.cancel` | optional | required |
+
+**Rules**
+- **No key** (header missing, empty or blank) → **428 `IDEMPOTENCY_KEY_REQUIRED`**. The status code is the one SEC-01-C03 (#69) names. Nothing is read or written.
+- **Order of checks:** permission (403), then key (428), then amount (422), then key reservation, then the write.
+- **Wrapper:** the seven POSTs run through `_once()`. It reserves the key with `begin_idempotent`, runs the write, then stores the JSON result with `complete_idempotent`.
+
+**Outcomes for a key**
+
+| Case | Response |
+|---|---|
+| Same key, same request | The stored result, byte-identical; nothing is written again. |
+| Same key, different request | 409 `IDEMPOTENCY_KEY_REUSED`, nothing written. |
+| Same key while the first attempt has not finished | 409 `IDEMPOTENCY_IN_PROGRESS`. |
+| A refusal inside the write (400/404/409) | The key is marked **failed** (W0-04). A retry with the same key and the same request runs again; it is never a replayed success. |
+
+Keys are per tenant (`tenant_id` is part of the record id).
+
+### Frontend
+
+- **Helper:** `src/lib/idempotency.js` provides a key holder (`createKeyHolder`). It keeps one key per form submission: a double click, or a retry after a network error with no response, reuses the key. Once the server has answered, the next submission gets a fresh key. It also provides `apiErrorText`, which shows the `message` of an object detail instead of `[object Object]`.
+- **Call sites:** all 11 calls to these endpoints send the key. The batch pay derives `batchKey:invoiceId`, so a retried batch replays the invoices already paid.
+
+| Page | Calls |
+|---|---|
+| `PaymentsPage` | payment, allocate, other expense, other income, reversal (already sent a key) |
+| `FinancialAccountsPage` | transfer, funding |
+| `InvoiceEditorPage` | quick-pay, allocation cancel (already sent a key) |
+| `InvoicesPage` | quick-pay, batch pay |
+
+### Tests
+
+`backend/tests/test_pay_01_c01_idempotency.py`: **120 cases**, on mongomock and real Mongo, in off, shadow and enforce.
+
+**What the cases check**
+- **No key → 428:** each of the 7 POSTs is called without a key, with an empty key and with a blank key. Each gets 428 and writes 0 rows (no audit entry, no key record). Reversal and cancel without a key also → 428.
+- **Same key → one write:** a repeated request returns the same status and body, and the row count goes up only once (payment 1, quick-pay 1+1, transfer 2, allocate 1 allocation).
+- **Key conflicts:** the same key with another body → 409 REUSED; a key that is still in progress → 409 IN_PROGRESS.
+- **Failed key:** a key that failed can be retried.
+- **Per tenant:** keys of different tenants do not collide.
+- **Permission first:** a non-finance role still gets 403 before the key check.
+
+**Contract changes in existing tests**
+- In `test_pay_01_payment_reversal.py`, `hdr()` now sends a fresh key by default; `key=False` sends none.
+- `test_12` now compares only the business collections, and asserts the refused allocate is recorded as a **failed** key.
+- `test_w0_03e_a1_collision_matrix.py` sends keys on its quick-pay and cancel calls.
+
+`frontend/src/lib/__tests__/idempotency.test.js`: 6 tests.
+
+| Run | Result |
+|---|---|
+| All PAY-01* tests + A1 collision matrix | 431 passed |
+| R29 file on 45768f3 | **108 failed**, 12 passed (the per-tenant and 403 cases, which already held) |
+| frontend `yarn test` | 6 suites, 98 passed |
+
+The A1 inventory was regenerated and is identical. The A1 and A2C guards report 0 violations.
+
+### Known debt (recorded, not fixed)
+
+- **PAY-01-C01-D4: a crash leaves the key stuck.** If the process dies after the business write and before `complete_idempotent`, the key stays `started`. Retries then get 409 IN_PROGRESS rather than a replay. Recovery needs a deterministic row id per key, or a check of the steps already done.
+- **PAY-01-C01-D5: allocate is not atomic** (this predates PAY-01). If one item of a multi-invoice allocate is refused after an earlier item was written, the earlier allocation stays. The key is marked failed, so retrying the same request writes that earlier allocation again. Fix: validate every item before the first insert. This needs Krum's confirmation (CLAUDE.md §18).
+- **PAY-01-C01-D6: live-API tests do not send the key.** `test_invoice_payments.py`, `test_invoice_workflow_p0.py` and `test_m5_finance.py` run against a deployed server and cannot run here. They do not send the key (nor the PAY-01 reason), so they need updating before they are run against this build.

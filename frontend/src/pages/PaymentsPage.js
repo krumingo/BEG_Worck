@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import {
@@ -73,6 +74,10 @@ function EmpAvatar({ name, url, size = 22 }) {
 const empLabel = (e) => e ? (e.name || [e.first_name, e.last_name].filter(Boolean).join(" ") || e.email) : "";
 
 export default function PaymentsPage() {
+  const paymentKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  const allocateKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  const otherKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  const incomeKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -226,14 +231,16 @@ export default function PaymentsPage() {
       await API.post("/finance/payments", {
         ...formData,
         amount: parseFloat(formData.amount),
-      });
+      }, idempotencyHeaders(paymentKey.get()));
+      paymentKey.settle();
       setDialogOpen(false);
       const newParams = new URLSearchParams(searchParams);
       newParams.delete("invoice_id");
       setSearchParams(newParams);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.createFailed"));
+      paymentKey.settle(err);
+      alert(apiErrorText(err, t("toast.createFailed")));
     } finally {
       setSaving(false);
     }
@@ -283,11 +290,13 @@ export default function PaymentsPage() {
           invoice_id: a.invoice_id,
           amount: parseFloat(a.amount),
         })),
-      });
+      }, idempotencyHeaders(allocateKey.get()));
+      allocateKey.settle();
       setAllocDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.allocateFailed"));
+      allocateKey.settle(err);
+      alert(apiErrorText(err, t("toast.allocateFailed")));
     } finally {
       setSaving(false);
     }
@@ -359,11 +368,13 @@ export default function PaymentsPage() {
         counterparty_name: otherForm.counterparty_name,
         date: otherForm.date,
         note: otherForm.note,
-      });
+      }, idempotencyHeaders(otherKey.get()));
+      otherKey.settle();
       setOtherOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      otherKey.settle(err);
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -387,11 +398,13 @@ export default function PaymentsPage() {
         counterparty_name: incomeForm.counterparty_name,
         date: incomeForm.date,
         note: incomeForm.note,
-      });
+      }, idempotencyHeaders(incomeKey.get()));
+      incomeKey.settle();
       setIncomeOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      incomeKey.settle(err);
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }

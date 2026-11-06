@@ -58,8 +58,12 @@ def mode(request):
 
 
 def hdr(uid, key=None):
+    """Auth headers. R29: every money write needs an Idempotency-Key — ``key=None`` sends a
+    fresh one, a string sends that key, ``key=False`` sends none (the 428 cases)."""
     org, role = USERS[uid]
     h = _token(uid, org, role)
+    if key is None:
+        key = "auto-" + uuid.uuid4().hex
     if key:
         h["Idempotency-Key"] = key
     return h
@@ -465,11 +469,15 @@ def test_12_reversed_payment_cannot_be_allocated(monkeypatch, backend, mode):
     async def scenario(c, op):
         pid = await pay(c, 90.0)
         assert (await reverse(c, pid)).status_code == 200
-        before = await snap(op)
-        r = await c.post("/api/finance/payments/%s/allocate" % pid, headers=hdr("acct-a"),
+        business = tuple(c_ for c_ in MONEY if c_ != "audit_idempotency")
+        before = await snap(op, business)
+        r = await c.post("/api/finance/payments/%s/allocate" % pid, headers=hdr("acct-a", "k-12"),
                          json={"allocations": [{"invoice_id": "inv-a2", "amount": 10.0}]})
         assert r.status_code == 409, r.text
-        assert await snap(op) == before
+        assert await snap(op, business) == before
+        # R29: the refused attempt is kept as a FAILED key (W0-04), never as a replayable success
+        rec = await op.audit_idempotency.find_one({"key": "k-12"}, {"_id": 0})
+        assert rec["status"] == "failed" and rec["action"] == "finance.payment.allocate"
     run(monkeypatch, backend, mode, scenario)
 
 
