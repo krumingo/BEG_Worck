@@ -6,7 +6,7 @@ Phase 3: Actual labor cost by execution package
 Phase 4: Variance + progress + warnings
 Phase 5: Project/profit integration
 """
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -17,7 +17,8 @@ from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import require_field_cost_write
-from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.permissions.money_input import (MoneyWrite, money_value, project_in_tenant,  # SEC-01-C03
+                                         labor_money_visible, without_labor_money)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -50,6 +51,7 @@ router = APIRouter(tags=["Labor by SMR"])
 @router.post("/labor-entries", status_code=201)
 async def create_labor_entry(
     data: dict,
+    request: Request,
     _sec01: dict = Depends(require_field_cost_write(
         "labor.entry.create", module="M2", resource_type="labor_entry",
         project_from="body")),  # SEC-01 + C01 (R16): before any read/write
@@ -60,6 +62,7 @@ async def create_labor_entry(
     tenant = _tenant(user)
     org_id = user["org_id"]
     hours = money_value(data.get("hours"), "hours")  # SEC-01-C03: finite > 0, else 422 before any write
+    await project_in_tenant(tenant, data.get("project_id"))  # SEC-01-C03-B (FG-29)
     now = datetime.now(timezone.utc).isoformat()
 
     entry = {
@@ -87,14 +90,19 @@ async def create_labor_entry(
         entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
 
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
+    # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
+    # a replay shows them to a caller without the finance right (an R16 member).
+    show_money = await labor_money_visible(request, user)
     if mw.replay_id:
-        return await tenant.labor_entries.find_one({"id": mw.replay_id}, {"_id": 0})
+        replay = await tenant.labor_entries.find_one({"id": mw.replay_id}, {"_id": 0})
+        return replay if show_money else without_labor_money(replay)
     entry["id"] = mw.new_id("labor_entry")
     async with mw:
         if await mw.needs_insert(tenant.labor_entries, entry["id"]):
             await tenant.labor_entries.insert_one(entry)
         mw.result_id = entry["id"]
-    return {k: v for k, v in entry.items() if k != "_id"}
+    out = {k: v for k, v in entry.items() if k != "_id"}
+    return out if show_money else without_labor_money(out)
 
 
 @router.post("/labor-entries/sync-from-work-reports")

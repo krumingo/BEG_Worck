@@ -121,7 +121,10 @@ WRITES_ONLY_WITH_SOURCE_DATA = {"labor_sync", "labor_recompute"}
 UNCHANGED_RESYNC = {"labor_sync"}
 # Debt SEC-01-D1 (recorded by SEC-01, not fixed): these handlers do not check that the
 # project id is one of the caller's tenant; a finance role of B writes a row in B.
-UNCHECKED_PROJECT = {"pm_put", "labor_create", "waste_create"}
+# SEC-01-C03-B (FG-29) closed debt SEC-01-D1: these routes now check that the project
+# exists in the caller's tenant (B -> A's project: 404, nothing written).
+UNCHECKED_PROJECT: set = set()
+PROJECT_CHECKED_R16 = {"labor_create", "waste_create"}
 
 
 def body_for(key: str, t: Dict[str, Any], project_id: Optional[str]) -> Optional[dict]:
@@ -186,7 +189,11 @@ def expected(key: str, legacy_role: str, target: Optional[str]) -> Dict[str, Any
         return {"status": 409, "writes": False} if legacy_role in FINANCE else deny
     if rule == "r16":
         member = legacy_role in FIELD_MEMBER and target == "P1"
-        return success if (legacy_role in FINANCE or member) else deny
+        if not (legacy_role in FINANCE or member):
+            return deny
+        if target == "XA" and key in PROJECT_CHECKED_R16:
+            return {"status": 404, "writes": False}         # FG-29: not the caller's project
+        return success
     if rule in ("project_put_owner", "project_put_same"):
         if target == "XA":
             return {"status": 404, "writes": False}         # the project is not B's

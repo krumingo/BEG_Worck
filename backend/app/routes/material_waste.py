@@ -4,13 +4,14 @@ Routes - Material Waste Tracking v1.
 from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_field_cost_write
-from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.permissions.money_input import MoneyWrite, money_value, project_in_tenant  # SEC-01-C03
+from app.services.money_amount import strict_number  # SEC-01-C03-B (FG-47)
 from app.services.material_waste import build_material_waste_summary
 from app.tenancy.data_access import TenantData
 
@@ -30,6 +31,12 @@ class WasteEntryCreate(BaseModel):
     location_id: Optional[str] = None
     qty: float
     unit: str = "бр"
+
+    @field_validator("qty", mode="before")
+    @classmethod
+    def qty_is_a_number(cls, value):
+        """SEC-01-C03-B (FG-47): only a JSON number — refused BEFORE Pydantic coerces "12"/true."""
+        return strict_number(value)
     waste_type: str = "damaged"
     notes: Optional[str] = None
     date: Optional[str] = None
@@ -67,6 +74,7 @@ async def create_waste_entry(
 ):
     tenant = _tenant(user)
     qty = money_value(data.qty, "qty")  # SEC-01-C03: finite > 0, else 422 before any write
+    await project_in_tenant(tenant, project_id)  # SEC-01-C03-B (FG-29)
     mw = await MoneyWrite.begin(user, "material_waste.entry.create", idempotency_key,
                                 {"project_id": project_id, **data.model_dump()})
     if mw.replay_id:

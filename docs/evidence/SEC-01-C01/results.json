@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.6,
+ "seconds": 30.9,
  "rows": [
   {
    "mode": "off",
@@ -6187,13 +6187,9 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6204,13 +6200,9 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6455,13 +6447,9 @@
    "method": "PUT",
    "path": "/api/price-modifiers/project/{project_id}",
    "target": "XA",
-   "status": 200,
-   "written": [
-    "op.price_modifiers_config"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6472,13 +6460,9 @@
    "method": "PUT",
    "path": "/api/price-modifiers/project/{project_id}",
    "target": "XA",
-   "status": 200,
-   "written": [
-    "op.price_modifiers_config"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6658,13 +6642,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6675,13 +6655,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -12750,13 +12726,9 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12767,13 +12739,9 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -13018,13 +12986,9 @@
    "method": "PUT",
    "path": "/api/price-modifiers/project/{project_id}",
    "target": "XA",
-   "status": 200,
-   "written": [
-    "op.price_modifiers_config"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -13035,13 +12999,9 @@
    "method": "PUT",
    "path": "/api/price-modifiers/project/{project_id}",
    "target": "XA",
-   "status": 200,
-   "written": [
-    "op.price_modifiers_config"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -13221,13 +13181,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -13238,13 +13194,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -19699,13 +19651,9 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19716,13 +19664,9 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19991,13 +19935,9 @@
    "method": "PUT",
    "path": "/api/price-modifiers/project/{project_id}",
    "target": "XA",
-   "status": 200,
-   "written": [
-    "op.price_modifiers_config"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -20008,13 +19948,9 @@
    "method": "PUT",
    "path": "/api/price-modifiers/project/{project_id}",
    "target": "XA",
-   "status": 200,
-   "written": [
-    "op.price_modifiers_config"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -20200,13 +20136,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -20217,13 +20149,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 404,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",

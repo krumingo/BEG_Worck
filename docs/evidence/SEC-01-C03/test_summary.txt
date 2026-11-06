@@ -1,21 +1,27 @@
 # SEC-01-C03 test summaries (branch claude/sec-01-money-write-permissions, local real MongoDB 7.0 replica set)
 ## SEC-01-C03 + C02 + C01 + SEC-01 + PM-01, real Mongo (W0_03_REAL_MONGO_URL set)
-36 passed (file by file after addendum A: C03 6, SEC-01 8, C01 7, C02 9, PM-01 6)
+36 passed (file by file after addendum B: C03 6, SEC-01 8, C01 7, C02 9, PM-01 6)
 ## C03 harness (docs/evidence/SEC-01-C03/results.json)
-207 invalid-amount calls (nan, inf, -inf, 1e309, "", abc, -1, 0, missing) x 8 probes x 3 modes -> all 422, 0 business writes
+282 invalid-amount calls (nan, inf, -inf, 1e309, "", abc, "10", true, [10], -1, 0, missing) x 8 probes x 3 modes -> all 422, 0 business writes
 24 idempotency sequences (8 probes x 3 modes): no key -> 428 IDEMPOTENCY_KEY_REQUIRED, 0 rows (R29, addendum A); same key twice -> 1 row, identical replay, no write; same key + other body -> 409 IDEMPOTENCY_CONFLICT, no write
 24 SEC-R1 calls: P1 (member, no dates) -> 201; P2 (expired Technician / future SiteManager) -> 403, nothing written; off/shadow/enforce
 ## tests/test_r0_0*.py (real Mongo)
-814 passed in 172.62s (0:02:52)
+814 passed in 157.45s (0:02:37)
 ## W0 DB-free (tests/test_w0_*.py --noconftest)
-15 failed, 1085 passed, 50 skipped in 76.61s (0:01:16)
+15 failed, 1085 passed, 50 skipped in 67.11s (0:01:07)
 (the same 15 test_w0_03e_legacy_routes failures as main, SEC-01, C01 and C02)
 ## Guards
-W0-03E-A1 tenant access guard: 418 unit(s) checked, 0 violation(s)
-W0-03E-A2C tenant boundary guard: 206 module(s) checked, 0 violation(s)
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
 (A1 inventory regenerated: +3 rows, the replay reads find_one(id) of cash/overhead/bonus, TenantData org_id, SAFE)
 ## Frontend
 yarn test: 6 suites, 96 tests passed (new: src/lib/__tests__/idempotency.test.js)
 yarn build: Compiled with warnings (no warning in the changed files)
 ## PM-01 matrix re-run: 54 cells changed (6 routes x 3 finance roles x 3 modes), PM-01 body has no amount -> 422, nothing written (pm01_cells_changed.csv)
 ## Addendum A (R29) PM-01 re-run: 9 cells changed (material-waste x Owner/Admin/Accountant x 3 modes): 201 writes -> 428 nothing written (PM-01 sends no key) — pm01_cells_changed_addendum_a.csv
+## Addendum B (FG-15, FG-47, FG-29)
+FG-29: 7 cases x 3 modes (B's project / unknown -> 404, missing project_id -> 422), 0 business writes
+FG-15: Technician member -> 201, no hourly_rate/labor_cost in response or replay (stored row keeps them); Accountant sees them; 3 modes
+Regenerated SEC-01 / C01 / C02 results.json: only the B -> A project cells changed (6 / 18 / 12), all to 404, nothing written (closes SEC-01-D1)
+PM-01 matrix re-run: unchanged
+Frontend: yarn test 96 passed; yarn build compiled (no warning in changed files)
