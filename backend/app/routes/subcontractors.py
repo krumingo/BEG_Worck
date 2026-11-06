@@ -20,6 +20,7 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.permissions.money_write import require_money_write
 
 router = APIRouter(tags=["Subcontractors"])
 
@@ -430,7 +431,13 @@ async def list_subcontractor_acts(project_id: Optional[str] = None, package_id: 
 
 
 @router.post("/subcontractor-acts/{act_id}/confirm")
-async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2)):
+async def confirm_subcontractor_act(
+    act_id: str,
+    _sec01: dict = Depends(require_money_write(
+        "subcontract.act_confirm.execute", module="M2",
+        resource_type="subcontractor_act")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     tenant = _tenant(user)
     act = await tenant.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
@@ -491,7 +498,25 @@ async def _get_next_pay_no(org_id):
 
 
 @router.post("/subcontractor-payments", status_code=201)
-async def create_subcontractor_payment(data: dict, user: dict = Depends(require_m2)):
+async def create_subcontractor_payment(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.subcontractor_payment.create", module="M2",
+        resource_type="subcontractor_payment")),  # SEC-01-C02 (R14, FG-27): before any read
+    user: dict = Depends(require_m2),
+):
+    """A real payment to a subcontractor (SEC-01-C02, FG-27).
+
+    CLAUDE.md §2.5/§7: every real money movement is in the ONE payment ledger
+    (FLOW-006). Until W0-05 builds the Payment Core, that ledger is ``finance_payments``
+    (IMPLEMENTATION_WAVES.md W0-05: "един finance_payments write service"). So a payment
+    is accepted ONLY when its cash/bank account resolves and the Outflow row is written
+    to ``finance_payments``; otherwise 409 BEFORE any write — never a payment that
+    exists only in ``subcontractor_payments``. ``subcontractor_payments`` stays the
+    package's allocation record (the row points to its ledger row), not a second ledger.
+    Debt SEC-01-C02-D1: not yet through a W0-05 write service, no idempotency key, no
+    Approval, no reversal API (W0-05 / R1 Payment).
+    """
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("package_id")
@@ -510,9 +535,17 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
     req_account_id = data.get("account_id")
     if req_account_id:
         account = await tenant.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
     else:
         account = await tenant.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
-    account_id = account["id"] if account else None
+    if not account:
+        # FG-27: no account -> no ledger row -> no payment (nothing is written).
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_LEDGER_ACCOUNT_REQUIRED",
+            "message": "Плащането трябва да мине през платежния регистър: изберете "
+                       "сметка (Каса/Банка)"})
+    account_id = account["id"]
 
     payment = {
         "id": str(uuid.uuid4()), "org_id": org_id,
@@ -528,24 +561,30 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         "account_id": account_id,
         "created_at": now,
     }
-    await tenant.subcontractor_payments.insert_one(payment)
 
-    # Cash outflow from the chosen account (Каса/Банка) — keeps cash flow / account balance correct
-    if account_id:
-        await tenant.finance_payments.insert_one({
-            "id": str(uuid.uuid4()), "org_id": org_id,
-            "direction": "Outflow", "amount": amount,
-            "currency": pkg.get("currency", "EUR"),
-            "date": payment["payment_date"],
-            "method": (account.get("account_type", "Cash") if account else "Cash"),
-            "account_id": account_id,
-            "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
-            "reference": payment["payment_no"],
-            "note": "Подизпълнител/бригада плащане",
-            "project_id": pkg["project_id"],
-            "subcontractor_payment_id": payment["id"],
-            "created_at": now, "updated_at": now,
-        })
+    # The ledger row first (FG-27): the cash outflow from the chosen account (Каса/Банка)
+    # in finance_payments; the package's allocation record points to it.
+    ledger_id = str(uuid.uuid4())
+    payment["finance_payment_id"] = ledger_id
+    await tenant.finance_payments.insert_one({
+        "id": ledger_id, "org_id": org_id,
+        "direction": "Outflow", "amount": amount,
+        "currency": pkg.get("currency", "EUR"),
+        "date": payment["payment_date"],
+        "method": account.get("account_type", "Cash"),
+        "account_id": account_id,
+        "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
+        "reference": payment["payment_no"],
+        "note": "Подизпълнител/бригада плащане",
+        "project_id": pkg["project_id"],
+        "subcontractor_payment_id": payment["id"],
+        "created_at": now, "updated_at": now,
+    })
+    await tenant.subcontractor_payments.insert_one(payment)
+    await log_audit(org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
+                    "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
+                                           "subcontractor_payment_id": payment["id"],
+                                           "account_id": account_id})
 
     # Update package paid totals
     all_pays = await tenant.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)

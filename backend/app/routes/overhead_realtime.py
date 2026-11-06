@@ -12,6 +12,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.services.overhead_realtime import compute_realtime_overhead
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -60,7 +61,13 @@ async def get_worker_calendar(
 
 
 @router.post("/worker-calendar", status_code=201)
-async def create_calendar_entry(data: CalendarEntry, user: dict = Depends(get_current_user)):
+async def create_calendar_entry(
+    data: CalendarEntry,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar.create", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     if data.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {VALID_STATUSES}")
@@ -95,7 +102,14 @@ async def create_calendar_entry(data: CalendarEntry, user: dict = Depends(get_cu
 
 
 @router.put("/worker-calendar/{entry_id}")
-async def update_calendar_entry(entry_id: str, data: CalendarEntry, user: dict = Depends(get_current_user)):
+async def update_calendar_entry(
+    entry_id: str,
+    data: CalendarEntry,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar.update", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     entry = await tenant.worker_calendar.find_one({"id": entry_id, "org_id": user["org_id"]})
     if not entry:
@@ -112,7 +126,13 @@ async def update_calendar_entry(entry_id: str, data: CalendarEntry, user: dict =
 
 
 @router.post("/worker-calendar/bulk", status_code=201)
-async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_user)):
+async def bulk_calendar(
+    data: CalendarBulk,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar_bulk.execute", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     created = 0
@@ -141,7 +161,13 @@ async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_use
 
 
 @router.post("/worker-calendar/sync-from-sessions")
-async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def sync_from_sessions(
+    date: Optional[str] = None,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar_sync.execute", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     """Auto-sync calendar from work_sessions for a given date."""
     tenant = _tenant(user)
     org_id = user["org_id"]

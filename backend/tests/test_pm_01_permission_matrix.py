@@ -611,6 +611,19 @@ ENFORCE_EXTRA_WRITES = {
     ("DELETE", "/api/price-modifiers/project/{project_id}"): "denial",
     ("POST", "/api/labor-entries/sync-from-work-reports"): "denial",
     ("POST", "/api/execution-packages/recompute-labor/{project_id}"): "denial",
+    # SEC-01-C02 (R14; FLOW Guard FG-27, FG-30): the remaining money writes.
+    ("POST", "/api/subcontractor-payments"): "denial",
+    ("POST", "/api/client-acts/{act_id}/confirm"): "denial",
+    ("POST", "/api/subcontractor-acts/{act_id}/confirm"): "denial",
+    ("PUT", "/api/supplier-invoices/{inv_id}"): "denial",
+    ("POST", "/api/worker-calendar"): "denial",
+    ("PUT", "/api/worker-calendar/{entry_id}"): "denial",
+    ("POST", "/api/worker-calendar/bulk"): "denial",
+    ("POST", "/api/worker-calendar/sync-from-sessions"): "denial",
+    ("POST", "/api/overhead-allocation/compute/{project_id}"): "denial",
+    ("PUT", "/api/ocr-invoice/{intake_id}/approve"): "denial",
+    ("POST", "/api/sales/commit"): "denial",
+    ("POST", "/api/pricing/refresh"): "denial",
 }
 
 

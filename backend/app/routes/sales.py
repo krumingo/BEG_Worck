@@ -13,6 +13,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.fifo_service import consume_fifo, get_current_stock, InsufficientStockError
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -197,7 +198,13 @@ class CommitRequest(BaseModel):
 
 
 @router.post("/sales/commit", status_code=201)
-async def commit_sale(data: CommitRequest, user: dict = Depends(get_current_user)):
+async def commit_sale(
+    data: CommitRequest,
+    _sec01: dict = Depends(require_money_write(
+        "sales.sale_commit.execute", module=None,
+        resource_type="sale")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     org_id = user["org_id"]
 

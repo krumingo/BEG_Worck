@@ -19,6 +19,7 @@ from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import require_money_write
+from app.routes.labor_smr import ACTIVE_LABOR_ROW
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 
@@ -189,7 +190,14 @@ async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depe
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-allocation/compute/{project_id}")
-async def compute_overhead_allocation(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
+async def compute_overhead_allocation(
+    project_id: str,
+    data: dict = {},
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_allocation.execute", module='M2',
+        resource_type="project_overhead_alloc")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     """Compute overhead allocation for a project based on labor hours share"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -429,7 +437,7 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "unmapped_material", "severity": "warning", "count": mat_warn, "message": f"{mat_warn} материални записа без връзка към СМР"})
 
     # Labor warnings
-    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW})
     if lab_unmapped > 0:
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 

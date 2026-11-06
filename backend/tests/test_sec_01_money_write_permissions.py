@@ -51,6 +51,12 @@ MODES = ("off", "shadow", "enforce")
 ROLE_KEYS = ("owner", "admin", "requester", "technician", "accountant",
              "warehousekeeper", "driver", "viewer")
 ALLOWED_LEGACY = {"Owner", "Admin", "Accountant"}
+# FG-24 (SEC-01-C02): this harness runs on the bare ST-01 fixture, which has NO project
+# membership (test_the_fixture_has_no_project_membership below). So a SiteManager or
+# Technician refused here on labor/waste is a NON-member — exactly R16. A MEMBER
+# SiteManager/Technician writes labor and waste: tests/test_sec_01_c01_*.py and
+# tests/test_sec_01_c02_*.py. This file does not assert "SiteManager never writes labor".
+R16_PATHS = {"/api/labor-entries", "/api/projects/{project_id}/material-waste"}
 DB_PREFIX_OP, DB_PREFIX_SYS = "sec01_op_", "sec01_sys_"
 SYNTH_PASSWORD = "SEC01-Synthetic-Pass-2026!"   # synthetic users of a scratch database
 
@@ -359,6 +365,12 @@ def test_the_committed_evidence_satisfies_the_package():
         ["Owner", "Admin", "SiteManager", "Technician", "Accountant", "Warehousekeeper",
          "Driver", "Viewer"])
     check_rows(data["rows"])
+
+
+def test_the_fixture_has_no_project_membership():
+    """FG-24: the R16 denials of this file are non-member denials (see R16_PATHS)."""
+    src = (REPO / "ops" / "staging" / "seed_synthetic.py").read_text(encoding="utf-8")
+    assert "project_team" not in src and "/team" not in src
 
 
 def test_the_pm01_matrix_shows_the_money_write_cells_closed():

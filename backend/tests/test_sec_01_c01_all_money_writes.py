@@ -115,6 +115,10 @@ PROJECT_PROBES = {p[0] for p in PROBES if "{project_id}" in p[2]} | {"labor_crea
 # Probes whose success writes nothing when the target project has no source data
 # (no work report / no execution package): P2, and A's project seen from tenant B.
 WRITES_ONLY_WITH_SOURCE_DATA = {"labor_sync", "labor_recompute"}
+# SEC-01-C02 (FG-26): the sync no longer deletes and recreates its rows. P1's synced row
+# equals its work report, so a re-sync writes nothing at all; the changed-line case
+# (reversal + new row, no delete) is proven in tests/test_sec_01_c02_*.py.
+UNCHANGED_RESYNC = {"labor_sync"}
 # Debt SEC-01-D1 (recorded by SEC-01, not fixed): these handlers do not check that the
 # project id is one of the caller's tenant; a finance role of B writes a row in B.
 UNCHECKED_PROJECT = {"pm_put", "labor_create", "waste_create"}
@@ -167,6 +171,8 @@ def expected(key: str, legacy_role: str, target: Optional[str]) -> Dict[str, Any
     deny = {"status": 403, "writes": False}
     success = {"status": ok, "writes": True}
     if key in WRITES_ONLY_WITH_SOURCE_DATA and target in ("P2", "XA"):
+        success = {"status": ok, "writes": False}
+    if key in UNCHANGED_RESYNC:
         success = {"status": ok, "writes": False}
     if rule == "finance":
         if legacy_role not in FINANCE:
@@ -425,13 +431,25 @@ GUARDED_ROUTES = {
 R16_ROUTES = {k for k, a in GUARDED_ROUTES.items() if a.startswith(("labor.", "material_waste."))}
 
 
+def _c02_routes():
+    spec = importlib.util.spec_from_file_location(
+        "c01_c02_routes",
+        Path(__file__).resolve().parent / "test_sec_01_c02_flow_guard_money_writes.py")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.C02_GUARDED_ROUTES
+
+
 def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
+    """C01's routes; the only other marked routes are SEC-01-C02's (R14, FG-27/FG-30)."""
+    c02 = _c02_routes()
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]
         marked = [c for c in calls if hasattr(c, "sec01_action")]
         for method in route.methods:
-            if marked:
+            if marked and (method, route.path) not in c02:
                 found[(method, route.path)] = (calls, marked)
     assert set(found) == set(GUARDED_ROUTES), sorted(set(found) ^ set(GUARDED_ROUTES))
     for key, (calls, marked) in found.items():
@@ -452,12 +470,12 @@ def test_the_catalog_r16_and_money_grants():
     from app.permissions.catalog import (
         ACTIONS, PERMISSION_MATRIX, MONEY_WRITE_ACTIONS, FIELD_COST_WRITE_ACTIONS,
         ORG_PRICING_ACTIONS, project_membership_actions, is_significant_action,
-        PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS)
+        PROJECT_MEMBER_ACTIONS, PROJECT_MANAGER_ACTIONS, MONEY_WRITE_ACTIONS_C02)
     actions = set(GUARDED_ROUTES.values())
     assert actions <= ACTIONS
     assert all(is_significant_action(a) for a in actions)       # denials are audited
     company_money = actions - ORG_PRICING_ACTIONS
-    assert company_money == MONEY_WRITE_ACTIONS
+    assert company_money == MONEY_WRITE_ACTIONS - MONEY_WRITE_ACTIONS_C02   # + SEC-01-C02
     holders = {rid for rid, acts in PERMISSION_MATRIX.items() if acts & actions}
     assert holders == {"owner", "admin", "accountant"}           # company scope only
     assert not (PERMISSION_MATRIX["accountant"] & ORG_PRICING_ACTIONS)

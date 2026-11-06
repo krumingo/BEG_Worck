@@ -23,6 +23,22 @@ def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
 
+
+# SEC-01-C02 (FG-26): a labor row that is neither a reversal nor reversed. Sums need no
+# filter (a reversal carries the negative hours/cost); counts use this.
+ACTIVE_LABOR_ROW = {"entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
+
+
+def _sync_fingerprint(row: dict) -> tuple:
+    """What makes two synced labor rows the same row (SEC-01-C02, FG-26)."""
+    cost = row.get("labor_cost")
+    rate = row.get("hourly_rate")
+    return (row.get("work_report_id"), row.get("employee_id"), row.get("date", ""),
+            round(float(row.get("hours", 0) or 0), 4), row.get("activity_name", ""),
+            row.get("note", ""), row.get("execution_package_id"), row.get("offer_line_id"),
+            None if rate is None else round(float(rate), 4),
+            None if cost is None else round(float(cost), 2))
+
 router = APIRouter(tags=["Labor by SMR"])
 
 
@@ -105,12 +121,18 @@ async def sync_labor_entries_from_work_reports(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(1000)
 
-    # Clear old synced entries for this project
-    await tenant.labor_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "work_report_sync"})
-
+    # SEC-01-C02 (FG-26; CLAUDE.md §2.9, §7): NO delete. Labor rows are the basis of
+    # pay (FLOW-028), so a re-sync never removes or edits one. It compares the rows the
+    # work reports give NOW with the active synced rows:
+    #   same row (fingerprint)  -> kept as it is;
+    #   row no longer given     -> a REVERSAL row (negative hours/cost, same date and
+    #                              package) is appended and the original is marked
+    #                              reversed_by_entry_id — every sum stays correct;
+    #   new row                 -> inserted.
+    # A re-sync with no change writes nothing (idempotent by content).
     now = datetime.now(timezone.utc).isoformat()
-    created = 0
 
+    desired = []
     for wr in reports:
         uid = wr["user_id"]
         rate = rate_map.get(uid, 0)
@@ -127,7 +149,7 @@ async def sync_labor_entries_from_work_reports(
             ep_id = matched_pkg["id"] if matched_pkg else None
             ol_id = matched_pkg.get("offer_line_id") if matched_pkg else None
 
-            entry = {
+            desired.append({
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
                 "project_id": project_id,
@@ -144,11 +166,54 @@ async def sync_labor_entries_from_work_reports(
                 "source": "work_report_sync",
                 "mapped": ep_id is not None,
                 "created_at": now,
-            }
-            await tenant.labor_entries.insert_one(entry)
-            created += 1
+            })
 
-    return {"ok": True, "synced": created, "project_id": project_id}
+    active = await tenant.labor_entries.find(
+        {"org_id": org_id, "project_id": project_id, "source": "work_report_sync",
+         "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None},
+        {"_id": 0}).to_list(10000)
+    pool = {}
+    for row in active:
+        pool.setdefault(_sync_fingerprint(row), []).append(row)
+
+    created = unchanged = 0
+    for entry in desired:
+        same = pool.get(_sync_fingerprint(entry))
+        if same:
+            same.pop()
+            unchanged += 1
+            continue
+        await tenant.labor_entries.insert_one(entry)
+        created += 1
+
+    reversed_count = 0
+    for rows in pool.values():
+        for old in rows:
+            reversal = {
+                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
+                "employee_id": old.get("employee_id"),
+                "execution_package_id": old.get("execution_package_id"),
+                "offer_line_id": old.get("offer_line_id"),
+                "work_report_id": old.get("work_report_id"),
+                "date": old.get("date", ""),
+                "hours": -float(old.get("hours", 0) or 0),
+                "activity_name": old.get("activity_name", ""),
+                "note": "Сторно при повторна синхронизация",
+                "hourly_rate": old.get("hourly_rate"),
+                "labor_cost": (-float(old["labor_cost"]) if old.get("labor_cost") is not None
+                               else None),
+                "source": "work_report_sync", "entry_kind": "reversal",
+                "reverses_entry_id": old["id"], "mapped": old.get("mapped", False),
+                "created_by": user["id"], "created_at": now,
+            }
+            await tenant.labor_entries.insert_one(reversal)
+            await tenant.labor_entries.update_one(
+                {"id": old["id"], "org_id": org_id, "reversed_by_entry_id": None},
+                {"$set": {"reversed_by_entry_id": reversal["id"], "reversed_at": now}})
+            reversed_count += 1
+
+    return {"ok": True, "synced": created, "unchanged": unchanged,
+            "reversed": reversed_count, "project_id": project_id}
 
 
 @router.get("/labor-entries")
@@ -346,11 +411,12 @@ async def get_labor_warnings(project_id: str, user: dict = Depends(require_m2)):
     ).to_list(200)
 
     # Count unmapped entries
+    # SEC-01-C02: count the active rows only (a reversal and the row it reverses cancel out).
     unmapped = await tenant.labor_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": None}
+        {"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW}
     )
     total_entries = await tenant.labor_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id}
+        {"org_id": org_id, "project_id": project_id, **ACTIVE_LABOR_ROW}
     )
 
     warnings = []
