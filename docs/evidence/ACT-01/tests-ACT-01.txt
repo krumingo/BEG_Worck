@@ -138,3 +138,21 @@ harness_rc=0
 SAME_AS_MAIN_d226c49
 ## PAY-01 + W0-04-C01
 668 passed, 1 warning in 155.00s (0:02:34)
+
+# ── Addendum D (FG-142): confirm names the values seen ──
+before (dd11e8e + the new test): confirmer saw 407.38 (488.86 gross) -> 200, 407.39 stored
+after: 409 ACT_VALUE_CHANGED (total 488.87, line 407.39), nothing written; re-confirm with the new values -> 200
+## A2C guard
+W0-03E-A2C tenant boundary guard: 216 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 436 unit(s) checked, 0 violation(s)
+## ACT-01 (committed results regenerated) + fresh ACT-01 + PM-01 (real Mongo, -rs)
+harness_rc=0
+119 passed, 6 warnings in 192.13s (0:03:12)
+## R0
+814 passed, 6 warnings in 141.05s (0:02:21)
+## W0
+15 failed, 1173 passed, 6 warnings in 111.29s (0:01:51)
+SAME_AS_MAIN_d226c49
+## PAY-01 + W0-04-C01
+668 passed, 1 warning in 159.97s (0:02:39)
