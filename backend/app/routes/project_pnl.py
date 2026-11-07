@@ -40,6 +40,9 @@ async def get_pnl_summary(project_id: str, user: dict = Depends(get_current_user
         "input_vat": pnl["vat"]["input_vat"],
         "vat_payable": pnl["vat"]["vat_payable"],
         "total_expense": pnl["expense"]["total_expense"],
+        "material_cost": pnl["expense"]["material_cost"],
+        # 5C-C21 F-12 — project write-off, its own „фира" line (in total_expense once).
+        "material_waste_cost": pnl["expense"]["material_waste_cost"],
         "gross_profit": pnl["profit"]["gross_profit"],
         "margin_pct": pnl["profit"]["margin_pct"],
         "status": pnl["profit"]["status"],
@@ -51,7 +54,8 @@ async def get_pnl_breakdown(project_id: str, user: dict = Depends(get_current_us
     if not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     pnl = await compute_project_pnl(user["org_id"], project_id)
-    return {"budget": pnl["budget"], "revenue": pnl["revenue"], "expense": pnl["expense"], "profit": pnl["profit"]}
+    return {"budget": pnl["budget"], "revenue": pnl["revenue"], "expense": pnl["expense"],
+            "profit": pnl["profit"], "warehouse_cost_basis": pnl["warehouse_cost_basis"]}
 
 
 @router.get("/projects/{project_id}/pnl/trend")

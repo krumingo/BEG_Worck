@@ -149,6 +149,7 @@
     "assetsBatchIntake": "Stock intake",
     "assetsIntakeReview": "Pending approval",
     "masterDataReview": "Master Data review",
+    "warehouseCanonical": "Warehouse (canonical)",
     "assetsItems": "Items",
     "assetsUnits": "Assets (QR)",
     "dashboard": "Dashboard",
@@ -1545,6 +1546,7 @@
     "revenueBreakdown": "Revenue",
     "laborCost": "Labor",
     "materialCost": "Materials",
+    "materialWasteCost": "Material waste (write-off)",
     "subcontractorCost": "Subcontractors",
     "contractCost": "External Payments",
     "overhead": "Overhead",
@@ -1955,7 +1957,11 @@
     "notes": "Notes",
     "fillRequired": "Fill material and quantity",
     "added": "Entry added",
-    "noData": "No material data"
+    "noData": "No material data",
+    "manualEntries": "Manual entries",
+    "writeOffs": "Warehouse write-offs",
+    "writeOffsTitle": "Warehouse write-offs (waste)",
+    "writeOffBadge": "warehouse write-off"
   },
   "excelImportV2": {
     "title": "Import from Excel",

@@ -4,6 +4,7 @@ import { useActiveProject } from "@/contexts/ProjectContext";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { canReadMasterData } from "@/lib/masterDataAccess";
+import { canOpenCanonicalWarehouse } from "@/lib/warehouseCanonicalAccess";
 import {
   LayoutDashboard, Users, Building2, Blocks, ScrollText, LogOut, KeyRound,
   ChevronRight, ChevronDown, HardHat, FolderKanban, CalendarCheck,
@@ -124,6 +125,9 @@ const PLATFORM_ADMIN_CHILDREN = [
 // The Master Data review screen for a role that may read the queue but does
 // not get the grouped admin navigation — the office (see MasterDataRoute).
 const MASTER_DATA_NAV_ITEM = { to: "/data/master-data", icon: Inbox, labelKey: "nav.masterDataReview" };
+// 5C-C19 F-6: non-admin roles that the catalog lets read the canonical
+// warehouse (e.g. Warehousekeeper) get a direct entry to the screen.
+const CANONICAL_WAREHOUSE_NAV_ITEM = { to: "/warehouse/canonical", icon: Warehouse, labelKey: "nav.warehouseCanonical" };
 
 const WORKER_NAV = [
   { to: "/tech", icon: ClipboardList, labelKey: "nav.techDashboard" },
@@ -234,7 +238,11 @@ export default function DashboardLayout({ children }) {
   const isProfileRoute = location.pathname === "/profile";
   const isPlatformAdmin = user?.is_platform_admin === true;
   const isAdmin = ["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role);
-  const workerNav = canReadMasterData(user?.role) ? [...WORKER_NAV, MASTER_DATA_NAV_ITEM] : WORKER_NAV;
+  const workerNav = [
+    ...WORKER_NAV,
+    ...(canReadMasterData(user?.role) ? [MASTER_DATA_NAV_ITEM] : []),
+    ...(canOpenCanonicalWarehouse(user?.role) ? [CANONICAL_WAREHOUSE_NAV_ITEM] : []),
+  ];
 
   const isTabActive = (tabPath) => tabPath === "/" ? location.pathname === "/" : location.pathname.startsWith(tabPath);
 

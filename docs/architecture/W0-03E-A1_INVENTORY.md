@@ -370,8 +370,11 @@
 | app/routes/items.py:get_item | GET /items/{item_id} | items | require(id = item_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/subcontractors.py:get_subcontractor | GET /subcontractors/{sub_id} | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | get(id = warehouse_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouse_transactions | distinct('item_id') | TenantData org_id (session) | new read | SAFE |
+| app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouse_transactions | find_one($or) | TenantData org_id (session) | new read | SAFE |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouse_transactions | count_documents(ledger_sequence) | TenantData org_id (session) | new read | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 359 accesses — FIXED 130, SAFE 229
+Totals: 362 accesses — FIXED 130, SAFE 232
