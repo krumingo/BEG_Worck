@@ -45,6 +45,42 @@ COST_TYPES = ("LABOR", "DOWNTIME", "DOWNTIME_UNCLASSIFIED")
 REPORT_DECIDABLE = ("SUBMITTED", "APPROVED")
 
 
+# LAB-02-B (audit LAB02-1): at most ONE active decision per line — (tenant, report, entry,
+# version) is unique among the approved quantity records and among the active
+# classifications. Concurrent approvals with different keys: one wins, the others get 409.
+LINE_KEY = [("org_id", 1), ("report_id", 1), ("entry_id", 1), ("report_version", 1)]
+LABOR_INDEXES = (
+    ("labor_quantity_approvals", LINE_KEY,
+     {"unique": True, "partialFilterExpression": {"status": "approved"}, "name": "one_approved_per_line"}),
+    ("labor_line_classifications", LINE_KEY,
+     {"unique": True, "partialFilterExpression": {"status": "active"}, "name": "one_active_per_line"}),
+)
+_indexed = set()
+
+
+async def ensure_labor_indexes(raw_db) -> int:
+    """Create the unique partial indexes (startup; and lazily before the first decision in a
+    database that missed startup). Idempotent."""
+    key = (id(raw_db), raw_db.name)
+    if key in _indexed:
+        return 0
+    for coll, keys, opts in LABOR_INDEXES:
+        await raw_db[coll].create_index(keys, **opts)
+    _indexed.add(key)
+    return len(LABOR_INDEXES)
+
+
+async def _insert_decision(collection, rec: dict):
+    """Insert the one active decision of a line; a concurrent winner → 409, nothing written."""
+    try:
+        await collection.insert_one(dict(rec))
+    except Exception as exc:
+        if type(exc).__name__ == "DuplicateKeyError" or "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=409, detail=(
+                "За този ред току-що беше записано друго решение — презаредете и проверете"))
+        raise
+
+
 def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
@@ -377,7 +413,8 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
             "status": "approved", "approved_by": user["id"], "approved_at": now, "note": data.note,
             "replaces": [p["id"] for p in prev], "idempotency_key": key,
         }
-        await tenant.labor_quantity_approvals.insert_one(dict(rec))
+        await ensure_labor_indexes(db)
+        await _insert_decision(tenant.labor_quantity_approvals, rec)
         await _audit(user, action="labor_quantity.corrected" if prev else "labor_quantity.approved",
                      entity_type="labor_quantity_approval", entity_id=rec["id"], version=line["report_version"],
                      before={"approved_quantity": prev[-1].get("approved_quantity")} if prev else None,
@@ -441,7 +478,8 @@ async def classify_line(data: ClassifyInput, user: dict = Depends(get_current_us
                "responsible_party": data.responsible_party, "status": "active",
                "classified_by": user["id"], "classified_at": now, "replaces": [p["id"] for p in prev],
                "idempotency_key": key}
-        await tenant.labor_line_classifications.insert_one(dict(rec))
+        await ensure_labor_indexes(db)
+        await _insert_decision(tenant.labor_line_classifications, rec)
         await _audit(user, action="labor_line.classified", entity_type="labor_line_classification",
                      entity_id=rec["id"], version=line["report_version"],
                      before={"cost_type": prev[-1].get("cost_type")} if prev else None,

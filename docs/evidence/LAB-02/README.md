@@ -65,3 +65,11 @@ Canon: FLOW-028 (akord = approved quantity × agreed piece rate), FLOW-019 (DOWN
   - Added the exact regression tests: the SiteManager sets 800 and gets 403 on his own approval, with nothing payable (no 7200), while the Owner can approve; a SiteManager who is `submitted_by` gets 403 on approve and on classify.
 - **FG-93:** approve and classify return **409** on a line that is in payroll, decided from the pay-run lines as in LAB-01-J. Quantity entry is also 409 there.
 - **FG-94:** classify accepts only submitted or approved lines; a draft gets **409**.
+
+## LAB-02-B2 (audit LAB02-1) — `tests-LAB-02-B2.txt`
+- **One active decision per line:** unique partial indexes on `(org_id, report_id, entry_id, report_version)`:
+  - `labor_quantity_approvals` where `status = approved` (`one_approved_per_line`);
+  - `labor_line_classifications` where `status = active` (`one_active_per_line`).
+- **When they are created:** at startup (`server.py`) and lazily before the first decision in a database that missed startup.
+- **Concurrent approvals:** with different keys, one wins and the others get **409**, with nothing written. Void history records do not block a re-approval.
+- **Test:** 4 concurrent approvals give exactly 1 active record, and the pending list shows the quantity that is paid. The same test **fails** on real Mongo with the guard disabled (`repro_lab02_1_without_guard.py`, 3/3 failures).

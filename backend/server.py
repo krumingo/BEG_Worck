@@ -400,6 +400,9 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # LAB-02-B: one active quantity approval / classification per report line
+    from app.routes.labor_quantities import ensure_labor_indexes
+    await ensure_labor_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

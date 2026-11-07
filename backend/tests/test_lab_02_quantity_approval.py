@@ -416,3 +416,49 @@ def test_fg94_a_draft_line_cannot_be_classified(monkeypatch, backend):
         assert r.status_code == 409
         assert await op.labor_line_classifications.count_documents({}) == 0
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-02-B (audit LAB02-1)
+def test_lab02_1_concurrent_approvals_leave_one_active_record(monkeypatch, backend):
+    """4 concurrent approvals of the same line with DIFFERENT keys and quantities: at most one
+    approved record stays active (unique partial index); the pending list shows exactly the
+    quantity that is paid."""
+    async def scenario(c, op):
+        assert (await _set_rate(c)).status_code == 200
+        await op.employee_daily_reports.update_one({"id": "R-AK"}, {"$set": {"status": "APPROVED", "quantity": 120}})
+        bodies = [{"report_id": "R-AK", "report_version": 0, "approved_quantity": q,
+                   "execution_package_id": "pkg-sh"} for q in (100, 110, 120, 130)]
+        rs = await asyncio.gather(*[c.post("/api/labor-quantities/approve", json=b, headers=H(who))
+                                    for b, who in zip(bodies, ("sm", "admin", "owner", "sm"))])
+        codes = [r.status_code for r in rs]
+        assert set(codes) <= {200, 409} and 200 in codes, [r.text for r in rs]
+        active = await op.labor_quantity_approvals.find({"status": "approved"}, {"_id": 0}).to_list(10)
+        assert len(active) == 1, active
+        paid_qty = active[0]["approved_quantity"]
+        pend = await c.get("/api/labor-quantities/pending", params={"project_id": "P"}, headers=_token("admin"))
+        shown = {i["report_id"]: i for i in pend.json()["items"]}["R-AK"]["approval"]["approved_quantity"]
+        assert shown == paid_qty
+        assert (await _preview(c))["w-ak"]["earned_amount"] == round(paid_qty * 5, 2)
+        # the unique partial index exists
+        assert "one_approved_per_line" in (await op.labor_quantity_approvals.index_information())
+    run(monkeypatch, scenario, backend)
+
+
+def test_lab02_1_a_second_active_record_is_refused_with_409(monkeypatch, backend):
+    """The index itself: a racing second insert (simulated) is answered 409, nothing written."""
+    async def scenario(c, op):
+        from app.routes.labor_quantities import _insert_decision, ensure_labor_indexes
+        from fastapi import HTTPException as _H
+        await ensure_labor_indexes(op)
+        rec = {"id": "a1", "org_id": ORG, "report_id": "R-AK", "entry_id": None, "report_version": 0,
+               "status": "approved", "approved_quantity": 10}
+        await op.labor_quantity_approvals.insert_one(dict(rec))
+        with pytest.raises(_H) as ex:
+            await _insert_decision(op.labor_quantity_approvals, dict(rec, id="a2", approved_quantity=99))
+        assert ex.value.status_code == 409
+        assert await op.labor_quantity_approvals.count_documents({"status": "approved"}) == 1
+        # a void record of the same line does not block (re-approval keeps the history)
+        await op.labor_quantity_approvals.update_one({"id": "a1"}, {"$set": {"status": "void"}})
+        await _insert_decision(op.labor_quantity_approvals, dict(rec, id="a3"))
+        assert await op.labor_quantity_approvals.count_documents({}) == 2
+    run(monkeypatch, scenario, backend)
