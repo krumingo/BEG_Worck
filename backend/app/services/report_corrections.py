@@ -33,8 +33,8 @@ async def authorize_report_edit(user: dict, report: dict, *, projects: Iterable[
 
     if (report.get("payroll_status") or "").lower() in PAYROLL_LOCKED:
         raise HTTPException(status_code=409, detail=(
-            "The report is already in payroll (batched/paid); it is corrected only through "
-            "the FLOW-028 correction / reversal path, not edited"))
+            "Отчетът вече е в заплати (в пакет или платен) — не се редактира; "
+            "поправката става с корекция / сторно"))
     if user.get("role") in CORRECTOR_ROLES:
         return CORRECTOR
     project_ids = sorted({p for p in projects if p})
@@ -51,11 +51,11 @@ async def authorize_report_edit(user: dict, report: dict, *, projects: Iterable[
         if status in {s.upper() for s in author_statuses}:
             return AUTHOR
         raise HTTPException(status_code=400, detail=(
-            "The author corrects only their own draft or returned report; an approver "
-            "(Admin / Owner / SiteManager of the project) corrects the others"))
+            "Авторът поправя само своя чернова или върнат отчет; останалите поправя "
+            "проверяващ (Админ / Собственик / ръководител на обекта)"))
     raise HTTPException(status_code=403, detail=(
-        "Only the report's author (own draft / returned) or an approver "
-        "(Admin / Owner / SiteManager of the project) may correct this report"))
+        "Този отчет може да поправи само авторът (своя чернова / върнат) или проверяващ "
+        "(Админ / Собственик / ръководител на обекта)"))
 
 
 async def audit_report_correction(raw_db, *, user: dict, mode: str, report: dict, before: dict,

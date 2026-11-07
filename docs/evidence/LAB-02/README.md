@@ -49,3 +49,11 @@ Canon: FLOW-028 (akord = approved quantity × agreed piece rate), FLOW-019 (DOWN
 - **Quantity entry:** `PUT /labor-quantities/entry` on an APPROVED report sends it back to SUBMITTED, exactly like the other R36 corrections (approved_by cleared, approvals void, DQ alert, `correctors`).
 - **Approve / classify:** `POST /labor-quantities/approve` and `/classify` refuse anyone who authored or corrected the report (`self_approval_ids`), as well as the worker.
 - **Test:** the admin corrects a quantity → the report is SUBMITTED → the admin gets 403 on approval → the SiteManager gets 200.
+
+## LAB-02-C02 — bot F-1 / F-2 — `tests-LAB-02-C02.txt`
+- **F-2:** one `<AppToaster/>` (sonner; top-center for 390 px, richColors, close button) is mounted at the app root. Every `toast()` (confirmations, hints, 403/409 errors) is now visible, which was broken on main too. It is an isolated commit `a0d1ca9` (App.js + AppToaster + test) that can be cherry-picked onto main by itself.
+- **F-1:**
+  - pay types are shown in Bulgarian everywhere they are displayed (`lib/payTypes.js` → Pay Runs, All reports, My money, My payslips): Акорд / Часова ставка / Надница / Месечна заплата;
+  - the internal code "(FLOW-028)" is removed from the screen subtitle and from user-facing messages (DQ, correction reasons, Pay Run warnings);
+  - the error details of the LAB-01/LAB-02 endpoints that the screens show as toasts are now Bulgarian.
+- **Bot:** 12/12, with new checks that the save, approve and "Напишете причина за престоя" toasts are visible and that no "FLOW-" text appears.

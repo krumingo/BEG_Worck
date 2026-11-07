@@ -48,6 +48,10 @@ async function pageAs(browser, who) {
       await page.getByTestId("lt-rate").fill("5");
       await page.screenshot({ path: `${OUT}/01-accountant-piece-rate.png`, fullPage: true });
       await page.getByTestId("lt-save").click();
+      // bot F-2: the confirmation toast is visible
+      await page.getByText("Акордната цена е записана").waitFor({ timeout: 10000 });
+      check("toast: piece rate saved is visible", true);
+      check("no internal FLOW code on the screen", !(await page.content()).includes("FLOW-"));
       await page.getByText("версия 1").waitFor({ timeout: 10000 });
       await page.screenshot({ path: `${OUT}/02-accountant-saved.png`, fullPage: true });
       check("accountant saved the piece rate (version 1)", true);
@@ -60,7 +64,15 @@ async function pageAs(browser, who) {
       await page.getByTestId("lq-item-R-AK").waitFor();
       check("site manager does not see the piece-rate tab", await page.getByText("Акордни цени").count() === 0);
       await page.screenshot({ path: `${OUT}/03-sitemanager-pending.png`, fullPage: true });
+      // the downtime button without a reason shows the hint toast
+      await page.getByTestId("lq-downtime").click();
+      await page.getByText("Напишете причина за престоя").waitFor({ timeout: 10000 });
+      check("toast: downtime reason hint is visible", true);
+      await page.screenshot({ path: `${OUT}/03b-sitemanager-hint-toast.png`, fullPage: false });
       await page.getByTestId("lq-approve").click();
+      await page.getByText("Количеството е одобрено").waitFor({ timeout: 10000 });
+      check("toast: quantity approved is visible", true);
+      await page.screenshot({ path: `${OUT}/04a-sitemanager-approved-toast.png`, fullPage: false });
       await page.getByText("одобрено: 120 м2").waitFor({ timeout: 10000 });
       const body = await page.content();
       check("site manager sees the approval without a price", !body.includes("× 5"));

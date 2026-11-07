@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { payTypeLabel } from "@/lib/payTypes";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -167,7 +168,7 @@ export default function MyPayslipsPage() {
               <div className="space-y-3">
                 <div className="flex justify-between py-2 border-b border-border">
                   <span className="text-sm text-muted-foreground">Pay Type</span>
-                  <span className="text-sm font-medium">{selectedPayslip.pay_type || "-"}</span>
+                  <span className="text-sm font-medium">{payTypeLabel(selectedPayslip.pay_type) || "-"}</span>
                 </div>
                 {selectedPayslip.approved_days !== undefined && (
                   <div className="flex justify-between py-2 border-b border-border">

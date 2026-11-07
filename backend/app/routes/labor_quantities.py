@@ -57,9 +57,9 @@ def _finite(value, what: str, minimum: float = 0.0) -> float:
     try:
         number = float(value)
     except (TypeError, ValueError, OverflowError):
-        raise HTTPException(status_code=422, detail=f"{what} must be a number")
+        raise HTTPException(status_code=422, detail=f"{what}: трябва да е число")
     if not math.isfinite(number) or number < minimum:
-        raise HTTPException(status_code=422, detail=f"{what} must be a finite number ≥ {minimum}")
+        raise HTTPException(status_code=422, detail=f"{what}: трябва да е число ≥ {minimum}")
     return round(number, 4)
 
 
@@ -85,25 +85,25 @@ async def _idempotent(user: dict, key: Optional[str], action: str, payload: dict
     from app.audit import idempotency as _idem
     k = (key or "").strip()
     if not k:
-        raise HTTPException(status_code=428, detail="Idempotency-Key header is required (R29)")
+        raise HTTPException(status_code=428, detail="Липсва ключ за еднократност (Idempotency-Key) — презаредете и опитайте пак")
     if len(k) > 200:
-        raise HTTPException(status_code=400, detail="Idempotency-Key is too long (max 200)")
+        raise HTTPException(status_code=400, detail="Ключът за еднократност е твърде дълъг (до 200 знака)")
     unprotected = getattr(_idem, "IdempotencyUnprotected", None)
     try:
         state = await begin_idempotent(db, tenant_id=user["org_id"], key=k, action=action,
                                        request_fingerprint=request_fingerprint(payload))
     except IdempotencyConflict:
-        raise HTTPException(status_code=409, detail="Idempotency-Key was already used for another request")
+        raise HTTPException(status_code=409, detail="Този ключ за еднократност вече е използван за друга заявка")
     except Exception as exc:
         if unprotected is not None and isinstance(exc, unprotected):
-            raise HTTPException(status_code=503, detail="Idempotency registry is not protected; nothing written")
+            raise HTTPException(status_code=503, detail="Регистърът за еднократност не е защитен — нищо не е записано")
         raise
     if state["status"] == IDEMPOTENCY_DUPLICATE:
         if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
             found = await replay(state["result_reference"])
             if found is not None:
                 return dict(found, idempotent_replay=True)
-        raise HTTPException(status_code=409, detail="A request with this Idempotency-Key is in progress")
+        raise HTTPException(status_code=409, detail="Същата заявка още се обработва — изчакайте")
     try:
         result, ref = await perform(k)
     except HTTPException as exc:
@@ -123,20 +123,20 @@ async def _locate(tenant: TenantData, org_id: str, report_id: str, entry_id: Opt
     """(report doc, line view) for an old-style entry or a new-style flat report."""
     doc = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id}, {"_id": 0})
     if not doc:
-        raise HTTPException(status_code=404, detail="Report not found")
+        raise HTTPException(status_code=404, detail="Отчетът не е намерен")
     status = (doc.get("approval_status") or doc.get("status") or "").upper()
     version = int(doc.get("report_version") or 0)
     if doc.get("day_entries") is not None and doc.get("employee_id"):
         entry = next((e for e in doc.get("day_entries") or [] if e.get("id") == entry_id), None)
         if not entry_id or entry is None:
-            raise HTTPException(status_code=404, detail="Report entry not found")
+            raise HTTPException(status_code=404, detail="Редът от отчета не е намерен")
         line = {"worker_id": doc.get("employee_id"), "project_id": entry.get("project_id"),
                 "date": doc.get("report_date"), "hours": entry.get("hours_worked"),
                 "quantity": entry.get("quantity"), "smr_type": entry.get("work_description") or "",
                 "execution_package_id": entry.get("execution_package_id")}
     else:
         if entry_id:
-            raise HTTPException(status_code=404, detail="This report has no entries")
+            raise HTTPException(status_code=404, detail="Този отчет няма редове")
         line = {"worker_id": doc.get("worker_id"), "project_id": doc.get("project_id"),
                 "date": doc.get("date"), "hours": doc.get("hours"), "quantity": doc.get("quantity"),
                 "smr_type": doc.get("smr_type") or "", "execution_package_id": doc.get("execution_package_id")}
@@ -151,7 +151,7 @@ APPROVER_ROLES = ("Admin", "Owner", "SiteManager")
 def _require_approver_role(user: dict):
     """First gate (before key / body checks): only approver roles get any further."""
     if user.get("role") not in APPROVER_ROLES:
-        raise HTTPException(status_code=403, detail="Only Admin, Owner or the project's SiteManager approves")
+        raise HTTPException(status_code=403, detail="Одобрява само Админ, Собственик или ръководителят на обекта")
 
 
 async def _require_approver(user: dict, line: dict, doc: Optional[dict] = None):
@@ -159,13 +159,13 @@ async def _require_approver(user: dict, line: dict, doc: Optional[dict] = None):
     anyone who authored or corrected the report (LAB-01-I four-eyes, CLAUDE §8)."""
     if user.get("id") == line.get("worker_id") or user.get("id") in self_approval_ids(doc or {}):
         raise HTTPException(status_code=403, detail=(
-            "A person cannot approve or classify work they reported or corrected — another approver does"))
+            "Не можете да одобрите или класифицирате работа, която сте отчели или поправили — одобрява друг"))
     if user.get("role") in ("Admin", "Owner"):
         return
     if user.get("role") == "SiteManager" and line.get("project_id") and \
             await can_manage_project(user, line["project_id"]):
         return
-    raise HTTPException(status_code=403, detail="Only Admin, Owner or the project's SiteManager approves")
+    raise HTTPException(status_code=403, detail="Одобрява само Админ, Собственик или ръководителят на обекта")
 
 
 # ═══════════════════════════════════════════════════════════════ 1. piece rate per SMR
@@ -178,7 +178,7 @@ class LaborTermsInput(BaseModel):
 @router.get("/labor-terms")
 async def list_labor_terms(project_id: str, user: dict = Depends(get_current_user)):
     if user.get("role") not in FINANCE_ROLES:
-        raise HTTPException(status_code=403, detail="Piece rates are visible to finance roles only (R31)")
+        raise HTTPException(status_code=403, detail="Акордните цени виждат само финансовите роли")
     tenant = _tenant(user)
     pkgs = await tenant.execution_packages.find(
         {"org_id": user["org_id"], "project_id": project_id},
@@ -192,20 +192,20 @@ async def list_labor_terms(project_id: str, user: dict = Depends(get_current_use
 async def set_labor_terms(package_id: str, data: LaborTermsInput, user: dict = Depends(get_current_user),
                           idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")):
     if user.get("role") not in FINANCE_ROLES:
-        raise HTTPException(status_code=403, detail="Only Owner, Admin or Accountant sets piece rates")
+        raise HTTPException(status_code=403, detail="Акордна цена задават само Собственик, Админ или Счетоводител")
     pay_type = (data.labor_pay_type or "").strip() or None
     if pay_type is not None and pay_type not in PAY_TYPES:
-        raise HTTPException(status_code=422, detail=f"labor_pay_type must be one of {list(PAY_TYPES)}")
+        raise HTTPException(status_code=422, detail="Невалиден тип заплащане")
     rate = None if data.labor_piece_rate is None else _finite(data.labor_piece_rate, "labor_piece_rate")
     if pay_type == "Akord" and not rate:
-        raise HTTPException(status_code=422, detail="An akord SMR needs a piece rate > 0")
+        raise HTTPException(status_code=422, detail="За акорд е нужна акордна цена > 0")
     tenant = _tenant(user)
     org_id = user["org_id"]
 
     async def perform(key):
         pkg = await tenant.execution_packages.find_one({"org_id": org_id, "id": package_id}, {"_id": 0})
         if not pkg:
-            raise HTTPException(status_code=404, detail="SMR package not found")
+            raise HTTPException(status_code=404, detail="СМР пакетът не е намерен")
         before = {"labor_pay_type": pkg.get("labor_pay_type"), "labor_piece_rate": pkg.get("labor_piece_rate")}
         after = {"labor_pay_type": pay_type, "labor_piece_rate": rate}
         version = int(pkg.get("labor_terms_version") or 0) + 1
@@ -283,7 +283,7 @@ async def pending_quantities(project_id: str, user: dict = Depends(get_current_u
     sees quantity, unit and SMR — no piece rate (R31)."""
     if user.get("role") not in ("Admin", "Owner") and not (
             user.get("role") == "SiteManager" and await can_manage_project(user, project_id)):
-        raise HTTPException(status_code=403, detail="Only Admin, Owner or the project's SiteManager")
+        raise HTTPException(status_code=403, detail="Само Админ, Собственик или ръководителят на обекта")
     from app.services.report_normalizer import fetch_normalized_report_lines
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -346,13 +346,13 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
         doc, line = await _locate(tenant, org_id, data.report_id, data.entry_id)
         await _require_approver(user, line, doc)
         if line["status"] not in REPORT_DECIDABLE:
-            raise HTTPException(status_code=409, detail="Only a submitted or approved report gets a quantity decision")
+            raise HTTPException(status_code=409, detail="Количество се одобрява само по подаден или одобрен отчет")
         if int(data.report_version) != line["report_version"]:
             raise HTTPException(status_code=409, detail=(
-                f"The report changed (version {line['report_version']}, not {data.report_version}); reload"))
+                f"Отчетът е променен (версия {line['report_version']}, не {data.report_version}) — презаредете"))
         pkg = await tenant.execution_packages.find_one({"org_id": org_id, "id": data.execution_package_id}, {"_id": 0})
         if not pkg or pkg.get("project_id") != line["project_id"]:
-            raise HTTPException(status_code=422, detail="The SMR package must belong to the line's project")
+            raise HTTPException(status_code=422, detail="СМР пакетът трябва да е от обекта на реда")
         now = _now()
         k = approval_key(data.report_id, data.entry_id, line["report_version"])
         prev = await tenant.labor_quantity_approvals.find(
@@ -409,16 +409,16 @@ async def classify_line(data: ClassifyInput, user: dict = Depends(get_current_us
     org_id = user["org_id"]
     cost_type = (data.cost_type or "").strip().upper()
     if cost_type not in COST_TYPES:
-        raise HTTPException(status_code=422, detail=f"cost_type must be one of {list(COST_TYPES)}")
+        raise HTTPException(status_code=422, detail="Невалиден вид разход")
     if cost_type != "LABOR" and not data.reason.strip():
-        raise HTTPException(status_code=422, detail="A downtime needs a reason (FLOW-019)")
+        raise HTTPException(status_code=422, detail="Престоят изисква причина")
 
     async def perform(key):
         doc, line = await _locate(tenant, org_id, data.report_id, data.entry_id)
         await _require_approver(user, line, doc)
         if int(data.report_version) != line["report_version"]:
             raise HTTPException(status_code=409, detail=(
-                f"The report changed (version {line['report_version']}, not {data.report_version}); reload"))
+                f"Отчетът е променен (версия {line['report_version']}, не {data.report_version}) — презаредете"))
         now = _now()
         k = approval_key(data.report_id, data.entry_id, line["report_version"])
         prev = await tenant.labor_line_classifications.find(

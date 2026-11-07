@@ -4,17 +4,20 @@
 //  - quantities are approved by Admin / Owner / the project's SiteManager (the backend
 //    checks the project membership and that the approver is not the worker).
 
+import { PAY_TYPE_LABELS as PAY_TYPE_LABEL_MAP } from "@/lib/payTypes";
+
 export const FINANCE_ROLES = ["Owner", "Admin", "Accountant"];
 export const APPROVER_ROLES = ["Owner", "Admin", "SiteManager"];
 
 export const canSeePieceRates = (role) => FINANCE_ROLES.includes(role);
 export const canApproveQuantities = (role) => APPROVER_ROLES.includes(role);
 
+// the four pay types an SMR can carry (the full label map lives in lib/payTypes.js)
 export const PAY_TYPE_LABELS = {
-  Akord: "Акорд",
-  Hourly: "Часова ставка",
-  Daily: "Надница",
-  Monthly: "Месечна заплата",
+  Akord: PAY_TYPE_LABEL_MAP.Akord,
+  Hourly: PAY_TYPE_LABEL_MAP.Hourly,
+  Daily: PAY_TYPE_LABEL_MAP.Daily,
+  Monthly: PAY_TYPE_LABEL_MAP.Monthly,
 };
 
 export const STATE_LABELS = {

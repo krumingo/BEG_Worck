@@ -1,0 +1,34 @@
+# LAB-02-C02 checks (2026-11-07) — bot F-1 (Bulgarian texts) + F-2 (one <Toaster/> at the app root); run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## LAB-02 + LAB-01 tests (mongomock + real mongo:7.0 rs0)
+106 passed, 1 skipped, 1 warning in 8.40s
+## PM-01 matrix tests
+6 passed, 6 warnings in 180.49s (0:03:00)
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 166.18s (0:02:46)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 74.18s (0:01:14)
+  non-legacy_routes failures: 0
+## frontend: yarn test (CI) / yarn build
+Test Suites: 8 passed, 8 total
+Tests:       101 passed, 101 total
+Compiled with warnings.
+  (warnings only in pre-existing files; none in AppToaster / payTypes / changed pages)
+## bot scenario (real backend + production build, Playwright 390×844)
+PASS accountant sees the piece-rate tab only 
+PASS toast: piece rate saved is visible 
+PASS no internal FLOW code on the screen 
+PASS accountant saved the piece rate (version 1) 
+PASS site manager does not see the piece-rate tab 
+PASS toast: downtime reason hint is visible 
+PASS toast: quantity approved is visible 
+PASS site manager sees the approval without a price 
+PASS admin sees 120 м2 × 5 = 600 
+PASS Pay Run preview earned = 600 (120 м2 × 5) 600
+PASS worker gets 403 on the approval list 403
+PASS worker is sent away from the screen http://127.0.0.1:3011/tech
+
+bot scenario: 12/12 checks passed

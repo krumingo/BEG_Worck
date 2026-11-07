@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import { payTypeLabel } from "@/lib/payTypes";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -109,7 +110,7 @@ export default function MyMoneyPage() {
               </div>
 
               <div className="space-y-2.5">
-                <Row label="Тип заплащане" value={sel.pay_type || "-"} />
+                <Row label="Тип заплащане" value={payTypeLabel(sel.pay_type) || "-"} />
                 {sel.approved_days !== undefined && <Row label="Дни" value={sel.approved_days} />}
                 {sel.approved_hours !== undefined && <Row label="Часове" value={`${sel.approved_hours}ч${sel.overtime_hours > 0 ? ` (вкл. ${sel.overtime_hours}ч овъртайм)` : ""}`} />}
                 {sel.frozen_hourly_rate > 0 && <Row label="Ставка" value={eur(sel.frozen_hourly_rate)} />}

@@ -184,7 +184,7 @@ export default function LaborQuantitiesPage() {
       <div className="space-y-1">
         <h1 className="text-xl font-semibold">Количества и акорд</h1>
         <p className="text-sm text-muted-foreground">
-          Акордът се плаща само по одобрено количество × акордна цена по СМР (FLOW-028).
+          Акордът се плаща само по одобрено количество × акордна цена по СМР.
         </p>
       </div>
       <select value={projectId} onChange={(e) => setProjectId(e.target.value)}
