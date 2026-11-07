@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `e4d131e` | **PASS** + MEDIUM WH55-L-1 (unit bypass: 10 bag + 10 pcs linked → P 200, flagged only) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `d98cead` | **PASS** (WH55-L-1 closed; no open findings) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `4b745f1` | **PASS** (C01-G fixes PAY70-04; N1–N4 24/24) | 2026-11-07 |
@@ -1667,6 +1667,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #73 LAB-01 | `4da2ee6` | **PASS** (PM73-01 closed; PM-01 real, not skipped) | 2026-11-07 |
 | #75 LAB-02 | `ef16a16` | **PASS** (PM75-01 closed; PM-01 real, not skipped) | 2026-11-07 |
 | #76 SUB-ADV-01 | `f42da33` | **PASS** (probe S1–S7 × 3 modes, on its own and + #72); notes D1–D3, merge with #70 conflicts in `finance.py` | 2026-11-07 |
+| #77 ACT-01 | `c6c7f1c` | **PASS** + MEDIUM ACT77-01 (concurrent first acts on a fresh tenant → 500 "namespace already in use") | 2026-11-07 |
 | #74 OH-01 | `45178ac` | **PASS** (OH74-05 closed: O16 and new O17 pass; FG-89 one source; #69 `3fb55f2` merge R0 6/6 = 814) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -3707,3 +3708,73 @@ U1 is not blocking: it is flagged and needs a unit mismatch. **Fix:** once the c
 | PM-01 | not on this branch's base (pre-#68) |
 
 PR comment 6695125557 updated (note, no blocker).
+
+
+### main moved: `7b6da64` (Merge PR #72, Codex PASS, Krum "да")
+
+From now on, trial merges are against main `7b6da64` instead of main + #72.
+
+### #55 @ `d98cead` (WH55-L-1 fix) — PASS, no open findings
+
+- **Fix:** once the comparable linked quantity reaches the line quantity, any further linked receipt in any unit gets 409 `INVOICE_LINE_FULLY_LINKED`. Another unit gets 422 `INVOICE_LINE_UNIT_MISMATCH` up front.
+- **U1** (bag/pcs): refused, P **100** live and after rebuild ×2.
+- **M1** × 5 × 3 modes: exactly 1 accepted. The C26l-K race shapes pass.
+- **Crash probe:** updated, because the lock document is now pre-created outside the transaction by design. It now asserts that the in-transaction bump and the link roll back, and they do.
+- **Edited tests:** c26 bypasses only the legacy write; its read assertions (`PATH_B_LINK_QTY_UNVERIFIED`, counted once) are kept. c26j changes only the line unit. Neither is weakened.
+
+| Gate | Result |
+|---|---|
+| warehouse suite | **43 files, 974 passed** |
+| W0 | same 15 |
+| A2C | 0/223 |
+| A1 | 0/452 |
+| R0 | 814 |
+| merge-tree main `7b6da64` | `data_access` + A2B (known) |
+
+PR comment 6695125557 updated (resolved).
+
+### #77 ACT-01 @ `c6c7f1c` — PASS, 1 MEDIUM
+
+Code reviewed (`services/client_acts.py`, `permissions/client_act_write.py`, `routes/revenue_expense.py`):
+- **Offer line:** resolved on the server (tenant, same project, `Accepted`).
+- **Price:** material + labor unit cost. That is the offer model's only price; there is no markup field. A different price → 422.
+- **Contracted quantity:** from the offer.
+- **Reservation:** a conditional `$inc` per offer line (`client_act_line_totals`) inside the act's transaction. Pre-ACT-01 acts are counted on first touch.
+- **Act number:** an `org_counters` counter in the same transaction, plus a partial unique index.
+- **R29:** through `RecoverableWrite`.
+- **Versions:** Addendum A, with 409 `SUPERSEDED` / `LINEAGE_UNKNOWN`.
+- **Rights:** narrowed from "any M2 role" to finance roles. PM-01: non-finance 404 → 403, finance 404 → 428. Nothing widened.
+
+`probes/act01/probe_act01.py`, real RS, off/shadow/enforce, PR seed:
+
+| Case | Result |
+|---|---|
+| A3: PUT on a Draft 4 → 7 → 2 | acted 7, then 2; a new act of 8 → 201; 0.01 more → 409; totals 10.0000 |
+| A4: tenant B line / another project / draft offer | 422, nothing written |
+| A5: R29 | 428 / 201 / identical replay / 409; 1 act; **1** `client_act.created` event |
+| A1 (collections exist, documents absent): 6 concurrent acts of 4 on L1 (qty 10), × 10 | **2 × 201 + 4 × 409** every round, acted 8 |
+| **ACT77-01, MEDIUM, PROVED** — A1 on a **fresh tenant** (`client_act_line_totals` / `org_counters` absent) | **1 × 201 + 5 × 500** every round, × 3 modes |
+| ACT77-01 — A2 (fresh `org_counters`), 6 concurrent creates | 2 × 500 |
+
+ACT77-01 detail:
+- **Cause:** the transaction implicitly creates the collection, and the concurrent creator gets `OperationFailure: Collection namespace … is already in use` (`TransientTransactionError`), which surfaces as **500** instead of being retried.
+- **Integrity holds:** no over-acting, unique numbers.
+- **Fix:** create both collections (and their indexes) outside the transaction (cf. #55 `ensure_line_lock`), or retry on the transient label.
+
+| Gate | Result |
+|---|---|
+| `test_act_01`, real | **80 passed**, 0 skipped |
+| W0 | same 15 |
+| A2C | 0/213 |
+| A1 | 0/430 |
+| R0 | 814 |
+| PM-01 | 6, real, not skipped |
+
+merge-tree:
+- main `7b6da64`: `run_meta` only.
+- **#69 `3fb55f2`:** `revenue_expense.py` + PM-01 test.
+- **#71 `e90aa5f`:** `revenue_expense.py` + PM-01 test + matrix.
+
+All three guard the client-act routes, so a merge order is needed.
+
+No blocking finding, so no PR comment.

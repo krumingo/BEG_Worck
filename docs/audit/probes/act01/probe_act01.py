@@ -52,7 +52,11 @@ with TestClient(app, raise_server_exceptions=False) as tc:
         hist = collections.Counter()
         for rnd in range(10):
             restore()
-            q(lambda: op.drop_collection("client_act_line_totals")); q(lambda: op.drop_collection("org_counters"))
+            if os.environ.get("PROBE_DOCS_ONLY") == "1":    # collections exist, documents absent
+                q(lambda: op.client_act_line_totals.insert_one({"_id": "warm"})); q(lambda: op.client_act_line_totals.delete_many({}))
+                q(lambda: op.org_counters.insert_one({"_id": "warm"})); q(lambda: op.org_counters.delete_many({}))
+            else:
+                q(lambda: op.drop_collection("client_act_line_totals")); q(lambda: op.drop_collection("org_counters"))
             rs = q(lambda: gather([("POST", "/api/client-acts", body("L1", 4), H()) for _ in range(6)]))
             codes = tuple(sorted(r.status_code for r in rs)); hist[codes] += 1
             acted = acts_on("L1")
