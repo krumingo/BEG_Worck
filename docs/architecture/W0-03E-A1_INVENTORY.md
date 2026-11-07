@@ -144,9 +144,9 @@
 | app/routes/offers.py:get_offer | GET /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:get_offer | GET /offers/{offer_id} | projects | get(id = offer.get('project_id')) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:update_offer | PUT /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:update_offer | PUT /offers/{offer_id} | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:update_offer | PUT /offers/{offer_id} | offers | update_one(id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | update_one(id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | update_one(id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_versions | find_one(offer_id) | TenantData org_id (session) | scoped@base | SAFE |
@@ -157,7 +157,7 @@
 | app/routes/offers.py:reject_offer | POST /offers/{offer_id}/reject | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:reject_offer | POST /offers/{offer_id}/reject | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | update_one(id, status, superseded_by) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | update_one(id, status, superseded_by, updated_at) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | insert_one(new_offer) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:cancel_offer | POST /offers/{offer_id}/cancel | offers | get(id = offer_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:cancel_offer | POST /offers/{offer_id}/cancel | offers | find_one_and_update(id, status, superseded_by) | TenantData org_id (session) | new read | SAFE |

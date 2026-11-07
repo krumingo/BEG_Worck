@@ -384,19 +384,17 @@ async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(re
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    won = await _tenant(user).offers.update_one({"id": offer_id, **DRAFT_FILTER}, {"$set": update})
+    # OFF79-04: the totals are derived BEFORE the write, from the lines as read, and written
+    # with the header in ONE CAS on the draft as read (Draft filter + updated_at). Before,
+    # the VAT and the totals were two writes and a /send in between sent a VAT 9 offer at
+    # the VAT 20 total. A lost race → 409, nothing written.
+    merged = compute_offer_totals({**{k: v for k, v in offer.items() if k != "_id"}, **update})
+    update.update({"subtotal": merged["subtotal"], "vat_amount": merged["vat_amount"],
+                   "total": merged["total"]})
+    won = await _tenant(user).offers.update_one(
+        {"id": offer_id, **DRAFT_FILTER, "updated_at": offer.get("updated_at")}, {"$set": update})
     if won.matched_count != 1:
         raise _draft_lost()
-    
-    # Recompute if vat changed
-    if "vat_percent" in update:
-        updated = await _tenant(user).offers.get(offer_id)
-        updated = compute_offer_totals({k: v for k, v in updated.items() if k != "_id"})
-        await _tenant(user).offers.update_one({"id": offer_id, **DRAFT_FILTER}, {"$set": {
-            "subtotal": updated["subtotal"],
-            "vat_amount": updated["vat_amount"],
-            "total": updated["total"],
-        }})
     
     await log_audit(user["org_id"], user["id"], user["email"], "offer_updated", "offer", offer_id, update)
     return await _tenant(user).offers.get(offer_id, {"_id": 0})
@@ -442,7 +440,9 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
     updated["vat_amount"] = offer["vat_amount"]
     updated["total"] = offer["total"]
     
-    won = await _tenant(user).offers.update_one({"id": offer_id, **DRAFT_FILTER}, {"$set": updated})
+    # OFF79-04: the totals come from these lines and the VAT as read — one CAS on that draft
+    won = await _tenant(user).offers.update_one(
+        {"id": offer_id, **DRAFT_FILTER, "updated_at": offer.get("updated_at")}, {"$set": updated})
     if won.matched_count != 1:
         raise _draft_lost()
     await log_audit(user["org_id"], user["id"], user["email"], "offer_lines_updated", "offer", offer_id, 
@@ -640,7 +640,10 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
                     "status": STATUS_SUPERSEDED, "status_before_supersede": seen_status,
                     **_revoke_link(offer, "superseded", now)}
             won = await tenant.offers.update_one(
-                {"id": offer_id, "status": seen_status, "superseded_by": None},
+                # OFF79-04: the same draft/offer as read — the new version copies its lines
+                # and totals, so an edit in between must make this CAS fail
+                {"id": offer_id, "status": seen_status, "superseded_by": None,
+                 "updated_at": offer.get("updated_at")},
                 {"$set": mark}, session=session)
             if won.modified_count != 1:
                 current = await tenant.offers.get(offer_id, {"_id": 0}, session=session) or {}
