@@ -57,3 +57,4 @@ tests/test_oh_01_overhead_no_hard_delete.py: 201 passed (new test_27 x2 backends
 full_cost net profit, financial alerts, project risk, package net margin, revenue_expense profit summary and revenue_snapshot profit-by-period read overhead ONLY via current_allocations(); POST /overhead-allocation/compute is a read-only projection (writes nothing); project_overhead_alloc is no longer read or written by any code path (left in place, not deleted)
 every view == OH-01 allocation: 0 -> 300 -> recompute 300 (R38) -> 600
 R0 814; W0 1085/15/50 same 15; PM-01 6 (matrix unchanged); A1/A2C 0/0
+merge with #69 @ ccab244 after FG-89: SEC-01 30/30, OH-01 201, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0 — 7-step procedure in HANDOFF OH-01-E (test edits: merge69_sec01_tests.diff; regenerated evidence: merge69_sec01_c0{1,2,3}_results.diff)

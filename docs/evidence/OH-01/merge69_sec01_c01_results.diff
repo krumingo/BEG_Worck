@@ -1,5 +1,5 @@
 diff --git a/docs/evidence/SEC-01-C01/results.json b/docs/evidence/SEC-01-C01/results.json
-index ad63ed4..6e031ee 100644
+index ad63ed4..ab1608f 100644
 --- a/docs/evidence/SEC-01-C01/results.json
 +++ b/docs/evidence/SEC-01-C01/results.json
 @@ -157,7 +157,7 @@
@@ -7,7 +7,7 @@ index ad63ed4..6e031ee 100644
   "mongo": "local replica set (oplog)",
   "outbound_http": "closed local port",
 - "seconds": 30.9,
-+ "seconds": 26.7,
++ "seconds": 28.2,
   "rows": [
    {
     "mode": "off",

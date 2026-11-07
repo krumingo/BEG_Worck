@@ -1,13 +1,13 @@
 diff --git a/docs/evidence/SEC-01-C03/results.json b/docs/evidence/SEC-01-C03/results.json
-index 7064ddc..3fc0b77 100644
+index 1af3a4f..da11f17 100644
 --- a/docs/evidence/SEC-01-C03/results.json
 +++ b/docs/evidence/SEC-01-C03/results.json
 @@ -94,7 +94,7 @@
   ],
   "mongo": "local replica set (oplog)",
   "outbound_http": "closed local port",
-- "seconds": 22.6,
-+ "seconds": 16.6,
+- "seconds": 25.3,
++ "seconds": 18.9,
   "amount_rows": [
    {
     "mode": "off",
@@ -35,55 +35,53 @@ index 7064ddc..3fc0b77 100644
       "op.overhead_snapshots"
      ]
     },
-@@ -4487,14 +4490,14 @@
-    },
+@@ -4488,13 +4491,13 @@
     "retry_statuses": [
-     201,
--    409,
--    409,
--    409,
-+    201,
-+    201,
-+    201,
-     409,
-     409
-    ],
-    "retry_payment_ids": [
--    "d2a0645f-7fee-52b5-b4f4-a0da8542d02a"
-+    "9ccae10f-f37c-5d82-b67f-4524b9d6b1a1"
-    ],
-    "ledger_rows_added": 1,
-    "allocations_added": 1,
-@@ -4511,14 +4514,14 @@
-    },
-    "retry_statuses": [
-     201,
--    409,
-+    201,
-     409,
-     409,
-     409,
-     409
-    ],
-    "retry_payment_ids": [
--    "2c2237fb-915d-549e-b733-8a0c7fc78cc5"
-+    "80b82cfb-e52c-553b-8621-284e0fe7dc12"
-    ],
-    "ledger_rows_added": 1,
-    "allocations_added": 1,
-@@ -4537,12 +4540,12 @@
-     201,
      201,
      201,
 -    201,
 -    201,
+-    201,
++    409,
 +    409,
 +    409,
      409
     ],
     "retry_payment_ids": [
--    "9f7f737b-a581-5b55-a031-01bc750ef2f6"
-+    "e67d7dc0-0cf2-50bf-b166-161a9b72094d"
+-    "b7a5430f-4157-58bf-bdcb-21bdcd5c031e"
++    "f43e7238-b1af-5a37-b119-1bd79f3ce4e2"
+    ],
+    "ledger_rows_added": 1,
+    "allocations_added": 1,
+@@ -4512,13 +4515,13 @@
+    "retry_statuses": [
+     201,
+     201,
+-    201,
++    409,
+     409,
+     409,
+     409
+    ],
+    "retry_payment_ids": [
+-    "57175e53-4e0b-57aa-9de2-a63eb2542be9"
++    "d156a84c-fb20-5a58-9f60-f67b0c1d3a67"
+    ],
+    "ledger_rows_added": 1,
+    "allocations_added": 1,
+@@ -4536,13 +4539,13 @@
+    "retry_statuses": [
+     201,
+     201,
+-    201,
++    409,
+     409,
+     409,
+     409
+    ],
+    "retry_payment_ids": [
+-    "f5a78541-4a03-5e13-8b87-a4cccf8db9bf"
++    "5130a579-726e-512e-8df4-373ccc5e233b"
     ],
     "ledger_rows_added": 1,
     "allocations_added": 1,
