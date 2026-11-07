@@ -1663,10 +1663,10 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `3606766` | **PASS** (RETAKE-1 option (b): loser = DUPLICATE/STARTED + detail IN_PROGRESS) | 2026-11-07 |
+| #72 W0-04-C01 | `90a582b` | **PASS** (+48 PM-01 rows for the #56 auth routes only) | 2026-11-07 |
 | #73 LAB-01 | `3107ba0` | **PASS** (RETAKE-1 closed: explicit STARTED; P5 on merge with #72 → 1 run) | 2026-11-07 |
 | #75 LAB-02 | `ba08ab5` | **PASS** (RETAKE-1 + LAB02-1 closed) | 2026-11-07 |
-| #74 OH-01 | `26a135a` | evidence-only after 39eafdf (PASS); 6-step #69 merge procedure VERIFIED on ccab244; Codex OH74-03/04 open (not duplicated) | 2026-11-07 |
+| #74 OH-01 | `6a4ac5b` | **FINDINGS: OH74-05 BLOCKING** (current_allocations reads rows before the pointer → reader sees 0 during publish); Codex OH74-03/04 probes pass | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -3248,3 +3248,42 @@ FG-90: a payment naming an act requires a **confirmed** act of the package (404/
 ## #55 @ `1b3f182` — PASS
 
 R37 test only: the keeper sees the value on a warehouse "фира" and not on a project one. `c26j` file: **58 passed** (real Mongo).
+
+
+## #72 @ `90a582b` — PASS
+
+`3606766..90a582b`: `docs/evidence/PM-01/matrix.csv` only, +48 rows:
+- `POST /api/auth/forgot-password`: 24 cells, 200, wrote=yes;
+- `POST /api/auth/reset-password`: 24 cells, 400, wrote=yes.
+
+Both are unauthenticated #56 routes that record tokens and auth events even on a refusal; plus `run_meta.json`. PM-01 on `90a582b`: **6 passed**.
+
+
+## #74 OH-01-D @ `6a4ac5b` — 2026-11-07 ~11:55 UTC — FINDINGS (1 blocking)
+
+- **OH74-03 fix:** a new allocation batch is inserted **staged**, then published by one atomic write of the period pointer (`overhead_period_locks.current_allocation_batch_id`, under the period lock). `current_allocations()` is used by project P&L, financial results, snapshot detail and `/overhead/allocations`. Superseding is history only.
+- **OH74-04 fix:** `audit_overhead_event_once` / `legacy_audit_once` check for an existing event or row of this operation key before writing. This is safe because only one attempt of a key runs at a time.
+
+Probes, real Mongo RS:
+
+| Probe | Result |
+|---|---|
+| Codex's own two probes from comment 6705531681 (`oh01/test_codex_oh74_recompute_interruptions.py`, verbatim logic) × off/shadow/enforce | **6/6 pass**: reader during the switch → 300 labelled "преизчислява се"; crash after the canonical event + same-key retry → 200, 1 event |
+| my O1, O2, O5, O7, O8, O9, O11, O12, O14, O15 | all pass |
+| **O16** `test_o16_reader_interleaved_with_publish`: reader paused **between its row read and its pointer read**, while a real allocate completes | P&L(A) **300 → 0 → 600**. FAIL |
+
+**OH74-05, BLOCKING, PROVED:** `current_allocations()` reads the rows, then the snapshots, then the pointer. An insert plus publish in between leaves the reader with rows lacking the new batch and a pointer naming it, so it keeps nothing and reads 0. That is exactly the invariant OH74-03 claims.
+- **Fix:** read the pointer(s) first. The read is then consistent, because old batches are never deleted and the staged insert precedes the publish.
+- PR comment 6703213443 updated (blocking).
+
+Low note: rows that carry an `allocation_batch_id` but have no published pointer (allocated by an intermediate draft head) are no longer counted. No production data has them; all #74 heads are unmerged.
+
+Gates on `6a4ac5b`:
+
+| Gate | Result |
+|---|---|
+| OH-01 tests | **194 passed** |
+| W0 | same 15 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | **814** |

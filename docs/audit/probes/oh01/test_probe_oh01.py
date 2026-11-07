@@ -384,3 +384,47 @@ def test_o15_retake_of_failed_allocate_key(monkeypatch):
         print("O15 codes", sorted(r.status_code for r in rs), "batches", len(batches))
         assert len(batches) == 1
     _run(monkeypatch, "enforce", scenario)
+
+
+def test_o16_reader_interleaved_with_publish(monkeypatch):
+    """O16 (OH74-03 at 6a4ac5b): a P&L reader reads the allocation ROWS, then (paused) the
+    allocator inserts the staged batch AND publishes the pointer, then the reader reads the
+    pointer. Does the reader see 0 (rows without the new batch + pointer naming it)?"""
+    async def scenario(c, op):
+        from app.tenancy.data_access import TenantCollection
+        from app.services.project_pnl import compute_project_pnl
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        s1 = (await _compute(c, "2026-10-01", "2026-10-31")).json()
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        await _cost(c, cat["id"], date="2026-10-20", amount=400.0)
+        s2 = (await _compute(c, "2026-10-01", "2026-10-31")).json()
+        before = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        reached, proceed = asyncio.Event(), asyncio.Event()
+        orig_find = TenantCollection.find
+        armed = {"on": False}
+
+        def find(self, *a, **kw):
+            cur = orig_find(self, *a, **kw)
+            if armed["on"] and self.name == "overhead_snapshots":
+                armed["on"] = False
+                real_to_list = cur.to_list
+
+                async def paused(*aa, **kk):
+                    reached.set()
+                    await asyncio.wait_for(proceed.wait(), 15)
+                    return await real_to_list(*aa, **kk)
+                cur.to_list = paused
+            return cur
+        monkeypatch.setattr(TenantCollection, "find", find)
+        armed["on"] = True
+        reader = asyncio.create_task(compute_project_pnl(ORG, PROJ_A))
+        await asyncio.wait_for(reached.wait(), 15)       # reader holds rows (old batch only)
+        w = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate", json={"method": "PersonDays"}, headers=_h(key=_key()))
+        proceed.set()
+        during = (await reader)["expense"]["overhead"]
+        after = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        print("O16 before", before, "| reader interleaved with publish ->", during, "| allocate", w.status_code, "| after", after)
+        assert during in (before, after), f"O16 FAIL: reader saw {during}"
+    _run(monkeypatch, "enforce", scenario)
