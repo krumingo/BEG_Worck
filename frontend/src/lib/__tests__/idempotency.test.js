@@ -1,7 +1,10 @@
 /**
- * SEC-01-C03: a money form keeps one Idempotency-Key while its payload stays the same.
+ * SEC-01-C03 (#69): a money form keeps one Idempotency-Key while its payload stays the same.
+ * PAY-01-C01 Addendum B (#70, R29): one key per submission (createKeyHolder).
  */
-import { createIdempotencyHolder, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
+import {
+  apiErrorText, createIdempotencyHolder, createKeyHolder, idempotencyHeaders, newIdempotencyKey,
+} from "@/lib/idempotency";
 
 test("a retry of the same submission reuses the key", () => {
   const h = createIdempotencyHolder();
@@ -30,7 +33,6 @@ test("keys are distinct and the header has the canonical name", () => {
 });
 
 // R29 (PAY-01-C01 Addendum B): every money write carries an Idempotency-Key.
-import { apiErrorText, createKeyHolder, idempotencyHeaders, newIdempotencyKey } from "../idempotency";
 
 describe("idempotency keys", () => {
   test("a new key is non-empty and unique", () => {

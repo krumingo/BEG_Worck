@@ -200,6 +200,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
 
         roles_rows, flows, races, refusals, reversal = [], [], [], [], []
         cap_races, fg115, crashes, visibility = [], [], [], []
+        headroom, audit_once = [], []
 
         from app.permissions import workflow
         original_mark = workflow.mark_idempotent_step
@@ -280,6 +281,99 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             out["after_act_crash"] = adv_state()
             out["deduct_d_retry"] = slim(call("POST", "accountant", ded_url, {"amount": 150}, key))
             out["after_deduct_d_retry"] = adv_state()
+            restore_all()
+            return out
+
+        def taken_vs_contract():
+            p = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                {"id": rid("pkg")}, {"_id": 0}))
+            g = lambda k: float(p.get(k) or 0)                       # noqa: E731
+            return {"taken": round(g("advance_total") + g("advance_pending_total")
+                                   - g("advance_deducted_total")
+                                   - g("advance_deduction_pending_total")
+                                   + g("committed_paid_total"), 2),
+                    "contract": g("contract_total")}
+
+        def headroom_probe(mode):
+            """F-76-01: outstanding advance + committed <= contract, whatever the order."""
+            out: Dict[str, Any] = {"mode": mode}
+            pay = lambda amount, **x: slim(call("POST", "accountant", pay_url, {   # noqa: E731
+                "package_id": rid("pkg"), "act_id": rid("act1"), "amount": amount, **x}))
+            # order 1: advance, then an ordinary payment
+            out["o1_advance_5000"] = slim(call("POST", "accountant", adv_url,
+                                               {**adv, "amount": 5000}))
+            out["o1_pay_100"] = pay(100)
+            # cash 100 + deduction 100 is still 100 of new money on a full contract -> refused;
+            # a deduction without cash only moves the advance into committed -> fits
+            out["o1_pay_100_deducting_100"] = pay(100, advance_deducted=100)
+            out["o1_deduct_100_no_cash"] = slim(call(
+                "POST", "accountant", "/api/subcontractor-acts/%s/advance-deduction" % rid("act1"),
+                {"amount": 100}))
+            out["o1_end"] = taken_vs_contract()
+            restore_all()
+            # order 2: an ordinary payment, then the advance
+            out["o2_pay_3000"] = pay(3000)
+            out["o2_advance_2000_01"] = slim(call("POST", "accountant", adv_url,
+                                                  {**adv, "amount": 2000.01}))
+            out["o2_advance_2000"] = slim(call("POST", "accountant", adv_url,
+                                               {**adv, "amount": 2000}))
+            out["o2_pay_0_01"] = slim(call("POST", "accountant", pay_url, {
+                "package_id": rid("pkg"), "act_id": rid("act2"), "amount": 0.01}))
+            out["o2_end"] = taken_vs_contract()
+            restore_all()
+            # race: advance 1000 || ordinary payment 1000 at taken 4000 (only one fits)
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            rounds = []
+            for _ in range(3):
+                call("POST", "accountant", adv_url, {**adv, "amount": 4000})
+
+                async def pair():
+                    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                                 base_url="http://testserver") as ac:
+                        return await asyncio.gather(
+                            ac.post(adv_url, json=adv,
+                                    headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}),
+                            ac.post(pay_url, json={"package_id": rid("pkg"),
+                                                   "act_id": rid("act1"), "amount": 1000},
+                                    headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}))
+                a, b = tc.portal.call(pair)
+                rounds.append({"statuses": sorted([a.status_code, b.status_code]),
+                               "codes_409": sorted((r.json().get("detail") or {}).get("error_code")
+                                                   for r in (a, b) if r.status_code == 409),
+                               **taken_vs_contract()})
+                restore_all()
+            out["race"] = rounds
+            return out
+
+        def audit_crash_probe(mode):
+            """F-76-02: crash right after the audit insert, then two same-key retries."""
+            def audits(action):
+                return tc.portal.call(lambda: op_db.audit_logs.count_documents(
+                    {"action": action, "org_id": fx["A"]["tenant_id"]}))
+            out: Dict[str, Any] = {"mode": mode}
+            a0 = audits("subcontractor_advance_created")
+            key = uuid.uuid4().hex
+            first = post_crashing("audit", "accountant", adv_url, adv, key)
+            r1 = slim(call("POST", "accountant", adv_url, adv, key))
+            r2 = slim(call("POST", "accountant", adv_url, adv, key))
+            out["advance"] = {"statuses": [first["status"], r1["status"], r2["status"]],
+                              "audit_rows": audits("subcontractor_advance_created") - a0,
+                              "advance_rows": tc.portal.call(
+                                  lambda: op_db.subcontractor_payments.count_documents(
+                                      {"package_id": rid("pkg"), "kind": "advance"})),
+                              "advance_total": pkg_state()["advance_total"]}
+            d0 = audits("subcontractor_advance_deducted")
+            key = uuid.uuid4().hex
+            ded_url = "/api/subcontractor-acts/%s/advance-deduction" % rid("act2")
+            first = post_crashing("audit_deduction", "accountant", ded_url, {"amount": 100}, key)
+            r1 = slim(call("POST", "accountant", ded_url, {"amount": 100}, key))
+            r2 = slim(call("POST", "accountant", ded_url, {"amount": 100}, key))
+            act2 = tc.portal.call(lambda: op_db.subcontractor_acts.find_one({"id": rid("act2")},
+                                                                           {"_id": 0}))
+            out["deduction"] = {"statuses": [first["status"], r1["status"], r2["status"]],
+                                "audit_rows": audits("subcontractor_advance_deducted") - d0,
+                                "act_entries": len(act2.get("advance_deductions") or []),
+                                "deducted": pkg_state()["advance_deducted_total"]}
             restore_all()
             return out
 
@@ -469,6 +563,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             crashes.append(crash_probe(mode))
             # ── FG-128: the advance is shown to the finance roles only
             visibility.append(visibility_probe(mode))
+            # ── Codex F-76-01 / F-76-02
+            headroom.append(headroom_probe(mode))
+            audit_once.append(audit_crash_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -481,6 +578,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "same_key_race": races, "reversal": reversal,
         "fg114_different_keys_race": cap_races, "fg115_cash_vs_cost": fg115,
         "fg103_crash": crashes, "fg128_visibility": visibility,
+        "f76_01_headroom": headroom, "f76_02_audit_once": audit_once,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -687,6 +785,34 @@ def check_result(result: Dict[str, Any]) -> None:
             assert v["one_advance"] is None and v["act_keys"] == [], (role, r)
             assert v["advance_rows"] == 0, (role, r)
             assert v["profit_advances"] in (None, "n/a"), (role, r)
+
+    head = result["f76_01_headroom"]
+    assert [r["mode"] for r in head] == list(MODES)
+    for r in head:
+        assert r["o1_advance_5000"]["status"] == 201, r
+        assert r["o1_pay_100"] == _nothing("PAYMENT_EXCEEDS_PACKAGE_VALUE"), r
+        assert r["o1_pay_100_deducting_100"] == _nothing("PAYMENT_EXCEEDS_PACKAGE_VALUE"), r
+        assert r["o1_deduct_100_no_cash"]["status"] == 201, r      # explicit deduction: fits
+        assert r["o1_end"] == {"taken": 5000, "contract": 5000}, r
+        assert r["o2_pay_3000"]["status"] == 201, r
+        assert r["o2_advance_2000_01"] == _nothing("ADVANCE_EXCEEDS_PACKAGE_VALUE"), r
+        assert r["o2_advance_2000"]["status"] == 201, r
+        assert r["o2_pay_0_01"] == _nothing("PAYMENT_EXCEEDS_PACKAGE_VALUE"), r
+        assert r["o2_end"] == {"taken": 5000, "contract": 5000}, r
+        assert len(r["race"]) == 3, r
+        for rnd in r["race"]:
+            assert rnd["statuses"] == [201, 409], r
+            assert rnd["codes_409"][0] in ("ADVANCE_EXCEEDS_PACKAGE_VALUE",
+                                           "PAYMENT_EXCEEDS_PACKAGE_VALUE"), r
+            assert rnd["taken"] == 5000 and rnd["contract"] == 5000, r
+
+    aud = result["f76_02_audit_once"]
+    assert [r["mode"] for r in aud] == list(MODES)
+    for r in aud:
+        assert r["advance"] == {"statuses": [500, 201, 201], "audit_rows": 1,
+                                "advance_rows": 1, "advance_total": 1000}, r
+        assert r["deduction"] == {"statuses": [500, 201, 201], "audit_rows": 1,
+                                  "act_entries": 1, "deducted": 100}, r
 
     rev = result["reversal"]
     assert [r["mode"] for r in rev] == list(MODES)

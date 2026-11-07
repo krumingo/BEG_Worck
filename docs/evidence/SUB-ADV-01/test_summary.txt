@@ -46,3 +46,16 @@ tests/test_r0_0*.py (real Mongo): 814 passed
 W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15)
 Guards: A1 422 / 0; A2C 208 / 0; A1 inventory table unchanged
 Frontend: yarn test 96 passed; yarn build compiled (no warning in ProjectOperationsPage.js)
+
+## Codex F-76-01 / F-76-02 + merge of main d226c49 (#70, #72)
+F-76-01, 3 modes: contract 5000 / certified 3200:
+  order 1: advance 5000 -> 201; ordinary payment 100 (act, no deduction) -> 409 PAYMENT_EXCEEDS_PACKAGE_VALUE, 0 writes; payment 100 + deduction 100 -> 409 (new cash); deduction 100 without cash -> 201; taken = 5000
+  order 2: payment 3000 -> 201; advance 2000.01 -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE; advance 2000 -> 201; payment 0.01 -> 409 PAYMENT_EXCEEDS_PACKAGE_VALUE; taken = 5000
+  race x3 rounds: advance 1000 || payment 1000 at taken 4000 -> [201, 409] each round, taken never above 5000
+F-76-02, 3 modes: crash right after the audit insert, then 2 same-key retries -> [500, 201, 201], exactly 1 audit_logs row (advance and deduction), 1 advance / 1 act entry
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PAY-01 (all) + W0-04-C01, real Mongo: 706 passed
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1094 passed, 79 skipped — identical to main d226c49 (same 15 failures)
+Guards: A1 438 / 0; A2C 217 / 0; A1 inventory = script output (main + #69 rows); A2B inventory §1 regenerated (audit.py writer line 80 -> 88)
+PM-01 fresh run on the merged tree reproduces the committed (merged) matrix: 0 added / 0 removed / 0 changed
+Frontend: yarn test 7 suites, 117 tests passed; yarn build compiled (no warning in changed files)

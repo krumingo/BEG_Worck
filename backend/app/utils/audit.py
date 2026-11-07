@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 import uuid
 import logging
 
+from pymongo.errors import DuplicateKeyError
+
 from app.db import db
 
 # Configure security logger
@@ -49,7 +51,7 @@ def log_security_event(event_type: str, user: dict = None, payload: dict = None)
 
 async def log_audit(org_id: str, user_id: str, user_email: str, action: str, 
                     entity_type: str, entity_id: str = None, changes: dict = None,
-                    db_handle=None, session=None):
+                    db_handle=None, session=None, entry_id: str = None):
     """
     Log an audit entry to the database.
     
@@ -63,7 +65,7 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
         changes: Dictionary of changes made
     """
     entry = {
-        "id": str(uuid.uuid4()),
+        "id": entry_id or str(uuid.uuid4()),
         "org_id": org_id,
         "user_id": user_id,
         "user_email": user_email,
@@ -77,4 +79,14 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
     # the legacy audit row lands in the SAME database as the business write.
     # AUTH-01 C01: ``session`` lets the audit row commit or roll back together
     # with the business write it records (one Mongo transaction).
-    await (db if db_handle is None else db_handle).audit_logs.insert_one(entry, session=session)
+    # SUB-ADV-01 (Codex F-76-02): a DURABLE entry id (derived from the operation's
+    # Idempotency-Key) is also the row's _id, so a retry after a crash between this insert
+    # and the caller's step bookkeeping finds the row already there and writes no second one.
+    if entry_id is not None:
+        entry["_id"] = entry_id
+    try:
+        await (db if db_handle is None else db_handle).audit_logs.insert_one(entry, session=session)
+    except DuplicateKeyError as exc:
+        pattern = (getattr(exc, "details", None) or {}).get("keyPattern") or {}
+        if entry_id is None or set(pattern) not in ({"_id"}, set()):
+            raise

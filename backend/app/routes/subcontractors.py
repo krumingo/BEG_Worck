@@ -676,6 +676,20 @@ _ADV_PENDING = {"$ifNull": ["$advance_pending_total", 0]}
 _DED_PENDING = {"$ifNull": ["$advance_deduction_pending_total", 0]}
 _ADV_CONFIRMED_IDS = {"$ifNull": ["$advance_confirmed", []]}
 _DED_CONFIRMED_IDS = {"$ifNull": ["$advance_deduction_confirmed", []]}
+# F-76-01: the money already taken on for the package, counted once:
+#   advances given or reserved, not yet deducted  (advance_total + pending - deducted - deduction pending)
+# + committed_paid_total                          (ordinary payments + every deduction, pending or not)
+# A deduction moves an amount from the first term to the second: the sum does not change.
+_TAKEN = {"$add": [{"$subtract": [{"$add": [_ADV_TOTAL, _ADV_PENDING]},
+                                  {"$add": [_ADV_DEDUCTED, _DED_PENDING]}]}, _COMMITTED]}
+_CONTRACT = {"$ifNull": ["$contract_total", 0]}
+
+
+def _within_contract(extra) -> dict:
+    """``_TAKEN + extra <= contract_total``; a package without a contract value has no
+    advances (FG-114 refuses them) and keeps the certified cap only."""
+    return {"$or": [{"$lte": [_CONTRACT, 0]},
+                    {"$lte": [{"$add": [_TAKEN, extra]}, {"$add": [_CONTRACT, _CENT]}]}]}
 _CENT = 0.005
 
 # SUB-ADV-01 — kinds of rows in ``subcontractor_payments`` (the package's allocation record;
@@ -719,6 +733,8 @@ async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservat
                                                          (ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING)
       * deducted + pending on this act + deducted <= the act's certified total
                                                          (ADVANCE_DEDUCTION_EXCEEDS_ACT)
+      * F-76-01: outstanding advance (incl. pending) + committed + amount <= contract_total
+                                                         (PAYMENT_EXCEEDS_PACKAGE_VALUE)
 
     FG-103: the deduction is reserved as PENDING (``advance_deduction_pending_total`` and
     ``advance_deduction_pending_by_act``); ``_confirm_deduction`` moves it into
@@ -735,7 +751,10 @@ async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservat
     def once(field_expr, new_value):        # unchanged when this id is already reserved
         return {"$cond": [already, field_expr, new_value]}
     conds = [{"$lte": [{"$add": [_COMMITTED, amount + deducted]},
-                       {"$add": [{"$ifNull": ["$certified_total", 0]}, _CENT]}]}]
+                       {"$add": [{"$ifNull": ["$certified_total", 0]}, _CENT]}]},
+             # F-76-01: the contract headroom holds for an ordinary payment too (the deducted
+             # part only moves from the outstanding advance into committed).
+             _within_contract(amount)]
     sets = {"committed_paid_total": once(_COMMITTED, {"$round": [
                 {"$add": [_COMMITTED, amount + deducted]}, 2]}),
             "cap_reservations": once(_RESERVED_IDS, {"$concatArrays": [_RESERVED_IDS,
@@ -772,6 +791,18 @@ async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservat
             raise HTTPException(status_code=409, detail={
                 "error_code": "ADVANCE_DEDUCTION_EXCEEDS_ACT",
                 "message": "Приспаднатият аванс надвишава удостовереното по акта"})
+    taken = (float(pkg.get("advance_total") or 0) + float(pkg.get("advance_pending_total") or 0)
+             - float(pkg.get("advance_deducted_total") or 0)
+             - float(pkg.get("advance_deduction_pending_total") or 0)
+             + float(pkg.get("committed_paid_total") or pkg.get("paid_total") or 0))
+    contract = float(pkg.get("contract_total") or 0)
+    committed = float(pkg.get("committed_paid_total") or pkg.get("paid_total") or 0)
+    over_certified = committed + amount + deducted > float(pkg.get("certified_total") or 0) + _CENT
+    if contract > 0 and taken + amount > contract + _CENT and not over_certified:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+            "message": "Плащането заедно с неприспаднатия аванс надвишава договорната стойност "
+                       "на пакета; приспаднете аванса изрично по акта"})
     raise HTTPException(status_code=409, detail={
         "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
         "message": "Плащането надвишава актуваното (сертифицираното) по пакета; "
@@ -863,7 +894,8 @@ async def _record_act_deduction(mw, tenant, user, act: dict, deducted: float,
         user["org_id"], user["id"], user.get("email", ""), "subcontractor_advance_deducted",
         "subcontractor_act", act["id"], {"amount": deducted, "deduction_id": entry["id"],
                                          "subcontractor_payment_id": payment_id,
-                                         "reason": reason}))
+                                         "reason": reason},
+        entry_id=mw.new_id("audit_advance_deduction")))      # F-76-02: exactly one row
     await mw.step("confirm_deduction", lambda: _confirm_deduction(
         tenant, act["package_id"], act["id"], deducted, reservation_id))
 
@@ -975,8 +1007,7 @@ async def _reserve_advance(tenant, pkg_id: str, amount: float, advance_id: str) 
     key-derived id (``advance_reservations``, as F-69-03): a retry of the same key that finds
     it changes nothing. Over the cap -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE, nothing written."""
     already = {"$in": [advance_id, _ADV_RESERVED_IDS]}
-    taken = {"$add": [{"$subtract": [_ADV_TOTAL, _ADV_DEDUCTED]}, _ADV_PENDING, _COMMITTED,
-                      amount]}
+    taken = {"$add": [_TAKEN, amount]}        # F-76-01: the same headroom as the payments
     res = await tenant.subcontractor_packages.update_one(
         {"id": pkg_id, "$or": [
             {"advance_reservations": advance_id},
@@ -1101,7 +1132,8 @@ async def create_subcontractor_advance(
             org_id, user["id"], user.get("email", ""), "subcontractor_advance_created",
             "payment", ledger_id, {"amount": amount, "package_id": pkg_id, "reason": reason,
                                    "subcontractor_payment_id": advance["id"],
-                                   "account_id": account["id"]}))
+                                   "account_id": account["id"]},
+            entry_id=mw.new_id("audit_advance_created")))       # F-76-02: exactly one row
         # FG-103: only now — ledger row, advance row and AuditEvent exist — is it deductible
         await mw.step("advance_confirm", lambda: _confirm_advance(tenant, pkg_id, amount,
                                                                   advance["id"]))

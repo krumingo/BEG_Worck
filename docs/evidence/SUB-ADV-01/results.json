@@ -7,7 +7,7 @@
   "enforce"
  ],
  "mongo": "local replica set (oplog)",
- "seconds": 12.4,
+ "seconds": 18.3,
  "roles": [
   {
    "mode": "off",
@@ -719,7 +719,7 @@
     409
    ],
    "ids_201": [
-    "5a502286-e2f1-519c-8162-9cab0b071f02"
+    "5a07baad-5bf1-5a7b-9817-721ba5bb85d3"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -736,7 +736,7 @@
     409
    ],
    "ids_201": [
-    "9569b392-b3a6-5c39-b1ee-a270b944eaa7"
+    "33c90cd7-ce07-5494-a701-6113876d241e"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -753,7 +753,7 @@
     409
    ],
    "ids_201": [
-    "c2775984-1c10-54ab-b6db-db22b80dd2c4"
+    "ca3399a6-3f39-5a9b-8783-d55505b519a3"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -2063,6 +2063,382 @@
      "subcontract_detail",
      "total"
     ]
+   }
+  }
+ ],
+ "f76_01_headroom": [
+  {
+   "mode": "off",
+   "o1_advance_5000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o1_pay_100": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o1_pay_100_deducting_100": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o1_deduct_100_no_cash": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "o1_end": {
+    "taken": 5000.0,
+    "contract": 5000.0
+   },
+   "o2_pay_3000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o2_advance_2000_01": {
+    "status": 409,
+    "error_code": "ADVANCE_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o2_advance_2000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o2_pay_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o2_end": {
+    "taken": 5000.0,
+    "contract": 5000.0
+   },
+   "race": [
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    }
+   ]
+  },
+  {
+   "mode": "shadow",
+   "o1_advance_5000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o1_pay_100": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o1_pay_100_deducting_100": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o1_deduct_100_no_cash": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "o1_end": {
+    "taken": 5000.0,
+    "contract": 5000.0
+   },
+   "o2_pay_3000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o2_advance_2000_01": {
+    "status": 409,
+    "error_code": "ADVANCE_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o2_advance_2000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o2_pay_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o2_end": {
+    "taken": 5000.0,
+    "contract": 5000.0
+   },
+   "race": [
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    }
+   ]
+  },
+  {
+   "mode": "enforce",
+   "o1_advance_5000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o1_pay_100": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o1_pay_100_deducting_100": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o1_deduct_100_no_cash": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "o1_end": {
+    "taken": 5000.0,
+    "contract": 5000.0
+   },
+   "o2_pay_3000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o2_advance_2000_01": {
+    "status": 409,
+    "error_code": "ADVANCE_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o2_advance_2000": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "o2_pay_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_PACKAGE_VALUE",
+    "business_written": []
+   },
+   "o2_end": {
+    "taken": 5000.0,
+    "contract": 5000.0
+   },
+   "race": [
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    }
+   ]
+  }
+ ],
+ "f76_02_audit_once": [
+  {
+   "mode": "off",
+   "advance": {
+    "statuses": [
+     500,
+     201,
+     201
+    ],
+    "audit_rows": 1,
+    "advance_rows": 1,
+    "advance_total": 1000.0
+   },
+   "deduction": {
+    "statuses": [
+     500,
+     201,
+     201
+    ],
+    "audit_rows": 1,
+    "act_entries": 1,
+    "deducted": 100.0
+   }
+  },
+  {
+   "mode": "shadow",
+   "advance": {
+    "statuses": [
+     500,
+     201,
+     201
+    ],
+    "audit_rows": 1,
+    "advance_rows": 1,
+    "advance_total": 1000.0
+   },
+   "deduction": {
+    "statuses": [
+     500,
+     201,
+     201
+    ],
+    "audit_rows": 1,
+    "act_entries": 1,
+    "deducted": 100.0
+   }
+  },
+  {
+   "mode": "enforce",
+   "advance": {
+    "statuses": [
+     500,
+     201,
+     201
+    ],
+    "audit_rows": 1,
+    "advance_rows": 1,
+    "advance_total": 1000.0
+   },
+   "deduction": {
+    "statuses": [
+     500,
+     201,
+     201
+    ],
+    "audit_rows": 1,
+    "act_entries": 1,
+    "deducted": 100.0
    }
   }
  ]
