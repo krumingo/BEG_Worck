@@ -63,10 +63,6 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
         entity_type: Type of entity affected
         entity_id: ID of the entity
         changes: Dictionary of changes made
-        entry_id: SEC-01-C03 (audit of #69 @ da47777) — a durable id for the row, derived
-            from the operation's Idempotency-Key. It is also the row's ``_id``, so a retry of
-            the same operation that writes the entry again hits the unique ``_id`` and is
-            skipped: one audit row per durable operation. Absent -> a fresh id, as before.
     """
     entry = {
         "id": entry_id or str(uuid.uuid4()),
@@ -83,14 +79,14 @@ async def log_audit(org_id: str, user_id: str, user_email: str, action: str,
     # the legacy audit row lands in the SAME database as the business write.
     # AUTH-01 C01: ``session`` lets the audit row commit or roll back together
     # with the business write it records (one Mongo transaction).
-    if entry_id is None:
-        await (db if db_handle is None else db_handle).audit_logs.insert_one(entry, session=session)
-        return
-    entry["_id"] = entry_id
+    # SUB-ADV-01 (Codex F-76-02): a DURABLE entry id (derived from the operation's
+    # Idempotency-Key) is also the row's _id, so a retry after a crash between this insert
+    # and the caller's step bookkeeping finds the row already there and writes no second one.
+    if entry_id is not None:
+        entry["_id"] = entry_id
     try:
         await (db if db_handle is None else db_handle).audit_logs.insert_one(entry, session=session)
     except DuplicateKeyError as exc:
         pattern = (getattr(exc, "details", None) or {}).get("keyPattern") or {}
-        if set(pattern) != {"_id"}:
-            raise                       # another unique index: a real error
-        # the same durable operation already wrote this entry (a retry after a crash)
+        if entry_id is None or set(pattern) not in ({"_id"}, set()):
+            raise

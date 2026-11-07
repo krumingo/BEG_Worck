@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 26.0,
+ "seconds": 22.3,
  "amount_rows": [
   {
    "mode": "off",
@@ -4494,7 +4494,7 @@
     409
    ],
    "retry_payment_ids": [
-    "310f9d31-27ae-53e7-b271-8d6e0fa4f6b9"
+    "5ed834b1-80bf-5384-bafd-3ad15f1c31ca"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4518,7 +4518,7 @@
     409
    ],
    "retry_payment_ids": [
-    "07c87df9-3179-550c-a1ef-2c0cf6a0d5e4"
+    "23c731e5-cbc7-5f1f-bffb-7e2f1faadc20"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4542,7 +4542,7 @@
     409
    ],
    "retry_payment_ids": [
-    "4788ff6a-86e8-51c3-9486-486c4e4cdccf"
+    "75ba915e-2d2d-5c1b-af1b-45f9f42752fb"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
