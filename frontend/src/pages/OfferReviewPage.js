@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import API from "@/lib/api";
+import { createKeyHolder, idempotencyHeaders, apiErrorText } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,10 @@ import {
 const STATUS_BG = {
   Draft: "Чернова", Sent: "Изпратена", Accepted: "Одобрена",
   Rejected: "Отказана", NeedsRevision: "Изисква корекция", Archived: "Архивирана",
+  Superseded: "Заменена с нова версия", Cancelled: "Анулирана",
 };
+// OFF-01: one Idempotency-Key per answer; a retry after a lost connection reuses it
+const respondKey = createKeyHolder();
 const STATUS_COLORS = {
   Sent: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   Accepted: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -36,25 +40,28 @@ export default function OfferReviewPage() {
         const res = await API.get(`/offers/review/${reviewToken}`);
         setOffer(res.data);
       } catch (err) {
-        setError(err.response?.data?.detail || "Офертата не е намерена");
+        // OFF-01 FG-138: a replaced / closed link answers 410 with a neutral message only
+        setError(apiErrorText(err, "Офертата не е намерена"));
       } finally { setLoading(false); }
     })();
   }, [reviewToken]);
 
   const handleRespond = async (action) => {
     setResponding(true);
+    let failure = null;
     try {
       await API.post(`/offers/review/${reviewToken}/respond`, {
         action, comment, client_name: clientName,
-      });
+      }, idempotencyHeaders(respondKey.get()));
       setResponded(true);
       setOffer(prev => ({
         ...prev,
         status: action === "approve" ? "Accepted" : action === "reject" ? "Rejected" : "NeedsRevision",
       }));
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка");
-    } finally { setResponding(false); }
+      failure = err;
+      alert(apiErrorText(err, "Грешка"));
+    } finally { respondKey.settle(failure); setResponding(false); }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#0d1117]"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>;
@@ -103,8 +110,7 @@ export default function OfferReviewPage() {
                 <th className="text-left p-3 text-xs uppercase text-gray-500 font-medium">Описание</th>
                 <th className="text-left p-3 text-xs uppercase text-gray-500 font-medium w-16">Мярка</th>
                 <th className="text-right p-3 text-xs uppercase text-gray-500 font-medium w-16">К-во</th>
-                <th className="text-right p-3 text-xs uppercase text-gray-500 font-medium w-24">Мат. ед.</th>
-                <th className="text-right p-3 text-xs uppercase text-gray-500 font-medium w-24">Труд ед.</th>
+                <th className="text-right p-3 text-xs uppercase text-gray-500 font-medium w-24">Ед. цена</th>
                 <th className="text-right p-3 text-xs uppercase text-gray-500 font-medium w-28">Общо</th>
               </tr>
             </thead>
@@ -117,8 +123,8 @@ export default function OfferReviewPage() {
                   </td>
                   <td className="p-3 text-gray-400">{line.unit}</td>
                   <td className="p-3 text-right font-mono text-gray-300">{line.qty}</td>
-                  <td className="p-3 text-right font-mono text-gray-400">{(line.material_unit_cost || 0).toFixed(2)}</td>
-                  <td className="p-3 text-right font-mono text-gray-400">{(line.labor_unit_cost || 0).toFixed(2)}</td>
+                  {/* R43: the client sees only the combined unit price */}
+                  <td className="p-3 text-right font-mono text-gray-400">{(line.unit_price || 0).toFixed(2)}</td>
                   <td className="p-3 text-right font-mono font-medium text-white">{(line.line_total || 0).toFixed(2)} {offer.currency}</td>
                 </tr>
               ))}

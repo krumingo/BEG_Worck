@@ -400,6 +400,9 @@ async def startup():
     await db.organizations.create_index("id", unique=True)
     await db.feature_flags.create_index([("org_id", 1), ("module_code", 1)])
     await db.audit_logs.create_index([("org_id", 1), ("timestamp", -1)])
+    # OFF79-05: the offer transactions never create a collection implicitly
+    from app.services.offer_txn import ensure_offer_collections
+    await ensure_offer_collections(db)
     await db.projects.create_index([("org_id", 1), ("code", 1)], unique=True)
     await db.projects.create_index([("org_id", 1), ("status", 1)])
     # W0-03E-A2/A2C: project_team is a tenant-bound authorization relation and

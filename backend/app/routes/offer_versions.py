@@ -21,6 +21,22 @@ def _tenant(user: dict) -> TenantData:
 router = APIRouter(tags=["Offer Versions"])
 
 
+def _refuse_if_used(offer: dict, draft_was_used: bool) -> None:
+    """OFF-01 Addendum A §1 (OFF79-01): restore rewrites the offer's lines and totals in
+    place, and a version delete removes a snapshot for good. Both are allowed only on a draft
+    that was never sent — the same rule as DELETE /offers/{id}. Anything else → 409."""
+    if offer.get("status") != "Draft" or draft_was_used:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "OFFER_IN_USE",
+            "message": "Изпратена или използвана оферта не се променя и версиите ѝ не се "
+                       "изтриват — направете нова версия"})
+
+
+async def _draft_was_used(tenant: TenantData, offer: dict) -> bool:
+    from app.routes.offers import _draft_was_used as used
+    return await used(tenant, offer)
+
+
 class VersionCreate(BaseModel):
     note: Optional[str] = None
 
@@ -208,6 +224,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     
     if not await can_manage_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
+    _refuse_if_used(offer, await _draft_was_used(tenant, offer))
     
     # Get the version to restore
     version = await tenant.offer_versions.find_one(
@@ -218,25 +235,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     
     now = datetime.now(timezone.utc).isoformat()
     
-    # Step 1: Create automatic backup of current state BEFORE restore
-    backup_version_number = await get_next_version_number(user["org_id"], offer_id)
-    backup_snapshot = await create_snapshot(offer)
-    
-    backup = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": offer["project_id"],
-        "offer_id": offer_id,
-        "version_number": backup_version_number,
-        "created_at": now,
-        "created_by": user["id"],
-        "note": f"Автоматичен backup преди възстановяване на v{version_number}",
-        "snapshot_json": backup_snapshot,
-        "is_auto_backup": True,
-    }
-    await tenant.offer_versions.insert_one(backup)
-    
-    # Step 2: Restore the snapshot to the current offer
+    # Step 1: Restore the snapshot to the current offer (one CAS, below)
     snapshot = version["snapshot_json"]
     
     # Prepare the update
@@ -264,7 +263,33 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
         update_data["vat_amount"] = vat_amount
         update_data["total"] = round(subtotal + vat_amount, 2)
     
-    await tenant.offers.update_one({"id": offer_id}, {"$set": update_data})
+    # OFF79-03: the restore is a CAS on the exact unsent draft that was read; a /send (or
+    # another write) that slipped in → 409, nothing restored, no backup written.
+    won = await tenant.offers.update_one(
+        {"id": offer_id, "status": "Draft", "sent_at": None, "superseded_by": None,
+         "updated_at": offer.get("updated_at")}, {"$set": update_data})
+    if won.modified_count != 1:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "OFFER_IN_USE",
+            "message": "Офертата вече е изпратена или променена — презаредете"})
+
+    # Step 2: the automatic backup of the state as it was before the restore
+    backup_version_number = await get_next_version_number(user["org_id"], offer_id)
+    backup_snapshot = await create_snapshot(offer)
+    
+    backup = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": offer["project_id"],
+        "offer_id": offer_id,
+        "version_number": backup_version_number,
+        "created_at": now,
+        "created_by": user["id"],
+        "note": f"Автоматичен backup преди възстановяване на v{version_number}",
+        "snapshot_json": backup_snapshot,
+        "is_auto_backup": True,
+    }
+    await tenant.offer_versions.insert_one(backup)
     
     await log_audit(user["org_id"], user["id"], user["email"], "version_restored", "offer", offer_id, {
         "restored_version": version_number,
@@ -292,6 +317,7 @@ async def delete_offer_version(offer_id: str, version_number: int, user: dict = 
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
+    _refuse_if_used(offer, await _draft_was_used(tenant, offer))
     
     version = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id, "version_number": version_number}
