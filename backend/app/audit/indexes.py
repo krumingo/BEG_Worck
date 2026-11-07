@@ -24,6 +24,7 @@ The rules, in order:
   they are, for a human to decide; the manual script's dry run lists every
   duplicate group (read only).
 """
+import uuid
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 AUDIT_COLLECTION = "audit_events"            # = app.audit.store.AUDIT_COLLECTION
@@ -45,19 +46,65 @@ PLANNED_INDEXES: List[Tuple[str, List[Tuple[str, int]], Dict[str, Any]]] = [
 
 
 class AuditIndexError(RuntimeError):
-    """The audit indexes cannot be guaranteed for a database. Never ignored."""
+    """The audit indexes cannot be guaranteed for a database. Never ignored.
+
+    F-72-01: the message names only the database, the collection and the index
+    (field names), a safe ``code`` and a diagnostic ``ref``. It never carries a
+    key value, a reservation id, tenant content or MongoDB's errmsg/keyValue,
+    and it is raised ``from None`` so the original driver error is not chained
+    into a logged traceback. The rows themselves are listed only by the
+    operator report (scripts/w0_04_bootstrap_audit_indexes.py, dry run).
+    """
+
+    code = "AUDIT_INDEX_UNAVAILABLE"
+
+    def __init__(self, message: str, *, code: Optional[str] = None, ref: Optional[str] = None):
+        self.code = code or type(self).code
+        self.ref = ref or new_diagnostic_ref()
+        super().__init__("[%s ref=%s] %s" % (self.code, self.ref, message))
 
 
 class AuditIndexConflict(AuditIndexError):
     """An existing index contradicts the planned one. Nothing is dropped."""
 
+    code = "AUDIT_INDEX_CONFLICT"
+
 
 class AuditIndexDuplicates(AuditIndexError):
-    """Existing records would violate a planned unique index. Nothing is deleted."""
+    """Existing records would violate a planned unique index. Nothing is deleted.
 
-    def __init__(self, message: str, report: Dict[str, Any]):
-        super().__init__(message)
-        self.report = report
+    ``report`` holds only safe fields (database, collection, index, keys as
+    field names, code, ref) — never the duplicate values.
+    """
+
+    code = "AUDIT_INDEX_DUPLICATES"
+
+    def __init__(self, message: str, report: Dict[str, Any], **kw):
+        super().__init__(message, **kw)
+        self.report = dict(report, code=self.code, ref=self.ref)
+
+
+def new_diagnostic_ref() -> str:
+    """A random correlation id for one refusal (it identifies the log line, not data)."""
+    return uuid.uuid4().hex[:12]
+
+
+def safe_reason(exc: BaseException) -> str:
+    """A loggable classification of a driver/setup error — never its message."""
+    if _is_duplicate_error(exc):
+        return "existing duplicates block the unique index"
+    if isinstance(exc, AuditIndexError):
+        return exc.code
+    code = getattr(exc, "code", None)
+    if code in (85, 86):                    # IndexOptionsConflict / IndexKeySpecsConflict
+        return "a conflicting index with the same keys exists"
+    if isinstance(exc, _SafeGuardError):
+        return str(exc)
+    return "%s%s" % (type(exc).__name__, "" if code is None else " (code %s)" % code)
+
+
+class _SafeGuardError(RuntimeError):
+    """Internal guard outcome whose message is a fixed, data-free sentence."""
 
 
 def _is_duplicate_error(exc) -> bool:
@@ -121,15 +168,15 @@ async def ensure_audit_indexes(db) -> Dict[str, Any]:
             # nothing (code 11000). Nothing is deleted: report and stop.
             if not (unique and _is_duplicate_error(exc)):
                 raise
-            details = getattr(exc, "details", None) or {}
-            dup = {"database": report["database"], "collection": coll,
-                   "keys": _norm_keys(keys), "duplicate_key": details.get("keyValue"),
-                   "server_message": details.get("errmsg") or str(exc)}
+            # F-72-01: no keyValue / errmsg here and no exception chaining.
+            index = index_name(keys)
+            dup = {"database": report["database"], "collection": coll, "index": index,
+                   "keys": _norm_keys(keys)}
             raise AuditIndexDuplicates(
-                "%s: existing records violate the planned unique index %s on %s (first "
-                "duplicate %s) — nothing deleted; list every group with "
-                "scripts/w0_04_bootstrap_audit_indexes.py" % (
-                    report["database"], _norm_keys(keys), coll, dup["duplicate_key"]), dup) from exc
+                "%s: existing records violate the planned unique index %s on %s — nothing "
+                "deleted; list the duplicate groups with "
+                "scripts/w0_04_bootstrap_audit_indexes.py (dry run)" % (
+                    report["database"], index, coll), dup) from None
         info_cache[coll] = await db[coll].index_information()
         report["created"].append("%s.%s" % (coll, created))
     return report
@@ -213,16 +260,24 @@ async def require_unique_index(db, coll: str, keys, error_cls, *, create: bool =
     cache_key = (id(db.client), db.name, coll, tuple(_norm_keys(keys)))
     if cache_key in _unique_index_verified:
         return
+    reason = None
     try:
         if not await unique_index_present(db, coll, keys):
             if not create:
-                raise RuntimeError("the index is absent and cannot be built inside a transaction; "
-                                   "call it before the transaction starts")
+                raise _SafeGuardError("the index is absent and cannot be built inside a "
+                                      "transaction; call it before the transaction starts")
             await db[coll].create_index(keys, unique=True)
             if not await unique_index_present(db, coll, keys):
-                raise RuntimeError("the index is still absent after create_index")
+                raise _SafeGuardError("the index is still absent after create_index")
     except Exception as exc:  # noqa: BLE001
+        reason = safe_reason(exc)
+    if reason is not None:
+        # F-72-01: a fixed sentence + the classified reason; the driver error
+        # (which can quote the duplicate key) is neither formatted nor chained.
+        ref = new_diagnostic_ref()
         raise error_cls(
-            "%s.%s: no unique %s index and it cannot be created; refusing to write "
-            "(concurrent writes could duplicate): %s" % (db.name, coll, _norm_keys(keys), exc)) from exc
+            "[AUDIT_INDEX_UNPROTECTED ref=%s] %s.%s: no unique index %s and it cannot be "
+            "created (%s); refusing to write (concurrent writes could duplicate). Operator: "
+            "scripts/w0_04_bootstrap_audit_indexes.py (dry run)"
+            % (ref, db.name, coll, index_name(keys), reason))
     _unique_index_verified.add(cache_key)

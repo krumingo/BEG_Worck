@@ -203,9 +203,9 @@ async def record_event(db, event: Dict[str, Any], session=None) -> Dict[str, Any
             continue
         chained.pop("_id", None)
         return chained
+    # F-72-01: no tenant id in a message that may be logged.
     raise AuditChainContention(
-        "audit chain of tenant %s: no free sequence after %d attempts"
-        % (event["tenant_id"], CHAIN_APPEND_MAX_ATTEMPTS))
+        "audit chain: no free sequence after %d attempts" % CHAIN_APPEND_MAX_ATTEMPTS)
 
 
 # ---------------------------------------------------------------------------

@@ -884,7 +884,7 @@ async def _run(ctx: Any, db, plan: _Plan, *, actor_id: str, approval_id: Optiona
     if state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
         # W0-04-C01 F-69-01: a concurrent retry won the retake of this failed key;
         # its reservation is not ours to fail.
-        await refuse(MasterDataRefused("idempotency key %r is being retried right now" % plan.key))
+        await refuse(MasterDataRefused("this operation key is being retried right now"))
     if state.get("status") == IDEMPOTENCY_DUPLICATE and state.get("prior_status") == IDEMPOTENCY_COMPLETED:
         return outcome(state.get("result_reference"), replayed=True)
     resumed = state.get("status") == IDEMPOTENCY_DUPLICATE or bool(state.get("retry_of_failed"))

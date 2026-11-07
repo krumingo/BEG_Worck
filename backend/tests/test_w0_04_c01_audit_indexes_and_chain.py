@@ -255,7 +255,8 @@ def test_existing_duplicates_are_reported_never_deleted():
             await ix.ensure_audit_indexes(db)
         rep = exc.value.report
         assert rep["collection"] == AUDIT_COLLECTION and rep["keys"] == [("tenant_id", 1), ("sequence", 1)]
-        assert rep["duplicate_key"] == {"tenant_id": "t", "sequence": 1}
+        assert rep["index"] == "tenant_id_1_sequence_1" and "duplicate_key" not in rep
+        assert rep["code"] == "AUDIT_INDEX_DUPLICATES" and rep["ref"] in str(exc.value)
         assert "w0_04_bootstrap_audit_indexes" in str(exc.value)
         assert await db[AUDIT_COLLECTION].count_documents({}) == 2
         assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 2
@@ -565,3 +566,108 @@ def test_a_lost_retake_is_duplicate_started_with_detail_in_progress():
         rec = await db[IDEMPOTENCY_COLLECTION].find_one({"key": "k"}, {"_id": 0})
         assert rec["attempt_token"] == "rival"            # ours never landed
     scratch(go)
+
+
+
+# ─────────────────────────────────────────────── F-72-01: refusals leak no tenant / key data
+
+SENTINEL_TENANT = "SENTINEL-TENANT-7f3a9c"
+SENTINEL_KEY = "SENTINEL-KEY-c41e0b"
+SENTINELS = (SENTINEL_TENANT, SENTINEL_KEY)
+
+
+def _everything_logged(exc) -> str:
+    """The message, the full chained traceback and the report — what a log could hold."""
+    import traceback
+    text = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    return text + repr(getattr(exc, "report", "")) + str(exc)
+
+
+def _assert_clean(text):
+    for s in SENTINELS:
+        assert s not in text, "sentinel %s leaked:\n%s" % (s, text)
+
+
+async def _poison_idempotency(db):
+    rid = "idem_%s_pay_%s" % (SENTINEL_TENANT, SENTINEL_KEY)
+    dup = {"id": rid, "tenant_id": SENTINEL_TENANT, "action": "pay", "key": SENTINEL_KEY}
+    await db[IDEMPOTENCY_COLLECTION].insert_many([dict(dup), dict(dup)])
+
+
+async def _poison_chain(db):
+    await db[AUDIT_COLLECTION].insert_many([
+        {"event_id": "ae_" + SENTINEL_KEY, "tenant_id": SENTINEL_TENANT, "sequence": 1},
+        {"event_id": "ae_2" + SENTINEL_KEY, "tenant_id": SENTINEL_TENANT, "sequence": 1}])
+
+
+@real_mongo
+def test_f72_startup_refusal_leaks_no_key_or_tenant(caplog):
+    import logging
+
+    async def go(client, dbs):
+        op, sysdb = dbs
+        await _poison_chain(op)
+        await _poison_idempotency(op)
+        with pytest.raises(ix.AuditIndexDuplicates) as exc:
+            await ix.ensure_audit_indexes_for_installation(op, sysdb)
+        assert exc.value.__cause__ is None and exc.value.__suppress_context__
+        assert exc.value.code == "AUDIT_INDEX_DUPLICATES" and exc.value.ref in str(exc.value)
+        assert "w0_04_bootstrap_audit_indexes" in str(exc.value)
+        logging.getLogger("w004c01.startup").exception("startup refused", exc_info=exc.value)
+        _assert_clean(_everything_logged(exc.value) + caplog.text)
+    with caplog.at_level(logging.DEBUG):
+        scratch(go, n_dbs=2)
+
+
+@real_mongo
+def test_f72_lazy_guards_leak_no_key_or_tenant(caplog):
+    import logging
+    from app.audit.idempotency import IdempotencyUnprotected
+
+    async def go(client, dbs):
+        idem_db, chain_db = dbs
+        await _poison_idempotency(idem_db)
+        with pytest.raises(IdempotencyUnprotected) as e1:
+            await begin_idempotent(idem_db, tenant_id=SENTINEL_TENANT, key=SENTINEL_KEY,
+                                   action="pay")
+        await _poison_chain(chain_db)
+        with pytest.raises(store.AuditChainUnprotected) as e2:
+            await record_event(chain_db, make_event(tenant=SENTINEL_TENANT, entity=SENTINEL_KEY))
+        for e in (e1.value, e2.value):
+            assert e.__cause__ is None and (e.__context__ is None or e.__suppress_context__)
+            assert "AUDIT_INDEX_UNPROTECTED" in str(e) and "duplicates" in str(e)
+            logging.getLogger("w004c01.lazy").exception("refused", exc_info=e)
+            _assert_clean(_everything_logged(e))
+        _assert_clean(caplog.text)
+    with caplog.at_level(logging.DEBUG):
+        scratch(go, n_dbs=2)
+
+
+@real_mongo
+def test_f72_the_real_error_middleware_logs_no_key_or_tenant(caplog):
+    import logging
+    import httpx
+    from fastapi import FastAPI
+    from app.middleware.error_handler import ErrorHandlerMiddleware
+
+    async def go(client, dbs):
+        db = dbs[0]
+        await _poison_idempotency(db)
+        app = FastAPI()
+        app.add_middleware(ErrorHandlerMiddleware)
+
+        @app.post("/pay")
+        async def pay():
+            await begin_idempotent(db, tenant_id=SENTINEL_TENANT, key=SENTINEL_KEY, action="pay")
+            return {"ok": True}
+
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://t") as c:
+            r = await c.post("/pay")
+        assert r.status_code == 500 and r.json()["error_type"] == "IdempotencyUnprotected"
+        assert "Unhandled error: POST /pay" in caplog.text
+        assert "AUDIT_INDEX_UNPROTECTED" in caplog.text          # the typed refusal is logged
+        _assert_clean(caplog.text + r.text)
+        assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 2   # nothing written
+    with caplog.at_level(logging.DEBUG):
+        scratch(go)
