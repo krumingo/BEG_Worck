@@ -419,7 +419,8 @@ async def compute_overhead_snapshot(
         await mw.step("audit", lambda: log_audit(
             user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot",
             snapshot["id"], {"period": f"{period_start} - {period_end}",
-                             "total_overhead": total_overhead, "method": data.method}))
+                             "total_overhead": total_overhead, "method": data.method},
+            entry_id=mw.new_id("audit_snapshot")))   # one audit row per snapshot
         mw.result_id = snapshot["id"]
     return await tenant.overhead_snapshots.find_one({"id": snapshot["id"]}, {"_id": 0})
 

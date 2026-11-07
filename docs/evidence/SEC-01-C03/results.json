@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 29.6,
+ "seconds": 26.0,
  "amount_rows": [
   {
    "mode": "off",
@@ -4487,14 +4487,14 @@
    },
    "retry_statuses": [
     201,
-    201,
-    201,
-    201,
+    409,
+    409,
+    409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "cabd04a6-a51a-5bec-954f-f73b089b71b2"
+    "310f9d31-27ae-53e7-b271-8d6e0fa4f6b9"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4518,7 +4518,7 @@
     409
    ],
    "retry_payment_ids": [
-    "eb81cb4c-c8fe-5592-9247-a9d776f3f1db"
+    "07c87df9-3179-550c-a1ef-2c0cf6a0d5e4"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4535,14 +4535,14 @@
    },
    "retry_statuses": [
     201,
-    201,
+    409,
     409,
     409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "c113ebca-f45d-518b-ac8f-b753bfbf322b"
+    "4788ff6a-86e8-51c3-9486-486c4e4cdccf"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4803,10 +4803,10 @@
     },
     "retry_statuses": [
      201,
-     201,
-     201,
-     201,
-     201,
+     409,
+     409,
+     409,
+     409,
      409,
      409,
      409,
@@ -4880,9 +4880,9 @@
     },
     "retry_statuses": [
      201,
-     201,
-     201,
-     201,
+     409,
+     409,
+     409,
      409,
      409,
      409,
@@ -4957,7 +4957,7 @@
     },
     "retry_statuses": [
      201,
-     201,
+     409,
      409,
      409,
      409,
@@ -4977,6 +4977,71 @@
      "allocations_sum": 60.0,
      "ledger_rows": 1
     }
+   }
+  }
+ ],
+ "audit_crash_retry": [
+  {
+   "mode": "off",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  },
+  {
+   "mode": "shadow",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  },
+  {
+   "mode": "enforce",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
    }
   }
  ]

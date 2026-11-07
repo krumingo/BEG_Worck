@@ -42,3 +42,8 @@ PM-01 matrix: unchanged (reproduced cell for cell)
 3 modes, crash injected after the reservation, before its step: cap 100 retry -> 201; cap 1000 retry -> 201; 10 concurrent retries -> 201/409 only; every case ends with 1 ledger, 1 allocation 60, committed 60, paid 60
 Counter-check on c14fcda (f69_03_counter_check_c14fcda.json): cap 100 -> 409 PAYMENT_EXCEEDS_CERTIFIED, paid 0, committed 60; cap 1000 -> committed 120 for 60 paid; 10 retries -> all 409
 PM-01 matrix: unchanged (reproduced cell for cell)
+## Addendum G (audit of #69 @ da47777: one audit row per operation) — on top of the main merge d226c49
+Crash right after the audit row + 2 same-key retries, 3 modes: payment 201/201 and compute 200/200, exactly 1 audit row each (da47777: 2 rows — audit_crash_counter_check_da47777.json)
+Real Mongo: C03 6 / SEC-01 8 / C01 7 / C02 9 / PM-01 6 = 36 passed (PM-01 reproduced cell for cell); R0 814 passed
+W0: 1094 passed / 15 failed / 79 skipped after regenerating W0-03E-A2B inventory §1 (audit.py writer lines)
+Guards A1 436 / 0, A2C 216 / 0

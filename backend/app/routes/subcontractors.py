@@ -660,7 +660,8 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
         org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
         "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
                                "subcontractor_payment_id": payment["id"],
-                               "account_id": account_id}))
+                               "account_id": account_id},
+        entry_id=mw.new_id("audit_payment")))   # one audit row per payment, even after a crash
 
     # Update package paid totals
     # FG-105: summed in the database — a package with more than 200 payments is counted fully.
