@@ -1664,7 +1664,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `34ac9f4` | **PASS** (merge of main 0f870c3; store.py per recipe, check-only in tx, ensure_chain_index before session) | 2026-11-07 |
-| #73 LAB-01 | `6763970` | **FINDINGS**: LAB01H-1 HIGH/BLOCKING (R36 self-correction: SM/Admin raise own APPROVED hours, stays APPROVED) | 2026-11-07 |
+| #73 LAB-01 | `ca81286` | **PASS** (LAB-01-I closes LAB01H-1: corrected APPROVED → SUBMITTED, four-eyes re-approval); R0/lab real-Mongo rerun pending (env) | 2026-11-07 |
+| #75 LAB-02 | `789bbd9` | **PASS (review + probes)**, note LAB02-1 (concurrent approvals → several active records; pay not doubled); real-Mongo gates pending (env) | 2026-11-07 |
 | #74 OH-01 | `6c5c5cf` | **PASS** (D6 overlap refused, OH01-3 closed: indexes at startup/onboarding; #69 merge + results diff → SEC-01 30/30) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -2879,3 +2880,77 @@ These are the same conflicts the PRs have with main (they come from #56). lab01e
 - The audit `mongod` died at 08:33 UTC with a WiredTiger panic: **"Too many open files"** (errno 24) during the #55 warehouse suite. Leftover test databases had exhausted file handles under the 20000 limit.
 - The #55 run at that time (775 passed / 38 errors) is therefore **invalid**; it is being re-run on a fresh container.
 - New `$S/mongo_clean.sh` drops leftover test databases. It dropped 87 after the auth tests alone. It now runs before and after long suites.
+
+
+## #73 LAB-01-I @ `ca81286` — 2026-11-07 ~09:35 UTC — LAB01H-1 CLOSED
+
+`6763970..ca81286` (1 commit) chooses fix option (b):
+- `correction_fields`: a correction of an APPROVED report sets it back to **SUBMITTED**, clears `approved_by`/`approved_at`, sets `payroll_ready` false and `sessions_created` 0, stores `reopened_by_correction`, and adds the corrector to `correctors`.
+- `reopen_effects` flags the report's work sessions void (as reset does), gives back the activity-budget hours, and opens DQ `DAILY_REPORT_CORRECTED_AFTER_APPROVAL`.
+- `approve_report_one` refuses `self_approval_ids` (worker/employee/submitted_by/created_by plus correctors): 403 on the single path. The bulk path uses the same function.
+- Applied to PUT `/daily-reports`, PUT `/technician/draft`, batch-save.
+- The only other `Approved` setter is `work_reports` approve (`attendance.py:701`), which is a different collection, pre-existing and outside R36.
+
+Probe `lab01/test_probe_lab01h_r36.py` (H1/H2 updated; new H5 on the PR's four-eyes harness):
+
+| Case | Result |
+|---|---|
+| H1/H2: SM or Admin corrects own APPROVED report 8 → 12 h | 200, status **SUBMITTED**, `approved_by` None |
+| **H5** end to end (SM `sm` is the worker on P, approved by admin) | earned 80 before; after self-correction status SUBMITTED, **earned 0**; sm approves → **403**; admin approves → APPROVED, earned **120**. **LAB01H-1 closed (PROVED)** |
+
+Gates on `ca81286`:
+- `test_lab_01_h_r36` + `test_lab_01_i_four_eyes`: 30 passed.
+- W0: 1085/15/50, same 15.
+- A2C: 0/207.
+- A1: 0/420.
+
+The full real-Mongo lab suite and R0 will be re-run (environment, below). The existing #73 PR comment will be updated to "resolved".
+
+
+## #75 LAB-02 @ `789bbd9` — 2026-11-07 ~09:40 UTC — review PASS, note LAB02-1
+
+Stacked on #73 (`0c85678` LAB-02, then a merge of LAB-01-I `ca81286`, then `789bbd9` four-eyes on quantity entry/approval).
+
+New `routes/labor_quantities.py`:
+
+| Endpoint | Rules |
+|---|---|
+| `GET/PUT /labor-terms` | finance only (R31); PUT under R29 (`_idempotent` on the W0-04 registry, 503 when unprotected), `labor_terms_version` + `labor_terms_history`, AuditEvent |
+| `PUT /labor-quantities/entry` | R36 author/corrector, void before write, LAB-01-I reopen, audited |
+| `POST /labor-quantities/approve` | approver role first; `_require_approver`: never the worker nor any author/corrector; SM via `can_manage_project`; report SUBMITTED/APPROVED; **409 on a stale `report_version`**; package must be on the line's project. The record **snapshots** `labor_pay_type`/`piece_rate`/`labor_terms_version`; a re-approval voids the previous record (kept); AuditEvent |
+| `POST /labor-quantities/classify` | LABOR/DOWNTIME/DOWNTIME_UNCLASSIFIED, a reason is required for downtime, same binding, version check and four-eyes |
+
+`labor_cost.py`:
+- pay type and piece rate come first from the approval's snapshot, then the package, never the line;
+- `_cost_type` comes from the approver's classification;
+- `void_labor_approvals` also voids classifications.
+
+No `delete_*` in the new code; replaced records are marked `void`.
+
+Probes `lab01/test_probe_lab02.py`, real Mongo RS:
+
+| Probe | Result |
+|---|---|
+| **Q1**: 4 concurrent approvals of one line (sm, admin, owner, sm; different keys; quantities 100–130) | all 200, **4 `approved` records**; Pay Run earned 550 (one record; the earliest wins, so never the sum) |
+| Q2: rate 5 → approve 120 → finance sets 9 | earned **600 before and after** (snapshot), 2 history rows. PROVED |
+| Q3 roles | approve as tech/acct/sm-other/worker → 403, 0 records; GET terms acct 200, sm/tech 403; PUT terms sm 403, admin 200 |
+| Q4 cross-tenant | tenant-B admin: approve 404, set terms 404, entry 404; A's rate unchanged, 0 records |
+
+**LAB02-1, MEDIUM (PROVED in part):**
+- Concurrent approvals of the same (report, version, entry) leave several active `approved` records.
+- Pay is not doubled: `load_smr_terms` takes the earliest.
+- But `GET /labor-quantities/pending` builds `by_key` with last-wins, so the approver may be **shown** a different quantity than the one paid (by code reading).
+- Suggested fix: a per-line lock or a unique partial index on (org, report_id, entry_id, report_version) where status is approved; or make pending use the same earliest-wins rule.
+
+Gates on `789bbd9`:
+- W0: 1085/15/50, same 15.
+- A2C: 0/208.
+- A1: 0/422.
+- `laborQuantities.test.js`: 5 passed.
+- `yarn build`: compiled.
+- Lab tests: 53/53 on the first real-Mongo run. Later reruns failed because my own `mongo_clean.sh` loop was dropping databases mid-test (self-inflicted, see below). They will be re-run in isolation, with R0 and PM-01.
+
+**Environment (again):**
+- `mongod` crashed a second time at 09:09 UTC with "Too many open files", at about 70% of the #55 warehouse suite in one process. That suite alone exhausts the handles.
+- The #55 suite is now run **per file** with a cleanup between files.
+- Lesson logged: never run another real-Mongo suite while the cleanup loop runs.
