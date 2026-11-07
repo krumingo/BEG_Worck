@@ -110,3 +110,28 @@ def test_fg99_only_an_approved_report_is_reset(monkeypatch):
         assert ex.value.status_code == 400
         assert await _audits(op, "FREE") == []
     asyncio.run(body())
+
+
+@pytest.mark.parametrize("role", ["Technician", "Accountant", "Worker", "Viewer", "Driver", "Warehousekeeper",
+                                  "SiteManager"])
+def test_pm73_01_a_non_resetting_role_gets_403_before_the_lookup(monkeypatch, role):
+    """deny by default: 403 for a missing report too, so existence is not revealed."""
+    async def body():
+        from app.routes import daily_reports
+        await _setup(monkeypatch, "l01l_pm_" + role)
+        u = {"id": "x", "org_id": ORG, "role": role}
+        for rid in ("FREE", "does-not-exist"):
+            with pytest.raises(HTTPException) as ex:
+                await daily_reports.reset_daily_report(rid, u)
+            assert ex.value.status_code == 403, (role, rid)
+    asyncio.run(body())
+
+
+def test_pm73_01_admin_gets_404_for_a_missing_report(monkeypatch):
+    async def body():
+        from app.routes import daily_reports
+        await _setup(monkeypatch, "l01l_pm_admin404")
+        with pytest.raises(HTTPException) as ex:
+            await daily_reports.reset_daily_report("does-not-exist", U("admin"))
+        assert ex.value.status_code == 404
+    asyncio.run(body())
