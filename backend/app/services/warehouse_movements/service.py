@@ -1010,6 +1010,15 @@ class CommandService:
             # No prior row — this was a FAILED attempt. Fall through to
             # re-execute inside the current tx.
 
+        # 5C-C26l Addendum K (WH55-C26L-1) — the invoice-line decision of a
+        # linked direct delivery is taken HERE, in the transaction, under the
+        # line lock (the pre-check before the rights gate is not a guard).
+        if action == CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT and inp.invoice_line_id:
+            await self._lock_invoice_line(tenant_collection, session=session,
+                                          invoice_line_id=inp.invoice_line_id)
+            await self._check_invoice_line_delivery(tenant_db, tenant_collection, inp,
+                                                    session=session)
+
         # ------------------------------------------------------------
         # Resolve allocations + value per action type.
         # ------------------------------------------------------------
@@ -1736,7 +1745,7 @@ class CommandService:
 
     @staticmethod
     async def _check_invoice_line_delivery(tenant_db, tenant_collection,
-                                           inp: CommandInput) -> None:
+                                           inp: CommandInput, *, session=None) -> None:
         """5C-C26l — Codex F-55-C26-02 (D-04: one lot is cost once).
 
         A direct delivery (RECEIVE_FROM_SUPPLIER_TO_PROJECT) that names
@@ -1746,7 +1755,14 @@ class CommandService:
         recognises the same lot through the canon. Also refused: delivering
         more than L's allocation to that project still not delivered (when
         the units are comparable). 422 INVOICE_LINE_PROJECT_MISMATCH, nothing
-        written (held back until the rights check — FG-55)."""
+        written (held back until the rights check — FG-55).
+
+        5C-C26l Addendum K (WH55-C26L-1): called twice — before the rights
+        check (no session: the FG-55 ordering) and AGAIN inside the movement
+        transaction, after ``_lock_invoice_line`` (``session``), where it is
+        the decision that counts: the reads see the transaction's snapshot
+        and a concurrent delivery of the same line write-conflicts on the
+        lock, so ``with_transaction`` re-runs it against the committed rows."""
         if inp.action != CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT \
                 or not inp.invoice_line_id or not inp.project_id:
             return
@@ -1757,7 +1773,7 @@ class CommandService:
         line = await tenant.invoice_lines.find_one(
             {"id": inp.invoice_line_id},
             {"_id": 0, "id": 1, "qty": 1, "unit": 1, "allocations": 1,
-             "allocation_type": 1, "allocation_ref_id": 1})
+             "allocation_type": 1, "allocation_ref_id": 1}, session=session)
         mine = [a for a in effective_allocations(line or {})
                 if a["type"] == "project" and a["ref_id"] == inp.project_id]
         if not mine:
@@ -1772,7 +1788,7 @@ class CommandService:
         async for row in tenant_collection.find(
                 {"action": CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value,
                  "invoice_line_id": inp.invoice_line_id, "project_id": inp.project_id},
-                {"_id": 0, "quantity": 1, "idempotency_key": 1}):
+                {"_id": 0, "quantity": 1, "idempotency_key": 1}, session=session):
             if inp.idempotency_key and row.get("idempotency_key") == inp.idempotency_key:
                 return        # a replay of this very delivery — idempotency answers
             delivered += Decimal(str(row.get("quantity") or "0"))
@@ -1782,6 +1798,25 @@ class CommandService:
                 context={"invoice_line_id": inp.invoice_line_id,
                          "allocated": str(allocated), "delivered": str(delivered),
                          "quantity": str(inp.quantity)})
+
+    @staticmethod
+    async def _lock_invoice_line(tenant_collection, *, session, invoice_line_id: str) -> None:
+        """5C-C26l Addendum K (WH55-C26L-1) — the per-line lock of a linked
+        direct delivery, written in the movement transaction: one counter
+        document per (tenant, invoice line) with a deterministic ``_id``, in
+        the tenant's ``warehouse_ledger_counters`` (org_id-keyed, reached
+        through the same TenantData as the ledger). Two transactions that
+        deliver against the same line both write it → MongoDB aborts one
+        with a WriteConflict and ``with_transaction`` re-runs it, so the
+        covered-quantity decision always sees the other's committed row."""
+        tenant = tenant_collection.tenant
+        await tenant.warehouse_ledger_counters.update_one(
+            {"_id": f"invoice_line_lock:{tenant.org_id}:{invoice_line_id}"},
+            {"$inc": {"value": 1},
+             "$setOnInsert": {"tenant_id": tenant.org_id,
+                              "name": "invoice_line_lock",
+                              "invoice_line_id": invoice_line_id}},
+            upsert=True, session=session)
 
     @staticmethod
     async def _location_project(tenant_db, inp: CommandInput) -> Optional[str]:
