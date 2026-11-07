@@ -100,13 +100,33 @@ Run on this branch, real `mongo:7.0` replica set `rs0` (`W0_03_REAL_MONGO_URL=mo
 | ID | Debt |
 |---|---|
 | D-OFF01-1 | FLOW-003 carrier 3 (one-time approval page) requires **limited validity and an identity check**. The review link has neither: no expiry, no identity check. Recorded as `verification: "link_token_only"` in the approval. |
-| D-OFF01-2 | A new version of an **Accepted** offer: the accepted version keeps status `Accepted` (it was accepted; budgets/P&L read it) and only gets `superseded_by`. Which version counts for budgets, contracts and acts once the new one is accepted is not in the canon. |
+| D-OFF01-2 | **Closed by Addendum A §2** (FLOW-003/005): an Accepted offer gets no new version → 409 `OFFER_ACCEPTED_USE_ANNEX`. |
 | D-OFF01-3 | Cancelling an **Accepted** offer is refused (409): it touches contract/annex rules (FLOW-004) the canon does not state here. |
 | D-OFF01-4 | Undoing a mistaken new version (cancel the new draft → the old one stays superseded, it is not reopened). Whether to "un-supersede" is a business rule. |
-| D-OFF01-5 | Internal `/accept` does not yet REQUIRE an Interim Approval Receipt carrier (signed PDF / verified email with `file_id`). It records the method sent, or `internal_unspecified`. Making it mandatory changes the button's behaviour → Krum. |
+| D-OFF01-5 | **Partly closed by Addendum A §3**: a given `evidence_file_id` is now checked. Still open: `/accept` does not REQUIRE a carrier file; the plain button records `internal_unspecified`. |
 | D-OFF01-6 | No UI button for „Анулирай“ yet (API only). |
-| D-OFF01-7 | `POST /offers/{id}/versions/{n}/restore` (`offer_versions.py`) overwrites the lines of an offer in ANY status (also Sent/Accepted) — a silent edit FLOW-003 forbids; `DELETE /offers/{id}/versions/{n}` hard-deletes version snapshots. Out of this package. |
+| D-OFF01-7 | **Closed by Addendum A §1** (audit OFF79-01). |
 | D-OFF01-8 | `NeedsRevision` (client asked for a correction) cannot be versioned (`new-version` allows only Sent/Accepted/Rejected — unchanged rule); the client's request has no path to a new version. |
 | D-OFF01-9 | A crash between the transaction commit and `complete_idempotent` leaves the key STARTED: a retry with the same key gets 409 `IDEMPOTENCY_IN_PROGRESS` (never a double write). The same limitation as PAY-01's `_once`. |
 | D-OFF01-10 | `_require_key` / `_once` are imported from `app.routes.finance` (reuse, not a copy). Moving them into a shared service is a refactor for later. |
+| D-OFF01-12 | The evidence file is checked in `media_files`, the tenant's current file store. The canonical File Registry (W0-06, Gate Matrix: NOT STARTED) does not exist yet; once it does, `_check_evidence_file` must read it instead. A file not linked to anything is accepted as "linkable"; the acceptance does not link it. |
 | D-OFF01-11 | Two audit trails remain (legacy `audit_logs` + `offer_events` + canonical `audit_events`): W0-04 known debt. |
+
+
+## Addendum A (07.11) — audit OFF79-01 (blocking), D-OFF01-2, D-OFF01-5
+
+Package: the same file, section „Допълнение A“ @ `1a15df3`. Audit probe: `claude/audit-log` `docs/audit/probes/off01/test_probe_off01.py`, copied unchanged to `backend/tests/test_off_01_audit_probe.py`.
+
+**Reproduced first** (`b764069` = tests only, on `ea9df81` code):
+- probe: **9 failed**, 45 passed. All 9 failures are O1 × {Sent, Accepted, Superseded} × 3 modes. `restore 200 | total 1200.0 -> 12.0 | client approve 200 | final status Accepted total 12.0`.
+- `test_off_01`: **12 failed**, 42 passed (the new tests 13, 14, 15).
+
+| # | Fix | Test |
+|---|---|---|
+| §1 OFF79-01 | `POST /offers/{id}/versions/{n}/restore` and `DELETE /offers/{id}/versions/{n}` → **409 `OFFER_IN_USE`** unless the offer is a draft that was never sent (the same `_draft_was_used` rule as `DELETE /offers/{id}`). A never-sent draft restores and deletes snapshots as before. | `test_13` (mongomock + real), probe O1 |
+| §2 D-OFF01-2 | `new-version` of an **Accepted** offer → **409 `OFFER_ACCEPTED_USE_ANNEX`**. Draft, Sent and Rejected may be versioned; the old one always becomes `Superseded` (approval void), so the chain never holds two accepted versions. | `test_14` |
+| §3 D-OFF01-5 | `/accept` with `evidence_file_id` → it must be a file of THIS tenant (`media_files`) → else **422 `EVIDENCE_FILE_NOT_FOUND`**. It must also be unlinked or linked to the offer's project → else **422 `EVIDENCE_FILE_NOT_LINKABLE`**. Nothing written. | `test_15`, probe O7 (now 422) |
+
+After the fix: `test_off_01` + probe → **108 passed, 0 skipped**.
+
+Changed rules, noted: new-version of a **Draft** is now allowed (Addendum A §2 lists Draft); before it was 400. Accepted was allowed, now 409.
