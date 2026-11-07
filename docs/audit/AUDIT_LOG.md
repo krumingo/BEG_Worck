@@ -1666,6 +1666,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #72 W0-04-C01 | `90a582b` | **PASS** (+48 PM-01 rows for the #56 auth routes only) | 2026-11-07 |
 | #73 LAB-01 | `b5384cd` | **FINDINGS: PM73-01 BLOCKING** (PM-01 test red: 18 reset cells 403→404 new + 6 pay-runs cells stale since LAB-01-E) | 2026-11-07 |
 | #75 LAB-02 | `c34480b` | **FINDINGS: PM75-01 BLOCKING** (PM-01 test red: 18 reset cells 403→404 from merged LAB-01-L); FG-101 itself PASS | 2026-11-07 |
+| #76 SUB-ADV-01 | `f42da33` | **PASS** (probe S1–S7 × 3 modes, on its own and + #72); notes D1–D3, merge with #70 conflicts in `finance.py` | 2026-11-07 |
 | #74 OH-01 | `6a4ac5b` | **FINDINGS: OH74-05 BLOCKING** (current_allocations reads rows before the pointer → reader sees 0 during publish); Codex OH74-03/04 probes pass | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -3443,3 +3444,50 @@ The delivered sum is read before the transaction, and nothing serialises deliver
 | A1 | 0/450 |
 
 The full warehouse suite and R0 will run with the fix head.
+
+
+## #76 SUB-ADV-01 @ `f42da33` (on #69 `ccab244`) — 2026-11-07 ~12:35 UTC — PASS
+
+Code reviewed (`subcontractors.py`, `catalog.py`, `finance.py`):
+- **Advance:** `POST /subcontractor-packages/{id}/advances` uses `require_money_write(..., roles=Owner/Accountant)` before any read. Admin is taken out of the canonical set for this one action.
+- **Writes:** one Outflow `finance_payments` row (FLOW-006), plus a `subcontractor_payments` row with `kind=advance`, plus the `advance_total` step and an audit entry, all under `MoneyWrite` with key-derived ids and `insert_once`.
+- **Deduction:** done in the same atomic `$expr` update as FG-90. Three conditions:
+  - committed + amount + deducted ≤ certified;
+  - deducted ≤ outstanding advance;
+  - deducted on the act ≤ the act's certified total.
+- **Legacy delete:** `DELETE /finance/payments` on an advance row → 409 `SOURCE_MODULE_REVERSAL_REQUIRED`.
+
+`probes/subadv/probe_subadv01.py`, real Mongo RS, off/shadow/enforce, on `f42da33` alone **and** on the trial merge + #72 `90a582b` (`wtm7672`, only `run_meta.json` conflicted): **FAILS none**.
+
+| Case | Result (each mode) |
+|---|---|
+| S1: advance 1000, 6 concurrent deductions of 400 on act1, different keys | [201 ×2, 409 ×4]; deducted 800; act = package = 800; 2 entries |
+| S2: 6 concurrent payments of 100 + 400 deducted | [201 ×2, 409 ×4]; deducted 800 = sum of rows; committed 1000; paid 200 |
+| S3: act1 paid 3000 cash, act2 200 deducted | committed 3200; ordinary 0.01 → 409; a further deduction → 409; advance outstanding 800 stays visible |
+| S4: advance interrupted after its steps, same-key retry | 500 → 201; 1 row, 1 ledger row, `advance_total` 1000, 1 audit |
+| S5: deduction interrupted, same-key retry | 500 → 201; deducted 300 once, 1 act entry, 1 audit |
+| S6: tenant B accountant on A's package | 404, nothing written |
+| S7: 6 concurrent requests, one key | [201, 409 ×5]; 1 row, 1 ledger row, total 1000 |
+
+| Gate | `f42da33` | + #72 `90a582b` |
+|---|---|---|
+| `test_sub_adv_01` + `test_sec_01_*`, real Mongo | 38 passed | 38 passed |
+| PM-01 | 6 passed | 6 passed |
+| W0 | same 15 (1085/15/50) | same 15 (1093/15/70) |
+| A2C | 0/207 | 0/215 |
+| A1 | 0/420 | 0/434 |
+| R0 | 814 | 814 |
+
+merge-tree:
+- main: clean.
+- #74: `overhead.py` + matrix (the known #69 × #74 conflicts).
+- **#70 `4b745f1`:** `finance.py` (NEW: the advance guard in `delete_payment`, which #70 rewrites), the A1 inventory, and `idempotency.js` with its test (known from #69). #70's `source_module()` already treats `subcontractor_payment_id` as "subcontractor", so take #70's `delete_payment`.
+
+Debts and notes:
+- **D1 (reversal after #70):** confirmed open. On #76 alone (base without #70), `DELETE /finance/invoices/{inv}/payments/{alloc}` still hard-deletes a ledger row whose last allocation is removed (`finance.py:1223`). This holds for every module payment, and #70 C01A-1/FG-45 closes it, so #76 should merge after #70.
+- **D2:** no cap of the advance against the contract value. Confirmed; it is a business decision.
+- **D3:** `project_pnl`, `project_financial_results`, `revenue_snapshot` and `cashflow_forecast` sum `subcontractor_payments` amounts, so the advance is counted once as cash. The ledger row has no category, so `project_pnl`'s "Други" branch does not count it twice. Accrual view: not changed, as stated.
+- **Note:** a deduction without cash is allowed for Admin (Owner/Admin/Accountant, R14), as the HANDOFF says. Krum to confirm whether R39 also covers it.
+- **Note:** like FG90-N1, a reservation that is never followed by its payment is never released. Retries resume it with the same key.
+
+No blocking finding, so no PR comment, per the one-comment rule.
