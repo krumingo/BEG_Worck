@@ -396,6 +396,10 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # OH-01 (OH01-3): the overhead unique indexes (one allocation version, one active
+    # snapshot per period) at startup, never on a request path.
+    from app.services.overhead_lifecycle import ensure_overhead_indexes
+    await ensure_overhead_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

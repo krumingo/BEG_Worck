@@ -20,7 +20,7 @@ from ..models.overhead import (
 from app.tenancy.data_access import TenantData
 from app.services.overhead_lifecycle import (  # OH-01
     KeyedWrite, NOT_ARCHIVED, STATUS_ARCHIVED, audit_overhead_event, require_key,
-    ensure_allocation_indexes, ensure_snapshot_indexes, period_key, period_lock,
+    COMPUTE_LOCK, allocation_version_key, overhead_lock, period_key, period_lock,
 )
 
 
@@ -457,6 +457,23 @@ async def delete_overhead_asset(
 
 # ── Overhead Snapshots ─────────────────────────────────────────────
 
+async def _refuse_overlap(tenant: TenantData, period_start: str, period_end: str) -> None:
+    """D6 (FLOW-024 / CLAUDE.md §7: a cost is never counted twice): an ACTIVE snapshot of a
+    DIFFERENT but overlapping period -> 409 PERIOD_OVERLAP, nothing written. The SAME period
+    is not an overlap: it is versioned (FG-86)."""
+    overlap = await tenant.overhead_snapshots.find(
+        {"period_start": {"$lte": period_end}, "period_end": {"$gte": period_start},
+         "superseded_by": None,
+         "$nor": [{"period_start": period_start, "period_end": period_end}]},
+        {"_id": 0, "id": 1, "period_start": 1, "period_end": 1}).to_list(None)
+    if overlap:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PERIOD_OVERLAP",
+            "message": "Периодът се застъпва с активен snapshot на друг период; "
+                       "разходите не се броят два пъти",
+            "overlapping": sorted(overlap, key=lambda x: x["period_start"])})
+
+
 @router.post("/overhead/snapshots/compute")
 async def compute_overhead_snapshot(
     data: OverheadSnapshotCompute,
@@ -532,11 +549,11 @@ async def compute_overhead_snapshot(
     rate_per_hour = round(total_overhead / total_hours, 2) if total_hours > 0 else 0
     
     # 6. Create immutable snapshot — FG-86: as the new version of the period's snapshot
+    await _refuse_overlap(tenant, period_start, period_end)       # D6: before any write
     kw = await KeyedWrite.begin(db, user, "overhead.snapshot.compute", idempotency_key,
                                 data.model_dump())
     if kw.replay_id:
         return await tenant.overhead_snapshots.find_one({"id": kw.replay_id}, {"_id": 0})
-    await ensure_snapshot_indexes(db)
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
         "id": kw.new_id("snapshot"),
@@ -558,8 +575,9 @@ async def compute_overhead_snapshot(
         "active_period_key": "%s|%s" % (org_id, period_key(period_start, period_end)),
         "superseded_by": None,
     }
-    async with kw, period_lock(tenant, period_start, period_end):
+    async with kw, overhead_lock(tenant, COMPUTE_LOCK), period_lock(tenant, period_start, period_end):
         sid = snapshot["id"]
+        await _refuse_overlap(tenant, period_start, period_end)   # again, under the lock
 
         async def _supersede_previous():
             # the period's active snapshot(s): keyed ones and legacy ones (no key, same period)
@@ -781,7 +799,6 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
         version = rows[0]["allocation_version"] if rows else None
         return {"allocations": rows, "allocation_batch_id": kw.replay_id,
                 "allocation_version": version, "replayed": True}
-    await ensure_allocation_indexes(db)
     snap_doc = await tenant.overhead_snapshots.find_one(
         {"id": snapshot_id}, {"_id": 0, "period_start": 1, "period_end": 1})
     async with kw, period_lock(tenant, snap_doc["period_start"], snap_doc["period_end"]):
@@ -822,6 +839,8 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
                 "id": kw.new_id("alloc:%s" % a["project_id"]),
                 "allocation_batch_id": batch_id,
                 "allocation_version": version,
+                "version_key": allocation_version_key(user["org_id"], snapshot_id, version,
+                                                      a["project_id"]),
                 "allocation_method": method,
                 "allocated_by_user_id": user["id"],
                 "superseded_by": None,

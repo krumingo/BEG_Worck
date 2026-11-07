@@ -59,6 +59,8 @@ async def _seed(op, sysdb):
     system database), so enforce-mode routes — also #69's require_money_write on compute —
     resolve it like a real installation."""
     from app.permissions.catalog import LEGACY_ROLE_MAP
+    from app.services.overhead_lifecycle import ensure_overhead_indexes
+    await ensure_overhead_indexes(op)        # what server.py startup / onboarding do (OH01-3)
     await op.organizations.insert_one({"id": ORG, "name": "OH-01 Org"})
     await op.subscriptions.insert_one({"org_id": ORG, "plan_id": "pro", "status": "active"})
     await sysdb.tenant_registry.insert_one({"id": ORG, "legacy_org_id": ORG, "status": "active",
@@ -471,7 +473,11 @@ def test_09_allocation_version_index_is_unique_and_idempotent(monkeypatch, backe
         info = await op.project_overhead_allocations.index_information()
         assert info[ALLOCATION_VERSION_INDEX]["unique"] is True
         row = {"org_id": ORG, "overhead_snapshot_id": "S", "allocation_version": 2,
-               "project_id": PROJ_A}
+               "project_id": PROJ_A, "version_key": "%s|S|2|%s" % (ORG, PROJ_A)}
+        # legacy rows (no key) are not indexed — two of them never collide
+        await op.project_overhead_allocations.insert_many([
+            {"id": "l1", "org_id": ORG, "overhead_snapshot_id": "S", "project_id": PROJ_A},
+            {"id": "l2", "org_id": ORG, "overhead_snapshot_id": "S", "project_id": PROJ_A}])
         await op.project_overhead_allocations.insert_one({**row, "id": "r1"})
         with pytest.raises(Exception) as exc:
             await op.project_overhead_allocations.insert_one({**row, "id": "r2"})
@@ -640,3 +646,91 @@ def test_14_compute_requires_a_key_and_replays(monkeypatch, backend, mode):
         assert await _dump(op) == after
         assert await op.audit_events.count_documents({"action": "overhead.snapshot.computed"}) == 1
     run(monkeypatch, backend, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════════════════════════ 15. D6
+def test_15_overlapping_period_is_refused_nothing_written(monkeypatch, backend, mode):
+    """D6: Oct 1-31 and Oct 1-15 both allocated counted one 400 cost as 800. A compute whose
+    period overlaps an ACTIVE snapshot of a different period -> 409 PERIOD_OVERLAP, nothing
+    written; the same period is still versioned; a non-overlapping period is accepted."""
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        s1 = await _snapshot(c, "2026-10-01", "2026-10-31")
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        before = await _dump(op)
+        n_keys = await op.audit_idempotency.count_documents({})
+        for start, end in (("2026-10-01", "2026-10-15"), ("2026-09-15", "2026-10-05"),
+                           ("2026-10-31", "2026-11-30"), ("2026-09-01", "2026-12-31")):
+            r = await c.post("/api/overhead/snapshots/compute", headers=_h(key=_key()), json={
+                "period_start": start, "period_end": end, "method": "PersonDays"})
+            assert r.status_code == 409, (start, end, r.text)
+            d = r.json()["detail"]
+            assert d["error_code"] == "PERIOD_OVERLAP" and d["overlapping"][0]["id"] == s1["id"]
+        assert await _dump(op) == before
+        assert await op.audit_idempotency.count_documents({}) == n_keys
+        assert await _pnl_overhead(op) == pytest.approx(s1["total_overhead"], abs=0.02)  # not 2x
+        # the same period: versioned (FG-86), not an overlap
+        s2 = await _snapshot(c, "2026-10-01", "2026-10-31")
+        assert s2["snapshot_version"] == 2
+        # an adjacent, non-overlapping period is fine
+        s3 = await _snapshot(c, "2026-11-01", "2026-11-30")
+        assert s3["snapshot_version"] == 1
+        # a superseded snapshot does not block: only ACTIVE ones count
+        old = await op.overhead_snapshots.find_one({"id": s1["id"]})
+        assert old["superseded_by"] == s2["id"]
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_16_concurrent_overlapping_computes_leave_no_overlap(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        periods = [("2026-10-01", "2026-10-31"), ("2026-10-01", "2026-10-15"),
+                   ("2026-10-10", "2026-10-20"), ("2026-09-20", "2026-10-12")]
+        rs = await asyncio.gather(*[
+            c.post("/api/overhead/snapshots/compute", headers=_h(key=_key()), json={
+                "period_start": a, "period_end": b, "method": "PersonDays"}) for a, b in periods])
+        for x in rs:
+            assert x.status_code in (200, 409), x.text
+        active = await op.overhead_snapshots.find({"superseded_by": None}).to_list(None)
+        assert len(active) == 1, [(a["period_start"], a["period_end"]) for a in active]
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_17_no_request_path_creates_indexes(monkeypatch, backend):
+    """OH01-3: compute / allocate never issue createIndexes (startup and onboarding do)."""
+    async def scenario(c, op):
+        from app.services import overhead_lifecycle
+        calls = []
+
+        async def _boom(*a, **k):
+            calls.append(a)
+            raise AssertionError("createIndexes on a request path")
+        monkeypatch.setattr(overhead_lifecycle, "ensure_allocation_indexes", _boom)
+        monkeypatch.setattr(overhead_lifecycle, "ensure_snapshot_indexes", _boom)
+        monkeypatch.setattr(overhead_lifecycle, "ensure_overhead_indexes", _boom)
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s = await _snapshot(c)
+        r = await c.post(f"/api/overhead/snapshots/{s['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert calls == []
+        import inspect
+        from app.routes import overhead
+        assert "create_index" not in inspect.getsource(overhead)
+        assert "ensure_" not in inspect.getsource(overhead)
+    run(monkeypatch, backend, "off", scenario)
+
+
+def test_18_startup_and_onboarding_create_the_overhead_indexes():
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent
+    server = (root / "server.py").read_text(encoding="utf-8")
+    onboarding = (root / "app" / "tenancy" / "onboarding.py").read_text(encoding="utf-8")
+    assert "await ensure_overhead_indexes(db)" in server
+    assert "await ensure_overhead_indexes(op_db)" in onboarding

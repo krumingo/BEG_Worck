@@ -55,7 +55,7 @@ ALLOCATION_LOCK_STALE_SECONDS = 30
 ALLOCATIONS_COLLECTION = "project_overhead_allocations"
 #: OH01-1: no two rows of the same snapshot, version and project — two concurrent writers
 #: can never both produce "version N" (legacy rows without a version are not covered).
-ALLOCATION_VERSION_INDEX = "oh01_snapshot_version_project_unique"
+ALLOCATION_VERSION_INDEX = "oh01_allocation_version_key_unique"
 
 
 def require_key(raw_key: Optional[str]) -> str:
@@ -161,13 +161,17 @@ async def audit_overhead_event(db, user: Dict[str, Any], *, action: str, entity_
     return await record_event(db, event)
 
 
+def allocation_version_key(org_id: str, snapshot_id: str, version: int, project_id: str) -> str:
+    """OH01-1: the identity of one allocation row of one version — unique per (org,
+    snapshot, version, project). Legacy rows have no key and are not indexed."""
+    return "%s|%s|%s|%s" % (org_id, snapshot_id, version, project_id)
+
+
 async def ensure_allocation_indexes(db) -> None:
-    """OH01-1: the unique (org, snapshot, version, project) index on allocation rows.
-    ``create_index`` with the same name and spec is a no-op, so this is idempotent."""
+    """OH01-1: unique ``version_key`` on allocation rows — a SPARSE single-field index, so
+    legacy rows (no key) are not indexed. Idempotent."""
     await db[ALLOCATIONS_COLLECTION].create_index(
-        [("org_id", 1), ("overhead_snapshot_id", 1), ("allocation_version", 1), ("project_id", 1)],
-        name=ALLOCATION_VERSION_INDEX, unique=True,
-        partialFilterExpression={"allocation_version": {"$exists": True}})
+        [("version_key", 1)], name=ALLOCATION_VERSION_INDEX, unique=True, sparse=True)
 
 
 #: FG-86: one ACTIVE overhead snapshot per period — the active one carries this key,
@@ -188,8 +192,24 @@ async def ensure_snapshot_indexes(db) -> None:
         [("active_period_key", 1)], name=SNAPSHOT_PERIOD_INDEX, unique=True, sparse=True)
 
 
+async def ensure_overhead_indexes(db) -> None:
+    """OH01-3: the OH-01 unique indexes, created at STARTUP (server.py) and at tenant
+    onboarding (``onboarding.onboard_tenant``) — never on a request path. Idempotent."""
+    await ensure_allocation_indexes(db)
+    await ensure_snapshot_indexes(db)
+
+
+#: D6: the org-wide lock name for computing ANY snapshot (overlap checks need it).
+COMPUTE_LOCK = "compute"
+
+
+def period_lock(tenant, period_start: str, period_end: str):
+    """The lock of ONE period (compute and allocate of that period)."""
+    return overhead_lock(tenant, period_key(period_start, period_end))
+
+
 @asynccontextmanager
-async def period_lock(tenant, period_start: str, period_end: str):
+async def overhead_lock(tenant, name: str):
     """OH01-1 / FG-86: ONE writer per overhead period at a time — computing a snapshot and
     allocating any snapshot of that period are serialized. One atomic conditional upsert on
     ``_id`` (unique by definition) of the tenant's ``overhead_period_locks`` row: a held
@@ -197,7 +217,7 @@ async def period_lock(tenant, period_start: str, period_end: str):
     ALLOCATION_LOCK_STALE_SECONDS (crashed holder) can be taken over (the pattern of PR #70
     ``_row_lock``). Always released by its own token."""
     locks = tenant.collection(PERIOD_LOCKS_COLLECTION)
-    lock_id = "%s|%s" % (tenant.org_id, period_key(period_start, period_end))
+    lock_id = "%s|%s" % (tenant.org_id, name)
     token = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     stale = (now - timedelta(seconds=ALLOCATION_LOCK_STALE_SECONDS)).isoformat()
@@ -209,7 +229,7 @@ async def period_lock(tenant, period_start: str, period_end: str):
             {"_id": lock_id, "$or": [{ALLOCATION_LOCK_FIELD: {"$exists": False}},
                                      {ALLOCATION_LOCK_FIELD + ".at": {"$lt": stale}}]},
             {"$set": {ALLOCATION_LOCK_FIELD: {"token": token, "at": now.isoformat()},
-                      "period_start": period_start, "period_end": period_end}},
+                      "name": name}},
             upsert=True)
     except Exception as exc:     # the row exists and is held: the upsert collided on _id
         if "duplicate" in str(exc).lower() or type(exc).__name__ == "DuplicateKeyError":
