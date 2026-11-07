@@ -322,19 +322,34 @@ async def publish_allocation_batch(tenant, period_start: str, period_end: str,
         upsert=True)
 
 
+async def _read_current_pointers(tenant) -> Dict[str, str]:
+    """{period_key: current batch id} of every published period of the tenant. Read FIRST
+    (OH74-05); a separate function so a test can pause a reader right after it."""
+    ptrs = await tenant.collection(PERIOD_LOCKS_COLLECTION).find(
+        {"current_allocation_batch_id": {"$exists": True}},
+        {"_id": 0, "name": 1, "current_allocation_batch_id": 1}).to_list(None)
+    return {p["name"]: p["current_allocation_batch_id"] for p in ptrs if p.get("name")}
+
+
 async def current_allocations(tenant, flt: Dict[str, Any],
                               projection: Optional[Dict[str, Any]] = None) -> list:
-    """OH74-03: the CURRENT allocation rows matching ``flt`` — the one rule every reader
-    (project P&L, financial results, snapshot detail, /overhead/allocations) follows.
+    """OH74-03/05: the CURRENT allocation rows matching ``flt`` — the one rule every reader
+    (project P&L, financial results, snapshot detail, /overhead/allocations, full_cost,
+    profit views) follows.
 
-    A row is current when its period has a published pointer and the row is in the
-    pointed batch; for a period without a pointer (legacy data), a row without a batch id
-    and without ``superseded_by``. A staged row (batch id, not yet published) is never
-    current."""
+    Read order is the consistency guarantee (OH74-05): the publish POINTERS are read first,
+    the rows after. A batch's rows are inserted (staged) BEFORE its pointer is written and
+    are never deleted, so whatever pointer this reader saw, that batch's rows are there when
+    the rows are read — the reader sees the old version or the new one, never neither
+    (0) and never both.
+
+    A row is current when its period has a pointer (as read above) and the row is in that
+    batch; for a period without a pointer (legacy data), a row without a batch id. A staged
+    row (batch id, not published in the pointers read) is never current."""
+    current = await _read_current_pointers(tenant)
     proj = None
     if projection is not None:
-        proj = {**projection, "_id": 0, "overhead_snapshot_id": 1, "allocation_batch_id": 1,
-                "superseded_by": 1}
+        proj = {**projection, "_id": 0, "overhead_snapshot_id": 1, "allocation_batch_id": 1}
     rows = await tenant.project_overhead_allocations.find(flt, proj or {"_id": 0}).to_list(None)
     sids = sorted({r.get("overhead_snapshot_id") for r in rows if r.get("overhead_snapshot_id")})
     snaps = await tenant.overhead_snapshots.find(
@@ -343,18 +358,15 @@ async def current_allocations(tenant, flt: Dict[str, Any],
     pkey_of = {s["id"]: period_key(s["period_start"], s["period_end"])
                for s in snaps if s.get("period_start") and s.get("period_end")}
     period_of = {s["id"]: (s.get("period_start"), s.get("period_end")) for s in snaps}
-    names = sorted(set(pkey_of.values()))
-    ptrs = await tenant.collection(PERIOD_LOCKS_COLLECTION).find(
-        {"name": {"$in": names}, "current_allocation_batch_id": {"$exists": True}},
-        {"_id": 0, "name": 1, "current_allocation_batch_id": 1}).to_list(None) if names else []
-    current = {p["name"]: p["current_allocation_batch_id"] for p in ptrs}
     out = []
     for r in rows:
         pk = pkey_of.get(r.get("overhead_snapshot_id"))
         if pk in current:
             keep = r.get("allocation_batch_id") == current[pk]
         else:
-            keep = r.get("superseded_by") is None and not r.get("allocation_batch_id")
+            # no pointer in THIS reader's view: only pre-OH-01 rows (no batch id). Not
+            # ``superseded_by`` — the history step may set it concurrently (OH74-05).
+            keep = not r.get("allocation_batch_id")
         if keep:
             row = r if projection is None else \
                 {k: v for k, v in r.items() if k in projection or k == "recalculating"}

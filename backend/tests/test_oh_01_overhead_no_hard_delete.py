@@ -1181,3 +1181,48 @@ def test_28_no_code_path_reads_or_writes_project_overhead_alloc():
             if re.search(r"\.project_overhead_alloc\b|\[\s*[\"']project_overhead_alloc[\"']\s*\]", line):
                 hits.append("%s:%d" % (f.relative_to(root), i))
     assert hits == [], hits
+
+
+# ═══════════════════════════════════════════════════════════════════ 29. OH74-05
+@pytest.mark.parametrize("start", ["oh01_batch", "legacy_rows"])
+def test_29_a_reader_paused_between_its_reads_never_sees_zero(monkeypatch, backend, mode, start):
+    """OH74-05 (audit, PROVED): current_allocations() read the rows, then the pointer; a
+    reader paused between the two while an allocate published saw 300 -> 0 -> 600. Now the
+    pointers are read FIRST: a reader paused right after them while a whole allocation is
+    staged, published and history-marked still answers its consistent (old) version."""
+    async def scenario(c, op):
+        from app.services import overhead_lifecycle
+        from app.services.project_pnl import compute_project_pnl
+        if start == "legacy_rows":
+            await op.overhead_snapshots.insert_one({
+                "id": "legacy-snap", "org_id": ORG, "period_start": "2026-10-01",
+                "period_end": "2026-10-31", "method": "Hours", "total_overhead": 300.0,
+                "total_person_days": 4, "total_hours": 40, "computed_at": "2026-10-31T00:00:00"})
+            await op.project_overhead_allocations.insert_one({
+                "id": "legacy-a", "org_id": ORG, "overhead_snapshot_id": "legacy-snap",
+                "project_id": PROJ_A, "allocated_amount": 225.0})
+            cat = await _category(c)
+            await _cost(c, cat["id"], amount=600.0)
+            target = await _snapshot(c)                    # supersedes the legacy snapshot
+        else:
+            _s1, target = await _period_recomputed(c, op)  # s1 (300) allocated, s2 (600) computed
+        before = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        assert before == 225.0
+        real = overhead_lifecycle._read_current_pointers
+        state = {"paused": False}
+
+        async def pause_after_pointers(tenant):
+            ptrs = await real(tenant)
+            if not state["paused"]:
+                state["paused"] = True                     # the reader is frozen HERE ...
+                r = await c.post(f"/api/overhead/snapshots/{target['id']}/allocate",
+                                 json={"method": "Hours"}, headers=_h(key=_key()))
+                assert r.status_code == 200, r.text        # ... while an allocate publishes
+            return ptrs
+        monkeypatch.setattr(overhead_lifecycle, "_read_current_pointers", pause_after_pointers)
+        during = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        assert state["paused"]
+        assert during == 225.0                             # its consistent version, not 0
+        after = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        assert after == 450.0                              # the new one, alone (not 675)
+    run(monkeypatch, backend, mode, scenario)
