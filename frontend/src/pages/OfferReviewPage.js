@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import API from "@/lib/api";
+import { createKeyHolder, idempotencyHeaders, apiErrorText } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
@@ -12,7 +13,10 @@ import {
 const STATUS_BG = {
   Draft: "Чернова", Sent: "Изпратена", Accepted: "Одобрена",
   Rejected: "Отказана", NeedsRevision: "Изисква корекция", Archived: "Архивирана",
+  Superseded: "Заменена с нова версия", Cancelled: "Анулирана",
 };
+// OFF-01: one Idempotency-Key per answer; a retry after a lost connection reuses it
+const respondKey = createKeyHolder();
 const STATUS_COLORS = {
   Sent: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   Accepted: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -43,18 +47,20 @@ export default function OfferReviewPage() {
 
   const handleRespond = async (action) => {
     setResponding(true);
+    let failure = null;
     try {
       await API.post(`/offers/review/${reviewToken}/respond`, {
         action, comment, client_name: clientName,
-      });
+      }, idempotencyHeaders(respondKey.get()));
       setResponded(true);
       setOffer(prev => ({
         ...prev,
         status: action === "approve" ? "Accepted" : action === "reject" ? "Rejected" : "NeedsRevision",
       }));
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка");
-    } finally { setResponding(false); }
+      failure = err;
+      alert(apiErrorText(err, "Грешка"));
+    } finally { respondKey.settle(failure); setResponding(false); }
   };
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#0d1117]"><Loader2 className="w-8 h-8 animate-spin text-amber-500" /></div>;

@@ -1,7 +1,7 @@
 """
 Routes - Offers / BOQ (M2) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone
@@ -20,7 +20,7 @@ from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from ..models.offers import (
     OFFER_STATUSES, OFFER_UNITS,
-    OfferCreate, OfferUpdate, OfferLinesUpdate, OfferReject,
+    OfferCreate, OfferUpdate, OfferLinesUpdate, OfferReject, OfferAccept, OfferCancel,
     ActivityCatalogCreate, ActivityCatalogUpdate
 )
 
@@ -97,6 +97,104 @@ async def can_edit_offer(user: dict, offer: dict) -> bool:
     if offer["status"] != "Draft":
         return False
     return await can_manage_project(user, offer["project_id"])
+
+
+# ── OFF-01: versions, acceptance, cancellation (FLOW-003, FG-129/FG-130) ──
+#
+# * A new version supersedes the old one in the SAME transaction as the insert of the
+#   new one (``superseded_by``, who, when); the old review link is revoked — kept, never
+#   deleted. One conditional write on ``superseded_by: None`` decides the winner, so two
+#   new versions of one offer, or a new version and an acceptance, never both succeed.
+# * /accept and the public /respond accept only the CURRENT version; the check is the
+#   filter of the write itself, inside the transaction that also writes the AuditEvent.
+# * A sent offer is never deleted: it is cancelled (status + reason + AuditEvent).
+# * Every one of these writes needs an Idempotency-Key (R29 — a contractual action).
+
+STATUS_SUPERSEDED = "Superseded"
+STATUS_CANCELLED = "Cancelled"
+VERSIONABLE_STATUSES = ("Sent", "Accepted", "Rejected")          # unchanged rule
+CANCELLABLE_STATUSES = ("Sent", "Rejected", "NeedsRevision")
+OFFER_VERSION_SUPERSEDED = "OFFER_VERSION_SUPERSEDED"
+OFFER_IN_USE = "OFFER_IN_USE"
+PUBLIC_SUPERSEDED_TEXT = ("Тази версия на офертата е заменена с по-нова и вече не може да бъде "
+                          "одобрена. Моля, свържете се с изпълнителя за актуалната версия.")
+PUBLIC_NOT_OPEN_TEXT = "Тази оферта вече не е активна. Моля, свържете се с изпълнителя."
+
+
+def _conflict(error_code: str, message: str) -> HTTPException:
+    return HTTPException(status_code=409, detail={"error_code": error_code, "message": message})
+
+
+def _superseded_error() -> HTTPException:
+    return _conflict(OFFER_VERSION_SUPERSEDED, PUBLIC_SUPERSEDED_TEXT)
+
+
+def _is_superseded(offer: dict) -> bool:
+    return offer.get("status") == STATUS_SUPERSEDED or bool(offer.get("superseded_by"))
+
+
+def _link_closed(offer: dict) -> bool:
+    return offer.get("review_token_status") == "revoked" or offer.get("status") == STATUS_CANCELLED
+
+
+def _revoke_link(offer: dict, reason: str, now: str) -> dict:
+    """The fields that close the offer's review link (the token itself is kept)."""
+    if not offer.get("review_token") or offer.get("review_token_status") == "revoked":
+        return {}
+    return {"review_token_status": "revoked", "review_token_revoked_at": now,
+            "review_token_revoked_reason": reason}
+
+
+async def _draft_was_used(tenant: TenantData, offer: dict) -> bool:
+    """A draft that was ever sent, or that is a new version of a sent offer, is a used
+    record (FG-130): it is never deleted."""
+    if offer.get("sent_at") or offer.get("review_token") or offer.get("parent_offer_id") \
+            or offer.get("superseded_by"):
+        return True
+    return bool(await tenant.offer_events.find_one(
+        {"offer_id": offer["id"], "event_type": "sent"}, {"_id": 0, "id": 1}))
+
+
+def _require_key(header: Optional[str]) -> str:
+    """R29: the PAY-01 rule, reused — no key → 428 before anything is written."""
+    from app.routes.finance import _require_key as require_key
+    return require_key(header)
+
+
+async def _once(org_id: str, key: str, action: str, fingerprint: dict, work):
+    """The PAY-01 W0-04 idempotency wrapper, reused (one result per tenant/action/key)."""
+    from app.routes.finance import _once as once
+    return await once({"org_id": org_id}, key, action, fingerprint, work)
+
+
+async def _in_transaction(body):
+    """``auth_tx.run_in_transaction``; a deployment without transactions → 503, nothing written."""
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        return await run_in_transaction(db, body)
+    except TransactionsUnavailable:
+        raise HTTPException(status_code=503, detail={
+            "error_code": "TRANSACTIONS_UNAVAILABLE",
+            "message": "Записът изисква транзакция, а базата не я поддържа — нищо не е записано"})
+
+
+async def _offer_event(session, *, tenant_id: str, actor_type: str, actor_id: str, action: str,
+                       offer: dict, diff: dict, idem_key: str, reason: Optional[str] = None,
+                       roles=None, channel: str = "api", endpoint: Optional[str] = None,
+                       file_ids=None) -> None:
+    """Canonical W0-04 AuditEvent of an offer decision, in the business transaction."""
+    from app.audit.envelope import RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    event = build_event(
+        tenant_id=tenant_id, actor_type=actor_type, actor_id=actor_id, action=action,
+        source_flow="FLOW-003", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        entity_type="offer", entity_id=offer["id"], entity_version=str(offer.get("version", 1)),
+        scope_type="project", scope_id=offer.get("project_id"),
+        structured_diff=diff, reason=reason, source_channel=channel, tool_or_endpoint=endpoint,
+        idempotency_key=idem_key, related_file_ids=file_ids or None,
+        effective_role_assignments=roles,
+    )
+    await record_event(db, event, session=session)
 
 
 # ── Offer CRUD ─────────────────────────────────────────────────────
@@ -333,6 +431,8 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
         "status": "Sent", "sent_at": now, "sent_by": user["id"],
         "review_token": review_token, "updated_at": now,
+        # OFF-01: the link is bound to this offer id + this exact version
+        "review_token_version": offer.get("version", 1),
     }})
     
     # Record event
@@ -352,25 +452,62 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
 
 
 @router.post("/offers/{offer_id}/accept")
-async def accept_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await _tenant(user).offers.get(offer_id)
+async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
+                       user: dict = Depends(require_m2),
+                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Internal acceptance of the CURRENT version (OFF-01). A superseded version → 409
+    OFFER_VERSION_SUPERSEDED; the check is the filter of the write, in the transaction."""
+    tenant = _tenant(user)
+    offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner can accept offers")
-    if offer["status"] != "Sent":
-        raise HTTPException(status_code=400, detail="Only Sent offers can be accepted")
-    
-    now = datetime.now(timezone.utc).isoformat()
-    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
-        "status": "Accepted",
-        "accepted_at": now,
-        "updated_at": now,
-    }})
-    await log_audit(user["org_id"], user["id"], user["email"], "offer_accepted", "offer", offer_id,
-                    {"offer_no": offer["offer_no"], "total": offer.get("total", 0)})
-    
-    return await _tenant(user).offers.get(offer_id, {"_id": 0})
+    key = _require_key(idempotency_key)
+    data = data or OfferAccept()
+    version = offer.get("version", 1)
+
+    async def work():
+        # inside the key: a replay of a completed key returns its first result instead
+        if _is_superseded(offer):
+            raise _superseded_error()
+        if offer["status"] != "Sent":
+            raise HTTPException(status_code=400, detail="Only Sent offers can be accepted")
+
+        async def body(session):
+            from pymongo import ReturnDocument
+            now = datetime.now(timezone.utc).isoformat()
+            approval = {"method": data.approval_method, "channel": "internal",
+                        "evidence_file_id": data.evidence_file_id, "note": data.note,
+                        "version": version, "accepted_by": user["id"], "accepted_at": now}
+            done = await tenant.offers.find_one_and_update(
+                {"id": offer_id, "status": "Sent", "superseded_by": None, "version": version},
+                {"$set": {"status": "Accepted", "accepted_at": now, "accepted_by": user["id"],
+                          "approval": approval, "updated_at": now}},
+                projection={"_id": 0}, return_document=ReturnDocument.AFTER, session=session)
+            if not done:
+                current = await tenant.offers.get(offer_id, {"_id": 0}, session=session) or {}
+                if _is_superseded(current):
+                    raise _superseded_error()
+                raise HTTPException(status_code=400, detail="Only Sent offers can be accepted")
+            await log_audit(user["org_id"], user["id"], user["email"], "offer_accepted", "offer",
+                            offer_id, {"offer_no": offer["offer_no"], "total": offer.get("total", 0),
+                                       "version": version},
+                            db_handle=db, session=session)
+            await _offer_event(
+                session, tenant_id=user["org_id"], actor_type="human", actor_id=user["id"],
+                action="offers.offer.accepted", offer=done, idem_key=key,
+                roles=[user.get("role") or ""], endpoint="POST /api/offers/{offer_id}/accept",
+                file_ids=[data.evidence_file_id] if data.evidence_file_id else None,
+                diff={"status": {"before": "Sent", "after": "Accepted"}, "version": version,
+                      "approval_method": data.approval_method,
+                      "evidence_file_id": data.evidence_file_id,
+                      "total": done.get("total"), "currency": done.get("currency")})
+            return done
+        return await _in_transaction(body)
+
+    return await _once(user["org_id"], key, "offers.offer.accept",
+                       {"offer_id": offer_id, **data.model_dump()}, work)
 
 
 @router.post("/offers/{offer_id}/reject")
@@ -396,65 +533,162 @@ async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(re
 
 
 @router.post("/offers/{offer_id}/new-version")
-async def create_offer_version(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await _tenant(user).offers.get(offer_id)
+async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
+                               idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """A new version (Draft) of a non-draft offer. OFF-01: the old version is superseded
+    and its review link revoked in the same transaction as the insert of the new one."""
+    tenant = _tenant(user)
+    offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if not await can_manage_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    if offer["status"] not in ["Sent", "Accepted", "Rejected"]:
-        raise HTTPException(status_code=400, detail="Can only version non-Draft offers")
-    
-    now = datetime.now(timezone.utc).isoformat()
+    key = _require_key(idempotency_key)
+    seen_status = offer["status"]
     new_version = offer.get("version", 1) + 1
-    
-    # Clone lines with new IDs
-    new_lines = []
-    for line in offer.get("lines", []):
-        l = {k: v for k, v in line.items() if k != "_id"}
-        l["id"] = str(uuid.uuid4())
-        new_lines.append(l)
-    
-    new_offer = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": offer["project_id"],
-        "offer_no": offer["offer_no"],  # Keep same offer_no
-        "title": offer["title"],
-        "status": "Draft",
-        "version": new_version,
-        "parent_offer_id": offer["id"],
-        "currency": offer["currency"],
-        "vat_percent": offer["vat_percent"],
-        "lines": new_lines,
-        "subtotal": offer["subtotal"],
-        "vat_amount": offer["vat_amount"],
-        "total": offer["total"],
-        "notes": offer.get("notes", ""),
-        "created_at": now,
-        "updated_at": now,
-        "sent_at": None,
-        "accepted_at": None,
-    }
-    
-    await _tenant(user).offers.insert_one(new_offer)
-    await log_audit(user["org_id"], user["id"], user["email"], "offer_versioned", "offer", new_offer["id"],
-                    {"offer_no": offer["offer_no"], "version": new_version, "from_version": offer.get("version", 1)})
-    
-    return {k: v for k, v in new_offer.items() if k != "_id"}
+
+    async def work():
+        if _is_superseded(offer):
+            raise _superseded_error()
+        if seen_status not in VERSIONABLE_STATUSES:
+            raise HTTPException(status_code=400, detail="Can only version non-Draft offers")
+
+        async def body(session):
+            now = datetime.now(timezone.utc).isoformat()
+            new_id = str(uuid.uuid4())
+            mark = {"superseded_by": new_id, "superseded_at": now,
+                    "superseded_by_user": user["id"], "updated_at": now,
+                    **_revoke_link(offer, "superseded", now)}
+            if seen_status != "Accepted":
+                # an accepted version keeps "Accepted" (it was accepted); every other one
+                # is replaced (debt D-OFF01-2: what an accepted offer's new version means)
+                mark.update({"status": STATUS_SUPERSEDED, "status_before_supersede": seen_status})
+            won = await tenant.offers.update_one(
+                {"id": offer_id, "status": seen_status, "superseded_by": None},
+                {"$set": mark}, session=session)
+            if won.modified_count != 1:
+                current = await tenant.offers.get(offer_id, {"_id": 0}, session=session) or {}
+                if _is_superseded(current):
+                    raise _superseded_error()
+                raise _conflict("OFFER_STATE_CHANGED",
+                                "Офертата беше променена от друга заявка — презаредете и опитайте отново")
+            new_lines = []
+            for line in offer.get("lines", []):
+                l = {k: v for k, v in line.items() if k != "_id"}
+                l["id"] = str(uuid.uuid4())
+                new_lines.append(l)
+            new_offer = {
+                "id": new_id,
+                "org_id": user["org_id"],
+                "project_id": offer["project_id"],
+                "offer_no": offer["offer_no"],  # Keep same offer_no
+                "title": offer["title"],
+                "status": "Draft",
+                "version": new_version,
+                "parent_offer_id": offer["id"],
+                "currency": offer["currency"],
+                "vat_percent": offer["vat_percent"],
+                "lines": new_lines,
+                "subtotal": offer["subtotal"],
+                "vat_amount": offer["vat_amount"],
+                "total": offer["total"],
+                "notes": offer.get("notes", ""),
+                "created_at": now,
+                "updated_at": now,
+                "sent_at": None,
+                "accepted_at": None,
+            }
+            await tenant.offers.insert_one(new_offer, session=session)
+            new_offer.pop("_id", None)
+            await log_audit(user["org_id"], user["id"], user["email"], "offer_versioned", "offer",
+                            new_id, {"offer_no": offer["offer_no"], "version": new_version,
+                                     "from_version": offer.get("version", 1)},
+                            db_handle=db, session=session)
+            await _offer_event(
+                session, tenant_id=user["org_id"], actor_type="human", actor_id=user["id"],
+                action="offers.offer.superseded", offer=offer, idem_key=key,
+                roles=[user.get("role") or ""], endpoint="POST /api/offers/{offer_id}/new-version",
+                diff={"status": {"before": seen_status,
+                                 "after": mark.get("status", seen_status)},
+                      "superseded_by": new_id, "new_version": new_version,
+                      "review_link_revoked": bool(mark.get("review_token_status"))})
+            return new_offer
+        return await _in_transaction(body)
+
+    return await _once(user["org_id"], key, "offers.offer.new_version", {"offer_id": offer_id}, work)
+
+
+@router.post("/offers/{offer_id}/cancel")
+async def cancel_offer(offer_id: str, data: Optional[OfferCancel] = None,
+                       user: dict = Depends(require_m2),
+                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """OFF-01 (FG-130): a sent offer is withdrawn, never deleted — status Cancelled, the
+    reason, who and when, its review link revoked, a canonical AuditEvent."""
+    tenant = _tenant(user)
+    offer = await tenant.offers.get(offer_id)
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found")
+    if user["role"] not in ["Admin", "Owner"]:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner can cancel offers")
+    key = _require_key(idempotency_key)
+    reason = ((data.reason if data else None) or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail={
+            "error_code": "REASON_REQUIRED", "message": "Посочете причина за анулирането"})
+    from app.services.money_amount import check_reason
+    check_reason(reason)
+    seen_status = offer["status"]
+
+    async def work():
+        cancellable = seen_status in CANCELLABLE_STATUSES or (
+            seen_status == "Draft" and await _draft_was_used(tenant, offer))
+        if _is_superseded(offer) or not cancellable:
+            raise _conflict("OFFER_NOT_CANCELLABLE",
+                            "Тази оферта не може да бъде анулирана в състояние %s" % seen_status)
+
+        async def body(session):
+            from pymongo import ReturnDocument
+            now = datetime.now(timezone.utc).isoformat()
+            done = await tenant.offers.find_one_and_update(
+                {"id": offer_id, "status": seen_status, "superseded_by": None},
+                {"$set": {"status": STATUS_CANCELLED, "status_before_cancel": seen_status,
+                          "cancel_reason": reason, "cancelled_by": user["id"],
+                          "cancelled_at": now, "updated_at": now,
+                          **_revoke_link(offer, "cancelled", now)}},
+                projection={"_id": 0}, return_document=ReturnDocument.AFTER, session=session)
+            if not done:
+                raise _conflict("OFFER_NOT_CANCELLABLE",
+                                "Офертата беше променена от друга заявка — презаредете")
+            await log_audit(user["org_id"], user["id"], user["email"], "offer_cancelled", "offer",
+                            offer_id, {"offer_no": offer["offer_no"], "reason": reason},
+                            db_handle=db, session=session)
+            await _offer_event(
+                session, tenant_id=user["org_id"], actor_type="human", actor_id=user["id"],
+                action="offers.offer.cancelled", offer=done, idem_key=key, reason=reason,
+                roles=[user.get("role") or ""], endpoint="POST /api/offers/{offer_id}/cancel",
+                diff={"status": {"before": seen_status, "after": STATUS_CANCELLED},
+                      "review_link_revoked": bool(offer.get("review_token"))})
+            return done
+        return await _in_transaction(body)
+
+    return await _once(user["org_id"], key, "offers.offer.cancel",
+                       {"offer_id": offer_id, "reason": reason}, work)
 
 
 @router.delete("/offers/{offer_id}")
 async def delete_offer(offer_id: str, user: dict = Depends(require_m2)):
-    offer = await _tenant(user).offers.get(offer_id)
+    """Only a draft that was never sent (and is not a version of a sent offer) is removed.
+    OFF-01 (FG-130): anything else → 409 OFFER_IN_USE; cancel it instead."""
+    tenant = _tenant(user)
+    offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner can delete offers")
-    if offer["status"] == "Accepted":
-        raise HTTPException(status_code=400, detail="Cannot delete accepted offers")
+    if offer["status"] != "Draft" or await _draft_was_used(tenant, offer):
+        raise _conflict(OFFER_IN_USE, "Изпратена или използвана оферта не се изтрива — анулирайте я")
     
-    await _tenant(user).offers.delete_one({"id": offer_id})
+    await tenant.offers.delete_one({"id": offer_id})
     await log_audit(user["org_id"], user["id"], user["email"], "offer_deleted", "offer", offer_id,
                     {"offer_no": offer["offer_no"]})
     return {"ok": True}
@@ -551,7 +785,7 @@ async def get_offer_enums():
 # ── Offer Export (PDF + XLSX) ──────────────────────────────────────
 
 UNIT_LABELS_BG = {"m2": "м2", "m": "м", "pcs": "бр", "hours": "часа", "lot": "к-т", "kg": "кг", "l": "л"}
-STATUS_LABELS_BG = {"Draft": "Чернова", "Sent": "Изпратена", "Accepted": "Одобрена", "Rejected": "Отказана", "NeedsRevision": "Корекция", "Archived": "Архивирана"}
+STATUS_LABELS_BG = {"Draft": "Чернова", "Sent": "Изпратена", "Accepted": "Одобрена", "Rejected": "Отказана", "NeedsRevision": "Корекция", "Archived": "Архивирана", "Superseded": "Заменена", "Cancelled": "Анулирана"}
 
 @router.get("/offers/{offer_id}/pdf")
 async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
@@ -1137,45 +1371,91 @@ async def get_offer_review(review_token: str):
     }
 
 
+CLIENT_ACTIONS = {
+    "approve": ("Accepted", "approved_by_client", "offers.offer.client_approved"),
+    "reject": ("Rejected", "rejected_by_client", "offers.offer.client_rejected"),
+    "revision": ("NeedsRevision", "revision_requested", "offers.offer.client_revision_requested"),
+}
+
+
 @router.post("/offers/review/{review_token}/respond")
-async def respond_to_offer(review_token: str, data: dict):
-    """Public endpoint - client responds to offer (no auth required)"""
+async def respond_to_offer(review_token: str, data: dict,
+                           idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Public endpoint - client responds to offer (no auth required).
+
+    OFF-01: the link is bound to its offer id and exact version; a superseded version or a
+    revoked link → 409 with a neutral text. The check is the filter of the write, in the
+    transaction that also writes the AuditEvent."""
     tenant, offer = await resolve_review_token(db, review_token)
     if not offer:
         raise HTTPException(status_code=404, detail="Офертата не е намерена")
-    if offer["status"] not in ["Sent"]:
-        raise HTTPException(status_code=400, detail="Тази оферта вече е обработена")
-    
+    key = _require_key(idempotency_key)
     action = data.get("action")  # approve / reject / revision
     comment = data.get("comment", "")
     client_name = data.get("client_name", "")
-    now = datetime.now(timezone.utc).isoformat()
-    
-    if action == "approve":
-        new_status = "Accepted"
-        event_type = "approved_by_client"
-        update_fields = {"status": new_status, "accepted_at": now, "client_comment": comment, "client_name": client_name, "updated_at": now}
-    elif action == "reject":
-        new_status = "Rejected"
-        event_type = "rejected_by_client"
-        update_fields = {"status": new_status, "reject_reason": comment, "client_comment": comment, "client_name": client_name, "updated_at": now}
-    elif action == "revision":
-        new_status = "NeedsRevision"
-        event_type = "revision_requested"
-        update_fields = {"status": new_status, "revision_comment": comment, "client_comment": comment, "client_name": client_name, "updated_at": now}
-    else:
-        raise HTTPException(status_code=400, detail="Невалидно действие")
-    
-    await tenant.offers.update_one({"id": offer["id"], "review_token": review_token}, {"$set": update_fields})
-    
-    await db.offer_events.insert_one({
-        "id": str(uuid.uuid4()), "org_id": offer["org_id"],
-        "offer_id": offer["id"], "event_type": event_type,
-        "actor": client_name or "client", "created_at": now,
-        "details": {"comment": comment, "client_name": client_name},
-    })
-    
-    return {"ok": True, "status": new_status}
+    version = offer.get("version", 1)
+
+    async def work():
+        if _is_superseded(offer):
+            raise _superseded_error()
+        if _link_closed(offer):
+            raise _conflict("OFFER_NOT_OPEN", PUBLIC_NOT_OPEN_TEXT)
+        if offer["status"] not in ["Sent"]:
+            raise HTTPException(status_code=400, detail="Тази оферта вече е обработена")
+        if action not in CLIENT_ACTIONS:
+            raise HTTPException(status_code=400, detail="Невалидно действие")
+        new_status, event_type, canonical = CLIENT_ACTIONS[action]
+
+        async def body(session):
+            now = datetime.now(timezone.utc).isoformat()
+            update_fields = {"status": new_status, "client_comment": comment,
+                             "client_name": client_name, "updated_at": now}
+            if action == "approve":
+                update_fields.update({"accepted_at": now, "approval": {
+                    "method": "magic_link", "channel": "review_link", "version": version,
+                    "client_name": client_name, "comment": comment, "accepted_at": now,
+                    # FLOW-003 carrier 3 also needs a limited validity and an identity check
+                    # (debt D-OFF01-1): only the link itself is verified today.
+                    "verification": "link_token_only"}})
+            elif action == "reject":
+                update_fields["reject_reason"] = comment
+            else:
+                update_fields["revision_comment"] = comment
+            won = await tenant.offers.update_one(
+                {"id": offer["id"], "review_token": review_token, "status": "Sent",
+                 "superseded_by": None, "version": version,
+                 "review_token_status": {"$ne": "revoked"},
+                 "$or": [{"review_token_version": {"$exists": False}},
+                         {"review_token_version": version}]},
+                {"$set": update_fields}, session=session)
+            if won.modified_count != 1:
+                current = await tenant.offers.get(offer["id"], {"_id": 0}, session=session) or {}
+                if _is_superseded(current):
+                    raise _superseded_error()
+                if _link_closed(current) or current.get("version", version) != version:
+                    raise _conflict("OFFER_NOT_OPEN", PUBLIC_NOT_OPEN_TEXT)
+                raise HTTPException(status_code=400, detail="Тази оферта вече е обработена")
+            await tenant.offer_events.insert_one({
+                "id": str(uuid.uuid4()), "org_id": offer["org_id"],
+                "offer_id": offer["id"], "event_type": event_type,
+                "actor": client_name or "client", "created_at": now,
+                "details": {"comment": comment, "client_name": client_name, "version": version},
+            }, session=session)
+            await _offer_event(
+                session, tenant_id=offer["org_id"], actor_type="external_principal",
+                actor_id="offer-review-link:%s" % offer["id"], action=canonical, offer=offer,
+                idem_key=key, channel="magic_link",
+                endpoint="POST /api/offers/review/{review_token}/respond",
+                diff={"status": {"before": "Sent", "after": new_status}, "version": version,
+                      "approval_method": "magic_link" if action == "approve" else None,
+                      "client_name": client_name, "total": offer.get("total"),
+                      "currency": offer.get("currency")})
+            return {"ok": True, "status": new_status}
+        return await _in_transaction(body)
+
+    return await _once(offer["org_id"], key, "offers.offer.client_respond",
+                       {"offer_id": offer["id"], "action": action, "comment": comment,
+                        "client_name": client_name}, work)
 
 
 # ── Offer Events History ───────────────────────────────────────────
