@@ -62,4 +62,4 @@ merge with #69 @ ccab244 after FG-89: SEC-01 30/30, OH-01 201, R0 814, W0 same 1
 ## OH74-05 (audit, PROVED): pointer-first read — fix commit 612d026
 tests/test_oh_01_overhead_no_hard_delete.py: 213 passed (new test_29 x2 starts {OH-01 batch, legacy rows} x2 backends x3 modes: a reader paused right after reading the pointers while a whole allocate publishes answers its consistent old version 225, then 450 — never 0, never both)
 R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
-merge with #69 @ c14fcda (7-step procedure, unchanged): SEC-01 30/30, OH-01 213, R0 814, W0 same 15, PM-01 6, guards 0/0
+merge with #69 @ c14fcda (7-step procedure, unchanged): SEC-01 30/30, OH-01 213, W0 same 15, PM-01 6, guards 0/0; R0: first run 1 failed / 813 passed (test id not captured), then 4 further runs on rebuilt merged trees (incl. the same SEC-01 -> OH-01 -> PM-01 -> R0 order) 814 passed each; #69 alone 814 — recorded as an unidentified, non-reproduced flake
