@@ -4586,3 +4586,26 @@ For the #76 fix head, add:
 - (b) a crash at each step, then same-key retry → exactly 1 AuditEvent per business action.
 
 Trial merges now use main `2ec61f3`.
+
+### #79 @ `acc472f` (FG-144 reject CAS + status-transition sweep) — **full PASS**
+
+Probe O1–O18 × 3 modes: **606 passed**.
+
+| Case | Result |
+|---|---|
+| **O17** public approve ∥ internal reject **×100 per mode** | always exactly 1 winner (200 / 409); Accepted ⇒ `accepted_at` and no `rejected_at`, Rejected ⇒ the reverse; exactly 1 decision AuditEvent |
+| **O18** send ∥ send ×20 | one 200 + one 409, `offers.offer.sent` 1, snapshot 1, `offer_events` 'sent' 1 |
+| O18 reject without key | **428** |
+
+| Gate | Result |
+|---|---|
+| OFF-01 suite in the clean venv (req + dev) | 231 passed, 0 skipped |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The PM-01 diff vs main is only `+cancel`. The merge with main d226c49 is clean, and so is the merge with the **new main `2ec61f3`**.
+
+- **400 → 409:** no frontend change needed. `OfferEditorPage` (accept / reject / new-version) and `OfferReviewPage` (respond) render errors through `apiErrorText`. The new reject call sends a per-click Idempotency-Key.
+- **D-OFF01-18 (send has no key): acceptable as debt.** `/send` sends **no email**; it writes the status, a snapshot, `offer_events` 'sent' and `offers.offer.sent` in one transaction behind a compare-and-swap. A double send gives exactly one of each and the loser gets 409. A key would only turn the loser's 409 into a replay of the first answer.
