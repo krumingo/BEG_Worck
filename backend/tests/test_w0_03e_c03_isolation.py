@@ -37,6 +37,15 @@ from tests.test_w0_03e_legacy_migration import (
 )
 from tests.test_w0_03e_legacy_routes import ADMIN, client_for, enforce_with, find_all, landmines
 
+
+@pytest.fixture(autouse=True)
+def _permission_service_mode_off(monkeypatch):
+    """SEC-02: the finance reports here now pass the W0-02 permission dependency, which
+    reads PERMISSION_SERVICE_MODE. These tests are about MASTER_DATA_MODE and assume the
+    permission mode off (as ``enforce_with`` already pins); an earlier test file leaves
+    ``enforce`` in os.environ, so pin it for every test, not only the enforce ones."""
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+
 MODES = ["off", "shadow", "enforce"]
 
 #: Strings that exist ONLY in tenant B's documents. None may reach tenant A.
@@ -152,6 +161,7 @@ def set_mode(monkeypatch, db, mode):
     if mode == "enforce":
         return enforce_with(monkeypatch, db)
     monkeypatch.setenv(ENV_MODE, mode)
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")   # SEC-02: as enforce_with pins it
     return None
 
 

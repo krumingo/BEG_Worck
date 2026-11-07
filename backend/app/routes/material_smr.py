@@ -13,6 +13,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -136,6 +137,7 @@ async def sync_material_entries(project_id: str, user: dict = Depends(require_m2
 
 
 @router.get("/material-entries")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_material_entries(
     project_id: Optional[str] = None, execution_package_id: Optional[str] = None,
     planned_material_id: Optional[str] = None, user: dict = Depends(require_m2),
@@ -339,7 +341,11 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
 
 
 @router.get("/execution-packages/financial-breakdown/{project_id}")
-async def get_project_package_breakdown(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_package_breakdown(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_financial_breakdown.read", module="M2", resource_type="package_financial_breakdown")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """All execution packages financial breakdown for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -392,6 +398,7 @@ async def get_project_package_breakdown(project_id: str, user: dict = Depends(re
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/material-warnings/{project_id}")
+@strip_money_for_non_finance   # SEC-02-G (SEC71-03; R20-5M): EUR amounts in the warning text
 async def get_material_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Material cost warnings for a project"""
     tenant = _tenant(user)

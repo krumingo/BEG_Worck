@@ -5,17 +5,20 @@ from fastapi import APIRouter, Depends
 from typing import Optional
 
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 from app.services.morning_briefing import build_morning_briefing
 
 router = APIRouter(tags=["Morning Briefing"])
 
 
 @router.get("/morning-briefing")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_morning_briefing(date: Optional[str] = None, user: dict = Depends(get_current_user)):
     return await build_morning_briefing(user["org_id"], date)
 
 
 @router.get("/morning-briefing/compact")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_compact_briefing(date: Optional[str] = None, user: dict = Depends(get_current_user)):
     full = await build_morning_briefing(user["org_id"], date)
     return {

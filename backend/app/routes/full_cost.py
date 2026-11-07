@@ -8,7 +8,7 @@ Phase 5: Profit by period + expected vs actual
 Phase 6: Core financial alerts
 Phase 7: Project risk summary
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -18,6 +18,9 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write, require_finance_read
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.routes.labor_smr import ACTIVE_LABOR_ROW
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 
@@ -32,7 +35,11 @@ def _tenant(user: dict) -> TenantData:
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/employee-cost/{user_id}")
-async def get_employee_cost_basis(user_id: str, user: dict = Depends(require_m2)):
+async def get_employee_cost_basis(
+    user_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.employee_cost.read", module="M2", resource_type="employee_cost")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     """Employee full cost model — net salary untouched, additional layers separate"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -103,17 +110,27 @@ async def update_employee_cost_config(data: dict, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-snapshots", status_code=201)
-async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2)):
+async def create_overhead_snapshot(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot.create", module="M2", resource_type="overhead_snapshot")),  # SEC-01: before any read/write
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
     """Create an overhead period snapshot entry"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.overhead_snapshot.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.overhead_snapshots.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     entry = {
-        "id": str(uuid.uuid4()),
+        "id": mw.new_id("overhead_snapshot"),
         "org_id": user["org_id"],
         "category_code": data.get("category_code", "general"),
         "category_name": data.get("category_name", ""),
         "period_key": data.get("period_key", datetime.now().strftime("%Y-%m")),
-        "amount": float(data.get("amount", 0)),
+        "amount": amount,
         "currency": "EUR",
         "allocation_basis": data.get("allocation_basis", "labor_hours"),
         "notes": data.get("notes", ""),
@@ -121,12 +138,18 @@ async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2))
         "created_at": now,
         "created_by": user["id"],
     }
-    await tenant.overhead_snapshots.insert_one(entry)
+    async with mw:
+        if await mw.needs_insert(tenant.overhead_snapshots, entry["id"]):
+            await tenant.overhead_snapshots.insert_one(entry)
+        mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
 @router.get("/overhead-snapshots")
-async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_overhead_snapshots(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_snapshot.read", module="M2", resource_type="overhead_snapshot")),  # SEC-02 (R20-1): before any read
+    period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if period_key: q["period_key"] = period_key
@@ -134,7 +157,10 @@ async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict =
 
 
 @router.get("/overhead-snapshots/aggregate")
-async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+async def aggregate_overhead(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_snapshot_aggregate.read", module="M2", resource_type="overhead_snapshot_aggregate")),  # SEC-02 (R20-1): before any read
+    period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate overhead by period and category"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -183,7 +209,14 @@ async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depe
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-allocation/compute/{project_id}")
-async def compute_overhead_allocation(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
+async def compute_overhead_allocation(
+    project_id: str,
+    data: dict = {},
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_allocation.execute", module='M2',
+        resource_type="project_overhead_alloc")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     """Compute overhead allocation for a project based on labor hours share"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -254,7 +287,11 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/execution-packages/{pkg_id}/net-financial")
-async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2)):
+async def get_package_net_financial(
+    pkg_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_net_financial.read", module="M2", resource_type="package_net_financial")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Package net financial with overhead and net margin"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -307,7 +344,11 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-net-profit/{project_id}")
-async def get_project_net_profit(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_net_profit(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_net_profit.read", module="M2", resource_type="project_net_profit")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Extended project profit with overhead, gross vs net margin, expected vs actual"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -389,7 +430,11 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/financial-alerts/{project_id}")
-async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)):
+async def get_financial_alerts(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_financial_alert.read", module="M2", resource_type="project_financial_alert")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Core financial alerts for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -423,7 +468,7 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "unmapped_material", "severity": "warning", "count": mat_warn, "message": f"{mat_warn} материални записа без връзка към СМР"})
 
     # Labor warnings
-    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW})
     if lab_unmapped > 0:
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 
@@ -443,7 +488,11 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-risk/{project_id}")
-async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_risk(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_risk.read", module="M2", resource_type="project_risk")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Consolidated project risk summary"""
     tenant = _tenant(user)
     org_id = user["org_id"]

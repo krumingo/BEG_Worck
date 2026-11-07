@@ -13,6 +13,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -31,7 +32,11 @@ DEFAULT_PROCUREMENT_LEAD_DAYS = 14
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/revenue-snapshots/from-offer/{offer_id}", status_code=201)
-async def create_revenue_snapshot(offer_id: str, user: dict = Depends(require_m2)):
+async def create_revenue_snapshot(
+    offer_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.revenue_snapshot_from_offer.execute", module="M2", resource_type="revenue_snapshot_from_offer")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Create a frozen revenue snapshot from an accepted offer"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -85,7 +90,10 @@ async def create_revenue_snapshot(offer_id: str, user: dict = Depends(require_m2
 
 
 @router.get("/revenue-snapshots")
-async def list_revenue_snapshots(project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_revenue_snapshots(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.revenue_snapshot.read", module="M2", resource_type="revenue_snapshot")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
@@ -93,7 +101,11 @@ async def list_revenue_snapshots(project_id: Optional[str] = None, user: dict = 
 
 
 @router.get("/revenue-snapshots/{snapshot_id}")
-async def get_revenue_snapshot(snapshot_id: str, user: dict = Depends(require_m2)):
+async def get_revenue_snapshot(
+    snapshot_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.revenue_snapshot_detail.read", module="M2", resource_type="revenue_snapshot_detail")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     s = await tenant.revenue_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
     if not s:
@@ -106,7 +118,11 @@ async def get_revenue_snapshot(snapshot_id: str, user: dict = Depends(require_m2
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/profit-by-period/{project_id}")
-async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)):
+async def get_profit_by_period(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_profit_by_period.read", module="M2", resource_type="project_profit_by_period")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Monthly profit breakdown for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -215,7 +231,11 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/cash-vs-earned/{project_id}")
-async def get_cash_vs_earned(project_id: str, user: dict = Depends(require_m2)):
+async def get_cash_vs_earned(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_cash_vs_earned.read", module="M2", resource_type="project_cash_vs_earned")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Cash collected vs earned revenue + gap analysis"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -275,7 +295,11 @@ async def get_cash_vs_earned(project_id: str, user: dict = Depends(require_m2)):
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/procurement-alerts/{project_id}")
-async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m2)):
+async def get_procurement_alerts(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_procurement_alert.read", module="M2", resource_type="project_procurement_alert")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Procurement risk alerts based on planned vs requested vs purchased vs issued"""
     tenant = _tenant(user)
     org_id = user["org_id"]

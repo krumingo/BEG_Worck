@@ -10,6 +10,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m9
 from app.utils.audit import log_audit
+from app.permissions.money_write import require_money_write
 from ..models.overhead import (
     OVERHEAD_FREQUENCIES, OVERHEAD_ALLOCATION_TYPES, OVERHEAD_METHODS,
     OverheadCategoryCreate, OverheadCategoryUpdate,
@@ -34,12 +35,12 @@ def today_str():
 
 
 def check_overhead_access(user: dict, write: bool = False) -> bool:
-    """Check if user has access to overhead cost system"""
-    if user["role"] in ["Admin", "Owner", "Accountant"]:
-        return True
-    if user["role"] == "SiteManager" and not write:
-        return True
-    return False
+    """Check if user has access to overhead cost system.
+
+    SEC-02 (R20-1, Krum 06.11.2026): overhead is company finance — Owner/Admin/Accountant
+    only, for reads too. The former SiteManager read is removed; ``write`` is kept for the
+    callers' signature (the write rule was already the same three roles)."""
+    return user["role"] in ["Admin", "Owner", "Accountant"]
 
 
 # ── Dashboard Stats ────────────────────────────────────────────────
@@ -313,7 +314,13 @@ async def delete_overhead_asset(asset_id: str, user: dict = Depends(require_m9))
 # ── Overhead Snapshots ─────────────────────────────────────────────
 
 @router.post("/overhead/snapshots/compute")
-async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = Depends(require_m9)):
+async def compute_overhead_snapshot(
+    data: OverheadSnapshotCompute,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot_compute.execute", module="M9",
+        resource_type="overhead_snapshot")),  # SEC-01-C01: before any read/write
+    user: dict = Depends(require_m9),
+):
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")

@@ -182,7 +182,9 @@ export default function BatchesTab() {
             <TableBody>
               {batches.map(b => {
                 const st = STATUS_CFG[b.status] || STATUS_CFG.active;
-                const value = ((b.remaining_qty || 0) * (b.unit_cost || 0)).toFixed(2);
+                // SEC-02-B (R20, rule 4): without the finance right the backend sends no
+                // unit_cost — quantities only, no fake 0.
+                const value = b.unit_cost === undefined ? "—" : ((b.remaining_qty || 0) * (b.unit_cost || 0)).toFixed(2);
                 const itemName = items.find(i => i.id === b.item_id)?.name || b.item_id?.slice(0, 8);
                 const whName = warehouses.find(w => w.id === b.warehouse_id)?.name || "—";
                 return (
@@ -193,7 +195,7 @@ export default function BatchesTab() {
                     <TableCell className="text-muted-foreground font-mono">{b.invoice_number || "—"}</TableCell>
                     <TableCell className="text-right font-mono">{b.initial_qty}</TableCell>
                     <TableCell className={`text-right font-mono font-bold ${pctColor(b.remaining_qty, b.initial_qty)}`}>{b.remaining_qty}</TableCell>
-                    <TableCell className="text-right font-mono">{b.unit_cost} {b.currency}</TableCell>
+                    <TableCell className="text-right font-mono">{b.unit_cost === undefined ? "—" : `${b.unit_cost} ${b.currency || ""}`}</TableCell>
                     <TableCell className="text-right font-mono">{value}</TableCell>
                     <TableCell className="text-muted-foreground">{(b.received_at || "").slice(0, 10)}</TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${st.cls}`}>{st.label}</Badge></TableCell>

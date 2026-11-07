@@ -1,7 +1,7 @@
 """
 Routes - Reports (Prices, Turnover, Company Finance, etc.)
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 from calendar import monthrange
@@ -13,6 +13,8 @@ from app.master_data.legacy_adapter import annotate_refs, require_tenant_identit
 from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
+from app.permissions.money_write import require_money_write, require_finance_read
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 
 router = APIRouter(tags=["Reports"])
 
@@ -26,6 +28,8 @@ def _tenant(user: dict) -> TenantData:
 
 @router.get("/prices")
 async def get_price_history(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.purchase_price_history.read", module="M5", resource_type="purchase_price_history")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -158,6 +162,8 @@ async def get_price_history(
 
 @router.get("/reports/turnover-by-counterparty")
 async def get_turnover_by_counterparty(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.turnover_by_counterparty.read", module="M5", resource_type="turnover_by_counterparty")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -294,6 +300,8 @@ async def get_turnover_by_counterparty(
 @router.get("/reports/turnover-by-counterparty/{counterparty_id}/invoices")
 async def get_counterparty_invoices(
     counterparty_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.turnover_counterparty_invoices.read", module="M5", resource_type="turnover_counterparty_invoices")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -345,6 +353,8 @@ async def get_counterparty_invoices(
 
 @router.get("/reports/turnover-by-client")
 async def get_turnover_by_client(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.turnover_by_client.read", module="M5", resource_type="turnover_by_client")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -521,6 +531,8 @@ def get_week_ranges(year: int, month: int) -> list:
 
 @router.get("/reports/company-finance-summary")
 async def get_company_finance_summary(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance_summary.read", module="M5", resource_type="company_finance_summary")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),
@@ -805,6 +817,8 @@ async def get_month_finance_totals(tenant: TenantData, year: int, month: int) ->
 
 @router.get("/reports/company-finance-compare")
 async def compare_company_finance(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance_compare.read", module="M5", resource_type="company_finance_compare")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     year: Optional[int] = None,
     months: Optional[str] = None,  # comma-separated: "01,02,03"
@@ -907,6 +921,8 @@ async def compare_company_finance(
 
 @router.get("/finance/cash-transactions")
 async def list_cash_transactions(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.cash_transaction.read", module="M5", resource_type="cash_transaction")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -940,23 +956,33 @@ async def list_cash_transactions(
 @router.post("/finance/cash-transactions", status_code=201)
 async def create_cash_transaction(
     data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.cash_transaction.create", module="M5", resource_type="cash_transaction")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create a cash transaction (income or expense)"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.cash_transaction.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.cash_transactions.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     txn = {
-        "id": str(__import__("uuid").uuid4()),
+        "id": mw.new_id("cash_transaction"),
         "org_id": user["org_id"],
         "date": data.get("date", now[:10]),
         "type": data.get("type", "expense"),  # income or expense
-        "amount": data.get("amount", 0),
+        "amount": amount,
         "category": data.get("category", ""),
         "description": data.get("description", ""),
         "created_by": user["id"],
         "created_at": now,
     }
-    await tenant.cash_transactions.insert_one(txn)
+    async with mw:
+        if await mw.needs_insert(tenant.cash_transactions, txn["id"]):
+            await tenant.cash_transactions.insert_one(txn)
+        mw.result_id = txn["id"]
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -964,6 +990,8 @@ async def create_cash_transaction(
 
 @router.get("/finance/overhead-transactions")
 async def list_overhead_transactions(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_transaction.read", module="M5", resource_type="overhead_transaction")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -994,22 +1022,32 @@ async def list_overhead_transactions(
 @router.post("/finance/overhead-transactions", status_code=201)
 async def create_overhead_transaction(
     data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_transaction.create", module="M5", resource_type="overhead_transaction")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create an overhead transaction"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.overhead_transaction.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.overhead_transactions.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     txn = {
-        "id": str(__import__("uuid").uuid4()),
+        "id": mw.new_id("overhead_transaction"),
         "org_id": user["org_id"],
         "date": data.get("date", now[:10]),
-        "amount": data.get("amount", 0),
+        "amount": amount,
         "category": data.get("category", ""),
         "description": data.get("description", ""),
         "created_by": user["id"],
         "created_at": now,
     }
-    await tenant.overhead_transactions.insert_one(txn)
+    async with mw:
+        if await mw.needs_insert(tenant.overhead_transactions, txn["id"]):
+            await tenant.overhead_transactions.insert_one(txn)
+        mw.result_id = txn["id"]
     return {k: v for k, v in txn.items() if k != "_id"}
 
 
@@ -1017,6 +1055,8 @@ async def create_overhead_transaction(
 
 @router.get("/finance/bonus-payments")
 async def list_bonus_payments(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.bonus_payment.read", module="M5", resource_type="bonus_payment")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -1047,22 +1087,32 @@ async def list_bonus_payments(
 @router.post("/finance/bonus-payments", status_code=201)
 async def create_bonus_payment(
     data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.bonus_payment.create", module="M5", resource_type="bonus_payment")),  # SEC-01: before any read/write
     user: dict = Depends(require_m5),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     """Create a bonus payment"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.bonus_payment.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.bonus_payments.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     payment = {
-        "id": str(__import__("uuid").uuid4()),
+        "id": mw.new_id("bonus_payment"),
         "org_id": user["org_id"],
         "date": data.get("date", now[:10]),
-        "amount": data.get("amount", 0),
+        "amount": amount,
         "user_id": data.get("user_id"),
         "description": data.get("description", ""),
         "created_by": user["id"],
         "created_at": now,
     }
-    await tenant.bonus_payments.insert_one(payment)
+    async with mw:
+        if await mw.needs_insert(tenant.bonus_payments, payment["id"]):
+            await tenant.bonus_payments.insert_one(payment)
+        mw.result_id = payment["id"]
     return {k: v for k, v in payment.items() if k != "_id"}
 
 
@@ -1079,6 +1129,8 @@ MONTH_NAMES_BG = [
 
 @router.get("/reports/company-finance-export")
 async def export_company_finance(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance.export", module="M5", resource_type="company_finance")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),

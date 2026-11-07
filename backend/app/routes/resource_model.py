@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.services.resource_model import (
     get_resource_config, save_resource_config,
     classify_worker, classify_subcontractor_type,
@@ -81,7 +82,11 @@ async def classify_sub(sub_type: str, user: dict = Depends(get_current_user)):
 # ── Cost Preview ───────────────────────────────────────────────────
 
 @router.post("/resource-model/worker-cost-preview")
-async def worker_cost_preview(data: WorkerCostRequest, user: dict = Depends(get_current_user)):
+async def worker_cost_preview(
+    data: WorkerCostRequest,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.worker_cost_preview.execute", module=None, resource_type="worker_cost_preview")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     return await compute_worker_cost_breakdown(
         user["org_id"], data.worker_id, data.hours, data.hourly_rate,
         data.project_hours, data.total_hours,
@@ -89,6 +94,10 @@ async def worker_cost_preview(data: WorkerCostRequest, user: dict = Depends(get_
 
 
 @router.post("/resource-model/subcontractor-burden-preview")
-async def sub_burden_preview(data: SubBurdenRequest, user: dict = Depends(get_current_user)):
+async def sub_burden_preview(
+    data: SubBurdenRequest,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.subcontractor_burden_preview.execute", module=None, resource_type="subcontractor_burden_preview")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     config = await get_resource_config(user["org_id"])
     return compute_subcontractor_burden(data.sub_type, data.invoice_amount, config)

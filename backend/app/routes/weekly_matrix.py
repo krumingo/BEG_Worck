@@ -2,12 +2,14 @@
 Routes — Weekly Matrix (Sat→Fri payroll week view).
 Uses unified report normalizer.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import money_values_visible, without_keys
+from app.permissions.finance_read import WEEKLY_MATRIX_MONEY_FIELDS
 from app.services.report_normalizer import fetch_worker_day_map, NORMAL_DAY
 from app.tenancy.data_access import TenantData
 
@@ -48,6 +50,7 @@ def _calc_rate(profile: dict) -> float:
 
 @router.get("/weekly-matrix")
 async def get_weekly_matrix(
+    request: Request,
     user: dict = Depends(get_current_user),
     week_of: Optional[str] = None,
 ):
@@ -145,7 +148,7 @@ async def get_weekly_matrix(
     grand_value = round(sum(r["labor_value"] for r in rows), 2)
     workers_with_data = sum(1 for r in rows if r["total_hours"] > 0)
 
-    return {
+    result = {
         "week_start": sat,
         "week_end": fri,
         "dates": dates,
@@ -159,3 +162,8 @@ async def get_weekly_matrix(
             "workers_with_data": workers_with_data,
         },
     }
+    # SEC-02 (R20-5): hours for everyone who reaches the screen, pay for the finance roles.
+    if not await money_values_visible(request, user):
+        result = without_keys(result, WEEKLY_MATRIX_MONEY_FIELDS)
+        result["money_hidden"] = True
+    return result

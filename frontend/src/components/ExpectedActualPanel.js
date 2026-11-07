@@ -19,15 +19,18 @@ const STATUS_CFG = {
 
 function ComparisonRow({ item }) {
   const st = STATUS_CFG[item.status] || STATUS_CFG.on_track;
-  const pct = item.planned_cost > 0 ? Math.min(Math.round(item.actual_cost / item.planned_cost * 100), 200) : 0;
+  // SEC-02-D (R31): a hidden "spent" (one worker on the SMR) gives no bar, not NaN
+  const pct = item.planned_cost > 0 && item.actual_cost !== undefined ? Math.min(Math.round(item.actual_cost / item.planned_cost * 100), 200) : 0;
   return (
     <div className="flex items-center gap-3 py-1.5 text-xs">
       <span className={`w-2 h-2 rounded-full ${st.bg} flex-shrink-0`} />
       <span className="flex-1 truncate min-w-0">{item.name}</span>
       <span className="font-mono w-14 text-right text-muted-foreground">{item.planned_hours?.toFixed(0) || 0}ч</span>
       <span className="font-mono w-14 text-right">{item.actual_hours?.toFixed(0) || 0}ч</span>
+      {/* SEC-02 (R20-2B): group/location amounts are client prices — the backend omits
+          them for the Technical Manager; show a dash, not a fake 0. */}
       <span className={`font-mono w-16 text-right font-bold ${st.color}`}>
-        {item.variance_cost > 0 ? "+" : ""}{item.variance_cost?.toFixed(0) || 0}
+        {item.variance_cost === undefined ? "—" : <>{item.variance_cost > 0 ? "+" : ""}{item.variance_cost?.toFixed(0) || 0}</>}
       </span>
       <div className="w-20"><Progress value={Math.min(pct, 100)} className="h-1.5" /></div>
     </div>

@@ -10,6 +10,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user, can_manage_project
+from app.permissions.money_write import strip_money_for_non_finance
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
 
@@ -91,6 +92,7 @@ async def get_next_version_number(org_id: str, offer_id: str) -> int:
 
 
 @router.get("/offers/{offer_id}/versions")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_offer_versions(offer_id: str, user: dict = Depends(get_current_user)):
     """List all versions for an offer (latest first)."""
     tenant = _tenant(user)
@@ -165,6 +167,7 @@ async def create_offer_version(offer_id: str, data: VersionCreate, user: dict = 
 
 
 @router.get("/offers/{offer_id}/versions/{version_number}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_offer_version(offer_id: str, version_number: int, user: dict = Depends(get_current_user)):
     """Get a specific version snapshot for preview."""
     tenant = _tenant(user)
