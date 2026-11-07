@@ -337,6 +337,10 @@ api_router.include_router(brigades_router)
 from app.routes.pay_runs import router as pay_runs_router
 api_router.include_router(pay_runs_router)
 
+# LAB-02 (R33): quantity entry / approval and the piece rate per SMR
+from app.routes.labor_quantities import router as labor_quantities_router
+api_router.include_router(labor_quantities_router)
+
 from app.routes.settings import router as settings_router
 api_router.include_router(settings_router)
 

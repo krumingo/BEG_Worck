@@ -247,7 +247,10 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
 # price or classify the line (SMR package, pay type, piece rate, approved quantity,
 # DOWNTIME) is set only by an approver's record, never by the person who fills the line.
 DAY_ENTRY_FIELDS = ("id", "project_id", "smr_id", "extra_work_id", "work_description",
-                    "hours_worked", "note")
+                    "hours_worked", "note",
+                    # LAB-02: the made quantity is a fact the author enters; only an approver's
+                    # labor_quantity_approvals record makes it count (FG-64)
+                    "quantity")
 DAY_ENTRY_FORBIDDEN = ("execution_package_id", "pay_type", "piece_rate", "approved_quantity",
                        "labor_pay_type", "labor_piece_rate", "cost_type", "activity_type")
 
@@ -281,6 +284,14 @@ def _clean_day_entries(entries) -> list:
             raise HTTPException(status_code=400, detail=f"duplicate day entry id: {row['id']}")
         seen_ids.add(row["id"])
         row["hours_worked"] = hours
+        if row.get("quantity") is not None:  # LAB-02: a finite, non-negative made quantity
+            try:
+                q = float(row["quantity"])
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="quantity must be a number")
+            if not math.isfinite(q) or q < 0:
+                raise HTTPException(status_code=400, detail="quantity must be a finite number >= 0")
+            row["quantity"] = q
         clean.append(row)
     return clean
 
