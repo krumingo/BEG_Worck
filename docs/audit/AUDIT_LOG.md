@@ -4609,3 +4609,17 @@ The PM-01 diff vs main is only `+cancel`. The merge with main d226c49 is clean, 
 
 - **400 → 409:** no frontend change needed. `OfferEditorPage` (accept / reject / new-version) and `OfferReviewPage` (respond) render errors through `apiErrorText`. The new reject call sends a per-click Idempotency-Key.
 - **D-OFF01-18 (send has no key): acceptable as debt.** `/send` sends **no email**; it writes the status, a snapshot, `offer_events` 'sent' and `offers.offer.sent` in one transaction behind a compare-and-swap. A double send gives exactly one of each and the loser gets 409. A key would only turn the loser's 409 into a replay of the first answer.
+
+### Periodic pass 22:25 UTC — new PR #80 @ `d420096` (docs: task packages, addenda, decisions) — PASS (docs-only)
+
+**Docs-only:** 56 files, all under `docs/`; no code, tests or config. Secret scan of the diff: none.
+
+**Canon changes (FLOW-043, FLOW-040).** FLOW-043 gains **D-16** and **D-17**; FLOW-040 gains a pointer to D-16.
+
+| Decision | What it allows | Bounds | Source |
+|---|---|---|---|
+| **D-16** | Owner emergency recovery from the server: a narrow exception to FLOW-040 L5 | name + reason + canonical AuditEvent (R1) + Owner notification; no business-content access; the rest of L5 unchanged | Р19 + Р24 (Krum, 06.11.2026) |
+| **D-17** | the piece rate changed by one finance person: a narrow exception to FLOW-002 two-person | new version + reason + AuditEvent; already approved quantities keep their price; all other rate changes stay two-person | Р41 (Krum, 07.11.2026, FG-100 / FG-107) |
+
+- **Traceability verified:** Р19 (line 57), Р24 (line 67) and Р41 (line 101) are in `docs/architecture/RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md`, and D-16 / D-17 reproduce them faithfully. This meets CLAUDE.md §18: a locked FLOW changes only with Krum's explicit decision recorded in the canon.
+- No other PR head changed since the last audit: 55 ed48595, 69 da47777, 71 b1ab349, 74 31a9478, 76 542fa2c, 77 2cc1147, 79 acc472f. Main is `2ec61f3`.
