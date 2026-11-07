@@ -34,7 +34,7 @@
     "user_id": "<tenant A user_id>",
     "org_id": "<tenant A org_id>"
   },
-  "seconds": 175.8,
+  "seconds": 168.2,
   "slow_calls": [],
   "mongo": "local replica set (oplog)",
   "outbound_http": "closed local port"
