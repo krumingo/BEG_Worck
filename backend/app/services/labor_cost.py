@@ -23,11 +23,13 @@ Canon applied
 Pay type priority (FLOW-028 "на ниво отчетен СМР ред/пакет, а не само в профила")
 ----------------------------------------------------------------------------------
 1. the SMR / execution package terms: ``execution_packages.labor_pay_type`` of the
-   line's ``execution_package_id``;
+   package the APPROVER named in ``labor_quantity_approvals`` (LAB-01-C — never the
+   line's own ``execution_package_id``, which the person filling the report can edit);
 2. ``employee_profiles.pay_type`` (fallback; "Monthly" when the profile has none).
 
 LAB-01-B (FG-64): NOTHING that prices a line is read from the report line itself —
-the worker fills that line in (``PUT /daily-reports`` does not validate day_entries).
+the worker fills that line in. (LAB-01-C: ``PUT /daily-reports`` now also refuses
+pricing/classification fields in day_entries.)
 * ``line.pay_type`` / ``line.piece_rate`` / ``line.approved_quantity`` are IGNORED;
 * the piece rate comes ONLY from the package/contract (``labor_piece_rate``);
   the profile ``hourly_rate`` is never a piece rate;
@@ -94,11 +96,13 @@ def _quantities(terms):
 
 
 def _package(line: dict, terms: dict = None) -> dict:
-    """The SMR package that prices ``line``: the one named by the quantity approval record
-    (approver-written) when there is one, else the line's; only a package of the line's
-    own project counts — a worker cannot re-point a line to another project's price."""
+    """The SMR package that prices ``line`` — ONLY the one named by the approver's record in
+    ``labor_quantity_approvals`` (LAB-01-C, LAB01B-1). The line's own
+    ``execution_package_id`` is a pointer the person filling the report can edit, so it
+    never selects a price or pay type; with no approver-named package the line is priced
+    by the profile. Only a package of the line's own project counts."""
     rec = _quantities(terms).get(line.get("id") or "") or {}
-    pkg_id = rec.get("execution_package_id") or line.get("execution_package_id") or ""
+    pkg_id = rec.get("execution_package_id") or ""
     pkg = _packages(terms).get(pkg_id) or {}
     if pkg and pkg.get("project_id") and pkg.get("project_id") != line.get("project_id"):
         return {}
@@ -377,8 +381,8 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
             if not by or by == worker_of.get(rid):
                 continue
             quantities[rid] = r
-    pkg_ids = sorted({ln.get("execution_package_id") for ln in lines if ln.get("execution_package_id")}
-                     | {r.get("execution_package_id") for r in quantities.values() if r.get("execution_package_id")})
+    # LAB-01-C: only approver-named packages are loaded — never the line's own pointer
+    pkg_ids = sorted({r.get("execution_package_id") for r in quantities.values() if r.get("execution_package_id")})
     packages = {}
     if pkg_ids:
         pkgs = await tenant.execution_packages.find(

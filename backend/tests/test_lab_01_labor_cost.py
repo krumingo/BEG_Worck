@@ -43,10 +43,15 @@ P_START, P_END = "2026-10-05", "2026-10-11"
 DAYS = ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09"]
 
 
-def _terms(packages=None, quantities=None):
-    """In-memory pricing terms in the shape load_smr_terms returns."""
+def _terms(packages=None, quantities=None, approver_package="__only__"):
+    """In-memory pricing terms in the shape load_smr_terms returns. The approval records
+    name ``approver_package`` (by default the only package given) — LAB-01-C: the price
+    comes only from the package the approver names, never from the line's pointer."""
     pk = {pid: dict(t, id=pid, project_id=t.get("project_id", "prj")) for pid, t in (packages or {}).items()}
-    q = {rid: {"report_id": rid, "approved_quantity": qty, "status": "approved", "approved_by": "boss"}
+    if approver_package == "__only__":
+        approver_package = next(iter(pk)) if len(pk) == 1 else None
+    q = {rid: {"report_id": rid, "approved_quantity": qty, "status": "approved", "approved_by": "boss",
+               "execution_package_id": approver_package}
          for rid, qty in (quantities or {}).items()}
     return {"packages": pk, "quantities": q}
 
@@ -129,6 +134,96 @@ def test_fg64_worker_written_rate_quantity_and_pay_type_on_the_line_have_no_effe
     lc = compute_person_labor({"pay_type": "Daily", "daily_rate": 100},
                               [_ln("r1", pay_type="Akord", piece_rate=999, approved_quantity=999)], _terms())
     assert lc["lines"][0]["pay_type"] == "Daily" and lc["total"] == 100.0
+
+
+# ═══════════════════════════════════════════════════════ LAB-01-C (LAB01B-1)
+def test_lab01c_probe_worker_chosen_package_does_not_change_pay():
+    """The audit probe docs/audit/probes/lab01/probe_lab01b_package_pointer.py as a test."""
+    prof = {"pay_type": "Monthly", "monthly_salary": 1100, "working_days_per_month": 22,
+            "hourly_rate": 15, "daily_rate": 120}
+    base = {"id": "r1", "status": "APPROVED", "date": "2026-11-02", "project_id": "P",
+            "worker_id": "w", "hours": 12}
+    pk = {"A": {"id": "A", "project_id": "P", "labor_pay_type": "Hourly"},
+          "B": {"id": "B", "project_id": "P", "labor_pay_type": "Daily"},
+          "C": {"id": "C", "project_id": "P", "labor_pay_type": "Akord", "labor_piece_rate": 2},
+          "D": {"id": "D", "project_id": "P", "labor_pay_type": "Akord", "labor_piece_rate": 9}}
+    # P1 time work: same report, worker-chosen package → one number (the profile: 50 / day)
+    res = {}
+    for label, pkg in (("no package", None), ("package A Hourly", "A"), ("package B Daily", "B")):
+        ln = dict(base, execution_package_id=pkg) if pkg else dict(base)
+        res[label] = compute_person_labor(prof, [ln], {"packages": pk, "quantities": {}})["total"]
+    assert set(res.values()) == {50.0}, res
+    # P2 akord: approval record WITHOUT a package; the line points to C or D → one number
+    q = {"r1": {"report_id": "r1", "approved_quantity": 100, "status": "approved", "approved_by": "boss"}}
+    r2 = {pkg: compute_person_labor(prof, [dict(base, execution_package_id=pkg)],
+                                    {"packages": pk, "quantities": q})["total"] for pkg in ("C", "D")}
+    assert r2["C"] == r2["D"] == 50.0, r2
+    # the APPROVER's record names the package → that price, whatever the line points to
+    for line_pkg in ("C", "D", None):
+        qa = {"r1": dict(q["r1"], execution_package_id="C")}
+        ln = dict(base, execution_package_id=line_pkg) if line_pkg else dict(base)
+        lc = compute_person_labor(prof, [ln], {"packages": pk, "quantities": qa})
+        assert lc["total"] == 200.0 and lc["lines"][0]["pay_type_source"] == "smr", line_pkg
+
+
+def test_lab01c_load_terms_never_loads_the_lines_own_package():
+    async def body():
+        from mongomock_motor import AsyncMongoMockClient
+        from app.services.labor_cost import load_smr_terms
+        from app.tenancy.data_access import TenantData
+        op = AsyncMongoMockClient()["lab01c"]
+        await op.execution_packages.insert_many([
+            {"id": "C", "org_id": ORG, "project_id": "P", "labor_pay_type": "Akord", "labor_piece_rate": 2},
+            {"id": "D", "org_id": ORG, "project_id": "P", "labor_pay_type": "Akord", "labor_piece_rate": 9}])
+        await op.labor_quantity_approvals.insert_one(
+            {"org_id": ORG, "report_id": "r1", "approved_quantity": 100, "status": "approved",
+             "approved_by": "boss", "execution_package_id": "C"})
+        tenant = TenantData.for_resolved_org(op, ORG)
+        lines = [{"id": "r1", "worker_id": "w", "project_id": "P", "execution_package_id": "D"},
+                 {"id": "r2", "worker_id": "w", "project_id": "P", "execution_package_id": "D"}]
+        terms = await load_smr_terms(tenant, ORG, lines)
+        assert sorted(terms["packages"]) == ["C"]
+        assert sorted(terms["quantities"]) == ["r1"]
+    asyncio.run(body())
+
+
+def test_lab01c_put_daily_report_refuses_pricing_fields_in_day_entries(monkeypatch):
+    async def body():
+        from fastapi import HTTPException
+        from mongomock_motor import AsyncMongoMockClient
+        from app.routes import daily_reports
+        op = AsyncMongoMockClient()["lab01c_put"]
+        monkeypatch.setattr(daily_reports, "db", op)
+        rep = {"id": "rep-1", "org_id": ORG, "employee_id": "w", "report_date": "2026-11-02",
+               "approval_status": "DRAFT",
+               "day_entries": [{"id": "e1", "project_id": "P", "hours_worked": 8, "work_description": "x"}]}
+        await op.employee_daily_reports.insert_one(dict(rep))
+        user = {"id": "w", "org_id": ORG, "role": "Technician"}
+        for bad in ({"execution_package_id": "D"}, {"pay_type": "Hourly"}, {"piece_rate": 9},
+                    {"approved_quantity": 999}, {"cost_type": "DOWNTIME"}, {"labor_piece_rate": 9}):
+            entry = dict({"id": "e1", "project_id": "P", "hours_worked": 8}, **bad)
+            with pytest.raises(HTTPException) as ex:
+                await daily_reports.update_daily_report("rep-1", {"day_entries": [entry]}, user)
+            assert ex.value.status_code == 400, bad
+        for bad_entries in ("x", ["x"], [{"project_id": "P", "hours_worked": -1}],
+                            [{"project_id": "P", "hours_worked": "abc"}],
+                            [{"project_id": "P", "hours_worked": float("nan")}]):
+            with pytest.raises(HTTPException) as ex:
+                await daily_reports.update_daily_report("rep-1", {"day_entries": bad_entries}, user)
+            assert ex.value.status_code == 400, bad_entries
+        stored = await op.employee_daily_reports.find_one({"id": "rep-1"}, {"_id": 0})
+        assert stored["day_entries"] == rep["day_entries"]                  # nothing written
+        # allowed fields pass; unknown fields are not stored
+        out = await daily_reports.update_daily_report("rep-1", {"day_entries": [
+            {"id": "e1", "project_id": "P", "hours_worked": 6, "note": "ok", "whatever": 1}]}, user)
+        assert out["day_entries"] == [{"id": "e1", "project_id": "P", "hours_worked": 6.0, "note": "ok"}]
+        assert out["total_hours"] == 6.0
+        # an approved report cannot be edited at all (as before)
+        await op.employee_daily_reports.update_one({"id": "rep-1"}, {"$set": {"approval_status": "APPROVED"}})
+        with pytest.raises(HTTPException) as ex:
+            await daily_reports.update_daily_report("rep-1", {"day_entries": []}, user)
+        assert ex.value.status_code == 400
+    asyncio.run(body())
 
 
 def test_fg64_package_of_another_project_is_not_a_price():
@@ -229,10 +324,11 @@ async def _seed(op):
                             quantity=24, unit="m2", piece_rate=50, execution_package_id="pkg-ak"))
         approvals.append({"id": "qa-%d" % i, "org_id": ORG, "report_id": "ak-%d" % i,
                           "approved_quantity": 24, "status": "approved", "approved_by": "admin",
-                          "approved_at": d + "T18:00:00"})
+                          "execution_package_id": "pkg-ak", "approved_at": d + "T18:00:00"})
     reps.append(_report("ak-x", "w-akord", "2026-10-10", "prj-1", 4, quantity=30, unit="m2",
                         execution_package_id="pkg-ak"))
     approvals.append({"id": "qa-x", "org_id": ORG, "report_id": "ak-x", "approved_quantity": 30,
+                      "execution_package_id": "pkg-ak",
                       "status": "approved", "approved_by": "w-akord"})          # self-approval
     await op.labor_quantity_approvals.insert_many(approvals)
     # monthly: 100 / day; split between two projects on one day; a downtime line; a draft

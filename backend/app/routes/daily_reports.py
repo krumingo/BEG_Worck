@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional, List
 from datetime import datetime, timezone
 from pydantic import BaseModel
+import math
 import uuid
 
 from app.db import db
@@ -239,6 +240,44 @@ async def create_daily_report(data: DailyReportCreate, user: dict = Depends(requ
     return clean
 
 
+# LAB-01-C (LAB01B-1 / FG-64): the fields a person may write on a report line — the same
+# set POST /daily-reports (DayEntryInput) and the batch save store. Anything that would
+# price or classify the line (SMR package, pay type, piece rate, approved quantity,
+# DOWNTIME) is set only by an approver's record, never by the person who fills the line.
+DAY_ENTRY_FIELDS = ("id", "project_id", "smr_id", "extra_work_id", "work_description",
+                    "hours_worked", "note")
+DAY_ENTRY_FORBIDDEN = ("execution_package_id", "pay_type", "piece_rate", "approved_quantity",
+                       "labor_pay_type", "labor_piece_rate", "cost_type", "activity_type")
+
+
+def _clean_day_entries(entries) -> list:
+    """Validate and rebuild ``day_entries`` from the allowed fields only (400 on a pricing
+    field, a non-list, a non-object entry or negative/non-numeric hours)."""
+    if not isinstance(entries, list):
+        raise HTTPException(status_code=400, detail="day_entries must be a list")
+    clean = []
+    for e in entries:
+        if not isinstance(e, dict):
+            raise HTTPException(status_code=400, detail="each day entry must be an object")
+        bad = sorted(k for k in e if k in DAY_ENTRY_FORBIDDEN)
+        if bad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"day_entries may not set {bad}: package, pay type, rate, quantity and "
+                       f"DOWNTIME are set by the approver, not on the report line")
+        try:
+            hours = float(e.get("hours_worked", 0) or 0)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=400, detail="hours_worked must be a number")
+        if not math.isfinite(hours) or hours < 0:
+            raise HTTPException(status_code=400, detail="hours_worked cannot be negative")
+        row = {k: e.get(k) for k in DAY_ENTRY_FIELDS if k in e}
+        row["id"] = row.get("id") or str(uuid.uuid4())
+        row["hours_worked"] = hours
+        clean.append(row)
+    return clean
+
+
 @router.put("/daily-reports/{report_id}")
 async def update_daily_report(report_id: str, data: dict, user: dict = Depends(require_m4)):
     tenant = _tenant(user)
@@ -253,11 +292,7 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
     update = {k: v for k, v in data.items() if k in allowed}
 
     if "day_entries" in update:
-        for e in update["day_entries"]:
-            if not e.get("id"):
-                e["id"] = str(uuid.uuid4())
-            if float(e.get("hours_worked", 0)) < 0:
-                raise HTTPException(status_code=400, detail="hours_worked cannot be negative")
+        update["day_entries"] = _clean_day_entries(update["day_entries"])
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
