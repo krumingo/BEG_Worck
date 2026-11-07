@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `d98cead` | **PASS** (WH55-L-1 closed; no open findings) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `4b745f1` | **PASS** (C01-G fixes PAY70-04; N1–N4 24/24) | 2026-11-07 |
@@ -3831,3 +3831,40 @@ PR comment 6695992847 updated (blocking).
 | A2C | 0/212 |
 | A1 | 0/428 |
 | merge-tree vs main `d226c49` | clean |
+
+
+### #55 @ `94c0571` (Addendum M, FG-124 = Codex F-55-C26-03) — PASS, no open findings
+
+- **The fix:** `LOCKED_WHEN_LINKED` += `allocation_type`, `allocation_ref_id`. The deprecated single allocation is still read when `allocations[]` is empty.
+- **Embedded `invoices.lines` (finance.py), checked for a bypass:**
+  - all Path B / allocation readers and the lock read `tenant.invoice_lines` only;
+  - `effective_allocations` reads only that document's own fields, with no fallback to the parent invoice;
+  - all `invoice_lines` writers are in `routes/invoice_lines.py` and are locked, or are inserts.
+  - **Not a bypass.**
+
+| Check | Result |
+|---|---|
+| FG-124 tests (Codex HTTP repro × 3 modes; PUT-vs-delivery race × 10 × 3 modes) | **36 passed** |
+| My probes (M1, U1, race shapes, crash) × off/shadow/enforce | 13 passed each |
+| warehouse suite | **43 files, 1010 passed** |
+| W0 | same 15 |
+| A2C | 0/223 |
+| A1 | 0/452 |
+| R0 | 814 |
+| merge-tree main `d226c49` | `data_access` + A2B + A1 inventory |
+
+PR comment updated (resolved).
+
+### #73 @ `41a43b5` / #75 @ `f0a0757` (FG-110 / FG-112, LAB-01-O) — alone PASS; the merge with main conflicts
+
+| Check | #73 | #75 |
+|---|---|---|
+| lab tests | 116 passed, 1 skipped | 157 passed, 1 skipped |
+| reset file (6×10 concurrent resets → budget once; crash in the audit write → full rollback; crash after commit → 1 event; no transactions → 503) | 26 passed | 26 passed |
+| W0 | same 15 | same 15 |
+| A2C / A1 | 0 / 0 | 0 / 0 |
+| PM-01 | 6, real | 6, real |
+| R0 | 814 | the run printed an error line (billing webhook test) instead of a summary; re-run queued |
+
+- **Merge with main `d226c49`:** a conflict in `services/project_pnl.py`, an import line where both sides are kept. The programmer must merge main into both. The merged re-runs are queued.
+- **The 48 auth cells** in PM-01 `matrix.csv` are byte-identical on #73 `41a43b5`, #75 `f0a0757` and #72 `04e0a1b` (now on main), so there is no content conflict.
