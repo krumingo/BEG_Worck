@@ -85,11 +85,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     paid_materials = round(paid_materials, 2)
 
     # Subcontractor payments
-    sub_payments = await tenant.subcontractor_payments.find(
-        {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
-        {"_id": 0, "amount": 1},
-    ).to_list(200)
-    paid_subcontractors = round(sum(p.get("amount", 0) for p in sub_payments), 2)
+    # SUB-ADV-01-A (FG-115, FLOW-006: cash and result are not mixed): the CASH result counts
+    # every subcontractor payment, advances included; the operating / fully loaded results
+    # count the recognised cost (ordinary payments + advance deducted on acts).
+    from app.services.subcontract_cost import (subcontractor_cash_out,
+                                               subcontractor_cost_recognized)
+    paid_subcontractors = await subcontractor_cash_out(tenant, org_id, project_id)
+    subcontractor_cost = await subcontractor_cost_recognized(tenant, org_id, project_id)
 
     # Contract payments (external workers)
     contract_docs = await tenant.contract_payments.find(
@@ -188,7 +190,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     direct_labor = round(direct_labor, 2)
     direct_labor_insurance = round(direct_labor_insurance, 2)
 
-    operating_cost = round(direct_labor + paid_materials + paid_subcontractors + paid_contracts, 2)
+    operating_cost = round(direct_labor + paid_materials + subcontractor_cost + paid_contracts, 2)
     operating_result_val = round(earned_revenue - operating_cost, 2)
     operating_margin = round(operating_result_val / earned_revenue * 100, 1) if earned_revenue > 0 else 0
 
@@ -198,7 +200,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "revenue_mode": revenue_mode,
         "direct_labor": direct_labor,
         "materials": paid_materials,
-        "subcontractor_direct": paid_subcontractors,
+        "subcontractor_direct": subcontractor_cost,
         "contract_direct": paid_contracts,
         "operating_cost": operating_cost,
         "operating_result": operating_result_val,
@@ -240,7 +242,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Subcontractor burden
     weights = config.get("burden_weights", DEFAULT_BURDEN_WEIGHTS)
-    sub_burden = round(paid_subcontractors * weights.get("subcontractor_company", 0.3), 2)
+    sub_burden = round(subcontractor_cost * weights.get("subcontractor_company", 0.3), 2)
     contract_burden = round(paid_contracts * weights.get("subcontractor_crew", 0.6), 2)
 
     fully_loaded_cost = round(

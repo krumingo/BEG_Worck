@@ -90,9 +90,16 @@ async def seed_advance_records(op_db, fx: Dict[str, Any]) -> None:
         "package_no": "SP-ADV1", "title": "Advance package", "currency": "EUR",
         "status": "partially_certified", "contract_total": 5000, "certified_total": 3200,
         "paid_total": 0, "created_at": now})
-    for name, total in (("act1", 3000), ("act2", 200)):
+    # addendum A (FG-115): a second package, contract 1000, one confirmed act of 400.
+    await op_db.subcontractor_packages.insert_one({
+        "id": rid("pkg2"), "org_id": org, "project_id": p1,
+        "subcontractor_id": "pm01probe-A-c02-sub", "subcontractor_name": "Probe Sub",
+        "package_no": "SP-ADV2", "title": "Advance package 2", "currency": "EUR",
+        "status": "partially_certified", "contract_total": 1000, "certified_total": 400,
+        "paid_total": 0, "created_at": now})
+    for name, total, pkg in (("act1", 3000, "pkg"), ("act2", 200, "pkg"), ("act3", 400, "pkg2")):
         await op_db.subcontractor_acts.insert_one({
-            "id": rid(name), "org_id": org, "project_id": p1, "package_id": rid("pkg"),
+            "id": rid(name), "org_id": org, "project_id": p1, "package_id": rid(pkg),
             "act_no": "SA-%s" % name, "status": "confirmed", "certified_total": total,
             "lines": [], "created_at": now})
     if "subcontractor_acts" not in await op_db.list_collection_names():
@@ -192,6 +199,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         adv = {"amount": 1000, "reason": "Аванс по договор", "advance_date": "2026-11-07"}
 
         roles_rows, flows, races, refusals, reversal = [], [], [], [], []
+        cap_races, fg115 = [], []
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             # ── roles × mode (R39)
@@ -205,6 +213,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             f: Dict[str, Any] = {"mode": mode}
             f["advance"] = slim(call("POST", "accountant", adv_url, adv))
             f["after_advance"] = pkg_state()
+            # FG-114: 1 000 000 on a contract of 5 000 -> refused, nothing written
+            f["advance_1m"] = slim(call("POST", "accountant", adv_url, {**adv, "amount": 1000000}))
             f["pay_with_deduction"] = slim(call("POST", "accountant", pay_url, {
                 "package_id": rid("pkg"), "act_id": rid("act1"), "amount": 2000,
                 "advance_deducted": 1000}))
@@ -235,6 +245,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 "POST", "admin", "/api/subcontractor-acts/%s/advance-deduction" % rid("act2"),
                 {"amount": 200, "reason": "Акт покрит от аванса"}))
             f["after_act2"] = pkg_state()
+            # FG-114: taken = outstanding 300 + committed 3200 = 3500 of the contract 5000
+            f["advance_over_value"] = slim(call("POST", "owner", adv_url, {**adv, "amount": 1500.01}))
+            f["advance_to_value"] = slim(call("POST", "owner", adv_url, {**adv, "amount": 1500}))
             f["ordinary_0_01_at_cap"] = slim(call("POST", "accountant", pay_url, {
                 "package_id": rid("pkg"), "amount": 0.01}))
             # FG-90 on the C02 package (certified 100): unchanged
@@ -256,6 +269,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                      {"package_id": rid("pkg"), "amount": 10, "advance_deducted": 5}, "auto"),
                     ("payment_type_advance", "POST", pay_url,
                      {"package_id": rid("pkg"), "amount": 10, "payment_type": "advance"}, "auto"),
+                    ("no_contract_value", "POST", "/api/subcontractor-packages/%s/advances"
+                     % c02.rid("A", "pkg"), adv, "auto"),
                     ("unknown_package", "POST", "/api/subcontractor-packages/%s/advances"
                      % "pm01probe-A-c02-pkg-none", adv, "auto")):
                 res = call(method, "accountant", url, body, idem)
@@ -282,16 +297,63 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                           "ledger_rows_added": len(ledger_amounts()) - led0,
                           "advance_total": pkg_state()["advance_total"]})
             restore_all()
+            # ── FG-114: six concurrent advances of 1000, DIFFERENT keys, contract 5000
+
+            async def six_keys():
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(adv_url, json=adv, headers={
+                        **hdr, "Idempotency-Key": uuid.uuid4().hex}) for _ in range(6)])
+            led0 = len(ledger_amounts())
+            resps = tc.portal.call(six_keys)
+            advs = tc.portal.call(lambda: op_db.subcontractor_payments.count_documents(
+                {"package_id": rid("pkg"), "kind": "advance"}))
+            cap_races.append({
+                "mode": mode, "statuses": sorted(r.status_code for r in resps),
+                "codes_409": sorted({(r.json().get("detail") or {}).get("error_code")
+                                     for r in resps if r.status_code == 409}),
+                "advance_rows": advs, "ledger_rows_added": len(ledger_amounts()) - led0,
+                "advance_total": pkg_state()["advance_total"]})
+            restore_all()
+            # ── FG-115: an advance is cash, not cost; the cost comes with the deduction
+            pid = fx["A"]["project_id"]
+
+            def money_views():
+                pnl = call("GET", "owner", "/api/projects/%s/pnl" % pid, None, None)["body"]
+                fr = call("GET", "owner", "/api/projects/%s/financial-results" % pid,
+                          None, None)["body"]
+                return {"pnl_subcontractor_cost": pnl["expense"]["subcontractor_cost"],
+                        "cash_paid_subcontractors":
+                            fr["cash"]["breakdown"]["paid_subcontractors"],
+                        "operating_subcontractor_direct":
+                            fr["operating"]["subcontractor_direct"]}
+            v0 = money_views()
+            r_adv = slim(call("POST", "accountant",
+                              "/api/subcontractor-packages/%s/advances" % rid("pkg2"), adv))
+            v1 = money_views()
+            r_ded = slim(call("POST", "accountant",
+                              "/api/subcontractor-acts/%s/advance-deduction" % rid("act3"),
+                              {"amount": 400}))
+            v2 = money_views()
+            r_more = slim(call("POST", "owner",
+                               "/api/subcontractor-packages/%s/advances" % rid("pkg2"),
+                               {**adv, "amount": 0.01}))
+            delta = lambda a, b: {k: round(b[k] - a[k], 2) for k in a}   # noqa: E731
+            fg115.append({"mode": mode, "advance": r_adv, "deduct_400": r_ded,
+                          "after_advance": delta(v0, v1), "after_deduction": delta(v0, v2),
+                          "advance_0_01_over_contract": r_more})
+            restore_all()
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
         "schema": "beg.sub-adv-01-subcontractor-advance/v1",
         "fixture": "ST-01 synthetic tenant A + PM-01/C02 records + package certified 3200 "
-                   "(acts 3000 and 200, confirmed)",
+                   "(contract 5000, acts 3000 and 200) + package 2 (contract 1000, act 400)",
         "modes": list(MODES), "mongo": "local replica set (oplog)",
         "seconds": round(time.time() - started, 1),
         "roles": roles_rows, "flows": flows, "refusals": refusals,
         "same_key_race": races, "reversal": reversal,
+        "fg114_different_keys_race": cap_races, "fg115_cash_vs_cost": fg115,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -364,6 +426,7 @@ def check_result(result: Dict[str, Any]) -> None:
         a = f["after_advance"]
         assert (a["advance_total"], a["advance_outstanding"], a["paid_total"]) == (1000, 1000, 0), f
         assert a["committed_paid_total"] in (None, 0), f       # the advance reserves nothing
+        assert f["advance_1m"] == _nothing("ADVANCE_EXCEEDS_PACKAGE_VALUE"), f
         assert f["pay_with_deduction"]["status"] == 201, f
         p = f["after_payment"]
         assert p == {"certified_total": 3200, "paid_total": 2000, "advance_total": 1000,
@@ -387,6 +450,8 @@ def check_result(result: Dict[str, Any]) -> None:
                                    "advance_outstanding": 300, "committed_paid_total": 3200,
                                    "payable_total": 0, "cash_out_total": 3500}, f
         assert f["ordinary_0_01_at_cap"] == _nothing("PAYMENT_EXCEEDS_CERTIFIED"), f
+        assert f["advance_over_value"] == _nothing("ADVANCE_EXCEEDS_PACKAGE_VALUE"), f
+        assert f["advance_to_value"]["status"] == 201, f
         assert f["c02_pay_101"] == _nothing("PAYMENT_EXCEEDS_CERTIFIED"), f
 
     expected = {"no_key": _nothing("IDEMPOTENCY_KEY_REQUIRED", 428),
@@ -394,6 +459,7 @@ def check_result(result: Dict[str, Any]) -> None:
                 "nan": {"status": 422, "business_written": []},
                 "deduction_without_act": _nothing("ADVANCE_DEDUCTION_NEEDS_ACT", 422),
                 "payment_type_advance": _nothing("ADVANCE_NOT_A_PAYMENT", 422),
+                "no_contract_value": _nothing("ADVANCE_PACKAGE_VALUE_REQUIRED", 422),
                 "unknown_package": {"status": 404, "business_written": []}}
     refusals = result["refusals"]
     assert {(r["mode"], r["probe"]) for r in refusals} == {(m, k) for m in MODES for k in expected}
@@ -408,6 +474,26 @@ def check_result(result: Dict[str, Any]) -> None:
         assert len(r["ids_201"]) == 1, r                       # every 201 = the same advance
         assert r["advance_rows"] == 1 and r["ledger_rows_added"] == 1, r
         assert r["advance_total"] == 1000, r
+
+    cap = result["fg114_different_keys_race"]
+    assert [r["mode"] for r in cap] == list(MODES)
+    for r in cap:                       # contract 5000: five of six 1000s, never more
+        assert r["statuses"] == [201] * 5 + [409], r
+        assert r["codes_409"] == ["ADVANCE_EXCEEDS_PACKAGE_VALUE"], r
+        assert r["advance_rows"] == 5 and r["ledger_rows_added"] == 5, r
+        assert r["advance_total"] == 5000, r
+
+    fg115 = result["fg115_cash_vs_cost"]
+    assert [r["mode"] for r in fg115] == list(MODES)
+    for r in fg115:
+        assert r["advance"]["status"] == 201 and r["deduct_400"]["status"] == 201, r
+        assert r["after_advance"] == {"pnl_subcontractor_cost": 0,
+                                      "cash_paid_subcontractors": 1000,
+                                      "operating_subcontractor_direct": 0}, r
+        assert r["after_deduction"] == {"pnl_subcontractor_cost": 400,
+                                        "cash_paid_subcontractors": 1000,
+                                        "operating_subcontractor_direct": 400}, r
+        assert r["advance_0_01_over_contract"] == _nothing("ADVANCE_EXCEEDS_PACKAGE_VALUE"), r
 
     rev = result["reversal"]
     assert [r["mode"] for r in rev] == list(MODES)
@@ -458,7 +544,9 @@ def test_the_routes_check_the_role_before_any_read_and_take_the_key():
     src = inspect.getsource(s.create_subcontractor_advance)
     # validation before the first read; the ledger row before the package's advance total
     assert src.index("money_value(") < src.index("find_one(")
-    assert src.index("finance_payments.insert_one") < src.index('"advance_total"')
+    # FG-114: the contract-value reservation is the FIRST write, before the ledger row
+    assert src.index("_reserve_advance(") < src.index("finance_payments.insert_one")
+    assert "ADVANCE_PACKAGE_VALUE_REQUIRED" in src
     assert "delete_one" not in inspect.getsource(s.deduct_advance_on_act)
 
 

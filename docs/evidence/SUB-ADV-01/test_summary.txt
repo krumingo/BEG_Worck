@@ -21,3 +21,15 @@ A1 inventory: regenerated table identical to the committed one
 48 cells added (2 new routes x 8 roles x 3 modes, pm01_cells_added.csv), 0 existing cells changed; Admin -> 403 on advances
 ## Frontend
 yarn test: 6 suites, 96 tests passed; yarn build: Compiled with warnings (none in ProjectOperationsPage.js)
+
+## Addendum A (07.11) — merge of #69 @ 3fb55f2 + FG-114 + FG-115
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo: 44 passed (C03 includes #69's F-69-03 tests)
+FG-114, 3 modes: 1 000 000 on contract 5000 -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE, 0 writes; at taken 3500/5000: 1500.01 -> 409, 1500 -> 201;
+  6 concurrent advances of 1000 with DIFFERENT keys on contract 5000 -> [201 x5, 409], 5 advance rows, 5 ledger rows, advance_total 5000;
+  package without contract value -> 422 ADVANCE_PACKAGE_VALUE_REQUIRED, 0 writes
+FG-115, 3 modes (package 2: contract 1000, act 400): advance 1000 -> P&L subcontractor_cost +0, operating subcontractor_direct +0, cash paid_subcontractors +1000;
+  deduction 400 on the act -> P&L +400, operating +400, cash still +1000; then advance 0.01 -> 409 (600 + 400 = 1000)
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15 test_w0_03e_legacy_routes)
+Guards: A1 422 units / 0 violations; A2C 208 modules / 0 violations; A1 inventory table unchanged
+PM-01 fresh real-Mongo run reproduces the committed matrix (no route added in addendum A)

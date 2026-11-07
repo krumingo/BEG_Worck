@@ -838,6 +838,39 @@ def _reason(value, field: str = "reason", required: bool = True) -> str:
     return text
 
 
+_ADV_RESERVED_IDS = {"$ifNull": ["$advance_reservations", []]}
+
+
+async def _reserve_advance(tenant, pkg_id: str, amount: float, advance_id: str) -> None:
+    """FG-114: add ``amount`` to ``advance_total`` only if, in the same update,
+
+        (advance_total - advance_deducted_total)   advance not yet deducted
+      + committed_paid_total                       ordinary payments + advance deducted
+      + amount                                     <= contract_total (cent tolerance).
+
+    The deducted part of the advance is counted once (inside committed), so the left side is
+    the whole money already taken on for the package. The reservation carries the advance's
+    key-derived id (``advance_reservations``, as F-69-03): a retry of the same key that finds
+    it changes nothing. Over the cap -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE, nothing written."""
+    already = {"$in": [advance_id, _ADV_RESERVED_IDS]}
+    taken = {"$add": [{"$subtract": [_ADV_TOTAL, _ADV_DEDUCTED]}, _COMMITTED, amount]}
+    res = await tenant.subcontractor_packages.update_one(
+        {"id": pkg_id, "$or": [
+            {"advance_reservations": advance_id},
+            {"$expr": {"$lte": [taken, {"$add": [{"$ifNull": ["$contract_total", 0]}, _CENT]}]}}]},
+        [{"$set": {
+            "advance_total": {"$cond": [already, _ADV_TOTAL,
+                                        {"$round": [{"$add": [_ADV_TOTAL, amount]}, 2]}]},
+            "advance_reservations": {"$cond": [already, _ADV_RESERVED_IDS, {"$concatArrays": [
+                _ADV_RESERVED_IDS, [advance_id]]}]},
+        }}])
+    if res.matched_count == 0:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "ADVANCE_EXCEEDS_PACKAGE_VALUE",
+            "message": "Авансът заедно с поетите задължения по пакета надвишава договорната "
+                       "стойност на пакета"})
+
+
 @router.post("/subcontractor-packages/{pkg_id}/advances", status_code=201)
 async def create_subcontractor_advance(
     pkg_id: str,
@@ -856,7 +889,8 @@ async def create_subcontractor_advance(
     with ``kind = "advance"`` that points to it (``finance_payment_id``) and the ledger row
     points back (``subcontractor_payment_id``) — so a finance reversal of it is refused with
     409 SOURCE_MODULE_REVERSAL_REQUIRED (FG-45, PR #70) until the module reverses it.
-    ``advance_total`` of the package grows only after both rows exist. The advance is not
+    FG-114: the advance is first reserved against the package's contract value (atomic,
+    ``_reserve_advance``); a package without a contract value -> 422. The advance is not
     an ordinary payment: it is not capped by the certified total (FG-90) and does not enter
     ``committed_paid_total``; it is deducted later, explicitly, on acts.
     Idempotency-Key required (R29); AuditEvent ``subcontractor_advance_created``.
@@ -873,6 +907,14 @@ async def create_subcontractor_advance(
         raise HTTPException(status_code=409, detail={
             "error_code": "ADVANCE_PACKAGE_NOT_ACTIVE",
             "message": "Аванс се дава само по потвърден, незатворен пакет"})
+    contract_total = pkg.get("contract_total")
+    if not isinstance(contract_total, (int, float)) or isinstance(contract_total, bool) \
+            or not contract_total > 0:
+        # FG-114: an advance is tied to a contract/scope (FLOW-006); with no contract value
+        # there is nothing to deduct it from (FLOW-021) -> refused before any write.
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ADVANCE_PACKAGE_VALUE_REQUIRED",
+            "message": "Пакетът няма договорна стойност — авансът няма към какво да се прихване"})
     req_account_id = data.get("account_id")
     if req_account_id:
         account = await tenant.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
@@ -908,6 +950,11 @@ async def create_subcontractor_advance(
     ledger_id = mw.new_id("finance_payment")
     advance["finance_payment_id"] = ledger_id
     async with mw:
+        # FG-114: the FIRST write reserves the advance against the package's contract value,
+        # atomically (one conditional update; concurrent advances under different keys can
+        # never together pass the cap). Over it -> 409, nothing written.
+        await mw.step("advance_reserve", lambda: _reserve_advance(tenant, pkg_id, amount,
+                                                                  advance["id"]))
         async with mw.insert_once():
             await tenant.finance_payments.insert_one(mw.unique({
                 "id": ledger_id, "org_id": org_id,
@@ -926,9 +973,6 @@ async def create_subcontractor_advance(
             }))
         async with mw.insert_once():
             await tenant.subcontractor_payments.insert_one(mw.unique(advance))
-        await mw.step("advance_total", lambda: tenant.subcontractor_packages.update_one(
-            {"id": pkg_id}, [{"$set": {"advance_total": {"$round": [
-                {"$add": [_ADV_TOTAL, amount]}, 2]}}}]))
         await mw.step("audit", lambda: log_audit(
             org_id, user["id"], user.get("email", ""), "subcontractor_advance_created",
             "payment", ledger_id, {"amount": amount, "package_id": pkg_id, "reason": reason,
