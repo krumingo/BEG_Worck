@@ -11,7 +11,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.alarm_engine import evaluate_all_rules
 from app.permissions.money_write import strip_money_for_non_finance  # SEC-02-G (FG-111)
-from app.permissions.money_write import money_values_visible, money_alarm_exclusion
+from app.permissions.money_write import money_values_visible, money_alarm_exclusion, require_finance_read
 
 
 async def _band_filter(request: Request, user: dict) -> dict:
@@ -184,17 +184,25 @@ async def resolve_alarm(event_id: str, data: AcknowledgeRequest, request: Reques
 
 
 @router.post("/alarms/evaluate")
-@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
-async def evaluate_alarms(request: Request, user: dict = Depends(get_current_user)):
+async def evaluate_alarms(
+    request: Request,
+    # SEC-02-G (audit SEC71-05; R20): evaluating every rule (and auto-resolving) answers
+    # with counts over EVERY site's money alarms — finance roles only. The only caller is
+    # the Alarms page button (no cron). In enforce a denial writes the canonical
+    # "permission denied" AuditEvent (who called it).
+    _sec02: dict = Depends(require_finance_read(
+        "finance.alarm_evaluation.execute", module=None, resource_type="alarm_rules")),
+    user: dict = Depends(get_current_user)):
     result = await evaluate_all_rules(user["org_id"])
     if not await money_values_visible(request, user):
-        # SEC-02-G (SEC71-04): the new money alarms of single-paid-worker sites are not shown
-        from app.permissions.finance_read import MONEY_ALARM_TYPES
+        # defence in depth (unreachable for a non-finance role): no counter / list from a
+        # money alarm of a single-paid-worker site; resolved_events is not attributable
+        from app.permissions.finance_read import MONEY_ALARM_TYPES, strip_money
         from app.permissions.money_write import single_paid_sites
         single = await single_paid_sites(user, [e.get("site_id") for e in result["events"]])
         events = [e for e in result["events"]
                   if not (e.get("type") in MONEY_ALARM_TYPES and e.get("site_id") in single)]
-        result = {**result, "new_events": len(events), "events": events}
+        result = strip_money({"new_events": len(events), "events": events})
     return result
 
 

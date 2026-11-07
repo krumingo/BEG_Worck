@@ -62,5 +62,103 @@ with TestClient(app, raise_server_exceptions=False) as tc:
               % (mode, first, steps, sorted(map(str, seen)), derived, actual, len(paid)))
         if steps >= 10 and abs(derived - actual) <= max(5.0, 0.001 * actual):   # burn_pct is rounded to 0.1 %
             F.append("%s: TM derives the site's cumulative labor spent %.2f (actual %.2f) in %d budget edits" % (mode, derived, actual, steps))
+    # ── /alarms path (#71 02a1441, FG-111): an Admin-made budget rule ("> 100 %"); the TM
+    # moves the budget, POSTs /alarms/evaluate, sees whether an event for P1 fires (the
+    # stripped list still lists it), resolves it (no role check) and repeats.
+    HA = {"Authorization": "Bearer " + tok["admin"]}
+    rr = tc.post("/api/alarm-rules", headers=HA, json={"name": "Бюджет 100", "type": "budget", "severity": "critical",
+                 "condition": {"metric": "burn_pct", "operator": ">", "threshold": 100}, "cooldown_hours": 24})
+    rules_seen = tc.get("/api/alarm-rules", headers=H).json()
+    thr_visible = any((r.get("condition") or {}).get("threshold") == 100 for r in rules_seen.get("items", []))
+    for mode in T.MODES:
+        os.environ["PERMISSION_SERVICE_MODE"] = mode
+        others = sum(float(b.get("labor_budget") or 0) for b in q(lambda: op.activity_budgets.find(
+            {"project_id": P1, "type": {"$ne": "AuditProbe"}}, {"_id": 0, "labor_budget": 1}).to_list(None)))
+        lo, hi, steps, first = 0.0, 100000.0, 0, None
+        while hi - lo > 0.05 and steps < 40:
+            mid = (lo + hi) / 2
+            tc.post("/api/projects/%s/activity-budgets" % P1, headers=H,
+                    json={"type": "AuditProbe", "subtype": "", "labor_budget": max(mid - others, 0.0), "materials_budget": 0})
+            ev = tc.post("/api/alarms/evaluate", headers=H)
+            lst = tc.get("/api/alarms", params={"site_id": P1}, headers=H)
+            if first is None:
+                first = (rr.status_code, ev.status_code, lst.status_code, "threshold visible to TM" if thr_visible else "threshold hidden")
+            if ev.status_code != 200 or lst.status_code != 200:
+                break
+            items = [i for i in (lst.json().get("items") or lst.json().get("data") or []) if i.get("site_id") == P1]
+            if items:
+                lo = mid
+                for i in items:
+                    tc.put("/api/alarms/%s/resolve" % i["id"], headers=H, json={"notes": "probe"})
+            else:
+                hi = mid
+            steps += 1
+        derived = round((lo + hi) / 2, 2)
+        print("%s /alarms: first %s | steps %d | derived spent %.2f vs actual %.2f" % (mode, first, steps, derived, actual))
+        if steps >= 10 and abs(derived - actual) <= max(5.0, 0.001 * actual):
+            F.append("%s /alarms: TM derives cumulative labor spent %.2f (actual %.2f) via evaluate + resolve" % (mode, derived, actual))
+    # ── #71 e90aa5f extras ────────────────────────────────────────────────────────────
+    # (e) 404 oracle: a hidden (single-paid-site) alarm id vs a nonexistent id
+    os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
+    tc.post("/api/projects/%s/activity-budgets" % P1, headers=H,
+            json={"type": "AuditProbe", "subtype": "", "labor_budget": 1.0, "materials_budget": 0})
+    tc.post("/api/alarms/evaluate", headers=HA)                       # admin: creates the event
+    hidden = q(lambda: op.alarm_events.find_one({"site_id": P1, "type": "budget", "status": "active"}, {"_id": 0, "id": 1}))
+    if hidden:
+        for verb, path in (("GET", "/api/alarms/%s"), ("PUT", "/api/alarms/%s/acknowledge"), ("PUT", "/api/alarms/%s/resolve")):
+            a = tc.request(verb, path % hidden["id"], headers=H, json={"notes": "x"} if verb == "PUT" else None)
+            b = tc.request(verb, path % ("nope-" + uuid.uuid4().hex[:8]), headers=H, json={"notes": "x"} if verb == "PUT" else None)
+            same = (a.status_code, a.text) == (b.status_code, b.text)
+            print("e90 404-oracle %s %s: hidden %s vs none %s same=%s" % (verb, path, a.status_code, b.status_code, same))
+            if not same:
+                F.append("404 oracle on %s %s: %s/%s vs %s/%s" % (verb, path, a.status_code, a.text[:60], b.status_code, b.text[:60]))
+    # (c) auto_resolve oracle: evaluate's resolved_events count is not filtered
+    q(lambda: op.alarm_events.delete_many({}))
+    ar = tc.post("/api/alarm-rules", headers=HA, json={"name": "Бюджет AR", "type": "budget", "severity": "critical", "auto_resolve": True,
+                 "condition": {"metric": "burn_pct", "operator": ">", "threshold": 100}, "cooldown_hours": 24})
+    q(lambda: op.alarm_rules.update_many({"name": "Бюджет 100"}, {"$set": {"is_active": False}}))
+    others = sum(float(b.get("labor_budget") or 0) for b in q(lambda: op.activity_budgets.find(
+        {"project_id": P1, "type": {"$ne": "AuditProbe"}}, {"_id": 0, "labor_budget": 1}).to_list(None)))
+    lo, hi, steps = 0.0, 100000.0, 0
+    while hi - lo > 0.05 and steps < 40:
+        mid = (lo + hi) / 2
+        tc.post("/api/projects/%s/activity-budgets" % P1, headers=H, json={"type": "AuditProbe", "subtype": "", "labor_budget": max(mid - others, 0.0), "materials_budget": 0})
+        tc.post("/api/alarms/evaluate", headers=H)                      # fires (hidden) if over
+        tc.post("/api/projects/%s/activity-budgets" % P1, headers=H, json={"type": "AuditProbe", "subtype": "", "labor_budget": 10**9, "materials_budget": 0})
+        ev = tc.post("/api/alarms/evaluate", headers=H)                 # nothing fires -> auto-resolve
+        if ev.status_code != 200:
+            break
+        if (ev.json().get("resolved_events") or 0) > 0:
+            lo = mid
+        else:
+            hi = mid
+        steps += 1
+    derived = round((lo + hi) / 2, 2)
+    print("e90 auto_resolve oracle: rule %s | steps %d | derived %.2f vs actual %.2f" % (ar.status_code, steps, derived, actual))
+    if steps >= 10 and abs(derived - actual) <= max(5.0, 0.001 * actual):
+        F.append("auto_resolve oracle: TM derives %.2f (actual %.2f) from evaluate.resolved_events" % (derived, actual))
+    q(lambda: op.alarm_rules.update_many({}, {"$set": {"is_active": False}}))
+    # (d) known-pay variant: the TM's own paid session makes the site 2-paid; he knows his pay
+    me = fx["A"]["users"]["requester"]["id"]
+    q(lambda: op.work_sessions.insert_one({"id": "probe-own", "org_id": fx["A"]["tenant_id"], "worker_id": me, "site_id": P1,
+        "smr_type_id": "Мазилка", "started_at": "2026-11-05T07:00:00", "ended_at": "2026-11-05T15:00:00",
+        "duration_hours": 8, "labor_cost": 500.0, "created_at": "2026-11-05T15:00:00"}))
+    own = 500.0
+    lo, hi, steps, seen = 0.0, 100000.0, 0, set()
+    while hi - lo > 0.05 and steps < 40:
+        mid = (lo + hi) / 2
+        tc.post("/api/projects/%s/activity-budgets" % P1, headers=H, json={"type": "AuditProbe", "subtype": "", "labor_budget": max(mid - others, 0.0), "materials_budget": 0})
+        g = tc.post("/api/sites/%s/pulse/generate" % P1, params={"date": "2026-11-06"}, headers=H)
+        st = (g.json().get("budget_snapshot") or {}).get("status") if g.status_code == 200 else None
+        seen.add(st)
+        if st is None:
+            break
+        lo, hi = (mid, hi) if st == "over_budget" else (lo, mid)
+        steps += 1
+    derived_other = round((lo + hi) / 2 - own, 2)
+    print("e90 known-pay variant (2 paid: TM 500 + technician): statuses %s steps %d | derived other worker %.2f vs actual %.2f"
+          % (sorted(map(str, seen)), steps, derived_other, actual))
+    if steps >= 10 and abs(derived_other - actual) <= max(5.0, 0.001 * actual):
+        F.append("known-pay variant: TM derives the other worker's pay %.2f (actual %.2f)" % (derived_other, actual))
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

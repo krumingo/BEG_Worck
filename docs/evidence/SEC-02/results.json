@@ -809,8 +809,8 @@
   ],
   [
    "POST /api/alarms/evaluate",
-   "R20-5M",
-   "finance.money_values.read"
+   "R20-1",
+   "finance.alarm_evaluation.execute"
   ],
   [
    "GET /api/projects/{project_id}/activities-overview",
@@ -880,7 +880,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 180.6,
+ "seconds": 173.4,
  "rows": [
   {
    "mode": "off",
@@ -22416,17 +22416,13 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22434,17 +22430,13 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22452,15 +22444,11 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22468,15 +22456,11 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22484,17 +22468,13 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22502,15 +22482,11 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22518,15 +22494,11 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -22534,15 +22506,11 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46741,17 +46709,13 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46759,17 +46723,13 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46777,15 +46737,11 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46793,15 +46749,11 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46809,17 +46761,13 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46827,15 +46775,11 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46843,15 +46787,11 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -46859,15 +46799,11 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -74392,17 +74328,13 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74410,17 +74342,13 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74428,15 +74356,11 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74444,15 +74368,11 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74460,17 +74380,13 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74478,15 +74394,11 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74494,15 +74406,11 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -74510,15 +74418,11 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98717,17 +98621,13 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98735,17 +98635,13 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98753,15 +98649,11 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98769,15 +98661,11 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98785,17 +98673,13 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98803,15 +98687,11 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98819,15 +98699,11 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -98835,15 +98711,11 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
-   "written": [
-    "op.alarm_events"
-   ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -126554,17 +126426,13 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126572,17 +126440,13 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126590,15 +126454,13 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126606,15 +126468,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126622,17 +126482,13 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126640,15 +126496,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126656,15 +126510,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -126672,15 +126524,13 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151085,17 +150935,13 @@
    "role": "owner",
    "legacy_role": "Owner",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151103,17 +150949,13 @@
    "role": "admin",
    "legacy_role": "Admin",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151121,15 +150963,13 @@
    "role": "requester",
    "legacy_role": "SiteManager",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151137,15 +150977,13 @@
    "role": "technician",
    "legacy_role": "Technician",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151153,17 +150991,13 @@
    "role": "accountant",
    "legacy_role": "Accountant",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
    "status": 200,
    "written": [
     "op.alarm_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [
-    "metric_value"
-   ],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151171,15 +151005,13 @@
    "role": "warehousekeeper",
    "legacy_role": "Warehousekeeper",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151187,15 +151019,13 @@
    "role": "driver",
    "legacy_role": "Driver",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -151203,15 +151033,13 @@
    "role": "viewer",
    "legacy_role": "Viewer",
    "probe": "POST /api/alarms/evaluate",
-   "rule": "R20-5M",
+   "rule": "R20-1",
    "target": null,
-   "status": 200,
+   "status": 403,
    "written": [
-    "op.alarm_events"
+    "op.audit_events"
    ],
-   "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -157405,7 +157233,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -157414,13 +157242,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "scope_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -157436,7 +157264,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "242609e71fb40f074a879ca3276377db0834ef3358345c74be32ebb525784d56"
+     "integrity_hash": "6820b60752883bc583c30cdfe09c59b3e15cd6eb3df18446ccd15aa92533e384"
     }
    ]
   },
@@ -157447,7 +157275,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -157456,7 +157284,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157481,7 +157309,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "179cb3d3f1ec1a96bb4e69e5927fcc67faa94c4cb481c13dfdbb66c84ff771d3"
+     "integrity_hash": "c8af25efffb4e0c5643f315cd5a7e638a6c20285ffea1e833440661084f888c9"
     }
    ]
   },
@@ -157492,7 +157320,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -157504,7 +157332,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -157513,7 +157341,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157539,7 +157367,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "7a1fc6a3432a1a729441ec91c5a2e0753b7d3ea122b4db0df72ba45a032bd87c"
+     "integrity_hash": "3417c808ace942e323130ee6ce65a13d241a97799ea94c2386c010534d08d927"
     }
    ]
   },
@@ -157550,7 +157378,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -157562,7 +157390,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -157574,7 +157402,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -157583,13 +157411,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "scope_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -157607,7 +157435,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "f7d1cb7a0a921730277fb29643d5de9d6ead38bef9590a298f0e8dd7afa046e8"
+     "integrity_hash": "e73b9a76411a099276403c8665aa0839e8850520e34c679e8e5d368edfc84abb"
     }
    ]
   },
@@ -157618,7 +157446,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -157627,7 +157455,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157653,7 +157481,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "810b97707a031a24c194051cd1b4f61b42cff6e457731a10da24f2ec286d2881"
+     "integrity_hash": "f3b50c7255bad2dd50b504c0e4e196f74f5c69cec0b1ab32ca890eea48ba3532"
     }
    ]
   },
@@ -157664,7 +157492,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -157676,7 +157504,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -157685,7 +157513,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157711,7 +157539,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "11fc749b5b00fb5361e3dac5f1b09b46d7b73636227e50746e9f2b20f499121a"
+     "integrity_hash": "d1508f6042844459260d6852ef66ee0b29d6f293ffe5c9d8bcfdc92624b3211e"
     }
    ]
   },
@@ -157722,7 +157550,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -157734,7 +157562,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -157746,7 +157574,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -157755,13 +157583,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "scope_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -157779,7 +157607,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "d05e34a177f993371d69a7273e92e59f3d41e8d42bee56496270651364c2b03a"
+     "integrity_hash": "44d34b62e7086ff852cdd889b1e022f1176a9e10cd31bb63ac73a127eb320f6a"
     }
    ]
   },
@@ -157790,7 +157618,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -157799,7 +157627,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157825,7 +157653,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "6ff93d874e3c9c6b796aecfb7a34ed017257846a6d3299f66527a7f9877ba38b"
+     "integrity_hash": "4b219796c41fd6408b81f8a127d9110bbe69144de6ee061b7eb5f8d4c4dfed0d"
     }
    ]
   },
@@ -157836,7 +157664,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -157848,7 +157676,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -157857,7 +157685,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157883,7 +157711,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "3ac6e6d59ee474a1c14b9e87ac78c408cc700067ec734ba65f16e1198dbe43b9"
+     "integrity_hash": "495f20eff9df4fac15f0fc89a1bb3a71a10814fd97cd285e1a90a2b5a8ab01ac"
     }
    ]
   },
@@ -157894,7 +157722,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -157906,7 +157734,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "060b930e-a5c4-4fdc-b95c-39fdca06c69a",
+   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
@@ -158593,7 +158421,7 @@
    "mode": "off",
    "role": "requester",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "SiteManager",
    "events": [],
    "money_text": [],
@@ -158637,7 +158465,7 @@
    "mode": "off",
    "role": "technician",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "Technician",
    "events": [],
    "money_text": [],
@@ -158681,7 +158509,7 @@
    "mode": "off",
    "role": "viewer",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "Viewer",
    "events": [],
    "money_text": [],
@@ -158797,7 +158625,7 @@
     "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
     "Бюджет над 80%"
    ],
-   "leaks_900": true,
+   "leaks_900": false,
    "leaks_124": true
   },
   {
@@ -158837,7 +158665,7 @@
    "mode": "shadow",
    "role": "requester",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "SiteManager",
    "events": [],
    "money_text": [],
@@ -158881,7 +158709,7 @@
    "mode": "shadow",
    "role": "technician",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "Technician",
    "events": [],
    "money_text": [],
@@ -158925,7 +158753,7 @@
    "mode": "shadow",
    "role": "viewer",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "Viewer",
    "events": [],
    "money_text": [],
@@ -159081,7 +158909,7 @@
    "mode": "enforce",
    "role": "requester",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "SiteManager",
    "events": [],
    "money_text": [],
@@ -159125,7 +158953,7 @@
    "mode": "enforce",
    "role": "technician",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "Technician",
    "events": [],
    "money_text": [],
@@ -159169,7 +158997,7 @@
    "mode": "enforce",
    "role": "viewer",
    "case": "evaluate",
-   "status": 200,
+   "status": 403,
    "legacy_role": "Viewer",
    "events": [],
    "money_text": [],
@@ -159309,6 +159137,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000
@@ -159334,6 +159172,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159357,6 +159205,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159386,6 +159244,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159423,6 +159294,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159457,6 +159341,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159486,6 +159383,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159515,6 +159425,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159546,6 +159469,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000
@@ -159571,6 +159504,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159594,6 +159537,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159623,6 +159576,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159660,6 +159626,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159694,6 +159673,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159723,6 +159715,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159752,6 +159757,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159783,6 +159801,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000
@@ -159808,6 +159836,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159831,6 +159869,16 @@
     "info": 0
    },
    "one_status": 404,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [],
+   "briefing_critical": [
+    0,
+    0
+   ],
+   "briefing_top_alarms": 0,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159860,6 +159908,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159897,6 +159958,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,
@@ -159931,6 +160005,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159960,6 +160047,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 403,
    "snapshot": null,
    "generate_budget_alerts": []
@@ -159989,6 +160089,19 @@
     "info": 0
    },
    "one_status": 200,
+   "briefing_status": [
+    200,
+    200
+   ],
+   "briefing_p1_reasons": [
+    "Бюджетът е надхвърлен",
+    "1 критични аларми"
+   ],
+   "briefing_critical": [
+    1,
+    1
+   ],
+   "briefing_top_alarms": 1,
    "generate_status": 200,
    "snapshot": {
     "total_budget": 5000,

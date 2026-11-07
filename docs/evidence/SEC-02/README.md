@@ -519,7 +519,36 @@ Route-ът е R20-2B (SiteManager член на проекта може да з�
   * Accountant — пълно и в двата случая;
 * `check_alarms` и `check_pulse_budget_alerts` са затегнати: при P1 (1 платен) не-финансовите роли нямат бюджетна аларма / алерт / статус.
 
+### SEC71-05 (Допълнение H, БЛОКИРАЩО, ДОКАЗАНО) — `POST /alarms/evaluate` и `resolved_events`
+При `e90aa5f` evaluate филтрираше `events` / `new_events`, но не `resolved_events`. С бюджетно правило с `auto_resolve: true` техническият ръководител прави цикъл: бюджет B → evaluate → бюджет 10⁹ → evaluate. `resolved_events > 0` точно когато B < кумулативния разход за труд, така че пробата на одита извежда **6196.90 при реални 6200.00 за 21 стъпки**.
+
+Поправка:
+* **`POST /alarms/evaluate` е само за финансови роли** (`require_finance_read("finance.alarm_evaluation.execute")`, R20-1 в регистъра). Evaluate оценява правилата на **всички** обекти и отговаря с броячи (нови / auto-resolved). Тези броячи не могат да се отнесат към обект, следователно не могат да се филтрират по обекти.
+  * Кой го вика: само бутонът „Оцени“ на `AlarmsDashboardPage` (Admin/Owner/SiteManager/Accountant); няма cron или друг извикващ.
+  * Бутонът вече се показва само при `canReadFinance` (Owner/Admin/Accountant).
+  * В enforce отказът пише каноничния AuditEvent „permission denied“, т.е. кой е викал. В off/shadow решава legacy проверката (403).
+* Допълнителна защита (недостижима за не-финансова роля): ако все пак стигне до handler-а, отговорът е само `new_events` / `events` без паричните аларми на single-paid обекти, без `resolved_events`, през `strip_money`.
+* **Други отговори с броячи / списъци от аларми:**
+  * `/alarms`, `?severity=`, `/alarms/count`, `/alarms/dashboard` (by_severity, by_type, by_site, recent, тренд), `/alarms/{id}`, acknowledge / resolve — `$nor` в заявката от SEC71-04. 404 за скрита аларма е еднакъв с 404 за несъществуваща (проба на одита, „404-oracle same=True“). Bulk ack/resolve няма;
+  * **`GET /morning-briefing` и `/morning-briefing/compact` — намерено при проверката.** За всеки проект брифингът смяташе кумулативния разход за труд спрямо бюджета: причина „Бюджетът е надхвърлен“ / „Бюджет N% изхарчен“ + severity critical / warning, плюс броячите critical/warning, top аларми и „N критични аларми“ по обект. Това е същата бисекция като SEC71-04 (текстът „Бюджетът е надхвърлен“ няма число и минаваше покрай предпазната мрежа). Сега за роля без финансово право `build_morning_briefing(..., band_user=user)`: на single-paid обект няма причина / severity за бюджет, а паричните му аларми не се броят и не се изброяват (броячи, top_alarms, headline, „критични аларми“);
+* при ≥ 2 платени работника лентата остава (Р31), финансовите роли виждат всичко.
+
+Доказателство:
+* пробата на одита (`ce2f93c`, разширена с /alarms + resolve, 404 oracle, auto_resolve oracle и known-pay вариант) е копирана **непроменена** в `backend/tools/audit_probe_sec71_d1_band_bisect.py`. Тестът `test_the_audit_band_bisection_probe_finds_nothing` изисква:
+  * pulse и /alarms бисекция → нищо, в 3 режима (evaluate → 403, 0 стъпки);
+  * 404 oracle еднакъв;
+  * auto_resolve oracle → 0 стъпки, нищо;
+  * остава **само** „known-pay variant“ — въпрос по канона, отнесен до Крум; по него нищо не е променено;
+* контрапроба `sec02g_sec71_05_counter_check.txt`: при `e90aa5f` auto_resolve oracle извежда 6196.90; след поправката — 0 стъпки;
+* harness: `alarms` — evaluate от SiteManager / Technician / Viewer → 403 в 3-те режима, Accountant → 200. `band_paid_workers` — morning-briefing (+ compact):
+  * при 1 платен: P1 без бюджетна причина / „аларми“, броячи 0 / 0, top_alarms 0;
+  * при 2 платени: „Бюджетът е надхвърлен“ и critical ≥ 1;
+  * Accountant — пълно;
+* PM-01: **15 клетки** спрямо `e90aa5f`. Всички са `POST /alarms/evaluate` × 5 не-финансови роли × 3 режима, 200 → 403; в enforce + `op.audit_events`.
+* frontend: yarn test 102 passed, build compiled.
+
 ### Дълг / решение за Крум
+* **SEC-02-G-D2 (Крум, канон):** known-pay вариантът — 2 платени работника, единият е самият технически ръководител (знае своето заплащане); лентата е разрешена по Р31 2+, а от нея се изважда заплащането на другия (6196.63 / 6200 в пробата на одита). Нищо не е променено до решение.
 * **SEC-02-G-D1 — ЗАТВОРЕН от SEC71-04 (Допълнение F):** лентата (status / severity / count / филтър / наличие на аларма или алерт) не се показва на роля без финансово право при < 2 платени работника; при ≥ 2 остава, както позволява Р31.
 
 ## Rollback

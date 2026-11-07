@@ -639,6 +639,8 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/resource-model/worker-cost-preview"): "denial",
     ("POST", "/api/revenue-snapshots/from-offer/{offer_id}"): "denial",
     ("POST", "/api/sites/{site_id}/pulse/generate"): "denial",
+    # SEC-02-G (audit SEC71-05): evaluating every alarm rule is finance only
+    ("POST", "/api/alarms/evaluate"): "denial",
     ("POST", "/api/smr-analyses/from-offer/{offer_id}"): "denial",
     ("POST", "/api/smr-analyses/{analysis_id}/recalculate"): "denial",
     ("POST", "/api/smr-analyses/{analysis_id}/recalculate-with-modifiers"): "denial",

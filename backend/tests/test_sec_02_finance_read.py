@@ -673,6 +673,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     gen = tc.post("/api/sites/%s/pulse/generate" % p1,
                                   params={"date": "2026-11-06"}, headers=hdr)
                     one = tc.get("/api/alarms/" + stored, headers=hdr)
+                    mb = tc.get("/api/morning-briefing", headers=hdr)
+                    mbc = tc.get("/api/morning-briefing/compact", headers=hdr)
                     items = (crit.json() or {}).get("items", []) if crit.status_code == 200 else []
                     band_rows.append({
                         "mode": mode, "paid_workers": paid, "role": role,
@@ -684,6 +686,18 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                         "dashboard_by_severity": (dash.json() or {}).get("by_severity")
                         if dash.status_code == 200 else None,
                         "one_status": one.status_code,
+                        # SEC-02-G (SEC71-05): the morning briefing burns the same band
+                        "briefing_status": (mb.status_code, mbc.status_code),
+                        "briefing_p1_reasons": [x for t in ((mb.json() or {}).get("top_risks")
+                                                            or []) if t.get("project_id") == p1
+                                                for x in t.get("reasons") or []]
+                        if mb.status_code == 200 else None,
+                        "briefing_critical": (((mb.json() or {}).get("summary") or {})
+                                              .get("critical_alarms"),
+                                              (mbc.json() or {}).get("critical_count"))
+                        if mb.status_code == 200 and mbc.status_code == 200 else None,
+                        "briefing_top_alarms": len((mb.json() or {}).get("top_alarms") or [])
+                        if mb.status_code == 200 else None,
                         "generate_status": gen.status_code,
                         "snapshot": (gen.json() or {}).get("budget_snapshot")
                         if gen.status_code == 200 else None,
@@ -934,8 +948,13 @@ def check_alarms(rows: List[Dict[str, Any]]) -> None:
     assert len(rows) == len(MODES) * 4 * 4
     for r in rows:
         # SEC-02-G (SEC71-04): a non-finance read of P1's money alarm by id is a 404
-        assert r["status"] == (404 if r["case"] == "one" and r["legacy_role"] not in FINANCE
-                               else 200), r
+        fin = r["legacy_role"] in FINANCE
+        expect = 200
+        if not fin and r["case"] == "one":
+            expect = 404              # SEC71-04: the hidden alarm does not exist for him
+        if not fin and r["case"] == "evaluate":
+            expect = 403              # SEC71-05: evaluating every rule is finance only
+        assert r["status"] == expect, r
         budget = [e for e in r["events"] if e["type"] == "budget"]
         if r["legacy_role"] not in FINANCE:
             # SEC-02-G (SEC71-04): P1 has ONE paid worker — its money alarm is not shown
@@ -972,11 +991,22 @@ def check_band_two_paid(rows: List[Dict[str, Any]]) -> None:
         assert r["generate_status"] == (200 if tm_or_fin else 403), r
         if not tm_or_fin:
             r = {**r, "snapshot": None, "generate_budget_alerts": None}
+        assert tuple(r["briefing_status"]) == (200, 200), r
+        budget_reason = [x for x in r["briefing_p1_reasons"] if "Бюджет" in x or "аларм" in x]
         if r["legacy_role"] in FINANCE:
             assert r["count"]["critical"] >= 1 and r["critical_list"], r
             assert r["one_status"] == 200 and "status" in r["snapshot"], r
             assert r["generate_budget_alerts"], r
+            assert "Бюджетът е надхвърлен" in r["briefing_p1_reasons"], r
+            assert r["briefing_critical"][0] >= 1 and r["briefing_critical"][1] >= 1, r
             continue
+        if r["paid_workers"] == 1:
+            # SEC71-05: no budget burn reason, no alarm counts / top alarms for P1
+            assert budget_reason == [] and tuple(r["briefing_critical"]) == (0, 0), r
+            assert r["briefing_top_alarms"] == 0, r
+        else:
+            assert "Бюджетът е надхвърлен" in r["briefing_p1_reasons"], r
+            assert r["briefing_critical"][0] >= 1, r
         if r["paid_workers"] == 1:
             assert r["count"]["critical"] == 0 and r["count"]["total"] == 0, r
             assert r["critical_list"] == [] and r["one_status"] == 404, r
@@ -1546,11 +1576,14 @@ def test_fg111_alarms_give_no_amount_metric_or_threshold():
                ("GET", "/api/alarms/dashboard"): alarms.alarm_dashboard,
                ("GET", "/api/alarms/{event_id}"): alarms.get_alarm,
                ("PUT", "/api/alarms/{event_id}/acknowledge"): alarms.acknowledge_alarm,
-               ("PUT", "/api/alarms/{event_id}/resolve"): alarms.resolve_alarm,
-               ("POST", "/api/alarms/evaluate"): alarms.evaluate_alarms}
+               ("PUT", "/api/alarms/{event_id}/resolve"): alarms.resolve_alarm}
     reg = by_route()
     for key, fn in readers.items():
         assert reg[key].rule == R20_5M and getattr(fn, "sec02_strips_money", False), key
+    # SEC-02-G (SEC71-05): evaluate is finance only (R20-1, a guarded execute action)
+    from app.permissions.finance_read import R20_1
+    assert reg[("POST", "/api/alarms/evaluate")].rule == R20_1
+    assert reg[("POST", "/api/alarms/evaluate")].action == "finance.alarm_evaluation.execute"
 
     def ev(name, sev, pct, threshold):
         return {"id": "e", "rule_id": "r", "rule_name": name, "severity": sev,
@@ -1802,7 +1835,7 @@ def test_the_audit_pulse_generate_probe_finds_nothing():
 
 @pytest.mark.skipif(bool(_real_refusal()), reason=_real_refusal() or "ok")
 def test_the_audit_band_bisection_probe_finds_nothing():
-    """SEC-02-G (audit SEC71-04, addendum F): the audit's probe
+    """SEC-02-G (audit SEC71-04 + SEC71-05, addenda F + H): the audit's probe
     docs/audit/probes/sec02/probe_sec71_d1_band_bisect.py (claude/audit-log; vendored
     unchanged as tools/audit_probe_sec71_d1_band_bisect.py) moves P1's budget as the
     Technical Manager and reads the generated pulse's status, in off/shadow/enforce. With
@@ -1814,9 +1847,20 @@ def test_the_audit_band_bisection_probe_finds_nothing():
     out = subprocess.run([sys.executable, str(probe)], cwd=str(BACKEND), env=env,
                          capture_output=True, text=True, timeout=900)
     assert out.returncode == 0, out.stderr[-2000:]
-    assert "FAILS: none" in out.stdout, out.stdout[-2000:]
+    # SEC-02-G (SEC71-05, addendum H): the probe also bisects through /alarms + resolve and
+    # through evaluate.resolved_events with an auto_resolve rule. Its "known-pay variant"
+    # (2 paid workers, one of them the TM himself) is a canon question put to Krum and is
+    # left as it is — every OTHER finding must be gone.
+    fails = out.stdout.rsplit("FAILS:", 1)[1].strip()
+    if fails != "none":
+        import ast
+        left = [f for f in ast.literal_eval(fails) if not f.startswith("known-pay variant")]
+        assert left == [], left
     for mode in MODES:
         assert "%s: first answer" % mode in out.stdout, out.stdout[-2000:]
+        assert "%s /alarms: first" % mode in out.stdout, out.stdout[-2000:]
+    assert "e90 auto_resolve oracle" in out.stdout and "404-oracle" in out.stdout, \
+        out.stdout[-2000:]
 
 
 def test_the_post_scan_finds_no_money_for_non_finance_roles():
