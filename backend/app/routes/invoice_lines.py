@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 import uuid
 
 from app.db import db, client as mongo_client
-from app.services.invoice_line_lock import InvoiceLineAllocationLocked, write_unless_linked
+from app.services.invoice_line_lock import (
+    InvoiceLineAllocationLocked, run_transaction, write_unless_linked,
+)
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
@@ -188,24 +190,31 @@ async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str):
     Both the invoice read and the invoice write carry the tenant predicate. The
     write filter in particular: a scoped read of the lines said nothing about
     which tenant's invoice ``{"id": invoice_id}`` alone would have updated.
+
+    5C-C26l (debt after Codex F-55-C26-04): the lines, the paid amount and the
+    header write are ONE transaction. Two recalculations of the same invoice
+    (concurrent edits of different lines) both write the invoice document, so
+    MongoDB aborts one with a WriteConflict and ``with_transaction`` re-runs it
+    against the committed lines — the stored header total is always Σ lines,
+    never a total computed from a line set read before another edit.
     """
-    lines = await tenant.invoice_lines.find({"invoice_id": invoice_id}).to_list(1000)
-    
-    subtotal = sum(l.get("line_total_ex_vat", 0) for l in lines)
-    vat_total = sum(l.get("vat_amount", 0) for l in lines)
-    total = round(subtotal + vat_total, 2)
-    
-    invoice = await tenant.invoices.get(invoice_id)
-    paid_amount = invoice.get("paid_amount", 0) if invoice else 0
-    
-    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
-        "subtotal": round(subtotal, 2),
-        "vat_amount": round(vat_total, 2),
-        "total": total,
-        "remaining_amount": max(0, round(total - paid_amount, 2)),
-        "lines_count": len(lines),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }})
+    async def _body(session):
+        lines = await tenant.invoice_lines.find({"invoice_id": invoice_id},
+                                                session=session).to_list(1000)
+        subtotal = sum(l.get("line_total_ex_vat", 0) for l in lines)
+        vat_total = sum(l.get("vat_amount", 0) for l in lines)
+        total = round(subtotal + vat_total, 2)
+        invoice = await tenant.invoices.get(invoice_id, session=session)
+        paid_amount = (invoice or {}).get("paid_amount", 0) or 0
+        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+            "subtotal": round(subtotal, 2),
+            "vat_amount": round(vat_total, 2),
+            "total": total,
+            "remaining_amount": max(0, round(total - paid_amount, 2)),
+            "lines_count": len(lines),
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }}, session=session)
+    await run_transaction(mongo_client, _body)
 
 
 async def enrich_line_with_names(tenant: TenantData, line: dict) -> dict:

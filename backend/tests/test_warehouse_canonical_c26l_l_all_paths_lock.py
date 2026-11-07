@@ -516,3 +516,93 @@ async def test_f55_c26_04_a_paused_allocate_reads_the_current_qty(
     await alloc
     line = await _line(db)
     assert (line["qty_allocated"], line["qty_unallocated"]) == (10, 10)
+
+
+# ═══════════ debt after F-55-C26-04 — the invoice header totals ═══════════
+
+IL2 = "il-c26-2"
+
+
+async def _two_lines(db):
+    from tests.test_warehouse_canonical_c26_one_path_per_lot import _invoice_line
+    await _invoice_line(db, line_id=IL2, deprecated=False, description="Пясък",
+                        allocations=[{"type": "project", "ref_id": PROJECT, "qty": 10}])
+
+
+async def _assert_header_is_sum(db):
+    lines = await db["invoice_lines"].find({"invoice_id": "inv-c26"}).to_list(None)
+    inv = await db["invoices"].find_one({"id": "inv-c26"})
+    sub = round(sum(ln.get("line_total_ex_vat", 0) for ln in lines), 2)
+    vat = round(sum(ln.get("vat_amount", 0) for ln in lines), 2)
+    assert (inv["subtotal"], inv["vat_amount"], inv["total"], inv["lines_count"]) == (
+        sub, vat, round(sub + vat, 2), len(lines)), (inv, sub, vat)
+
+
+@pytest.mark.parametrize("rep", range(10))
+@pytest.mark.parametrize("mode", MODES)
+async def test_invoice_header_total_is_the_sum_after_concurrent_line_edits(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode, rep):
+    """Two different lines of one invoice edited concurrently: the stored
+    header total = Σ lines (live and after rebuild)."""
+    from app.models.invoice_lines import InvoiceLineUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    await _two_lines(db)
+    routes = _routes(monkeypatch, client, db)
+    out = await asyncio.gather(
+        routes.update_invoice_line(IL, InvoiceLineUpdate(unit_price=20), user=OWNER),
+        routes.update_invoice_line(IL2, InvoiceLineUpdate(unit_price=30), user=OWNER),
+        return_exceptions=True)
+    assert not any(isinstance(r, Exception) for r in out), out
+    await _assert_header_is_sum(db)
+    await rebuild_from_ledger(db, tenant_id=T)
+    await _assert_header_is_sum(db)
+    inv = await db["invoices"].find_one({"id": "inv-c26"})
+    assert inv["subtotal"] == 500.0                        # 10 × 20 + 10 × 30
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_invoice_header_recalc_paused_after_its_read_is_never_stale(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """The interleaving: edit A's header recalculation pauses after reading
+    the lines; edit B (another line) completes, header included; A resumes.
+    94c0571+: A wrote the header from the line set it read (B's edit lost
+    from the total). Now the header is Σ the current lines."""
+    from app.models.invoice_lines import InvoiceLineUpdate
+    from app.tenancy.data_access import TenantCollection
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    await _two_lines(db)
+    routes = _routes(monkeypatch, client, db)
+    reached, release = asyncio.Event(), asyncio.Event()
+    seen = {}
+    real_get, real_find_one = TenantCollection.get, TenantCollection.find_one
+
+    async def _maybe_pause(coll):
+        task = asyncio.current_task()
+        if coll.name == "invoices" and getattr(task, "pause_me", False):
+            seen[task] = seen.get(task, 0) + 1
+            if seen[task] == 2 and not release.is_set():   # 1: Draft check, 2: header recalc
+                reached.set()
+                await release.wait()
+
+    async def get(self, *a, **kw):
+        await _maybe_pause(self)
+        return await real_get(self, *a, **kw)
+
+    async def find_one(self, *a, **kw):
+        await _maybe_pause(self)
+        return await real_find_one(self, *a, **kw)
+    monkeypatch.setattr(TenantCollection, "get", get)
+    monkeypatch.setattr(TenantCollection, "find_one", find_one)
+
+    async def _edit_a():
+        asyncio.current_task().pause_me = True
+        return await routes.update_invoice_line(IL, InvoiceLineUpdate(unit_price=20), user=OWNER)
+    a = asyncio.create_task(_edit_a())
+    await asyncio.wait_for(reached.wait(), 10)
+    await routes.update_invoice_line(IL2, InvoiceLineUpdate(unit_price=30), user=OWNER)
+    release.set()
+    await a
+    await _assert_header_is_sum(db)
+    await rebuild_from_ledger(db, tenant_id=T)
+    await _assert_header_is_sum(db)
+    assert (await db["invoices"].find_one({"id": "inv-c26"}))["subtotal"] == 500.0

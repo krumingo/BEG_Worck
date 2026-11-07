@@ -162,8 +162,9 @@ async def totals(invoice_id, user=Depends(x)):
 #: tree rather than on a snippet.
 REAL_MUTATIONS = [
     ("app/routes/invoice_lines.py",
-     "invoice = await tenant.invoices.get(invoice_id)",
-     'invoice = await db.invoices.find_one({"id": invoice_id})',
+     # 5C-C26l: the header recalculation reads the invoice in its transaction.
+     "invoice = await tenant.invoices.get(invoice_id, session=session)",
+     'invoice = await db.invoices.find_one({"id": invoice_id}, session=session)',
      "A2C-IDENTITY"),
     ("app/routes/invoice_lines.py",
      # 5C-C26l Addendum L (FG-109): the PUT write moved into the per-line
