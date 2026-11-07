@@ -1,0 +1,44 @@
+# L01P checks (2026-11-07) — head 215f378 — real mongo:7.0 rs0, every pytest run with -rs (skips listed)
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness (W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27017/?directConnection=true) exit=0
+  changed cells vs. the branch before the merge:
+    changed cells: 63
+    - POST /api/finance/account-funding: status 400→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/invoices/{invoice_id}/payments: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/other-expense: status 400→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/other-income: status 400→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/payments: status 201→428, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/payments/{payment_id}/allocate: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/transfers: status 400→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+  changed cells vs. main's committed matrix:
+    changed cells: 6
+    - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+## PM-01 tests (real-Mongo regression included)
+6 passed, 6 warnings in 171.83s (0:02:51)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 217 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 438 unit(s) checked, 0 violation(s)
+## LAB suites
+117 passed, 1 warning in 7.26s
+## PAY-01 (tests/test_pay_01_*.py) — re-run on a fresh mongo:7.0 rs0 container (see the note at the end)
+630 passed, 1 warning in 157.22s (0:02:37)
+  (tests/test_invoice_payments.py left out: a legacy live-server test — it needs REACT_APP_BACKEND_URL of a running deployment; without it all 16 fail with requests MissingSchema)
+## W0-04 (audit idempotency + C01 indexes/chain), real Mongo
+70 passed, 1 warning in 14.75s
+## AUTH-01/02
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+tests/test_auth_01_c01_corrections.py::test_f01_a_failed_reset_changes_nothing[user_update]
+122 passed, 6 warnings in 170.15s (0:02:50)
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 164.26s (0:02:44)
+  lines 'subscription id resolves to no single tenant' in the R0 output: 0
+## W0 DB-free (baseline run, no real Mongo URL)
+15 failed, 1094 passed, 79 skipped, 6 warnings in 75.57s (0:01:15)
+  non-legacy_routes failures: 0
+## note: the local mongod aborted (WiredTiger panic: directory-sync open failed at collection file #39352 — the container's
+## 20000 open-file limit after tens of thousands of scratch collections) AFTER this suite had finished; the PAY-01 re-run above
+## used a fresh container. Not a product failure.
