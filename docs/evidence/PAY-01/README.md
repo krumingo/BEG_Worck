@@ -547,3 +547,27 @@ The UI makes a fresh key on every click (`PaymentsPage.js:254`), so a user retry
 | Both tests on 0713a81 | the new key on leg 1 **fails 6/6** (leg 2 stays active); the new key on leg 2 already held there (control) |
 | All `test_pay_01*` + A1 collision matrix + `test_w0_04*` | 667 passed |
 | A1 / A2C guards | 0 violations; the A1 inventory is unchanged (374) |
+
+## Merge of main 7b6da64 (#72 W0-04-C01): merge-ready check
+
+**Merge.** `origin/main` 7b6da64 was merged into `claude/pay-01-payment-reversal` with merge commit `1ad9509`: no rebase, no force-push. There were **no conflicts**; `backend/app/audit/store.py` auto-merged, keeping main's linear audit chain and this branch's read-only `has_event`. After the merge, `scripts/w0_04_bootstrap_audit_indexes.PLANNED_INDEXES` **is** `app.audit.indexes.PLANNED_INDEXES`, the list that startup and onboarding use. So the PAY test harness creates exactly the indexes created at startup, with no change to the harness.
+
+**PM-01 matrix: regenerated with the harness only** (`python tests/test_pm_01_permission_matrix.py --harness`, local replica set).
+- **Why:** the first run against the committed matrix differed in 63 cells.
+- **What changed:** all 63 are the expected R29 contract: 7 money POSTs × the 3 finance roles (owner, admin, accountant) × 3 modes. The probe sends no `Idempotency-Key`, so each cell is now **428, nothing written**. Before, the cells were 400/404, or 201 with a write for `POST /finance/payments`. The 7 POSTs are payment, quick-pay, transfer, account-funding, other-expense, other-income and allocate.
+- **What stayed the same:** 0 rows were added or removed (18096), and no other route, role or mode changed.
+- **Files:** only `matrix.csv` and `run_meta.json` (the run duration) changed.
+
+**Results on the merge (real Mongo `mongo:7.0` rs0, `W0_03_REAL_MONGO_URL` set; `-rs`)**
+
+| Suite | Result |
+|---|---|
+| PAY: all `test_pay_01*` + A1 collision matrix | 635 passed, 0 skipped |
+| W0-04 / C01: `test_w0_04*` | 70 passed, 0 skipped |
+| 6 parallel begins with one key: `test_six_parallel_begin_with_one_key_have_exactly_one_winner` (startup indexes via `ensure_audit_indexes`) + the no-index variant | 2 passed |
+| PM-01: `test_pm_01_permission_matrix.py`, after the harness regeneration | 6 passed, **0 skipped** |
+| R0 | 814 passed |
+| W0: `test_w0_*` | 1173 passed, 15 failed, the same 15 in `test_w0_03e_legacy_routes.py` |
+| A2C / A1 guards | 214 modules / 432 units, 0 violations |
+| A1 inventory | identical (no regeneration needed) |
+| frontend `yarn test` | 113 passed |
