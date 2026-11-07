@@ -116,3 +116,24 @@ W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
      10 9 passed, 19 deselected
 ## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
 ## retake: 6 concurrent retries of a FAILED key x10 rounds -> exactly 1 STARTED, every loser DUPLICATE/prior_status STARTED; no top-level in_progress
+
+# F-72-01 (2026-11-07), commit cc994eb — vs main 0f870c3 baseline above
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+185 passed, 6 warnings in 145.38s (0:02:25)
+## R0 (real mongo)
+814 passed, 6 warnings in 139.11s (0:02:19)
+## W0 DB-free
+15 failed, 1093 passed, 73 skipped, 6 warnings in 58.56s
+## W0 real mongo
+15 failed, 1166 passed, 6 warnings in 109.10s (0:01:49)
+## PM-01 (real mongo)
+6 passed, 6 warnings in 144.92s (0:02:24)
+## stability: C01 -k 'parallel or fg57 or no_index or retries or retake or f72' x10
+     10 12 passed, 19 deselected, 1 warning
+## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
+## negative control: 90a582b indexes.py/store.py with the f72 sentinel tests: DuplicateKeyError chained as __cause__; middleware log contains 'idem_SENTINEL-TENANT-7f3a9c_pay_SENTINEL-KEY-c41e0b' and the Mongo keyValue/errmsg
+## with the fix: no sentinel in message, chained traceback, report or caplog (startup, both lazy guards, ErrorHandlerMiddleware)
