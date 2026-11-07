@@ -5,7 +5,7 @@ Phase 2: Labor Cost Aggregation
 Phase 3: Execution Packages
 Phase 4: Project Profit Summary
 """
-from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from typing import Any, Dict, Optional, List
 import math
 from datetime import datetime, timezone
@@ -20,7 +20,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
-from app.permissions.client_act_write import require_client_act_right
+from app.permissions.client_act_write import client_act_money_visible, require_client_act_right
 from app.services import client_acts as ca
 
 
@@ -82,12 +82,14 @@ async def create_client_act(
 
 
 @router.get("/client-acts")
-async def list_client_acts(project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_client_acts(request: Request, project_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     acts = await tenant.client_acts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    if not await client_act_money_visible(request, user):            # FG-122 (R20)
+        return [ca.strip_money(a) for a in acts]
     return acts
 
 
@@ -106,12 +108,15 @@ async def client_act_remaining(
 
 
 @router.get("/client-acts/{act_id}")
-async def get_client_act(act_id: str, user: dict = Depends(require_m2)):
+async def get_client_act(act_id: str, request: Request, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]}, {"_id": 0})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
-    return await ca.act_view(tenant, act)
+    view = await ca.act_view(tenant, act)
+    if not await client_act_money_visible(request, user):            # FG-122 (R20)
+        return ca.strip_money(view)
+    return view
 
 
 @router.put("/client-acts/{act_id}")
@@ -141,24 +146,22 @@ async def update_client_act(
 
 
 @router.post("/client-acts/{act_id}/confirm")
-async def confirm_client_act(act_id: str, user: dict = Depends(require_m2)):
-    """Confirm act → status=Accepted → earned revenue"""
+async def confirm_client_act(
+    act_id: str,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    _act01: dict = Depends(require_client_act_right(ca.ACTION_CONFIRM)),  # FG-119: before any read
+    user: dict = Depends(require_m2),
+):
+    """Confirm act → status=Accepted → earned revenue (FG-119: finance roles, Idempotency-Key,
+    one transaction with the offer/version/cap re-check and the canonical AuditEvent)."""
+    key = ca.KeyedWrite(db, user, ca.ACTION_CONFIRM, idempotency_key)       # 428 without
     tenant = _tenant(user)
-    act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
-    if not act:
+    if not await tenant.client_acts.find_one({"id": act_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Act not found")
-    if act["status"] != "Draft":
-        raise HTTPException(status_code=400, detail="Only draft acts can be confirmed")
-    if not act.get("lines"):
-        raise HTTPException(status_code=400, detail="Act has no lines")
-
-    now = datetime.now(timezone.utc).isoformat()
-    await tenant.client_acts.update_one({"id": act_id}, {"$set": {
-        "status": "Accepted", "accepted_at": now, "accepted_by": user["id"], "updated_at": now,
-    }})
-    await log_audit(user["org_id"], user["id"], user.get("email", ""), "client_act_confirmed", "client_act", act_id,
-                    {"act_number": act["act_number"], "total": act["total"]})
-    return await tenant.client_acts.find_one({"id": act_id}, {"_id": 0})
+    return await key.run(
+        {"route": "POST /client-acts/{act_id}/confirm", "act_id": act_id},
+        lambda: ca.confirm_act(db, user=user, act_id=act_id, key=key,
+                               endpoint="POST /api/client-acts/{act_id}/confirm"))
 
 
 @router.post("/client-acts/from-offer/{offer_id}", status_code=201)

@@ -503,6 +503,7 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/client-acts"): "denial",
     ("PUT", "/api/client-acts/{act_id}"): "denial",
     ("POST", "/api/client-acts/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/client-acts/{act_id}/confirm"): "denial",       # ACT-01 addendum B, FG-119
 }
 
 

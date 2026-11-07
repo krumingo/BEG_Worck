@@ -56,3 +56,21 @@ def require_client_act_right(action: str, *, resource_type: str = "client_act"):
 
     dependency.act01_action = action           # inspected by tests/test_act_01_*.py
     return dependency
+
+
+async def client_act_money_visible(request, user: dict) -> bool:
+    """FG-122 (R20): may this reader see the prices and sums of a client act?
+
+    off/shadow: the legacy finance roles. enforce: the Permission Service on
+    ``finance.client_act_money.read`` at company scope (Owner/Admin/Accountant only). No
+    denial audit: a hidden value is not a refused action (the same rule as SEC-02's
+    ``money_values_visible``)."""
+    from app.permissions.deps import MODE_ENFORCE, current_mode
+    if current_mode() != MODE_ENFORCE:
+        return user.get("role") in FINANCE_ROLES
+    from app.permissions.service import evaluate_permission
+    from app.tenancy.guard import get_tenant_context
+    ctx = await get_tenant_context(request, user)
+    decision = await evaluate_permission(ctx, "finance.client_act_money.read", module=None,
+                                         scope_type=None, scope_id=None)
+    return bool(decision.allowed)

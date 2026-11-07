@@ -108,17 +108,22 @@ export default function ProjectOperationsPage() {
   // ACT-01: a client act is a money write — one Idempotency-Key per submission (R29), kept
   // for a retry only while the server has not answered; the 409/422 reason is shown in
   // Bulgarian (e.g. "над остатъка", "различна цена от офертата").
-  const createClientActFromOffer = async (offerId, payload) => {
+  const createClientActFromOffer = (offerId, payload) =>
+    postClientActWrite(`/client-acts/from-offer/${offerId}`, payload);
+  // FG-119: confirming an act is a money write too (finance roles, key, Bulgarian reason).
+  const confirmClientAct = (actId) => postClientActWrite(`/client-acts/${actId}/confirm`, {});
+  const postClientActWrite = async (endpoint, payload) => {
     setSaving(true);
     if (!clientActKey.current) {
       clientActKey.current = window.crypto?.randomUUID ? window.crypto.randomUUID()
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     }
     try {
-      await API.post(`/client-acts/from-offer/${offerId}`, payload,
+      await API.post(endpoint, payload,
         { headers: { "Idempotency-Key": clientActKey.current } });
       clientActKey.current = null;
       setDialog(null);
+      setConfirmDialog(null);
       fetchAll();
     } catch (err) {
       if (err.response) clientActKey.current = null;
@@ -223,10 +228,10 @@ export default function ProjectOperationsPage() {
                   <TableRow key={i}>
                     <TableCell className="font-mono text-sm text-primary">{act.act_number}</TableCell>
                     <TableCell className="text-sm">{formatDate(act.act_date)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{act.subtotal?.toFixed(2)} €</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{act.subtotal != null ? `${act.subtotal.toFixed(2)} €` : "—"}</TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${act.status === "Accepted" ? "bg-emerald-500/15 text-emerald-400" : ""}`}>{act.status === "Draft" ? "Чернова" : act.status === "Accepted" ? "Приет" : act.status}</Badge></TableCell>
                     <TableCell>
-                      {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => handleSave(`/client-acts/${act.id}/confirm`, {}))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
+                      {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => confirmClientAct(act.id))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
                     </TableCell>
                   </TableRow>
                 ))}

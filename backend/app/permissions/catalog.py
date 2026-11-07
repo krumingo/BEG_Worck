@@ -183,6 +183,9 @@ CLIENT_ACT_ACTIONS: Set[str] = {
     "finance.client_act.update",                 # PUT  /api/client-acts/{act_id}
     "finance.client_act_from_offer.execute",     # POST /api/client-acts/from-offer/{offer_id}
     "finance.client_act_remaining.read",         # GET  /api/client-acts/remaining/{project_id}
+    # ACT-01 addendum B: FG-119 (the name SEC-01-C02 / #69 gives the same route) and FG-122.
+    "revenue.client_act_confirm.execute",        # POST /api/client-acts/{act_id}/confirm
+    "finance.client_act_money.read",             # prices / sums in GET /api/client-acts[/{id}]
 }
 ACTIONS |= CLIENT_ACT_ACTIONS
 for _role_id in ("owner", "admin", "accountant"):

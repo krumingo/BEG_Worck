@@ -50,6 +50,7 @@ writing a second one.
 from __future__ import annotations
 
 import hashlib
+from decimal import ROUND_HALF_UP, Decimal
 import json
 import math
 import re
@@ -70,7 +71,7 @@ TOTALS = "client_act_line_totals"
 COUNTER_TYPE = "client_act_number"
 NUMBER_SOURCE = "counter"
 QTY_SCALE = 10_000                    # quantities are compared in 1/10 000 of a unit
-PRICE_TOLERANCE = 0.005               # prices are kept to the cent (offers round to 2)
+PRICE_TOLERANCE = 1e-9                # FG-121: the offer's unit price EXACTLY (no rounding)
 VAT_PERCENT = 20                      # the offer model's default (models/offers.py)
 ACCEPTED = "Accepted"
 DRAFT = "Draft"
@@ -83,6 +84,12 @@ ACTION_CREATE = "revenue.client_act.create"
 ACTION_UPDATE = "finance.client_act.update"
 ACTION_FROM_OFFER = "finance.client_act_from_offer.execute"
 ACTION_REMAINING_READ = "finance.client_act_remaining.read"
+ACTION_CONFIRM = "revenue.client_act_confirm.execute"     # the name SEC-01-C02 (#69) gives it
+ACTION_MONEY_READ = "finance.client_act_money.read"       # R20: prices / sums of an act
+# FG-122 (R20): the keys of an act that are money — removed for a reader without the right.
+ACT_MONEY_KEYS = frozenset({"subtotal", "vat_amount", "total"})
+LINE_MONEY_KEYS = frozenset({"unit_price", "line_total", "contracted_value", "acted_value_total",
+                             "remaining_value"})
 
 
 def _now() -> str:
@@ -114,10 +121,25 @@ def _number(value: Any, field: str, *, positive: bool = True) -> float:
     return float(value)
 
 
+def _dec(value: Any) -> Decimal:
+    return Decimal(str(float(value or 0)))
+
+
 def offer_unit_price(offer_line: Dict[str, Any]) -> float:
-    """The unit price of an offer line (the same formula the pre-ACT-01 from-offer used)."""
-    return round(float(offer_line.get("material_unit_cost") or 0)
-                 + float(offer_line.get("labor_unit_cost") or 0), 2)
+    """The unit price of an offer line — material + labor of the offer line, EXACTLY.
+
+    FG-121 (FLOW-004 "различна единична цена в акт без анекс"): the price is not rounded
+    before the multiplication (12.345 stays 12.345); only a line value is rounded."""
+    return float(_dec(offer_line.get("material_unit_cost")) + _dec(offer_line.get("labor_unit_cost")))
+
+
+def money(qty: Any, price: Any) -> float:
+    """qty × price rounded once, to the cent, half up (the only rounding of a value)."""
+    return float((_dec(qty) * _dec(price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
+
+
+def cents(value: Decimal) -> float:
+    return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 # ═══════════════════════════════════════════════════════════════════ idempotency (R29)
@@ -236,6 +258,25 @@ async def check_offer_version(tenant: TenantData, offer: Dict[str, Any], session
         cap — and two caps are never added together. Debt D1.
     An additional offer (``offer_type`` "extra", its own number) is new scope with its own cap.
     """
+    accepted, latest, _family_ids = await offer_family(tenant, offer, session)
+    if len(accepted) <= 1:
+        return
+    if latest["id"] != offer["id"]:
+        raise _err(409, "OFFER_VERSION_SUPERSEDED",
+                   "Тази версия на офертата е заменена от по-нова приета версия (v%s). "
+                   "Актува се само по действащата версия." % latest.get("version"),
+                   offer_id=offer["id"], current_offer_id=latest["id"],
+                   current_version=latest.get("version"))
+    raise _err(409, "OFFER_VERSION_LINEAGE_UNKNOWN",
+               "Офертата има повече от една приета версия, а редовете на версиите не са "
+               "свързани помежду си — вече актуваното по старата версия не може да се "
+               "приспадне. Актуването по тази оферта е спряно до решение.",
+               offer_id=offer["id"], accepted_versions=sorted(
+                   int(o.get("version") or 1) for o in accepted))
+
+
+async def offer_family(tenant: TenantData, offer: Dict[str, Any], session=None):
+    """(accepted versions, latest accepted version or None, every family offer id)."""
     family_candidates = await tenant.offers.find(
         {"project_id": offer.get("project_id"), "offer_no": offer.get("offer_no")},
         {"_id": 0, "id": 1, "parent_offer_id": 1, "version": 1, "status": 1,
@@ -255,22 +296,23 @@ async def check_offer_version(tenant: TenantData, offer: Dict[str, Any], session
         family.add(oid)
         todo.extend(links[oid])
     accepted = [by_id[oid] for oid in family if by_id[oid].get("status") == ACCEPTED]
-    if len(accepted) <= 1:
-        return
     latest = max(accepted, key=lambda o: (int(o.get("version") or 1),
-                                          str(o.get("accepted_at") or ""), str(o.get("created_at") or "")))
-    if latest["id"] != offer["id"]:
-        raise _err(409, "OFFER_VERSION_SUPERSEDED",
-                   "Тази версия на офертата е заменена от по-нова приета версия (v%s). "
-                   "Актува се само по действащата версия." % latest.get("version"),
-                   offer_id=offer["id"], current_offer_id=latest["id"],
-                   current_version=latest.get("version"))
-    raise _err(409, "OFFER_VERSION_LINEAGE_UNKNOWN",
-               "Офертата има повече от една приета версия, а редовете на версиите не са "
-               "свързани помежду си — вече актуваното по старата версия не може да се "
-               "приспадне. Актуването по тази оферта е спряно до решение.",
-               offer_id=offer["id"], accepted_versions=sorted(
-                   int(o.get("version") or 1) for o in accepted))
+                                          str(o.get("accepted_at") or ""),
+                                          str(o.get("created_at") or ""))) if accepted else None
+    return accepted, latest, sorted(family)
+
+
+async def guard_offer_family(tenant: TenantData, offer: Dict[str, Any], session) -> None:
+    """FG-123: make an act and a concurrent change of the offer's versions conflict.
+
+    A MongoDB transaction reads a snapshot; a version accepted by someone else after that
+    snapshot would not be seen. So the act's transaction also WRITES every offer of the
+    family (``act_version_guard`` +1, a technical counter, not offer content): an accept /
+    reject / new version written meanwhile makes this transaction conflict, and its retry
+    re-reads the versions (and is refused when it is superseded now)."""
+    _accepted, _latest, family_ids = await offer_family(tenant, offer, session)
+    await tenant.offers.update_many({"id": {"$in": family_ids or [offer["id"]]}},
+                                    {"$inc": {"act_version_guard": 1}}, session=session)
 
 
 async def check_versions_for(tenant: TenantData, resolved: Dict[str, Tuple[Dict, Dict]],
@@ -285,6 +327,7 @@ async def check_versions_for(tenant: TenantData, resolved: Dict[str, Tuple[Dict,
         if offer["id"] in seen:
             continue
         seen.add(offer["id"])
+        await guard_offer_family(tenant, offer, session)
         await check_offer_version(tenant, offer, session)
 
 
@@ -309,7 +352,7 @@ def build_lines(raw_lines: List[Dict[str, Any]], resolved: Dict[str, Tuple[Dict,
             "executed_qty": executed,
             "executed_percent": round(executed / contracted * 100, 1) if contracted > 0 else 0,
             "unit_price": price,
-            "line_total": round(executed * price, 2),
+            "line_total": money(executed, price),
             "vat_percent": _offer_vat(offer),
             "currency": offer.get("currency") or "EUR",
             "note": raw.get("note"),
@@ -396,7 +439,7 @@ async def _acted_from_acts(tenant: TenantData, offer_line_id: str, session=None)
 
 
 async def reserve(tenant: TenantData, *, offer: Dict, offer_line: Dict, delta: int,
-                  session) -> Dict[str, Any]:
+                  session, verify_cap: bool = False) -> Dict[str, Any]:
     """Move the acted total of one offer line by ``delta`` units, capped by the offer qty.
 
     Runs inside the act's transaction. Raises 409 ``ACT_EXCEEDS_REMAINING`` (nothing is
@@ -415,7 +458,7 @@ async def reserve(tenant: TenantData, *, offer: Dict, offer_line: Dict, delta: i
             "units_per_qty": QTY_SCALE, "initialized_from_acts": legacy, "created_at": _now()}},
             upsert=True, session=session)
     flt: Dict[str, Any] = {"_id": tid}
-    if delta > 0:
+    if delta > 0 or verify_cap:       # confirm (delta 0): the total must still fit the cap
         flt["acted_units"] = {"$lte": cap - delta}
     after = await coll.find_one_and_update(
         flt, {"$inc": {"acted_units": delta},
@@ -473,9 +516,9 @@ def _line_view(line: Dict[str, Any], totals: Dict[str, int]) -> Dict[str, Any]:
         price = float(line.get("unit_price") or 0)
         out.update({
             "acted_qty_total": unq(acted), "remaining_qty": unq(cap - acted),
-            "contracted_value": round(unq(cap) * price, 2),
-            "acted_value_total": round(unq(acted) * price, 2),
-            "remaining_value": round(unq(cap - acted) * price, 2),
+            "contracted_value": money(unq(cap), price),
+            "acted_value_total": money(unq(acted), price),
+            "remaining_value": money(unq(cap - acted), price),
         })
     return out
 
@@ -502,28 +545,75 @@ async def act_view(tenant: TenantData, act: Dict[str, Any], session=None) -> Dic
     return view
 
 
+def _remaining_row(o: Dict[str, Any], ol: Dict[str, Any], acted: int) -> Dict[str, Any]:
+    cap = q(float(ol.get("qty") or 0))
+    price = offer_unit_price(ol)
+    return {
+        "offer_id": o["id"], "offer_no": o.get("offer_no"), "version": o.get("version", 1),
+        "offer_type": o.get("offer_type", "main"), "offer_line_id": ol["id"],
+        "activity_name": ol.get("activity_name", ""), "unit": ol.get("unit", "m2"),
+        "unit_price": price, "contracted_qty": unq(cap), "acted_qty": unq(acted),
+        "remaining_qty": unq(cap - acted), "contracted_value": money(unq(cap), price),
+        "acted_value": money(unq(acted), price), "remaining_value": money(unq(cap - acted), price),
+        "over_acted": acted > cap, "acting_blocked": None,
+    }
+
+
 async def remaining_for_project(tenant: TenantData, project_id: str) -> Dict[str, Any]:
-    """Per offer line of every accepted offer of the project: contracted / acted / remaining."""
+    """FLOW-004 "остатък по всеки СМР ред" — per line of the ACTIVE version of every
+    accepted offer of the project (FG-120, addendum A: versions are one scope).
+
+    One accepted version -> its lines with contracted / acted / remaining. More than one
+    accepted version -> only the latest version's lines, ``acting_blocked``
+    ``OFFER_VERSION_LINEAGE_UNKNOWN`` and NO remainder (``remaining_*`` = null): what was
+    acted on a superseded version cannot be mapped to the current lines (debt D1), and the
+    two caps are never added. What was acted on superseded versions is listed apart."""
     offers = await tenant.offers.find({"project_id": project_id, "status": ACCEPTED},
                                       {"_id": 0}).to_list(500)
-    olines = [(o, ol) for o in offers for ol in o.get("lines") or [] if ol.get("id")]
-    totals = await acted_by_line(tenant, [ol["id"] for _o, ol in olines])
+    seen: set = set()
+    active: List[Tuple[Dict, bool]] = []      # (offer, blocked)
+    superseded: List[Dict] = []
+    for o in sorted(offers, key=lambda x: (str(x.get("offer_no")), int(x.get("version") or 1))):
+        if o["id"] in seen:
+            continue
+        accepted, latest, _ids = await offer_family(tenant, o)
+        seen.update(x["id"] for x in accepted)
+        latest_full = next((x for x in offers if x["id"] == latest["id"]), o)
+        active.append((latest_full, len(accepted) > 1))
+        superseded.extend(x for x in offers if x["id"] in {a["id"] for a in accepted}
+                          and x["id"] != latest["id"])
+    all_lines = [ol["id"] for o in [a for a, _b in active] + superseded
+                 for ol in o.get("lines") or [] if ol.get("id")]
+    totals = await acted_by_line(tenant, all_lines)
     rows = []
-    for o, ol in olines:
-        cap = q(float(ol.get("qty") or 0))
-        acted = totals.get(ol["id"], 0)
-        price = offer_unit_price(ol)
-        rows.append({
-            "offer_id": o["id"], "offer_no": o.get("offer_no"), "offer_type": o.get("offer_type", "main"),
-            "offer_line_id": ol["id"], "activity_name": ol.get("activity_name", ""),
-            "unit": ol.get("unit", "m2"), "unit_price": price,
-            "contracted_qty": unq(cap), "acted_qty": unq(acted), "remaining_qty": unq(cap - acted),
-            "contracted_value": round(unq(cap) * price, 2),
-            "acted_value": round(unq(acted) * price, 2),
-            "remaining_value": round(unq(cap - acted) * price, 2),
-            "over_acted": acted > cap,
-        })
-    return {"project_id": project_id, "actuation_mode": "fixed_price", "lines": rows}
+    for o, blocked in active:
+        for ol in o.get("lines") or []:
+            if not ol.get("id"):
+                continue
+            row = _remaining_row(o, ol, totals.get(ol["id"], 0))
+            if blocked:
+                row.update({"acting_blocked": "OFFER_VERSION_LINEAGE_UNKNOWN",
+                            "remaining_qty": None, "remaining_value": None})
+            rows.append(row)
+    old_rows = []
+    for o in superseded:
+        for ol in o.get("lines") or []:
+            if ol.get("id") and totals.get(ol["id"], 0):
+                row = _remaining_row(o, ol, totals[ol["id"]])
+                old_rows.append({k: row[k] for k in (
+                    "offer_id", "offer_no", "version", "offer_line_id", "activity_name", "unit",
+                    "unit_price", "acted_qty", "acted_value")})
+    return {"project_id": project_id, "actuation_mode": "fixed_price", "lines": rows,
+            "acted_on_superseded_versions": old_rows}
+
+
+def strip_money(view: Dict[str, Any]) -> Dict[str, Any]:
+    """FG-122 (R20): the act without prices and sums — quantities, statuses, numbers stay."""
+    out = {k: v for k, v in view.items() if k not in ACT_MONEY_KEYS}
+    out["lines"] = [{k: v for k, v in ln.items() if k not in LINE_MONEY_KEYS}
+                    for ln in view.get("lines") or []]
+    out["money_hidden"] = True
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════ audit
@@ -556,9 +646,9 @@ def _offer_vat(offer: Dict[str, Any]) -> float:
 
 def _totals(lines: List[Dict[str, Any]]) -> Dict[str, Any]:
     """Net / VAT / gross kept apart (FLOW-006); VAT per line at its offer's rate."""
-    subtotal = round(sum(float(ln.get("line_total") or 0) for ln in lines), 2)
-    vat = round(sum(float(ln.get("line_total") or 0) * float(ln.get("vat_percent", VAT_PERCENT)) / 100
-                    for ln in lines), 2)
+    subtotal = cents(sum((_dec(ln.get("line_total")) for ln in lines), Decimal(0)))
+    vat = cents(sum((_dec(ln.get("line_total")) * _dec(ln.get("vat_percent", VAT_PERCENT)) / 100
+                     for ln in lines), Decimal(0)))
     rates = sorted({float(ln.get("vat_percent", VAT_PERCENT)) for ln in lines})
     currencies = sorted({ln.get("currency") or "EUR" for ln in lines})
     if len(currencies) > 1:
@@ -568,7 +658,7 @@ def _totals(lines: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"subtotal": subtotal,
             # one rate -> that rate; no lines -> the default; mixed rates -> None (per line)
             "vat_percent": rates[0] if len(rates) == 1 else (None if rates else float(VAT_PERCENT)),
-            "vat_amount": vat, "total": round(subtotal + vat, 2),
+            "vat_amount": vat, "total": cents(_dec(subtotal) + _dec(vat)),
             "currency": currencies[0] if currencies else None}
 
 
@@ -697,6 +787,60 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
             raise _err(400, "ACT_NOT_DRAFT", "Само чернова може да се редактира")
         await _audit(database, user=user, action="client_act.updated", act=res, key=key,
                      endpoint=endpoint, session=session, diff=diff)
+        return await act_view(tenant, res, session=session)
+
+    return await _run(database, body)
+
+
+async def confirm_act(database, *, user: Dict[str, Any], act_id: str, key: KeyedWrite,
+                      endpoint: str) -> Dict[str, Any]:
+    """FG-119: Draft -> Accepted in ONE transaction: the act is checked again against the
+    offer (basis, exact price, active version, cap — FLOW-004), the reservation is verified
+    under the cap, the status changes and one canonical AuditEvent is appended."""
+    tenant = TenantData.for_user(database, user)
+
+    async def body(session):
+        act = await tenant.client_acts.find_one({"id": act_id}, {"_id": 0}, session=session)
+        if not act:
+            raise HTTPException(status_code=404, detail="Act not found")
+        if key.key_ref in (act.get("applied_update_keys") or []):
+            return await act_view(tenant, act, session=session)      # resumed, already done
+        if act.get("status") != DRAFT:
+            raise _err(400, "ACT_NOT_DRAFT", "Само чернова може да се потвърди")
+        lines = act.get("lines") or []
+        if not lines:
+            raise _err(400, "ACT_NO_LINES", "Актът няма редове")
+        raw = []
+        for ln in lines:
+            if not ln.get("offer_line_id"):
+                raise _err(422, "OFFER_LINE_REQUIRED",
+                           "Актът има ред без връзка с ред от приета оферта (създаден преди "
+                           "ACT-01); поправете черновата, преди да я потвърдите")
+            raw.append({"offer_line_id": ln["offer_line_id"],
+                        "executed_qty": float(ln.get("executed_qty") or 0),
+                        "unit_price": float(ln.get("unit_price") or 0)})
+        resolved = await resolve_offer_lines(tenant, act["project_id"],
+                                             [r["offer_line_id"] for r in raw], session)
+        check_against_offer(raw, resolved)
+        deltas = _deltas(lines)
+        await check_versions_for(tenant, resolved, deltas, session)
+        for olid in sorted(deltas):
+            offer, ol = resolved[olid]
+            await reserve(tenant, offer=offer, offer_line=ol, delta=0, session=session,
+                          verify_cap=True)
+        now = _now()
+        res = await tenant.client_acts.find_one_and_update(
+            {"id": act_id, "status": DRAFT},
+            {"$set": {"status": ACCEPTED, "accepted_at": now, "accepted_by": user["id"],
+                      "updated_at": now},
+             "$inc": {"revision": 1}, "$addToSet": {"applied_update_keys": key.key_ref}},
+            projection={"_id": 0}, return_document=ReturnDocument.AFTER, session=session)
+        if res is None:
+            raise _err(400, "ACT_NOT_DRAFT", "Само чернова може да се потвърди")
+        await _audit(database, user=user, action="client_act.confirmed", act=res, key=key,
+                     endpoint=endpoint, session=session,
+                     diff={"status": [DRAFT, ACCEPTED], "act_number": res.get("act_number"),
+                           "subtotal": res.get("subtotal"), "total": res.get("total")})
         return await act_view(tenant, res, session=session)
 
     return await _run(database, body)

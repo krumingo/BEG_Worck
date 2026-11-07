@@ -50,3 +50,22 @@ harness_rc=0
 15 failed, 1135 passed, 6 warnings in 105.68s (0:01:45)
 SAME_15
   test_act_01 against main 0f870c3 (re-recorded main-0f870c3-results.json): 75 failed / 5 passed
+
+# ── Addendum B (FG-119..123), rerun on the new head ──
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 committed results + ACT-01 fresh + PM-01 (real Mongo, -rs)
+harness_rc=0
+104 passed, 6 warnings in 194.25s (0:03:14)
+## R0
+814 passed, 6 warnings in 148.71s (0:02:28)
+## W0
+15 failed, 1135 passed, 6 warnings in 101.42s (0:01:41)
+SAME_15
+  test_act_01 against main 0f870c3 (re-recorded main-0f870c3-results.json): 93 failed / 5 passed
+  FG-123 probe: with guard_offer_family disabled, test_a_version_accepted_during_the_act_transaction_blocks_the_act
+  fails in all three modes (3 failed / 95 passed) — the guard write is what closes the race.
+  PM-01 matrix: only POST /api/client-acts/{act_id}/confirm changed (non-finance 404 -> 403, audited in enforce;
+  finance 404 -> 428 without a key; nothing written anywhere).

@@ -32,6 +32,14 @@
 
 Редакция: само чернова; резервацията се мести точно с разликата (нагоре или надолу). Приет акт → 400 `ACT_NOT_DRAFT` (корекция/сторно — дълг D4). Без hard delete.
 
+Потвърждение (`POST /client-acts/{id}/confirm`, единственият преход на статуса; Допълнение B, FG-119): само финанси, Idempotency-Key, една транзакция — повторна проверка срещу офертата (основание, точна цена, действаща версия, таван), смяна на статуса и canonical AuditEvent `client_act.confirmed`. Действието е `revenue.client_act_confirm.execute` — същото, което #69 слага на този route.
+
+FG-123: транзакцията на акта записва и всички версии на офертата (технически брояч `act_version_guard` в офертния документ, не съдържание) — приемане на нова версия междувременно предизвиква конфликт и повторният опит вижда новата версия. Доказано с тест, който е червен, когато guard-ът е изключен.
+
+FG-121: единичната цена е точно офертната (материал + труд, без закръгляне); закръгля се само стойността на реда и сумите — до цент, half-up (Decimal).
+
+FG-122 (Р20): `GET /client-acts` и `/client-acts/{id}` показват на не-финансови роли само количества; другите четци на актове (P&L, печалба, риск, cash-vs-earned, revenue snapshots) са в регистъра на SEC-02 (#71, Р20-1/Р20-2).
+
 ## Червено на main @ 0f870c3 (същият harness, `main-0f870c3-results.json`)
 
 | Проверка | main | след ACT-01 |
@@ -49,6 +57,12 @@
 | AuditEvent при създаване | **няма** | един `client_act.created` |
 | v1 и v2 на една оферта приети: акт по v1 / по v2 (Допълнение A) | **201 / 201** (две тавана) | 409 `OFFER_VERSION_SUPERSEDED` / 409 `OFFER_VERSION_LINEAGE_UNKNOWN` |
 | ДДС на акт по оферта с 9 % | **20 %** (твърдо) | 9 % от офертата |
+| **FG-119** потвърждение на акт от SiteManager / Viewer | **200 Accepted** | 403, нищо |
+| FG-119 потвърждение без ключ / на чернова по заменена v1 / на стара чернова със свободен ред | **200 / 200 / 200** | 428 / 409 `OFFER_VERSION_SUPERSEDED` / 422 `OFFER_LINE_REQUIRED` |
+| **FG-120** остатък при приети v1 и v2 | **v1 + v2 редове (два тавана)** | само v2, `acting_blocked`, без измислен остатък; актуваното по v1 отделно |
+| **FG-121** цена 12.345 × 100 | (цената от body) | 12.345 точно, ред 1 234.50 (не 12.35 → 1 235.00) |
+| **FG-122** Viewer чете `GET /client-acts[/{id}]` | **цени и суми** | само количества (`money_hidden: true`) |
+| **FG-123** v2 приета, докато трае транзакцията на акт по v1 | (няма проверка) | 409 `OFFER_VERSION_SUPERSEDED`, актът не е записан |
 
 ## Тестове (реален MongoDB 7.0 replica set rs0, локален docker)
 
@@ -56,7 +70,7 @@
 
 | Проверка | Резултат |
 |---|---|
-| `tests/test_act_01_client_act_from_offer.py` (off / shadow / enforce, oplog, транзакции) | 80 passed (на main: 75 failed / 5 passed) |
+| `tests/test_act_01_client_act_from_offer.py` (off / shadow / enforce, oplog, транзакции) | 98 passed (на main: 93 failed / 5 passed) |
 | `tests/test_pm_01_permission_matrix.py` (реален Mongo, `-rs`: 0 skipped) | 6 passed (на main: 2 failed — виж D10) |
 | `tests/test_r0_0*.py` | 814 passed |
 | `tests/test_w0_*.py` | 1135 passed / 15 failed — същите 15 `test_w0_03e_legacy_routes` като на main |
