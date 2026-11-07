@@ -161,35 +161,43 @@ def verify_chain(events: List[Dict[str, Any]]) -> Tuple[bool, Optional[str]]:
     return True, None
 
 
-async def _last_event(db, tenant_id: str) -> Optional[Dict[str, Any]]:
+async def _last_event(db, tenant_id: str, session=None) -> Optional[Dict[str, Any]]:
+    kwargs = {} if session is None else {"session": session}
     return await db[AUDIT_COLLECTION].find_one(
-        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)]
+        {"tenant_id": tenant_id}, {"_id": 0}, sort=[("sequence", -1)], **kwargs
     )
 
 
-async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
+async def record_event(db, event: Dict[str, Any], session=None) -> Dict[str, Any]:
     """
     Append one validated event to the tenant's audit chain.
 
     The event must come from build_event(). Returns the stored event
-    including its sequence and hashes.
+    including its sequence and hashes. ``session`` (optional) runs the chain
+    read and the append inside the caller's MongoDB transaction (R0-04).
 
-    Concurrency (W0-04-C01): relies on the unique (tenant_id, sequence) index
-    that app.audit.indexes.ensure_audit_indexes creates at startup. A lost
+    Concurrency (W0-04-C01): relies on the unique (tenant_id, sequence) index.
+    Outside a transaction a missing index is created first (FG-57) and a lost
     race is retried from the new chain head, so no event is dropped and the
-    chain stays linear.
+    chain stays linear. Inside one (``session``) the index is only CHECKED —
+    building it would wait on the transaction's own lock; the transaction
+    runner calls ensure_chain_index() before it starts — and a collision is
+    raised so the transaction is retried as a whole.
     """
     validate_event(event)
-    await _require_chain_index(db)
+    await _require_chain_index(db, create=session is None)
     from pymongo.errors import DuplicateKeyError
     for attempt in range(1, CHAIN_APPEND_MAX_ATTEMPTS + 1):
-        previous = await _last_event(db, event["tenant_id"])
+        previous = await _last_event(db, event["tenant_id"], session=session)
         chained = chain_hashes(event, previous)
         try:
-            await db[AUDIT_COLLECTION].insert_one(dict(chained))
+            if session is None:
+                await db[AUDIT_COLLECTION].insert_one(dict(chained))
+            else:
+                await db[AUDIT_COLLECTION].insert_one(dict(chained), session=session)
         except DuplicateKeyError as exc:
             # Another append took this sequence: re-read the head and re-link.
-            if not _is_sequence_collision(exc):
+            if session is not None or not _is_sequence_collision(exc):
                 raise
             await asyncio.sleep(random.uniform(0, min(_CHAIN_RETRY_MAX_DELAY_S, 0.002 * attempt)))
             continue
