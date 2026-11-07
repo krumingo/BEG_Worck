@@ -27,6 +27,10 @@ from app.tenancy.data_access import TenantData
 SOURCE_FLOW = "FLOW-028"
 STATUS_PENDING = "pending_approval"
 STATUS_SUPERSEDED = "superseded"
+# LAB-01-D-C01: only these may be re-priced by a later run edit; an approved / applied /
+# rejected correction is never touched (a new difference raises a DQ alert instead).
+REOPENABLE = (STATUS_PENDING, STATUS_SUPERSEDED)
+DQ_CODE_LOCKED = "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"
 APPROVAL_AWAITING_RUNTIME = "awaiting_approval_runtime"  # W0-07 not started
 DQ_CODE = "PAYROLL_CORRECTION_PENDING_APPROVAL"
 
@@ -113,15 +117,35 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
                          reason="previously paid exceeds the re-priced earned amount (LAB-01)")
         elif existing.get("status") == STATUS_PENDING and existing.get("amount") == fields["amount"]:
             record = existing  # idempotent: same run, same employee, same amount
+        elif existing.get("status") not in REOPENABLE or existing.get("applied"):
+            # decided (approved / applied / rejected …): never rewritten. A new difference is
+            # surfaced for a human, not merged into the decided record.
+            if existing.get("amount") != fields["amount"]:
+                await tenant.dq_alerts.update_one(
+                    {"org_id": org_id, "entity_type": "payroll_correction", "entity_id": existing["id"],
+                     "code": DQ_CODE_LOCKED},
+                    {"$set": {"org_id": org_id, "code": DQ_CODE_LOCKED, "severity": "high",
+                              "status": "open", "entity_type": "payroll_correction",
+                              "entity_id": existing["id"], "entity_version": existing.get("version"),
+                              "employee_id": eid, "pay_run_id": run_id,
+                              "decided_amount": existing.get("amount"), "new_amount": fields["amount"],
+                              "message": "Корекцията вече е решена; новата разлика чака човек.",
+                              "updated_at": now},
+                     "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
+                    upsert=True)
+            continue
         else:
             before = {k: existing.get(k) for k in fields}
             record = dict(existing, **fields, status=STATUS_PENDING,
                           approval_status=APPROVAL_AWAITING_RUNTIME, approval_id=None,
                           version=int(existing.get("version") or 1) + 1, updated_at=now)
-            await tenant.payroll_corrections.update_one(
-                {"org_id": org_id, "idempotency_key": key},
+            res = await tenant.payroll_corrections.update_one(
+                {"org_id": org_id, "idempotency_key": key, "status": {"$in": list(REOPENABLE)},
+                 "applied": {"$ne": True}},
                 {"$set": {k: record[k] for k in (*fields, "status", "approval_status", "approval_id",
                                                  "version", "updated_at")}})
+            if getattr(res, "matched_count", 1) == 0:
+                continue  # decided between the read and the write — left untouched
             await _audit(raw_db, org_id=org_id, actor_id=actor_id, action="payroll.correction.updated",
                          record=record, diff={"before": before, "after": fields},
                          reason="pay run edited; correction amount changed")
@@ -135,9 +159,11 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
         if rec.get("employee_id") in seen:
             continue
         rec = dict(rec, status=STATUS_SUPERSEDED, version=int(rec.get("version") or 1) + 1, updated_at=now)
-        await tenant.payroll_corrections.update_one(
-            {"org_id": org_id, "id": rec["id"]},
+        res = await tenant.payroll_corrections.update_one(
+            {"org_id": org_id, "id": rec["id"], "status": STATUS_PENDING, "applied": {"$ne": True}},
             {"$set": {"status": STATUS_SUPERSEDED, "version": rec["version"], "updated_at": now}})
+        if getattr(res, "matched_count", 1) == 0:
+            continue
         await tenant.dq_alerts.update_one(
             {"org_id": org_id, "entity_type": "payroll_correction", "entity_id": rec["id"]},
             {"$set": {"status": "resolved", "resolution": "superseded", "updated_at": now}})

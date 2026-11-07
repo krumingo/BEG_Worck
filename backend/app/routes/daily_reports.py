@@ -306,9 +306,9 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
-    # LAB-01-D (FG-72): a changed report voids its labor approvals (new version)
+    # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
     await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_edited")
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -526,11 +526,12 @@ async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict
         return {"status": "failed", "report_id": rid, "reason": "cannot_reject_approved"}
     if status == "REJECTED":
         return {"status": "skipped", "report_id": rid, "reason": "already_rejected"}
+    # LAB-01-D (FG-72): bump + void BEFORE the status write
+    await void_labor_approvals(tenant, actor["org_id"], rid, actor["id"], "report_rejected")
     await tenant.employee_daily_reports.update_one({"id": rid}, {"$set": {
         "approval_status": "REJECTED", "status": "REJECTED",
         "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
     }})
-    await void_labor_approvals(tenant, actor["org_id"], rid, actor["id"], "report_rejected")  # FG-72
     return {"status": "ok", "report_id": rid}
 
 
@@ -643,14 +644,14 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
                     }}
                 )
 
-    # Reset report
+    # Reset report — LAB-01-D (FG-72): bump + void BEFORE the status write
+    await void_labor_approvals(tenant, user["org_id"], report_id, user["id"], "report_reset")
     await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
         "approval_status": "SUBMITTED", "status": "SUBMITTED",
         "approved_by": None, "approved_at": None,
         "payroll_ready": False, "sessions_created": 0,
         "updated_at": now,
     }})
-    await void_labor_approvals(tenant, user["org_id"], report_id, user["id"], "report_reset")  # FG-72
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -1021,10 +1022,11 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             kept = [e for e in old_entries if e.get("project_id") != project_id]
             merged = kept + emp_entries
             merged_total = round(sum(e["hours_worked"] for e in merged), 2)
+            # LAB-01-D (FG-72): bump + void BEFORE the content write
+            await void_labor_approvals(tenant, org_id, existing["id"], user["id"], "batch_saved")
             await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
                 "day_entries": merged, "total_hours": merged_total, "updated_at": now,
             }})
-            await void_labor_approvals(tenant, org_id, existing["id"], user["id"], "batch_saved")  # FG-72
         else:
             report = {
                 "id": str(uuid.uuid4()),

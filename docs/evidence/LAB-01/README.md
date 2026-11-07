@@ -49,3 +49,9 @@ Per-line amounts of one person add up to the cent to that person's total.
   - It writes a canonical AuditEvent (FLOW-028, R1) on create, update and supersede, and an open `dq_alerts` entry.
   - It is never applied, and it is superseded (not deleted) when the overpayment disappears.
 - **FG-76 — one "spent" number:** the budget-burn warning (`/progress-warnings`) reads `project_labor_cost`, not work_sessions. Expected-actual has done so since LAB-01; #71 changes only that route's visibility, not the service.
+
+## LAB-01-D-C01 (audit notes on 21d4ed1) — `tests-LAB-01-D-C01.txt`
+- **(a) Decided corrections stay untouched:**
+  - A run edit re-prices only `pending_approval` / `superseded` corrections that are not `applied`. The write filter enforces this too.
+  - An approved, applied or other decided correction is never rewritten or superseded. A new difference opens the DQ alert `PAYROLL_CORRECTION_CHANGED_AFTER_DECISION` (decided amount vs new amount) instead.
+- **(b) Void before the write:** `void_labor_approvals` (version bump + void) now runs **before** the content or status write in PUT, reject, reset, batch merge, the technician draft edit and the work-report edit. If the write then fails, the approvals stay void, which is the safe side.

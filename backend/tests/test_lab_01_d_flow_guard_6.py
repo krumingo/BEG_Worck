@@ -234,3 +234,89 @@ def test_fg76_budget_burn_uses_the_lab01_number_not_work_sessions(monkeypatch, b
         assert "budget_overrun" not in kinds                       # 825 approved of 1000
         assert "budget_burn_high" in kinds                         # 82.5 % burn at 10 % progress
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════ LAB-01-D-C01 (audit notes on 21d4ed1)
+def test_c01_void_runs_before_the_content_write(monkeypatch):
+    """(b) the version bump + void happen BEFORE the report content/status is written."""
+    async def body():
+        op, dr = await _put_harness(monkeypatch)
+        seen = []
+        real = dr.void_labor_approvals
+
+        async def spy(tenant, org_id, report_id, actor_id, reason, **kw):
+            doc = await op.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
+            seen.append((reason, doc["day_entries"][0]["hours_worked"], doc["approval_status"]))
+            return await real(tenant, org_id, report_id, actor_id, reason, **kw)
+        monkeypatch.setattr(dr, "void_labor_approvals", spy)
+        owner = {"id": "w", "org_id": ORG, "role": "Worker"}
+        await dr.update_daily_report("REP", {"day_entries": [
+            {"id": "e1", "project_id": "prj", "hours_worked": 6}]}, owner)
+        rep = await op.employee_daily_reports.find_one({"id": "REP"}, {"_id": 0})
+        await dr.reject_report_one(rep, {"id": "boss", "org_id": ORG, "role": "Admin"}, "x")
+        # at void time the OLD content / status was still stored
+        assert seen == [("report_edited", 8, "DRAFT"), ("report_rejected", 6, "DRAFT")]
+        assert (await op.employee_daily_reports.find_one({"id": "REP"}))["report_version"] == 2
+
+        # and when the content write fails after the void, the approvals stay void (safe side)
+        await op.labor_quantity_approvals.insert_one(dict(_approval("e1", 2, id="qa-v2"), org_id=ORG))
+        await op.employee_daily_reports.update_one({"id": "REP"}, {"$set": {"approval_status": "DRAFT"}})
+        from app.tenancy import data_access
+
+        real_update = data_access.TenantCollection.update_one
+
+        async def failing_update(self, flt, update, *a, **kw):
+            if "$set" in update and "day_entries" in update["$set"]:
+                raise RuntimeError("write failed")
+            return await real_update(self, flt, update, *a, **kw)
+        monkeypatch.setattr(data_access.TenantCollection, "update_one", failing_update)
+        with pytest.raises(RuntimeError):
+            await dr.update_daily_report("REP", {"day_entries": [
+                {"id": "e1", "project_id": "prj", "hours_worked": 1}]}, owner)
+        assert (await op.labor_quantity_approvals.find_one({"id": "qa-v2"}))["status"] == "void"
+    asyncio.run(body())
+
+
+def test_c01_decided_corrections_are_never_rewritten(monkeypatch, backend):
+    """(a) a later run edit re-prices only pending / superseded corrections."""
+    async def scenario(c, op):
+        await op.pay_runs.insert_one({
+            "id": "run-old", "org_id": ORG, "number": "PR-0001", "status": "confirmed", "version": 1,
+            "period_start": P_START, "period_end": P_END, "week_number": 41, "paid_at": None,
+            "employee_rows": [{"employee_id": "w-akord", "earned_amount": 660.0, "paid_now_amount": 660.0}],
+            "totals": {"earned": 660.0}, "history": []})
+        body = {"run_type": "weekly", "period_start": P_START, "period_end": P_END,
+                "rows": [{"employee_id": "w-akord"}], "status": "draft"}
+        run_ = (await c.post("/api/pay-runs", json=body, headers=_token())).json()
+        rec = await op.payroll_corrections.find_one({}, {"_id": 0})
+        assert rec["amount"] == 60.0
+
+        for decided in ({"status": "approved", "approval_id": "APR-1"},
+                        {"status": "pending_approval", "applied": True}):
+            await op.payroll_corrections.update_one({"id": rec["id"]}, {"$set": decided})
+            before = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
+            # the overpayment changes (paid 700 now) → a different amount
+            await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 700.0}})
+            r = await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
+            assert r.status_code == 200, r.text
+            assert await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0}) == before, decided
+            locked = await op.dq_alerts.find_one({"code": "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"}, {"_id": 0})
+            assert locked and locked["new_amount"] == 100.0 and locked["decided_amount"] == 60.0
+            # the overpayment disappears → a decided record is not superseded either
+            await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 0}})
+            assert (await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())).status_code == 200
+            assert await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0}) == before, decided
+            await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 660.0}})
+            await op.payroll_corrections.update_one({"id": rec["id"]}, {"$set": {
+                "status": "pending_approval", "applied": False, "approval_id": None, "amount": 60.0}})
+        assert await op.audit_events.count_documents({"entity_id": rec["id"]}) == 1  # only "created"
+
+        # a superseded one may come back: overpayment gone → superseded, back → pending again
+        await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 0}})
+        await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
+        assert (await op.payroll_corrections.find_one({"id": rec["id"]}))["status"] == "superseded"
+        await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 700.0}})
+        await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
+        back = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
+        assert (back["status"], back["amount"]) == ("pending_approval", 100.0)
+    run(monkeypatch, scenario, backend)
