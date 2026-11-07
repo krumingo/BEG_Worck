@@ -185,6 +185,15 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "smr_type_id": "Мазилка", "started_at": "2026-11-02T07:00:00",
             "ended_at": "2026-11-02T15:00:00", "duration_hours": 8, "labor_cost": 3200,
             "created_at": now})
+        # SEC-02-E (FG-63): activity-budget-summary sums daily work log hours, so P1 gets
+        # ONE worker there too — the screen must hide his "spent" as well.
+        await op_db.work_types.insert_one({
+            "id": sid(tkey, "wt1"), "org_id": org, "name": "Мазилка",
+            "activity_type": "Мазилка", "default_hourly_rate": 400.0})
+        await op_db.daily_work_logs.insert_one({
+            "id": sid(tkey, "dwl1"), "org_id": org, "site_id": p1, "date": "2026-11-02",
+            "work_type_id": sid(tkey, "wt1"),
+            "entries": [{"user_id": tech, "hours": 8}], "created_at": now})
 
 
 def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:
