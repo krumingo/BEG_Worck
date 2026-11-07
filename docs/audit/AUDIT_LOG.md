@@ -4517,3 +4517,18 @@ The merge with main is clean.
 
 - With `requirements.txt` alone, 15 mongomock-backend tests fail with `ModuleNotFoundError: mongomock_motor`. That is expected: it lives in `requirements-dev.txt`, documented as required for tests. Not a defect.
 - OFF79-01 / 03 / 04 / 05 / 06 are all resolved. Remaining debts (D-OFF01-1, -15 etc.) are as judged earlier.
+
+### #55 @ `ed48595` (FG-140 + main d226c49) — **full PASS**
+
+| Gate | Result |
+|---|---|
+| c26l_n FG-140 suite | **72 passed** (edit ∥ send ×10 and edit ∥ send→pay ×10 × 3 modes: a Paid invoice stays at its paid total with remaining 0, header = Σ lines live and after rebuild; paused edits after send / payment → 409; conditional send / delete; claim honours the PAY-01 lock with `INVOICE_BUSY`) |
+| wh55 probes (c26l L, link race, F-55-C26-04) | 55 × 3 modes |
+| PAY (#70 suites on the merged finance) | 630 |
+| warehouse canonical | **44 files, 1121 passed**, 0 bad |
+| W0 | same 15 |
+| A2C / A1 (against the regenerated inventories) | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 (767 routes / 18 408 cells; modes identical) |
+
+Static review is in the entry above. Ready for Codex.
