@@ -4364,3 +4364,50 @@ My matrix of 16 metric names × 10 types (incl. custom, pricing, procurement, No
 
 - **SEC71-06 resolved.**
 - Runtime: `b71f` (bisect probe, sec02, W0, R0, PM-01, merge) on rs2 (running).
+
+### #71 @ `eb91eec` — **full PASS** (SEC71-06 resolved)
+
+Bisect probe × 3 modes: every oracle closed.
+
+| Oracle | Result |
+|---|---|
+| pulse | derived 0.02 of 6200 |
+| /alarms | 0 steps |
+| 404 (GET, acknowledge, resolve) | same response for hidden and missing |
+| auto_resolve | 0 steps |
+| band-varies (3 readers) | False |
+| known-pay variant | the only FAILS line; R42, accepted |
+
+| Gate | Result |
+|---|---|
+| sec02 | 30 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main touches the inventories, PM-01 `run_meta` and the `idempotency.js` pair (same as #69 / #74).
+
+### #79 @ `5d17063` (Addendum B complete + R43) — probes PASS
+
+Probe O1–O16 × 3 modes: **246 passed**.
+
+| Case | Result |
+|---|---|
+| **O16 R43** review GET line keys | only `activity_name`, `id`, `line_total`, `note`, `qty`, `sort_order`, `unit`, `unit_price` (= 100.0); no split keys and no split figures (40 / 60 / 400 / 600 / 1.5) in the body |
+| **O16 R43** generated PDF (text extracted with pypdf) | no "Мат" / "Труд" columns and no split figures; unit price 100.00 present |
+| **O16 R43** respond | `{ok, status}` only |
+| O13–O15 | pass |
+
+The only public routes are `GET /offers/review/{token}` and `POST …/respond`. The PDF and XLSX are staff routes (`require_m2`).
+
+- **OFF79-05 confirmed again** on this head (O11 / O12 ×3 on idle rs0: 1, 5 and 0 failures of 60, all `audit_logs` namespace in use). Medium, non-blocking.
+
+**Debt verdicts**
+
+| Debt | Verdict |
+|---|---|
+| **D-OFF01-16 XLSX** | **confirmed internal-only.** `GET /offers/{id}/xlsx` requires an authenticated M2 user; the only UI caller is the staff `OfferEditorPage` export button; no token / public route serves it. It still contains the split, which is fine for staff. Sending that file to a client by hand is a process matter. |
+| **D-OFF01-15 plaintext `review_token`** | **acceptable as debt, not blocking.** It was already plaintext on main; the token is 96-bit random, scoped to one offer, and can only approve / reject / request revision of the current Sent version (409 / 410 after a new version, cancel or revoke). Main also already returns `review_token` to internal users in the project financial view (`projects.py` extra_offers projection). Condition: pair it with D-OFF01-1 (no expiry, no identity check) **before** a magic-link approval is treated as contractual evidence; until then the approval records `verification: link_token_only`. Cheap hardening worth doing early: drop `review_token` from list projections for roles that cannot send offers. |
+
+Gates: `b79d`, then #77 `b77e` (running).

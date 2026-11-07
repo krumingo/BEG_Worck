@@ -319,3 +319,36 @@ def test_o15_carriers_and_closed_links(monkeypatch, backend, mode):
         print("O15 %s: %s | GET cancelled link %s leak %s" % (mode, out, g.status_code, leak or "none"))
         assert all(v[0] == 422 and v[2] == "Sent" for v in out.values()) and g.status_code == 410 and not leak
     run(monkeypatch, backend, mode, scenario)
+
+
+def test_o16_r43_client_sees_only_the_combined_price(monkeypatch, backend, mode):
+    """5d17063 R43: no client-facing answer (review GET, respond, PDF) carries the
+    material / labour split or anything to derive it (line_material_cost, line_labor_cost,
+    labor_hours_per_unit, the split figures 40 / 60 / 400 / 600)."""
+    async def scenario(c, op):
+        doc = offer_doc("o1", token=TOKEN)
+        doc["lines"][0].update({"material_unit_cost": 40.0, "labor_unit_cost": 60.0, "line_material_cost": 400.0,
+                                "line_labor_cost": 600.0, "labor_hours_per_unit": 1.5})
+        await op.offers.insert_one(doc)
+        g = await c.get("/api/offers/review/%s" % TOKEN)
+        lines = g.json().get("lines", []) if g.status_code == 200 else []
+        keys = sorted({k for ln in lines for k in ln})
+        bad_keys = [k for k in keys if k in ("material_unit_cost", "labor_unit_cost", "line_material_cost",
+                                             "line_labor_cost", "labor_hours_per_unit")]
+        nums = [n for n in ('"40.0"', ": 40.0", ": 60.0", ": 400.0", ": 600.0", ": 1.5", "40.00", "60.00") if n in g.text]
+        p = await c.get("/api/offers/o1/pdf", headers=hdr("admin-a"))
+        txt = ""
+        try:
+            import io
+            from pypdf import PdfReader
+            txt = " ".join(pg.extract_text() or "" for pg in PdfReader(io.BytesIO(p.content)).pages)
+        except Exception as exc:  # noqa: BLE001
+            txt = "<no text: %s>" % type(exc).__name__
+        pdf_bad = [w for w in ("Мат", "Труд", "40.00", "60.00", "400.00", "600.00") if w in txt]
+        r = await respond(c, TOKEN)
+        print("O16 %s: GET %s keys %s bad %s nums %s | PDF %s %d bytes split-terms %s (unit 100.00 present %s) | respond %s %s" % (
+            mode, g.status_code, keys, bad_keys or "none", nums or "none", p.status_code, len(p.content),
+            pdf_bad or "none", "100.00" in txt, r.status_code, r.text[:60]))
+        assert g.status_code == 200 and not bad_keys and not nums and not pdf_bad
+        assert lines and lines[0]["unit_price"] == 100.0
+    run(monkeypatch, backend, mode, scenario)
