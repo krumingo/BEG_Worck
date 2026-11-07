@@ -4313,3 +4313,54 @@ This is likely the same class as the programmer's "75 W0 failures from a local m
 - **Open check:** one O12 run (reject ∥ new-version, fresh database) raised `OperationFailure: Collection namespace '…audit_logs' is already in use` from the new-version transaction. That is the fresh-tenant implicit-collection-creation class, like ACT77-01. It ran shortly before the 19:20 crash, so it is being re-run on rs0 (×3) to confirm or discard.
 - FG-138 part 2 (unit costs in the client view) is held for Krum.
 - FG-139 (plaintext token) is debt D-OFF01-15. Sensible: it needs a re-issue flow.
+
+### #79 @ `b03b806` — probe re-run on the stable rs0
+
+Full probe O1–O15: **243 passed**.
+
+**OFF79-05 (medium, non-blocking): fresh-tenant first-write race.** O11 / O12 run alone on an idle rs0, ×3: in **1–4 of 60 rounds** the new-version transaction fails with `pymongo OperationFailure: Collection namespace '…audit_logs' is already in use`, and it reaches the client as an error.
+
+- Cause: on a tenant whose `audit_logs` collection does not exist yet, a concurrent non-transactional `log_audit` (the reject) and the transactional `log_audit(..., session)` (new-version) both create it implicitly.
+- Same class as ACT77-01. Nothing is corrupted: the transaction aborts and a retry works. Only the first offer actions of a brand-new tenant are affected.
+- Fix: as in ACT77-01, make sure `audit_logs` / `offer_events` / `audit_events` exist before the transaction opens. `run_in_transaction` already does this for the chain index.
+
+The other O11 / O12 failures seen earlier were collisions with my own concurrent #77 probe on rs0 (`mongo_clean` dropped its database), not findings. Gates: `b79c` (running).
+
+### #77 @ `2cc1147` (Addendum D, FG-142 expected values on confirm) — PASS on probes
+
+`probe_act01.py` with `PROBE_ACT_B`, `C`, `C2`, `D` × 3 modes. The probe now confirms with the values seen, and on 409 re-confirms with the shown values (as the UI does).
+
+| Case | Result |
+|---|---|
+| **D** confirm with no key | 428 |
+| **D** confirm with no body | 422 `EXPECTED_VALUES_REQUIRED` |
+| **D** confirm with the draft's 407.38 (the second act on LD) | **409 `ACT_VALUE_CHANGED`**; act stays Draft, 0 events |
+| **D** same key with the corrected body | 409 (key reused) |
+| **D** new key with the corrected values | **200**, Accepted at **407.39** (total 488.87); AuditEvent `confirmed_total_seen` = 488.87 |
+| C randomized | invariant holds at every step; full = 1234.50 |
+| C2 | unchanged pass |
+| C3 confirm ∥ 2 draft edits ×10 | (409, 200, 200); then re-confirmed with the shown values → Accepted; full = 1234.50 (re-run ×2: 60/60) |
+| A1–A10 | still pass |
+
+- Note: after `ACT_VALUE_CHANGED`, the **same** Idempotency-Key cannot be reused, because the body is in the fingerprint. The frontend sends a new key (verified in `ProjectOperationsPage.js`), so this is fine.
+- The one C3 failure in the first run (acts vanished) was my own `mongo_clean` colliding on rs0, and does not reproduce.
+- Gates are queued after `b79c`.
+
+### #71 @ `eb91eec` (SEC71-06 fix: fail closed by rule type) — static PASS
+
+`safe_alarm_rule` shows `threshold` only for the types `alarm_engine` evaluates as a non-money unit. Verified against the engine's branches:
+
+| Type | Unit |
+|---|---|
+| budget | burn % |
+| overhead | % change of overhead per person-day |
+| overtime | hours |
+| attendance | days |
+| deadline | days left |
+
+`secondary_threshold` is shown only for (budget, progress_pct).
+
+My matrix of 16 metric names × 10 types (incl. custom, pricing, procurement, None, wrong case), 160 cases: **0 mismatches**. `threshold_eur` and the other keys are always dropped.
+
+- **SEC71-06 resolved.**
+- Runtime: `b71f` (bisect probe, sec02, W0, R0, PM-01, merge) on rs2 (running).

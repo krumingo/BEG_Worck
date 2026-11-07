@@ -46,6 +46,22 @@ with TestClient(app, raise_server_exceptions=False) as tc:
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://p") as ac:
             return await asyncio.gather(*[ac.request(m, u, json=b, headers=h) for m, u, b, h in reqs])
 
+    def cbody(aid):
+        """FG-142 (#77 2cc1147): the values the confirmer sees (the draft as stored)."""
+        if os.environ.get("PROBE_NO_EXPECTED") == "1":
+            return None
+        d = q(lambda: op.client_acts.find_one({"id": aid}, {"_id": 0, "total": 1, "lines": 1})) or {}
+        return {"expected_total": d.get("total"), "expected_line_values": {l["id"]: l["line_total"] for l in d.get("lines") or []}}
+
+    def confirm(aid, headers):
+        """confirm as the UI would: with the values seen; on 409 ACT_VALUE_CHANGED re-confirm with the shown values (new key)."""
+        r = tc.post("/api/client-acts/%s/confirm" % aid, headers=headers, json=cbody(aid))
+        det = r.json().get("detail") if r.status_code == 409 else None
+        if isinstance(det, dict) and det.get("error_code") == "ACT_VALUE_CHANGED":
+            r = tc.post("/api/client-acts/%s/confirm" % aid, headers=H(), json={
+                "expected_total": det["total"], "expected_line_values": det["line_values"]})
+        return r
+
     for mode in T.MODES:
         os.environ["PERMISSION_SERVICE_MODE"] = mode
         # A1
@@ -108,8 +124,8 @@ with TestClient(app, raise_server_exceptions=False) as tc:
             tv = tc.post("/api/auth/login", json={"email": fx["A"]["users"]["viewer"]["email"], "password": T.SYNTH_PASSWORD}).json()["token"]
             HV = {"Authorization": "Bearer " + tv, "Idempotency-Key": uuid.uuid4().hex}
             a = tc.post("/api/client-acts", json=body("L1", 3), headers=H()).json()
-            v = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=HV)
-            nk = tc.post("/api/client-acts/%s/confirm" % a["id"], headers={"Authorization": "Bearer " + tok})
+            v = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=HV, json=cbody(a["id"]))
+            nk = tc.post("/api/client-acts/%s/confirm" % a["id"], headers={"Authorization": "Bearer " + tok}, json=cbody(a["id"]))
             st0 = q(lambda: op.client_acts.find_one({"id": a["id"]}, {"_id": 0, "status": 1}))["status"]
             # A8: a crash in the confirm's audit write -> full rollback; same-key retry -> once
             orig = ca._audit; fail = [True]
@@ -120,12 +136,12 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                 return await orig(*aa, **kk)
             ca._audit = flaky
             k = "cf-" + uuid.uuid4().hex[:6]
-            c1 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k))
+            c1 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k), json=cbody(a["id"]))
             st1 = q(lambda: op.client_acts.find_one({"id": a["id"]}, {"_id": 0, "status": 1}))["status"]
             ev1 = cnt("audit_events", {"entity_id": a["id"], "action": {"$regex": "confirm"}})
             ca._audit = orig
-            c2 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k))
-            c3 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k))
+            c2 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k), json=cbody(a["id"]))
+            c3 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k), json=cbody(a["id"]))
             st2 = q(lambda: op.client_acts.find_one({"id": a["id"]}, {"_id": 0, "status": 1}))["status"]
             ev2 = cnt("audit_events", {"entity_id": a["id"], "action": {"$regex": "confirm"}})
             print(mode, "A7 viewer", v.status_code, "nokey", nk.status_code, "status", st0,
@@ -204,7 +220,7 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                         drafts += [x.json()["id"] for x in rs if x.status_code == 201]
                     elif op_ == "confirm" and drafts:
                         aid = drafts.pop(rng.randrange(len(drafts)))
-                        if tc.post("/api/client-acts/%s/confirm" % aid, headers=H()).status_code == 200:
+                        if confirm(aid, H()).status_code == 200:
                             g_ = q(lambda: op.client_acts.find_one({"id": aid}, {"_id": 0, "lines": 1, "total": 1}))
                             frozen[aid] = (g_["total"], [l["line_total"] for l in g_["lines"]])
                     check("r%d s%d %s" % (rnd, step, op_)); frozen_ok("r%d s%d %s" % (rnd, step, op_))
@@ -228,18 +244,21 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                 a = tc.post("/api/client-acts", json=body("LD", 0.3), headers=H()).json()["id"]
                 b = tc.post("/api/client-acts", json=body("LD", 0.3), headers=H()).json()["id"]
                 c_ = tc.post("/api/client-acts", json=body("LD", 33.3333), headers=H()).json()["id"]
-                rs = q(lambda: gather([("POST", "/api/client-acts/%s/confirm" % b, None, H()),
+                bb = cbody(b)
+                rs = q(lambda: gather([("POST", "/api/client-acts/%s/confirm" % b, bb, H()),
                                        ("PUT", "/api/client-acts/%s" % a, {"lines": [{"offer_line_id": i["L1"], "executed_qty": 1}]}, H()),
                                        ("PUT", "/api/client-acts/%s" % c_, {"lines": [{"offer_line_id": i["LD"], "executed_qty": 7.7777}]}, H())]))
                 hist3[tuple(x.status_code for x in rs)] += 1
+                if rs[0].status_code == 409:
+                    confirm(b, H())
                 bv = q(lambda: op.client_acts.find_one({"id": b}, {"_id": 0, "total": 1, "status": 1}))
                 s_, u_, _ = state()
                 fill = tc.post("/api/client-acts", json=body("LD", (1000000 - u_) / 10000), headers=H())
-                tc.post("/api/client-acts/%s/confirm" % c_, headers=H())
+                confirm(c_, H())
                 bv2 = q(lambda: op.client_acts.find_one({"id": b}, {"_id": 0, "total": 1, "status": 1}))
                 check("C3 r%d" % rnd)
                 s_, u_, _ = state()
-                if s_ != Dm("1234.50") or bv != bv2 or any(x.status_code >= 500 for x in rs):
+                if s_ != Dm("1234.50") or bv != bv2 or bv.get("status") != "Accepted" or any(x.status_code >= 500 for x in rs):
                     F.append("%s C3 r%d: %s sum %s confirmed b %s -> %s" % (mode, rnd, [x.status_code for x in rs], s_, bv, bv2))
             print(mode, "C3 confirm || 2 draft edits x10:", dict(hist3))
             restore()
@@ -305,6 +324,34 @@ with TestClient(app, raise_server_exceptions=False) as tc:
             lv1 = tc.post("/api/client-acts", json=body("LV1", 1), headers=H())
             lv2 = tc.post("/api/client-acts", json=body("LV2", 1), headers=H())
             print(mode, "X4 legacy: accept OV2 %s -> %s | act on OV1 %s | act on OV2 %s" % (acc.status_code, ov, st(lv1), st(lv2)))
+            restore()
+        if os.environ.get("PROBE_ACT_D") == "1":          # #77 2cc1147 (Addendum D, FG-142)
+            a1 = tc.post("/api/client-acts", json=body("LD", 33), headers=H()).json()["id"]
+            a2 = tc.post("/api/client-acts", json=body("LD", 33), headers=H()).json()["id"]
+            d2 = q(lambda: op.client_acts.find_one({"id": a2}, {"_id": 0}))
+            seen = cbody(a2)
+            nokey = tc.post("/api/client-acts/%s/confirm" % a2, headers={"Authorization": "Bearer " + tok})
+            nobody = tc.post("/api/client-acts/%s/confirm" % a2, headers=H())
+            k = "d-" + uuid.uuid4().hex[:8]
+            r1 = tc.post("/api/client-acts/%s/confirm" % a2, headers=H(k), json=seen)
+            st1 = q(lambda: op.client_acts.find_one({"id": a2}, {"_id": 0, "status": 1, "lines": 1}))
+            ev1 = cnt("audit_events", {"entity_id": a2, "action": "client_act.confirmed"})
+            det = r1.json().get("detail") if r1.status_code == 409 else {}
+            good = {"expected_total": det.get("total"), "expected_line_values": det.get("line_values")} if det else seen
+            r2 = tc.post("/api/client-acts/%s/confirm" % a2, headers=H(k), json=good)        # same key, corrected body
+            r3 = tc.post("/api/client-acts/%s/confirm" % a2, headers=H(), json=good)         # new key
+            fin = q(lambda: op.client_acts.find_one({"id": a2}, {"_id": 0, "status": 1, "lines": 1, "total": 1}))
+            ev = q(lambda: op.audit_events.find_one({"entity_id": a2, "action": "client_act.confirmed"}, {"_id": 0, "structured_diff": 1})) or {}
+            seen_t = (ev.get("structured_diff") or {}).get("confirmed_total_seen")
+            print(mode, "D draft a2 line %s | no key %s | no body %s | confirm with draft values %s %s (status %s, events %d) | same key corrected %s | new key %s | final %s line %s total %s | seen in event %s" % (
+                d2["lines"][0]["line_total"], nokey.status_code, st(nobody) if "st" in dir() else nobody.status_code,
+                r1.status_code, (det or {}).get("error_code"), st1["status"], ev1, r2.status_code, r3.status_code,
+                fin["status"], fin["lines"][0]["line_total"], fin["total"], seen_t))
+            ok = (nokey.status_code == 428 and nobody.status_code == 422 and r1.status_code == 409
+                  and st1["status"] == "Draft" and ev1 == 0 and fin["status"] == "Accepted"
+                  and fin["lines"][0]["line_total"] == 407.39 and seen_t == fin["total"])
+            if not ok:
+                F.append("%s D %s %s %s %s %s %s" % (mode, nokey.status_code, nobody.status_code, r1.status_code, r2.status_code, r3.status_code, fin))
             restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")
