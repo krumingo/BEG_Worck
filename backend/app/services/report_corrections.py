@@ -23,14 +23,61 @@ AUTHOR = "author"
 CORRECTOR = "corrector"
 CORRECTOR_ROLES = ("Admin", "Owner")
 PAYROLL_LOCKED = ("paid", "batched")
+# LAB-01-J (FG-91): a Pay Run in any of these states holds its lines (paid or on the way)
+LOCKING_RUN_STATUSES = ("confirmed", "paid", "paying", "payment_failed", "reopened")
+
+
+def report_line_ids(report: dict) -> list:
+    """The ids a Pay Run uses for this report's lines: the report id (new format) and
+    ``<report id>_<entry id>`` per entry (old format — report_normalizer)."""
+    rid = report.get("id")
+    ids = [rid] if rid else []
+    for e in report.get("day_entries") or []:
+        if isinstance(e, dict) and e.get("id") and rid:
+            ids.append(f"{rid}_{e['id']}")
+    return ids
+
+
+async def report_in_payroll(tenant, org_id: str, report: dict) -> Optional[str]:
+    """LAB-01-J (FG-91): is the report already in payroll? Decided from the PAY RUN LINES
+    that reference it or its entries — not only from ``payroll_status``, which the payroll
+    sync never stamps on the old (employee_id / report_date) format. Returns the reason."""
+    if (report.get("payroll_status") or "").lower() in PAYROLL_LOCKED:
+        return f"payroll_status={report.get('payroll_status')}"
+    ids = report_line_ids(report)
+    if not ids or tenant is None:
+        return None
+    run = await tenant.pay_runs.find_one(
+        {"org_id": org_id,
+         "$and": [
+             {"$or": [{"status": {"$in": list(LOCKING_RUN_STATUSES)}}, {"paid_at": {"$ne": None}}]},
+             {"$or": [{"employee_rows.selected_report_ids": {"$in": ids}},
+                      {"employee_rows.day_cells.reports.report_id": {"$in": ids}},
+                      {"employee_rows.day_cells.report_ids": {"$in": ids}}]},
+         ]},
+        {"_id": 0, "id": 1, "number": 1, "status": 1})
+    if run:
+        return f"pay_run {run.get('number') or run.get('id')} ({run.get('status')})"
+    return None
+
+
+async def refuse_if_in_payroll(tenant, org_id: str, report: dict) -> None:
+    reason = await report_in_payroll(tenant, org_id, report)
+    if reason:
+        raise HTTPException(status_code=409, detail=(
+            "Отчетът вече е в заплати (в пакет или платен) — не се редактира и не се одобрява наново; "
+            f"поправката става с корекция / сторно [{reason}]"))
 
 
 async def authorize_report_edit(user: dict, report: dict, *, projects: Iterable[str],
                                 author_ids: Iterable[Optional[str]],
-                                author_statuses: Iterable[str]) -> str:
-    """Return AUTHOR or CORRECTOR, or raise 403 / 400 / 409 (R36)."""
+                                author_statuses: Iterable[str], tenant=None) -> str:
+    """Return AUTHOR or CORRECTOR, or raise 403 / 400 / 409 (R36). With ``tenant`` the
+    payroll lock is decided from the Pay Run lines too (LAB-01-J, FG-91)."""
     from app.deps.auth import can_manage_project
 
+    if tenant is not None:
+        await refuse_if_in_payroll(tenant, report.get("org_id") or user.get("org_id"), report)
     if (report.get("payroll_status") or "").lower() in PAYROLL_LOCKED:
         raise HTTPException(status_code=409, detail=(
             "The report is already in payroll (batched/paid); it is corrected only through "

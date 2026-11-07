@@ -309,7 +309,7 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
     mode = await authorize_report_edit(
         user, report, projects=projects,
         author_ids=(report.get("employee_id"), report.get("created_by")),
-        author_statuses=("DRAFT", "REJECTED"))
+        author_statuses=("DRAFT", "REJECTED"), tenant=tenant)
 
     now = datetime.now(timezone.utc).isoformat()
     update["updated_at"] = now
@@ -1043,7 +1043,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             modes[emp_id] = await authorize_report_edit(
                 user, existing, projects=[project_id],
                 author_ids=(existing.get("employee_id"), existing.get("created_by")),
-                author_statuses=("DRAFT", "REJECTED"))
+                author_statuses=("DRAFT", "REJECTED"), tenant=tenant)
         except HTTPException as exc:
             refused.append({"employee_id": emp_id, "report_id": existing["id"],
                             "status_code": exc.status_code, "reason": exc.detail})
