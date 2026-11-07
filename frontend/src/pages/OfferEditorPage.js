@@ -490,15 +490,21 @@ export default function OfferEditorPage() {
     }
   };
 
+  const rejectKey = useMemo(() => createKeyHolder(), []);
+
   const handleReject = async () => {
     const reason = prompt(t("offers.rejectionReasonPrompt"));
     setSaving(true);
+    let failure = null;
     try {
-      await API.post(`/offers/${offerId}/reject`, { reason });
+      // FG-144: the reject is a contractual write too — one Idempotency-Key per click
+      await API.post(`/offers/${offerId}/reject`, { reason }, idempotencyHeaders(rejectKey.get()));
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      failure = err;
+      alert(apiErrorText(err, t("toast.errorOccurred")));
     } finally {
+      rejectKey.settle(failure);
       setSaving(false);
     }
   };

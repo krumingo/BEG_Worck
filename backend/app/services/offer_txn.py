@@ -13,7 +13,7 @@ read or written here.
 #: MongoDB creates a missing collection implicitly INSIDE a transaction, and concurrent
 #: first writes on a fresh tenant then fail with "namespace … is already in use". So they
 #: are created outside it — at startup, at onboarding, and before every transaction.
-OFFER_TXN_COLLECTIONS = ("offers", "offer_events", "audit_logs", "audit_events")
+OFFER_TXN_COLLECTIONS = ("offers", "offer_events", "offer_versions", "audit_logs", "audit_events")
 MAX_TXN_ATTEMPTS = 5
 
 

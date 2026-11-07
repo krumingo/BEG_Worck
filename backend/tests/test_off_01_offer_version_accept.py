@@ -509,12 +509,17 @@ def test_08_without_transactions_nothing_is_written(monkeypatch, mode):
     """A deployment that cannot run transactions refuses the write (503), writes nothing."""
     async def scenario(c, op):
         await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        await op.offers.insert_one(offer_doc("od", status="Draft"))
         before = await snap(op, ("offers", "offer_events", "audit_events", "audit_logs"))
         for r in (await new_version(c, "o1"), await accept(c, "o1"), await cancel(c, "o1"),
-                  await respond(c, TOKEN)):
+                  await respond(c, TOKEN),
+                  # FG-144 sweep: reject and send are transactions too
+                  await c.post("/api/offers/o1/reject", headers=hdr("admin-a"), json={"reason": "x"}),
+                  await c.post("/api/offers/od/send", headers=hdr("admin-a"))):
             assert r.status_code == 503, r.text
             assert code(r) == "TRANSACTIONS_UNAVAILABLE"
         assert await snap(op, ("offers", "offer_events", "audit_events", "audit_logs")) == before
+        assert not await op.offer_versions.count_documents({})          # no send snapshot
     run(monkeypatch, "mongomock", mode, scenario)
 
 
@@ -716,8 +721,14 @@ def test_16_restore_or_edit_racing_send_never_leaves_a_sent_offer_unlike_its_sna
                     other = c.put("/api/offers/%s/lines" % oid, headers=hdr("admin-a"), json={
                         "lines": [{"activity_name": "Плочки", "unit": "m2", "qty": 1,
                                    "material_unit_cost": 5, "labor_unit_cost": 5}]})
+                async def staggered(coro, delay):
+                    await asyncio.sleep(delay)
+                    return await coro
+                # send is a transaction (slower than one write): on odd rounds the rival starts
+                # a little later, so both outcomes are exercised in every mode
                 s, o = await asyncio.gather(
-                    c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")), other)
+                    c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")),
+                    staggered(other, 0.002 * (i % 2) * (1 + i % 5)))
                 # the rival either loses (409 / 403 once the offer is Sent) or finished
                 # before /send read the offer — then the send sends the rival's result
                 assert s.status_code in (200, 409) and o.status_code in (200, 403, 409), (
@@ -878,7 +889,7 @@ def test_19_a_version_with_a_newer_one_in_its_family_is_never_accepted(monkeypat
     run(monkeypatch, backend, mode, scenario)
 
 
-def test_20_delete_racing_send_never_deletes_a_sent_offer(monkeypatch, any_backend, mode):
+def test_20_delete_racing_send_never_deletes_a_sent_offer(monkeypatch, backend, mode):
     """FG-136: DELETE ∥ send hard-deleted a just-sent offer and send answered 500."""
     async def scenario(c, op):
         for i in range(ROUNDS):
@@ -896,7 +907,7 @@ def test_20_delete_racing_send_never_deletes_a_sent_offer(monkeypatch, any_backe
                 assert d.status_code == 200 and doc is None
                 assert not await op.offer_versions.count_documents({"offer_id": oid})
                 assert not await op.offer_events.count_documents({"offer_id": oid})
-    run(monkeypatch, any_backend, mode, scenario)
+    run(monkeypatch, backend, mode, scenario)
 
 
 def test_21_signed_pdf_needs_its_file_and_verified_email_its_proof(monkeypatch, backend, mode):
