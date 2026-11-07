@@ -647,8 +647,12 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
                                "account_id": account_id}))
 
     # Update package paid totals
-    all_pays = await tenant.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)
-    total_paid = sum(p["amount"] for p in all_pays)
+    # FG-105: summed in the database — a package with more than 200 payments is counted fully.
+    paid = await tenant.subcontractor_payments.aggregate([
+        {"$match": {"package_id": pkg_id, "status": "completed"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+    ]).to_list(1)
+    total_paid = paid[0]["total"] if paid else 0
     certified = pkg.get("certified_total", 0)
     payable = round(certified - total_paid, 2)
 

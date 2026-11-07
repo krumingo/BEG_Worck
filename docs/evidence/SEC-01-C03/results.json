@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 25.3,
+ "seconds": 24.2,
  "amount_rows": [
   {
    "mode": "off",
@@ -4489,12 +4489,12 @@
     201,
     201,
     201,
-    201,
-    201,
+    409,
+    409,
     409
    ],
    "retry_payment_ids": [
-    "b7a5430f-4157-58bf-bdcb-21bdcd5c031e"
+    "7aeefd45-b764-5f43-aa68-8cd285e2cfd8"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4513,12 +4513,12 @@
     201,
     201,
     201,
-    409,
+    201,
     409,
     409
    ],
    "retry_payment_ids": [
-    "57175e53-4e0b-57aa-9de2-a63eb2542be9"
+    "8719488d-614a-5d5d-994f-f3415e0bb972"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4537,12 +4537,12 @@
     201,
     201,
     201,
-    409,
+    201,
     409,
     409
    ],
    "retry_payment_ids": [
-    "f5a78541-4a03-5e13-8b87-a4cccf8db9bf"
+    "62163784-040f-5a63-94c1-49b5eb77737b"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4722,6 +4722,29 @@
     ],
     "allocations_sum": 60.0
    }
+  }
+ ],
+ "fg105_many_payments": [
+  {
+   "mode": "off",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "shadow",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "enforce",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
   }
  ]
 }

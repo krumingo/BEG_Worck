@@ -241,6 +241,28 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         computed: List[Dict[str, Any]] = []
         race: List[Dict[str, Any]] = []
         fg90: List[Dict[str, Any]] = []
+        fg105: List[Dict[str, Any]] = []
+
+        def many_payments_probe(mode: str) -> Dict[str, Any]:
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            org = fx["A"]["tenant_id"]
+            tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                {"id": pkg_id}, {"$set": {"certified_total": 1000, "paid_total": 250,
+                                          "committed_paid_total": 250}}))
+            tc.portal.call(lambda: op_db.subcontractor_payments.insert_many([
+                {"id": "c03-fg105-%d" % i, "org_id": org, "package_id": pkg_id,
+                 "amount": 1.0, "status": "completed", "created_at": "2026-11-01T00:00:00"}
+                for i in range(250)]))
+            resp = tc.post("/api/subcontractor-payments", json={**base, "amount": 1},
+                           headers={"Authorization": "Bearer " + tokens["accountant"],
+                                    "Idempotency-Key": uuid.uuid4().hex})
+            pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                {"id": pkg_id}, {"_id": 0}))
+            restore_all()
+            return {"mode": mode, "earlier_payments": 250, "status": resp.status_code,
+                    "paid_total": pkg.get("paid_total"),
+                    "payable_total": pkg.get("payable_total")}
 
         def certified_cap_probe(mode: str) -> Dict[str, Any]:
             import httpx
@@ -477,6 +499,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             race.append(interrupted_payment_race(mode))
             # FG-90 (FLOW-021): no payment above the certified total of the package (100).
             fg90.append(certified_cap_probe(mode))
+            # FG-105: paid_total counts more than 200 earlier payments.
+            fg105.append(many_payments_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -489,7 +513,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "amount_rows": rows, "idempotency_sequences": sequences, "sec_r1": r1,
         "fg29_project_in_tenant": fg29, "fg15_labor_money": fg15,
         "f69_02_computed_routes": computed, "f69_01_interrupted_payment_race": race,
-        "fg90_certified_cap": fg90,
+        "fg90_certified_cap": fg90, "fg105_many_payments": fg105,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -596,6 +620,11 @@ def check_result(result: Dict[str, Any]) -> None:
 
     check_computed_and_race(result)
     check_certified_cap(result)
+    rows = result["fg105_many_payments"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:   # 250 earlier payments of 1 + this one: all counted (before: only 200)
+        assert r == {"mode": r["mode"], "earlier_payments": 250, "status": 201,
+                     "paid_total": 251.0, "payable_total": 749.0}, r
 
 
 def check_computed_and_race(result: Dict[str, Any]) -> None:
