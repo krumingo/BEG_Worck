@@ -1664,7 +1664,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
-| #73 LAB-01 | `25f1d6c` | **PASS** (LAB-01-F FG-84 source-keyed corrections; FG-85 verified on #72 merge; fail-closed 503 without the index); note F2 (draft netting supersedes) for Krum | 2026-11-07 |
+| #73 LAB-01 | `d0aa09a` | **PASS** (LAB-01-G: no automatic netting, receivable per paid source line, never superseded; F2 closed) | 2026-11-07 |
 | #74 OH-01 | `240cbcf` | **PASS** (FG-86/87/88); notes: OH01-3 #69-merge guidance wrong for the SEC-01 real-Mongo test (createIndex $cmd, not 428); D6 overlap doubles (Krum) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -2686,3 +2686,40 @@ Other notes:
 - Between "new snapshot computed" and "new snapshot allocated", P&L shows 0 overhead for the period (HANDOFF; behaviour change).
 - FG-87 is strict and also blocks non-financial fields on used records (HANDOFF; Krum).
 - FG-89: `full_cost.py` is a second overhead path writing into `overhead_snapshots` with no versions or key (HANDOFF debt; needs a decision).
+
+
+## #73 LAB-01-G @ `d0aa09a` — 2026-11-07 ~08:00 UTC — PASS (F2 closed)
+
+Delta `25f1d6c..d0aa09a` (fast-forward, 1 commit) answers my F2 note under CLAUDE.md §7:
+- `allocate_paid_sources` (`pay_runs.py:294`) takes the paid lines in run order and lets each consume the LAB-01 earned amount of **its own days**. "Previously paid" counts a line only up to that; the excess is `overpaid`, a receivable.
+- `overpayment_item` builds the item per source.
+- `sync_run_corrections` now only **creates** missing records: one per (employee, source pay run), key `overpayment:employee:<id>:source:pay_run:<run>`. It never rewrites, supersedes or applies one. A different recomputed amount opens a DQ alert (`PAYROLL_CORRECTION_RECOMPUTED`, or `…CHANGED_AFTER_DECISION` for a decided record) with the recorded and new amounts.
+- In create/update, the run's own window shortfall no longer produces an item.
+
+Probes (`docs/audit/probes/lab01/test_probe_lab01f_sources.py`, updated; new G1 and G3), real Mongo RS:
+
+| Case | Result |
+|---|---|
+| F1: week, 3-week and month windows over one 60 overpayment (mongomock + real) | 1 record, 60, source `run-old`, 3 `pay_run_ids` |
+| **F2**: draft monthly run with later unpaid work worth 120 | earned 720; previously paid **counted 600** (total 660); receivable 60; **remaining 120** (later work paid in full); correction **stays pending**. Next weekly run: still pending, v1, 60, 1 record. **F2 closed (PROVED)** |
+| G1: two confirmed runs paid the same week (660 + 600, earned 600) | counted 600, receivable 660, remaining 0. Records: `run-old` 60 and `run-old-2` 600. PROVED |
+| G3: paying 700 now against 600 earned in this run | **400 "Overpayment is not allowed"**, no record. There is no path that creates an overpaid line inside a run |
+
+The orchestrator expected "600 remaining" in F2. In my seed the later work is worth 120, so the correct remaining is 120 (later earnings paid in full); the semantics match.
+
+Test edits: `test_lab_01_d/e` replace the supersede/reopen assertions with "record unchanged + DQ alert" assertions, and `previously_paid` 660 → 600 with `previously_paid_total` 660. This is consistent with the design change; nothing is weakened.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*` on `d0aa09a` | 53 passed, 1 skipped (fg85) |
+| `tests/test_lab_01*` on the merge with #72 | **54 passed** |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0 | 814 |
+| merge-tree main / #72 / #74 | clean |
+| merge-tree #69 / #70 / #71 | known conflicts |
+
+Note, low: a receivable is recorded only when a later run's preview sees the paid line; nothing records it at the moment the source run is paid. G3 shows a run cannot itself pay above its remaining, so the only way to get one is later re-pricing. That is acceptable.
