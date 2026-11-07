@@ -79,3 +79,22 @@ W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
 ## W0 real mongo
 15 failed, 1159 passed, 6 warnings in 103.19s (0:01:43)
 ## W0 failures identical to main in both runs (15, test_w0_03e_legacy_routes); W0-04+C01+auth delta +24 = the C01 tests
+
+# F-69-01 (2026-11-07), commit 23d0bc9 on 34ac9f4 — vs main 0f870c3 baseline above
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+181 passed, 6 warnings in 142.24s (0:02:22)
+## R0 (real mongo)
+814 passed, 6 warnings in 138.97s (0:02:18)
+## W0 DB-free
+15 failed, 1093 passed, 69 skipped, 6 warnings in 59.08s
+## W0 real mongo
+15 failed, 1162 passed, 6 warnings in 106.10s (0:01:46)
+## stability: C01 -k 'parallel or fg57 or no_index or retries' x10
+     10 8 passed, 19 deselected
+## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
+## negative control: 34ac9f4 idempotency.py, key interrupted to FAILED, 6 concurrent retries: ['started' x6], assert 6 == 1
+## with the fix: exactly 1 STARTED per round (10 rounds/run), 10/10 runs
