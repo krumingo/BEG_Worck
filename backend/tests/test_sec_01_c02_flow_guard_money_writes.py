@@ -429,11 +429,14 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         seq: Dict[str, Any] = {}
         hdr = {"Authorization": "Bearer " + tokens[("A", "requester")]}
         before = tc.portal.call(lambda: pm._last_ts(oplog))
+        # R29 / SEC-01-C03-C: the sync requires a key; two DIFFERENT keys = two real syncs.
         r1 = tc.post("/api/labor-entries/sync-from-work-reports",
-                     json={"project_id": fx["A"]["project_id"]}, headers=hdr)
+                     json={"project_id": fx["A"]["project_id"]},
+                     headers={**hdr, "Idempotency-Key": uuid.uuid4().hex})
         mid = tc.portal.call(lambda: pm._last_ts(oplog))
         r2 = tc.post("/api/labor-entries/sync-from-work-reports",
-                     json={"project_id": fx["A"]["project_id"]}, headers=hdr)
+                     json={"project_id": fx["A"]["project_id"]},
+                     headers={**hdr, "Idempotency-Key": uuid.uuid4().hex})
         after_writes = tc.portal.call(lambda: pm.writes_with_org(client, oplog, mid, dbs, snap))
         rows_now = tc.portal.call(lambda: op_db.labor_entries.find(
             {"org_id": fx["A"]["tenant_id"], "project_id": fx["A"]["project_id"]},
@@ -441,7 +444,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         seq["labor_sync"] = {
             "first": {"status": r1.status_code, "body": r1.json()},
             "second": {"status": r2.status_code, "body": r2.json(),
-                       "written": sorted({short(n) for n, _ in after_writes})},
+                       "written": sorted({short(n) for n, _ in after_writes
+                                          if not n.endswith(".audit_idempotency")})},
             "deleted": tc.portal.call(lambda: deletes_since(oplog, before, op_name)),
             "rows": sorted(({"id": x["id"] if x["id"].startswith("pm01probe") else "new",
                              "hours": x["hours"], "labor_cost": x.get("labor_cost"),
@@ -674,7 +678,9 @@ def test_no_hard_delete_left_in_the_labor_sync():
     import ast
     import inspect
     from app.routes import labor_smr
-    src = inspect.getsource(labor_smr.sync_labor_entries_from_work_reports)
+    # SEC-01-C03-C: the route reserves the key; the sync itself is ``_sync_labor_entries``.
+    src = (inspect.getsource(labor_smr.sync_labor_entries_from_work_reports)
+           + inspect.getsource(labor_smr._sync_labor_entries))
     calls = {n.func.attr for n in ast.walk(ast.parse(src))
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
     assert not calls & {"delete_one", "delete_many", "find_one_and_delete", "drop", "remove"}

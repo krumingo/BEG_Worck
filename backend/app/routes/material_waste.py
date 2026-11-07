@@ -99,8 +99,8 @@ async def create_waste_entry(
         "updated_at": now,
     }
     async with mw:
-        if await mw.needs_insert(tenant.material_waste_entries, entry["id"]):
-            await tenant.material_waste_entries.insert_one(entry)
+        async with mw.insert_once():
+            await tenant.material_waste_entries.insert_one(mw.unique(entry))
         mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 

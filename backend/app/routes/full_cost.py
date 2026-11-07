@@ -135,8 +135,8 @@ async def create_overhead_snapshot(
         "created_by": user["id"],
     }
     async with mw:
-        if await mw.needs_insert(tenant.overhead_snapshots, entry["id"]):
-            await tenant.overhead_snapshots.insert_one(entry)
+        async with mw.insert_once():
+            await tenant.overhead_snapshots.insert_one(mw.unique(entry))
         mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 

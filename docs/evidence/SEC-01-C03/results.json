@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 15.0,
+ "seconds": 22.6,
  "amount_rows": [
   {
    "mode": "off",
@@ -4248,6 +4248,307 @@
     "hourly_rate",
     "labor_cost"
    ]
+  }
+ ],
+ "f69_02_computed_routes": [
+  {
+   "mode": "off",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "off",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "off",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  },
+  {
+   "mode": "shadow",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "shadow",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "shadow",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  },
+  {
+   "mode": "enforce",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "enforce",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "enforce",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  }
+ ],
+ "f69_01_interrupted_payment_race": [
+  {
+   "mode": "off",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "d2a0645f-7fee-52b5-b4f4-a0da8542d02a"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  },
+  {
+   "mode": "shadow",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "2c2237fb-915d-549e-b733-8a0c7fc78cc5"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  },
+  {
+   "mode": "enforce",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    201,
+    201,
+    201,
+    201,
+    409
+   ],
+   "retry_payment_ids": [
+    "9f7f737b-a581-5b55-a031-01bc750ef2f6"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
   }
  ]
 }

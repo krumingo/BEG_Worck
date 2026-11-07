@@ -966,8 +966,8 @@ async def create_cash_transaction(
         "created_at": now,
     }
     async with mw:
-        if await mw.needs_insert(tenant.cash_transactions, txn["id"]):
-            await tenant.cash_transactions.insert_one(txn)
+        async with mw.insert_once():
+            await tenant.cash_transactions.insert_one(mw.unique(txn))
         mw.result_id = txn["id"]
     return {k: v for k, v in txn.items() if k != "_id"}
 
@@ -1029,8 +1029,8 @@ async def create_overhead_transaction(
         "created_at": now,
     }
     async with mw:
-        if await mw.needs_insert(tenant.overhead_transactions, txn["id"]):
-            await tenant.overhead_transactions.insert_one(txn)
+        async with mw.insert_once():
+            await tenant.overhead_transactions.insert_one(mw.unique(txn))
         mw.result_id = txn["id"]
     return {k: v for k, v in txn.items() if k != "_id"}
 
@@ -1092,8 +1092,8 @@ async def create_bonus_payment(
         "created_at": now,
     }
     async with mw:
-        if await mw.needs_insert(tenant.bonus_payments, payment["id"]):
-            await tenant.bonus_payments.insert_one(payment)
+        async with mw.insert_once():
+            await tenant.bonus_payments.insert_one(mw.unique(payment))
         mw.result_id = payment["id"]
     return {k: v for k, v in payment.items() if k != "_id"}
 

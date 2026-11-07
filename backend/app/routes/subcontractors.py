@@ -579,15 +579,17 @@ async def create_subcontractor_payment(
     async with mw:
         await _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now)
         mw.result_id = payment["id"]
-    return {k: v for k, v in payment.items() if k != "_id"}
+    # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost the
+    # insert answers with the same payment (same payment_no) as the one that won it.
+    return await tenant.subcontractor_payments.find_one({"id": payment["id"]}, {"_id": 0})
 
 
 async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now):
     """The writes of one subcontractor payment; each one done once per Idempotency-Key."""
     org_id, pkg_id, amount = user["org_id"], payment["package_id"], payment["amount"]
     account_id = account["id"]
-    if await mw.needs_insert(tenant.finance_payments, ledger_id):
-        await tenant.finance_payments.insert_one({
+    async with mw.insert_once():   # SEC-01-C03-C (F-69-01): atomic, _id = key-derived id
+        await tenant.finance_payments.insert_one(mw.unique({
             "id": ledger_id, "org_id": org_id,
             "direction": "Outflow", "amount": amount,
             "currency": pkg.get("currency", "EUR"),
@@ -600,9 +602,9 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
             "project_id": pkg["project_id"],
             "subcontractor_payment_id": payment["id"],
             "created_at": now, "updated_at": now,
-        })
-    if await mw.needs_insert(tenant.subcontractor_payments, payment["id"]):
-        await tenant.subcontractor_payments.insert_one(payment)
+        }))
+    async with mw.insert_once():
+        await tenant.subcontractor_payments.insert_one(mw.unique(payment))
     await mw.step("audit", lambda: log_audit(
         org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
         "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
