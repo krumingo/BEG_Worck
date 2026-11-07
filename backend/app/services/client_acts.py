@@ -138,6 +138,33 @@ def money(qty: Any, price: Any) -> float:
     return float((_dec(qty) * _dec(price)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
+def value_at(units: int, price: Any) -> Decimal:
+    """round(cumulative quantity × price) to the cent, half up — FG-131 (addendum C)."""
+    return (Decimal(units) / QTY_SCALE * _dec(price)).quantize(Decimal("0.01"),
+                                                                rounding=ROUND_HALF_UP)
+
+
+def apportion(lines: List[Dict[str, Any]], *, base_units: int, total: Decimal) -> None:
+    """Set ``line_total`` of the act lines of ONE offer line by cumulative rounding.
+
+    FG-131 (addendum C, FLOW-004 "Сборът на всички актове трябва да стигне до договореното
+    количество и стойност, без да ги надвишава"): a line is worth
+    round(cumulative after × price) − round(cumulative before × price), so the values of
+    all acts on an offer line telescope to exactly round(acted quantity × price) — 33+33+34
+    of 12.345 give 1234.50, never 1234.51. ``base_units`` is where these lines start on the
+    offer line; ``total`` is what they are worth together (the last line takes any cent a
+    re-split inside the act leaves over)."""
+    acc, done = base_units, Decimal(0)
+    for ln in lines:
+        nxt = acc + q(ln["executed_qty"])
+        v = value_at(nxt, ln["unit_price"]) - value_at(acc, ln["unit_price"])
+        ln["line_total"] = float(v)
+        done += v
+        acc = nxt
+    if lines and done != total:
+        lines[-1]["line_total"] = float(_dec(lines[-1]["line_total"]) + (total - done))
+
+
 def cents(value: Decimal) -> float:
     return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
@@ -438,6 +465,25 @@ async def _acted_from_acts(tenant: TenantData, offer_line_id: str, session=None)
     return total
 
 
+async def _value_from_acts(tenant: TenantData, offer_line_id: str, session=None) -> Decimal:
+    total = Decimal(0)
+    cursor = tenant.client_acts.find({"lines.offer_line_id": offer_line_id},
+                                     {"_id": 0, "lines": 1}, session=session)
+    async for act in cursor:
+        for ln in act.get("lines") or []:
+            if ln.get("offer_line_id") == offer_line_id:
+                total += _dec(ln.get("line_total"))
+    return total
+
+
+async def add_value(tenant: TenantData, offer_line_id: str, change: Decimal, session) -> None:
+    """Σ line values of all acts on the offer line, kept next to the acted quantity."""
+    if change:
+        await tenant.collection(TOTALS).update_one(
+            {"_id": _totals_id(tenant.org_id, offer_line_id)},
+            {"$inc": {"acted_value": float(change)}}, session=session)
+
+
 async def reserve(tenant: TenantData, *, offer: Dict, offer_line: Dict, delta: int,
                   session, verify_cap: bool = False) -> Dict[str, Any]:
     """Move the acted total of one offer line by ``delta`` units, capped by the offer qty.
@@ -455,7 +501,9 @@ async def reserve(tenant: TenantData, *, offer: Dict, offer_line: Dict, delta: i
         await coll.update_one({"_id": tid}, {"$setOnInsert": {
             "id": tid, "offer_id": offer["id"], "offer_line_id": offer_line["id"],
             "project_id": offer.get("project_id"), "acted_units": legacy,
-            "units_per_qty": QTY_SCALE, "initialized_from_acts": legacy, "created_at": _now()}},
+            "units_per_qty": QTY_SCALE, "initialized_from_acts": legacy,
+            "acted_value": float(await _value_from_acts(tenant, offer_line["id"], session)),
+            "created_at": _now()}},
             upsert=True, session=session)
     flt: Dict[str, Any] = {"_id": tid}
     if delta > 0 or verify_cap:       # confirm (delta 0): the total must still fit the cap
@@ -743,11 +791,18 @@ async def create_act(database, *, user: Dict[str, Any], project_id: str,
             raise _err(422, "OFFER_LINE_NOT_IN_SOURCE_OFFER",
                        "Редовете трябва да са от посочената оферта (source_offer_id)")
         lines = build_lines(raw_lines, resolved)
-        totals = _totals(lines)
+        _totals(lines)                                     # mixed currency -> 422 first
         await check_versions_for(tenant, resolved, _deltas(lines), session)
         for olid, delta in sorted(_deltas(lines).items()):
             offer, ol = resolved[olid]
-            await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
+            after = await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
+            u_after = int(after["acted_units"])
+            mine = [ln for ln in lines if ln["offer_line_id"] == olid]
+            value = value_at(u_after, offer_unit_price(ol)) - value_at(u_after - delta,
+                                                                     offer_unit_price(ol))
+            apportion(mine, base_units=u_after - delta, total=value)       # FG-131
+            await add_value(tenant, olid, value, session)
+        totals = _totals(lines)
         number = await next_act_number(tenant, session)
         now = _now()
         offer_ids = sorted({ln["offer_id"] for ln in lines})
@@ -804,13 +859,32 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
                                      {k: nxt.get(k, 0) - old.get(k, 0) for k in nxt}, session)
             for olid in sorted(set(old) | set(nxt)):
                 delta = nxt.get(olid, 0) - old.get(olid, 0)
-                if delta == 0:
-                    continue
                 if olid in resolved:
                     offer, ol = resolved[olid]
                 else:   # a line removed from the act: its offer line may be any offer's
                     offer, ol = await _offer_of_line(tenant, olid, session)
-                await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
+                old_lines = [ln for ln in act.get("lines") or [] if ln.get("offer_line_id") == olid]
+                old_value = sum((_dec(ln.get("line_total")) for ln in old_lines), Decimal(0))
+                after = await reserve(tenant, offer=offer, offer_line=ol, delta=delta,
+                                      session=session)      # delta 0: initialises / reads
+                u_after = int(after["acted_units"])
+                price = offer_unit_price(ol)
+                mine = [ln for ln in lines if ln["offer_line_id"] == olid]
+                at_offer_price = all(abs(float(ln.get("unit_price") or 0) - price) <= PRICE_TOLERANCE
+                                     for ln in old_lines)
+                if not mine:
+                    new_value = Decimal(0)
+                elif at_offer_price:
+                    # FG-131: the act moves by exactly the cumulative change of the offer line
+                    new_value = old_value + value_at(u_after, price) - value_at(u_after - delta, price)
+                else:
+                    # a pre-ACT-01 line at a free price: re-priced at the offer price, placed at
+                    # the end of what is acted on the offer line
+                    new_value = value_at(u_after, price) - value_at(u_after - nxt[olid], price)
+                if mine:
+                    apportion(mine, base_units=u_after - nxt[olid], total=new_value)
+                await add_value(tenant, olid, new_value - old_value, session)
+            totals = _totals(lines)
             new["lines"] = lines
             new.update({k: v for k, v in totals.items() if k != "currency" or v})
             new["source_offer_ids"] = sorted({ln["offer_id"] for ln in lines})

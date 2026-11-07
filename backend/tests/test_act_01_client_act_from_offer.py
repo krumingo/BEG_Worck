@@ -283,6 +283,18 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 return round(total, 4)
             return tc.portal.call(q)
 
+        def value_on(lkey) -> float:
+            """Σ line_total of every act on one offer line (Decimal, to the cent)."""
+            from decimal import Decimal
+            async def q():
+                total = Decimal(0)
+                async for a in op_db.client_acts.find({"org_id": fx["A"]["tenant_id"]}):
+                    for ln in a.get("lines") or []:
+                        if ln.get("offer_line_id") == i[lkey]:
+                            total += Decimal(str(ln.get("line_total") or 0))
+                return float(total)
+            return tc.portal.call(q)
+
         def count(coll, flt=None) -> int:
             return tc.portal.call(lambda: op_db[coll].count_documents(flt or {}))
 
@@ -605,6 +617,37 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 reindex()               # the dropped collections lost their indexes
                 return out
             scenario("fresh_tenant", fresh_tenant)
+            # 31. FG-131 (addendum C): cumulative rounding — acts on a line add up to exactly
+            #     round(quantity x 12.345); never 1234.51 for 1234.50
+            def cumulative():
+                parts = [post_act(act_body(line("LD", n))) for n in (33, 33, 34)]
+                three = {"statuses": [p_["status"] for p_ in parts],
+                         "values": [p_["body"]["lines"][0]["line_total"]
+                                    if isinstance(p_["body"], dict) and p_["body"].get("lines")
+                                    else None for p_ in parts],
+                         "sum": value_on("LD"), "acted": acts_on("LD")}
+                restore()
+                ones = [post_act(act_body(line("LD", 1)))["status"] for _ in range(100)]
+                hundred = {"statuses": sorted(set(ones)), "sum": value_on("LD"),
+                           "acted": acts_on("LD")}
+                restore()
+                conc = concurrent([act_body(line("LD", 10)) for _ in range(10)])
+                concurrent_ = {"statuses": sorted(x["status"] for x in conc),
+                               "sum": value_on("LD"), "acted": acts_on("LD")}
+                restore()
+                a1 = post_act(act_body(line("LD", 33)))
+                a2 = post_act(act_body(line("LD", 33)))
+                a1_id = a1["body"].get("id") if isinstance(a1["body"], dict) else None
+                down = call("PUT", "/api/client-acts/%s" % a1_id, body={"lines": [line("LD", 30)]})
+                after_down = {"sum": value_on("LD"), "acted": acts_on("LD")}
+                up = call("PUT", "/api/client-acts/%s" % a1_id, body={"lines": [line("LD", 41)]})
+                last = post_act(act_body(line("LD", 26)))               # 41 + 33 + 26 = 100
+                edits = {"statuses": [a1["status"], a2["status"], down["status"], up["status"],
+                                      last["status"]],
+                         "after_down": after_down, "sum": value_on("LD"), "acted": acts_on("LD")}
+                return {"three": three, "hundred": hundred, "concurrent": concurrent_,
+                        "edits": edits}
+            scenario("cumulative_rounding", cumulative)
             # 24. the answer shows contracted / acted / remaining per line
             scenario("line_view", lambda: post_act(act_body(line("L1", 3))))
             results["modes"][mode] = res
@@ -989,6 +1032,23 @@ def test_a_fresh_tenant_takes_concurrent_first_acts_without_errors(r):
     statuses = sorted(x["status"] for x in f["big"])
     assert statuses == [201] + [409] * 9, f["big"]
     assert f["big_acted"] == 10.0
+
+
+def test_acts_on_a_line_add_up_to_exactly_the_offer_line_value(r):
+    """FG-131 (addendum C): value = round(cum after x p) - round(cum before x p)."""
+    c = r["cumulative_rounding"]
+    t = c["three"]
+    assert t["statuses"] == [201, 201, 201], t
+    assert t["values"] == [407.39, 407.38, 419.73], t            # not 407.39 + 407.39 + 419.73
+    assert t["sum"] == 1234.5 and t["acted"] == 100.0, t
+    h = c["hundred"]
+    assert h["statuses"] == [201] and h["sum"] == 1234.5 and h["acted"] == 100.0, h
+    k = c["concurrent"]
+    assert k["statuses"] == [201] * 10 and k["sum"] == 1234.5 and k["acted"] == 100.0, k
+    e = c["edits"]
+    assert e["statuses"] == [201, 201, 200, 200, 201], e
+    assert e["after_down"]["acted"] == 63.0 and e["after_down"]["sum"] == 777.74, e  # round(63 x p)
+    assert e["sum"] == 1234.5 and e["acted"] == 100.0, e
 
 
 # ── correction ─────────────────────────────────────────────────────────────────────
