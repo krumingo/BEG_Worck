@@ -967,9 +967,9 @@ def test_23_the_client_sees_only_the_combined_unit_price(monkeypatch, backend, m
         assert r.status_code == 200 and not any(k in r.text for k in INTERNAL_COST_KEYS)
 
         # the offer PDF (the document sent to the client) has no material/labour columns
+        # OFF79-06: never skipped — reportlab and pdfplumber are pinned in requirements.txt,
+        # so a missing one fails here instead of hiding the R43 check
         p = await c.get("/api/offers/o1/pdf", headers=hdr("admin-a"))
-        if p.status_code == 500 and "reportlab" in p.text:
-            pytest.skip("reportlab not installed")
         assert p.status_code == 200, p.text[:300]
         import io
         import pdfplumber
