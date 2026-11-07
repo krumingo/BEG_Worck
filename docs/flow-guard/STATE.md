@@ -8,7 +8,7 @@
 |---|---|---|---|
 | `main` | `0f870c3` | 9 | merge PM-01 (#68), ST-02 (#67), AUTH-01/02 (#56). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7), FLOW-020 (8), FLOW-021 (9) |
 | #55 `task5c/live-ops-01-canonical-stock-core` | `8025871` | 9 | склад: FLOW-009/020/008, Р10/Р11/Р13 |
-| #56 `claude/auth-owner-recovery-forgot-password-sfv359` | `3234446` | 9 | слят в main (`0f870c3`); auth: FLOW-002/040, Р6. Изостава от main (база `c0e34e1`) |
+| #56 `claude/auth-owner-recovery-forgot-password-sfv359` | `3234446` | 9 | слят в main (`0f870c3`); auth: FLOW-002/040, Р6, Р19 (D-16) |
 | #67 `claude/st-02-staging-stack` | `675faba` | 4 | слят в main (`35ae10b`) |
 | #68 `claude/pm-01-permission-matrix` | `4e20084` | 3 | слят в main (`8e3b190`) |
 | #69 `claude/sec-01-money-write-permissions` | `7300864` | 5 | SEC-01 + C01 + C02 + SEC-R1 + C03 |
