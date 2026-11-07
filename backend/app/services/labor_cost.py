@@ -455,13 +455,14 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
 
 async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
                                actor_id: str, reason: str,
-                               collection: str = "employee_daily_reports") -> int:
+                               collection: str = "employee_daily_reports", bump: bool = True) -> int:
     """LAB-01-D (FG-72): any change or reset of a report bumps its ``report_version`` and
     voids every labor approval of it. The approval records stay (no delete), marked void."""
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
-    await tenant.collection(collection).update_one(
-        {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}})
+    if bump:  # LAB-01-M: a reset bumps the version inside its own compare-and-set
+        await tenant.collection(collection).update_one(
+            {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}})
     res = await tenant.labor_quantity_approvals.update_many(
         {"org_id": org_id, "report_id": report_id, "status": "approved"},
         {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}})
