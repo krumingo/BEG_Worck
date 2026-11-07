@@ -4246,3 +4246,31 @@ The 3 SEC-01 failures are merge-time expectation updates, not a regression. Each
 The permission gates are intact: `require_money_write` count is 2/2 in `full_cost.py` and 1/1 in `overhead.py`, and PM-01 passes.
 
 **Action for whichever of #69 / #74 merges second:** update the SEC-01 c01 / c02 / c03 expected write sets for ohcompute (+`audit_events`, +`overhead_period_locks`) and oh_alloc (no write; or drop it from the money-write list, since it is read-only now).
+
+### #79 @ `ed68cb9` (OFF79-04 compare-and-swap sweep) — provisional PASS on probes
+
+`probes/off01` O1–O12 × 3 modes: **207 passed**.
+
+| Case | Result |
+|---|---|
+| O10 VAT PUT ∥ send ×15 | always consistent; Sent equals its snapshot (1090 at VAT 9, or 1200 at VAT 20) |
+| O8 restore ∥ send | never a mismatch |
+| O11 lines PUT ∥ new-version of a Draft ×10 | the new version copies the final lines (or 409) |
+| O12 reject ∥ new-version ×10 | consistent (Rejected, or Rejected then Superseded) |
+
+- **OFF79-04 resolved.** The header PUT, lines PUT and new-version now each make one compare-and-swap with `updated_at`.
+- Observation: a public GET of the review page writes `updated_at` on a Sent offer, so a new-version that read the offer before the client viewed it gets 409 `OFFER_STATE_CHANGED`. This is benign; the user retries.
+- Gates: `b79b` (running). Pending addenda FG-135..139.
+
+### #71 @ `30a8c22` (FG-141) — static review
+
+`is_money_metric()` is a **name heuristic that fails open**. It treats a metric as money only when it matches eur / amount / cost / price / spent / budget / … and not pct / hours / days / count.
+
+| Classified as money (threshold hidden) | Classified as NOT money (**threshold shown to non-finance**) |
+|---|---|
+| `labor_cost`, `amount_eur`, `spend_eur` | `total_spend`, `expenses`, `overhead_total`, `paid_total`, `outstanding`, `debt`, `cash`, `fee`, `receivables`, `deficit`, `overspend` |
+
+The metric is free admin text, and `alarm_engine` dispatches on the rule type, not the metric name.
+
+- **SEC71-06 (medium):** fail closed instead. Show the threshold only for an allowlist of metrics `alarm_engine` actually reads as % / hours / days / count (e.g. `burn_pct`, `progress_pct`, overtime hours, days left), or decide by rule `type`. Hide it for everything else.
+- Runtime: `b71d` (bisect probe, sec02, gates; starts after `b55c`).
