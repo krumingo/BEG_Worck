@@ -4428,3 +4428,31 @@ Re-run after the mongod crash, on the recreated rs1.
 | R0 | 814 |
 
 The merge with main conflicts in the same 3 files as before: `data_access.py`, A1 / A2B inventories. FG-140 (invoice edit ∥ send / pay) is pending as the next head.
+
+### #79 @ `5d17063` gates — PASS (with OFF79-06 low)
+
+| Gate | Result |
+|---|---|
+| off01 + audit_probe | 225 + **3 failed** → **228** once `pdfplumber` was installed |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The PM-01 diff is only `+cancel`; the merge with main is clean.
+
+- **OFF79-06 (low):** `test_23_the_client_sees_only_the_combined_unit_price` imports `pdfplumber`, which is **not in `backend/requirements.txt`**. In a clean environment (CI / Codex) the R43 PDF test fails with `ModuleNotFoundError` in all 3 modes. Fix: add `pdfplumber` (pinned) to the requirements, not an importorskip. A skip would hide the R43 PDF check.
+- Open: OFF79-05 (medium, fresh-tenant `audit_logs` race).
+
+### #77 @ `2cc1147` gates — **full PASS**
+
+| Gate | Result |
+|---|---|
+| act01 | 113 |
+| PAY + W0-04 | 700 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main is clean.
