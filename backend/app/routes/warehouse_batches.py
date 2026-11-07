@@ -106,6 +106,7 @@ async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
 # ── Create batch ──
 
 @router.post("/warehouse/batches", status_code=201)
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)):
     if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")

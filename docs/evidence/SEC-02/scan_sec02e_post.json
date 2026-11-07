@@ -1,0 +1,1199 @@
+{
+ "calls": 4575,
+ "roles": [
+  "requester",
+  "technician",
+  "warehousekeeper",
+  "driver",
+  "viewer"
+ ],
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "hits": {
+  "POST /api/budget-freezes/{project_id}": {
+   "off/requester": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "off/technician": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "off/warehousekeeper": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "off/driver": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "off/viewer": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "shadow/requester": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "shadow/technician": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "shadow/warehousekeeper": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "shadow/driver": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "shadow/viewer": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "enforce/requester": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "enforce/technician": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "enforce/warehousekeeper": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "enforce/driver": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ],
+   "enforce/viewer": [
+    ".packages[].labor_budget_total",
+    ".totals.labor_budget",
+    ".totals.total_budget"
+   ]
+  },
+  "POST /api/client-acts/from-offer/{offer_id}": {
+   "off/requester": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "off/technician": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "off/warehousekeeper": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "off/driver": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "off/viewer": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "shadow/requester": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "shadow/technician": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "shadow/warehousekeeper": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "shadow/driver": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "shadow/viewer": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "enforce/requester": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "enforce/technician": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "enforce/warehousekeeper": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "enforce/driver": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ],
+   "enforce/viewer": [
+    ".lines[].unit_price",
+    ".vat_amount",
+    ".vat_percent"
+   ]
+  },
+  "POST /api/extra-works/ai-proposal": {
+   "off/requester": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "off/technician": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "off/warehousekeeper": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "off/driver": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "off/viewer": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "shadow/requester": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "shadow/technician": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "shadow/warehousekeeper": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "shadow/driver": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "shadow/viewer": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "enforce/requester": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "enforce/technician": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "enforce/warehousekeeper": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "enforce/driver": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ],
+   "enforce/viewer": [
+    ".hourly_info.hourly_rate",
+    ".hourly_info.min_job_price",
+    ".pricing.base_labor_price",
+    ".pricing.base_material_price",
+    ".pricing.labor_price_per_unit",
+    ".pricing.material_price_per_unit",
+    ".pricing.total_price_per_unit"
+   ]
+  },
+  "POST /api/offers/{offer_id}/send": {
+   "off/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].unit_price"
+   ],
+   "shadow/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].unit_price"
+   ],
+   "enforce/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].unit_price"
+   ]
+  },
+  "POST /api/price-modifiers/calculate": {
+   "off/requester": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "off/technician": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "off/warehousekeeper": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "off/driver": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "off/viewer": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "shadow/requester": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "shadow/technician": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "shadow/warehousekeeper": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "shadow/driver": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "shadow/viewer": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "enforce/requester": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "enforce/technician": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "enforce/warehousekeeper": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "enforce/driver": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ],
+   "enforce/viewer": [
+    ".base_cost",
+    ".breakdown[].value",
+    ".final_price",
+    ".modifiers_applied.profit_pct"
+   ]
+  },
+  "POST /api/projects/{project_id}/activity-budgets/calculate-all-snapshots": {
+   "off/requester": [
+    ".avg_daily_wage"
+   ],
+   "off/technician": [
+    ".avg_daily_wage"
+   ],
+   "off/warehousekeeper": [
+    ".avg_daily_wage"
+   ],
+   "off/driver": [
+    ".avg_daily_wage"
+   ],
+   "off/viewer": [
+    ".avg_daily_wage"
+   ],
+   "shadow/requester": [
+    ".avg_daily_wage"
+   ],
+   "shadow/technician": [
+    ".avg_daily_wage"
+   ],
+   "shadow/warehousekeeper": [
+    ".avg_daily_wage"
+   ],
+   "shadow/driver": [
+    ".avg_daily_wage"
+   ],
+   "shadow/viewer": [
+    ".avg_daily_wage"
+   ],
+   "enforce/requester": [
+    ".avg_daily_wage"
+   ],
+   "enforce/technician": [
+    ".avg_daily_wage"
+   ],
+   "enforce/warehousekeeper": [
+    ".avg_daily_wage"
+   ],
+   "enforce/driver": [
+    ".avg_daily_wage"
+   ],
+   "enforce/viewer": [
+    ".avg_daily_wage"
+   ]
+  },
+  "POST /api/resource-model/subcontractor-burden-preview": {
+   "off/requester": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "off/technician": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "off/warehousekeeper": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "off/driver": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "off/viewer": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "shadow/requester": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "shadow/technician": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "shadow/warehousekeeper": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "shadow/driver": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "shadow/viewer": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "enforce/requester": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "enforce/technician": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "enforce/warehousekeeper": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "enforce/driver": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ],
+   "enforce/viewer": [
+    ".burden_amount",
+    ".invoice_amount",
+    ".total_loaded_cost"
+   ]
+  },
+  "POST /api/resource-model/worker-cost-preview": {
+   "off/requester": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "off/technician": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "off/warehousekeeper": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "off/driver": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "off/viewer": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "shadow/requester": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "shadow/technician": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "shadow/warehousekeeper": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "shadow/driver": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "shadow/viewer": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "enforce/requester": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "enforce/technician": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "enforce/warehousekeeper": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "enforce/driver": [
+    ".insurance_cost",
+    ".total_cost"
+   ],
+   "enforce/viewer": [
+    ".insurance_cost",
+    ".total_cost"
+   ]
+  },
+  "POST /api/revenue-snapshots/from-offer/{offer_id}": {
+   "off/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "off/technician": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "off/warehousekeeper": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "off/driver": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "off/viewer": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "shadow/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "shadow/technician": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "shadow/warehousekeeper": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "shadow/driver": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "shadow/viewer": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "enforce/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "enforce/technician": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "enforce/warehousekeeper": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "enforce/driver": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ],
+   "enforce/viewer": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].sale_unit_price",
+    ".total_contract_value"
+   ]
+  },
+  "POST /api/sites/{site_id}/pulse/generate": {
+   "off/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "off/technician": [
+    ".budget_snapshot.total_budget"
+   ],
+   "off/warehousekeeper": [
+    ".budget_snapshot.total_budget"
+   ],
+   "off/driver": [
+    ".budget_snapshot.total_budget"
+   ],
+   "off/viewer": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/technician": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/warehousekeeper": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/driver": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/viewer": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/technician": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/warehousekeeper": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/driver": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/viewer": [
+    ".budget_snapshot.total_budget"
+   ]
+  },
+  "POST /api/smr-analyses/from-offer/{offer_id}": {
+   "off/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].material_cost_per_unit",
+    ".lines[].original_price",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ]
+  },
+  "POST /api/smr-analyses/{analysis_id}/recalculate": {
+   "off/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ]
+  },
+  "POST /api/smr-analyses/{analysis_id}/recalculate-with-modifiers": {
+   "off/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "off/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "shadow/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/requester": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/technician": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/warehousekeeper": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/driver": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ],
+   "enforce/viewer": [
+    ".lines[].final_price_per_unit",
+    ".lines[].labor_price_per_unit",
+    ".lines[].modifiers_applied.profit_pct",
+    ".lines[].total_cost_per_unit",
+    ".totals.cost_total"
+   ]
+  },
+  "POST /api/supplier-invoices": {
+   "off/requester": [
+    ".vat_percent"
+   ],
+   "shadow/requester": [
+    ".vat_percent"
+   ],
+   "enforce/requester": [
+    ".vat_percent"
+   ]
+  },
+  "PUT /api/client-acts/{act_id}": {
+   "off/requester": [
+    ".lines[].unit_price"
+   ],
+   "off/technician": [
+    ".lines[].unit_price"
+   ],
+   "off/warehousekeeper": [
+    ".lines[].unit_price"
+   ],
+   "off/driver": [
+    ".lines[].unit_price"
+   ],
+   "off/viewer": [
+    ".lines[].unit_price"
+   ],
+   "shadow/requester": [
+    ".lines[].unit_price"
+   ],
+   "shadow/technician": [
+    ".lines[].unit_price"
+   ],
+   "shadow/warehousekeeper": [
+    ".lines[].unit_price"
+   ],
+   "shadow/driver": [
+    ".lines[].unit_price"
+   ],
+   "shadow/viewer": [
+    ".lines[].unit_price"
+   ],
+   "enforce/requester": [
+    ".lines[].unit_price"
+   ],
+   "enforce/technician": [
+    ".lines[].unit_price"
+   ],
+   "enforce/warehousekeeper": [
+    ".lines[].unit_price"
+   ],
+   "enforce/driver": [
+    ".lines[].unit_price"
+   ],
+   "enforce/viewer": [
+    ".lines[].unit_price"
+   ]
+  },
+  "PUT /api/execution-packages/{pkg_id}": {
+   "off/requester": [
+    ".labor_budget_total"
+   ],
+   "off/technician": [
+    ".labor_budget_total"
+   ],
+   "off/warehousekeeper": [
+    ".labor_budget_total"
+   ],
+   "off/driver": [
+    ".labor_budget_total"
+   ],
+   "off/viewer": [
+    ".labor_budget_total"
+   ],
+   "shadow/requester": [
+    ".labor_budget_total"
+   ],
+   "shadow/technician": [
+    ".labor_budget_total"
+   ],
+   "shadow/warehousekeeper": [
+    ".labor_budget_total"
+   ],
+   "shadow/driver": [
+    ".labor_budget_total"
+   ],
+   "shadow/viewer": [
+    ".labor_budget_total"
+   ],
+   "enforce/requester": [
+    ".labor_budget_total"
+   ],
+   "enforce/technician": [
+    ".labor_budget_total"
+   ],
+   "enforce/warehousekeeper": [
+    ".labor_budget_total"
+   ],
+   "enforce/driver": [
+    ".labor_budget_total"
+   ],
+   "enforce/viewer": [
+    ".labor_budget_total"
+   ]
+  },
+  "PUT /api/offers/{offer_id}": {
+   "off/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].unit_price"
+   ],
+   "shadow/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].unit_price"
+   ],
+   "enforce/requester": [
+    ".lines[].labor_unit_cost",
+    ".lines[].material_unit_cost",
+    ".lines[].unit_price"
+   ]
+  },
+  "POST /api/warehouse/batches": {
+   "off/warehousekeeper": [
+    ".unit_cost"
+   ],
+   "shadow/warehousekeeper": [
+    ".unit_cost"
+   ],
+   "enforce/warehousekeeper": [
+    ".unit_cost"
+   ]
+  }
+ },
+ "allowed_budget_view": {},
+ "judged_not_money": {},
+ "own_record": {}
+}

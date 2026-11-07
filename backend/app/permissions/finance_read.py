@@ -246,6 +246,32 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/pulse/summary", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/sites/{site_id}/pulse", MONEY_VALUES_READ, R20_5B, CANON_B43 + "; R31 (no per-worker money); B-D2"),
     _E("GET", "/api/sites/{site_id}/pulse/range", MONEY_VALUES_READ, R20_5B, CANON_B43 + "; R31 (no per-worker money); B-D2"),
+    # SEC-02-E (audit SEC02D-1): the pulse generators
+    _E("POST", "/api/sites/{site_id}/pulse/generate", "finance.site_pulse_generate.execute", R20_2B,
+       CANON_BUDGET + "; R31; audit SEC02D-1 (response = the pulse view)"),
+    _E("POST", "/api/pulse/generate-all", "finance.pulse_generate_all.execute", R20_1,
+       CANON_COMPANY + "; audit SEC02D-1 (regenerates every site's stored pulse)"),
+    # SEC-02-E: the POST/PUT sweep (tools/sec02_money_scan_post.py) — routes that answered a
+    # non-finance role with money. Money computations / money documents -> finance only.
+    _E("POST", "/api/price-modifiers/calculate", "finance.price_modifier_calculation.execute", R20_1, CANON_PRICING + "; SEC-02-E sweep"),
+    _E("POST", "/api/resource-model/worker-cost-preview", "finance.worker_cost_preview.execute", R20_1, CANON_PAY + "; SEC-02-E sweep"),
+    _E("POST", "/api/resource-model/subcontractor-burden-preview", "finance.subcontractor_burden_preview.execute", R20_1, CANON_SUBCONTRACT + "; SEC-02-E sweep"),
+    _E("POST", "/api/smr-analyses/{analysis_id}/recalculate", "finance.smr_analysis_recalculation.execute", R20_2, CANON_PRICING + "; SEC-02-E sweep"),
+    _E("POST", "/api/smr-analyses/{analysis_id}/recalculate-with-modifiers", "finance.smr_analysis_modifier_recalculation.execute", R20_2, CANON_PRICING + "; SEC-02-E sweep"),
+    _E("POST", "/api/smr-analyses/from-offer/{offer_id}", "finance.smr_analysis_from_offer.execute", R20_2, CANON_PRICING + "; SEC-02-E sweep"),
+    _E("POST", "/api/revenue-snapshots/from-offer/{offer_id}", "finance.revenue_snapshot_from_offer.execute", R20_2, CANON_PROJECT + "; SEC-02-E sweep"),
+    _E("POST", "/api/client-acts/from-offer/{offer_id}", "finance.client_act_from_offer.execute", R20_2, CANON_PROJECT + "; SEC-02-E sweep; SEC-01-C02-D4"),
+    _E("PUT", "/api/client-acts/{act_id}", "finance.client_act.update", R20_2, CANON_PROJECT + "; SEC-02-E sweep; SEC-01-C02-D4"),
+    _E("PUT", "/api/execution-packages/{pkg_id}", "finance.execution_package.update", R20_2, CANON_PROJECT + "; SEC-02-E sweep; SEC-01-C02-D4"),
+    # budget writes: finance + the Technical Manager on his project (budgets only in the answer)
+    _E("POST", "/api/budget-freezes/{project_id}", "finance.budget_freeze.execute", R20_2B, CANON_BUDGET + "; SEC-02-E sweep"),
+    # mixed answers -> money stripped, the route keeps its own rule
+    _E("POST", "/api/extra-works/ai-proposal", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; SEC-02-E sweep"),
+    _E("POST", "/api/projects/{project_id}/activity-budgets/calculate-all-snapshots", MONEY_VALUES_READ, R20_5M, CANON_PAY + "; SEC-02-E sweep (avg daily wage)"),
+    _E("POST", "/api/projects/{project_id}/activity-budgets/{budget_id}/calculate-snapshot", MONEY_VALUES_READ, R20_5M, CANON_PAY + "; SEC-02-E sweep"),
+    _E("POST", "/api/offers/{offer_id}/send", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; SEC-02-E sweep"),
+    _E("PUT", "/api/offers/{offer_id}", MONEY_VALUES_READ, R20_5M, CANON_D1 + "; SEC-02-E sweep"),
+    _E("POST", "/api/warehouse/batches", MONEY_VALUES_READ, R20_5M, CANON_WAREHOUSE + "; SEC-02-E sweep (echo of the entered unit cost)"),
     _E("GET", "/api/ocr-invoice", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/projects/{project_id}/activity-reports/{smr_type}", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/labor-warnings/{project_id}", MONEY_VALUES_READ, R20_5M,
@@ -280,6 +306,8 @@ SCAN_JUDGED_NOT_MONEY: Dict[str, str] = {
                           "not the tenant's money",
     "/api/organization": "vat_percent — the tax RATE of the company, no amount",
     "/api/projects/{project_id}/invoice-context": "default_vat_rate — a tax rate, no amount",
+    "POST /api/supplier-invoices": "vat_percent — the tax RATE echoed from the caller's own "
+                                   "input; no amount",
 }
 # SEC-02-B: a role reading ITS OWN record (FLOW-037 §3.4 forbids other people's pay only).
 SCAN_OWN_RECORD_PATHS = {"/api/employees/{user_id}", "/api/employees/{user_id}/dashboard"}

@@ -281,6 +281,7 @@ async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
 # ── AI Proposal Endpoint (Hybrid) ──────────────────────────────────
 
 @router.post("/extra-works/ai-proposal")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def get_ai_proposal_endpoint(data: AIProposalRequest, user: dict = Depends(require_m2)):
     """Generate AI proposal using hybrid provider (LLM → rule-based fallback)"""
     org_rates = await get_org_worker_rates(user["org_id"])

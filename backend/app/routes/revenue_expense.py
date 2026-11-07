@@ -145,7 +145,11 @@ async def get_client_act(
 
 
 @router.put("/client-acts/{act_id}")
-async def update_client_act(act_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_client_act(
+    act_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.update", module="M2", resource_type="client_act")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
@@ -200,7 +204,11 @@ async def confirm_client_act(
 
 
 @router.post("/client-acts/from-offer/{offer_id}", status_code=201)
-async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(require_m2)):
+async def create_act_from_offer(
+    offer_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_from_offer.execute", module="M2", resource_type="client_act_from_offer")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Generate client act lines from accepted offer"""
     tenant = _tenant(user)
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
@@ -419,7 +427,11 @@ async def list_execution_packages(
 
 
 @router.put("/execution-packages/{pkg_id}")
-async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_execution_package(
+    pkg_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.update", module="M2", resource_type="execution_package")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:

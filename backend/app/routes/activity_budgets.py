@@ -412,6 +412,7 @@ async def get_forecast(budget_id: str, user: dict = Depends(get_current_user)):
 # ── Snapshot Calculation ───────────────────────────────────────────
 
 @router.post("/projects/{project_id}/activity-budgets/{budget_id}/calculate-snapshot")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depends(get_current_user)):
     """Calculate and persist man-hours/man-days snapshot for a budget line."""
     tenant = _tenant(user)
@@ -445,6 +446,7 @@ async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depen
 
 
 @router.post("/projects/{project_id}/activity-budgets/calculate-all-snapshots")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_current_user)):
     """Calculate snapshots for ALL budget lines in a project."""
     tenant = _tenant(user)

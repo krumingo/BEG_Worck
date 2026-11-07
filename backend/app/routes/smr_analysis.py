@@ -351,7 +351,11 @@ async def delete_line(analysis_id: str, line_id: str, user: dict = Depends(requi
 # ── Recalculate ────────────────────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/recalculate")
-async def recalculate(analysis_id: str, user: dict = Depends(require_m2)):
+async def recalculate(
+    analysis_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.smr_analysis_recalculation.execute", module="M2", resource_type="smr_analysis_recalculation")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]})
     if not doc:
@@ -893,7 +897,11 @@ async def diff_versions(analysis_id: str, version: int, user: dict = Depends(req
 # ── Create KSS from Offer ─────────────────────────────────────────
 
 @router.post("/smr-analyses/from-offer/{offer_id}", status_code=201)
-async def create_from_offer(offer_id: str, user: dict = Depends(require_m2)):
+async def create_from_offer(
+    offer_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.smr_analysis_from_offer.execute", module="M2", resource_type="smr_analysis_from_offer")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]}, {"_id": 0})
     if not offer:

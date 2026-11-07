@@ -14,7 +14,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.permissions.money_write import strip_money_for_non_finance
+from app.permissions.money_write import strip_money_for_non_finance, require_project_budget_read
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -31,7 +31,11 @@ router = APIRouter(tags=["Budget Freeze / Progress"])
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/budget-freezes/{project_id}", status_code=201)
-async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
+async def create_budget_freeze(
+    project_id: str,
+    _sec02: dict = Depends(require_project_budget_read(
+        "finance.budget_freeze.execute", module="M2", resource_type="budget_freeze")),  # SEC-02 (R20-2B): before any read
+    data: dict = {}, user: dict = Depends(require_m2)):
     """Freeze current budget state for all execution packages in a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]

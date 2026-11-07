@@ -41,6 +41,10 @@ async def get_expected_actual(
     date_to: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    # SEC-02-E (audit SEC02D-1 b; R31): a date window lets two calls differ by one day's
+    # labor — one worker's pay. Without the finance right the view is the whole project.
+    if not await money_values_visible(request, user):
+        date_from = date_to = None
     full = await build_expected_actual(user["org_id"], project_id, date_from, date_to)
     return await _budget_view(request, user, full, project_id)
 

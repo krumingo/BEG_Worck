@@ -112,6 +112,11 @@ async def _project_id_from_path(request: Request) -> Optional[str]:
     return value if isinstance(value, str) and value else None
 
 
+async def _site_id_from_path(request: Request) -> Optional[str]:
+    value = request.path_params.get("site_id")       # SEC-02-E: a site IS a project
+    return value if isinstance(value, str) and value else None
+
+
 async def _project_id_from_body(request: Request) -> Optional[str]:
     try:
         payload: Any = await request.json()      # already read and cached by FastAPI
@@ -121,7 +126,8 @@ async def _project_id_from_body(request: Request) -> Optional[str]:
     return value if isinstance(value, str) and value else None
 
 
-_PROJECT_SOURCES = {"path": _project_id_from_path, "body": _project_id_from_body}
+_PROJECT_SOURCES = {"path": _project_id_from_path, "body": _project_id_from_body,
+                    "site": _site_id_from_path}
 
 
 def require_field_cost_write(action: str, *, module: str, resource_type: str,
@@ -181,10 +187,13 @@ def require_finance_read(action: str, *, module: Optional[str], resource_type: s
     return dependency
 
 
-def require_project_budget_read(action: str, *, module: Optional[str], resource_type: str):
-    """R20-2B: finance roles everywhere; SiteManager only on a current member project."""
+def require_project_budget_read(action: str, *, module: Optional[str], resource_type: str,
+                                project_from: str = "path"):
+    """R20-2B: finance roles everywhere; SiteManager only on a current member project.
+    ``project_from="site"`` (SEC-02-E): the project is the ``{site_id}`` path parameter."""
     dependency = require_field_cost_write(action, module=module, resource_type=resource_type,
-                                          project_from="path", member_roles=("SiteManager",))
+                                          project_from=project_from,
+                                          member_roles=("SiteManager",))
     dependency.sec02_action = action
     dependency.sec01_rule = "R20-2B"
     return dependency
@@ -372,10 +381,15 @@ def strip_pulse_for_non_finance(fn):
                 n_day = len({w.get("worker_id") for w in pulse.get("workers") or []})
                 kept = {k: pulse[k] for k in ("smr_summary", "total_labor_cost") if k in pulse}
                 out.update(r31_view(kept, dict(day), n_day))
-                if "budget_snapshot" in pulse:        # cumulative: all workers of the site
-                    view = await r31_budget_view(user, site,
-                                                 {"budget_snapshot": pulse["budget_snapshot"]})
-                    out["budget_snapshot"] = view["budget_snapshot"]
+                if isinstance(pulse.get("budget_snapshot"), dict):
+                    # SEC-02-E (audit SEC02D-1 b): the snapshot is the site's CUMULATIVE
+                    # spent at generation time — two stored days differ by one day's labor,
+                    # i.e. one worker's pay on a single-worker day. The Technical Manager
+                    # keeps the budget and its status only; spent stays on the budget
+                    # screens (current, per SMR / project, R31 rules).
+                    snap = pulse["budget_snapshot"]
+                    out["budget_snapshot"] = {k: snap[k] for k in ("total_budget", "status")
+                                              if k in snap}
             out.pop("workers", None)
             return out
 

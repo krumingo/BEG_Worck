@@ -638,7 +638,9 @@ def test_no_other_route_carries_a_sec02_action():
     assert marked == {(e.method, e.path) for e in FINANCE_READS
                       if e.rule not in (R20_5, R20_5M, R20_5B)}
     stripped = {k for k, r in _routes().items() if getattr(r.endpoint, "sec02_strips_money", False)}
-    assert stripped == {(e.method, e.path) for e in FINANCE_READS if e.rule in (R20_5M, R20_5B)}
+    # SEC-02-E: the pulse generator is guarded (R20-2B) AND answers with the pulse view.
+    assert stripped == {(e.method, e.path) for e in FINANCE_READS if e.rule in (R20_5M, R20_5B)} \
+        | {("POST", "/api/sites/{site_id}/pulse/generate")}
 
 
 def test_the_registry_has_one_action_per_endpoint_and_known_rules():
@@ -683,9 +685,9 @@ def test_the_catalog_grants():
             assert not acts & reads, (rid, rip)
             assert bool(acts & PROJECT_BUDGET_READ_ACTIONS) == (rid == "site_manager"), (rid, rip)
     # Only the export is audited on denial (a significant verb); plain reads are not.
-    assert {a for a in reads | PROJECT_BUDGET_READ_ACTIONS if is_significant_action(a)} == \
-        {"finance.company_finance.export", "finance.smr_analysis.export",
-         "finance.offer_document.export", "finance.offer_spreadsheet.export"}
+    # A plain read is not audited on denial; an export / execute / update (SEC-02-A/E) is.
+    for a in reads | PROJECT_BUDGET_READ_ACTIONS:
+        assert is_significant_action(a) == (not a.endswith(".read")), a
     # SEC-02-A (D9): the employee file — finance roles and the Technical Manager only.
     assert {rid for rid, acts in PERMISSION_MATRIX.items() if EMPLOYEE_FILE_ACTION in acts} == \
         {"owner", "admin", "accountant", "site_manager"}
@@ -916,6 +918,43 @@ def _real_refusal() -> str:
         return _pm01()._real_refusal()
     except Exception as exc:                                   # noqa: BLE001
         return "refused: %s" % exc
+
+
+@pytest.mark.skipif(bool(_real_refusal()), reason=_real_refusal() or "ok")
+def test_the_audit_pulse_generate_probe_finds_nothing():
+    """SEC-02-E: the audit's probe docs/audit/probes/sec02/probe_sec02_d_pulse_generate.py
+    (claude/audit-log; vendored unchanged as tools/audit_probe_sec02_d_pulse_generate.py),
+    off and enforce: (a) a non-member Warehousekeeper / a Viewer get no per-worker labor
+    cost from POST /sites/{id}/pulse/generate; (b) the member SiteManager cannot derive a
+    single-worker day's pay from two stored daily pulses."""
+    probe = BACKEND / "tools" / "audit_probe_sec02_d_pulse_generate.py"
+    for mode in ("off", "enforce"):
+        env = dict(os.environ, MONGO_URL=os.environ["W0_03_REAL_MONGO_URL"], PROBE_MODE=mode,
+                   PYTHONPATH=str(BACKEND))
+        out = subprocess.run([sys.executable, str(probe)], cwd=str(BACKEND), env=env,
+                             capture_output=True, text=True, timeout=600)
+        assert out.returncode == 0, out.stderr[-2000:]
+        assert "FAILS: none" in out.stdout, out.stdout[-2000:]
+        assert "pulse/generate → 403" in out.stdout, out.stdout[-2000:]
+
+
+def test_the_post_scan_finds_no_money_for_non_finance_roles():
+    """SEC-02-E: tools/sec02_money_scan_post.py — every POST/PUT x 5 non-finance roles x
+    3 modes, database restored after each call: no answer with money, except the Technical
+    Manager's budget view on his own project and judged non-money rates."""
+    from app.permissions.finance_read import by_route, SCAN_JUDGED_NOT_MONEY
+    scan = json.loads((EVIDENCE / "scan_sec02e_post.json").read_text(encoding="utf-8"))
+    assert scan["calls"] > 5000 and scan["modes"] == ["off", "shadow", "enforce"]
+    assert scan["hits"] == {}
+    reg = by_route()
+    for path, cells in scan["allowed_budget_view"].items():
+        method, p = path.split(" ", 1)
+        assert reg[(method, p)].rule in (R20_2B, R20_5B), path
+        assert {c.split("/")[1] for c in cells} == {"requester"}, (path, cells)
+        for keys in cells.values():
+            assert not any(re.search(r"worker|hourly_rate|daily_rate|spent|actual", k)
+                           for k in keys), (path, keys)
+    assert set(scan["judged_not_money"]) <= set(SCAN_JUDGED_NOT_MONEY)
 
 
 @pytest.mark.skipif(bool(_real_refusal()), reason=_real_refusal() or "ok")

@@ -220,6 +220,7 @@ async def get_offer(offer_id: str, user: dict = Depends(require_m2)):
 
 
 @router.put("/offers/{offer_id}")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(require_m2)):
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
@@ -294,6 +295,7 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
 
 
 @router.post("/offers/{offer_id}/send")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     offer = await _tenant(user).offers.get(offer_id)

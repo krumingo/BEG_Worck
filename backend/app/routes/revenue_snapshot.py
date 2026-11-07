@@ -32,7 +32,11 @@ DEFAULT_PROCUREMENT_LEAD_DAYS = 14
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/revenue-snapshots/from-offer/{offer_id}", status_code=201)
-async def create_revenue_snapshot(offer_id: str, user: dict = Depends(require_m2)):
+async def create_revenue_snapshot(
+    offer_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.revenue_snapshot_from_offer.execute", module="M2", resource_type="revenue_snapshot_from_offer")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Create a frozen revenue snapshot from an accepted offer"""
     tenant = _tenant(user)
     org_id = user["org_id"]

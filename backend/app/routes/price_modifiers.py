@@ -173,7 +173,11 @@ async def get_effective(
 # ── Calculate ──────────────────────────────────────────────────────
 
 @router.post("/price-modifiers/calculate")
-async def calculate_price(data: CalculateRequest, user: dict = Depends(require_m2)):
+async def calculate_price(
+    data: CalculateRequest,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.price_modifier_calculation.execute", module="M2", resource_type="price_modifier_calculation")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     eff = await get_effective_modifiers(user["org_id"], data.project_id)
     result = apply_modifiers_to_price(data.base_cost, eff["modifiers"])
     return result
@@ -182,7 +186,11 @@ async def calculate_price(data: CalculateRequest, user: dict = Depends(require_m
 # ── SMR Analysis Integration ──────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/recalculate-with-modifiers")
-async def recalculate_with_modifiers(analysis_id: str, user: dict = Depends(require_m2)):
+async def recalculate_with_modifiers(
+    analysis_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.smr_analysis_modifier_recalculation.execute", module="M2", resource_type="smr_analysis_modifier_recalculation")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Recalculate all lines using project-level price modifiers."""
     tenant = _tenant(user)
     from app.routes.smr_analysis import calc_line, calc_totals
