@@ -302,10 +302,13 @@ async def budget_view_visible(request: Request, user: dict, project_id: str) -> 
     return bool(decision.allowed)
 
 
-def strip_for_budget_view(fn):
+def strip_for_budget_view(fn=None, *, labor_source: str = "sessions"):
     """SEC-02-B (R20-5B, FG-43) decorator, under ``@router.get``: finance roles get the full
     response; a Technical Manager member of ``{project_id}`` gets budget + spent +
-    remaining without client / subcontractor prices; every other caller no money."""
+    remaining without client / subcontractor prices; every other caller no money.
+    ``labor_source`` (FG-63): where the screen's "spent" comes from (``LABOR_SOURCES``)."""
+    if fn is None:
+        return lambda f: strip_for_budget_view(f, labor_source=labor_source)
     import functools
     import inspect
     from fastapi.encoders import jsonable_encoder
@@ -324,11 +327,13 @@ def strip_for_budget_view(fn):
         body = jsonable_encoder(result)
         if await budget_view_visible(request, user, kwargs.get("project_id")):
             return await r31_budget_view(user, kwargs.get("project_id"),
-                                         without_keys(body, BUDGET_VIEW_HIDDEN_FIELDS))
+                                         without_keys(body, BUDGET_VIEW_HIDDEN_FIELDS),
+                                         source=labor_source)
         return strip_money(body)
 
     wrapper.__signature__ = sig.replace(parameters=params)
     wrapper.sec02_strips_money = True
+    wrapper.sec02_labor_source = labor_source
     wrapper.sec02_budget_view = True
     wrapper.sec02_keep = ()
     return wrapper
@@ -406,34 +411,80 @@ def strip_pulse_for_non_finance(fn):
     return wrapper
 
 
-async def project_labor_workers(user: dict, project_id: str):
-    """SEC-02-D (R31): distinct workers per SMR of a project, and of the whole project —
-    from the work sessions and the daily reports (both feed the "spent" figures)."""
+# SEC-02-E (FLOW Guard FG-63): the workers behind a "spent" figure are counted from the SAME
+# source, filter and date window as that figure — a wider count (all history, or another
+# source) could say "2+" while the money shown comes from one person.
+LABOR_SOURCES = ("sessions", "centralized", "daily_logs")
+
+
+def _window(field: str, date_from: Optional[str], date_to: Optional[str]) -> dict:
+    rng = {}
+    if date_from:
+        rng["$gte"] = "%sT00:00:00" % date_from
+    if date_to:
+        rng["$lte"] = "%sT23:59:59" % date_to
+    return {field: rng} if rng else {}
+
+
+async def project_labor_workers(user: dict, project_id: str, source: str = "sessions",
+                                date_from: Optional[str] = None,
+                                date_to: Optional[str] = None):
+    """Distinct workers per SMR, and of the whole project, behind a "spent" figure.
+
+    ``source`` — what the screen sums (same filters as its handler):
+      sessions     ended work sessions of the site (expected-actual, activities-overview,
+                   budget-health, the activity burn);
+      centralized  Draft/Submitted daily reports + ended, unflagged work sessions
+                   (centralized-reports/activities);
+      daily_logs   daily work log entries, SMR = the work type's activity type
+                   (activity-budget-summary).
+    ``date_from`` / ``date_to`` — the same window as the money, when the screen has one.
+    """
     from collections import defaultdict
     from app.tenancy.data_access import TenantData
     from app.permissions.finance_read import _norm
+    if source not in LABOR_SOURCES:
+        raise ValueError(source)
     tenant = TenantData.for_user(db, user)
     org = user["org_id"]
     by_smr, everyone = defaultdict(set), set()
-    async for s_ in tenant.work_sessions.find(
-            {"org_id": org, "site_id": project_id},
-            {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1}):
-        w = s_.get("worker_id")
-        if w:
-            everyone.add(w)
-            by_smr[_norm(s_.get("smr_type_id") or s_.get("smr_type"))].add(w)
-    async for r in tenant.employee_daily_reports.find(
-            {"org_id": org, "project_id": project_id},
-            {"_id": 0, "worker_id": 1, "smr_type": 1, "activity_type": 1}):
-        w = r.get("worker_id")
-        if w:
-            everyone.add(w)
-            by_smr[_norm(r.get("smr_type") or r.get("activity_type"))].add(w)
+
+    def add(worker, smr):
+        if worker:
+            everyone.add(worker)
+            by_smr[_norm(smr)].add(worker)
+
+    if source in ("sessions", "centralized"):
+        q = {"org_id": org, "site_id": project_id, "ended_at": {"$ne": None},
+             **_window("started_at", date_from, date_to)}
+        if source == "centralized":
+            q["is_flagged"] = {"$ne": True}
+        async for s_ in tenant.work_sessions.find(
+                q, {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1}):
+            add(s_.get("worker_id"), s_.get("smr_type_id") or s_.get("smr_type"))
+    if source == "centralized":
+        async for r in tenant.employee_daily_reports.find(
+                {"org_id": org, "project_id": project_id,
+                 "status": {"$in": ["Draft", "Submitted", "SUBMITTED"]}},
+                {"_id": 0, "worker_id": 1, "smr_type": 1, "activity_type": 1}):
+            add(r.get("worker_id"), r.get("smr_type") or r.get("activity_type"))
+    if source == "daily_logs":
+        types = {wt["id"]: wt async for wt in tenant.work_types.find({"org_id": org},
+                                                                     {"_id": 0})}
+        async for log in tenant.daily_work_logs.find(
+                {"org_id": org, "site_id": project_id}, {"_id": 0, "entries": 1,
+                                                         "work_type_id": 1}):
+            wt = types.get(log.get("work_type_id"), {})
+            smr = wt.get("activity_type", wt.get("name", "Общо"))
+            for e in log.get("entries") or []:
+                add(e.get("user_id"), smr)
     return dict(by_smr), len(everyone)
 
 
-async def r31_budget_view(user: dict, project_id: str, body):
-    """The Technical Manager's budget view of ``body`` (SEC-02-D)."""
+async def r31_budget_view(user: dict, project_id: str, body, *, source: str = "sessions",
+                          date_from: Optional[str] = None, date_to: Optional[str] = None):
+    """The Technical Manager's budget view of ``body`` (SEC-02-D), with the workers counted
+    from the money's own source and window (SEC-02-E, FG-63)."""
     from app.permissions.finance_read import r31_view
-    by_smr, n = await project_labor_workers(user, project_id)
+    by_smr, n = await project_labor_workers(user, project_id, source, date_from, date_to)
     return r31_view(body, by_smr, n)

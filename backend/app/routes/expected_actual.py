@@ -13,7 +13,8 @@ from app.services.expected_actual import build_expected_actual
 router = APIRouter(tags=["Expected vs Actual"])
 
 
-async def _budget_view(request: Request, user: dict, full: dict, project_id: str) -> dict:
+async def _budget_view(request: Request, user: dict, full: dict, project_id: str,
+                       date_from: Optional[str] = None, date_to: Optional[str] = None) -> dict:
     """SEC-02 (R20-2B). The Technical Manager sees budget + spent + remaining per SMR
     (activity_budgets.labor_budget vs the work-session cost) — never client prices. The
     SMR-group and location amounts are sums of smr_analyses final_total (the price to
@@ -28,7 +29,9 @@ async def _budget_view(request: Request, user: dict, full: dict, project_id: str
     out["client_price_fields_hidden"] = True
     # SEC-02-D (R31, audit SEC02C-1): nothing that gives one worker's pay.
     from app.permissions.money_write import r31_budget_view
-    return await r31_budget_view(user, project_id, out)
+    # FG-63: workers counted from the same source (ended work sessions) and window.
+    return await r31_budget_view(user, project_id, out, source="sessions",
+                                 date_from=date_from, date_to=date_to)
 
 
 @router.get("/projects/{project_id}/expected-actual")
@@ -46,7 +49,7 @@ async def get_expected_actual(
     if not await money_values_visible(request, user):
         date_from = date_to = None
     full = await build_expected_actual(user["org_id"], project_id, date_from, date_to)
-    return await _budget_view(request, user, full, project_id)
+    return await _budget_view(request, user, full, project_id, date_from, date_to)
 
 
 @router.get("/projects/{project_id}/expected-actual/compact")

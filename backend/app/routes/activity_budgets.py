@@ -171,7 +171,7 @@ async def delete_activity_budget(project_id: str, budget_id: str, user: dict = D
 
 
 @router.get("/projects/{project_id}/activity-budget-summary")
-@strip_for_budget_view   # SEC-02-B (R20-5B, FG-43)
+@strip_for_budget_view(labor_source="daily_logs")   # FG-63: spent = daily work log hours   # SEC-02-B (R20-5B, FG-43)
 async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_current_user)):
     """
     Get budget vs spent summary grouped by type/subtype.

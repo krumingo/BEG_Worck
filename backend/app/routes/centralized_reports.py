@@ -33,7 +33,7 @@ async def get_activities_projection(
     # SEC-02-D (R31, audit SEC02C-1): the Technical Manager's view gives no one's pay.
     from app.permissions.money_write import money_values_visible, r31_budget_view
     if not await money_values_visible(request, user):
-        out = await r31_budget_view(user, project_id, out)
+        out = await r31_budget_view(user, project_id, out, source="centralized")  # FG-63
     return out
 
 

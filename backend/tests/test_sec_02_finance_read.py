@@ -763,7 +763,7 @@ def test_without_keys_and_the_budget_view(monkeypatch):
         return True
     monkeypatch.setattr(expected_actual, "money_values_visible", no)
 
-    async def r31_as_is(_u, _p, body):        # the R31 step is tested on its own below
+    async def r31_as_is(_u, _p, body, **_k):  # the R31 step is tested on its own below
         return body
     monkeypatch.setattr(money_write, "r31_budget_view", r31_as_is)
     v = asyncio.run(expected_actual._budget_view(None, {}, full, "P1"))
@@ -821,6 +821,75 @@ def test_the_money_key_rule():
             "unit": "m2"}]}], "total": 1, "page": 1}
     assert strip_money(body) == {"items": [{"name": "A", "qty": 2, "lines": [{"unit": "m2"}]}],
                                  "total": 1, "page": 1}
+
+
+def _fake_tenant(collections):
+    """A minimal async TenantData stand-in: find(query) with equality, $ne, $in, $gte, $lte."""
+    def match(doc, q):
+        for k, cond in q.items():
+            v = doc.get(k)
+            if isinstance(cond, dict):
+                if "$ne" in cond and v == cond["$ne"]:
+                    return False
+                if "$in" in cond and v not in cond["$in"]:
+                    return False
+                if "$gte" in cond and (v is None or v < cond["$gte"]):
+                    return False
+                if "$lte" in cond and (v is None or v > cond["$lte"]):
+                    return False
+            elif v != cond:
+                return False
+        return True
+
+    class Coll:
+        def __init__(self, docs):
+            self.docs = docs
+
+        def find(self, q, _p=None):
+            docs = [d for d in self.docs if match(d, q)]
+
+            async def gen():
+                for d in docs:
+                    yield d
+            return gen()
+
+    class T:
+        pass
+    t = T()
+    for name in ("work_sessions", "employee_daily_reports", "daily_work_logs", "work_types"):
+        setattr(t, name, Coll(collections.get(name, [])))
+    return t
+
+
+def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
+    """SEC-02-E (FLOW Guard FG-63; R31): the 2+ rule uses the workers of the SAME source,
+    filter and window as the "spent" figure."""
+    import asyncio
+    from app.permissions import money_write
+    from app.tenancy import data_access
+    org, p = "T", "P1"
+    sess = lambda w, day, smr="Мазилка", ended=True: {
+        "org_id": org, "site_id": p, "worker_id": w, "smr_type_id": smr,
+        "started_at": day + "T07:00:00", "ended_at": day + "T15:00:00" if ended else None}
+    data = {"work_sessions": [sess("w1", "2026-11-02"), sess("w2", "2026-11-03"),
+                              sess("w3", "2026-11-02", ended=False)],
+            "employee_daily_reports": [{"org_id": org, "project_id": p, "worker_id": "w4",
+                                        "smr_type": "Мазилка", "status": "Draft"}]}
+    monkeypatch.setattr(data_access.TenantData, "for_user",
+                        staticmethod(lambda _db, _u: _fake_tenant(data)))
+    user = {"org_id": org, "id": "sm"}
+    run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
+    # whole history, ended sessions only: w1 + w2 (w3 not ended, w4 is a draft report)
+    assert run("sessions") == ({"мазилка": {"w1", "w2"}}, 2)
+    # a one-day window: ONE worker -> the 2+ rule must hide that day's spent
+    assert run("sessions", "2026-11-03", "2026-11-03") == ({"мазилка": {"w2"}}, 1)
+    # the centralized screen also sums draft reports -> w4 counts there, and only there
+    assert run("centralized")[1] == 3
+    body = {"activities": [{"name": "Мазилка", "planned_cost": 100, "actual_cost": 60}],
+            "summary": {"total_actual_cost": 60}}
+    v = asyncio.run(money_write.r31_budget_view(user, p, body, source="sessions",
+                                                date_from="2026-11-03", date_to="2026-11-03"))
+    assert "actual_cost" not in v["activities"][0] and "total_actual_cost" not in v["summary"]
 
 
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
