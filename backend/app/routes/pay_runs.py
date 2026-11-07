@@ -287,7 +287,7 @@ def remaining_and_correction(gross_payable: float, previously_paid: float, paid_
         "gross_payable": round(_money_float(gross_payable), 2),
         "previously_paid": round(_money_float(previously_paid), 2),
         "paid_now": round(_money_float(paid_now), 2),
-        "reason": "Платено преди надвишава заработеното (корекция по FLOW-028, не отрицателен остатък)",
+        "reason": "Платено преди надвишава заработеното — корекция, не отрицателен остатък",
     }
 
 
@@ -343,8 +343,8 @@ def overpayment_item(org_id: str, employee_id: str, alloc: dict):
         "type": "FLOW028_CORRECTION", "status": "pending_approval", "employee_id": employee_id,
         "amount": round(sum(s["overpaid"] for s in over), 2),
         "sources": alloc["sources"], "correction_ids": ids, "correction_id": ids[0],
-        "reason": ("Платено преди надвишава заработеното за същите дни — вземане по FLOW-028; "
-                   "не се нетира автоматично с по-късна заработка (CLAUDE.md §7)"),
+        "reason": ("Платено преди надвишава заработеното за същите дни — вземане от човека; "
+                   "не се прихваща автоматично с по-късна заработка"),
     }
 
 
@@ -868,7 +868,7 @@ async def generate_pay_run(
             "corrections": round(sum((r.get("correction_item") or {}).get("amount", 0) for r in rows), 2),
         },
         "warnings": ([f"Има {overlap_count} съществуващи плащания за този период"] if overlap_count > 0 else [])
-                    + [f"Корекция по FLOW-028: {r['first_name']} {r['last_name']} — платено с "
+                    + [f"Корекция: {r['first_name']} {r['last_name']} — платено с "
                        f"{r['correction_item']['amount']} EUR повече от заработеното"
                        for r in rows if r.get("correction_item")],
     }
@@ -894,9 +894,9 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     org_id = user["org_id"]
     key = (idempotency_key or "").strip()
     if not key:
-        raise HTTPException(status_code=428, detail="Idempotency-Key header is required (R29)")
+        raise HTTPException(status_code=428, detail="Липсва ключ за еднократност (Idempotency-Key) — презаредете и опитайте пак")
     if len(key) > 200:
-        raise HTTPException(status_code=400, detail="Idempotency-Key is too long (max 200)")
+        raise HTTPException(status_code=400, detail="Ключът за еднократност е твърде дълъг (до 200 знака)")
     fp = request_fingerprint(data.model_dump())
     from app.audit import idempotency as _idem
     unprotected = getattr(_idem, "IdempotencyUnprotected", None)  # W0-04-C01 (#72)
@@ -904,11 +904,11 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
         state = await begin_idempotent(db, tenant_id=org_id, key=key, action=PAY_RUN_CREATE_ACTION,
                                        request_fingerprint=fp)
     except IdempotencyConflict:
-        raise HTTPException(status_code=409, detail="Idempotency-Key was already used for another Pay Run request")
+        raise HTTPException(status_code=409, detail="Този ключ за еднократност вече е използван за друго плащане")
     except Exception as exc:
         if unprotected is not None and isinstance(exc, unprotected):
             # fail closed: without the unique reservation index no money write is made
-            raise HTTPException(status_code=503, detail="Idempotency registry is not protected; nothing written")
+            raise HTTPException(status_code=503, detail="Регистърът за еднократност не е защитен — нищо не е записано")
         raise
     if state.get("status") == IDEMPOTENCY_DUPLICATE:
         if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
@@ -916,10 +916,10 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
                 {"org_id": org_id, "id": state["result_reference"]}, {"_id": 0})
             if run:
                 return dict(run, idempotent_replay=True)
-        raise HTTPException(status_code=409, detail="A Pay Run with this Idempotency-Key is in progress")
+        raise HTTPException(status_code=409, detail="Същото плащане още се обработва — изчакайте")
     if state.get("status") != IDEMPOTENCY_STARTED:
         # audit RETAKE-1 (defence in depth): only an explicit STARTED reservation writes
-        raise HTTPException(status_code=409, detail="A Pay Run with this Idempotency-Key is in progress")
+        raise HTTPException(status_code=409, detail="Същото плащане още се обработва — изчакайте")
     try:
         result = await _create_pay_run(data, user)
     except HTTPException as exc:

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import { payTypeLabel } from "@/lib/payTypes";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -825,7 +826,7 @@ export default function PayRunsPage() {
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1">
-                                    <p className="text-[8px] text-muted-foreground">{row.position || row.pay_type || "—"}</p>
+                                    <p className="text-[8px] text-muted-foreground">{row.position || payTypeLabel(row.pay_type) || "—"}</p>
                                     <button onClick={() => isSelected ? clearAllDaysForEmp(eid) : selectAllDaysForEmp(eid, row.day_cells || [])} className="text-[7px] text-primary hover:underline">{empDays.size > 0 ? "×" : "✓"}</button>
                                   </div>
                                 </div>
@@ -1423,7 +1424,7 @@ export default function PayRunsPage() {
                         <TableCell className="text-xs font-mono">{w.period_start} → {w.period_end}</TableCell>
                         <TableCell>
                           <button onClick={() => navigate(`/employees/${w.employee_id}?tab=payroll-weeks`)} className="text-xs font-medium hover:text-primary">{w.first_name} {w.last_name}</button>
-                          <p className="text-[9px] text-muted-foreground">{w.position || w.pay_type || "—"}</p>
+                          <p className="text-[9px] text-muted-foreground">{w.position || payTypeLabel(w.pay_type) || "—"}</p>
                         </TableCell>
                         <TableCell>{w.sites?.length > 0 ? w.sites.map((s, si) => <span key={si} className="text-[9px] text-primary">{si > 0 ? ", " : ""}{s}</span>) : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
                         <TableCell className="text-center text-xs font-mono">{w.approved_days}</TableCell>
@@ -1687,7 +1688,7 @@ export default function PayRunsPage() {
               <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                 <div>
                   <p className="font-semibold">{detailSlip.first_name} {detailSlip.last_name}</p>
-                  <p className="text-xs text-muted-foreground">{detailSlip.position || "—"} | {detailSlip.pay_type} | {detailSlip.payment_schedule || "—"}</p>
+                  <p className="text-xs text-muted-foreground">{detailSlip.position || "—"} | {payTypeLabel(detailSlip.pay_type) || "—"} | {detailSlip.payment_schedule || "—"}</p>
                 </div>
                 <div className="text-right">
                   <Badge variant="outline" className={(STATUS_CFG[detailSlip.status] || {}).cls}>{(STATUS_CFG[detailSlip.status] || {}).label}</Badge>

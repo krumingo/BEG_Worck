@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { payTypeLabel } from "@/lib/payTypes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -451,7 +452,7 @@ export default function AllReportsPage() {
                 )}
                 <div>
                   <p className="font-semibold">{detail.worker_name}</p>
-                  <p className="text-xs text-muted-foreground">{detail.position || detail.pay_type || "—"}</p>
+                  <p className="text-xs text-muted-foreground">{detail.position || payTypeLabel(detail.pay_type) || "—"}</p>
                 </div>
               </div>
 

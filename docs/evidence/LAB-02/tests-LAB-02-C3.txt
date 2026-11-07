@@ -1,0 +1,17 @@
+# LAB-02-C3 checks (2026-11-07) — merged LAB-01-M (FG-110 reset compare-and-set, FG-112 uniform 403) into LAB-02; merge a12bb17
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness (W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27017/?directConnection=true) exit=0; changed cells vs. ef16a16:
+  changed cells: 0
+## PM-01 tests WITH the real-Mongo regression (nothing skipped)
+6 passed, 6 warnings in 175.37s (0:02:55)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## LAB-02 + LAB-01 tests (mongomock + real; -rs shows any skip)
+SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:286: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
+153 passed, 1 skipped, 1 warning in 12.18s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 164.14s (0:02:44)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 76.47s (0:01:16)
+  non-legacy_routes failures: 0

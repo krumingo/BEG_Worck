@@ -1,5 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import AppToaster from "@/components/AppToaster";
 import { AuthProvider, useAuth, PlatformAuthProvider, usePlatformAuth } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -35,6 +36,7 @@ import EmployeesPage from "@/pages/EmployeesPage";
 import BrigadesPage from "@/pages/BrigadesPage";
 import AdvancesPage from "@/pages/AdvancesPage";
 import PayRunsPage from "@/pages/PayRunsPage";
+import LaborQuantitiesPage from "@/pages/LaborQuantitiesPage";
 import MyPayslipsPage from "@/pages/MyPayslipsPage";
 import FinanceOverviewPage from "@/pages/FinanceOverviewPage";
 import FinancialAccountsPage from "@/pages/FinancialAccountsPage";
@@ -244,6 +246,7 @@ function AppRoutes() {
       <Route path="/projects/:projectId/operations" element={<AdminRoute><ProjectOperationsPage /></AdminRoute>} />
       <Route path="/advances" element={<AdminRoute><AdvancesPage /></AdminRoute>} />
       <Route path="/pay-runs" element={<AdminRoute><PayRunsPage /></AdminRoute>} />
+      <Route path="/labor-quantities" element={<AdminRoute><LaborQuantitiesPage /></AdminRoute>} />
       <Route path="/finance" element={<AdminRoute><FinanceOverviewPage /></AdminRoute>} />
       <Route path="/finance/accounts" element={<AdminRoute><FinancialAccountsPage /></AdminRoute>} />
       <Route path="/finance/invoices" element={<AdminRoute><InvoicesPage /></AdminRoute>} />
@@ -334,6 +337,7 @@ function App() {
           <BrowserRouter>
             <AppRoutes />
           </BrowserRouter>
+          <AppToaster />
         </ProjectProvider>
       </PlatformAuthProvider>
     </AuthProvider>

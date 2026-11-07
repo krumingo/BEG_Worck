@@ -337,6 +337,10 @@ api_router.include_router(brigades_router)
 from app.routes.pay_runs import router as pay_runs_router
 api_router.include_router(pay_runs_router)
 
+# LAB-02 (R33): quantity entry / approval and the piece rate per SMR
+from app.routes.labor_quantities import router as labor_quantities_router
+api_router.include_router(labor_quantities_router)
+
 from app.routes.settings import router as settings_router
 api_router.include_router(settings_router)
 
@@ -406,6 +410,9 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # LAB-02-B: one active quantity approval / classification per report line
+    from app.routes.labor_quantities import ensure_labor_indexes
+    await ensure_labor_indexes(db)
     # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
     # shared rate-limit counters and durable auth security events (both TTL).
     from app.services import auth_events, password_reset, rate_limit

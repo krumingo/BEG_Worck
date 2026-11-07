@@ -1,0 +1,18 @@
+# LAB-02-B checks (2026-11-07): #75 merged with LAB-01-J (6ac47d0) + FG-92/93/94; run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 208 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 422 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches
+## LAB-02 + LAB-01 tests (mongomock + real mongo:7.0 rs0)
+118 passed, 1 skipped, 1 warning in 9.05s
+## PM-01 matrix tests (incl. fresh real-Mongo reproduction)
+6 passed, 6 warnings in 168.07s (0:02:48)
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 164.03s (0:02:44)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 70.72s (0:01:10)
+  non-legacy_routes failures: 0
+## frontend unchanged since 70cb594 — yarn test
+Tests:       101 passed, 101 total

@@ -125,8 +125,13 @@ def _package(line: dict, terms: dict = None) -> dict:
 
 
 def resolve_pay_type(line: dict, profile: dict, terms: dict = None):
-    """(pay_type, source) by the documented priority SMR package → profile.
-    The worker-editable ``line.pay_type`` is ignored (FG-64)."""
+    """(pay_type, source) by the documented priority: the approval's snapshot of the SMR
+    terms (LAB-02 — a later price change does not touch an approved quantity) → the SMR
+    package → profile. The worker-editable ``line.pay_type`` is ignored (FG-64)."""
+    rec = _quantities(terms).get(line_approval_key(line)) or {}
+    pt = _norm_pay_type(rec.get("labor_pay_type"))
+    if pt:
+        return pt, "smr"
     terms = _package(line, terms)
     pt = _norm_pay_type(terms.get("labor_pay_type"))
     if pt:
@@ -135,7 +140,12 @@ def resolve_pay_type(line: dict, profile: dict, terms: dict = None):
 
 
 def resolve_piece_rate(line: dict, terms: dict = None):
-    """(piece_rate, source) — ONLY the SMR package/contract. Never the line, never the profile."""
+    """(piece_rate, source) — the approval's snapshot of the SMR price (LAB-02), else the SMR
+    package/contract. Never the line, never the profile."""
+    rec = _quantities(terms).get(line_approval_key(line)) or {}
+    r = _num(rec.get("piece_rate"))
+    if r is not None and r > 0:
+        return r, "smr"
     terms = _package(line, terms)
     r = _num(terms.get("labor_piece_rate"))
     if r is not None and r > 0:
@@ -147,7 +157,14 @@ def _is_approved(line: dict) -> bool:
     return (line.get("status") or "").upper() == "APPROVED"
 
 
-def _cost_type(line: dict) -> str:
+def _cost_type(line: dict, terms: dict = None) -> str:
+    """LAB-02: the approver's classification of the line (``labor_line_classifications``)
+    decides DOWNTIME / LABOR; only without one the line's own (legacy, no longer writable —
+    LAB-01-C) ``cost_type`` is read."""
+    rec = ((terms or {}).get("classifications") or {}).get(line_approval_key(line))
+    if rec:
+        ct = (rec.get("cost_type") or "").strip().upper()
+        return ct if ct in DOWNTIME_TYPES else LABOR
     ct = (line.get("cost_type") or line.get("activity_type") or "").strip().upper()
     return ct if ct in DOWNTIME_TYPES else LABOR
 
@@ -258,7 +275,7 @@ def compute_person_labor(profile: dict, lines: list, smr_terms: dict = None) -> 
         key = line_approval_key(ln)
         duplicate = key in seen_keys
         seen_keys.add(key)
-        cost_type = _cost_type(ln)
+        cost_type = _cost_type(ln, smr_terms)
         pay_type, pt_src = resolve_pay_type(ln, profile, smr_terms)
         rec = dict(base, cost_type=cost_type, pay_type=pay_type, pay_type_source=pt_src,
                    quantity=_num(ln.get("quantity")),
@@ -363,7 +380,7 @@ _DQ_MESSAGES = {
     DQ_AKORD_NO_APPROVED_QTY: "Акорд без одобрено количество — не влиза в разхода (0).",
     DQ_AKORD_NO_PIECE_RATE: "Акорд без акордна цена по реда/СМР — не влиза в разхода (0).",
     DQ_MISSING_RATE: "Липсва ставка в профила — не влиза в разхода (0), без ставка по подразбиране.",
-    DQ_DOWNTIME_UNCLASSIFIED: "Неуточнен престой — нужна е класификация (FLOW-019).",
+    DQ_DOWNTIME_UNCLASSIFIED: "Неуточнен престой — нужна е класификация.",
     DQ_DUPLICATE_ENTRY: "Повторен ред (същият отчет/версия/ред) — одобреното количество се брои само веднъж.",
 }
 
@@ -421,7 +438,19 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
             {"_id": 0, "id": 1, "project_id": 1, "labor_pay_type": 1, "labor_piece_rate": 1},
         ).to_list(len(pkg_ids))
         packages = {p["id"]: p for p in pkgs}
-    return {"packages": packages, "quantities": quantities}
+    # LAB-02: the approver's DOWNTIME / LABOR classification, bound like an approval
+    classifications = {}
+    if report_ids:
+        recs = await tenant.labor_line_classifications.find(
+            {"org_id": org_id, "report_id": {"$in": report_ids}, "status": "active"}, {"_id": 0},
+        ).to_list(len(worker_of) * 4 + 10)
+        recs.sort(key=lambda r: (str(r.get("classified_at") or ""), str(r.get("id") or "")))
+        for r in recs:
+            key, by = record_approval_key(r), r.get("classified_by")
+            if key not in worker_of or not by or by == worker_of[key]:
+                continue
+            classifications[key] = r  # the latest active one wins
+    return {"packages": packages, "quantities": quantities, "classifications": classifications}
 
 
 async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
@@ -437,6 +466,11 @@ async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
             {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}}, session=session)
     res = await tenant.labor_quantity_approvals.update_many(
         {"org_id": org_id, "report_id": report_id, "status": "approved"},
+        {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
+        session=session)
+    # LAB-02: the approver's DOWNTIME classification of the old version is void as well
+    await tenant.labor_line_classifications.update_many(
+        {"org_id": org_id, "report_id": report_id, "status": "active"},
         {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
         session=session)
     return getattr(res, "modified_count", 0)
