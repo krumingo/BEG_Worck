@@ -1665,6 +1665,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
 | #73 LAB-01 | `c4ddd33` | **PASS** (LAB-01-E FG-78/79/80 + R29 on POST /pay-runs); **merge order: #72 before #73** (R29 race-safe only with #72 indexes) | 2026-11-07 |
+| #74 OH-01 | `a3e0b91` | **FINDINGS**: OH01-1 BLOCKING (concurrent re-allocations leave N current versions, P&L overhead ×N); OH01-2 medium; needs #72; harness breaks after #69 | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2460,3 +2461,81 @@ Gates on `c4ddd33`:
 | merge-tree #71 | `all_reports.py`, `labor_smr.py`, A2B inventory (known) |
 
 Environment: the dockerd restart was blocked by a stale `/var/run/docker.pid`; it was removed and the RS brought back up.
+
+
+## #74 OH-01 @ `a3e0b91` — 2026-11-07 ~06:20 UTC — FINDINGS (1 blocking)
+
+Base: main `35ae10b`. Package: `OH-01_OVERHEAD_NO_HARD_DELETE.md` (tasks branch `ab74e23`); FLOW-024, CLAUDE §2.9, FG-77.
+
+Read in code:
+- `overhead.py` has **no `delete_one`/`delete_many`** left (grep is empty).
+- The DELETE routes (category, cost, asset) do: access check, then `require_key` (428), then a 404 check, then a usage check (409 `OVERHEAD_RECORD_IN_USE`), and only then archive (`status=archived`, who/when/why) plus a FLOW-024 AuditEvent.
+- Allocate supersedes the previous batch first, then inserts version N+1.
+- Every reader of `project_overhead_allocations` filters `superseded_by: None`: snapshot detail, `/overhead/allocations`, `project_pnl.py:112`, `project_financial_results.py:216`. There are no other readers in `backend/app`.
+- Permissions are the unchanged `check_overhead_access` (write = Admin/Owner/Accountant), as the package allows until #69.
+
+Probe `docs/audit/probes/oh01/test_probe_oh01.py` (real Mongo RS, enforce unless noted, one test per process):
+
+| Case | Tree | Result |
+|---|---|---|
+| **O1** 4 concurrent re-allocations, **different** keys, ×5 rounds | `a3e0b91` | all 200; **4 current batches every round; current total 1600 vs snapshot 400**; versions collide (one version number per round) |
+| O1 | trial merge with #72 | **same: 5/5 rounds with >1 current version**. This is not the index issue |
+| **O2** 6 concurrent DELETEs of the same unused cost, different keys | `a3e0b91` | **6 × 200, 6 AuditEvents** "archived"; the document is archived once |
+| O3 tenant-B Owner DELETEs tenant-A cost and category ids | `a3e0b91` | 404 / 404, A untouched. PASS |
+| O4 accountant / sitemanager / technician / viewer, off/shadow/enforce | `a3e0b91` | accountant 200 (finance role); the others 403/403 in all three modes. PASS |
+| O5 4 concurrent allocates, **same** key | `a3e0b91` | 4 × 200, **8 rows, total 1600** (no unique `audit_idempotency` index on main) |
+| O5 | trial merge with #72 | 1 × 200 + 3 × 409, 2 rows, 400. PASS. Needs #72 (same class as IDEM-IDX-1) |
+
+### OH01-1 — BLOCKING, PROVED: concurrent re-allocations double (×N) the project overhead
+
+`_write_allocation_version` (`overhead.py:~686-735`) runs these steps with no lock and no compare-and-set:
+1. read max version;
+2. `update_many(superseded_by=None, batch != mine)`;
+3. `insert_many`.
+
+Two requests with different keys (two admins, or two tabs) interleave: A supersedes, B supersedes, A inserts, B inserts. The result is two current batches with the same version number. `project_pnl` and `project_financial_results` then sum both.
+
+- Repro: O1 above. P&L overhead is 1600 for a 400 snapshot.
+- This contradicts the package ("the sum is not doubled") and HANDOFF D2 ("never double").
+- Suggested fix, any one of:
+  - a per-snapshot lock or a CAS on the snapshot document (`allocation_version` `$inc` conditioned on the version that was read), like #70's `allocation_lock`;
+  - a unique index on `(overhead_snapshot_id, allocation_version)`, inserting before superseding `version < N`.
+- Add a concurrency test.
+
+### OH01-2 — MEDIUM, PROVED: concurrent archives all succeed and each writes an AuditEvent
+
+`_archive_record` ignores `update_one(...status != archived)`'s `modified_count`. A loser of the race returns 200 and appends "overhead_cost.archived" again (O2: 6 events for one archive). Suggested fix: when `modified_count == 0`, refuse with 409 `ALREADY_ARCHIVED` (`kw.refuse`).
+
+### Conditions and notes
+
+- **Needs #72 first (PROVED, O5):** same-key double submit creates duplicate rows without the unique idempotency index.
+- **Merge order with #69 (PROVED):**
+  - `merge-tree` is clean, and PM-01 plus OH-01 on the trial merge pass in off and shadow.
+  - But **12 OH-01 enforce cases fail** on the trial merge. #69's `require_money_write` on `/overhead/snapshots/compute` sends enforce through the Tenant Guard / Permission Service, and the OH-01 harness seeds no tenant registry (403 `TENANT_NOT_REGISTERED`; without MONGO_URL it reaches localhost:27017).
+  - The HANDOFF says only "re-run PM-01". Whichever PR merges second must also fix the OH-01 harness.
+  - After #69, the 4 OH-01 routes stay on the legacy role check while compute uses `require_money_write`. That inconsistency should be a follow-up, as HANDOFF item 3 says.
+  - SEC-01 tests on the trial merge: 30 passed.
+- **PM-01 regeneration verified:**
+  - `tests/test_pm_01_permission_matrix.py` gives 6 passed on `a3e0b91`.
+  - The `matrix.csv` diff is exactly 36 cells: 4 routes × owner/admin/accountant × 3 modes, 404 → 428, wrote=no before and after. No non-finance cell changed.
+  - 404 → 428 is expected: PM-01 sends no key, and the key check precedes the existence check.
+- **Low notes:**
+  - A category whose only costs are archived can never be archived (usage counts archived costs). This is conservative.
+  - PUT on an archived record is not blocked (HANDOFF D4).
+  - Asset usage is approximated by `computed_at` (D1).
+- **#70:** `merge-tree` conflicts in `frontend/src/lib/idempotency.js` and its test. #74's copy equals #69's, #70's differs.
+
+Gates on `a3e0b91`:
+
+| Gate | Result |
+|---|---|
+| OH-01 tests (mongomock + real × 3 modes) | **43 passed** |
+| `test_m9_overhead.py` | live-server test (needs `REACT_APP_BACKEND_URL`), not runnable here |
+| PM-01, real Mongo | 6 passed |
+| W0 DB-free | 1085/15/50, same 15 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| merge-tree main / #69 / #71 / #72 / #73 / #55 | clean |
+| merge-tree #70 | `idempotency.js` (+ test) conflict |
+
+R0 and `yarn build` were not re-run by me this round: the delta is backend overhead plus 2 pages, and the PR evidence states R0 814 and the build compiles. Re-run them at the fix round.
