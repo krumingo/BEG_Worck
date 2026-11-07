@@ -140,6 +140,8 @@ def _app(monkeypatch, op, sysdb, mode):
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
+    # AUTH-02 (FG-16): an explicit test-only HMAC key — no literal fallback any more.
+    monkeypatch.setenv("AUTH_EVENT_HMAC_KEY", "r003-test-only-hmac-key")
     for module in (appdb, deps_auth, deps_modules, r_auth, r_hr, r_platform, u_audit):
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
@@ -170,6 +172,17 @@ def run(monkeypatch, backend, mode, scenario, extra_seed=None):
             if extra_seed:
                 await extra_seed(op, sysdb)
             app = _app(monkeypatch, op, sysdb, mode)
+            if backend != "real":
+                # AUTH-02 (FG-11): admin set-password is one transaction; mongomock has
+                # none, so use the AUTH-01 commit-or-restore double. The real backend
+                # (a replica set) runs the production transaction unchanged.
+                from app.services import auth_tx, password_reset
+                from tests.test_auth_01_password_recovery import _snapshot_transaction
+
+                async def _supported(db):
+                    return True
+                monkeypatch.setattr(auth_tx, "transactions_supported", _supported)
+                monkeypatch.setattr(password_reset, "run_in_transaction", _snapshot_transaction)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
                                          base_url="http://r003") as c:
                 return await scenario(c, op, sysdb)

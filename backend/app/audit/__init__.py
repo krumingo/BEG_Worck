@@ -45,6 +45,7 @@ from app.audit.idempotency import (
     IDEMPOTENCY_STARTED,
     IDEMPOTENCY_DUPLICATE,
     IDEMPOTENCY_COMPLETED,
+    IDEMPOTENCY_IN_PROGRESS,
 )
 
 __all__ = [
@@ -78,5 +79,6 @@ __all__ = [
     "fail_idempotent",
     "IDEMPOTENCY_STARTED",
     "IDEMPOTENCY_DUPLICATE",
+    "IDEMPOTENCY_IN_PROGRESS",
     "IDEMPOTENCY_COMPLETED",
 ]

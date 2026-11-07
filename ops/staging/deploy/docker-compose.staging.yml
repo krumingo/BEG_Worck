@@ -1,0 +1,55 @@
+# ST-02 — isolated staging overlay on top of the UNCHANGED production compose file.
+#
+#   docker compose -p begwork-staging -f docker-compose.yml -f docker-compose.staging.yml ...
+#
+# docker-compose.yml, Dockerfile.backend and Dockerfile.frontend in the staging layout root are
+# byte-identical copies of ops/synology/deploy/ from the release (the release verifier checks
+# their sha256 against the manifest). This file only changes what must differ for isolation:
+#
+#   * container names        begwork-backend/-frontend -> ${ST02_PROJECT}-backend/-frontend
+#   * published port         8080:80 is REPLACED (!override) by 127.0.0.1:${ST02_HTTP_PORT}:80
+#   * network                own bridge network ${ST02_PROJECT}_net (no external network)
+#   * database               own MongoDB replica set (rs0) on an own named volume, not published
+#   * ENV / flag             ENV=staging, PERMISSION_SERVICE_MODE=${ST02_PERMISSION_SERVICE_MODE}
+#                            (default shadow per R15; enforce/off only as an explicit parameter)
+#
+# Values come from the staging layout root's .env (written by staging_up.py: synthetic values
+# only, never production credentials, no SMTP/Stripe/LLM keys). Requires Docker Compose >= 2.24
+# for `!override`; staging_deploy.sh refuses to run if `compose config` still shows a
+# production container name or port 8080.
+name: ${ST02_PROJECT:?ST02_PROJECT missing in .env}
+
+services:
+  backend:
+    container_name: ${ST02_PROJECT}-backend
+    environment:
+      ENV: staging
+      PERMISSION_SERVICE_MODE: ${ST02_PERMISSION_SERVICE_MODE:-shadow}
+    networks:
+      - st02
+
+  frontend:
+    container_name: ${ST02_PROJECT}-frontend
+    ports: !override
+      - "127.0.0.1:${ST02_HTTP_PORT:?ST02_HTTP_PORT missing in .env}:80"
+    networks:
+      - st02
+
+  mongo:
+    image: ${ST02_MONGO_IMAGE:-mongo:7.0}
+    container_name: ${ST02_PROJECT}-mongo
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    restart: unless-stopped
+    volumes:
+      - st02-mongo-data:/data/db
+    networks:
+      - st02
+
+networks:
+  st02:
+    name: ${ST02_PROJECT}_net
+    driver: bridge
+
+volumes:
+  st02-mongo-data:
+    name: ${ST02_PROJECT}_mongo_data

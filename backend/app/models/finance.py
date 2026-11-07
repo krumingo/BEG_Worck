@@ -1,7 +1,7 @@
 """
 Pydantic models - Finance (M5).
 """
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 
 ACCOUNT_TYPES = ["Cash", "Bank"]
@@ -9,6 +9,11 @@ INVOICE_DIRECTIONS = ["Issued", "Received"]
 INVOICE_STATUSES = ["Draft", "Sent", "PartiallyPaid", "Paid", "Overdue", "Cancelled"]
 PAYMENT_DIRECTIONS = ["Inflow", "Outflow"]
 COST_CATEGORIES = ["Materials", "Labor", "Subcontract", "Other"]
+
+
+def _strict_number(value):
+    from app.services.money_amount import strict_number
+    return strict_number(value)
 
 
 # ── Counterparty (Supplier/Client) ─────────────────────────────────
@@ -112,9 +117,21 @@ class PaymentCreate(BaseModel):
     reference: Optional[str] = None
     note: Optional[str] = None
 
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _amount_is_number(cls, v):
+        """PAY-01-C01 L1: a JSON number only — `true` / "12" are refused before coercion (422)."""
+        return _strict_number(v)
+
 class AllocationInput(BaseModel):
     invoice_id: str
     amount: float
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def _amount_is_number(cls, v):
+        """PAY-01-C01 L1: a JSON number only (see PaymentCreate)."""
+        return _strict_number(v)
 
 class AllocatePaymentRequest(BaseModel):
     allocations: List[AllocationInput]

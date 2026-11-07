@@ -342,6 +342,49 @@ class TargetTests(BuildAsserts):
         self.assert_build_fails(fx()["c"]["c1"], "only allowed for a --baseline", "--no-previous",
                                 "--legacy-extra", "x.conf=" + LIVE_NGINX_BLOB)
 
+    # --- R26 (ST-02-C03): non-production flag value recorded in the manifest's feature_flags snapshot
+    def test_r26_staging_flag_override_is_recorded_in_the_manifest(self):
+        f = fx()
+        b = ok_build(f["c"]["c1"], "--no-previous", "--flag-override", "PERMISSION_SERVICE_MODE=shadow",
+                     "--flag-override-reason", "R15 staging default", environment="staging")
+        doc = read_json(manifest_of(b))
+        spec = doc["release"]["feature_flags"]["PERMISSION_SERVICE_MODE"]
+        self.assertEqual(spec["expected"], "shadow")
+        self.assertTrue(spec["source"].startswith(mf.FLAG_OVERRIDE_PREFIX + "staging): R15 staging default"), spec)
+        self.assertIn("layout default off", spec["source"])
+        self.assertEqual(mf.validate_manifest(doc), [])
+        self.assertEqual(mf.render_plan(doc)["FLAG_EXPECT_PERMISSION_SERVICE_MODE"], "shadow")
+        v = verify("bundle", "--bundle", b)
+        self.assertEqual(v.returncode, 0, v.stdout)
+        plain = read_json(manifest_of(ok_build(f["c"]["c1"], "--no-previous", environment="staging")))
+        self.assertEqual(plain["release"]["feature_flags"]["PERMISSION_SERVICE_MODE"]["expected"], "off")
+        self.assertNotEqual(plain["release"]["configuration"]["version"], doc["release"]["configuration"]["version"])
+
+    def test_r26_builds_without_override_keep_the_configuration_version(self):
+        f = fx()
+        a = read_json(manifest_of(f["b1"]))["release"]["configuration"]["version"]
+        b = read_json(manifest_of(ok_build(f["c"]["c1"], "--previous-manifest", manifest_of(f["b0"]))))
+        self.assertEqual(b["release"]["configuration"]["version"], a)
+        self.assertEqual(b["release"]["feature_flags"]["PERMISSION_SERVICE_MODE"],
+                         {"expected": "off", "source": "app default; the key must be absent from .env or equal"})
+
+    def test_r26_flag_override_refusals(self):
+        c1 = fx()["c"]["c1"]
+        ok = ("--flag-override-reason", "R15 staging default")
+        self.assert_build_fails(c1, "not allowed for production", "--no-previous",
+                                "--flag-override", "PERMISSION_SERVICE_MODE=shadow", *ok)
+        for item, needle in (("UNKNOWN_FLAG=x", "not a flag of the versioned layout"),
+                             ("PERMISSION_SERVICE_MODE=on", "value not allowed"),
+                             ("PERMISSION_SERVICE_MODE=off;reboot", "value not allowed"),
+                             ("PERMISSION_SERVICE_MODE", "invalid or repeated")):
+            with self.subTest(item):
+                self.assert_build_fails(c1, needle, "--no-previous", "--flag-override", item, *ok, environment="staging")
+        self.assert_build_fails(c1, "invalid or repeated", "--no-previous", "--flag-override", "PERMISSION_SERVICE_MODE=shadow",
+                                "--flag-override", "PERMISSION_SERVICE_MODE=off", *ok, environment="staging")
+        self.assert_build_fails(c1, "needs --flag-override-reason", "--no-previous",
+                                "--flag-override", "PERMISSION_SERVICE_MODE=shadow", environment="staging")
+        self.assert_build_fails(c1, "without --flag-override", "--no-previous", *ok, environment="staging")
+
     def test_tree_verification_detects_wrong_tree_and_extra_files(self):
         f = fx()
         stage = os.path.join(tempfile.mkdtemp(dir=f["tmp"]), "stage")
@@ -531,6 +574,10 @@ class ManifestValidationTests(unittest.TestCase):
             ("log service", lambda r: r["smoke"].update(log_service="worker"), "must be one of the built services"),
             ("base url", lambda r: r["smoke"].update(base_url="http://127.0.0.1:8080/$(id)"), "release.smoke.base_url"),
             ("flag value", lambda r: r["feature_flags"]["PERMISSION_SERVICE_MODE"].update(expected="off;reboot"),
+             "release.feature_flags.PERMISSION_SERVICE_MODE"),
+            ("R26 override in production", lambda r: r["feature_flags"]["PERMISSION_SERVICE_MODE"].update(
+                source=mf.FLAG_OVERRIDE_PREFIX + "staging): x; layout default off"), "not allowed in production"),
+            ("flag source type", lambda r: r["feature_flags"]["PERMISSION_SERVICE_MODE"].update(source=1),
              "release.feature_flags.PERMISSION_SERVICE_MODE"),
             ("secret value", lambda r: r["approvals"].append({"type": "review", "ref": secret_uri}), "secret-like value"),
             ("secret key", lambda r: r["configuration"]["build_args"]["frontend"].update(JWT_SECRET="abcdef0123456789"),
