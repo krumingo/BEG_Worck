@@ -555,8 +555,15 @@ Route-ът е R20-2B (SiteManager член на проекта може да з�
 
 Всеки друг ключ (напр. бъдеща сума в EUR) се маха. Финансовите роли получават записания `condition`. Тест: `test_fg133_alarm_rules_give_only_known_condition_keys`.
 
-### FG-141 (Допълнение I) — праг на правило с парична метрика
-Правило върху **парична** метрика има сума като праг: `finance_read.is_money_metric` — валута (eur / bgn / usd) винаги, или amount / cost / price / spent / budget / salary / wage / pay / value / limit / … без pct / percent / hours / days / count. За роля без финансово право `GET /alarm-rules` не дава `threshold` за такава `metric` и `secondary_threshold` за такава `secondary_metric`. Процентните, часовите и дневните прагове остават (конфигурация, Р20). Името на правилото остава (свободен admin текст, решено в Допълнение G). Тест: `test_fg141_money_metric_rules_give_no_threshold`.
+### FG-141 (Допълнение I) + одит SEC71-06 — праг на правило: fail closed
+Първата версия (`30a8c22`) разпознаваше паричната метрика по името (`is_money_metric`). Одитът SEC71-06 показа, че това fail-ва open: total_spend, expenses, overhead_total, paid_total, outstanding, debt, cash, fee, receivables, deficit, overspend запазваха прага.
+
+Сега решението е **по типа на правилото**, по който `alarm_engine` разклонява (името на `metric` не се чете). За роля без финансово право `GET /alarm-rules` показва:
+* `threshold` само за типовете, които engine-ът оценява в непарична единица (`finance_read.NON_MONEY_THRESHOLD_TYPES`): budget → % изхарчено, overhead → % промяна, overtime → часове / седмица, attendance → дни без работници, deadline → дни до срока;
+* `secondary_threshold` само за единственото оценявано второ условие: budget + `secondary_metric` „progress_pct“ (% прогрес);
+* всеки друг тип (custom, pricing, procurement, непознат) или второ условие — без праг.
+
+Името на правилото остава (свободен admin текст, решено в Допълнение G). Тест: `test_fg141_money_metric_rules_give_no_threshold` — имената от одита + EUR метрики × непарични и парични типове, второто условие и името.
 
 ### Дълг / решение за Крум
 * **SEC-02-G-D2 — ЗАТВОРЕН от Р42** (решение на Крум, 07.11.2026, `docs/architecture/RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md` @ `940bd49`): known-pay вариантът. При 2 платени работника, единият от които е самият технически ръководител, той може да изведе заплатата на другия (6196.63 / 6200 в пробата на одита). Прагът остава **2 платени работника**, Крум приема това извеждане; кодът не се променя. Тестът на пробата допуска само тази находка.

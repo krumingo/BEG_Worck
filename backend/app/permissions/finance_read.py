@@ -465,30 +465,27 @@ ALARM_CONDITION_KEYS: FrozenSet[str] = frozenset(
      "secondary_threshold"})
 
 
-# SEC-02-G (FG-141, addendum I): a rule on a MONEY metric (EUR: amount_eur, limit_eur, any
-# metric in money) has an amount as its threshold — a caller without the finance right
-# gets no threshold / secondary_threshold for it. A percent / hours / days / count metric
-# keeps its threshold (configuration, not money; R20). The rule name stays (admin text).
-_NOT_MONEY_METRIC = _re.compile(r"(pct|percent|ratio|hours|days|count|_h$|_d$)", _re.I)
-_MONEY_METRIC = _re.compile(r"(eur|bgn|usd|amount|cost|price|spent|budget|salary|wage|pay|"
-                            r"value|limit|money|revenue|profit|margin|balance|invoice)", _re.I)
-
-
-def is_money_metric(metric) -> bool:
-    if not isinstance(metric, str) or not metric:
-        return False
-    if _re.search(r"(eur|bgn|usd)", metric, _re.I):
-        return True                                   # an amount in a currency, always
-    return bool(_MONEY_METRIC.search(metric)) and not _NOT_MONEY_METRIC.search(metric)
+# SEC-02-G (FG-141, addendum I; audit SEC71-06): FAIL CLOSED. A caller without the finance
+# right sees a rule's threshold only when alarm_engine evaluates it as a non-money unit —
+# decided by the rule TYPE the engine branches on (its ``metric`` name is not read):
+#   budget -> burn %, overhead -> % change, overtime -> hours / week,
+#   attendance -> days without workers, deadline -> days left;
+# and secondary_threshold only for the one secondary condition the engine evaluates
+# (budget + secondary_metric "progress_pct" -> progress %). Every other type (custom,
+# pricing, procurement, unknown) or secondary metric: no threshold. The name stays.
+NON_MONEY_THRESHOLD_TYPES: FrozenSet[str] = frozenset(
+    {"budget", "overhead", "overtime", "attendance", "deadline"})
+NON_MONEY_SECONDARY = frozenset({("budget", "progress_pct")})
 
 
 def safe_alarm_rule(rule: dict) -> dict:
     out = dict(rule)
     if isinstance(out.get("condition"), dict):
         cond = {k: v for k, v in out["condition"].items() if k in ALARM_CONDITION_KEYS}
-        if is_money_metric(cond.get("metric")):
+        rtype = out.get("type")
+        if rtype not in NON_MONEY_THRESHOLD_TYPES:
             cond.pop("threshold", None)
-        if is_money_metric(cond.get("secondary_metric")):
+        if (rtype, cond.get("secondary_metric")) not in NON_MONEY_SECONDARY:
             cond.pop("secondary_threshold", None)
         out["condition"] = cond
     return out
