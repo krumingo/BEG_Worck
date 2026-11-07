@@ -396,3 +396,20 @@ def test_o18_double_send(monkeypatch, backend, mode, rep):
         assert sorted([r1.status_code, r2.status_code]) == [200, 409] and (ev, snaps, legacy) == (1, 1, 1)
         assert nk.status_code == 428
     run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(20))
+def test_o19_client_view_races_new_version(monkeypatch, backend, mode, rep):
+    """653a1a5 FG-149: a client opening the link (GET review) ∥ new-version on the same Sent
+    offer → new-version always 200 (the view no longer bumps updated_at)."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        g, nv = await asyncio.gather(c.get("/api/offers/review/%s" % TOKEN), new_version(c, "o1"))
+        o = await get(op, "o1")
+        leak = [k for k in ("view_count", "last_viewed_at", "updated_at") if k in g.text]
+        if rep < 2 or nv.status_code != 200:
+            print("O19 %s/%d: view %s new-version %s | o1 %s view_count %s | leak %s" % (
+                mode, rep, g.status_code, nv.status_code, o["status"], o.get("view_count"), leak or "none"))
+        assert nv.status_code == 200 and o["status"] == "Superseded" and not leak
+        assert g.status_code in (200, 410)
+    run(monkeypatch, backend, mode, scenario)
