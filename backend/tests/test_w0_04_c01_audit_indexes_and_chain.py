@@ -671,3 +671,89 @@ def test_f72_the_real_error_middleware_logs_no_key_or_tenant(caplog):
         assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 2   # nothing written
     with caplog.at_level(logging.DEBUG):
         scratch(go)
+
+
+# ─────────────────────────────────────────────── F-72-01 (Addendum A): IdempotencyConflict
+
+@real_mongo
+def test_f72_idempotency_conflict_names_no_key_or_tenant(caplog):
+    import logging
+    from app.audit.idempotency import IdempotencyConflict
+
+    async def go(client, dbs):
+        db = dbs[0]
+        kw = dict(tenant_id=SENTINEL_TENANT, key=SENTINEL_KEY, action="payment.create")
+        await begin_idempotent(db, request_fingerprint="fp-1", **kw)
+        with pytest.raises(IdempotencyConflict) as exc:
+            await begin_idempotent(db, request_fingerprint="fp-2", **kw)
+        e = exc.value
+        assert e.code == "IDEMPOTENCY_CONFLICT" and e.ref in str(e) and e.action == "payment.create"
+        assert "[IDEMPOTENCY_CONFLICT ref=" in str(e)
+        logging.getLogger("w004c01.conflict").exception("conflict", exc_info=e)
+        _assert_clean(_everything_logged(e) + caplog.text)
+    with caplog.at_level(logging.DEBUG):
+        scratch(go)
+
+
+@real_mongo
+def test_f72_recoverable_write_keeps_its_409_contract_and_logs_nothing(caplog):
+    """The client contract is unchanged (409 + the same body, which echoes the
+    caller's own key); nothing about the key or tenant reaches the log."""
+    import logging
+    import httpx
+    from fastapi import FastAPI
+    from app.middleware.error_handler import ErrorHandlerMiddleware
+    from app.permissions.workflow import RecoverableWrite
+
+    async def go(client, dbs):
+        db = dbs[0]
+        await begin_idempotent(db, tenant_id=SENTINEL_TENANT, key=SENTINEL_KEY,
+                               action="role.change", request_fingerprint="fp-1")
+        app = FastAPI()
+        app.add_middleware(ErrorHandlerMiddleware)
+
+        @app.post("/roles")
+        async def change():
+            rw = RecoverableWrite(db, tenant_id=SENTINEL_TENANT, action="role.change",
+                                  key=SENTINEL_KEY, fingerprint="fp-2")
+            await rw.begin()
+            return {"ok": True}
+
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://t") as c:
+            r = await c.post("/roles")
+        assert r.status_code == 409
+        assert r.json() == {"detail": {
+            "error_code": "IDEMPOTENCY_CONFLICT",
+            "message": "The same operation key was already used with a different payload",
+            "idempotency_action": "role.change", "idempotency_key": SENTINEL_KEY}}
+        _assert_clean(caplog.text)
+    with caplog.at_level(logging.DEBUG):
+        scratch(go)
+
+
+@real_mongo
+def test_f72_master_data_conflict_refusals_name_no_key(monkeypatch):
+    from app.audit import idempotency as idem
+    from app.master_data import legacy_migration as lm
+    from app.master_data.service import MasterDataRefused
+
+    async def go(client, dbs):
+        db = dbs[0]
+        await begin_idempotent(db, tenant_id=SENTINEL_TENANT, key=SENTINEL_KEY,
+                               action="md.legacy_migration", request_fingerprint="fp-1")
+        # 1. the read-ahead check (another payload already recorded under the key)
+        with pytest.raises(MasterDataRefused) as e1:
+            await lm._begin(db, SENTINEL_TENANT, "md.legacy_migration", SENTINEL_KEY, "fp-2")
+        _assert_clean(_everything_logged(e1.value))
+        # 2. the race: the conflict surfaces from begin_idempotent itself and is
+        #    passed through as str(exc) — not chained
+        async def conflict(*a, **kw):
+            raise idem.IdempotencyConflict("md.legacy_migration")
+        monkeypatch.setattr(idem, "begin_idempotent", conflict)
+        with pytest.raises(MasterDataRefused) as e2:
+            await lm._begin(db, SENTINEL_TENANT, "md.legacy_migration", "fresh-key", "fp-1")
+        assert "IDEMPOTENCY_CONFLICT" in str(e2.value)
+        assert e2.value.__cause__ is None and e2.value.__suppress_context__
+        _assert_clean(_everything_logged(e2.value))
+    scratch(go)

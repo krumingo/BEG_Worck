@@ -45,7 +45,20 @@ IDEMPOTENCY_IN_PROGRESS = "in_progress"
 
 
 class IdempotencyConflict(RuntimeError):
-    """Same idempotency key reused for a different request payload."""
+    """Same idempotency key reused for a different request payload.
+
+    W0-04-C01 F-72-01: the message names the action only, with a typed ``code``
+    and a diagnostic ``ref`` — never the raw key, the reservation id or the
+    tenant, so it is safe in a log or a traceback.
+    """
+
+    code = "IDEMPOTENCY_CONFLICT"
+
+    def __init__(self, action: str):
+        self.ref = uuid.uuid4().hex[:12]
+        self.action = action
+        super().__init__("[%s ref=%s] the operation key for action '%s' was already used "
+                         "with a different request payload" % (self.code, self.ref, action))
 
 
 class IdempotencyUnprotected(RuntimeError):
@@ -145,10 +158,7 @@ async def begin_idempotent(
         and existing.get("request_fingerprint") is not None
         and existing["request_fingerprint"] != request_fingerprint
     ):
-        raise IdempotencyConflict(
-            f"Idempotency key '{key}' for action '{action}' was already used "
-            "with a different request payload"
-        )
+        raise IdempotencyConflict(action)
 
     # A FAILED attempt may be retried under the same key: the reservation
     # returns to STARTED and the caller performs the write again.

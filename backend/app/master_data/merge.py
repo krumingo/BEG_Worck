@@ -806,7 +806,7 @@ async def _idempotency_state(db, tenant_id: str, action: str, key: str,
                                                        {"_id": 0})
     if record and record.get("request_fingerprint") not in (None, fingerprint):
         raise MasterDataRefused(
-            "idempotency key %r was already used for a different %s request" % (key, action))
+            "this operation key was already used for a different %s request" % action)
     return record
 
 
