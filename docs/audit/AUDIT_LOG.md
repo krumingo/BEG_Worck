@@ -4274,3 +4274,15 @@ The metric is free admin text, and `alarm_engine` dispatches on the rule type, n
 
 - **SEC71-06 (medium):** fail closed instead. Show the threshold only for an allowlist of metrics `alarm_engine` actually reads as % / hours / days / count (e.g. `burn_pct`, `progress_pct`, overtime hours, days left), or decide by rule `type`. Hide it for everything else.
 - Runtime: `b71d` (bisect probe, sec02, gates; starts after `b55c`).
+
+#79 @ `ed68cb9` gates — PASS (provisional; FG-135..139 addenda pending):
+
+| Gate | Result |
+|---|---|
+| off01 + audit_probe | 210 |
+| W0 | **same 15** (the programmer's one-off 75 was a local mongod crash; not reproduced here) |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The PM-01 diff vs main is only `+cancel`. The merge with main is clean.
