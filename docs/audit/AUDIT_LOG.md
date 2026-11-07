@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `43477d8` | **PASS** (Addendum K closes WH55-C26L-1: 60/60 race rounds, crash leaves nothing) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `e4d131e` | **PASS** + MEDIUM WH55-L-1 (unit bypass: 10 bag + 10 pcs linked → P 200, flagged only) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `4b745f1` | **PASS** (C01-G fixes PAY70-04; N1–N4 24/24) | 2026-11-07 |
@@ -1663,7 +1663,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `cb5d061` | **PASS** (F-72-01: sentinel probe clean on 11 paths; leaks on 90a582b) | 2026-11-07 |
+| #72 W0-04-C01 | `04e0a1b` | **PASS** (FG-117: the DB-name marker is clean on 12 paths; leaks on `cb5d061`) | 2026-11-07 |
 | #73 LAB-01 | `4da2ee6` | **PASS** (PM73-01 closed; PM-01 real, not skipped) | 2026-11-07 |
 | #75 LAB-02 | `ef16a16` | **PASS** (PM75-01 closed; PM-01 real, not skipped) | 2026-11-07 |
 | #76 SUB-ADV-01 | `f42da33` | **PASS** (probe S1–S7 × 3 modes, on its own and + #72); notes D1–D3, merge with #70 conflicts in `finance.py` | 2026-11-07 |
@@ -3653,3 +3653,57 @@ SEC71-03 fixed:
 - PR comment 6695992847 updated (blocking).
 
 Low: a bare number with no % or currency, in an alert type outside `MONEY_ALERT_TYPES`, passes the regex safety net.
+
+
+## Round 3 (FLOW Guard pass 11 addenda) — started 2026-11-07 ~14:00 UTC
+
+The orchestrator said FG-108..117 addenda would replace every head, and asked to audit only the next HANDOFF head. The round-2 results at `43477d8`, `cb5d061`, `4da2ee6`, `ef16a16`, `45178ac` and `5af530e` are therefore superseded, and their probes are re-run below.
+
+### #72 @ `04e0a1b` (FG-117) — PASS
+
+- **The change:** `database_ref()` (sha256-12 of the name) replaces the database name in every index error, report and startup log line (`describe_report`). Only the dry-run operator script prints names.
+- **Probe:** `probes/w004/probe_f7201_sentinels.py` now also plants a **database-name marker**, and checks the startup INFO line as L8.
+
+| Head | Result |
+|---|---|
+| `04e0a1b` | all 12 paths clean |
+| `cb5d061` (control) | the database-name marker leaks on 8 paths (L1/L2/L3/L7/L8/L6 dup and lazy/log) |
+
+| Gate | Result |
+|---|---|
+| fail-closed | holds |
+| retake × 10 | 1 started each |
+| W0-04 + auth + MDM, real | **300 passed, 0 skipped** |
+| W0 | same 15 |
+| A2C | 0/212 |
+| A1 | 0/428 |
+| R0 | 814 |
+| merge-tree vs every open head | only `run_meta` / `server.py` / `data_access` / A2B (known) |
+
+Low note: an unsalted sha256 of a guessable database name can be matched by trying candidate names; an HMAC with a server secret would avoid that.
+
+### #55 @ `e4d131e` (Addendum L: FG-108 / FG-109) — PASS, 1 MEDIUM
+
+- **FG-108:** every linked supplier receipt (warehouse or direct) bumps the line lock in the transaction. `_check_invoice_line_total` refuses beyond the line quantity with 422 `INVOICE_LINE_QTY_EXCEEDED`. Legacy over-link is counted once, with a warning.
+- **FG-109:** `write_unless_linked` decides allocation/qty/unit/price edits and deletes in one transaction on the same lock document, giving 409 `INVOICE_LINE_ALLOCATION_LOCKED`. There is a session-less fallback for deployments without transactions.
+- **Static guard:** the anchor moved to the new write, with the same mutation (not weakened).
+
+`probes/wh55/test_probe_c26l_L.py`, real RS:
+
+| Case | Result |
+|---|---|
+| **M1**: 6 concurrent full receipts (3 warehouse + 3 direct), × 5 | exactly 1 accepted each round (3 × warehouse, 2 × direct); P 100 live and after rebuild ×2 |
+| **U1** (WH55-L-1, MEDIUM, PROVED): L fully received as 10 bag (warehouse → P), then a linked direct delivery of 10 **pcs** | **accepted**; P = **200** live and after rebuild ×2, only `PATH_B_LINK_QTY_UNVERIFIED` |
+
+U1 is not blocking: it is flagged and needs a unit mismatch. **Fix:** once the comparable linked quantity equals the line quantity, refuse any further linked receipt.
+
+| Gate | Result |
+|---|---|
+| warehouse suite per file | **43 files, 968 passed** |
+| W0 | same 15 |
+| A2C | 0/223 |
+| A1 | 0/452 |
+| R0 | 814 |
+| PM-01 | not on this branch's base (pre-#68) |
+
+PR comment 6695125557 updated (note, no blocker).

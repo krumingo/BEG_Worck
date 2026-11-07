@@ -139,5 +139,26 @@ with TestClient(app, raise_server_exceptions=False) as tc:
         if (n, led, pkg().get("advance_total")) != (1, 1, 1000):
             F.append("%s S7 %s" % (mode, (n, led)))
         restore()
+        if os.environ.get("PROBE_FG114") == "1":
+            # S8 (#76 17aa55d, FG-114): contract 5000, nothing committed; 6 CONCURRENT advances
+            # of 999.99 under different keys -> exactly 5 pass (4999.95 <= 5000), 1 x 409
+            rs = q(lambda: gather([(ADV, {**adv, "amount": 999.99}, H()) for _ in range(6)]))
+            p = pkg(); n = cnt("subcontractor_payments", {"kind": "advance"})
+            print(mode, "S8", sorted(r.status_code for r in rs), "rows", n, "advance_total", p.get("advance_total"),
+                  "contract", p.get("contract_total"))
+            if n != 5 or (p.get("advance_total") or 0) > (p.get("contract_total") or 0) + 0.005:
+                F.append("%s S8 %s rows %s total %s" % (mode, sorted(r.status_code for r in rs), n, p.get("advance_total")))
+            restore()
+            # S9: committed counts — act1 3000 + act2 200 paid in cash (committed 3200), then an
+            # advance of 1800 -> 201 (= 5000), a further 0.01 -> 409; a deduction moves nothing
+            a = tc.post("/api/subcontractor-payments", json={"package_id": PKG, "act_id": A1, "amount": 3000}, headers=H())
+            b = tc.post("/api/subcontractor-payments", json={"package_id": PKG, "act_id": A2, "amount": 200}, headers=H())
+            c1 = tc.post(ADV, json={**adv, "amount": 1800}, headers=H())
+            c2 = tc.post(ADV, json={**adv, "amount": 0.01}, headers=H())
+            print(mode, "S9", a.status_code, b.status_code, c1.status_code, c2.status_code,
+                  (c2.json().get("detail") or {}).get("error_code") if c2.status_code != 201 else "")
+            if (c1.status_code, c2.status_code) != (201, 409):
+                F.append("%s S9 %s %s" % (mode, c1.status_code, c2.status_code))
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

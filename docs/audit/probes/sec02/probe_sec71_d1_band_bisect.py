@@ -62,5 +62,40 @@ with TestClient(app, raise_server_exceptions=False) as tc:
               % (mode, first, steps, sorted(map(str, seen)), derived, actual, len(paid)))
         if steps >= 10 and abs(derived - actual) <= max(5.0, 0.001 * actual):   # burn_pct is rounded to 0.1 %
             F.append("%s: TM derives the site's cumulative labor spent %.2f (actual %.2f) in %d budget edits" % (mode, derived, actual, steps))
+    # ── /alarms path (#71 02a1441, FG-111): an Admin-made budget rule ("> 100 %"); the TM
+    # moves the budget, POSTs /alarms/evaluate, sees whether an event for P1 fires (the
+    # stripped list still lists it), resolves it (no role check) and repeats.
+    HA = {"Authorization": "Bearer " + tok["admin"]}
+    rr = tc.post("/api/alarm-rules", headers=HA, json={"name": "Бюджет 100", "type": "budget", "severity": "critical",
+                 "condition": {"metric": "burn_pct", "operator": ">", "threshold": 100}, "cooldown_hours": 24})
+    rules_seen = tc.get("/api/alarm-rules", headers=H).json()
+    thr_visible = any((r.get("condition") or {}).get("threshold") == 100 for r in rules_seen.get("items", []))
+    for mode in T.MODES:
+        os.environ["PERMISSION_SERVICE_MODE"] = mode
+        others = sum(float(b.get("labor_budget") or 0) for b in q(lambda: op.activity_budgets.find(
+            {"project_id": P1, "type": {"$ne": "AuditProbe"}}, {"_id": 0, "labor_budget": 1}).to_list(None)))
+        lo, hi, steps, first = 0.0, 100000.0, 0, None
+        while hi - lo > 0.05 and steps < 40:
+            mid = (lo + hi) / 2
+            tc.post("/api/projects/%s/activity-budgets" % P1, headers=H,
+                    json={"type": "AuditProbe", "subtype": "", "labor_budget": max(mid - others, 0.0), "materials_budget": 0})
+            ev = tc.post("/api/alarms/evaluate", headers=H)
+            lst = tc.get("/api/alarms", params={"site_id": P1}, headers=H)
+            if first is None:
+                first = (rr.status_code, ev.status_code, lst.status_code, "threshold visible to TM" if thr_visible else "threshold hidden")
+            if ev.status_code != 200 or lst.status_code != 200:
+                break
+            items = [i for i in (lst.json().get("items") or lst.json().get("data") or []) if i.get("site_id") == P1]
+            if items:
+                lo = mid
+                for i in items:
+                    tc.put("/api/alarms/%s/resolve" % i["id"], headers=H, json={"notes": "probe"})
+            else:
+                hi = mid
+            steps += 1
+        derived = round((lo + hi) / 2, 2)
+        print("%s /alarms: first %s | steps %d | derived spent %.2f vs actual %.2f" % (mode, first, steps, derived, actual))
+        if steps >= 10 and abs(derived - actual) <= max(5.0, 0.001 * actual):
+            F.append("%s /alarms: TM derives cumulative labor spent %.2f (actual %.2f) via evaluate + resolve" % (mode, derived, actual))
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

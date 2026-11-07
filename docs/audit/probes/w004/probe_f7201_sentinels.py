@@ -15,7 +15,8 @@ import asyncio, io, logging, os, traceback, uuid
 from motor.motor_asyncio import AsyncIOMotorClient
 
 SK, ST, SR = "SENTINELKEY" + uuid.uuid4().hex[:6], "SENTINELTEN" + uuid.uuid4().hex[:6], "SENTINELRES" + uuid.uuid4().hex[:6]
-SENT = (SK, ST, SR, "SENTINEL")
+SD = "sntldb" + uuid.uuid4().hex[:6]   # FG-117: a database-name marker
+SENT = (SK, ST, SR, "SENTINEL", SD)
 buf = io.StringIO(); h = logging.StreamHandler(buf); h.setLevel(logging.DEBUG)
 logging.getLogger().addHandler(h); logging.getLogger().setLevel(logging.DEBUG)
 F, OUT = [], []
@@ -36,7 +37,7 @@ def tb(exc):
 async def main():
     from app.audit import indexes as ix, idempotency as idem, store
     c = AsyncIOMotorClient(os.environ["MONGO_URL"])
-    db = c["f7201_" + uuid.uuid4().hex[:8]]
+    db = c[SD + "a"]
     # duplicates in the key registry, carrying the sentinels
     for _ in range(2):
         await db["audit_idempotency"].insert_one({"id": SR, "tenant_id": ST, "action": "probe.act", "key": SK})
@@ -57,7 +58,7 @@ async def main():
             leak("%s %s" % (label, type(exc).__name__), str(exc), tb(exc),
                  repr(exc.__cause__), "" if exc.__suppress_context__ else repr(exc.__context__))
     # L4 — conflict on a clean, indexed db
-    db2 = c["f7201b_" + uuid.uuid4().hex[:8]]
+    db2 = c[SD + "b"]
     await ix.ensure_audit_indexes(db2)
     await idem.begin_idempotent(db2, tenant_id=ST, key=SK, action="probe.act", request_fingerprint="fp1")
     try:
@@ -78,7 +79,7 @@ async def main():
         leak("L5 %s" % type(exc).__name__, str(exc), tb(exc))
     store.CHAIN_APPEND_MAX_ATTEMPTS = old
     # L7 — fail-closed without the index
-    db3 = c["f7201c_" + uuid.uuid4().hex[:8]]
+    db3 = c[SD + "c"]
     await db3["audit_idempotency"].insert_one({"warm": 1}); await db3["audit_idempotency"].delete_many({})
     await db3["audit_idempotency"].insert_one({"id": SR, "tenant_id": ST, "action": "probe.act", "key": SK})
     await db3["audit_idempotency"].insert_one({"id": SR, "tenant_id": ST, "action": "probe.act", "key": SK})
@@ -89,6 +90,13 @@ async def main():
     except Exception as exc:  # noqa: BLE001
         OUT.append("L7 fail-closed: %s" % type(exc).__name__)
         leak("L7 %s" % type(exc).__name__, str(exc), tb(exc))
+    # L8 (FG-117): the startup INFO line for a successful index creation
+    db4 = c[SD + "d"]
+    rep = await ix.ensure_audit_indexes(db4)
+    line = ix.describe_report(rep) if hasattr(ix, "describe_report") else "%s: %s" % (rep["database"], rep["created"])
+    logging.getLogger("server").info("W0-04-C01 audit indexes %s", line)
+    leak("L8 startup info line", line)
+    await c.drop_database(db4.name)
     return c, db, db2, db3
 
 
