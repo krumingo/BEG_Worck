@@ -55,5 +55,10 @@ async def run_in_transaction(db, body: Callable[[Any], Awaitable[Any]]) -> Any:
         raise TransactionsUnavailable(
             "MongoDB multi-document transactions are not available on this deployment "
             "(a replica set is required)")
+    # W0-04-C01: the audit chain index must exist BEFORE the transaction opens;
+    # inside it record_event only checks (an index build would wait on the
+    # transaction's own collection lock).
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(db)
     async with await db.client.start_session() as session:
         return await session.with_transaction(body)
