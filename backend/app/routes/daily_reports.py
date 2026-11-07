@@ -1007,13 +1007,31 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
     now = datetime.now(timezone.utc).isoformat()
     saved = 0
 
-    for emp_id, emp_entries in by_emp.items():
-        total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
-
-        # Check for existing report
+    # LAB-01-E (FG-79): every existing report this batch would change is checked BEFORE any
+    # write — only its owner (the worker, or whoever created it) may change it, and only
+    # while it is DRAFT or REJECTED. One refusal → 409/403, nothing written.
+    existing_by_emp, refused = {}, []
+    for emp_id in by_emp:
         existing = await tenant.employee_daily_reports.find_one({
             "org_id": org_id, "employee_id": emp_id, "report_date": report_date
         })
+        if not existing:
+            continue
+        status = existing.get("approval_status") or existing.get("status") or ""
+        if user.get("id") not in (existing.get("employee_id"), existing.get("created_by")):
+            refused.append({"employee_id": emp_id, "report_id": existing["id"], "reason": "not_owner"})
+        elif status.upper() not in ("DRAFT", "REJECTED"):
+            refused.append({"employee_id": emp_id, "report_id": existing["id"], "reason": f"status_{status}"})
+        existing_by_emp[emp_id] = existing
+    if refused:
+        code = 403 if any(r["reason"] == "not_owner" for r in refused) else 409
+        raise HTTPException(status_code=code, detail={"message": "batch-save refused; nothing written",
+                                                      "refused": refused})
+
+    for emp_id, emp_entries in by_emp.items():
+        total_hours = round(sum(e["hours_worked"] for e in emp_entries), 2)
+
+        existing = existing_by_emp.get(emp_id)
 
         if existing:
             # Merge: add new entries to existing, avoid exact duplicates

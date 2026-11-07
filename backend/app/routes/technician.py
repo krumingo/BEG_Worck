@@ -1384,8 +1384,13 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Draft not found")
-    if doc.get("status") not in ["Draft", "Submitted"]:
-        raise HTTPException(status_code=400, detail="Cannot edit approved/rejected reports")
+    # LAB-01-E (FG-78): only the draft's owner (who entered it, or the worker it is for)
+    # edits it, and only while it is a Draft — a submitted report is changed only through
+    # the approval path (approve / reject / reset).
+    if user.get("id") not in (doc.get("submitted_by"), doc.get("worker_id")):
+        raise HTTPException(status_code=403, detail="Only the draft's owner can edit it")
+    if doc.get("status") not in ["Draft"]:
+        raise HTTPException(status_code=400, detail="Only Draft reports can be edited")
 
     now = datetime.now(timezone.utc).isoformat()
     update = {"updated_at": now}

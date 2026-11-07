@@ -33,6 +33,8 @@ import uuid
 
 import pytest
 
+from tests.pay_run_idempotency import EVENT_HOOKS
+
 from app.services.labor_cost import (
     DQ_AKORD_NO_APPROVED_QTY, DQ_AKORD_NO_PIECE_RATE, DQ_MISSING_RATE,
     compute_person_labor,
@@ -400,7 +402,8 @@ def run(monkeypatch, scenario, backend):
             await _seed(op)
             app = _app(monkeypatch, op)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
-                                         base_url="http://lab01") as c:
+                                         base_url="http://lab01",
+                                         event_hooks=EVENT_HOOKS) as c:  # R29 key (LAB-01-E)
                 return await scenario(c, op)
     return asyncio.run(body())
 

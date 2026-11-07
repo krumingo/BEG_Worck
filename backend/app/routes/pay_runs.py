@@ -2,7 +2,7 @@
 Routes — Pay Runs (Payroll settlement with multi-pay-type earned engine + payment slips).
 Formula: remaining = earned + bonuses - deductions - previously_paid - paid_now
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from typing import Annotated, Optional, List
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel, BeforeValidator, Field, ValidationInfo
@@ -796,11 +796,57 @@ async def generate_pay_run(
 
 # ── Create / Confirm Pay Run + Generate Slips ──────────────────────
 
+PAY_RUN_CREATE_ACTION = "pay_run.create"
+
+
 @router.post("/pay-runs")
-async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
+async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_current_user),
+                         idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")):
+    """LAB-01-E (FG-80, R29): a Pay Run is created only under an ``Idempotency-Key``
+    (W0-04 registry, per tenant). No key → 428. The same key with the same body returns
+    the run created the first time (no second run); the same key with another body → 409;
+    a key still in progress → 409. A failed attempt may be retried under the same key."""
+    from app.audit.idempotency import (
+        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IdempotencyConflict,
+        begin_idempotent, complete_idempotent, fail_idempotent, request_fingerprint)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
+    org_id = user["org_id"]
+    key = (idempotency_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=428, detail="Idempotency-Key header is required (R29)")
+    if len(key) > 200:
+        raise HTTPException(status_code=400, detail="Idempotency-Key is too long (max 200)")
+    fp = request_fingerprint(data.model_dump())
+    try:
+        state = await begin_idempotent(db, tenant_id=org_id, key=key, action=PAY_RUN_CREATE_ACTION,
+                                       request_fingerprint=fp)
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail="Idempotency-Key was already used for another Pay Run request")
+    if state["status"] == IDEMPOTENCY_DUPLICATE:
+        if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
+            run = await _tenant(user).pay_runs.find_one(
+                {"org_id": org_id, "id": state["result_reference"]}, {"_id": 0})
+            if run:
+                return dict(run, idempotent_replay=True)
+        raise HTTPException(status_code=409, detail="A Pay Run with this Idempotency-Key is in progress")
+    try:
+        result = await _create_pay_run(data, user)
+    except HTTPException as exc:
+        await fail_idempotent(db, tenant_id=org_id, key=key, action=PAY_RUN_CREATE_ACTION,
+                              error_code=f"http_{exc.status_code}")
+        raise
+    except Exception as exc:
+        await fail_idempotent(db, tenant_id=org_id, key=key, action=PAY_RUN_CREATE_ACTION,
+                              error_code=type(exc).__name__)
+        raise
+    await complete_idempotent(db, tenant_id=org_id, key=key, action=PAY_RUN_CREATE_ACTION,
+                              result_reference=result["id"])
+    return result
+
+
+async def _create_pay_run(data: PayRunCreateInput, user: dict):
+    tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
 
@@ -855,7 +901,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
         if correction:  # LAB-01-D (FG-66): the item names its correction record
-            correction["correction_id"] = correction_id(org_id, run_id, eid)
+            correction["correction_id"] = correction_id(org_id, eid, data.period_start, data.period_end)
         row = dict(row, correction_item=correction)
 
         frozen_row = {
@@ -1495,7 +1541,7 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
         if correction:  # LAB-01-D (FG-66): the item names its correction record
-            correction["correction_id"] = correction_id(org_id, run_id, eid)
+            correction["correction_id"] = correction_id(org_id, eid, data.period_start, data.period_end)
         row = dict(row, correction_item=correction)
         existing_row = existing_row_map.get(eid, {}) or {}
         day_cells = row.get("day_cells") or existing_row.get("day_cells") or []
@@ -1583,7 +1629,9 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
     if res.matched_count == 0:
         raise await _conflict(tenant, org_id, run_id, PAID_RUN_LOCKED)
     # LAB-01-D (FG-66): correction records follow the edited rows
-    await sync_run_corrections(tenant, db, org_id, {**run, "employee_rows": employee_rows}, user["id"])
+    await sync_run_corrections(tenant, db, org_id, {**run, "employee_rows": employee_rows,
+                                                     "period_start": data.period_start,
+                                                     "period_end": data.period_end}, user["id"])
 
     # Generate slips if confirming
     if data.status == "confirmed":

@@ -5,8 +5,10 @@ When what was already paid to a person exceeds the (re-priced) payable amount of
 Run row, the row shows remaining 0 and a ``correction_item``; this service turns that
 item into a real record:
 
-* ``payroll_corrections`` — one record per (pay run, employee), idempotent by
-  ``idempotency_key``; status ``pending_approval``. It is NEVER applied automatically:
+* ``payroll_corrections`` — one record per underlying overpayment: (employee, period,
+  source "paid pay runs of the period") — LAB-01-E (FG-80). Every Pay Run of the same
+  person and period sees the same overpayment and finds the same record (idempotent
+  across runs; the runs are listed in ``pay_run_ids``); status ``pending_approval``. It is NEVER applied automatically:
   no deduction, no reversal, no payment is created from it (CLAUDE.md §7/§8).
 * Approval: the canonical DQ/Approval runtime (W0-07) is NOT STARTED
   (IMPLEMENTATION_GATE_MATRIX). The record is therefore routed to Approval as
@@ -35,13 +37,18 @@ APPROVAL_AWAITING_RUNTIME = "awaiting_approval_runtime"  # W0-07 not started
 DQ_CODE = "PAYROLL_CORRECTION_PENDING_APPROVAL"
 
 
-def correction_id(org_id: str, run_id: str, employee_id: str) -> str:
-    """Deterministic id of the one correction of (tenant, run, employee)."""
-    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"beg-work:payroll-correction:{org_id}:{run_id}:{employee_id}"))
+SOURCE = "paid_pay_runs_of_period"
 
 
-def _key(run_id: str, employee_id: str) -> str:
-    return f"pay_run:{run_id}:employee:{employee_id}"
+def _key(employee_id: str, period_start: str, period_end: str) -> str:
+    """LAB-01-E (FG-80): the overpayment itself — employee + period + source — not a run."""
+    return f"overpayment:employee:{employee_id}:period:{period_start}..{period_end}:source:{SOURCE}"
+
+
+def correction_id(org_id: str, employee_id: str, period_start: str, period_end: str) -> str:
+    """Deterministic id of the one correction of (tenant, employee, period, source)."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL,
+                          f"beg-work:payroll-correction:{org_id}:{_key(employee_id, period_start, period_end)}"))
 
 
 async def _audit(raw_db, *, org_id: str, actor_id: str, action: str, record: dict,
@@ -82,15 +89,17 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
     Returns the records touched. Never changes a payment."""
     now = datetime.now(timezone.utc).isoformat()
     run_id = run["id"]
+    p_start, p_end = run.get("period_start"), run.get("period_end")
     touched = []
-    seen = set()
+    without = []  # employees of this run whose overpayment (for this period) is gone
     for row in run.get("employee_rows") or []:
         eid = row.get("employee_id")
         item = row.get("correction_item")
+        if eid and not item:
+            without.append(eid)
         if not eid or not item:
             continue
-        seen.add(eid)
-        key = _key(run_id, eid)
+        key = _key(eid, p_start, p_end)
         existing = await tenant.payroll_corrections.find_one(
             {"org_id": org_id, "idempotency_key": key}, {"_id": 0})
         fields = {
@@ -102,9 +111,10 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
         }
         if existing is None:
             record = {
-                "id": item.get("correction_id") or correction_id(org_id, run_id, eid),
+                "id": item.get("correction_id") or correction_id(org_id, eid, p_start, p_end),
                 "org_id": org_id, "idempotency_key": key, "type": "FLOW028_CORRECTION",
-                "employee_id": eid, "pay_run_id": run_id, "pay_run_number": run.get("number"),
+                "source": SOURCE, "employee_id": eid,
+                "pay_run_id": run_id, "pay_run_ids": [run_id], "pay_run_number": run.get("number"),
                 "period_start": run.get("period_start"), "period_end": run.get("period_end"),
                 **fields,
                 "status": STATUS_PENDING, "approval_status": APPROVAL_AWAITING_RUNTIME,
@@ -116,7 +126,10 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
                          record=record, diff={"after": fields},
                          reason="previously paid exceeds the re-priced earned amount (LAB-01)")
         elif existing.get("status") == STATUS_PENDING and existing.get("amount") == fields["amount"]:
-            record = existing  # idempotent: same run, same employee, same amount
+            record = existing  # idempotent: the same overpayment seen again (any run)
+            if run_id not in (existing.get("pay_run_ids") or []):
+                await tenant.payroll_corrections.update_one(
+                    {"org_id": org_id, "idempotency_key": key}, {"$addToSet": {"pay_run_ids": run_id}})
         elif existing.get("status") not in REOPENABLE or existing.get("applied"):
             # decided (approved / applied / rejected …): never rewritten. A new difference is
             # surfaced for a human, not merged into the decided record.
@@ -143,7 +156,8 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
                 {"org_id": org_id, "idempotency_key": key, "status": {"$in": list(REOPENABLE)},
                  "applied": {"$ne": True}},
                 {"$set": {k: record[k] for k in (*fields, "status", "approval_status", "approval_id",
-                                                 "version", "updated_at")}})
+                                                 "version", "updated_at")},
+                 "$addToSet": {"pay_run_ids": run_id}})
             if getattr(res, "matched_count", 1) == 0:
                 continue  # decided between the read and the write — left untouched
             await _audit(raw_db, org_id=org_id, actor_id=actor_id, action="payroll.correction.updated",
@@ -152,12 +166,15 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
         await _raise_dq(tenant, org_id, record, now)
         touched.append(record)
 
-    # a pending correction whose overpayment disappeared on this run → superseded (kept)
-    stale = await tenant.payroll_corrections.find(
-        {"org_id": org_id, "pay_run_id": run_id, "status": STATUS_PENDING}, {"_id": 0}).to_list(500)
+    # a pending correction whose overpayment (same employee + period) is gone → superseded
+    stale = []
+    for eid in without:
+        rec = await tenant.payroll_corrections.find_one(
+            {"org_id": org_id, "idempotency_key": _key(eid, p_start, p_end), "status": STATUS_PENDING},
+            {"_id": 0})
+        if rec:
+            stale.append(rec)
     for rec in stale:
-        if rec.get("employee_id") in seen:
-            continue
         rec = dict(rec, status=STATUS_SUPERSEDED, version=int(rec.get("version") or 1) + 1, updated_at=now)
         res = await tenant.payroll_corrections.update_one(
             {"org_id": org_id, "id": rec["id"], "status": STATUS_PENDING, "applied": {"$ne": True}},

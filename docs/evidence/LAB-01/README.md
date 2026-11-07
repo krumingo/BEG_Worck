@@ -55,3 +55,19 @@ Per-line amounts of one person add up to the cent to that person's total.
   - A run edit re-prices only `pending_approval` / `superseded` corrections that are not `applied`. The write filter enforces this too.
   - An approved, applied or other decided correction is never rewritten or superseded. A new difference opens the DQ alert `PAYROLL_CORRECTION_CHANGED_AFTER_DECISION` (decided amount vs new amount) instead.
 - **(b) Void before the write:** `void_labor_approvals` (version bump + void) now runs **before** the content or status write in PUT, reject, reset, batch merge, the technician draft edit and the work-report edit. If the write then fails, the approvals stay void, which is the safe side.
+
+## LAB-01-E (FLOW Guard pass 7: FG-78, FG-79, FG-80) — `tests-LAB-01-E.txt`
+- **FG-78:** `PUT /technician/draft/{id}` is allowed only for the draft's owner (`submitted_by` or `worker_id`), otherwise 403. Only a `Draft` can be edited; a submitted report gives 400.
+- **FG-79:** `POST /daily-reports/batch-save` checks every existing report first, before any write:
+  - the owner (`employee_id` or `created_by`) is required, otherwise 403;
+  - only DRAFT or REJECTED reports can be changed, otherwise 409;
+  - one refusal means nothing is written for anyone in the batch;
+  - a content change bumps the version and voids approvals (before the write).
+- **FG-80 — corrections:** one `payroll_corrections` record per underlying overpayment, keyed `overpayment:employee:<id>:period:<start>..<end>:source:paid_pay_runs_of_period`. It is the same record across runs (`pay_run_ids`) and is superseded per employee + period.
+- **FG-80 — R29 idempotency:** `POST /pay-runs` requires `Idempotency-Key` (W0-04 registry, per tenant, action `pay_run.create`).
+  - No key → 428.
+  - Same key + same body → the first run is returned (`idempotent_replay`).
+  - Same key + another body → 409; a key still in progress → 409.
+  - A refused attempt (4xx) can be retried under the same key.
+  - Frontend `PayRunsPage.js` sends one key per request body; a double click or retry reuses it. The frontend build was not run here (no node_modules).
+  - The R0-05 / R0-06 / LAB-01 test clients add a fresh key per `POST /pay-runs` (`tests/pay_run_idempotency.py`); their assertions are unchanged.
