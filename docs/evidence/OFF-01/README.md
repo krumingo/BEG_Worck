@@ -177,3 +177,28 @@ No other module writes offer totals (`grep offers.update_one|update_many|find_on
 | PM-01 | harness re-run: matrix byte-identical (only `seconds` changed, not committed) |
 
 Note: an earlier gate run (on `cd0eea1`) showed 75 W0 failures because the local `mongod` crashed (exit 14) while two suites ran against it at once. The server was recreated and every gate re-run sequentially; the numbers above are from that clean run.
+
+## Round 5 (07.11) — Addendum B, FLOW Guard pass 14 (package @ `c559ad7`)
+
+**Reproduced first** (`fcfe9f0` = tests only, on `bfc41f5` code): **12 failed**, 3 passed. The 3 that pass are `test_20` on mongomock, which does not interleave two requests; on real Mongo it fails in all 3 modes.
+
+| FG | Fix | Test |
+|---|---|---|
+| FG-135 (high): a legacy pair (v1 Sent 1200, v2 Sent 1500, v1 never superseded) — the client accepted v1 by its old link | Any version that has a newer version (a child, by `parent_offer_id`) is superseded, whatever the child's status. `/accept`, the public respond (approve, reject, revision), new-version and `GET /offers/review/{token}` refuse it with `OFFER_VERSION_SUPERSEDED`. The check runs before AND inside the transaction (inside `_family_guard` for approve). No data migration: legacy rows are untouched. | `test_19` (child Sent / Draft / Rejected / Cancelled) |
+| FG-136: DELETE ∥ send hard-deleted a just-sent offer, and send answered 500 | `DELETE /offers/{id}` is one conditional single-document delete: unsent, unlinked draft (`status Draft`, `sent_at` / `review_token` / `parent_offer_id` / `superseded_by` empty) with the `updated_at` as read. It is atomic on its own, so no transaction is needed. If `/send` won → 409 `OFFER_IN_USE`. `/send` never answers 500: if the offer vanished it returns 409 `OFFER_CHANGED`. | `test_20` ×10 × 3 modes, mongomock + real |
+| FG-137: `signed_pdf` without a file was accepted | `signed_pdf` without `evidence_file_id` → 422 `EVIDENCE_FILE_REQUIRED` (the file is then checked as in Addendum A §3). `verified_email` → 422 `VERIFIED_EMAIL_NOT_SUPPORTED`. There is no model of a verified client address and no record of the e-mail citing offer id + version, so it is never accepted without proof (debt D-OFF01-14). | `test_21` |
+| FG-138 part 1: a revoked or superseded link returned the whole old offer with prices | Superseded (also a legacy parent with a child) → **410** `OFFER_VERSION_SUPERSEDED`; cancelled or revoked → **410** `OFFER_NOT_OPEN`. The answer is a neutral Bulgarian text only, with no title, lines, prices, totals or ids. The review page shows the message. | `test_22` |
+| FG-138 part 2: the client view shows `material_unit_cost` / `labor_unit_cost` | **HELD** — the orchestrator is asking Krum first. Not changed. | — |
+| FG-139 (low): `review_token` stored in plaintext | **Debt D-OFF01-15**, not a small change. The editor rebuilds the "copy link" from `offer.review_token` on every load, so a hash-only store needs a new "re-issue link" flow. `resolve_review_token` (the one deliberate cross-tenant lookup), the respond CAS and the review page key on the plaintext. Existing tokens need a migration or a dual lookup. | — |
+
+My own tests were adjusted only where Addendum B changes the expected answer:
+- `test_02`: the review page is now 410.
+- `test_04`: `verified_email` is now 422, so the key-reuse case uses `signed_pdf` with another file.
+- `test_17`: a parent with a child is now `OFFER_VERSION_SUPERSEDED`; only the newest version can win the race.
+
+New debts:
+
+| ID | Debt |
+|---|---|
+| D-OFF01-14 | `verified_email` needs a verified client address (FLOW-002 contacts) and the e-mail itself (cites offer id + version) in the File Registry; until both exist it is refused (422). |
+| D-OFF01-15 | FG-139: hash-only storage of `review_token` (sha256) with a re-issue flow for the link and a migration of existing tokens. |
