@@ -16,18 +16,27 @@
  "allowed_budget_view": {
   "POST /api/budget-freezes/{project_id}": {
    "off/requester": [
+    ".packages[].budget_total",
     ".packages[].labor_budget_total",
+    ".packages[].material_budget_total",
     ".totals.labor_budget",
+    ".totals.material_budget",
     ".totals.total_budget"
    ],
    "shadow/requester": [
+    ".packages[].budget_total",
     ".packages[].labor_budget_total",
+    ".packages[].material_budget_total",
     ".totals.labor_budget",
+    ".totals.material_budget",
     ".totals.total_budget"
    ],
    "enforce/requester": [
+    ".packages[].budget_total",
     ".packages[].labor_budget_total",
+    ".packages[].material_budget_total",
     ".totals.labor_budget",
+    ".totals.material_budget",
     ".totals.total_budget"
    ]
   },

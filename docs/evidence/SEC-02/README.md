@@ -442,6 +442,29 @@ Merge commit `4c7a87a`. Конфликтите бяха само в import-ит�
 ### Извън обхвата
 FG-76 (две различни „изхарчено“) отива към LAB-01, което ще пусне expected-actual през своята функция. #71 запазва правилата за видимост.
 
+## SEC-02-G (07.11.2026) — Codex CHANGES_REQUESTED @ `dee0610`: SEC71-01, SEC71-02
+
+### SEC71-01 [P1] — `POST /budget-freezes/{project_id}` даваше на техническия ръководител клиентската цена и марж
+Route-ът е R20-2B (SiteManager член на проекта може да замразява бюджета). Отговорът обаче връщаше целия снимков запис: `sale_total` 12345, `planned_margin` 77 и `totals.total_sale`.
+* Отговорът минава през `@strip_for_budget_view`. Финансовите роли получават всичко, техническият ръководител — R20 бюджетния изглед (бюджети, без продажна цена / марж), всеки друг — без пари. Записът в базата не се променя.
+* Бюджетният изглед вече не зависи само от списък с имена. `finance_read.budget_view_forbidden` е списъкът + шаблон `sale|price|margin|profit|revenue|markup|commission|final_total` за **всяко** име на ключ; `without_budget_view_forbidden` го прилага при всеки R20-5B отговор и при pulse изгледа.
+* Защо скенерите не го хванаха: (1) регексът за пари нямаше `sale`; (2) отговорите в „allowed_budget_view“ не се проверяваха за забранени ключове; (3) seed-ът нямаше пакет с продажна цена. И трите са поправени. Регексът има `sale|markup|commission`. Забранен ключ в allowed отговор се записва като **hit**, а пълният списък ключове на всеки allowed отговор се пази. Seed-ът има пакет на P1 със `sale_total` 12345 и `planned_margin` 77.
+
+### SEC71-02 [P1] — pulse с един платен и един неплатен работник показваше 160
+`GET /sites/{id}/pulse` (и `/pulse/range`, `/pulse/today`, `POST …/pulse/generate` — същият декоратор) броеше всички `worker_id` от pulse-а. При един платен (160) и един с 0 даваше `total_labor_cost` 160 и `total_cost` на СМР 160.
+* `money_write.pulse_paid_workers(pulse)`: брои се само работник с `labor_cost` ≠ 0 за деня. Pulse-ът пази един разход на човек, не по СМР, затова работникът се брои за СМР само ако то е **единственото** му СМР за деня. Иначе заплащането му не може да се отнесе и би вдигнало чуждо СМР до „2+“.
+* Всяко СМР от `smr_summary` е в списъка. СМР с < 2 преброени работници губи `total_cost`, ден с < 2 платени губи `total_labor_cost`. `r31_view` вече скрива при ≤ 1 (по-рано само при точно 1).
+
+### Доказателство
+* unit: `test_sec71_01_the_budget_freeze_answer_is_the_budget_view` (TM: нито един забранен ключ, бюджетите остават; финансови: целият отговор), `test_sec71_02_pulse_counts_only_paid_workers` (160 + 0 → скрито; 160 + 200 → видимо; платен работник с 2 СМР не се отнася към нито едно), `test_sec71_01_no_allowed_budget_view_route_carries_a_forbidden_field` (всички allowed route-ове в двата скана, със забранителния шаблон).
+* реален Mongo, harness-ът на SEC-02 в off/shadow/enforce:
+  * всеки R20-2B / R20-5B отговор 200/201 към не-финансова роля е без забранен ключ (`forbidden_keys`);
+  * финансовите роли на POST freeze виждат `sale_total`, `planned_margin`, `total_sale`;
+  * `pulse_one_paid_worker`: `GET /sites/{P1}/pulse?date=2026-11-03` (160 + 0) → TM без 160, без worker list, snapshot само budget/status; Accountant и Owner виждат 160.
+* скенерите след поправката: GET 5640 извиквания / 0 hits, POST/PUT 4575 / 0 hits. POST freeze е в allowed само с бюджетни ключове.
+* контрапроба `sec02g_counter_check.txt`: при `dee0610` TM получава `sale_total` 12345, `planned_margin` 77 и pulse 160; след поправката — нито едно от тях.
+* PM-01: 0 клетки спрямо `dee0610` (статусите и записите са същите; промяната е само в съдържанието на отговора).
+
 ## Rollback
 
 Revert на commit-а. Няма миграция и няма запис в данни. Проектните назначения, синхронизирани след SEC-02, носят три допълнителни read действия; при стария код те просто не се ползват.

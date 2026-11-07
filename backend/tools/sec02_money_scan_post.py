@@ -36,7 +36,8 @@ spec = importlib.util.spec_from_file_location("sec02t", BACKEND / "tests" / "tes
 T = importlib.util.module_from_spec(spec); sys.modules["sec02t"] = T; spec.loader.exec_module(T)
 
 MONEY = re.compile(r"(cost|price|amount|salary|wage|profit|margin|revenue|hourly_rate|net_pay|"
-                   r"vat|paid|balance|budget|_value$|^value$|payable|receivable|invoiced|earned)", re.I)
+                   r"vat|paid|balance|budget|_value$|^value$|payable|receivable|invoiced|earned|"
+                   r"sale|markup|commission)", re.I)   # SEC-02-G: + sale/markup/commission
 ROLES = ("requester", "technician", "warehousekeeper", "driver", "viewer")
 MODES = ("off", "shadow", "enforce")
 OUT = BACKEND.parent / "docs" / "evidence" / "SEC-02" / "scan_sec02e_post.json"
@@ -65,7 +66,8 @@ def child(mongo_url):
     from fastapi.testclient import TestClient
     from fastapi.routing import APIRoute
     from app.permissions.finance_read import (by_route, R20_2B, R20_5B, EMPLOYEE_FILE_ACTION,
-                                              SCAN_JUDGED_NOT_MONEY, SCAN_OWN_RECORD_PATHS)
+                                              SCAN_JUDGED_NOT_MONEY, SCAN_OWN_RECORD_PATHS,
+                                              budget_view_forbidden)
     reg = by_route()
     budget_view = {m + " " + p for (m, p), e in reg.items()
                    if e.rule in (R20_2B, R20_5B) and e.action != EMPLOYEE_FILE_ACTION}
@@ -132,7 +134,13 @@ def child(mongo_url):
                     except Exception:
                         continue
                     if hits:
-                        if role == "requester" and path in budget_view:
+                        # SEC-02-G (Codex SEC71-01): the budget view never carries a client
+                        # price / sale / margin / profit — such a key is a hit, not "allowed"
+                        bad = [h for h in hits
+                               if budget_view_forbidden(re.split(r"[.\[\]]+", h.strip(".[]"))[-1])]
+                        if role == "requester" and path in budget_view and bad:
+                            bucket, hits = results, bad
+                        elif role == "requester" and path in budget_view:
                             bucket = allowed
                         elif path in SCAN_JUDGED_NOT_MONEY:
                             bucket = judged
@@ -140,7 +148,8 @@ def child(mongo_url):
                             bucket = own            # {user_id} is the technician himself
                         else:
                             bucket = results
-                        bucket.setdefault(path, {})["%s/%s" % (mode, role)] = sorted(set(hits))[:8]
+                        bucket.setdefault(path, {})["%s/%s" % (mode, role)] = (
+                            sorted(set(hits)) if bucket is allowed else sorted(set(hits))[:8])
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
         OUT.write_text(json.dumps({"calls": calls, "roles": list(ROLES), "modes": list(MODES),
                                    "hits": results, "allowed_budget_view": allowed,

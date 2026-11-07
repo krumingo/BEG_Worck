@@ -194,6 +194,34 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "id": sid(tkey, "dwl1"), "org_id": org, "site_id": p1, "date": "2026-11-02",
             "work_type_id": sid(tkey, "wt1"),
             "entries": [{"user_id": tech, "hours": 8}], "created_at": now})
+        # SEC-02-G (Codex SEC71-01): an execution package with a client price and a margin,
+        # so the budget freeze answer would show them if the budget view kept them.
+        await op_db.execution_packages.insert_one({
+            "id": sid(tkey, "ep2"), "org_id": org, "project_id": p1,
+            "activity_name": "Мазилка", "unit": "m2", "qty": 10, "sale_total": 12345.0,
+            "labor_budget_total": 500.0, "material_budget_total": 100.0,
+            "budget_total": 600.0, "planned_margin": 77.0, "created_at": now})
+        # SEC-02-G (Codex SEC71-02, FG-74): ONE paid worker (160) and one with no pay on the
+        # same day and SMR — a stored pulse of P1 and the work sessions behind it.
+        driver = t["users"]["driver"]["id"]
+        await op_db.site_pulses.insert_one({
+            "id": sid(tkey, "pulse2"), "org_id": org, "site_id": p1, "date": "2026-11-03",
+            "site_name": "P1", "generated_at": now, "total_workers": 2, "total_hours": 16,
+            "workers": [{"worker_id": tech, "worker_name": "T", "hours": 8,
+                         "smr_types": ["Мазилка"], "labor_cost": 160.0},
+                        {"worker_id": driver, "worker_name": "D", "hours": 8,
+                         "smr_types": ["Мазилка"], "labor_cost": 0}],
+            "smr_summary": [{"smr_type": "Мазилка", "total_hours": 16, "total_cost": 160.0,
+                             "workers_count": 2}],
+            "total_labor_cost": 160.0, "materials_used": [], "total_material_cost": 0,
+            "budget_snapshot": {"total_budget": 5000.0, "total_spent": 3360.0,
+                                "remaining": 1640.0, "burn_pct": 67.2, "status": "ok"},
+            "alerts": []})
+        await op_db.work_sessions.insert_one({
+            "id": sid(tkey, "ws2"), "org_id": org, "worker_id": driver, "site_id": p1,
+            "smr_type_id": "Мазилка", "started_at": "2026-11-02T07:00:00",
+            "ended_at": "2026-11-02T15:00:00", "duration_hours": 8, "labor_cost": 0,
+            "created_at": now})
 
 
 def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:
@@ -218,6 +246,26 @@ def body_money_keys(value: Any, keep=()) -> List[str]:
         if isinstance(v, dict):
             for k, x in v.items():
                 if isinstance(k, str) and is_money_key(k, list(v), keep):
+                    found.add(k)
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(value)
+    return sorted(found)
+
+
+def forbidden_budget_view_keys(value: Any) -> List[str]:
+    """SEC-02-G: every key with a non-zero number that the budget view must never carry
+    (``finance_read.budget_view_forbidden``: client price, sale, margin, profit, ...)."""
+    from app.permissions.finance_read import budget_view_forbidden
+    found = set()
+
+    def walk(v):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if budget_view_forbidden(k) and isinstance(x, (int, float)) \
+                        and not isinstance(x, bool) and x != 0:
                     found.add(k)
                 walk(x)
         elif isinstance(v, list):
@@ -420,10 +468,12 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
             if p["rule"] in (R20_2B, R20_5B) and p["action"] != EMPLOYEE_FILE_ACTION \
-                    and resp.status_code == 200:
+                    and resp.status_code in (200, 201):
                 from app.permissions.finance_read import _is_actual
                 row["actual_keys"] = sorted({k for k in body_money_keys(body) if _is_actual(k)})
                 row["worker_detail"] = money_keys_in(body, {"workers", "workers_count"})
+                # SEC-02-G (Codex SEC71-01): client prices / sale / margin / profit
+                row["forbidden_keys"] = forbidden_budget_view_keys(body)
             if p["rule"] == R20_2B and resp.status_code == 200 and "expected-actual" in p["path"]:
                 groups = (body.get("groups") if "groups" in body
                           else body.get("top_overruns", {}).get("groups")) or []
@@ -493,6 +543,23 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                             "scope_type", "scope_id", "structured_diff", "tool_or_endpoint",
                             "idempotency_key", "sequence", "integrity_hash")}
                             for e in events]})
+        # SEC-02-G (Codex SEC71-02): the stored P1 pulse of 2026-11-03 — one worker paid
+        # 160, one with no pay. The Technical Manager gets no day / SMR total; finance does.
+        pulse_paid = []
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            for role in ("requester", "accountant", "owner"):
+                r = tc.get("/api/sites/%s/pulse" % fx["A"]["project_id"],
+                           params={"date": "2026-11-03"},
+                           headers={"Authorization": "Bearer " + tokens[("A", role)]})
+                body = r.json() if r.status_code == 200 else {}
+                pulse_paid.append({
+                    "mode": mode, "role": role, "legacy_role": fx["A"]["users"][role]["role"],
+                    "status": r.status_code, "date": body.get("date"),
+                    "total_labor_cost": body.get("total_labor_cost"),
+                    "smr_total_cost": [x.get("total_cost") for x in body.get("smr_summary") or []],
+                    "has_workers": "workers" in body,
+                    "budget_snapshot": body.get("budget_snapshot")})
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -505,6 +572,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "site_manager_mirrors": mirrors,
         "labor_replay": replay,
         "price_modifier_audit": pm_audit,
+        "pulse_one_paid_worker": pulse_paid,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -573,11 +641,22 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
                 assert set(r["written"]) <= {"op.audit_events"}, r
             else:
                 assert r["written"] == [], r
-        if r["status"] == 200 and "actual_keys" in r and r["legacy_role"] == "SiteManager" \
+        if r["status"] in (200, 201) and "actual_keys" in r \
+                and r["legacy_role"] == "SiteManager" \
                 and r["tenant"] in ("A", "B") and r["target"] in ("P1", None):
-            # SEC-02-D (audit SEC02C-1; R31): P1 has ONE worker in the seed, so the
+            # SEC-02-D (audit SEC02C-1; R31): P1 has ONE PAID worker in the seed (SEC-02-G:
+            # plus one with no pay, in the sessions and in a stored pulse), so the
             # Technical Manager gets no spent / actual at all, and never worker detail.
             assert r["actual_keys"] == [] and r["worker_detail"] == [], r
+        if r["status"] in (200, 201) and "forbidden_keys" in r \
+                and r["legacy_role"] not in FINANCE:
+            # SEC-02-G (Codex SEC71-01): no allowed budget view carries a client price,
+            # sale, margin or profit — in every mode, for every R20-2B / R20-5B route
+            assert r["forbidden_keys"] == [], r
+        if r["probe"] == "POST /api/budget-freezes/{project_id}" and r["status"] == 201 \
+                and r["legacy_role"] in FINANCE and r["target"] in ("P1", None):
+            # finance roles keep the full view (the seed's package has sale 12345, margin 77)
+            assert {"sale_total", "planned_margin", "total_sale"} <= set(r["forbidden_keys"]), r
         if r["status"] == 200 or r["status"] == 201:
             if r["rule"] == R20_5B and "money_keys" in r and not exp["money"]:
                 assert r["hidden_budget_keys"] == [] and not r["leaks_7777"], r
@@ -659,6 +738,22 @@ def check_price_modifier_audit(rows: List[Dict[str, Any]]) -> None:
         assert e["idempotency_key"] and isinstance(e["sequence"], int) and e["integrity_hash"], e
 
 
+def check_pulse_one_paid_worker(rows: List[Dict[str, Any]]) -> None:
+    """SEC-02-G (Codex SEC71-02): the stored pulse with ONE paid worker (160) and one with
+    no pay — the Technical Manager (member of P1) gets the pulse without the day total,
+    the SMR total, the worker list or the cumulative spent; finance roles get 160."""
+    assert len(rows) == len(MODES) * 3
+    for r in rows:
+        assert r["status"] == 200 and r["date"] == "2026-11-03", r
+        if r["legacy_role"] in FINANCE:
+            assert r["total_labor_cost"] == 160.0 and r["smr_total_cost"] == [160.0], r
+            assert r["has_workers"], r
+        else:
+            assert r["total_labor_cost"] is None and r["smr_total_cost"] == [None], r
+            assert not r["has_workers"], r
+            assert r["budget_snapshot"] == {"total_budget": 5000.0, "status": "ok"}, r
+
+
 def check_mirrors(mirrors: List[Dict[str, Any]]) -> None:
     """FG-14 / FG-12 in enforce: the SiteManager's project mirrors carry the budget view
     and never a finance read."""
@@ -710,9 +805,11 @@ def test_no_other_route_carries_a_sec02_action():
     assert marked == {(e.method, e.path) for e in FINANCE_READS
                       if e.rule not in (R20_5, R20_5M, R20_5B)}
     stripped = {k for k, r in _routes().items() if getattr(r.endpoint, "sec02_strips_money", False)}
-    # SEC-02-E: the pulse generator is guarded (R20-2B) AND answers with the pulse view.
+    # SEC-02-E: the pulse generator is guarded (R20-2B) AND answers with the pulse view;
+    # SEC-02-G (SEC71-01): so does the budget freeze, with the R20 budget view.
     assert stripped == {(e.method, e.path) for e in FINANCE_READS if e.rule in (R20_5M, R20_5B)} \
-        | {("POST", "/api/sites/{site_id}/pulse/generate")}
+        | {("POST", "/api/sites/{site_id}/pulse/generate"),
+           ("POST", "/api/budget-freezes/{project_id}")}
 
 
 def test_the_registry_has_one_action_per_endpoint_and_known_rules():
@@ -1013,6 +1110,96 @@ def test_fg74_only_workers_with_pay_in_the_window_count(monkeypatch):
     assert "actual_cost" not in v["activities"][0], v
 
 
+def test_sec71_01_the_budget_freeze_answer_is_the_budget_view(monkeypatch):
+    """SEC-02-G (Codex SEC71-01; R20-5B): POST /budget-freezes answers a Technical Manager
+    with budgets only — no client price (sale), margin, profit — while finance roles keep
+    the full answer. The projection is a key pattern, not only a list of names."""
+    import asyncio
+    from app.permissions import money_write
+    from app.routes import budget_progress
+    endpoint = budget_progress.create_budget_freeze
+    assert getattr(endpoint, "sec02_budget_view", False), "not decorated"
+    freeze = {"packages": [{"activity_name": "Мазилка", "sale_total": 12345.0,
+                            "labor_budget_total": 500.0, "budget_total": 600.0,
+                            "planned_margin": 77.0, "client_unit_price": 9.0}],
+              "totals": {"labor_budget": 500.0, "total_budget": 600.0, "total_sale": 12345.0,
+                         "expected_profit": 5.0, "markup_pct": 3.0}}
+
+    @money_write.strip_for_budget_view
+    async def handler(project_id: str, user: dict = None):
+        return freeze
+
+    async def r31_as_is(_u, _p, body, **_k):
+        return body
+    monkeypatch.setattr(money_write, "r31_budget_view", r31_as_is)
+
+    def visible(fin, tm):
+        async def mv(*_a, **_k):
+            return fin
+
+        async def bv(*_a, **_k):
+            return tm
+        monkeypatch.setattr(money_write, "money_values_visible", mv)
+        monkeypatch.setattr(money_write, "budget_view_visible", bv)
+    visible(False, True)
+    v = asyncio.run(handler(project_id="P1", user={"id": "sm"}, _sec02_request=None))
+    assert forbidden_budget_view_keys(v) == [] and "12345" not in json.dumps(v), v
+    assert v["packages"][0]["labor_budget_total"] == 500.0 and v["totals"]["total_budget"] == 600.0
+    visible(True, True)
+    assert asyncio.run(handler(project_id="P1", user={"id": "acc"}, _sec02_request=None)) is freeze
+
+
+def test_sec71_02_pulse_counts_only_paid_workers(monkeypatch):
+    """SEC-02-G (Codex SEC71-02; FG-74 on the pulse path): one paid worker (160) and one
+    with no pay — the Technical Manager gets neither the day total nor the SMR total. A
+    worker with several SMRs that day cannot be attributed and counts for none of them."""
+    import asyncio
+    from app.permissions import money_write
+
+    def pulse(workers, smr):
+        return {"site_id": "P1", "workers": workers,
+                "smr_summary": [{"smr_type": k, "total_hours": 8, "total_cost": c,
+                                 "workers_count": n} for k, c, n in smr],
+                "total_labor_cost": sum(w["labor_cost"] for w in workers),
+                "budget_snapshot": {"total_budget": 5000.0, "total_spent": 160.0,
+                                    "status": "ok"}}
+    w = lambda i, cost, *smr: {"worker_id": i, "labor_cost": cost, "smr_types": list(smr)}
+
+    @money_write.strip_pulse_for_non_finance
+    async def handler(site_id: str, user: dict = None):
+        return current
+
+    async def no(*_a, **_k):
+        return False
+
+    async def yes(*_a, **_k):
+        return True
+    monkeypatch.setattr(money_write, "money_values_visible", no)
+    monkeypatch.setattr(money_write, "budget_view_visible", yes)
+    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "sm"}, _sec02_request=None))
+
+    # Codex: 160 + 0 -> one paid worker -> no day total, no SMR total
+    current = pulse([w("t", 160.0, "Мазилка"), w("d", 0, "Мазилка")], [("Мазилка", 160.0, 2)])
+    assert money_write.pulse_paid_workers(current) == ({"мазилка": {"t"}}, 1)
+    v = run()
+    assert "total_labor_cost" not in v and "total_cost" not in v["smr_summary"][0], v
+    assert "workers" not in v and "workers_count" not in v["smr_summary"][0], v
+    assert v["budget_snapshot"] == {"total_budget": 5000.0, "status": "ok"}
+    # two paid workers on one SMR -> both totals stay
+    current = pulse([w("t", 160.0, "Мазилка"), w("d", 200.0, "Мазилка")],
+                    [("Мазилка", 360.0, 2)])
+    v = run()
+    assert v["total_labor_cost"] == 360.0 and v["smr_summary"][0]["total_cost"] == 360.0
+    # y is paid but on two SMRs: Шпакловка has x only -> no SMR keeps its total; the day
+    # has 2 paid workers -> the day total stays
+    current = pulse([w("x", 100.0, "Шпакловка"), w("y", 300.0, "Мазилка", "Шпакловка")],
+                    [("Мазилка", 250.0, 1), ("Шпакловка", 150.0, 2)])
+    assert money_write.pulse_paid_workers(current) == (
+        {"мазилка": set(), "шпакловка": {"x"}}, 2)
+    v = run()
+    assert all("total_cost" not in r for r in v["smr_summary"]) and v["total_labor_cost"] == 400.0
+
+
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
     import asyncio
     from app.permissions.money_write import money_values_visible
@@ -1070,6 +1257,7 @@ def test_the_committed_evidence_satisfies_the_package():
     check_mirrors(data["site_manager_mirrors"])
     check_replay(data["labor_replay"])
     check_price_modifier_audit(data["price_modifier_audit"])
+    check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
 
 
 def test_the_audit_scan_finds_no_money_for_non_finance_roles():
@@ -1098,6 +1286,28 @@ def test_the_audit_scan_finds_no_money_for_non_finance_roles():
     assert set(scan["own_record"]) <= SCAN_OWN_RECORD_PATHS
     for cells in scan["own_record"].values():
         assert {c.split("/")[1] for c in cells} == {"technician"}
+
+
+def test_sec71_01_no_allowed_budget_view_route_carries_a_forbidden_field():
+    """SEC-02-G (Codex SEC71-01): EVERY route the scanners accept as the Technical
+    Manager's budget view (``allowed_budget_view``, GET and POST/PUT scans, all modes)
+    answered with no non-zero client price, sale, margin, profit, markup or commission —
+    the scanners now file such a key as a hit (``budget_view_forbidden``), and the full
+    key list of every allowed answer is kept. Also: each allowed route keeps budget keys
+    only, and the budget freeze POST is among them."""
+    from app.permissions.finance_read import budget_view_forbidden
+    leaf = lambda k: re.split(r"[.\[\]]+", k.strip(".[]"))[-1]
+    seen = set()
+    for name in ("scan_sec02b.json", "scan_sec02e_post.json"):
+        scan = json.loads((EVIDENCE / name).read_text(encoding="utf-8"))
+        assert scan["hits"] == {}, name
+        for path, cells in scan["allowed_budget_view"].items():
+            seen.add(path)
+            for keys in cells.values():
+                assert keys, (name, path)
+                bad = [k for k in keys if budget_view_forbidden(leaf(k))]
+                assert bad == [], (name, path, bad)
+    assert "POST /api/budget-freezes/{project_id}" in seen
 
 
 # ═══════════════════════════════════════════════════════════════════ real-Mongo test
@@ -1174,6 +1384,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     check_mirrors(data["site_manager_mirrors"])
     check_replay(data["labor_replay"])
     check_price_modifier_audit(data["price_modifier_audit"])
+    check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r.get("money_keys")) for r in data["rows"]} == \

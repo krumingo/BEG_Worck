@@ -347,7 +347,7 @@ def strip_for_budget_view(fn=None, *, labor_source: str = "sessions"):
     import functools
     import inspect
     from fastapi.encoders import jsonable_encoder
-    from app.permissions.finance_read import strip_money, BUDGET_VIEW_HIDDEN_FIELDS
+    from app.permissions.finance_read import strip_money, without_budget_view_forbidden
 
     sig = inspect.signature(fn)
     own_request, params = _request_param(sig)
@@ -362,7 +362,7 @@ def strip_for_budget_view(fn=None, *, labor_source: str = "sessions"):
         body = jsonable_encoder(result)
         if await budget_view_visible(request, user, kwargs.get("project_id")):
             return await r31_budget_view(user, kwargs.get("project_id"),
-                                         without_keys(body, BUDGET_VIEW_HIDDEN_FIELDS),
+                                         without_budget_view_forbidden(body),  # SEC-02-G
                                          source=labor_source)
         return strip_money(body)
 
@@ -378,6 +378,34 @@ def strip_for_budget_view(fn=None, *, labor_source: str = "sessions"):
 # the site's budget snapshot (budget / spent / remaining), the per-SMR totals and the site
 # labor total. Never the per-worker labor cost (FLOW-037 §3.4) or material values.
 PULSE_BUDGET_VIEW_KEYS = ("budget_snapshot", "smr_summary", "total_labor_cost")
+
+
+def pulse_paid_workers(pulse: dict):
+    """SEC-02-G (Codex SEC71-02; FG-74 on the pulse path): the PAID workers of one site
+    pulse, per SMR and of the day, for the R31 2+ rule (``finance_read.r31_view``).
+
+    A worker counts only with a non-zero ``labor_cost`` that day. The pulse keeps one cost
+    per worker, not per SMR, so he counts for an SMR only when it is his ONLY SMR that
+    day — else his pay cannot be attributed and could lift another worker's SMR over the
+    rule. Every SMR of ``smr_summary`` is listed, so an SMR with fewer than 2 counted
+    workers loses its ``total_cost``; a day with fewer than 2 paid workers loses
+    ``total_labor_cost``."""
+    from app.permissions.finance_read import _norm
+    workers = [w for w in pulse.get("workers") or [] if isinstance(w, dict)]
+    paid = set()
+    for w in workers:
+        try:
+            if w.get("worker_id") and round(float(w.get("labor_cost") or 0), 2):
+                paid.add(w["worker_id"])
+        except (TypeError, ValueError):
+            pass
+    day = {_norm(r.get("smr_type")): set() for r in pulse.get("smr_summary") or []
+           if isinstance(r, dict)}
+    for w in workers:
+        types = {_norm(t) for t in w.get("smr_types") or []}
+        if w.get("worker_id") in paid and len(types) == 1:
+            day.setdefault(types.pop(), set()).add(w["worker_id"])
+    return day, len(paid)
 
 
 def strip_pulse_for_non_finance(fn):
@@ -411,16 +439,11 @@ def strip_pulse_for_non_finance(fn):
                 own[site] = await budget_view_visible(request, user, site)
             out = strip_money(pulse)
             if own[site]:
-                from collections import defaultdict
-                from app.permissions.finance_read import r31_view, _norm
-                # the day: workers per SMR from the pulse itself (then dropped)
-                day = defaultdict(set)
-                for w in pulse.get("workers") or []:
-                    for t in w.get("smr_types") or []:
-                        day[_norm(t)].add(w.get("worker_id"))
-                n_day = len({w.get("worker_id") for w in pulse.get("workers") or []})
+                from app.permissions.finance_read import (r31_view, _norm,
+                                                          without_budget_view_forbidden)
+                day, n_paid = pulse_paid_workers(pulse)   # SEC-02-G (Codex SEC71-02)
                 kept = {k: pulse[k] for k in ("smr_summary", "total_labor_cost") if k in pulse}
-                out.update(r31_view(kept, dict(day), n_day))
+                out.update(without_budget_view_forbidden(r31_view(kept, day, n_paid)))
                 if isinstance(pulse.get("budget_snapshot"), dict):
                     # SEC-02-E (audit SEC02D-1 b): the snapshot is the site's CUMULATIVE
                     # spent at generation time — two stored days differ by one day's labor,

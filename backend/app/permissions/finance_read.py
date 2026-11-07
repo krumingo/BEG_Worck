@@ -49,6 +49,7 @@ FG-12 ("по-ограниченото право има предимство") �
 
 This module is pure data (no imports from the app) so the catalog can import it.
 """
+import re as _re
 from typing import Dict, FrozenSet, List, NamedTuple, Set
 
 R20_1 = "R20-1"
@@ -331,7 +332,28 @@ EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS: FrozenSet[str] = frozenset(
 # R20-5B (FG-43): what the Technical Manager does NOT see on his budget screens.
 BUDGET_VIEW_HIDDEN_FIELDS: FrozenSet[str] = frozenset(
     {"subcontractor_price", "sale_total", "final_total", "unit_price", "total_price",
-     "margin", "profit"})
+     "margin", "profit", "planned_margin", "total_sale"})
+# SEC-02-G (Codex SEC71-01): the budget view never carries a client price, sale, margin,
+# profit, revenue, markup or commission under ANY key name — the set above plus this
+# pattern. Used to project the response and by the scanners / tests on every
+# allowed_budget_view route.
+BUDGET_VIEW_FORBIDDEN = _re.compile(
+    r"(sale|price|margin|profit|revenue|markup|commission|final_total)", _re.I)
+
+
+def budget_view_forbidden(key) -> bool:
+    return isinstance(key, str) and (key in BUDGET_VIEW_HIDDEN_FIELDS
+                                     or bool(BUDGET_VIEW_FORBIDDEN.search(key)))
+
+
+def without_budget_view_forbidden(value):
+    """A copy of ``value`` without any key the budget view must not carry, at any depth."""
+    if isinstance(value, dict):
+        return {k: without_budget_view_forbidden(v) for k, v in value.items()
+                if not budget_view_forbidden(k)}
+    if isinstance(value, list):
+        return [without_budget_view_forbidden(v) for v in value]
+    return value
 # /api/subscription: the plan price — Owner/Admin only.
 SUBSCRIPTION_PRICE_FIELDS: FrozenSet[str] = frozenset({"plan_price", "price"})
 
@@ -345,7 +367,6 @@ WEEKLY_MATRIX_MONEY_FIELDS: FrozenSet[str] = frozenset(
 
 
 # ── SEC-02-A: which keys are money (R20-5M) ─────────────────────────────────
-import re as _re
 
 # A key is money when its name says price / cost / amount / value / margin / budget /
 # pay / profit / revenue / VAT ...; quantities, hours, counts, ids, dates and statuses
@@ -425,7 +446,9 @@ def r31_view(value, workers_by_smr: Dict[str, set], project_workers: int):
     """SEC-02-D: the Technical Manager's budget view with nothing that gives one worker's
     pay. ``workers_by_smr``: normalized SMR name -> distinct worker ids of the project;
     ``project_workers``: distinct workers of the project."""
-    single = {k for k, v in workers_by_smr.items() if len(v) == 1}
+    # SEC-02-G: fewer than 2 COUNTED (paid) workers — 0 included: a source may list an SMR
+    # whose only paid worker is not attributable to it (pulse, multi-SMR workers)
+    single = {k for k, v in workers_by_smr.items() if len(v) <= 1}
 
     def walk(v):
         if isinstance(v, list):

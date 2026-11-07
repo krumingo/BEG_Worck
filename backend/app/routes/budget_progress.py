@@ -15,6 +15,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.permissions.money_write import strip_money_for_non_finance, require_project_budget_read
+from app.permissions.money_write import strip_for_budget_view  # SEC-02-G (SEC71-01)
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -31,6 +32,7 @@ router = APIRouter(tags=["Budget Freeze / Progress"])
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/budget-freezes/{project_id}", status_code=201)
+@strip_for_budget_view   # SEC-02-G (Codex SEC71-01; R20-5B): the answer is the R20 budget view
 async def create_budget_freeze(
     project_id: str,
     _sec02: dict = Depends(require_project_budget_read(
