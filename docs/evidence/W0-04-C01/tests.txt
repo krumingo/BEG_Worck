@@ -137,3 +137,23 @@ W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
 ## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
 ## negative control: 90a582b indexes.py/store.py with the f72 sentinel tests: DuplicateKeyError chained as __cause__; middleware log contains 'idem_SENTINEL-TENANT-7f3a9c_pay_SENTINEL-KEY-c41e0b' and the Mongo keyValue/errmsg
 ## with the fix: no sentinel in message, chained traceback, report or caplog (startup, both lazy guards, ErrorHandlerMiddleware)
+
+# F-72-01 Addendum A — IdempotencyConflict (2026-11-07), commit 867a4ef — vs main 0f870c3 baseline above
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+188 passed, 6 warnings in 143.81s (0:02:23)
+## R0 (real mongo)
+814 passed, 6 warnings in 136.09s (0:02:16)
+## W0 DB-free
+15 failed, 1093 passed, 76 skipped, 6 warnings in 59.69s
+## W0 real mongo
+15 failed, 1169 passed, 6 warnings in 111.99s (0:01:51)
+## PM-01 (real mongo)
+6 passed, 6 warnings in 150.33s (0:02:30)
+## stability: C01 -k 'parallel or fg57 or no_index or retries or retake or f72' x10
+     10 15 passed, 19 deselected, 1 warning
+## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
+## negative control ced08ed app code: test_f72_idempotency_conflict_names_no_key_or_tenant and test_f72_master_data_conflict_refusals_name_no_key FAIL (sentinel key leaked); the 409 contract test passes on both (contract unchanged)
