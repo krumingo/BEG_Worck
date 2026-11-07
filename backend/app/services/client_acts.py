@@ -144,27 +144,6 @@ def value_at(units: int, price: Any) -> Decimal:
                                                                 rounding=ROUND_HALF_UP)
 
 
-def apportion(lines: List[Dict[str, Any]], *, base_units: int, total: Decimal) -> None:
-    """Set ``line_total`` of the act lines of ONE offer line by cumulative rounding.
-
-    FG-131 (addendum C, FLOW-004 "Сборът на всички актове трябва да стигне до договореното
-    количество и стойност, без да ги надвишава"): a line is worth
-    round(cumulative after × price) − round(cumulative before × price), so the values of
-    all acts on an offer line telescope to exactly round(acted quantity × price) — 33+33+34
-    of 12.345 give 1234.50, never 1234.51. ``base_units`` is where these lines start on the
-    offer line; ``total`` is what they are worth together (the last line takes any cent a
-    re-split inside the act leaves over)."""
-    acc, done = base_units, Decimal(0)
-    for ln in lines:
-        nxt = acc + q(ln["executed_qty"])
-        v = value_at(nxt, ln["unit_price"]) - value_at(acc, ln["unit_price"])
-        ln["line_total"] = float(v)
-        done += v
-        acc = nxt
-    if lines and done != total:
-        lines[-1]["line_total"] = float(_dec(lines[-1]["line_total"]) + (total - done))
-
-
 def cents(value: Decimal) -> float:
     return float(value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
@@ -476,14 +455,6 @@ async def _value_from_acts(tenant: TenantData, offer_line_id: str, session=None)
     return total
 
 
-async def add_value(tenant: TenantData, offer_line_id: str, change: Decimal, session) -> None:
-    """Σ line values of all acts on the offer line, kept next to the acted quantity."""
-    if change:
-        await tenant.collection(TOTALS).update_one(
-            {"_id": _totals_id(tenant.org_id, offer_line_id)},
-            {"$inc": {"acted_value": float(change)}}, session=session)
-
-
 async def reserve(tenant: TenantData, *, offer: Dict, offer_line: Dict, delta: int,
                   session, verify_cap: bool = False) -> Dict[str, Any]:
     """Move the acted total of one offer line by ``delta`` units, capped by the offer qty.
@@ -770,6 +741,76 @@ async def _run(database, body):
     raise last  # pragma: no cover — five concurrent audit appends in a row
 
 
+def _priced(ln: Dict[str, Any], price: float) -> bool:
+    return abs(float(ln.get("unit_price") or 0) - price) <= PRICE_TOLERANCE
+
+
+async def revalue_line(tenant: TenantData, offer_line: Dict[str, Any], session) -> List[str]:
+    """FG-131 / audit ACT77-02: after ANY write on an offer line, the values of all its act
+    lines add up to exactly round(Σ acted × price) — and so never above round(offer qty ×
+    price).
+
+    * Accepted acts keep the value fixed at confirmation (``confirm_act``); in confirmation
+      order those values telescope to round(Σ confirmed × price).
+    * Every DRAFT line on the offer line is re-valued cumulatively, in a stable order
+      (``created_at``, ``id``, line order), starting after the confirmed quantity:
+      value = round(cum after × price) − round(cum before × price). Moving a line to
+      another offer line, removing it or shrinking it therefore re-tiles the drafts instead
+      of leaving a cent behind.
+    * A pre-ACT-01 line at a price other than the offer's keeps its value and stays out of
+      the sequence (debt D7: it cannot be confirmed either).
+
+    Runs inside the act's transaction. Returns the ids of the OTHER drafts whose values
+    moved (recorded in the AuditEvent of the write that caused it)."""
+    olid = offer_line["id"]
+    price = offer_unit_price(offer_line)
+    acts = await tenant.client_acts.find({"lines.offer_line_id": olid}, {"_id": 0},
+                                         session=session).to_list(None)
+    confirmed_units = sum(q(float(ln.get("executed_qty") or 0))
+                          for a in acts if a.get("status") != DRAFT
+                          for ln in a.get("lines") or []
+                          if ln.get("offer_line_id") == olid and _priced(ln, price))
+    total = sum((_dec(ln.get("line_total")) for a in acts if a.get("status") != DRAFT
+                 for ln in a.get("lines") or [] if ln.get("offer_line_id") == olid), Decimal(0))
+    acc, moved = confirmed_units, []
+    drafts = sorted((a for a in acts if a.get("status") == DRAFT),
+                    key=lambda a: (str(a.get("created_at") or ""), str(a.get("id") or "")))
+    for act in drafts:
+        lines, dirty = [], False
+        for ln in act.get("lines") or []:
+            if ln.get("offer_line_id") == olid and _priced(ln, price):
+                nxt = acc + q(float(ln.get("executed_qty") or 0))
+                v = value_at(nxt, price) - value_at(acc, price)
+                acc = nxt
+                total += v
+                if _dec(ln.get("line_total")) != v:
+                    ln = {**ln, "line_total": float(v)}
+                    dirty = True
+            elif ln.get("offer_line_id") == olid:
+                total += _dec(ln.get("line_total"))
+            lines.append(ln)
+        if dirty:
+            sums = _totals(lines)
+            await tenant.client_acts.update_one(
+                {"id": act["id"], "status": DRAFT},
+                {"$set": {"lines": lines, "subtotal": sums["subtotal"],
+                          "vat_amount": sums["vat_amount"], "total": sums["total"]}},
+                session=session)
+            moved.append(act["id"])
+    await tenant.collection(TOTALS).update_one(
+        {"_id": _totals_id(tenant.org_id, olid)}, {"$set": {"acted_value": float(total)}},
+        session=session)
+    return moved
+
+
+async def _revalue(tenant: TenantData, offer_lines: Dict[str, Dict[str, Any]], session,
+                   self_id: str) -> List[str]:
+    moved: List[str] = []
+    for olid in sorted(offer_lines):
+        moved += await revalue_line(tenant, offer_lines[olid], session)
+    return sorted({m for m in moved if m != self_id})
+
+
 async def create_act(database, *, user: Dict[str, Any], project_id: str,
                      raw_lines: List[Dict[str, Any]], header: Dict[str, Any],
                      key: KeyedWrite, endpoint: str, source_offer_id: Optional[str] = None
@@ -795,14 +836,8 @@ async def create_act(database, *, user: Dict[str, Any], project_id: str,
         await check_versions_for(tenant, resolved, _deltas(lines), session)
         for olid, delta in sorted(_deltas(lines).items()):
             offer, ol = resolved[olid]
-            after = await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
-            u_after = int(after["acted_units"])
-            mine = [ln for ln in lines if ln["offer_line_id"] == olid]
-            value = value_at(u_after, offer_unit_price(ol)) - value_at(u_after - delta,
-                                                                     offer_unit_price(ol))
-            apportion(mine, base_units=u_after - delta, total=value)       # FG-131
-            await add_value(tenant, olid, value, session)
-        totals = _totals(lines)
+            await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
+        totals = _totals(lines)              # provisional; revalue_line sets the final values
         number = await next_act_number(tenant, session)
         now = _now()
         offer_ids = sorted({ln["offer_id"] for ln in lines})
@@ -819,11 +854,14 @@ async def create_act(database, *, user: Dict[str, Any], project_id: str,
             "created_at": now, "updated_at": now, "created_by": user["id"],
         }
         await tenant.client_acts.insert_one(dict(act), session=session)
-        act.pop("_id", None)
+        moved = await _revalue(tenant, {olid: resolved[olid][1] for olid in _deltas(lines)},
+                               session, act_id)                              # FG-131
+        act = await tenant.client_acts.find_one({"id": act_id}, {"_id": 0}, session=session)
         await _audit(database, user=user, action="client_act.created", act=act, key=key,
                      endpoint=endpoint, session=session,
                      diff={"act_number": number, "project_id": project_id,
-                           "lines": _lines_digest(lines), "subtotal": act["subtotal"]})
+                           "lines": _lines_digest(act["lines"]), "subtotal": act["subtotal"],
+                           "revalued_drafts": moved})
         return await act_view(tenant, act, session=session)
 
     return await _run(database, body)
@@ -857,34 +895,16 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
             old, nxt = _deltas(act.get("lines") or []), _deltas(lines)
             await check_versions_for(tenant, resolved,
                                      {k: nxt.get(k, 0) - old.get(k, 0) for k in nxt}, session)
+            touched: Dict[str, Dict[str, Any]] = {}
             for olid in sorted(set(old) | set(nxt)):
                 delta = nxt.get(olid, 0) - old.get(olid, 0)
                 if olid in resolved:
                     offer, ol = resolved[olid]
                 else:   # a line removed from the act: its offer line may be any offer's
                     offer, ol = await _offer_of_line(tenant, olid, session)
-                old_lines = [ln for ln in act.get("lines") or [] if ln.get("offer_line_id") == olid]
-                old_value = sum((_dec(ln.get("line_total")) for ln in old_lines), Decimal(0))
-                after = await reserve(tenant, offer=offer, offer_line=ol, delta=delta,
-                                      session=session)      # delta 0: initialises / reads
-                u_after = int(after["acted_units"])
-                price = offer_unit_price(ol)
-                mine = [ln for ln in lines if ln["offer_line_id"] == olid]
-                at_offer_price = all(abs(float(ln.get("unit_price") or 0) - price) <= PRICE_TOLERANCE
-                                     for ln in old_lines)
-                if not mine:
-                    new_value = Decimal(0)
-                elif at_offer_price:
-                    # FG-131: the act moves by exactly the cumulative change of the offer line
-                    new_value = old_value + value_at(u_after, price) - value_at(u_after - delta, price)
-                else:
-                    # a pre-ACT-01 line at a free price: re-priced at the offer price, placed at
-                    # the end of what is acted on the offer line
-                    new_value = value_at(u_after, price) - value_at(u_after - nxt[olid], price)
-                if mine:
-                    apportion(mine, base_units=u_after - nxt[olid], total=new_value)
-                await add_value(tenant, olid, new_value - old_value, session)
-            totals = _totals(lines)
+                await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
+                touched[olid] = ol
+            totals = _totals(lines)          # provisional; revalue_line sets the final values
             new["lines"] = lines
             new.update({k: v for k, v in totals.items() if k != "currency" or v})
             new["source_offer_ids"] = sorted({ln["offer_id"] for ln in lines})
@@ -899,6 +919,13 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
             projection={"_id": 0}, return_document=ReturnDocument.AFTER, session=session)
         if res is None:
             raise _err(400, "ACT_NOT_DRAFT", "Само чернова може да се редактира")
+        if raw_lines is not None:
+            # FG-131 / ACT77-02: old AND new offer lines are re-tiled (a line moved away
+            # or removed leaves no cent behind on its old offer line)
+            diff["revalued_drafts"] = await _revalue(tenant, touched, session, act_id)
+            res = await tenant.client_acts.find_one({"id": act_id}, {"_id": 0}, session=session)
+            diff["after"] = _lines_digest(res["lines"])
+            diff["subtotal_after"] = res.get("subtotal")
         await _audit(database, user=user, action="client_act.updated", act=res, key=key,
                      endpoint=endpoint, session=session, diff=diff)
         return await act_view(tenant, res, session=session)
@@ -942,19 +969,41 @@ async def confirm_act(database, *, user: Dict[str, Any], act_id: str, key: Keyed
             offer, ol = resolved[olid]
             await reserve(tenant, offer=offer, offer_line=ol, delta=0, session=session,
                           verify_cap=True)
+        # FG-131: the accepted value continues the CONFIRMED sequence of each offer line
+        # (a draft value was provisional), so Σ accepted = round(Σ confirmed × price).
+        fixed = [dict(ln) for ln in lines]
+        for olid in sorted(deltas):
+            ol = resolved[olid][1]
+            price = offer_unit_price(ol)
+            others = await tenant.client_acts.find(
+                {"lines.offer_line_id": olid, "status": {"$ne": DRAFT}, "id": {"$ne": act_id}},
+                {"_id": 0, "lines": 1}, session=session).to_list(None)
+            acc = sum(q(float(x.get("executed_qty") or 0)) for o in others
+                      for x in o.get("lines") or []
+                      if x.get("offer_line_id") == olid and _priced(x, price))
+            for ln in fixed:
+                if ln.get("offer_line_id") == olid:
+                    nxt = acc + q(float(ln.get("executed_qty") or 0))
+                    ln["line_total"] = float(value_at(nxt, price) - value_at(acc, price))
+                    acc = nxt
+        sums = _totals(fixed)
         now = _now()
         res = await tenant.client_acts.find_one_and_update(
             {"id": act_id, "status": DRAFT},
             {"$set": {"status": ACCEPTED, "accepted_at": now, "accepted_by": user["id"],
-                      "updated_at": now},
+                      "updated_at": now, "lines": fixed, "subtotal": sums["subtotal"],
+                      "vat_amount": sums["vat_amount"], "total": sums["total"]},
              "$inc": {"revision": 1}, "$addToSet": {"applied_update_keys": key.key_ref}},
             projection={"_id": 0}, return_document=ReturnDocument.AFTER, session=session)
         if res is None:
             raise _err(400, "ACT_NOT_DRAFT", "Само чернова може да се потвърди")
+        moved = await _revalue(tenant, {olid: resolved[olid][1] for olid in deltas}, session,
+                               act_id)
         await _audit(database, user=user, action="client_act.confirmed", act=res, key=key,
                      endpoint=endpoint, session=session,
                      diff={"status": [DRAFT, ACCEPTED], "act_number": res.get("act_number"),
-                           "subtotal": res.get("subtotal"), "total": res.get("total")})
+                           "subtotal_draft": act.get("subtotal"), "subtotal": res.get("subtotal"),
+                           "total": res.get("total"), "revalued_drafts": moved})
         return await act_view(tenant, res, session=session)
 
     return await _run(database, body)

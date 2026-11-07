@@ -295,6 +295,28 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 return float(total)
             return tc.portal.call(q)
 
+        def invariant() -> List[str]:
+            """FG-131/ACT77-02: per offer line, Σ line values == round(Σ acted x price) for
+            the lines at the offer price (pre-ACT-01 free-price lines excluded, D7)."""
+            from decimal import Decimal, ROUND_HALF_UP
+            out = []
+            for lkey in ("L1", "L2", "LX", "LD"):
+                price = Decimal(str(LINES[lkey][2])) + Decimal(str(LINES[lkey][3]))
+                async def q():
+                    units, value = Decimal(0), Decimal(0)
+                    async for a in op_db.client_acts.find({"org_id": fx["A"]["tenant_id"]}):
+                        for ln in a.get("lines") or []:
+                            if ln.get("offer_line_id") == i[lkey] and \
+                                    Decimal(str(ln.get("unit_price") or 0)) == price:
+                                units += Decimal(str(ln.get("executed_qty") or 0))
+                                value += Decimal(str(ln.get("line_total") or 0))
+                    return units, value
+                units, value = tc.portal.call(q)
+                exact = (units * price).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+                if value != exact:
+                    out.append("%s: %s != round(%s x %s) = %s" % (lkey, value, units, price, exact))
+            return out
+
         def count(coll, flt=None) -> int:
             return tc.portal.call(lambda: op_db[coll].count_documents(flt or {}))
 
@@ -648,6 +670,51 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 return {"three": three, "hundred": hundred, "concurrent": concurrent_,
                         "edits": edits}
             scenario("cumulative_rounding", cumulative)
+            # 32. ACT77-02 (audit, BLOCKING on 611d17e): a draft line moved to another offer
+            #     line, removed, or interleaved with a confirmation leaves no cent behind
+            def moved_lines():
+                out = {}
+                for first in (0.3, 33):
+                    restore()
+                    a1 = post_act(act_body(line("LD", first)))
+                    a2 = post_act(act_body(line("LD", first)))
+                    a1_id = a1["body"].get("id") if isinstance(a1["body"], dict) else None
+                    mv = call("PUT", "/api/client-acts/%s" % a1_id, body={"lines": [line("L1", 1)]})
+                    mid = {"sum": value_on("LD"), "invariant": invariant()}
+                    fill = post_act(act_body(line("LD", round(100 - first, 4))))
+                    out["move_%s" % first] = {
+                        "statuses": [a1["status"], a2["status"], mv["status"], fill["status"]],
+                        "mid": mid, "sum": value_on("LD"), "acted": acts_on("LD"),
+                        "invariant": invariant()}
+                restore()                                       # removal of a middle draft
+                acts_ = [post_act(act_body(line("LD", 0.3))) for _ in range(3)]
+                mid_id = acts_[1]["body"].get("id") if isinstance(acts_[1]["body"], dict) else None
+                rm = call("PUT", "/api/client-acts/%s" % mid_id, body={"lines": []})
+                fill = post_act(act_body(line("LD", 99.4)))
+                out["remove_middle"] = {"statuses": [a["status"] for a in acts_] + [rm["status"],
+                                        fill["status"]], "sum": value_on("LD"),
+                                        "acted": acts_on("LD"), "invariant": invariant()}
+                restore()                                       # confirm interleaved with edits
+                b1 = post_act(act_body(line("LD", 0.3)))
+                b2 = post_act(act_body(line("LD", 0.3)))
+                b3 = post_act(act_body(line("LD", 0.3)))
+                ids_ = [b["body"].get("id") if isinstance(b["body"], dict) else None
+                        for b in (b1, b2, b3)]
+                c2 = call("POST", "/api/client-acts/%s/confirm" % ids_[1])
+                after_confirm = invariant()
+                rm1 = call("PUT", "/api/client-acts/%s" % ids_[0], body={"lines": [line("L1", 2)]})
+                after_move = invariant()
+                fill = post_act(act_body(line("LD", 99.4)))      # 0.3 (b2) + 0.3 (b3) left
+                c3 = call("POST", "/api/client-acts/%s/confirm" % ids_[2])
+                out["confirm_interleaved"] = {
+                    "statuses": [b1["status"], b2["status"], b3["status"], c2["status"],
+                                 rm1["status"], fill["status"], c3["status"]],
+                    "confirmed_value": c2["body"]["lines"][0]["line_total"]
+                    if isinstance(c2["body"], dict) and c2["body"].get("lines") else None,
+                    "after_confirm": after_confirm, "after_move": after_move,
+                    "sum": value_on("LD"), "acted": acts_on("LD"), "invariant": invariant()}
+                return out
+            scenario("moved_lines", moved_lines)
             # 24. the answer shows contracted / acted / remaining per line
             scenario("line_view", lambda: post_act(act_body(line("L1", 3))))
             results["modes"][mode] = res
@@ -1049,6 +1116,29 @@ def test_acts_on_a_line_add_up_to_exactly_the_offer_line_value(r):
     assert e["statuses"] == [201, 201, 200, 200, 201], e
     assert e["after_down"]["acted"] == 63.0 and e["after_down"]["sum"] == 777.74, e  # round(63 x p)
     assert e["sum"] == 1234.5 and e["acted"] == 100.0, e
+
+
+def test_moving_removing_or_confirming_a_line_leaves_no_cent_behind(r):
+    """ACT77-02: after every create / edit / move / removal / confirm, per offer line
+    Σ values == round(Σ acted x price); a full line is exactly 1234.50."""
+    m = r["moved_lines"]
+    for first in ("0.3", "33"):
+        c = m["move_" + first]
+        assert c["statuses"] == [201, 201, 200, 201], (first, c)
+        assert c["mid"]["invariant"] == [], (first, c["mid"])
+        assert c["invariant"] == [] and c["sum"] == 1234.5 and c["acted"] == 100.0, (first, c)
+    c = m["remove_middle"]
+    assert c["statuses"] == [201, 201, 201, 200, 201], c
+    assert c["invariant"] == [] and c["sum"] == 1234.5 and c["acted"] == 100.0, c
+    c = m["confirm_interleaved"]
+    assert c["statuses"] == [201, 201, 201, 200, 200, 201, 200], c
+    assert c["confirmed_value"] == 3.70, c          # the FIRST confirmed 0.3: round(0.3 x p)
+    assert c["after_confirm"] == [] and c["after_move"] == [], c
+    assert c["invariant"] == [] and c["sum"] == 1234.5 and c["acted"] == 100.0, c
+
+
+def test_the_value_invariant_holds_after_the_rounding_scenarios(r):
+    assert r["cumulative_rounding"]["edits"]["sum"] == 1234.5
 
 
 # ── correction ─────────────────────────────────────────────────────────────────────
