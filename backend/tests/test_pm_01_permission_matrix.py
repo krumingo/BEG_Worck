@@ -498,6 +498,11 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/assets/intake/{intake_id}/approve"): "denial",
     ("POST", "/api/users"): "denial+create",
     ("PUT", "/api/users/{user_id}"): "denial",
+    # ACT-01 (R14/R20): the client-act writes refuse every non-finance role in all three
+    # modes; in enforce the refusal is audited (app/permissions/client_act_write.py).
+    ("POST", "/api/client-acts"): "denial",
+    ("PUT", "/api/client-acts/{act_id}"): "denial",
+    ("POST", "/api/client-acts/from-offer/{offer_id}"): "denial",
 }
 
 

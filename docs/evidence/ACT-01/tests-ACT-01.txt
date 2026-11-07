@@ -1,0 +1,52 @@
+# ACT-01 checks (2026-11-07), parent 0f870c3 + ACT-01 working tree, run from backend/ with PYTHONPATH=.
+# MongoDB: disposable local docker mongo:7.0, replica set rs0 (127.0.0.1:27019), W0_03_REAL_MONGO_URL + MONGO_URL set.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## tests/test_act_01_client_act_from_offer.py + tests/test_pm_01_permission_matrix.py (real Mongo, -rs: no SKIPPED line = 0 skipped)
+80 passed, 6 warnings in 200.00s (0:03:20)
+  on main 0f870c3: test_pm_01 = 2 failed / 4 passed (the committed matrix lacked POST /api/auth/forgot-password and
+  POST /api/auth/reset-password from PR #56); test_act_01 against main = 70 failed / 4 passed (main-0f870c3-results.json)
+## tests/test_r0_0*.py (real Mongo)
+814 passed, 6 warnings in 141.21s (0:02:21)
+  main 0f870c3: 814 passed
+## W0: tests/test_w0_*.py (real Mongo URL set)
+15 failed, 1135 passed — the same 15 as main 0f870c3 (15 failed, 1135 passed):
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+## Full backend/tests (real Mongo URL set; REACT_APP_BACKEND_URL = closed port, so the legacy live-server tests fail on both sides)
+main 0f870c3 : 168 failed, 2312 passed, 996 errors
+ACT-01       : 166 failed, 2391 passed, 993 errors
+FAILED/ERROR names new on ACT-01: none.
+Only on main: the 2 PM-01 tests (stale matrix, fixed by the regeneration) and 3 ST-02 setup errors
+("bundle directory already exists" — the two suites ran in parallel and shared one /tmp/pytest-of-root
+release directory; environmental, not ACT-01). +79 passed = 74 ACT-01 + 2 PM-01 + 3 ST-02.
+
+# ── Addendum A (offer versions) + D12 (VAT/currency from the offer), rerun on the new head ──
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 + PM-01
+harness_rc=0
+86 passed, 6 warnings in 198.17s (0:03:18)
+## R0
+814 passed, 6 warnings in 149.55s (0:02:29)
+## W0
+15 failed, 1135 passed, 6 warnings in 105.68s (0:01:45)
+SAME_15
+  test_act_01 against main 0f870c3 (re-recorded main-0f870c3-results.json): 75 failed / 5 passed

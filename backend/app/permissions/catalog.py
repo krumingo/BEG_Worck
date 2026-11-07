@@ -175,6 +175,20 @@ LEGACY_ROLE_MAP: Dict[str, str] = {
 }
 
 
+# ACT-01 (FLOW-004; R14/R20, Krum 06.11.2026): a client act carries client prices and a
+# receivable — finance roles only (Owner/Admin/Accountant). The names of PUT and from-offer
+# are the ones SEC-02 (R20-2) gives the same routes. Granted to no other role.
+CLIENT_ACT_ACTIONS: Set[str] = {
+    "revenue.client_act.create",                 # POST /api/client-acts
+    "finance.client_act.update",                 # PUT  /api/client-acts/{act_id}
+    "finance.client_act_from_offer.execute",     # POST /api/client-acts/from-offer/{offer_id}
+    "finance.client_act_remaining.read",         # GET  /api/client-acts/remaining/{project_id}
+}
+ACTIONS |= CLIENT_ACT_ACTIONS
+for _role_id in ("owner", "admin", "accountant"):
+    CANONICAL_ROLES[_role_id]["actions"] |= CLIENT_ACT_ACTIONS
+
+
 def role_actions(role_id: str) -> Set[str]:
     """Actions granted by a role_id (canonical or legacy). Unknown -> empty."""
     if role_id in CANONICAL_ROLES:
