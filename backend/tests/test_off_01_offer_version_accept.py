@@ -939,3 +939,43 @@ def test_22_a_closed_link_shows_no_offer_content(monkeypatch, backend, mode):
         g = await c.get("/api/offers/review/" + "topn" + "k" * 20)
         assert g.status_code == 200 and g.json()["total"] == 1200.0
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════ R43 (Krum, 07.11.2026; FG-138 part 2): the client view of an offer
+INTERNAL_COST_KEYS = ("material_unit_cost", "labor_unit_cost", "line_material_cost",
+                      "line_labor_cost", "labor_hours_per_unit")
+
+
+def test_23_the_client_sees_only_the_combined_unit_price(monkeypatch, backend, mode):
+    """R43: the client sees only the combined unit price, quantity, value and VAT. The
+    material/labour split is internal — in the review page, the respond answer and the PDF."""
+    async def scenario(c, op):
+        doc = offer_doc("o1", token=TOKEN)
+        doc["lines"][0].update({"line_material_cost": 400.0, "line_labor_cost": 600.0,
+                                "labor_hours_per_unit": 1.5, "material_unit_cost": 40.0,
+                                "labor_unit_cost": 60.0})
+        await op.offers.insert_one(doc)
+        g = await c.get("/api/offers/review/" + TOKEN)
+        assert g.status_code == 200, g.text
+        body = g.json()
+        for key in INTERNAL_COST_KEYS:
+            assert key not in g.text, key
+        line = body["lines"][0]
+        assert line["unit_price"] == 100.0 and line["qty"] == 10 and line["line_total"] == 1000.0
+        assert body["subtotal"] == 1000.0 and body["vat_amount"] == 200.0 and body["total"] == 1200.0
+        r = await respond(c, TOKEN, "revision")
+        assert r.status_code == 200 and not any(k in r.text for k in INTERNAL_COST_KEYS)
+
+        # the offer PDF (the document sent to the client) has no material/labour columns
+        p = await c.get("/api/offers/o1/pdf", headers=hdr("admin-a"))
+        if p.status_code == 500 and "reportlab" in p.text:
+            pytest.skip("reportlab not installed")
+        assert p.status_code == 200, p.text[:300]
+        import io
+        import pdfplumber
+        with pdfplumber.open(io.BytesIO(p.content)) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        assert "100.00" in text and "1000.00" in text, text
+        for word in ("Мат.", "Труд", "40.00", "60.00", "400.00", "600.00"):
+            assert word not in text, (word, text)
+    run(monkeypatch, backend, mode, scenario)
