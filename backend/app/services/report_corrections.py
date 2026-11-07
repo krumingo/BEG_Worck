@@ -107,7 +107,7 @@ async def authorize_report_edit(user: dict, report: dict, *, projects: Iterable[
 
 async def audit_report_correction(raw_db, *, user: dict, mode: str, report: dict, before: dict,
                                   after: dict, endpoint: str, collection: str = "employee_daily_reports",
-                                  action: str = None):
+                                  action: str = None, session=None):
     """One canonical AuditEvent per correction: who, when (occurred_at), before / after."""
     from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
     from app.audit.store import record_event
@@ -123,7 +123,8 @@ async def audit_report_correction(raw_db, *, user: dict, mode: str, report: dict
         reason=(f"R36 reset of a {status or 'UNKNOWN'} report (role {user.get('role')})" if action == "daily_report.reset"
                 else f"R36 {mode} correction of a {status or 'UNKNOWN'} report (role {user.get('role')})"),
         tool_or_endpoint=endpoint)
-    return await record_event(raw_db, event)
+    # LAB-01-O: with ``session`` the chained event commits inside the caller's transaction
+    return await record_event(raw_db, event, session=session)
 
 
 # ═══════════════════════════════════════════════════ LAB-01-I (LAB01H-1, CLAUDE §8/§16)

@@ -346,3 +346,84 @@ def test_lab01n_without_transactions_the_reset_is_refused_and_writes_nothing(mon
         assert (await op.labor_quantity_approvals.find_one({"id": "qa-FREE"}))["status"] == "approved"
         assert await _audits(op, "FREE") == []
     asyncio.run(body())
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-01-O (audit in the transaction)
+async def _real_db(name):
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from tests.test_w0_03c_real_mongo import REAL_URL
+    client = AsyncIOMotorClient(REAL_URL, serverSelectionTimeoutMS=5000)
+    return client, client[name]
+
+
+def _needs_real():
+    from tests.test_w0_03c_real_mongo import _refusal
+    if _refusal():
+        pytest.skip(_refusal())
+
+
+def test_lab01o_a_crash_in_the_audit_write_commits_nothing(monkeypatch):
+    """real rs0: the chained AuditEvent is part of the reset transaction — if writing it
+    fails, the claim, the voids and the budget return are rolled back too."""
+    _needs_real()
+
+    async def body():
+        import uuid as _u
+        client, op = await _real_db("l01o_a_" + _u.uuid4().hex[:8])
+        try:
+            await _patch_all(monkeypatch, op)
+            from app.audit import store
+            from app.routes import daily_reports
+            await _seed_budget_report(op, "RA")
+            rep0 = await op.employee_daily_reports.find_one({"id": "RA"}, {"_id": 0})
+            bud0 = await op.activity_budgets.find_one({"id": "b-RA"}, {"_id": 0})
+
+            async def crash(*a, **kw):
+                raise RuntimeError("simulated crash while writing the audit event")
+            monkeypatch.setattr(store, "record_event", crash)
+            with pytest.raises(RuntimeError):
+                await daily_reports.reset_daily_report("RA", U("admin"))
+            assert await op.employee_daily_reports.find_one({"id": "RA"}, {"_id": 0}) == rep0
+            assert await op.activity_budgets.find_one({"id": "b-RA"}, {"_id": 0}) == bud0
+            assert await op.audit_events.count_documents({}) == 0
+        finally:
+            await client.drop_database(op.name)
+            client.close()
+    asyncio.run(body())
+
+
+def test_lab01o_a_crash_right_after_the_commit_leaves_the_reset_with_its_audit_event(monkeypatch):
+    """real rs0: nothing of the reset is written after the commit — a crash right after it
+    still leaves exactly one daily_report.reset event, chained, with the reset id."""
+    _needs_real()
+
+    async def body():
+        import uuid as _u
+        client, op = await _real_db("l01o_b_" + _u.uuid4().hex[:8])
+        try:
+            await _patch_all(monkeypatch, op)
+            from app.audit.store import verify_chain
+            from app.routes import daily_reports
+            await _seed_budget_report(op, "RB")
+            committed = daily_reports._run_reset_transaction
+
+            async def commit_then_crash(raw_db, tx_body):
+                await committed(raw_db, tx_body)
+                raise RuntimeError("simulated crash right after the commit")
+            monkeypatch.setattr(daily_reports, "_run_reset_transaction", commit_then_crash)
+            with pytest.raises(RuntimeError):
+                await daily_reports.reset_daily_report("RB", U("admin"))
+            rep = await op.employee_daily_reports.find_one({"id": "RB"})
+            assert rep["approval_status"] == "SUBMITTED"
+            assert rep["last_reset"]["audit_written"] is True and rep["last_reset"]["budget_returned"] is True
+            assert (await op.activity_budgets.find_one({"id": "b-RB"}))["consumed_hours"] == 32
+            events = [e async for e in op.audit_events.find({"entity_id": "RB"}, {"_id": 0})]
+            assert [e["action"] for e in events] == ["daily_report.reset"]
+            assert events[0]["structured_diff"]["after"]["reset_id"] == rep["last_reset"]["id"]
+            chain = [e async for e in op.audit_events.find({"tenant_id": ORG}, {"_id": 0}).sort("sequence", 1)]
+            ok, why = verify_chain(chain)
+            assert ok, why
+        finally:
+            await client.drop_database(op.name)
+            client.close()
+    asyncio.run(body())

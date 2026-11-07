@@ -751,7 +751,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
             {"id": report_id, "org_id": org_id, field: value},
             {"$set": dict(reset_fields, updated_at=now,
                           last_reset={"id": reset_id, "by": user["id"], "at": now,
-                                      "budget_returned": True}),
+                                      "budget_returned": True, "audit_written": True}),
              "$inc": {"report_version": 1}}, session=session)
         if not won:
             raise HTTPException(status_code=409, detail=(
@@ -763,16 +763,16 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
         await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_reset",
                                    bump=False, session=session)
         await _return_budget_once(tenant, org_id, current, reset_id, now, session=session)
+        # LAB-01-L (FG-99) / LAB-01-O: the canonical chained AuditEvent (who, when, before /
+        # after) is written INSIDE the same transaction — it commits with the reset or not at all
+        before = {k: current.get(k) for k in reset_fields}
+        await audit_report_correction(db, user=user, mode=CORRECTOR, report=current, before=before,
+                                      after=dict(reset_fields, reset_id=reset_id, budget_returned=True),
+                                      endpoint="POST /daily-reports/{id}/reset",
+                                      action="daily_report.reset", session=session)
         return current
 
-    report = await _run_reset_transaction(db, body)
-    returned = True
-    # LAB-01-L (FG-99): every reset leaves a canonical AuditEvent — who, when, before / after
-    before = {k: report.get(k) for k in reset_fields}
-    await audit_report_correction(db, user=user, mode=CORRECTOR, report=report, before=before,
-                                  after=dict(reset_fields, reset_id=reset_id, budget_returned=returned),
-                                  endpoint="POST /daily-reports/{id}/reset",
-                                  action="daily_report.reset")
+    await _run_reset_transaction(db, body)
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
