@@ -57,3 +57,11 @@ Canon: FLOW-028 (akord = approved quantity × agreed piece rate), FLOW-019 (DOWN
   - the internal code "(FLOW-028)" is removed from the screen subtitle and from user-facing messages (DQ, correction reasons, Pay Run warnings);
   - the error details of the LAB-01/LAB-02 endpoints that the screens show as toasts are now Bulgarian.
 - **Bot:** 12/12, with new checks that the save, approve and "Напишете причина за престоя" toasts are visible and that no "FLOW-" text appears.
+
+## LAB-02-B (FLOW Guard pass 9: FG-92, FG-93, FG-94; LAB-01-J merged) — `tests-LAB-02-B.txt`
+- **FG-92** was already closed by LAB-01-I, which has been on this branch since 789bbd9:
+  - a quantity entry on an approved report sends it back to SUBMITTED;
+  - the approver must differ from the worker, `submitted_by`, the creator and every corrector.
+  - Added the exact regression tests: the SiteManager sets 800 and gets 403 on his own approval, with nothing payable (no 7200), while the Owner can approve; a SiteManager who is `submitted_by` gets 403 on approve and on classify.
+- **FG-93:** approve and classify return **409** on a line that is in payroll, decided from the pay-run lines as in LAB-01-J. Quantity entry is also 409 there.
+- **FG-94:** classify accepts only submitted or approved lines; a draft gets **409**.

@@ -33,7 +33,8 @@ from app.db import db
 from app.deps.auth import can_manage_project, get_current_user
 from app.services.labor_cost import approval_key, void_labor_approvals
 from app.services.report_corrections import (CORRECTOR, audit_report_correction, authorize_report_edit,
-                                             correction_fields, reopen_effects, self_approval_ids)
+                                             correction_fields, refuse_if_in_payroll, reopen_effects,
+                                             self_approval_ids)
 from app.tenancy.data_access import TenantData
 
 router = APIRouter(tags=["Labor quantities (LAB-02)"])
@@ -252,7 +253,8 @@ async def enter_quantity(data: QuantityEntryInput, user: dict = Depends(get_curr
     else:
         author_ids, statuses = (doc.get("submitted_by"), doc.get("worker_id")), ("Draft", "Rejected")
     mode = await authorize_report_edit(user, doc, projects=[line["project_id"]],
-                                       author_ids=author_ids, author_statuses=statuses)
+                                       author_ids=author_ids, author_statuses=statuses,
+                                       tenant=tenant)  # LAB-01-J: pay-run lines lock it
     now = _now()
     await void_labor_approvals(tenant, org_id, data.report_id, user["id"],
                                "quantity_corrected" if mode == CORRECTOR else "quantity_entered")
@@ -345,6 +347,7 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
     async def perform(key):
         doc, line = await _locate(tenant, org_id, data.report_id, data.entry_id)
         await _require_approver(user, line, doc)
+        await refuse_if_in_payroll(tenant, org_id, doc)  # LAB-02-B (FG-93): paid → 409
         if line["status"] not in REPORT_DECIDABLE:
             raise HTTPException(status_code=409, detail="Количество се одобрява само по подаден или одобрен отчет")
         if int(data.report_version) != line["report_version"]:
@@ -416,6 +419,9 @@ async def classify_line(data: ClassifyInput, user: dict = Depends(get_current_us
     async def perform(key):
         doc, line = await _locate(tenant, org_id, data.report_id, data.entry_id)
         await _require_approver(user, line, doc)
+        await refuse_if_in_payroll(tenant, org_id, doc)  # LAB-02-B (FG-93): paid → 409
+        if line["status"] not in REPORT_DECIDABLE:  # LAB-02-B (FG-94): no draft lines
+            raise HTTPException(status_code=409, detail="Класифицира се само подаден или одобрен ред")
         if int(data.report_version) != line["report_version"]:
             raise HTTPException(status_code=409, detail=(
                 f"Отчетът е променен (версия {line['report_version']}, не {data.report_version}) — презаредете"))

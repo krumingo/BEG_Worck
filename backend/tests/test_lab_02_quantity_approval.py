@@ -352,3 +352,67 @@ def test_quantity_correction_reopens_the_report_and_the_corrector_cannot_approve
         assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("admin"))).status_code == 403
         assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("sm"))).status_code == 200
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-02-B (FLOW Guard pass 9)
+def test_fg92_site_manager_cannot_raise_a_quantity_and_approve_it_himself(monkeypatch, backend):
+    """The proven case: an approved akord line, the SiteManager sets 800 and approves it
+    himself (800 × 9 = 7200). Now: the entry reopens the report and he gets 403."""
+    async def scenario(c, op):
+        assert (await _set_rate(c, 9)).status_code == 200
+        await op.employee_daily_reports.update_one({"id": "R-AK"}, {"$set": {
+            "status": "APPROVED", "approval_status": "APPROVED", "approved_by": "admin", "quantity": 100}})
+        r = await c.put("/api/labor-quantities/entry", json={"report_id": "R-AK", "quantity": 800},
+                        headers=H("sm", False))
+        assert r.status_code == 200 and r.json()["status"] == "SUBMITTED"
+        doc = await op.employee_daily_reports.find_one({"id": "R-AK"}, {"_id": 0})
+        body = {"report_id": "R-AK", "report_version": doc["report_version"], "approved_quantity": 800,
+                "execution_package_id": "pkg-sh"}
+        r = await c.post("/api/labor-quantities/approve", json=body, headers=H("sm"))
+        assert r.status_code == 403
+        assert await op.labor_quantity_approvals.count_documents({"status": "approved"}) == 0
+        assert "w-ak" not in await _preview(c)                     # nothing payable: no 7200
+        # another approver decides
+        assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("owner"))).status_code == 200
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg92_a_site_manager_who_submitted_the_report_cannot_approve_it(monkeypatch, backend):
+    async def scenario(c, op):
+        assert (await _set_rate(c)).status_code == 200
+        await op.employee_daily_reports.update_one({"id": "R-AK"}, {"$set": {
+            "status": "APPROVED", "submitted_by": "sm", "quantity": 120}})
+        body = {"report_id": "R-AK", "report_version": 0, "approved_quantity": 120, "execution_package_id": "pkg-sh"}
+        assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("sm"))).status_code == 403
+        cl = {"report_id": "R-AK", "report_version": 0, "cost_type": "DOWNTIME", "reason": "x"}
+        assert (await c.post("/api/labor-quantities/classify", json=cl, headers=H("sm"))).status_code == 403
+        assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("admin"))).status_code == 200
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg93_approve_and_classify_on_a_paid_line_are_409(monkeypatch, backend):
+    async def scenario(c, op):
+        assert (await _set_rate(c)).status_code == 200
+        await op.employee_daily_reports.update_one({"id": "R-AK"}, {"$set": {"status": "APPROVED", "quantity": 120}})
+        await op.pay_runs.insert_one({
+            "id": "run-paid", "org_id": ORG, "number": "PR-0009", "status": "paid", "paid_at": DAY,
+            "employee_rows": [{"employee_id": "w-ak", "paid_now_amount": 0, "selected_report_ids": ["R-AK"]}]})
+        body = {"report_id": "R-AK", "report_version": 0, "approved_quantity": 120, "execution_package_id": "pkg-sh"}
+        r = await c.post("/api/labor-quantities/approve", json=body, headers=H("sm"))
+        assert r.status_code == 409 and "PR-0009" in r.text
+        cl = {"report_id": "R-AK", "report_version": 0, "cost_type": "DOWNTIME", "reason": "x"}
+        assert (await c.post("/api/labor-quantities/classify", json=cl, headers=H("sm"))).status_code == 409
+        assert (await c.put("/api/labor-quantities/entry", json={"report_id": "R-AK", "quantity": 1},
+                            headers=H("admin", False))).status_code == 409
+        assert await op.labor_quantity_approvals.count_documents({}) == 0
+        assert await op.labor_line_classifications.count_documents({}) == 0
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg94_a_draft_line_cannot_be_classified(monkeypatch, backend):
+    async def scenario(c, op):
+        cl = {"report_id": "R-AK", "report_version": 0, "cost_type": "DOWNTIME", "reason": "липса на фронт"}
+        r = await c.post("/api/labor-quantities/classify", json=cl, headers=H("sm"))   # R-AK is a Draft
+        assert r.status_code == 409
+        assert await op.labor_line_classifications.count_documents({}) == 0
+    run(monkeypatch, scenario, backend)
