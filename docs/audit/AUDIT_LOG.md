@@ -4654,3 +4654,31 @@ A package without `contract_total` keeps the certified cap only (FG-114 already 
 | S11 | advance / deduction / payment × crash after `log_audit` / `_confirm_advance` / `_confirm_deduction` / `_refresh_package_totals`, then 2 same-key retries → `audit_logs` and `audit_events` deltas equal a clean run |
 
 Runtime `b76c` (rs0; the machine restarted again ~22:34) is running.
+
+#76 @ `c4de7c9` runtime — **BLOCKING SUBADV76-01**
+
+`probe_subadv01.py` with `PROBE_FG114=1 PROBE_F76=1` × 3 modes.
+
+| Case | Result |
+|---|---|
+| **S10a** | advance 2000 → 2999.99 201 → +0.01 201 (taken 5000.00) → +0.01 **409 `PAYMENT_EXCEEDS_PACKAGE_VALUE`** |
+| **S10b** | 6 concurrent payments of 600 after an advance of 2000 → 5 × 201 + 1 × 409, taken 5000 |
+| **S10c** | 3 advances ∥ 3 payments of 1000 → exactly 5 × 201, taken 5000 |
+| **S11** advance / deduction × crash after `log_audit` / `_confirm_advance` / `_confirm_deduction` / `_refresh_package_totals` + 2 retries | `audit_logs` delta = clean (+1) every time |
+| **S11 payment, crash after `log_audit`** + 2 retries | **`audit_logs` +2 (clean +1)** |
+
+- **F-76-01 resolved.**
+- **F-76-02: incomplete (SUBADV76-01).** The ordinary payment audit step has no `entry_id`. This code is inherited from #69 SEC-01-C03, so **#69 `da47777` has the same defect** (`subcontractors.py` `mw.step("audit", log_audit(…"subcontractor_payment_created"…))`). `overhead.py`'s `mw.step` audit is the same class, but #74 replaces that block.
+- PR comment posted on #76 (blocking). #69 is flagged to @parent.
+
+| Gate | Result |
+|---|---|
+| subadv + sec01 | 38 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+- The merge with main `2ec61f3` is clean. The merge with #69 `da47777` touches `run_meta` and the `idempotency.js` pair (text only).
+- Clean runs write only legacy `audit_logs` (no canonical AuditEvent). This is declared debt in SUB-ADV-01 README:88, same as #69.
