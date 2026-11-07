@@ -462,6 +462,37 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                "same_id": (r1.json() or {}).get("id") == (r2.json() or {}).get("id"),
                                "first_money": money_keys_in(r1.json(), LABOR_MONEY_FIELDS),
                                "replay_money": money_keys_in(r2.json(), LABOR_MONEY_FIELDS)})
+        # SEC-02-F (FG-75): every PUT /price-modifiers writes ONE canonical AuditEvent
+        # (FLOW-040 envelope, R1, before/after) in the database of the write; a refused
+        # PUT writes none (only the enforce "permission denied" event).
+        pm_audit = []
+        n = 0
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            for role in ("admin", "accountant", "viewer"):
+                for scope, url in (("org", "/api/price-modifiers/org"),
+                                   ("project", "/api/price-modifiers/project/%s"
+                                    % fx["A"]["project_id"])):
+                    n += 1
+                    key = "sec02f-%s-%s-%s" % (mode, role, scope)
+                    r = tc.put(url, json={"modifiers": {"risk_pct": 5 + n}},
+                               headers={"Authorization": "Bearer " + tokens[("A", role)],
+                                        "Idempotency-Key": key})
+                    events = tc.portal.call(lambda: op_db.audit_events.find(
+                        {"idempotency_key": key}, {"_id": 0}).to_list(10))
+                    pm_audit.append({
+                        "mode": mode, "role": role, "scope": scope, "status": r.status_code,
+                        "legacy_role": fx["A"]["users"][role]["role"],
+                        "user_id": fx["A"]["users"][role]["id"],
+                        # ST-01: the legacy org of tenant A IS its tenant id
+                        "expected_tenant": fx["A"]["tenant_id"],
+                        "project_id": fx["A"]["project_id"], "risk_pct": 5 + n,
+                        "events": [{k: e.get(k) for k in (
+                            "action", "result", "retention_class", "source_flow", "tenant_id",
+                            "actor_id", "actor_type", "entity_type", "entity_id",
+                            "scope_type", "scope_id", "structured_diff", "tool_or_endpoint",
+                            "idempotency_key", "sequence", "integrity_hash")}
+                            for e in events]})
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -473,6 +504,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "seconds": round(time.time() - started, 1), "rows": rows,
         "site_manager_mirrors": mirrors,
         "labor_replay": replay,
+        "price_modifier_audit": pm_audit,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -594,6 +626,37 @@ def check_replay(replay: List[Dict[str, Any]]) -> None:
             assert r["first_money"] == r["replay_money"] == ["hourly_rate", "labor_cost"], r
         else:
             assert r["first_money"] == r["replay_money"] == [], r
+
+
+def check_price_modifier_audit(rows: List[Dict[str, Any]]) -> None:
+    """SEC-02-F (FG-75; CLAUDE.md §14, FLOW-040): each successful PUT /price-modifiers
+    writes exactly ONE canonical AuditEvent — R1, success, FLOW-023, the tenant of the
+    write, the actor, the scope, before/after of the changed field, the endpoint and the
+    request's Idempotency-Key, chained (sequence + integrity hash). A refused PUT writes
+    no pricing event in any mode."""
+    assert len(rows) == len(MODES) * 3 * 2
+    for r in rows:
+        allowed = (r["legacy_role"] in ("Owner", "Admin") if r["scope"] == "org"
+                   else r["legacy_role"] in FINANCE)
+        if not allowed:
+            assert r["status"] == 403 and r["events"] == [], r
+            continue
+        assert r["status"] == 200 and len(r["events"]) == 1, r
+        e = r["events"][0]
+        org = r["scope"] == "org"
+        assert e["action"] == ("pricing.org_modifier.updated" if org
+                               else "pricing.project_modifier.updated"), e
+        assert (e["result"], e["retention_class"], e["source_flow"], e["actor_type"]) == \
+            ("success", "R1", "FLOW-023", "human"), e
+        assert e["tenant_id"] == r["expected_tenant"] and e["actor_id"] == r["user_id"], e
+        assert e["entity_type"] == "price_modifiers_config" and e["entity_id"], e
+        assert e["scope_type"] == ("company" if org else "project"), e
+        assert e["scope_id"] == (r["expected_tenant"] if org else r["project_id"]), e
+        assert e["structured_diff"]["after"]["modifiers"]["risk_pct"] == r["risk_pct"], e
+        before = e["structured_diff"]["before"]
+        assert before is None or before["modifiers"].get("risk_pct") != r["risk_pct"], e
+        assert e["tool_or_endpoint"].startswith("PUT /api/price-modifiers/"), e
+        assert e["idempotency_key"] and isinstance(e["sequence"], int) and e["integrity_hash"], e
 
 
 def check_mirrors(mirrors: List[Dict[str, Any]]) -> None:
@@ -877,13 +940,11 @@ def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
     from app.permissions import money_write
     from app.tenancy import data_access
     org, p = "T", "P1"
-    sess = lambda w, day, smr="Мазилка", ended=True: {
-        "org_id": org, "site_id": p, "worker_id": w, "smr_type_id": smr,
+    sess = lambda w, day, smr="Мазилка", ended=True, cost=800: {
+        "org_id": org, "site_id": p, "worker_id": w, "smr_type_id": smr, "labor_cost": cost,
         "started_at": day + "T07:00:00", "ended_at": day + "T15:00:00" if ended else None}
     data = {"work_sessions": [sess("w1", "2026-11-02"), sess("w2", "2026-11-03"),
-                              sess("w3", "2026-11-02", ended=False)],
-            "employee_daily_reports": [{"org_id": org, "project_id": p, "worker_id": "w4",
-                                        "smr_type": "Мазилка", "status": "Draft"}]}
+                              sess("w3", "2026-11-02", ended=False)]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
     user = {"org_id": org, "id": "sm"}
@@ -893,12 +954,63 @@ def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
     # a one-day window: ONE worker -> the 2+ rule must hide that day's spent
     assert run("sessions", "2026-11-03", "2026-11-03") == ({"мазилка": {"w2"}}, 1)
     # the centralized screen also sums draft reports -> w4 counts there, and only there
-    assert run("centralized")[1] == 3
+    # (SEC-02-F: from the handler's own entries, the same pay as its "spent")
+    ent = lambda w, pay: {"worker_id": w, "smr_type": "Мазилка", "amount_clean_labor": pay}
+    assert run("centralized", entries=[ent("w1", 800), ent("w2", 800), ent("w4", 400)])[1] == 3
     body = {"activities": [{"name": "Мазилка", "planned_cost": 100, "actual_cost": 60}],
             "summary": {"total_actual_cost": 60}}
     v = asyncio.run(money_write.r31_budget_view(user, p, body, source="sessions",
                                                 date_from="2026-11-03", date_to="2026-11-03"))
     assert "actual_cost" not in v["activities"][0] and "total_actual_cost" not in v["summary"]
+
+
+def test_fg74_only_workers_with_pay_in_the_window_count(monkeypatch):
+    """SEC-02-F (FLOW Guard FG-74; R31): a worker with zero cost adds nothing to "spent",
+    so he must not lift one paid worker over the 2+ rule — in every source."""
+    import asyncio
+    from app.permissions import money_write
+    from app.tenancy import data_access
+    org, p = "T", "P1"
+    sess = lambda w, cost, smr="Мазилка": {
+        "org_id": org, "site_id": p, "worker_id": w, "smr_type_id": smr, "labor_cost": cost,
+        "started_at": "2026-11-02T07:00:00", "ended_at": "2026-11-02T15:00:00"}
+    data = {
+        # w1 is paid, w2 has no rate (labor_cost 0), w3 nets out to 0 (+100 / -100)
+        "work_sessions": [sess("w1", 800), sess("w2", 0), sess("w3", 100), sess("w3", -100),
+                          sess("w5", 300, smr="Шпакловка"), sess("w6", 0, smr="Шпакловка")],
+        "work_types": [{"id": "wt-paid", "org_id": org, "activity_type": "Мазилка",
+                        "default_hourly_rate": 50},
+                       {"id": "wt-free", "org_id": org, "activity_type": "Мазилка",
+                        "default_hourly_rate": 0}],
+        "daily_work_logs": [
+            {"org_id": org, "site_id": p, "work_type_id": "wt-paid",
+             "entries": [{"user_id": "u1", "hours": 8}, {"user_id": "u2", "hours": 0}]},
+            {"org_id": org, "site_id": p, "work_type_id": "wt-free",
+             "entries": [{"user_id": "u3", "hours": 8}]}]}
+    monkeypatch.setattr(data_access.TenantData, "for_user",
+                        staticmethod(lambda _db, _u: _fake_tenant(data)))
+    user = {"org_id": org, "id": "sm"}
+    run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
+    # sessions: only w1 (Мазилка) and w5 (Шпакловка) are paid
+    assert run("sessions") == ({"мазилка": {"w1"}, "шпакловка": {"w5"}}, 2)
+    # daily logs: u2 has 0 hours, u3 a zero rate -> only u1
+    assert run("daily_logs") == ({"мазилка": {"u1"}}, 1)
+    # centralized: the handler's entries; a zero-pay entry does not count
+    ent = lambda w, pay: {"worker_id": w, "smr_type": "Мазилка", "amount_clean_labor": pay}
+    assert run("centralized", entries=[ent("w1", 800), ent("w2", 0)]) == ({"мазилка": {"w1"}}, 1)
+    # the view: Мазилка has ONE paid worker -> no row keeps "spent"; the two paid workers
+    # of the project keep the project total
+    body = {"activities": [{"name": "Мазилка", "planned_cost": 900, "actual_cost": 800},
+                           {"name": "Шпакловка", "planned_cost": 400, "actual_cost": 300}],
+            "summary": {"total_actual_cost": 1100}}
+    v = asyncio.run(money_write.r31_budget_view(user, p, body, source="sessions"))
+    assert all("actual_cost" not in a for a in v["activities"]), v
+    assert v["summary"]["total_actual_cost"] == 1100
+    # before FG-74 u2 (0 hours) and u3 (rate 0) made Мазилка a "3 workers" row, 800 visible
+    v = asyncio.run(money_write.r31_budget_view(
+        user, p, {"activities": [{"name": "Мазилка", "actual_cost": 800}]},
+        source="daily_logs"))
+    assert "actual_cost" not in v["activities"][0], v
 
 
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
@@ -957,6 +1069,7 @@ def test_the_committed_evidence_satisfies_the_package():
     check_rows(data["rows"])
     check_mirrors(data["site_manager_mirrors"])
     check_replay(data["labor_replay"])
+    check_price_modifier_audit(data["price_modifier_audit"])
 
 
 def test_the_audit_scan_finds_no_money_for_non_finance_roles():
@@ -1060,6 +1173,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     check_rows(data["rows"])
     check_mirrors(data["site_manager_mirrors"])
     check_replay(data["labor_replay"])
+    check_price_modifier_audit(data["price_modifier_audit"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r.get("money_keys")) for r in data["rows"]} == \

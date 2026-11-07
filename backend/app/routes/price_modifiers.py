@@ -2,7 +2,7 @@
 Routes - Price Modifiers (Ценови модификатори).
 Cascade: org_default → project override → line override.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import require_money_write, OWNER_ADMIN_ROLES, require_finance_read
+from app.permissions.money_write import audit_money_write  # SEC-02-F (FG-75)
 from app.permissions.money_input import project_in_tenant  # SEC-01-C03-B (FG-29)
 from app.services.price_modifiers import (
     get_effective_modifiers, apply_modifiers_to_price,
@@ -25,6 +26,13 @@ def _tenant(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Price Modifiers"])
+
+# SEC-02-F (FG-75): the fields a PUT may change — the before/after of the AuditEvent.
+_AUDITED = ("modifiers", "auto_rules")
+
+
+def _audited(doc):
+    return {k: (doc or {}).get(k) for k in _AUDITED} if doc else None
 
 
 class ModifiersUpdate(BaseModel):
@@ -56,6 +64,7 @@ async def get_org_modifiers(
 @router.put("/price-modifiers/org")
 async def update_org_modifiers(
     data: ModifiersUpdate,
+    request: Request,
     _sec01: dict = Depends(require_money_write(
         "pricing.org_modifier.update", module="M2", resource_type="price_modifiers_config",
         roles=OWNER_ADMIN_ROLES)),  # SEC-01-C01: the existing Owner/Admin rule, all modes
@@ -76,6 +85,7 @@ async def update_org_modifiers(
             if k in data.auto_rules:
                 update[f"auto_rules.{k}"] = data.auto_rules[k]
 
+    before = await tenant.price_modifiers_config.find_one({"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0})
     await tenant.price_modifiers_config.update_one(
         {"org_id": user["org_id"], "scope": "org_default"},
         {"$set": update, "$setOnInsert": {
@@ -84,9 +94,15 @@ async def update_org_modifiers(
         }},
         upsert=True,
     )
-    return await tenant.price_modifiers_config.find_one(
+    after = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0}
     )
+    await audit_money_write(  # SEC-02-F (FG-75; CLAUDE.md §14): canonical AuditEvent
+        request, user, action="pricing.org_modifier.updated", source_flow="FLOW-023",
+        entity_type="price_modifiers_config", entity_id=after.get("id"),
+        scope_type="company", scope_id=user["org_id"], before=_audited(before), after=_audited(after),
+        reason="price modifiers org_default updated")
+    return after
 
 
 # ── Project Override ───────────────────────────────────────────────
@@ -108,6 +124,7 @@ async def get_project_modifiers(
 async def update_project_modifiers(
     project_id: str,
     data: ModifiersUpdate,
+    request: Request,
     _sec01: dict = Depends(require_money_write(
         "pricing.project_modifier.update", module="M2", resource_type="price_modifiers_config")),  # SEC-01: before any read/write
     user: dict = Depends(require_m2),
@@ -125,6 +142,7 @@ async def update_project_modifiers(
             if k in data.auto_rules:
                 update[f"auto_rules.{k}"] = data.auto_rules[k]
 
+    before = await tenant.price_modifiers_config.find_one({"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0})
     await tenant.price_modifiers_config.update_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id},
         {"$set": update, "$setOnInsert": {
@@ -133,9 +151,15 @@ async def update_project_modifiers(
         }},
         upsert=True,
     )
-    return await tenant.price_modifiers_config.find_one(
+    after = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0}
     )
+    await audit_money_write(  # SEC-02-F (FG-75; CLAUDE.md §14): canonical AuditEvent
+        request, user, action="pricing.project_modifier.updated", source_flow="FLOW-023",
+        entity_type="price_modifiers_config", entity_id=after.get("id"),
+        scope_type="project", scope_id=project_id, before=_audited(before), after=_audited(after),
+        reason="price modifiers project updated")
+    return after
 
 
 @router.delete("/price-modifiers/project/{project_id}")

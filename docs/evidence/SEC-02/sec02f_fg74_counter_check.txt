@@ -1,0 +1,3 @@
+data: work_sessions of P1 — w1 labor_cost 800, w2 labor_cost 0 (no rate); Technical Manager budget view, source sessions
+71f9bbe (before SEC-02-F) workers: ({'мазилка': {'w2', 'w1'}}, 2) view: {'activities': [{'name': 'Мазилка', 'planned_cost': 900, 'actual_cost': 800}], 'summary': {'total_actual_cost': 800}}
+SEC-02-F workers: ({'мазилка': {'w1'}}, 1) view: {'activities': [{'name': 'Мазилка', 'planned_cost': 900}], 'summary': {}}

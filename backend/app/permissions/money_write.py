@@ -86,12 +86,47 @@ def require_money_write(action: str, *, module: str, resource_type: str,
         legacy_check=_legacy_role_check(tuple(roles)),
     )
 
-    async def dependency(ctx: TenantContext = Depends(permission)) -> dict:
+    async def dependency(request: Request, ctx: TenantContext = Depends(permission)) -> dict:
         await _legacy_data_path_guard(ctx)
+        request.state.sec_money_ctx = ctx    # SEC-02-F (FG-75): for audit_money_write
         return ctx.user
 
     dependency.sec01_action = action      # inspected by tests/test_sec_01_*.py
     return dependency
+
+
+async def audit_money_write(request: Request, user: dict, *, action: str, source_flow: str,
+                            entity_type: str, entity_id: Optional[str],
+                            before: Any = None, after: Any = None,
+                            scope_type: Optional[str] = None, scope_id: Optional[str] = None,
+                            reason: str) -> dict:
+    """SEC-02-F (FLOW Guard FG-75; CLAUDE.md §14, FLOW-040): the canonical AuditEvent of a
+    money write that went through ``require_money_write`` — R1, success, the before/after
+    of the changed fields, the request's Idempotency-Key, endpoint and request id.
+
+    Written in the SAME database as the business write (the context's ``db()``: the
+    legacy handle in off/shadow, the guarded tenant handle in enforce). The event is
+    labelled with the tenant that owns the record: in off/shadow the legacy org of the
+    write (as ``audit_permission_change``, PR-06), in enforce the context's tenant. A
+    failure is raised, never swallowed (the write must not be reported as audited).
+    """
+    from app.audit.envelope import (build_event, ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS,
+                                    RESULT_SUCCESS)
+    from app.audit.store import record_event
+    ctx = getattr(request.state, "sec_money_ctx", None)
+    if ctx is None:
+        raise RuntimeError("audit_money_write needs a route guarded by require_money_write")
+    event = build_event(
+        tenant_id=ctx.tenant_id if ctx.enforced else user["org_id"],
+        actor_type=ACTOR_HUMAN, actor_id=user["id"], action=action,
+        source_flow=source_flow, retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        result=RESULT_SUCCESS, entity_type=entity_type, entity_id=entity_id,
+        scope_type=scope_type, scope_id=scope_id,
+        structured_diff={"before": before, "after": after}, reason=reason,
+        source_channel="api", tool_or_endpoint="%s %s" % (request.method, request.url.path),
+        request_id=request.headers.get("x-request-id"),
+        idempotency_key=request.headers.get("idempotency-key"))
+    return await record_event(await ctx.db(), event)
 
 
 async def check_money_write(request: Request, user: dict, action: str, *, module: str,
@@ -428,17 +463,24 @@ def _window(field: str, date_from: Optional[str], date_to: Optional[str]) -> dic
 
 async def project_labor_workers(user: dict, project_id: str, source: str = "sessions",
                                 date_from: Optional[str] = None,
-                                date_to: Optional[str] = None):
-    """Distinct workers per SMR, and of the whole project, behind a "spent" figure.
+                                date_to: Optional[str] = None,
+                                entries: Optional[list] = None):
+    """Distinct PAID workers per SMR, and of the whole project, behind a "spent" figure.
 
-    ``source`` — what the screen sums (same filters as its handler):
-      sessions     ended work sessions of the site (expected-actual, activities-overview,
-                   budget-health, the activity burn);
-      centralized  Draft/Submitted daily reports + ended, unflagged work sessions
-                   (centralized-reports/activities);
-      daily_logs   daily work log entries, SMR = the work type's activity type
+    ``source`` — what the screen sums (same filters and the same pay as its handler):
+      sessions     ended work sessions of the site, pay = ``labor_cost`` (expected-actual,
+                   activities-overview, budget-health, the activity burn);
+      centralized  the entries of ``build_centralized_reports`` — Draft/Submitted daily
+                   reports + ended, unflagged work sessions, pay = ``amount_clean_labor``
+                   (centralized-reports/activities); ``entries`` passes the handler's own;
+      daily_logs   daily work log entries, pay = hours x the work type's
+                   ``default_hourly_rate`` (25 when unset), SMR = its activity type
                    (activity-budget-summary).
     ``date_from`` / ``date_to`` — the same window as the money, when the screen has one.
+
+    SEC-02-F (FG-74): a worker counts only with a NON-ZERO pay in that window (per SMR:
+    in that SMR). A worker with zero cost adds nothing to "spent", so counting him would
+    let one paid worker's pay pass the 2+ rule.
     """
     from collections import defaultdict
     from app.tenancy.data_access import TenantData
@@ -447,27 +489,33 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
         raise ValueError(source)
     tenant = TenantData.for_user(db, user)
     org = user["org_id"]
-    by_smr, everyone = defaultdict(set), set()
+    pay_by_smr = defaultdict(lambda: defaultdict(float))     # smr -> worker -> pay
+    pay = defaultdict(float)                                 # worker -> pay
 
-    def add(worker, smr):
+    def add(worker, smr, amount):
+        try:
+            amount = float(amount or 0)
+        except (TypeError, ValueError):
+            amount = 0.0
         if worker:
-            everyone.add(worker)
-            by_smr[_norm(smr)].add(worker)
+            pay[worker] += amount
+            pay_by_smr[_norm(smr)][worker] += amount
 
-    if source in ("sessions", "centralized"):
+    if source == "sessions":
         q = {"org_id": org, "site_id": project_id, "ended_at": {"$ne": None},
              **_window("started_at", date_from, date_to)}
-        if source == "centralized":
-            q["is_flagged"] = {"$ne": True}
         async for s_ in tenant.work_sessions.find(
-                q, {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1}):
-            add(s_.get("worker_id"), s_.get("smr_type_id") or s_.get("smr_type"))
+                q, {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1,
+                    "labor_cost": 1}):
+            add(s_.get("worker_id"), s_.get("smr_type_id") or s_.get("smr_type"),
+                s_.get("labor_cost", 0))
     if source == "centralized":
-        async for r in tenant.employee_daily_reports.find(
-                {"org_id": org, "project_id": project_id,
-                 "status": {"$in": ["Draft", "Submitted", "SUBMITTED"]}},
-                {"_id": 0, "worker_id": 1, "smr_type": 1, "activity_type": 1}):
-            add(r.get("worker_id"), r.get("smr_type") or r.get("activity_type"))
+        if entries is None:
+            from app.services.centralized_reports import build_centralized_reports
+            entries = (await build_centralized_reports(org, project_id,
+                                                       with_entries=True))["entries"]
+        for e in entries:
+            add(e.get("worker_id"), e.get("smr_type"), e.get("amount_clean_labor", 0))
     if source == "daily_logs":
         types = {wt["id"]: wt async for wt in tenant.work_types.find({"org_id": org},
                                                                      {"_id": 0})}
@@ -476,15 +524,26 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
                                                          "work_type_id": 1}):
             wt = types.get(log.get("work_type_id"), {})
             smr = wt.get("activity_type", wt.get("name", "Общо"))
+            rate = wt.get("default_hourly_rate", 25)
             for e in log.get("entries") or []:
-                add(e.get("user_id"), smr)
-    return dict(by_smr), len(everyone)
+                try:
+                    amount = float(e.get("hours", 0) or 0) * float(rate or 0)
+                except (TypeError, ValueError):
+                    amount = 0.0
+                add(e.get("user_id"), smr, amount)
+
+    def paid(m):
+        return {w for w, v in m.items() if round(v, 2) != 0}
+    by_smr = {k: paid(m) for k, m in pay_by_smr.items()}
+    return by_smr, len(paid(pay))
 
 
 async def r31_budget_view(user: dict, project_id: str, body, *, source: str = "sessions",
-                          date_from: Optional[str] = None, date_to: Optional[str] = None):
+                          date_from: Optional[str] = None, date_to: Optional[str] = None,
+                          entries: Optional[list] = None):
     """The Technical Manager's budget view of ``body`` (SEC-02-D), with the workers counted
     from the money's own source and window (SEC-02-E, FG-63)."""
     from app.permissions.finance_read import r31_view
-    by_smr, n = await project_labor_workers(user, project_id, source, date_from, date_to)
+    by_smr, n = await project_labor_workers(user, project_id, source, date_from, date_to,
+                                            entries=entries)
     return r31_view(body, by_smr, n)

@@ -845,7 +845,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 129.9,
+ "seconds": 132.3,
  "rows": [
   {
    "mode": "off",
@@ -150970,6 +150970,521 @@
     "hourly_rate",
     "labor_cost"
    ]
+  }
+ ],
+ "price_modifier_audit": [
+  {
+   "mode": "off",
+   "role": "admin",
+   "scope": "org",
+   "status": 200,
+   "legacy_role": "Admin",
+   "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 6,
+   "events": [
+    {
+     "action": "pricing.org_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-org",
+     "scope_type": "company",
+     "scope_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "structured_diff": {
+      "before": {
+       "modifiers": {},
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_pct": 6
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/org",
+     "idempotency_key": "sec02f-off-admin-org",
+     "sequence": 17,
+     "integrity_hash": "b8e118e568142f4b088b762e7e6e1b489a1bf9a3dddda0c5ffe0814f03d5b27d"
+    }
+   ]
+  },
+  {
+   "mode": "off",
+   "role": "admin",
+   "scope": "project",
+   "status": 200,
+   "legacy_role": "Admin",
+   "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 7,
+   "events": [
+    {
+     "action": "pricing.project_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-p1",
+     "scope_type": "project",
+     "scope_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_percent": 5
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 7
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "idempotency_key": "sec02f-off-admin-project",
+     "sequence": 18,
+     "integrity_hash": "8564ec5fd02a7eb06629dc69321d8ab9b4f80c31a0ed0ba05550a6a30e0d28f5"
+    }
+   ]
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "scope": "org",
+   "status": 403,
+   "legacy_role": "Accountant",
+   "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 8,
+   "events": []
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "scope": "project",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 9,
+   "events": [
+    {
+     "action": "pricing.project_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-p1",
+     "scope_type": "project",
+     "scope_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 7
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 9
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "idempotency_key": "sec02f-off-accountant-project",
+     "sequence": 19,
+     "integrity_hash": "cde8457699a0d79a841188f3eefe7a23a3567aaad9357659c7cb2465cb9f9494"
+    }
+   ]
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "scope": "org",
+   "status": 403,
+   "legacy_role": "Viewer",
+   "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 10,
+   "events": []
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "scope": "project",
+   "status": 403,
+   "legacy_role": "Viewer",
+   "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 11,
+   "events": []
+  },
+  {
+   "mode": "shadow",
+   "role": "admin",
+   "scope": "org",
+   "status": 200,
+   "legacy_role": "Admin",
+   "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 12,
+   "events": [
+    {
+     "action": "pricing.org_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-org",
+     "scope_type": "company",
+     "scope_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_pct": 6
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_pct": 12
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/org",
+     "idempotency_key": "sec02f-shadow-admin-org",
+     "sequence": 20,
+     "integrity_hash": "9cb67ff296dfad51fc5c329299e3444b9b0d2634f3dc80f8e9a0af5b7bafde43"
+    }
+   ]
+  },
+  {
+   "mode": "shadow",
+   "role": "admin",
+   "scope": "project",
+   "status": 200,
+   "legacy_role": "Admin",
+   "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 13,
+   "events": [
+    {
+     "action": "pricing.project_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-p1",
+     "scope_type": "project",
+     "scope_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 9
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 13
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "idempotency_key": "sec02f-shadow-admin-project",
+     "sequence": 21,
+     "integrity_hash": "e14b90c2bee68698d5255eb0d7f8f95f8fd5d0625816bbb669baed1e43df0f25"
+    }
+   ]
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "scope": "org",
+   "status": 403,
+   "legacy_role": "Accountant",
+   "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 14,
+   "events": []
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "scope": "project",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 15,
+   "events": [
+    {
+     "action": "pricing.project_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-p1",
+     "scope_type": "project",
+     "scope_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 13
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 15
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "idempotency_key": "sec02f-shadow-accountant-project",
+     "sequence": 22,
+     "integrity_hash": "a838c0837865b4b02e66f9df998f322ba03f0b40e39b6e349c93897ab45bf17a"
+    }
+   ]
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "scope": "org",
+   "status": 403,
+   "legacy_role": "Viewer",
+   "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 16,
+   "events": []
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "scope": "project",
+   "status": 403,
+   "legacy_role": "Viewer",
+   "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 17,
+   "events": []
+  },
+  {
+   "mode": "enforce",
+   "role": "admin",
+   "scope": "org",
+   "status": 200,
+   "legacy_role": "Admin",
+   "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 18,
+   "events": [
+    {
+     "action": "pricing.org_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-org",
+     "scope_type": "company",
+     "scope_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_pct": 12
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_pct": 18
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/org",
+     "idempotency_key": "sec02f-enforce-admin-org",
+     "sequence": 23,
+     "integrity_hash": "24b9b705994493f343c7f89f9e2bf71dc798311a10d6c4e22be3f7e7edf09d9d"
+    }
+   ]
+  },
+  {
+   "mode": "enforce",
+   "role": "admin",
+   "scope": "project",
+   "status": 200,
+   "legacy_role": "Admin",
+   "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 19,
+   "events": [
+    {
+     "action": "pricing.project_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-p1",
+     "scope_type": "project",
+     "scope_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 15
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 19
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "idempotency_key": "sec02f-enforce-admin-project",
+     "sequence": 24,
+     "integrity_hash": "2c67f666b6c7cabde4f4c2f71b74e4c7515d1ff777ebc8e2880394d506c887b0"
+    }
+   ]
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "scope": "org",
+   "status": 403,
+   "legacy_role": "Accountant",
+   "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 20,
+   "events": []
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "scope": "project",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 21,
+   "events": [
+    {
+     "action": "pricing.project_modifier.updated",
+     "result": "success",
+     "retention_class": "R1",
+     "source_flow": "FLOW-023",
+     "tenant_id": "16dd247b-9009-410f-8f3f-d789a5586915",
+     "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
+     "actor_type": "human",
+     "entity_type": "price_modifiers_config",
+     "entity_id": "pm01probe-A-pm-p1",
+     "scope_type": "project",
+     "scope_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "structured_diff": {
+      "before": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 19
+       },
+       "auto_rules": {}
+      },
+      "after": {
+       "modifiers": {
+        "risk_percent": 5,
+        "risk_pct": 21
+       },
+       "auto_rules": {}
+      }
+     },
+     "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
+     "idempotency_key": "sec02f-enforce-accountant-project",
+     "sequence": 26,
+     "integrity_hash": "aeb8a3dedba584a659a0664339183a1b347d14b9b01f20bf5c0e4d171c95d996"
+    }
+   ]
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "scope": "org",
+   "status": 403,
+   "legacy_role": "Viewer",
+   "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 22,
+   "events": []
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "scope": "project",
+   "status": 403,
+   "legacy_role": "Viewer",
+   "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+   "expected_tenant": "16dd247b-9009-410f-8f3f-d789a5586915",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "risk_pct": 23,
+   "events": []
   }
  ]
 }

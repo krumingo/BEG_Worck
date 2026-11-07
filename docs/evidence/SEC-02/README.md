@@ -408,6 +408,40 @@ Merge commit `0d30eae`, без rebase и без конфликт в кода. П
 ### Сливане с #69 @ `7300864` (SEC-01-C03 допълнение B: FG-15, FG-47, FG-29)
 Merge commit `4c7a87a`. Конфликтите бяха само в import-ите на `labor_smr.py`, `price_modifiers.py` и `subcontractors.py`. За тялото на `POST /labor-entries` се ползва версията на #69 (`labor_money_visible` / `without_labor_money`). PM-01 матрицата е регенерирана с harness-а: **0 клетки** спрямо SEC-02-E @ `b37909f`. Спрямо #69 @ `7300864` — **1584 клетки в 117 route-а** (`pm01_cells_changed.csv`). Матрицата на #69 е една и съща при `6d43284` и `7300864`.
 
+## SEC-02-F (07.11.2026) — FLOW Guard pass 6: FG-74, FG-75
+
+### FG-74 (PROVEN) — броят се само работници със заплащане в прозореца
+Правилото „2+“ броеше и работници с нулев разход: сесия без ставка (`labor_cost` 0), дневен отчет с 0 часа или вид работа със ставка 0. Такъв работник не добавя нищо към „изхарчено“, но вдигаше реда до „двама“. Така се виждаше заплащането на единствения платен работник.
+
+Сега `project_labor_workers` сумира заплащането на всеки работник от същия източник, в същия прозорец и със същата формула като екрана. Брои го само ако сумата не е 0 (за СМР — сумата в това СМР):
+
+| Източник | Заплащане |
+|---|---|
+| `sessions` | `labor_cost` на сесията (каквото сумират expected-actual, budget-health, activities-overview, burn) |
+| `centralized` | `amount_clean_labor` на самите записи на `build_centralized_reports` (`with_entries=True`). Route-ът подава своите, затова формулата за ставка не е копирана |
+| `daily_logs` | часове × `default_hourly_rate` на вида работа (25, ако липсва), както в activity-budget-summary |
+
+Доказателство:
+* `test_fg74_only_workers_with_pay_in_the_window_count`: работник с ставка 0, нетиране +100/−100, 0 часа, вид работа със ставка 0, запис с 0 заплащане — нито един не се брои. Ред с един платен работник губи „изхарчено“, а проектната сума на двама платени остава;
+* контрапроба `sec02f_fg74_counter_check.txt`: при `71f9bbe` w1 (800) + w2 (0) дават „2 работника“ и техническият ръководител вижда 800, т.е. заплащането на w1. След поправката редът и сумата са скрити.
+
+### FG-75 — `PUT /price-modifiers/*` пише canonical AuditEvent
+Двата PUT-а (`/org` и `/project/{project_id}`) записват по **един** AuditEvent чрез `audit_money_write` (`app/permissions/money_write.py`), с envelope-а на FLOW-040 (`build_event` → `record_event`):
+* action `pricing.org_modifier.updated` / `pricing.project_modifier.updated`, FLOW-023, R1, success, actor;
+* scope company/project, before/after на `modifiers` и `auto_rules`, endpoint, `x-request-id`, Idempotency-Key, верига (sequence + integrity hash);
+* в същата база като бизнес записа (`ctx.db()`). Tenant е legacy org в off/shadow и tenant-ът на контекста в enforce (PR-06). Грешка при одита не се поглъща.
+
+`require_money_write` оставя своя TenantContext в `request.state`; отговорът и правата не се променят.
+
+Доказателство (реален Mongo, harness-ът на SEC-02, `price_modifier_audit` в `results.json`): 3 режима × Admin / Accountant / Viewer × org / project.
+* Разрешен PUT → 200 и точно 1 събитие с всички полета по-горе.
+* Отказан PUT (Accountant на `/org`, Viewer и на двата) → 403 и 0 pricing събития.
+* PM-01: **15 клетки** спрямо `71f9bbe`, само колоната `written`: + `op.audit_events` при 200 на двата PUT-а (project × 3 финансови роли × 3 режима = 9; org × Owner/Admin × 3 = 6). Нито един статус не е променен.
+* SEC-01 (15 клетки) и SEC-01-C01 (48 клетки) са регенерирани с техните harness-и. Разликата е същата: само тези два PUT-а, + `op.audit_events`, статусите са същите.
+
+### Извън обхвата
+FG-76 (две различни „изхарчено“) отива към LAB-01, което ще пусне expected-actual през своята функция. #71 запазва правилата за видимост.
+
 ## Rollback
 
 Revert на commit-а. Няма миграция и няма запис в данни. Проектните назначения, синхронизирани след SEC-02, носят три допълнителни read действия; при стария код те просто не се ползват.

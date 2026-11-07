@@ -28,12 +28,13 @@ async def get_activities_projection(
     _sec02: dict = Depends(require_project_budget_read(
         "finance.project_budget_burn.read", module=None, resource_type="project_budget_burn")),  # SEC-02 (R20-2B): before any read
     user: dict = Depends(get_current_user)):
-    data = await build_centralized_reports(user["org_id"], project_id)
+    data = await build_centralized_reports(user["org_id"], project_id, with_entries=True)
     out = {"activities": data["activities"], "entries_count": data["entries_count"]}
     # SEC-02-D (R31, audit SEC02C-1): the Technical Manager's view gives no one's pay.
     from app.permissions.money_write import money_values_visible, r31_budget_view
     if not await money_values_visible(request, user):
-        out = await r31_budget_view(user, project_id, out, source="centralized")  # FG-63
+        out = await r31_budget_view(user, project_id, out, source="centralized",  # FG-63
+                                    entries=data["entries"])  # FG-74: the same pay
     return out
 
 
