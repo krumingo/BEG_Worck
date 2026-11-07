@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
@@ -137,8 +137,8 @@ Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b
 | #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #64 | `frontend/src/components/DashboardLayout.js` |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 
 Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
 
@@ -1007,10 +1007,10 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 
 
 ---
@@ -1081,7 +1081,7 @@ The comment on #69 still applies.
 | Pair | Status |
 |---|---|
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
@@ -1123,10 +1123,10 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 
 | Pair | Status |
 |---|---|
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 
 
 ---
@@ -1867,7 +1867,7 @@ Merge-tree, `e733c66` against each:
 |---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #56 | conflict: `store.py` (recipe above) + the A2B inventory |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 
 **Rollout risk (not a code defect; for Krum).** If a production or staging database already has duplicate idempotency rows or `(tenant_id, sequence)` events, which are likely given IDEM-IDX-1 and the `record_event` debt, the **app refuses to start** after deploy, by design. Before deploying, run the dry run `scripts/w0_04_bootstrap_audit_indexes.py` against a copy of the data, as the HANDOFF says.
 
@@ -1946,7 +1946,7 @@ Gates:
 | #71 SEC-02 | `71f9bbe` | **PASS** (FG-63; #69 7300864 merged, behaviour kept; scan clean) | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 `31ed258` | conflict: `project_pnl.py` |
-| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
 
 - The HANDOFF names `expected_actual` / `activity_budgets` / `project_pnl` / `all_reports` with respect to #71 only.
 - It does not mention that `labor_smr.py` `sync-from-work-reports` was rewritten by both #69 and #73:
@@ -2279,3 +2279,39 @@ Probe `docs/audit/probes/sec02/probe_sec02_e_narrow_window.py`: a member SiteMan
 - Why the one-day window shows 410: for a caller without the finance right the window is deliberately **ignored**. `routes/expected_actual.py:47-50` sets `date_from = date_to = None` (SEC-02-E, anti-differencing).
 - So one worker's pay is not exposed by a narrow window. **FG-63 holds.** The probe's "FAILS" lines are false positives: it flagged the planned budget and the two-worker total.
 - Residual (info, the same class as noted before; inherent to R31 "spent"): the all-time total grows day by day. A SiteManager who polls once per day can take the difference, which is that day's labor. On a day with a single worker, that is that worker's pay. Mitigation would be coarser publication (for example weekly, k-anonymous deltas); this is Krum's call.
+
+
+## #55 5C-C26i @ `f0d86ab` — 2026-11-07 ~03:40 UTC — PASS
+
+Delta:
+- FG-70: `_check_dispatch_acceptance`. An acceptance of a warehouse→project dispatch must land on the dispatch's `project_id` (a subproject counts by its DB parent); a mismatch is an `InvariantViolationError`, held behind the rights check.
+- FG-69: a denial on a command with a subproject names only `scope_type = subproject` / the sent id.
+
+New probe `docs/audit/probes/pr55/test_probe_pr55_c26i_accept.py`. The dispatch is addressed to P2. PROVED; the results are identical in off and enforce:
+
+| Who | Accept into | Result |
+|---|---|---|
+| member SiteManager | P1 | **422**, +0 |
+| member SiteManager | subproject of P1 | **422**, +0 |
+| member SiteManager | subproject of P2 | DENIED `R28_PROJECT_RELATION_REQUIRED`, scope subproject `sp-i-of-p2` only (FG-69) |
+| member SiteManager | P2 | DENIED, scope project P2 |
+| Admin | P1 | **422**, +0 |
+| Admin | subproject of P1 | **422**, +0 |
+| Admin | subproject of P2 | ALLOWED |
+| Admin | P2 | ALLOWED |
+
+Before FG-70, only a transfer's target was enforced.
+
+Other probes: c26e_real, c26f, c26h reads, and c24, c24b, c25, c26, c26b, c26d — all pass.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + c23 | **761 passed** on re-run. The first run gave 751 passed + 10 errors in 8:47 (slow, environmental); the re-run in 4:25 had 0 errors |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/221 |
+| A1 | 0/448 |
+| R0 | 814 |
+
+Info: the 422 tells a SiteManager allowed on P1 that the dispatch is addressed elsewhere (not where). That is acceptable, because the rights check passed first.
