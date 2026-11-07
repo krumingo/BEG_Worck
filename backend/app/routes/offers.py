@@ -249,15 +249,30 @@ async def _once(org_id: str, key: str, action: str, fingerprint: dict, work):
     return await once({"org_id": org_id}, key, action, fingerprint, work)
 
 
+from app.services.offer_txn import MAX_TXN_ATTEMPTS, ensure_offer_collections  # OFF79-05
+
+
 async def _in_transaction(body):
-    """``auth_tx.run_in_transaction``; a deployment without transactions → 503, nothing written."""
-    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
-    try:
-        return await run_in_transaction(db, body)
-    except TransactionsUnavailable:
-        raise HTTPException(status_code=503, detail={
-            "error_code": "TRANSACTIONS_UNAVAILABLE",
-            "message": "Записът изисква транзакция, а базата не я поддържа — нищо не е записано"})
+    """``auth_tx.run_in_transaction``; a deployment without transactions → 503, nothing
+    written. The collections are ensured first (OFF79-05), and an error the server labels
+    TransientTransactionError that escaped the driver's own retry is retried, bounded."""
+    from pymongo.errors import PyMongoError
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction, transactions_supported
+    unavailable = HTTPException(status_code=503, detail={
+        "error_code": "TRANSACTIONS_UNAVAILABLE",
+        "message": "Записът изисква транзакция, а базата не я поддържа — нищо не е записано"})
+    if not await transactions_supported(db):
+        raise unavailable
+    await ensure_offer_collections(db)
+    for attempt in range(MAX_TXN_ATTEMPTS):
+        try:
+            return await run_in_transaction(db, body)
+        except TransactionsUnavailable:
+            raise unavailable
+        except PyMongoError as exc:
+            if exc.has_error_label("TransientTransactionError") and attempt < MAX_TXN_ATTEMPTS - 1:
+                continue
+            raise
 
 
 async def _offer_event(session, *, tenant_id: str, actor_type: str, actor_id: str, action: str,
