@@ -881,7 +881,7 @@ async def _run(ctx: Any, db, plan: _Plan, *, actor_id: str, approval_id: Optiona
     # 3. bookkeeping: reserve the key, take the lock
     state = await begin_idempotent(db, tenant_id=tenant_id, key=plan.key, action=plan.action,
                                    request_fingerprint=fingerprint)
-    if state.get("status") == IDEMPOTENCY_IN_PROGRESS:
+    if state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
         # W0-04-C01 F-69-01: a concurrent retry won the retake of this failed key;
         # its reservation is not ours to fail.
         await refuse(MasterDataRefused("idempotency key %r is being retried right now" % plan.key))

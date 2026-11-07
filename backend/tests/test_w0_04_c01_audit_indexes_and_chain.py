@@ -465,14 +465,14 @@ def test_six_concurrent_retries_of_a_failed_key_have_exactly_one_winner():
                                  request_fingerprint="fp") for _ in range(6)])
             statuses = [s["status"] for s in states]
             assert statuses.count(IDEMPOTENCY_STARTED) == 1, statuses
-            # Every other retry is told the write is running: IN_PROGRESS when it
-            # read FAILED and lost the retake, or the ordinary DUPLICATE/STARTED
-            # ("still running") when it read the record after the winner's update.
             losers = [s for s in states if s["status"] != IDEMPOTENCY_STARTED]
-            assert all(s["status"] == IDEMPOTENCY_IN_PROGRESS
-                       or (s["status"] == IDEMPOTENCY_DUPLICATE
-                           and s["prior_status"] == IDEMPOTENCY_STARTED) for s in losers), statuses
+            # RETAKE-1: every loser is the ordinary DUPLICATE/STARTED that all
+            # callers already refuse; a loser of the retake itself also carries
+            # detail IN_PROGRESS so resuming callers refuse too.
+            assert all(s["status"] == IDEMPOTENCY_DUPLICATE
+                       and s["prior_status"] == IDEMPOTENCY_STARTED for s in losers), statuses
             assert not any(s.get("retry_of_failed") for s in losers)
+            assert IDEMPOTENCY_IN_PROGRESS not in statuses
             winner = next(s for s in states if s["status"] == IDEMPOTENCY_STARTED)
             assert winner["retry_of_failed"] is True
             rec = await db[IDEMPOTENCY_COLLECTION].find_one({"key": key}, {"_id": 0})
@@ -501,7 +501,7 @@ def test_a_retry_after_the_winner_completed_is_a_replay():
         replay = await begin_idempotent(db, request_fingerprint="fp", **kw)
         assert replay["status"] == IDEMPOTENCY_DUPLICATE
         assert replay["prior_status"] == IDEMPOTENCY_COMPLETED and replay["result_reference"] == "pay-1"
-        assert IDEMPOTENCY_IN_PROGRESS not in (won["status"], replay["status"])
+        assert IDEMPOTENCY_IN_PROGRESS not in (won.get("detail"), lost.get("detail"), replay.get("detail"))
     scratch(go)
 
 
@@ -511,10 +511,57 @@ def test_recoverable_write_refuses_with_409_when_a_retry_is_in_progress(monkeypa
     from app.permissions import workflow
 
     async def lost_retake(*a, **kw):
-        return {"status": IDEMPOTENCY_IN_PROGRESS, "prior_status": IDEMPOTENCY_STARTED, "record": {}}
+        return {"status": IDEMPOTENCY_DUPLICATE, "prior_status": IDEMPOTENCY_STARTED,
+                "detail": IDEMPOTENCY_IN_PROGRESS, "record": {}}
     monkeypatch.setattr(workflow, "begin_idempotent", lost_retake)
     rw = workflow.RecoverableWrite(object(), tenant_id="t", action="a", key="k", fingerprint="fp")
     with pytest.raises(HTTPException) as exc:
         asyncio.run(rw.begin())
     assert exc.value.status_code == 409
     assert exc.value.detail["error_code"] == "IDEMPOTENCY_IN_PROGRESS"
+
+
+
+@real_mongo
+def test_a_lost_retake_is_duplicate_started_with_detail_in_progress():
+    """RETAKE-1, deterministic: another retry takes the FAILED key between this
+    caller's read and its compare-and-set. The result is the DUPLICATE/STARTED
+    every caller refuses, with detail IN_PROGRESS — never a new top-level state."""
+    from app.audit.idempotency import IDEMPOTENCY_IN_PROGRESS, fail_idempotent
+
+    class _RivalWinsFirst:
+        """audit_idempotency proxy: the rival's retake lands just before ours."""
+
+        def __init__(self, real):
+            self.real = real
+
+        def __getattr__(self, name):
+            return getattr(self.real, name)
+
+        async def update_one(self, flt, update, **kw):
+            if flt.get("status") == "failed":
+                await self.real.update_one({"id": flt["id"]}, {"$set": {
+                    "status": IDEMPOTENCY_STARTED, "attempt_token": "rival"}})
+            return await self.real.update_one(flt, update, **kw)
+
+    class _Db:
+        def __init__(self, real):
+            self.real, self.client, self.name = real, real.client, real.name
+
+        def __getitem__(self, coll):
+            c = self.real[coll]
+            return _RivalWinsFirst(c) if coll == IDEMPOTENCY_COLLECTION else c
+
+    async def go(client, dbs):
+        db = dbs[0]
+        kw = dict(tenant_id="tenant-a", key="k", action="pay_run.create")
+        await begin_idempotent(db, request_fingerprint="fp", **kw)
+        await fail_idempotent(db, error_code="INTERRUPTED", **kw)
+        lost = await begin_idempotent(_Db(db), request_fingerprint="fp", **kw)
+        assert lost["status"] == IDEMPOTENCY_DUPLICATE
+        assert lost["prior_status"] == IDEMPOTENCY_STARTED
+        assert lost["detail"] == IDEMPOTENCY_IN_PROGRESS
+        assert not lost.get("retry_of_failed") and lost["result_reference"] is None
+        rec = await db[IDEMPOTENCY_COLLECTION].find_one({"key": "k"}, {"_id": 0})
+        assert rec["attempt_token"] == "rival"            # ours never landed
+    scratch(go)

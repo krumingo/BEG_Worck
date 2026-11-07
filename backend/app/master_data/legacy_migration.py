@@ -685,7 +685,7 @@ async def _begin(db, tenant_id: str, action: str, key: str, fingerprint: str):
                                        request_fingerprint=fingerprint)
     except IdempotencyConflict as exc:
         raise MasterDataRefused(str(exc)) from exc
-    if state.get("status") == IDEMPOTENCY_IN_PROGRESS:
+    if state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
         # W0-04-C01 F-69-01: a concurrent retry won the retake of this failed key.
         raise MasterDataRefused("idempotency key %r for %s is being retried right now"
                                 % (key, action))

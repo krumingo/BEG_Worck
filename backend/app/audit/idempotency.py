@@ -36,9 +36,11 @@ IDEMPOTENCY_STARTED = "started"
 IDEMPOTENCY_COMPLETED = "completed"
 IDEMPOTENCY_FAILED = "failed"
 IDEMPOTENCY_DUPLICATE = "duplicate"
-# W0-04-C01 F-69-01: a concurrent retry lost the FAILED -> STARTED retake to
-# another caller that is performing the write right now. Not a replay, not a
-# resume: the caller must refuse (HTTP 409) and must not perform the write.
+# W0-04-C01 F-69-01 / RETAKE-1: the "detail" of a DUPLICATE result whose caller
+# lost the FAILED -> STARTED retake to a concurrent retry that is performing the
+# write right now. The top-level status stays DUPLICATE with prior_status
+# STARTED, which every caller already refuses (409); callers that RESUME an
+# interrupted STARTED attempt must check this detail and refuse instead.
 IDEMPOTENCY_IN_PROGRESS = "in_progress"
 
 
@@ -101,8 +103,9 @@ async def begin_idempotent(
       - IDEMPOTENCY_DUPLICATE — key was seen before; "prior_status" tells
         whether the original completed, failed or is still running, and
         "result_reference" carries the original result when completed;
-      - IDEMPOTENCY_IN_PROGRESS — the key had FAILED and a concurrent retry
-        won the retake; this caller must refuse (409) and not write.
+        when the key had FAILED and a concurrent retry won the retake, the
+        DUPLICATE carries prior_status STARTED and detail
+        IDEMPOTENCY_IN_PROGRESS: refuse (409), never resume, never write.
 
     Raises IdempotencyConflict when the key exists with a different
     request fingerprint.
@@ -152,7 +155,8 @@ async def begin_idempotent(
     # F-69-01: the retake is a compare-and-set on status == FAILED that also
     # writes this attempt's token. Of N concurrent retries exactly one update
     # matches; the caller whose token is in the record afterwards is the single
-    # winner. Every other caller gets IDEMPOTENCY_IN_PROGRESS and must refuse.
+    # winner. Every other caller gets DUPLICATE / prior_status STARTED with
+    # detail IDEMPOTENCY_IN_PROGRESS and must refuse.
     if existing.get("status") == IDEMPOTENCY_FAILED:
         attempt_token = uuid.uuid4().hex
         await db[IDEMPOTENCY_COLLECTION].update_one(
@@ -173,8 +177,9 @@ async def begin_idempotent(
             # Lost the retake: another retry owns the write (or already failed
             # it again) — never a second writer.
             return {
-                "status": IDEMPOTENCY_IN_PROGRESS,
-                "prior_status": existing.get("status"),
+                "status": IDEMPOTENCY_DUPLICATE,
+                "prior_status": IDEMPOTENCY_STARTED,
+                "detail": IDEMPOTENCY_IN_PROGRESS,
                 "result_reference": None,
                 "record": existing,
             }

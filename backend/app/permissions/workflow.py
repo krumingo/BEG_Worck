@@ -67,7 +67,7 @@ class RecoverableWrite:
                 "error_code": "IDEMPOTENCY_CONFLICT",
                 "message": "The same operation key was already used with a different payload",
                 **self.record_ref})
-        if self.state.get("status") == IDEMPOTENCY_IN_PROGRESS:
+        if self.state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
             # W0-04-C01 F-69-01: a concurrent retry of this failed key won the
             # retake and is performing the write; this request must not.
             raise HTTPException(status_code=409, detail={
