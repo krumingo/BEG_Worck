@@ -342,6 +342,7 @@ async def current_allocations(tenant, flt: Dict[str, Any],
     ).to_list(None) if sids else []
     pkey_of = {s["id"]: period_key(s["period_start"], s["period_end"])
                for s in snaps if s.get("period_start") and s.get("period_end")}
+    period_of = {s["id"]: (s.get("period_start"), s.get("period_end")) for s in snaps}
     names = sorted(set(pkey_of.values()))
     ptrs = await tenant.collection(PERIOD_LOCKS_COLLECTION).find(
         {"name": {"$in": names}, "current_allocation_batch_id": {"$exists": True}},
@@ -355,6 +356,17 @@ async def current_allocations(tenant, flt: Dict[str, Any],
         else:
             keep = r.get("superseded_by") is None and not r.get("allocation_batch_id")
         if keep:
-            out.append(r if projection is None else
-                       {k: v for k, v in r.items() if k in projection or k == "recalculating"})
+            row = r if projection is None else \
+                {k: v for k, v in r.items() if k in projection or k == "recalculating"}
+            # FG-89: readers that group by month get the period of the row's snapshot
+            ps, pe = period_of.get(r.get("overhead_snapshot_id"), (None, None))
+            out.append({**row, "period_start": ps, "period_end": pe})
     return out
+
+
+async def project_overhead_current(tenant, project_id: str) -> Dict[str, Any]:
+    """FG-89: THE project overhead — the sum of its current (published) allocations. The
+    one figure P&L, net profit, alerts, risk and revenue/profit views read."""
+    rows = await current_allocations(tenant, {"org_id": tenant.org_id, "project_id": project_id})
+    return {"amount": round(sum(r.get("allocated_amount", 0) for r in rows), 2),
+            "rows": rows, "recalculating": any(r.get("recalculating") for r in rows)}

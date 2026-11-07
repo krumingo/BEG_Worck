@@ -88,9 +88,9 @@ async def _seed(op, sysdb):
     ])
     await op.work_reports.insert_many([
         {"id": "wr-1", "org_id": ORG, "project_id": PROJ_A, "date": "2026-10-05",
-         "status": "Approved", "total_hours": 30},
+         "status": "Approved", "total_hours": 30, "user_id": "technician"},
         {"id": "wr-2", "org_id": ORG, "project_id": PROJ_B, "date": "2026-10-06",
-         "status": "Approved", "total_hours": 10},
+         "status": "Approved", "total_hours": 10, "user_id": "viewer"},
     ])
 
 
@@ -1085,3 +1085,99 @@ def test_26_crash_after_the_event_write_never_audits_twice(monkeypatch, backend,
         assert await op.audit_events.count_documents({"action": action}) == 1
         assert await op.audit_logs.count_documents({"action": legacy}) == 1
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 27. FG-89
+def _app_with_profit_views(monkeypatch, op, sysdb, mode):
+    """The OH-01 app plus the routers that read overhead outside FLOW-024's own pages."""
+    app = _app(monkeypatch, op, sysdb, mode)
+    from app.routes import full_cost, revenue_expense, revenue_snapshot, labor_smr, subcontractors
+    from app.routes import material_smr
+    for module in (full_cost, revenue_expense, revenue_snapshot, labor_smr, subcontractors,
+                   material_smr):
+        monkeypatch.setattr(module, "db", op)
+    for r in (full_cost.router, revenue_expense.router, revenue_snapshot.router):
+        app.include_router(r, prefix="/api")
+    return app
+
+
+def run_views(monkeypatch, backend, mode, scenario):
+    import httpx
+
+    async def body():
+        async with _Db(backend) as (op, sysdb):
+            await _seed(op, sysdb)
+            app = _app_with_profit_views(monkeypatch, op, sysdb, mode)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                         base_url="http://oh01") as c:
+                return await scenario(c, op)
+    return asyncio.run(body())
+
+
+async def _views(c, op):
+    """Every overhead figure for project A, from every view that shows one."""
+    from app.services.project_pnl import compute_project_pnl
+    net = (await c.get(f"/api/project-net-profit/{PROJ_A}", headers=_h())).json()
+    prof = (await c.get(f"/api/project-profit/{PROJ_A}", headers=_h())).json()
+    byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()
+    pkg = (await c.get("/api/execution-packages/PKG-A/net-financial", headers=_h())).json()
+    periods = byp if isinstance(byp, list) else byp.get("periods", [])
+    return {
+        "pnl": (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"],
+        "net_profit": net["costs"]["overhead"],
+        "profit_summary": prof["expenses"]["overhead"],
+        "by_period": round(sum(p.get("overhead", 0) for p in periods), 2),
+        "package": pkg["costs"]["overhead"],
+    }
+
+
+def test_27_every_view_reads_the_one_oh01_allocation(monkeypatch, backend, mode):
+    """FG-89 (CLAUDE.md §16): full_cost net profit, profit summary, profit-by-period and
+    package net margin read overhead ONLY through current_allocations() — equal to the OH-01
+    allocation across recompute (R38: old kept) and allocate; the legacy
+    /overhead-allocation/compute route writes nothing; legacy project_overhead_alloc rows
+    are ignored and NOT deleted."""
+    async def scenario(c, op):
+        await op.execution_packages.insert_one({"id": "PKG-A", "org_id": ORG, "project_id": PROJ_A,
+                                                "used_hours": 30, "sale_total": 1000})
+        await op.project_overhead_alloc.insert_one({          # a leftover second figure
+            "org_id": ORG, "project_id": PROJ_A, "period": "2026-10", "allocated_amount": 9999.0})
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s1 = await _snapshot(c)
+        assert set((await _views(c, op)).values()) == {0}      # nothing allocated yet
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert set((await _views(c, op)).values()) == {300.0}  # 30h of 40h of 400
+        await _cost(c, cat["id"], date="2026-10-20", amount=400.0)
+        s2 = await _snapshot(c)                                 # recompute (R38)
+        assert set((await _views(c, op)).values()) == {300.0}  # the old one, everywhere
+        r = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert set((await _views(c, op)).values()) == {600.0}  # the new one, everywhere
+        # the legacy route: a read-only projection, no write anywhere
+        before = await _dump(op)
+        alloc_rows = await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None)
+        pkg_before = await op.execution_packages.find_one({"id": "PKG-A"}, {"_id": 0})
+        r = await c.post(f"/api/overhead-allocation/compute/{PROJ_A}", json={}, headers=_h())
+        assert r.status_code == 200, r.text
+        assert r.json()["allocated"] == 600.0 and r.json()["read_only"] is True
+        assert await _dump(op) == before
+        assert await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None) == alloc_rows
+        assert await op.execution_packages.find_one({"id": "PKG-A"}, {"_id": 0}) == pkg_before
+        assert await op.project_overhead_alloc.count_documents({}) == 1   # kept, never deleted
+    run_views(monkeypatch, backend, mode, scenario)
+
+
+def test_28_no_code_path_reads_or_writes_project_overhead_alloc():
+    import re
+    from pathlib import Path
+    root = Path(__file__).resolve().parent.parent / "app"
+    hits = []
+    for f in root.rglob("*.py"):
+        for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if re.search(r"\.project_overhead_alloc\b|\[\s*[\"']project_overhead_alloc[\"']\s*\]", line):
+                hits.append("%s:%d" % (f.relative_to(root), i))
+    assert hits == [], hits

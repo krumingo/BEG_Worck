@@ -143,10 +143,11 @@ async def get_profit_by_period(project_id: str, user: dict = Depends(require_m2)
     ).to_list(200)
 
     # Overhead by month
-    oh_allocs = await tenant.project_overhead_alloc.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "period": 1, "allocated_amount": 1}
-    ).to_list(50)
+    # FG-89: the project's current OH-01 allocation; its month is its snapshot's period
+    from app.services.overhead_lifecycle import project_overhead_current
+    oh_allocs = [{"period": (r.get("period_start") or "")[:7],
+                  "allocated_amount": r.get("allocated_amount", 0)}
+                 for r in (await project_overhead_current(tenant, project_id))["rows"]]
 
     # Aggregate by period
     periods = {}
