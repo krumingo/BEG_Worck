@@ -718,22 +718,31 @@ def test_16_restore_or_edit_racing_send_never_leaves_a_sent_offer_unlike_its_sna
                                    "material_unit_cost": 5, "labor_unit_cost": 5}]})
                 s, o = await asyncio.gather(
                     c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")), other)
-                assert sorted((s.status_code, o.status_code)) in ([200, 409],), (
+                # the rival either loses (409 / 403 once the offer is Sent) or finished
+                # before /send read the offer — then the send sends the rival's result
+                assert s.status_code in (200, 409) and o.status_code in (200, 403, 409), (
                     i, rival, s.status_code, s.text, o.status_code, o.text)
+                assert 200 in (s.status_code, o.status_code)
                 doc = await get(op, oid)
                 sent_snaps = await op.offer_versions.find(
                     {"offer_id": oid, "is_auto_backup": True, "snapshot_json.status": "Sent"},
                     {"_id": 0}).to_list(None)
+                assert _consistent(doc), doc
                 if s.status_code == 200:
                     stats["send"] += 1
-                    assert doc["status"] == "Sent" and doc["total"] == 1200.0, (rival, doc["total"])
-                    assert len(sent_snaps) == 1 and sent_snaps[0]["snapshot_json"]["total"] == 1200.0
-                    assert o.status_code == 409 and code(o) == "OFFER_IN_USE", o.text
+                    assert doc["status"] == "Sent"
+                    assert len(sent_snaps) == 1
+                    assert sent_snaps[0]["snapshot_json"]["total"] == doc["total"], (rival, doc["total"])
+                    assert sent_snaps[0]["snapshot_json"]["lines"] == doc["lines"]
+                    if o.status_code != 200:
+                        assert doc["total"] == 1200.0
+                        if o.status_code == 409:
+                            assert code(o) == "OFFER_IN_USE", o.text
                 else:
                     stats[rival] += 1
                     assert doc["status"] == "Draft" and doc["total"] != 1200.0
                     assert sent_snaps == []
-                    assert s.status_code == 409 and code(s) == "OFFER_CHANGED", s.text
+                    assert code(s) == "OFFER_CHANGED", s.text
         assert stats["send"] > 0
     run(monkeypatch, backend, mode, scenario)
 
@@ -772,4 +781,65 @@ def test_17_a_legacy_pair_never_ends_with_two_accepted_versions(monkeypatch, bac
             assert code(loser) == "OFFER_FAMILY_ALREADY_ACCEPTED", loser.text
             assert await op.offers.count_documents({"id": {"$in": [a1, a2]},
                                                     "status": "Accepted"}) == 1
+    run(monkeypatch, backend, mode, scenario)
+
+
+def _consistent(doc):
+    sub = round(sum(l.get("line_total", 0) for l in doc.get("lines", [])), 2)
+    vat = round(sub * (doc.get("vat_percent") or 0) / 100, 2)
+    return doc["subtotal"] == sub and doc["vat_amount"] == vat and doc["total"] == round(sub + vat, 2)
+
+
+def test_18_every_write_with_derived_totals_is_one_cas(monkeypatch, backend, mode):
+    """OFF79-04: PUT /offers/{id} {"vat_percent": 9} wrote the VAT, then the totals in a second,
+    unchecked write — racing /send it left a Sent offer with VAT 9 and total 1200 (≠ 1090).
+    Every draft write with derived totals is now ONE CAS (Draft filter + updated_at)."""
+    async def scenario(c, op):
+        lines_body = {"lines": [{"activity_name": "Плочки", "unit": "m2", "qty": 20,
+                                 "material_unit_cost": 40, "labor_unit_cost": 60}]}
+        for i in range(3 * ROUNDS):     # the race is narrow: 30 rounds per mode
+            # header PUT ∥ send
+            oid = "vat-%d" % i
+            await op.offers.insert_one(offer_doc(oid, status="Draft"))
+            p, s = await asyncio.gather(
+                c.put("/api/offers/" + oid, headers=hdr("admin-a"), json={"vat_percent": 9}),
+                c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")))
+            assert p.status_code in (200, 403, 409) and s.status_code in (200, 409), (
+                i, p.text, s.text)
+            assert 200 in (p.status_code, s.status_code)
+            doc = await get(op, oid)
+            assert _consistent(doc), doc
+            if s.status_code == 200:
+                snapdoc = await op.offer_versions.find_one({"offer_id": oid}, {"_id": 0})
+                assert snapdoc["snapshot_json"]["total"] == doc["total"]
+                assert snapdoc["snapshot_json"]["vat_percent"] == doc["vat_percent"]
+                # PUT lost → VAT 20 / 1200; PUT finished first → sent at VAT 9 / 1090
+                want = {20: 1200.0, 9: 1090.0}[doc["vat_percent"]]
+                assert doc["total"] == want
+                assert (p.status_code == 200) == (doc["vat_percent"] == 9)
+            else:
+                assert doc["status"] == "Draft" and doc["vat_percent"] == 9 and doc["total"] == 1090.0
+                assert p.json()["total"] == 1090.0
+
+            # header PUT ∥ lines PUT: the stored totals always match the stored lines and VAT
+            oid = "mix-%d" % i
+            await op.offers.insert_one(offer_doc(oid, status="Draft"))
+            p, l = await asyncio.gather(
+                c.put("/api/offers/" + oid, headers=hdr("admin-a"), json={"vat_percent": 9}),
+                c.put("/api/offers/%s/lines" % oid, headers=hdr("admin-a"), json=lines_body))
+            assert 200 in (p.status_code, l.status_code), (i, p.text, l.text)
+            for r in (p, l):
+                assert r.status_code in (200, 409), r.text
+                if r.status_code == 409:
+                    assert code(r) == "OFFER_IN_USE"
+            assert _consistent(await get(op, oid)), await get(op, oid)
+
+        # a header PUT without VAT still keeps the totals (one write, consistent)
+        await op.offers.insert_one(offer_doc("t-only", status="Draft"))
+        r = await c.put("/api/offers/t-only", headers=hdr("admin-a"), json={"title": "Кухня"})
+        assert r.status_code == 200 and r.json()["title"] == "Кухня" and _consistent(r.json())
+        # a stale write on a sent offer → 403 (unchanged: only drafts are edited)
+        await op.offers.insert_one(offer_doc("t-sent", token="tts" + "w" * 21))
+        r = await c.put("/api/offers/t-sent", headers=hdr("admin-a"), json={"vat_percent": 9})
+        assert r.status_code == 403, r.text
     run(monkeypatch, backend, mode, scenario)
