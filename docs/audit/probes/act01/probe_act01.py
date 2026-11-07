@@ -151,5 +151,66 @@ with TestClient(app, raise_server_exceptions=False) as tc:
             if g.status_code == 200 and leak:
                 F.append("%s A10 non-finance sees %s" % (mode, leak))
             restore()
+        if os.environ.get("PROBE_ACT_C") == "1":          # #77 611d17e (Addendum C, FG-131)
+            import random
+            from decimal import Decimal as Dm, ROUND_HALF_UP
+            PR_ = Dm("12.345"); CAP = Dm("100")
+            val = lambda units: (Dm(units) / 10000 * PR_).quantize(Dm("0.01"), rounding=ROUND_HALF_UP)
+            def state(lk="LD"):
+                acts = q(lambda: op.client_acts.find({}, {"_id": 0, "lines": 1}).to_list(None))
+                s_ = sum((Dm(str(l.get("line_total") or 0)) for a in acts for l in a.get("lines") or []
+                          if l.get("offer_line_id") == i[lk]), Dm(0))
+                u_ = sum(int(round(float(l.get("executed_qty") or 0) * 10000)) for a in acts
+                         for l in a.get("lines") or [] if l.get("offer_line_id") == i[lk])
+                tot = q(lambda: op.client_act_line_totals.find_one({"offer_line_id": i[lk]}, {"_id": 0})) or {}
+                return s_, u_, tot
+            def check(tag, lk="LD"):
+                s_, u_, tot = state(lk)
+                av = tot.get("acted_value")
+                ok = s_ == val(u_) and s_ <= val(1000000) and (av is None or abs(Dm(str(av)) - s_) < Dm("0.005")) \
+                    and (not tot or int(tot.get("acted_units", u_)) == u_)
+                if not ok:
+                    F.append("%s C %s: sum %s vs round(acted x price) %s, acted_value %s, units %s/%s" % (
+                        mode, tag, s_, val(u_), av, u_, tot.get("acted_units")))
+                return ok
+            rng = random.Random(131)
+            for rnd in range(3):
+                restore(); drafts = []
+                for step in range(25):
+                    s_, u_, _ = state(); room = 1000000 - u_
+                    op_ = rng.choice(["new", "new", "put", "burst", "confirm", "split"])
+                    if op_ == "new" and room > 0:
+                        qty = min(rng.choice([3.3333, 0.0001, 7.7777, 1.2345, 0.5]), room / 10000)
+                        r = tc.post("/api/client-acts", json=body("LD", round(qty, 4)), headers=H())
+                        if r.status_code == 201: drafts.append(r.json()["id"])
+                    elif op_ == "split" and room >= 2:
+                        r = tc.post("/api/client-acts", json={"project_id": P, "lines": [
+                            {"offer_line_id": i["LD"], "executed_qty": 0.3333}, {"offer_line_id": i["LD"], "executed_qty": 0.6667}]}, headers=H())
+                        if r.status_code == 201: drafts.append(r.json()["id"])
+                    elif op_ == "put" and drafts:
+                        aid = rng.choice(drafts)
+                        qty = rng.choice([0.0001, 2.4691, 5.5555, 9.9999])
+                        tc.put("/api/client-acts/%s" % aid, json={"lines": [{"offer_line_id": i["LD"], "executed_qty": qty}]}, headers=H())
+                    elif op_ == "burst":
+                        rs = q(lambda: gather([("POST", "/api/client-acts", body("LD", 2.2222), H()) for _ in range(8)]))
+                        if any(x.status_code >= 500 for x in rs): F.append("%s C burst 5xx" % mode)
+                        drafts += [x.json()["id"] for x in rs if x.status_code == 201]
+                    elif op_ == "confirm" and drafts:
+                        aid = drafts.pop(rng.randrange(len(drafts)))
+                        tc.post("/api/client-acts/%s/confirm" % aid, headers=H())
+                    check("r%d s%d %s" % (rnd, step, op_))
+                # move one draft to another line (its LD part is released), then fill LD exactly
+                if drafts:
+                    tc.put("/api/client-acts/%s" % drafts[0], json={"lines": [{"offer_line_id": i["L1"], "executed_qty": 1}]}, headers=H())
+                    check("r%d moved off LD" % rnd)
+                s_, u_, _ = state()
+                r = tc.post("/api/client-acts", json=body("LD", (1000000 - u_) / 10000), headers=H())
+                over = tc.post("/api/client-acts", json=body("LD", 0.0001), headers=H())
+                s_, u_, tot = state()
+                print(mode, "C r%d" % rnd, "fill", r.status_code, "sum", s_, "acted", u_ / 10000, "acted_value", tot.get("acted_value"), "| +0.0001 ->", over.status_code)
+                if r.status_code != 201 or s_ != Dm("1234.50") or over.status_code != 409:
+                    F.append("%s C r%d fill %s sum %s over %s" % (mode, rnd, r.status_code, s_, over.status_code))
+                check("r%d full" % rnd)
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")
