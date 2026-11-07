@@ -3963,3 +3963,74 @@ D4 note: a pending reservation that is never retried holds headroom. By construc
 | PAY | 630 | — |
 
 - **#69 `3fb55f2`:** SEC-01 30, W0 same 15, R0 814, PM-01 6. Superseded by `da47777`, which is queued.
+
+### #77 + main — PASS
+
+The only conflict is `docs/evidence/PM-01/run_meta.json` (evidence), with 0 markers.
+
+| Check | Result |
+|---|---|
+| act01 | 101 |
+| PAY | 630 |
+| PM-01 | 6 |
+
+### #71 @ `bde1728` — SEC71-05 resolved
+
+Ran `probes/sec02/probe_sec71_d1_band_bisect.py` × 3 modes.
+
+| Check | Result |
+|---|---|
+| pulse bisection | first answer 201 / 200 with `total_budget` only; derived spent 0.02 vs actual 6200 |
+| /alarms | 0 steps |
+| 404 oracle (GET, acknowledge, resolve) | same response for hidden and missing |
+| **auto_resolve oracle** | rule 201, **0 steps**; derived 50000 vs 6200 (nothing learned) |
+| band-varies (expected-actual, morning-briefing, compact) | False |
+| known-pay variant | 6196.63 / 6200; this is R42, accepted by Krum, not a finding |
+
+| Gate | Result |
+|---|---|
+| sec02 | 28 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main touches the A1 / A2B inventories, PM-01 `run_meta`, `idempotency.js` and its test.
+
+I updated PR comment 6695992847 to "resolved".
+
+- `83f1bf3` is docs-only (R42 note).
+- `bfeda82` (FG-133) adds `safe_alarm_rule`: an allowlist of condition keys (metric / operator / threshold / secondary_*) for non-finance callers on GET /alarm-rules. Its test checks both roles.
+  - Observation, not a finding: the rule `name` is free admin text and is still returned as-is.
+  - Runtime is queued: `b71c` on the second RS.
+
+### #55 @ `cba5306` (Codex F-55-C26-04 + header recalc) — probes PASS, gates running
+
+**Static review**
+- A metadata-only PUT does a `$set` of only the fields sent plus `updated_at`.
+- Any derived input (`LOCKED_WHEN_LINKED` + `vat_percent`) is read, validated, computed and written in one transaction under the per-line lock. 409 applies only to the costing inputs.
+- /allocate reads `qty` inside the transaction. DELETE writes nothing derived.
+- The header recalculation is one `with_transaction`. A concurrent recalculation write-conflicts and retries, so the header equals Σ of the committed lines.
+
+**A2C anchor: not weakened.** It moved with the code and keeps the same rule, and the test machinery is unchanged. My own mutations of the new statements are all caught:
+
+| Mutated statement | Guard rule |
+|---|---|
+| header `update_one` | IDENTITY |
+| lines `find` | READ |
+| in-transaction `find_one` | READ |
+| metadata `update_one` | WRITE |
+
+**Probe** `probes/wh55/test_probe_f55_c26_04.py`: **42/42** on real Mongo (second RS on 27029, so it doesn't collide with b5–b7), × 3 modes.
+
+| Case | Result |
+|---|---|
+| F1 paused vat PUT, then price 20, then linked delivery 5 @ 20, then resume | line 20 / 200 / VAT 18, P = 200 ×3 |
+| F2 paused allocations-10 PUT while qty → 5 | 400, nothing written |
+| F3 paused qty-12 PUT while /allocate sets P 4 | 4 / 8 / 120 |
+| F4 ×10: 4 concurrent derived PUTs on 2 lines | no lost update; header Σ 410 / 60 / 470 |
+| F5 notes PUT on a linked line | derived fields byte-equal; P = 100 |
+
+Baseline at `94c0571`: F4 fails 10/10 (lost VAT, IL2 at 300 instead of 210) and F5 fails (derived values written on a linked line). F1–F3 can't be compared there: their pause hook isn't on the old path.
+
+The gates (`b55c`) are running.
