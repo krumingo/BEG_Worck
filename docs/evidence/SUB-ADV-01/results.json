@@ -7,7 +7,7 @@
   "enforce"
  ],
  "mongo": "local replica set (oplog)",
- "seconds": 7.5,
+ "seconds": 12.4,
  "roles": [
   {
    "mode": "off",
@@ -719,7 +719,7 @@
     409
    ],
    "ids_201": [
-    "adb56d5a-fcfa-51ce-8f18-7d19cfaf15f7"
+    "5a502286-e2f1-519c-8162-9cab0b071f02"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -736,7 +736,7 @@
     409
    ],
    "ids_201": [
-    "fde7323a-ebbb-5844-9a0a-e1f17d9d3851"
+    "9569b392-b3a6-5c39-b1ee-a270b944eaa7"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -753,7 +753,7 @@
     409
    ],
    "ids_201": [
-    "59b70080-f890-5304-a66e-9486431204bc"
+    "c2775984-1c10-54ab-b6db-db22b80dd2c4"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -937,6 +937,1132 @@
     "status": 409,
     "error_code": "ADVANCE_EXCEEDS_PACKAGE_VALUE",
     "business_written": []
+   }
+  }
+ ],
+ "fg103_crash": [
+  {
+   "mode": "off",
+   "advance_crash_after_reserve": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_advance_crash": {
+    "advance_total": 0,
+    "advance_pending": 1000.0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 0,
+    "advance_ledger_rows": 0,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_phantom": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "pay_deducting_phantom": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "advance_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "advance_retry_again": {
+    "status": 201,
+    "error_code": null,
+    "business_written": []
+   },
+   "after_advance_retry": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "advance_crash_after_audit": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_audit_crash": {
+    "advance_total": 1000.0,
+    "advance_pending": 500.0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "advance_b_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_advance_b_retry": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_crash_after_reserve": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_crash": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 200.0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_retry": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 200.0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 200.0,
+    "act2_entries": 1
+   },
+   "deduct_crash_after_act": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_act_crash": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 150.0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 150.0,
+    "act2_entries": 1
+   },
+   "deduct_d_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_d_retry": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 150.0,
+    "deduction_pending": 0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 150.0,
+    "act2_entries": 1
+   }
+  },
+  {
+   "mode": "shadow",
+   "advance_crash_after_reserve": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_advance_crash": {
+    "advance_total": 0,
+    "advance_pending": 1000.0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 0,
+    "advance_ledger_rows": 0,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_phantom": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "pay_deducting_phantom": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "advance_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "advance_retry_again": {
+    "status": 201,
+    "error_code": null,
+    "business_written": []
+   },
+   "after_advance_retry": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "advance_crash_after_audit": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_audit_crash": {
+    "advance_total": 1000.0,
+    "advance_pending": 500.0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "advance_b_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_advance_b_retry": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_crash_after_reserve": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_crash": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 200.0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_retry": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 200.0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 200.0,
+    "act2_entries": 1
+   },
+   "deduct_crash_after_act": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_act_crash": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 150.0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 150.0,
+    "act2_entries": 1
+   },
+   "deduct_d_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_d_retry": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 150.0,
+    "deduction_pending": 0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 150.0,
+    "act2_entries": 1
+   }
+  },
+  {
+   "mode": "enforce",
+   "advance_crash_after_reserve": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_advance_crash": {
+    "advance_total": 0,
+    "advance_pending": 1000.0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 0,
+    "advance_ledger_rows": 0,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_phantom": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "pay_deducting_phantom": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "advance_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "advance_retry_again": {
+    "status": 201,
+    "error_code": null,
+    "business_written": []
+   },
+   "after_advance_retry": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "advance_crash_after_audit": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_audit_crash": {
+    "advance_total": 1000.0,
+    "advance_pending": 500.0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "advance_b_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_advance_b_retry": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_crash_after_reserve": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_crash": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 200.0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 0,
+    "act2_entries": 0
+   },
+   "deduct_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_retry": {
+    "advance_total": 1500.0,
+    "advance_pending": 0,
+    "deducted": 200.0,
+    "deduction_pending": 0,
+    "advance_rows": 2,
+    "advance_ledger_rows": 2,
+    "act2_deducted": 200.0,
+    "act2_entries": 1
+   },
+   "deduct_crash_after_act": {
+    "status": 500,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_act_crash": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 0,
+    "deduction_pending": 150.0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 150.0,
+    "act2_entries": 1
+   },
+   "deduct_d_retry": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_deduct_d_retry": {
+    "advance_total": 1000.0,
+    "advance_pending": 0,
+    "deducted": 150.0,
+    "deduction_pending": 0,
+    "advance_rows": 1,
+    "advance_ledger_rows": 1,
+    "act2_deducted": 150.0,
+    "act2_entries": 1
+   }
+  }
+ ],
+ "fg128_visibility": [
+  {
+   "mode": "off",
+   "accountant": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "owner": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "admin": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "requester": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [],
+    "one_advance": null,
+    "one_keys": [],
+    "act_keys": [],
+    "advance_rows": 0,
+    "profit_advances": null,
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "technician": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [],
+    "one_advance": null,
+    "one_keys": [],
+    "act_keys": [],
+    "advance_rows": 0,
+    "profit_advances": null,
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   }
+  },
+  {
+   "mode": "shadow",
+   "accountant": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "owner": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "admin": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "requester": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [],
+    "one_advance": null,
+    "one_keys": [],
+    "act_keys": [],
+    "advance_rows": 0,
+    "profit_advances": null,
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "technician": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [],
+    "one_advance": null,
+    "one_keys": [],
+    "act_keys": [],
+    "advance_rows": 0,
+    "profit_advances": null,
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "accountant": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "owner": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "admin": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "one_advance": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "one_keys": [
+     "advance",
+     "advance_deducted_by_act",
+     "advance_deducted_total",
+     "advance_outstanding",
+     "advance_total",
+     "cash_out_total"
+    ],
+    "act_keys": [
+     "advance_deducted",
+     "advance_deductions"
+    ],
+    "advance_rows": 1,
+    "profit_advances": {
+     "given": 1000.0,
+     "deducted": 100.0,
+     "outstanding": 900.0,
+     "pending": 0.0
+    },
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "requester": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [],
+    "one_advance": null,
+    "one_keys": [],
+    "act_keys": [],
+    "advance_rows": 0,
+    "profit_advances": null,
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
+   },
+   "technician": {
+    "statuses": [
+     200,
+     200,
+     200,
+     200,
+     200
+    ],
+    "list_keys": [],
+    "one_advance": null,
+    "one_keys": [],
+    "act_keys": [],
+    "advance_rows": 0,
+    "profit_advances": null,
+    "profit_expenses_keys": [
+     "labor",
+     "labor_detail",
+     "labor_hours",
+     "material",
+     "material_detail",
+     "overhead",
+     "subcontract",
+     "subcontract_detail",
+     "total"
+    ]
    }
   }
  ]

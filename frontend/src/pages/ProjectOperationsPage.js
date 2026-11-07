@@ -119,6 +119,8 @@ export default function ProjectOperationsPage() {
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
 
   const acceptedOffers = offers.filter(o => o.status === "Accepted");
+  // SUB-ADV-01-B (FG-128): the server sends the advance only to the finance roles.
+  const showAdvance = packages.some(p => p.advance);
 
   return (
     <div className="p-6 max-w-[1400px]" data-testid="project-operations-page">
@@ -155,15 +157,17 @@ export default function ProjectOperationsPage() {
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Договор</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Сертифицирано</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Платено</TableHead>
+                {showAdvance && <>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right" title="Дадени аванси към подизпълнителя">Аванси</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right" title="Аванс, приспаднат по актове">Приспаднато</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right" title="Аванс, който още не е приспаднат">Остатък аванс</TableHead>
+                </>}
                 <TableHead className="text-[10px] uppercase text-muted-foreground">Статус</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground w-[160px]">Действия</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {packages.length === 0 ? (
-                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Няма пакети</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={showAdvance ? 10 : 7} className="text-center py-8 text-muted-foreground">Няма пакети</TableCell></TableRow>
                 ) : packages.map((pkg, i) => {
                   const sub = subs.find(s => s.id === pkg.subcontractor_id);
                   return (
@@ -173,9 +177,11 @@ export default function ProjectOperationsPage() {
                       <TableCell className="text-right font-mono text-sm">{pkg.contract_total?.toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-sm text-emerald-400">{pkg.certified_total?.toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{pkg.paid_total?.toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm" data-testid={`pkg-advance-${i}`}>{money(pkg.advance_total)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm" data-testid={`pkg-advance-deducted-${i}`}>{money(pkg.advance_deducted_total)}</TableCell>
-                      <TableCell className="text-right font-mono text-sm text-amber-400" data-testid={`pkg-advance-outstanding-${i}`}>{money(pkg.advance_outstanding)}</TableCell>
+                      {showAdvance && <>
+                      <TableCell className="text-right font-mono text-sm" data-testid={`pkg-advance-${i}`}>{money(pkg.advance?.given)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm" data-testid={`pkg-advance-deducted-${i}`}>{money(pkg.advance?.deducted)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm text-amber-400" data-testid={`pkg-advance-outstanding-${i}`}>{money(pkg.advance?.outstanding)}</TableCell>
+                      </>}
                       <TableCell><Badge variant="outline" className="text-[9px]">{pkg.status}</Badge></TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -184,7 +190,7 @@ export default function ProjectOperationsPage() {
                             <>
                               <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, lines: [], act_date: new Date().toISOString().split("T")[0], notes: "" }); setDialog({ type: "new-act", pkg }); }} data-testid={`new-act-${i}`}><FileText className="w-3 h-3 mr-0.5" />Акт</Button>
                               <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, amount: "", payment_date: new Date().toISOString().split("T")[0], payment_type: "partial", payment_method: "bank", account_id: (accounts.find(a => a.account_type === "Cash") || accounts[0] || {}).id || "", notes: "" }); setDialog({ type: "new-pay", pkg }); }} data-testid={`new-pay-${i}`}><CreditCard className="w-3 h-3 mr-0.5" />Плати</Button>
-                              <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ amount: "", reason: "", advance_date: new Date().toISOString().split("T")[0], account_id: (accounts.find(a => a.account_type === "Cash") || accounts[0] || {}).id || "", notes: "" }); setDialog({ type: "new-advance", pkg }); }} data-testid={`new-advance-${i}`}><DollarSign className="w-3 h-3 mr-0.5" />Аванс</Button>
+                              {showAdvance && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ amount: "", reason: "", advance_date: new Date().toISOString().split("T")[0], account_id: (accounts.find(a => a.account_type === "Cash") || accounts[0] || {}).id || "", notes: "" }); setDialog({ type: "new-advance", pkg }); }} data-testid={`new-advance-${i}`}><DollarSign className="w-3 h-3 mr-0.5" />Аванс</Button>}
                             </>
                           )}
                         </div>
@@ -324,13 +330,13 @@ export default function ProjectOperationsPage() {
           <DialogHeader><DialogTitle><CreditCard className="w-5 h-5 text-emerald-500 inline mr-2" />Плащане</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
             <div className="p-2 rounded bg-muted/30 text-sm"><span className="text-muted-foreground">Пакет:</span> <span className="font-mono">{dialog?.pkg?.package_no}</span></div>
-            <div className="p-2 rounded bg-muted/30 text-xs grid grid-cols-2 gap-1" data-testid="pay-pkg-summary">
+            {dialog?.pkg?.advance && <div className="p-2 rounded bg-muted/30 text-xs grid grid-cols-2 gap-1" data-testid="pay-pkg-summary">
               <span className="text-muted-foreground">Удостоверено:</span><span className="font-mono text-right">{money(dialog?.pkg?.certified_total)}</span>
               <span className="text-muted-foreground">Платено:</span><span className="font-mono text-right">{money(dialog?.pkg?.paid_total)}</span>
-              <span className="text-muted-foreground">Аванси:</span><span className="font-mono text-right">{money(dialog?.pkg?.advance_total)}</span>
-              <span className="text-muted-foreground">Приспаднато:</span><span className="font-mono text-right">{money(dialog?.pkg?.advance_deducted_total)}</span>
-              <span className="text-muted-foreground">Остатък аванс:</span><span className="font-mono text-right text-amber-400">{money(dialog?.pkg?.advance_outstanding)}</span>
-            </div>
+              <span className="text-muted-foreground">Аванси:</span><span className="font-mono text-right">{money(dialog?.pkg?.advance?.given)}</span>
+              <span className="text-muted-foreground">Приспаднато:</span><span className="font-mono text-right">{money(dialog?.pkg?.advance?.deducted)}</span>
+              <span className="text-muted-foreground">Остатък аванс:</span><span className="font-mono text-right text-amber-400">{money(dialog?.pkg?.advance?.outstanding)}</span>
+            </div>}
             <div><Label className="text-xs">По акт</Label>
               <Select value={form.act_id || "none"} onValueChange={v => setForm({...form, act_id: v === "none" ? "" : v, advance_deducted: v === "none" ? "" : form.advance_deducted})}>
                 <SelectTrigger className="bg-background h-9"><SelectValue placeholder="Без акт" /></SelectTrigger>
@@ -341,8 +347,8 @@ export default function ProjectOperationsPage() {
               </Select>
             </div>
             <div><Label className="text-xs">Сума (EUR) *</Label><Input type="number" step="0.01" value={form.amount || ""} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background font-mono" /></div>
-            {form.act_id && (Number(dialog?.pkg?.advance_outstanding) || 0) > 0 && (
-              <div><Label className="text-xs">Приспаднат аванс (EUR) — остатък {money(dialog?.pkg?.advance_outstanding)}</Label><Input type="number" step="0.01" min="0" value={form.advance_deducted || ""} onChange={e => setForm({...form, advance_deducted: e.target.value})} className="bg-background font-mono" data-testid="pay-advance-deducted" /></div>
+            {form.act_id && (Number(dialog?.pkg?.advance?.outstanding) || 0) > 0 && (
+              <div><Label className="text-xs">Приспаднат аванс (EUR) — остатък {money(dialog?.pkg?.advance?.outstanding)}</Label><Input type="number" step="0.01" min="0" value={form.advance_deducted || ""} onChange={e => setForm({...form, advance_deducted: e.target.value})} className="bg-background font-mono" data-testid="pay-advance-deducted" /></div>
             )}
             <div><Label className="text-xs">От сметка (Каса/Банка)</Label>
               <Select value={form.account_id || ""} onValueChange={v => setForm({...form, account_id: v})}>
@@ -372,7 +378,7 @@ export default function ProjectOperationsPage() {
         <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="new-advance-dialog">
           <DialogHeader><DialogTitle><DollarSign className="w-5 h-5 text-amber-500 inline mr-2" />Аванс към подизпълнител</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
-            <div className="p-2 rounded bg-muted/30 text-sm"><span className="text-muted-foreground">Пакет:</span> <span className="font-mono">{dialog?.pkg?.package_no}</span> · <span className="text-muted-foreground">Остатък аванс:</span> <span className="font-mono">{money(dialog?.pkg?.advance_outstanding)}</span></div>
+            <div className="p-2 rounded bg-muted/30 text-sm"><span className="text-muted-foreground">Пакет:</span> <span className="font-mono">{dialog?.pkg?.package_no}</span> · <span className="text-muted-foreground">Остатък аванс:</span> <span className="font-mono">{money(dialog?.pkg?.advance?.outstanding)}</span></div>
             <p className="text-[11px] text-muted-foreground">Авансът се приспада изрично от следващите актове („Приспаднат аванс“ при плащане).</p>
             <div><Label className="text-xs">Сума (EUR) *</Label><Input type="number" step="0.01" value={form.amount || ""} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background font-mono" data-testid="advance-amount" /></div>
             <div><Label className="text-xs">Причина *</Label><Input value={form.reason || ""} onChange={e => setForm({...form, reason: e.target.value})} maxLength={500} placeholder="Аванс по договор…" className="bg-background" data-testid="advance-reason" /></div>

@@ -33,3 +33,16 @@ tests/test_r0_0*.py (real Mongo): 814 passed
 W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15 test_w0_03e_legacy_routes)
 Guards: A1 422 units / 0 violations; A2C 208 modules / 0 violations; A1 inventory table unchanged
 PM-01 fresh real-Mongo run reproduces the committed matrix (no route added in addendum A)
+
+## Addendum B (07.11) — FG-103 crash safety + FG-128 visibility
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo: 44 passed
+FG-103, 3 modes (crash injected after the write, before its step is recorded):
+  A) advance crash after reservation -> pending 1000, 0 rows, 0 ledger; deduction 100 / payment deducting 1000 -> 409 ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING, 0 writes; retry -> 201 once (1 row, 1 ledger, advance_total 1000); again -> replay
+  B) advance crash after rows + audit -> not deductible (pending 500); retry confirms once (1500)
+  C) deduction crash after reservation -> pending 200, nothing on the act, no cost; retry -> act 200, deducted 200, once
+  D) deduction crash after the act update -> retry: 1 act entry, deducted 150 (no double)
+FG-128, 3 modes: Owner/Admin/Accountant see advance {given 1000, deducted 100, outstanding 900, pending 0} in package list/detail, act fields, advance rows, project-profit subcontract_advances (outside expenses); SiteManager/Technician: none of it
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15)
+Guards: A1 422 / 0; A2C 208 / 0; A1 inventory table unchanged
+Frontend: yarn test 96 passed; yarn build compiled (no warning in ProjectOperationsPage.js)

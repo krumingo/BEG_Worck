@@ -199,7 +199,128 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         adv = {"amount": 1000, "reason": "Аванс по договор", "advance_date": "2026-11-07"}
 
         roles_rows, flows, races, refusals, reversal = [], [], [], [], []
-        cap_races, fg115 = [], []
+        cap_races, fg115, crashes, visibility = [], [], [], []
+
+        from app.permissions import workflow
+        original_mark = workflow.mark_idempotent_step
+
+        def crash_at(step_name):
+            state = {"armed": True}
+
+            async def failing(db_, *, step, **kw):
+                if step == step_name and state["armed"]:
+                    state["armed"] = False      # the write is done; its step is not recorded
+                    raise RuntimeError("injected crash after step %s" % step_name)
+                return await original_mark(db_, step=step, **kw)
+            return failing
+
+        def post_crashing(step_name, role, url, body, idem):
+            workflow.mark_idempotent_step = crash_at(step_name)
+            try:
+                return slim(call("POST", role, url, body, idem))
+            finally:
+                workflow.mark_idempotent_step = original_mark
+
+        def adv_state():
+            p = pkg_state()
+            a1 = tc.portal.call(lambda: op_db.subcontractor_acts.find_one({"id": rid("act2")},
+                                                                         {"_id": 0}))
+            full = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                {"id": rid("pkg")}, {"_id": 0}))
+            return {"advance_total": p["advance_total"] or 0,
+                    "advance_pending": full.get("advance_pending_total") or 0,
+                    "deducted": p["advance_deducted_total"] or 0,
+                    "deduction_pending": full.get("advance_deduction_pending_total") or 0,
+                    "advance_rows": tc.portal.call(lambda: op_db.subcontractor_payments
+                                                   .count_documents({"package_id": rid("pkg"),
+                                                                     "kind": "advance"})),
+                    "advance_ledger_rows": tc.portal.call(lambda: op_db.finance_payments
+                                                          .count_documents(
+                                                              {"subcontractor_advance": True})),
+                    "act2_deducted": (a1 or {}).get("advance_deducted") or 0,
+                    "act2_entries": len((a1 or {}).get("advance_deductions") or [])}
+
+        def crash_probe(mode):
+            out: Dict[str, Any] = {"mode": mode}
+            ded_url = "/api/subcontractor-acts/%s/advance-deduction" % rid("act2")
+            # A) advance: crash right after the cap reservation
+            key = uuid.uuid4().hex
+            out["advance_crash_after_reserve"] = post_crashing("advance_reserve", "accountant",
+                                                                adv_url, adv, key)
+            out["after_advance_crash"] = adv_state()
+            # a deduction can never use the advance that does not exist
+            out["deduct_phantom"] = slim(call("POST", "accountant", ded_url, {"amount": 100}))
+            out["pay_deducting_phantom"] = slim(call("POST", "accountant", pay_url, {
+                "package_id": rid("pkg"), "act_id": rid("act1"), "amount": 2000,
+                "advance_deducted": 1000}))
+            out["advance_retry"] = slim(call("POST", "accountant", adv_url, adv, key))
+            out["advance_retry_again"] = slim(call("POST", "accountant", adv_url, adv, key))
+            out["after_advance_retry"] = adv_state()
+            # B) advance: crash after the rows and the AuditEvent, before the confirmation
+            key = uuid.uuid4().hex
+            out["advance_crash_after_audit"] = post_crashing("audit", "accountant", adv_url,
+                                                             {**adv, "amount": 500}, key)
+            out["after_audit_crash"] = adv_state()
+            out["advance_b_retry"] = slim(call("POST", "accountant", adv_url,
+                                               {**adv, "amount": 500}, key))
+            out["after_advance_b_retry"] = adv_state()
+            # C) deduction: crash right after its reservation
+            key = uuid.uuid4().hex
+            out["deduct_crash_after_reserve"] = post_crashing("reserve", "accountant", ded_url,
+                                                              {"amount": 200}, key)
+            out["after_deduct_crash"] = adv_state()
+            out["deduct_retry"] = slim(call("POST", "accountant", ded_url, {"amount": 200}, key))
+            out["after_deduct_retry"] = adv_state()
+            restore_all()
+            # D) deduction: crash after the act update, before its step is recorded
+            call("POST", "accountant", adv_url, adv)
+            key = uuid.uuid4().hex
+            out["deduct_crash_after_act"] = post_crashing("act_deduction", "accountant", ded_url,
+                                                          {"amount": 150}, key)
+            out["after_act_crash"] = adv_state()
+            out["deduct_d_retry"] = slim(call("POST", "accountant", ded_url, {"amount": 150}, key))
+            out["after_deduct_d_retry"] = adv_state()
+            restore_all()
+            return out
+
+        def visibility_probe(mode):
+            call("POST", "accountant", adv_url, adv)
+            call("POST", "accountant", "/api/subcontractor-acts/%s/advance-deduction"
+                 % rid("act2"), {"amount": 100})
+            pid = fx["A"]["project_id"]
+            adv_keys = {"advance", "advance_total", "advance_deducted_total",
+                        "advance_outstanding", "cash_out_total", "advance_deducted_by_act"}
+            out: Dict[str, Any] = {"mode": mode}
+            for role in ("accountant", "owner", "admin", "requester", "technician"):
+                pkgs = call("GET", role, "/api/subcontractor-packages?project_id=%s" % pid,
+                            None, None)
+                one = call("GET", role, "/api/subcontractor-packages/%s" % rid("pkg"), None, None)
+                acts = call("GET", role, "/api/subcontractor-acts?package_id=%s" % rid("pkg"),
+                            None, None)
+                pays = call("GET", role, "/api/subcontractor-payments?package_id=%s"
+                            % rid("pkg"), None, None)
+                prof = call("GET", role, "/api/project-profit/%s" % pid, None, None)
+                row = next((p for p in (pkgs["body"] if isinstance(pkgs["body"], list) else [])
+                            if p.get("id") == rid("pkg")), {})
+                act2 = next((a for a in (acts["body"] if isinstance(acts["body"], list) else [])
+                             if a.get("id") == rid("act2")), {})
+                out[role] = {
+                    "statuses": [pkgs["status"], one["status"], acts["status"], pays["status"],
+                                 prof["status"]],
+                    "list_keys": sorted(adv_keys & set(row)),
+                    "one_advance": (one["body"] or {}).get("advance")
+                    if one["status"] == 200 else None,
+                    "one_keys": sorted(adv_keys & set(one["body"] or {}))
+                    if one["status"] == 200 else [],
+                    "act_keys": sorted({"advance_deducted", "advance_deductions"} & set(act2)),
+                    "advance_rows": sum(1 for r in (pays["body"] if isinstance(pays["body"], list)
+                                                    else []) if r.get("kind") == "advance"),
+                    "profit_advances": (prof["body"] or {}).get("subcontract_advances")
+                    if prof["status"] == 200 else "n/a",
+                    "profit_expenses_keys": sorted(((prof["body"] or {}).get("expenses") or {})
+                                                   .keys()) if prof["status"] == 200 else []}
+            restore_all()
+            return out
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             # ── roles × mode (R39)
@@ -343,6 +464,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                           "after_advance": delta(v0, v1), "after_deduction": delta(v0, v2),
                           "advance_0_01_over_contract": r_more})
             restore_all()
+            # ── FG-103: crash right after a write, before its step is recorded
+            crashes.append(crash_probe(mode))
+            # ── FG-128: the advance is shown to the finance roles only
+            visibility.append(visibility_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -354,6 +479,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "roles": roles_rows, "flows": flows, "refusals": refusals,
         "same_key_race": races, "reversal": reversal,
         "fg114_different_keys_race": cap_races, "fg115_cash_vs_cost": fg115,
+        "fg103_crash": crashes, "fg128_visibility": visibility,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -494,6 +620,72 @@ def check_result(result: Dict[str, Any]) -> None:
                                         "cash_paid_subcontractors": 1000,
                                         "operating_subcontractor_direct": 400}, r
         assert r["advance_0_01_over_contract"] == _nothing("ADVANCE_EXCEEDS_PACKAGE_VALUE"), r
+
+    zero_adv = {"advance_total": 0, "advance_pending": 0, "deducted": 0, "deduction_pending": 0,
+                "advance_rows": 0, "advance_ledger_rows": 0, "act2_deducted": 0, "act2_entries": 0}
+    crashes = result["fg103_crash"]
+    assert [r["mode"] for r in crashes] == list(MODES)
+    for r in crashes:
+        # A) the reservation is pending only: not deductible, no rows, no cash
+        assert r["advance_crash_after_reserve"]["status"] == 500, r
+        assert r["after_advance_crash"] == {**zero_adv, "advance_pending": 1000}, r
+        assert r["deduct_phantom"] == _nothing("ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING"), r
+        assert r["pay_deducting_phantom"] == _nothing("ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING"), r
+        assert r["advance_retry"]["status"] == 201, r              # the same key finishes it
+        assert r["advance_retry_again"] == {"status": 201, "error_code": None,
+                                            "business_written": []}, r      # replay
+        assert r["after_advance_retry"] == {**zero_adv, "advance_total": 1000,
+                                            "advance_rows": 1, "advance_ledger_rows": 1}, r
+        # B) rows written, not yet confirmed: still not deductible; the retry confirms once
+        assert r["advance_crash_after_audit"]["status"] == 500, r
+        assert r["after_audit_crash"] == {**zero_adv, "advance_total": 1000,
+                                          "advance_pending": 500, "advance_rows": 2,
+                                          "advance_ledger_rows": 2}, r
+        assert r["advance_b_retry"]["status"] == 201, r
+        assert r["after_advance_b_retry"] == {**zero_adv, "advance_total": 1500,
+                                              "advance_rows": 2, "advance_ledger_rows": 2}, r
+        # C) deduction reserved, not on the act: pending only (no cost); the retry finishes once
+        assert r["deduct_crash_after_reserve"]["status"] == 500, r
+        assert r["after_deduct_crash"] == {**zero_adv, "advance_total": 1500,
+                                           "advance_rows": 2, "advance_ledger_rows": 2,
+                                           "deduction_pending": 200}, r
+        assert r["deduct_retry"]["status"] == 201, r
+        assert r["after_deduct_retry"] == {**zero_adv, "advance_total": 1500,
+                                           "advance_rows": 2, "advance_ledger_rows": 2,
+                                           "deducted": 200, "act2_deducted": 200,
+                                           "act2_entries": 1}, r
+        # D) crash after the act update: the retry never adds the deduction twice
+        assert r["deduct_crash_after_act"]["status"] == 500, r
+        assert r["after_act_crash"]["act2_entries"] == 1 and \
+            r["after_act_crash"]["deducted"] == 0 and \
+            r["after_act_crash"]["deduction_pending"] == 150, r
+        assert r["deduct_d_retry"]["status"] == 201, r
+        assert r["after_deduct_d_retry"] == {**zero_adv, "advance_total": 1000,
+                                             "advance_rows": 1, "advance_ledger_rows": 1,
+                                             "deducted": 150, "act2_deducted": 150,
+                                             "act2_entries": 1}, r
+
+    vis = result["fg128_visibility"]
+    assert [r["mode"] for r in vis] == list(MODES)
+    for r in vis:
+        for role in ("accountant", "owner", "admin"):
+            v = r[role]
+            assert v["statuses"] == [200] * 5, (role, r)
+            assert {"advance", "advance_total", "advance_deducted_total",
+                    "advance_outstanding"} <= set(v["list_keys"]), (role, r)
+            assert v["one_advance"] == {"given": 1000, "deducted": 100, "outstanding": 900,
+                                        "pending": 0}, (role, r)
+            assert v["act_keys"] == ["advance_deducted", "advance_deductions"], (role, r)
+            assert v["advance_rows"] == 1, (role, r)
+            assert v["profit_advances"] == {"given": 1000, "deducted": 100,
+                                            "outstanding": 900, "pending": 0}, (role, r)
+            assert not any("advance" in k for k in v["profit_expenses_keys"]), (role, r)
+        for role in ("requester", "technician"):
+            v = r[role]
+            assert v["list_keys"] == [] and v["one_keys"] == [], (role, r)
+            assert v["one_advance"] is None and v["act_keys"] == [], (role, r)
+            assert v["advance_rows"] == 0, (role, r)
+            assert v["profit_advances"] in (None, "n/a"), (role, r)
 
     rev = result["reversal"]
     assert [r["mode"] for r in rev] == list(MODES)

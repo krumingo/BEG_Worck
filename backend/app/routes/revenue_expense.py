@@ -5,7 +5,7 @@ Phase 2: Labor Cost Aggregation
 Phase 3: Execution Packages
 Phase 4: Project Profit Summary
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional, List
 from datetime import datetime, timezone
 import logging
@@ -433,7 +433,7 @@ async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-profit/{project_id}")
-async def get_project_profit_summary(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_profit_summary(project_id: str, request: Request, user: dict = Depends(require_m2)):
     """Comprehensive project financial summary — revenue, costs, profit"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -515,6 +515,10 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     from app.routes.subcontractors import get_subcontract_metrics
     sub_metrics = await get_subcontract_metrics(org_id, project_id)
     
+    from app.routes.subcontractors import advance_visible, get_advance_metrics
+    subcontract_advances = (await get_advance_metrics(org_id, project_id)
+                            if await advance_visible(request, user) else None)
+
     # Fallback to received invoices if no subcontractor packages
     if sub_metrics.get("available"):
         subcontract_cost = sub_metrics["certified"]  # certified = execution cost basis
@@ -589,6 +593,10 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
             "collected": round(collected_revenue, 2),
             "receivables": receivables,
         },
+
+        # SUB-ADV-01-B (FG-128): subcontractor advances given / deducted / remaining — cash and
+        # settlement, NOT an expense (FLOW-006): outside "expenses"; finance roles only (else None).
+        "subcontract_advances": subcontract_advances,
 
         "expenses": {
             "material": net_material_cost,
