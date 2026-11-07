@@ -342,7 +342,10 @@ async def ledger_invoice_line_links(tenant, org_id: str, ids: List[str]) -> Dict
     cursor = tenant.warehouse_transactions.find(
         {"org_id": org_id, "action": {"$exists": True}, "invoice_line_id": {"$in": ids}},
         {"_id": 0, "invoice_line_id": 1, "action": 1, "quantity": 1, "unit": 1,
-         "destination": 1, "movement_id": 1},
+         "destination": 1, "movement_id": 1,
+         # 5C-C26k (F-55-C26-01): the server-bound project of the movement —
+         # for a subproject destination, its DB-resolved parent (FG-38).
+         "project_id": 1},
     )
     async for row in cursor:
         out.setdefault(row["invoice_line_id"], []).append(row)
@@ -403,8 +406,14 @@ def path_b_split(line: dict, project_id: str, links: List[dict]) -> Dict[str, An
 
     def _is_to(row, pid):
         dst = row.get("destination") or {}
-        return dst.get("location_type") in PROJECT_LOCATION_TYPES \
-            and dst.get("location_id") == pid
+        if dst.get("location_type") == "project":
+            return dst.get("location_id") == pid
+        if dst.get("location_type") == "subproject":
+            # 5C-C26k (Codex F-55-C26-01): a subproject's id is not its
+            # project's id — the movement carries the server-bound parent
+            # (CommandService._bind_subproject_parent, FG-38).
+            return row.get("project_id") == pid
+        return False
 
     direct_to_me = sum(_f(r.get("quantity")) or 0.0 for r in receipts
                        if r.get("action") == "receive_from_supplier_to_project"
