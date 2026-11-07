@@ -622,33 +622,46 @@ async def _reset_status_field(report: dict):
     return "status", report.get("status")
 
 
-async def _return_budget_once(tenant, org_id: str, report: dict, reset_id: str, now: str) -> bool:
+async def _return_budget_once(tenant, org_id: str, report: dict, reset_id: str, now: str,
+                              session=None) -> bool:
     """LAB-01-M (FG-110): give the report's consumed hours back to its activity budget at most
-    once per reset — a compare-and-set on consumed_hours keyed by ``reset_id``
-    (``returned_resets``), retried on a concurrent change. True when returned (or already)."""
+    once per reset (keyed by ``reset_id`` in ``returned_resets``). Runs INSIDE the reset's
+    transaction (``session``), so it commits together with the claim or not at all."""
     smr_type = report.get("smr_type") or report.get("activity_type") or ""
     hours = report.get("hours") or report.get("hours_worked") or 0
     if not (smr_type and report.get("project_id") and hours):
         return True
-    for _ in range(20):
-        budget = await tenant.activity_budgets.find_one({
-            "org_id": org_id, "project_id": report["project_id"], "smr_type_id": smr_type})
-        if not budget:
-            return True
-        if reset_id in (budget.get("returned_resets") or []):
-            return True
-        old = budget.get("consumed_hours", 0) or 0
-        new_consumed = max(0, round(old - float(hours), 2))
-        planned = budget.get("planned_hours", 0) or 1
-        res = await tenant.activity_budgets.update_one(
-            {"id": budget["id"], "consumed_hours": budget.get("consumed_hours"),
-             "returned_resets": {"$ne": reset_id}},
-            {"$set": {"consumed_hours": new_consumed, "burn_percent": round(new_consumed / planned * 100, 1),
-                      "last_updated": now},
-             "$addToSet": {"returned_resets": reset_id}})
-        if getattr(res, "modified_count", 0):
-            return True
-    return False
+    budget = await tenant.activity_budgets.find_one({
+        "org_id": org_id, "project_id": report["project_id"], "smr_type_id": smr_type}, session=session)
+    if not budget:
+        return True
+    if reset_id in (budget.get("returned_resets") or []):
+        return True
+    new_consumed = max(0, round((budget.get("consumed_hours", 0) or 0) - float(hours), 2))
+    planned = budget.get("planned_hours", 0) or 1
+    res = await tenant.activity_budgets.update_one(
+        {"id": budget["id"], "consumed_hours": budget.get("consumed_hours"),
+         "returned_resets": {"$ne": reset_id}},
+        {"$set": {"consumed_hours": new_consumed, "burn_percent": round(new_consumed / planned * 100, 1),
+                  "last_updated": now},
+         "$addToSet": {"returned_resets": reset_id}}, session=session)
+    if not getattr(res, "modified_count", 0):
+        # the budget changed under us: abort the whole transaction — nothing is written
+        raise HTTPException(status_code=409, detail="Бюджетът на дейността току-що беше променен — опитайте пак")
+    return True
+
+
+async def _run_reset_transaction(raw_db, body):
+    """LAB-01-N: the reset's writes run in ONE MongoDB transaction (auth_tx.run_in_transaction):
+    all commit together or none. A deployment without transactions is refused (503, nothing
+    written) — there is no non-transactional path here. (The DB-free tests replace this
+    function explicitly with a session-less runner: tests/test_lab_01_l_reset.py.)"""
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        return await run_in_transaction(raw_db, body)
+    except TransactionsUnavailable:
+        raise HTTPException(status_code=503, detail=(
+            "Базата данни не поддържа транзакции — връщането на отчета не е изпълнено"))
 
 
 @router.post("/daily-reports/{report_id}/reset")
@@ -708,31 +721,41 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
         "approved_by": None, "approved_at": None,
         "payroll_ready": False, "sessions_created": 0,
     }
-    # LAB-01-M (FG-110): the reset is ONE compare-and-set on the report's status — only one
-    # concurrent reset wins; the losers get 409 and write nothing. The same atomic write bumps
-    # report_version (LAB-01-D / FG-72: the approvals of the old version stop matching at
-    # once) and records the reset with its budget return still pending.
-    field, value = await _reset_status_field(report)
-    won = await tenant.employee_daily_reports.find_one_and_update(
-        {"id": report_id, "org_id": org_id, field: value},
-        {"$set": dict(reset_fields, updated_at=now,
-                      last_reset={"id": reset_id, "by": user["id"], "at": now, "budget_returned": False}),
-         "$inc": {"report_version": 1}})
-    if not won:
-        raise HTTPException(status_code=409, detail=(
-            "Отчетът току-що беше върнат или променен от друг човек — презаредете"))
 
-    # the winner's side effects, each idempotent per reset
-    await tenant.work_sessions.update_many(
-        {"approved_report_id": report_id, "org_id": org_id},
-        {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
-    )
-    await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_reset", bump=False)
-    returned = await _return_budget_once(tenant, org_id, report, reset_id, now)
-    if returned:
-        await tenant.employee_daily_reports.update_one(
-            {"id": report_id, "org_id": org_id, "last_reset.id": reset_id},
-            {"$set": {"last_reset.budget_returned": True}})
+    async def body(session):
+        # LAB-01-M/N (FG-110): ONE transaction — the compare-and-set claim of the report
+        # (status APPROVED → SUBMITTED, report_version bump, last_reset), the voided work
+        # sessions and quantity approvals and the budget return commit together or not at
+        # all. Everything is re-read inside (the driver may retry the body): a concurrent
+        # winner makes this claim find nothing → 409, nothing written.
+        current = await tenant.employee_daily_reports.find_one(
+            {"id": report_id, "org_id": org_id}, session=session)
+        if not current:
+            raise HTTPException(status_code=409, detail="Отчетът вече не съществува — презаредете")
+        field, value = await _reset_status_field(current)
+        if (value or "").upper() != "APPROVED":
+            raise HTTPException(status_code=409, detail=(
+                "Отчетът току-що беше върнат или променен от друг човек — презаредете"))
+        won = await tenant.employee_daily_reports.find_one_and_update(
+            {"id": report_id, "org_id": org_id, field: value},
+            {"$set": dict(reset_fields, updated_at=now,
+                          last_reset={"id": reset_id, "by": user["id"], "at": now,
+                                      "budget_returned": True}),
+             "$inc": {"report_version": 1}}, session=session)
+        if not won:
+            raise HTTPException(status_code=409, detail=(
+                "Отчетът току-що беше върнат или променен от друг човек — презаредете"))
+        await tenant.work_sessions.update_many(
+            {"approved_report_id": report_id, "org_id": org_id},
+            {"$set": {"is_flagged": True, "flag_reason": "voided_by_reset", "updated_at": now}},
+            session=session)
+        await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_reset",
+                                   bump=False, session=session)
+        await _return_budget_once(tenant, org_id, current, reset_id, now, session=session)
+        return current
+
+    report = await _run_reset_transaction(db, body)
+    returned = True
     # LAB-01-L (FG-99): every reset leaves a canonical AuditEvent — who, when, before / after
     before = {k: report.get(k) for k in reset_fields}
     await audit_report_correction(db, user=user, mode=CORRECTOR, report=report, before=before,

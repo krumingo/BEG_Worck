@@ -25,10 +25,22 @@ def U(uid):
     return {"id": uid, "org_id": ORG, "role": USERS[uid], "email": uid + "@l01l.example"}
 
 
+def _mongomock_has_no_transactions(monkeypatch):
+    """EXPLICIT, test backend only: mongomock cannot run MongoDB transactions, so the DB-free
+    tests run the reset body without a session. Production refuses that (503) — see
+    test_lab01n_without_transactions_the_reset_is_refused_and_writes_nothing."""
+    from app.routes import daily_reports
+
+    async def no_tx(raw_db, body):
+        return await body(None)
+    monkeypatch.setattr(daily_reports, "_run_reset_transaction", no_tx)
+
+
 async def _setup(monkeypatch, name):
     from app.tenancy import project_team
     from app.tenancy.data_access import TenantData
     op = await _harness(monkeypatch, name)
+    _mongomock_has_no_transactions(monkeypatch)
     for uid, role in USERS.items():
         await op.users.insert_one({"id": uid, "org_id": ORG, "role": role, "is_active": True,
                                    "email": uid + "@l01l.example"})
@@ -186,6 +198,7 @@ def test_fg110_six_concurrent_resets_return_the_budget_exactly_once(monkeypatch,
         else:
             from mongomock_motor import AsyncMongoMockClient
             client = AsyncMongoMockClient()
+            _mongomock_has_no_transactions(monkeypatch)
         import uuid as _u
         name = "l01m_" + _u.uuid4().hex[:8]
         op = client[name]
@@ -255,4 +268,81 @@ def test_fg112_a_site_manager_of_another_project_gets_the_same_403(monkeypatch, 
         with pytest.raises(HTTPException) as ex:
             await daily_reports.reset_daily_report("OLD", U("sm-p"))
         assert ex.value.status_code == 409 and "PR-0001" in ex.value.detail
+    asyncio.run(body())
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-01-N (FG-110 transaction)
+def test_lab01n_a_crash_between_the_claim_and_the_budget_return_writes_neither(monkeypatch):
+    """real rs0: the claim (status, version, last_reset), the voided sessions / approvals and
+    the budget return are ONE transaction. A crash after the claim, before the budget return
+    → nothing of it stays; the next reset then does both."""
+    from tests.test_w0_03c_real_mongo import _refusal
+    if _refusal():
+        pytest.skip(_refusal())
+
+    async def body():
+        import uuid as _u
+        from motor.motor_asyncio import AsyncIOMotorClient
+        from tests.test_w0_03c_real_mongo import REAL_URL
+        client = AsyncIOMotorClient(REAL_URL, serverSelectionTimeoutMS=5000)
+        name = "l01n_" + _u.uuid4().hex[:8]
+        op = client[name]
+        try:
+            await _patch_all(monkeypatch, op)
+            from app.routes import daily_reports
+            await _seed_budget_report(op, "RC")
+            await op.work_sessions.insert_one({"id": "ws", "org_id": ORG, "approved_report_id": "RC"})
+            await op.labor_quantity_approvals.insert_one({
+                "id": "qa-RC", "org_id": ORG, "report_id": "RC", "report_version": 0, "status": "approved"})
+            snap = {
+                "report": await op.employee_daily_reports.find_one({"id": "RC"}, {"_id": 0}),
+                "budget": await op.activity_budgets.find_one({"id": "b-RC"}, {"_id": 0}),
+                "ws": await op.work_sessions.find_one({"id": "ws"}, {"_id": 0}),
+                "qa": await op.labor_quantity_approvals.find_one({"id": "qa-RC"}, {"_id": 0}),
+            }
+            real_return = daily_reports._return_budget_once
+            calls = {"n": 0}
+
+            async def crash(*a, **kw):
+                calls["n"] += 1
+                raise RuntimeError("simulated crash between the claim and the budget return")
+            monkeypatch.setattr(daily_reports, "_return_budget_once", crash)
+            with pytest.raises(RuntimeError):
+                await daily_reports.reset_daily_report("RC", U("admin"))
+            assert calls["n"] >= 1          # the claim had been made inside the transaction
+            assert await op.employee_daily_reports.find_one({"id": "RC"}, {"_id": 0}) == snap["report"]
+            assert await op.activity_budgets.find_one({"id": "b-RC"}, {"_id": 0}) == snap["budget"]
+            assert await op.work_sessions.find_one({"id": "ws"}, {"_id": 0}) == snap["ws"]
+            assert await op.labor_quantity_approvals.find_one({"id": "qa-RC"}, {"_id": 0}) == snap["qa"]
+            assert await op.audit_events.count_documents({"entity_id": "RC"}) == 0
+            # both: the next reset commits the claim AND the budget return together
+            monkeypatch.setattr(daily_reports, "_return_budget_once", real_return)
+            out = await daily_reports.reset_daily_report("RC", U("admin"))
+            assert out["approval_status"] == "SUBMITTED" and out["report_version"] == 1
+            assert out["last_reset"]["budget_returned"] is True
+            b = await op.activity_budgets.find_one({"id": "b-RC"})
+            assert b["consumed_hours"] == 32 and b["returned_resets"] == [out["last_reset"]["id"]]
+            assert (await op.work_sessions.find_one({"id": "ws"}))["flag_reason"] == "voided_by_reset"
+            assert (await op.labor_quantity_approvals.find_one({"id": "qa-RC"}))["status"] == "void"
+        finally:
+            await client.drop_database(name)
+            client.close()
+    asyncio.run(body())
+
+
+def test_lab01n_without_transactions_the_reset_is_refused_and_writes_nothing(monkeypatch):
+    """the production runner on a backend that cannot run transactions (mongomock here): 503,
+    nothing written — the route has no non-transactional fallback."""
+    async def body():
+        from app.routes import daily_reports
+        production_runner = daily_reports._run_reset_transaction
+        op = await _setup(monkeypatch, "l01n_no_tx")
+        monkeypatch.setattr(daily_reports, "_run_reset_transaction", production_runner)
+        before = await op.employee_daily_reports.find_one({"id": "FREE"}, {"_id": 0})
+        with pytest.raises(HTTPException) as ex:
+            await daily_reports.reset_daily_report("FREE", U("admin"))
+        assert ex.value.status_code == 503
+        assert await op.employee_daily_reports.find_one({"id": "FREE"}, {"_id": 0}) == before
+        assert (await op.labor_quantity_approvals.find_one({"id": "qa-FREE"}))["status"] == "approved"
+        assert await _audits(op, "FREE") == []
     asyncio.run(body())
