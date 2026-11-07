@@ -234,3 +234,37 @@ def test_o10_vat_put_races_send(monkeypatch, backend, mode, rep):
             assert o["total"] == want_total and (snap.get("vat_percent"), snap.get("total")) == (
                 o.get("vat_percent"), o["total"])
     run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(10))
+def test_o11_lines_put_races_new_version_of_a_draft(monkeypatch, backend, mode, rep):
+    """ed68cb9: new-version (Draft allowed since Addendum A) CAS carries updated_at. A lines PUT
+    ∥ new-version on a Draft: the new version must copy the lines the old one ends with,
+    and a superseded draft must not take the edit."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", status="Draft"))
+        body = {"lines": [{"activity_name": "Боя", "unit": "m2", "qty": 2, "material_unit_cost": 1,
+                           "labor_unit_cost": 1}]}
+        rp, rn = await asyncio.gather(c.put("/api/offers/o1/lines", headers=hdr("admin-a"), json=body),
+                                      new_version(c, "o1"))
+        o = await get(op, "o1")
+        v2 = await op.offers.find_one({"parent_offer_id": "o1"}, {"_id": 0})
+        print("O11 %s/%d: PUT %s new-version %s | v1 %s total %s | v2 total %s" % (
+            mode, rep, rp.status_code, rn.status_code, o["status"], o["total"], (v2 or {}).get("total")))
+        if v2:
+            assert o["status"] == "Superseded" and v2["total"] == o["total"]
+    run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(10))
+def test_o12_reject_races_new_version(monkeypatch, backend, mode, rep):
+    """/reject (not changed by OFF-01) writes {"id"} only. reject ∥ new-version on a Sent
+    offer: does a superseded offer end with status Rejected (observation)?"""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        rr, rn = await asyncio.gather(
+            c.post("/api/offers/o1/reject", headers=hdr("admin-a"), json={"reason": "x"}), new_version(c, "o1"))
+        o = await get(op, "o1")
+        print("O12 %s/%d: reject %s new-version %s | status %s superseded_by %s" % (
+            mode, rep, rr.status_code, rn.status_code, o["status"], bool(o.get("superseded_by"))))
+    run(monkeypatch, backend, mode, scenario)
