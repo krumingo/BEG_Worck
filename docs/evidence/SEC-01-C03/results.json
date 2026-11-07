@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 22.6,
+ "seconds": 25.3,
  "amount_rows": [
   {
    "mode": "off",
@@ -4487,14 +4487,14 @@
    },
    "retry_statuses": [
     201,
-    409,
-    409,
-    409,
-    409,
+    201,
+    201,
+    201,
+    201,
     409
    ],
    "retry_payment_ids": [
-    "d2a0645f-7fee-52b5-b4f4-a0da8542d02a"
+    "b7a5430f-4157-58bf-bdcb-21bdcd5c031e"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4511,14 +4511,14 @@
    },
    "retry_statuses": [
     201,
-    409,
-    409,
+    201,
+    201,
     409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "2c2237fb-915d-549e-b733-8a0c7fc78cc5"
+    "57175e53-4e0b-57aa-9de2-a63eb2542be9"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4537,18 +4537,191 @@
     201,
     201,
     201,
-    201,
-    201,
+    409,
+    409,
     409
    ],
    "retry_payment_ids": [
-    "9f7f737b-a581-5b55-a031-01bc750ef2f6"
+    "f5a78541-4a03-5e13-8b87-a4cccf8db9bf"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
    "package_paid_total": 10.0,
    "allocations_sum": 10.0,
    "amount": 10
+  }
+ ],
+ "fg90_certified_cap": [
+  {
+   "mode": "off",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  },
+  {
+   "mode": "shadow",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  },
+  {
+   "mode": "enforce",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
   }
  ]
 }

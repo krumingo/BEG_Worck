@@ -240,6 +240,53 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         fg15: List[Dict[str, Any]] = []
         computed: List[Dict[str, Any]] = []
         race: List[Dict[str, Any]] = []
+        fg90: List[Dict[str, Any]] = []
+
+        def certified_cap_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+
+            def pay(amount, **extra):
+                before = tc.portal.call(lambda: pm._last_ts(oplog))
+                resp = tc.post("/api/subcontractor-payments", json={**base, "amount": amount, **extra},
+                               headers={**hdr, "Idempotency-Key": uuid.uuid4().hex})
+                written = tc.portal.call(lambda: pm.writes_with_org(client, oplog, before, dbs, snap))
+                detail = resp.json().get("detail") if resp.status_code >= 400 else None
+                return {"status": resp.status_code,
+                        "error_code": detail.get("error_code") if isinstance(detail, dict) else None,
+                        "business_written": sorted({short(n) for n, _ in written
+                                                    if n.split(".", 1)[1] not in AUDIT})}
+            pkg0 = tc.portal.call(lambda: op_db.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0}))
+            out: Dict[str, Any] = {"mode": mode, "certified_total": pkg0.get("certified_total"),
+                                   "paid_before": pkg0.get("paid_total")}
+            out["over_101"] = pay(101)
+            out["pay_60"] = pay(60)
+            out["then_50"] = pay(50)
+            out["then_40_to_the_cap"] = pay(40)
+            out["then_0_01"] = pay(0.01)
+            out["unknown_act"] = pay(1, act_id="c03-no-such-act")
+            out["draft_act"] = pay(1, act_id=c02.rid("A", "sact"))
+            pkg1 = tc.portal.call(lambda: op_db.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0}))
+            out["paid_total_after"] = pkg1.get("paid_total")
+            out["committed_after"] = pkg1.get("committed_paid_total")
+            restore_all()
+
+            async def two_at_once():          # 60 + 60 > 100, two different keys, concurrent
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(
+                        "/api/subcontractor-payments", json={**base, "amount": 60},
+                        headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}) for _ in range(2)])
+            pair = tc.portal.call(two_at_once)
+            allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                {"package_id": pkg_id}, {"_id": 0, "amount": 1}).to_list(100))
+            out["concurrent_60_60"] = {
+                "statuses": sorted(r.status_code for r in pair),
+                "allocations_sum": round(sum(float(a["amount"]) for a in allocs), 2)}
+            restore_all()
+            return out
 
         def interrupted_payment_race(mode: str) -> Dict[str, Any]:
             from app.tenancy import data_access
@@ -428,6 +475,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 restore_all()
             # F-69-01: a payment interrupted after the ledger row, then 6 CONCURRENT retries.
             race.append(interrupted_payment_race(mode))
+            # FG-90 (FLOW-021): no payment above the certified total of the package (100).
+            fg90.append(certified_cap_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -440,6 +489,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "amount_rows": rows, "idempotency_sequences": sequences, "sec_r1": r1,
         "fg29_project_in_tenant": fg29, "fg15_labor_money": fg15,
         "f69_02_computed_routes": computed, "f69_01_interrupted_payment_race": race,
+        "fg90_certified_cap": fg90,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -545,6 +595,7 @@ def check_result(result: Dict[str, Any]) -> None:
         assert r["response_money_keys"] == visible and r["replay_money_keys"] == visible, r
 
     check_computed_and_race(result)
+    check_certified_cap(result)
 
 
 def check_computed_and_race(result: Dict[str, Any]) -> None:
@@ -573,6 +624,24 @@ def check_computed_and_race(result: Dict[str, Any]) -> None:
         assert len(r["retry_payment_ids"]) == 1, r            # every 201 = the same payment
         assert r["ledger_rows_added"] == 1 and r["allocations_added"] == 1, r
         assert r["package_paid_total"] == r["allocations_sum"], r
+
+
+def check_certified_cap(result: Dict[str, Any]) -> None:
+    rows = result["fg90_certified_cap"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    nothing = {"status": 409, "error_code": "PAYMENT_EXCEEDS_CERTIFIED", "business_written": []}
+    for r in rows:
+        assert r["certified_total"] == 100 and r["paid_before"] == 0, r
+        assert r["over_101"] == nothing, r
+        assert r["pay_60"]["status"] == 201, r
+        assert r["then_50"] == nothing, r                  # 60 + 50 > 100
+        assert r["then_40_to_the_cap"]["status"] == 201, r  # exactly the cap
+        assert r["then_0_01"] == nothing, r
+        assert r["unknown_act"]["status"] == 404 and r["unknown_act"]["business_written"] == [], r
+        assert r["draft_act"] == {"status": 409, "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+                                  "business_written": []}, r
+        assert r["paid_total_after"] == 100 and r["committed_after"] == 100, r
+        assert r["concurrent_60_60"] == {"statuses": [201, 409], "allocations_sum": 60.0}, r
 
 
 # ═════════════════════════════════════════════════════════════════════ DB-free tests

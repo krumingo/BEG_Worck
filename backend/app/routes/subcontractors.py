@@ -553,6 +553,19 @@ async def create_subcontractor_payment(
                        "сметка (Каса/Банка)"})
     account_id = account["id"]
 
+    # SEC-01-C03-D (FG-90, FLOW-021 "плащане над измереното без Approval"): a named act must
+    # be a CONFIRMED act of this package; the cap itself is reserved atomically below.
+    act_id = data.get("act_id")
+    if act_id is not None:
+        act = await tenant.subcontractor_acts.find_one({"id": act_id, "package_id": pkg_id},
+                                                       {"_id": 0, "id": 1, "status": 1})
+        if not act:
+            raise HTTPException(status_code=404, detail="Act not found in this package")
+        if act.get("status") != "confirmed":
+            raise HTTPException(status_code=409, detail={
+                "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+                "message": "Плаща се само по потвърден акт"})
+
     mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
     if mw.replay_id:            # the same request again: the original payment, no new row
         return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
@@ -584,10 +597,32 @@ async def create_subcontractor_payment(
     return await tenant.subcontractor_payments.find_one({"id": payment["id"]}, {"_id": 0})
 
 
+_COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
+
+
+async def _reserve_within_certified(tenant, pkg_id: str, amount: float) -> None:
+    """Add ``amount`` to the package's ``committed_paid_total`` only if the result stays
+    within ``certified_total`` (cent tolerance); otherwise 409 PAYMENT_EXCEEDS_CERTIFIED."""
+    res = await tenant.subcontractor_packages.update_one(
+        {"id": pkg_id, "$expr": {"$lte": [{"$add": [_COMMITTED, amount]},
+                                          {"$add": [{"$ifNull": ["$certified_total", 0]}, 0.005]}]}},
+        [{"$set": {"committed_paid_total": {"$round": [{"$add": [_COMMITTED, amount]}, 2]}}}])
+    if res.matched_count == 0:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+            "message": "Плащането надвишава актуваното (сертифицираното) по пакета; "
+                       "над измереното се плаща само с одобрение (FLOW-021)"})
+
+
 async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now):
     """The writes of one subcontractor payment; each one done once per Idempotency-Key."""
     org_id, pkg_id, amount = user["org_id"], payment["package_id"], payment["amount"]
     account_id = account["id"]
+    # SEC-01-C03-D (FG-90): the FIRST write reserves the amount against the package's
+    # certified total, atomically (one conditional update: two payments under different keys
+    # cannot both pass). Over the cap -> 409, nothing written. FLOW-021 allows more only with
+    # an Approval (W0-07), which does not exist yet -> refused. Done once per key.
+    await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, amount))
     async with mw.insert_once():   # SEC-01-C03-C (F-69-01): atomic, _id = key-derived id
         await tenant.finance_payments.insert_one(mw.unique({
             "id": ledger_id, "org_id": org_id,
