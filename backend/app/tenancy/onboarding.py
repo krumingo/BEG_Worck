@@ -91,6 +91,14 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
         raise OnboardingRefused(str(exc), "IDENTITY_CHECK_UNAVAILABLE")
     if taken:
         raise OnboardingRefused("Email already registered", "EMAIL_EXISTS")
+    # W0-04-C01: the database this tenant writes to carries the unique audit /
+    # idempotency indexes BEFORE its first record (one key = one write, a
+    # linear audit chain). A conflict or duplicate refuses before any write.
+    from app.audit.indexes import AuditIndexError, ensure_audit_indexes
+    try:
+        await ensure_audit_indexes(op_db)
+    except AuditIndexError as exc:
+        raise OnboardingRefused("audit indexes unavailable: %s" % exc, "AUDIT_INDEXES_UNAVAILABLE")
 
     now = _now()
     tenant_id = str(uuid.uuid4())          # server-generated; the only tenant value

@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +57,8 @@ const kindLabel = (k) => KIND_LABELS[k] || "Фактура";
 const KIND_ORDER = ["Invoice", "Proforma", "CreditNote", "DebitNote"];
 
 export default function InvoicesPage() {
+  const payKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  const batchKeyHolder = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -143,11 +146,12 @@ export default function InvoicesPage() {
         reference: payRef,
         notes: payNote,
         account_id: payAccount || undefined,
-      });
+      }, idempotencyHeaders(payKey.get()));
+      payKey.settle();
       toast.success(`Плащане ${amt.toFixed(2)} € записано`);
       setPayDialog(null); setPayAmount(""); setPayRef(""); setPayNote("");
       fetchData();
-    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    } catch (err) { payKey.settle(err); toast.error(apiErrorText(err, "Грешка")); }
     finally { setPaying(false); }
   };
 
@@ -157,6 +161,9 @@ export default function InvoicesPage() {
     setPaying(true);
     try {
       let count = 0;
+      // One key per invoice, derived from one batch key: a retry of the same batch replays
+      // the invoices that were already paid instead of paying them twice.
+      const batchKey = batchKeyHolder.get();
       for (const inv of sel) {
         await API.post(`/finance/invoices/${inv.id}/payments`, {
           amount: inv.remaining_amount,
@@ -165,13 +172,14 @@ export default function InvoicesPage() {
           reference: payRef,
           notes: payNote || `Групово плащане (${sel.length} фактури)`,
           account_id: payAccount || undefined,
-        });
+        }, idempotencyHeaders(`${batchKey}:${inv.id}`));
         count++;
       }
+      batchKeyHolder.settle();
       toast.success(`${count} фактури маркирани като платени`);
       setSelected(new Set()); setPayRef(""); setPayNote("");
       fetchData();
-    } catch (err) { toast.error(err.response?.data?.detail || "Грешка"); }
+    } catch (err) { batchKeyHolder.settle(err); toast.error(apiErrorText(err, "Грешка")); }
     finally { setPaying(false); }
   };
 

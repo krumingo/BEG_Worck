@@ -806,7 +806,7 @@ async def _idempotency_state(db, tenant_id: str, action: str, key: str,
                                                        {"_id": 0})
     if record and record.get("request_fingerprint") not in (None, fingerprint):
         raise MasterDataRefused(
-            "idempotency key %r was already used for a different %s request" % (key, action))
+            "this operation key was already used for a different %s request" % action)
     return record
 
 
@@ -846,8 +846,8 @@ async def _run(ctx: Any, db, plan: _Plan, *, actor_id: str, approval_id: Optiona
                verifier: Any, subject: Dict[str, Any], fingerprint: str,
                fail_after: Optional[str]) -> MergeOutcome:
     from app.audit.idempotency import (
-        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, begin_idempotent, complete_idempotent,
-        fail_idempotent, mark_idempotent_step)
+        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_IN_PROGRESS, begin_idempotent,
+        complete_idempotent, fail_idempotent, mark_idempotent_step)
     tenant_id = ctx.tenant_id
 
     def outcome(event_id, **kw):
@@ -881,6 +881,10 @@ async def _run(ctx: Any, db, plan: _Plan, *, actor_id: str, approval_id: Optiona
     # 3. bookkeeping: reserve the key, take the lock
     state = await begin_idempotent(db, tenant_id=tenant_id, key=plan.key, action=plan.action,
                                    request_fingerprint=fingerprint)
+    if state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
+        # W0-04-C01 F-69-01: a concurrent retry won the retake of this failed key;
+        # its reservation is not ours to fail.
+        await refuse(MasterDataRefused("this operation key is being retried right now"))
     if state.get("status") == IDEMPOTENCY_DUPLICATE and state.get("prior_status") == IDEMPOTENCY_COMPLETED:
         return outcome(state.get("result_reference"), replayed=True)
     resumed = state.get("status") == IDEMPOTENCY_DUPLICATE or bool(state.get("retry_of_failed"))
