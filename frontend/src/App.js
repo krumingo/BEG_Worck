@@ -1,5 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import AppToaster from "@/components/AppToaster";
 import { AuthProvider, useAuth, PlatformAuthProvider, usePlatformAuth } from "@/contexts/AuthContext";
 import { ProjectProvider } from "@/contexts/ProjectContext";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -331,6 +332,7 @@ function App() {
           <BrowserRouter>
             <AppRoutes />
           </BrowserRouter>
+          <AppToaster />
         </ProjectProvider>
       </PlatformAuthProvider>
     </AuthProvider>
