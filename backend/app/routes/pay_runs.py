@@ -100,7 +100,9 @@ def _validate_no_overpayment(row_or_rows):
     if remaining_before_payment < -0.01 and paid_now > 0:
         _raise("remaining_before_payment is already negative from existing data")
 
-    if round(paid_now - remaining_before_payment, 2) > 0.01:
+    # LAB-01-B (FG-66): a negative remaining is a FLOW-028 correction item; paying 0 on such
+    # a row is allowed (nothing more is paid), any positive amount is refused above.
+    if round(paid_now - max(remaining_before_payment, 0.0), 2) > 0.01:
         _raise("paid_now_amount exceeds remaining_before_payment")
 
     return {
@@ -267,10 +269,31 @@ def _labor_row_fields(lc: dict) -> dict:
     }
 
 
+def remaining_and_correction(gross_payable: float, previously_paid: float, paid_now: float = 0.0,
+                             employee_id: str = "") -> tuple:
+    """LAB-01-B (FG-66): the remaining amount is never negative. When what was already
+    paid exceeds the (re-priced) payable amount, remaining is 0 and the difference is a
+    FLOW-028 correction item (to settle by correction / deduction / reversal with
+    Approval) — never a negative balance and never a silent edit of the old payment."""
+    raw = round(_money_float(gross_payable) - _money_float(previously_paid) - _money_float(paid_now), 2)
+    if raw >= 0:
+        return raw, None
+    return 0.0, {
+        "type": "FLOW028_CORRECTION",
+        "status": "open",
+        "employee_id": employee_id,
+        "amount": round(-raw, 2),
+        "gross_payable": round(_money_float(gross_payable), 2),
+        "previously_paid": round(_money_float(previously_paid), 2),
+        "paid_now": round(_money_float(paid_now), 2),
+        "reason": "Платено преди надвишава заработеното (корекция по FLOW-028, не отрицателен остатък)",
+    }
+
+
 def _frozen_labor_fields(row: dict) -> dict:
     """LAB-01 fields frozen on a created/updated Pay Run row (never recomputed on read)."""
     return {k: row.get(k) for k in ("labor_amount", "akord_amount", "downtime_amount",
-                                    "labor_dq_warnings", "labor_calc") if k in row}
+                                    "labor_dq_warnings", "labor_calc", "correction_item") if k in row}
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -432,7 +455,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
     total_hours = round(sum(ln["hours"] for ln in sel), 1)
     approved_days = len({ln["date"] for ln in sel})
     # LAB-01: the one labor calculation, restricted to the selected reports
-    smr_terms = await load_smr_terms(tenant, org_id, [ln.get("execution_package_id") for ln in sel])
+    smr_terms = await load_smr_terms(tenant, org_id, sel)
     lc = compute_person_labor(prof, sel, smr_terms)
     e = earned_from_labor(lc)
     amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
@@ -466,6 +489,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         day_cells.append(cell)
 
     prev_paid = row.get("previously_paid", 0)
+    sel_remaining, sel_correction = remaining_and_correction(e["earned"], prev_paid, 0, eid)
     out = dict(row)
     out.update({
         "hourly_rate": e["hourly_rate"],
@@ -477,7 +501,8 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         "overtime_hours": round(sum(ln.get("overtime_hours", 0) for ln in sel), 1),
         "earned_amount": e["earned"],
         "earned_formula": e.get("formula", ""),
-        "remaining_after_payment": round(e["earned"] - prev_paid, 2),
+        "remaining_after_payment": sel_remaining,
+        "correction_item": sel_correction,
         "sites": sorted({s for dc in day_cells for s in dc["sites"]}),
         "day_cells": day_cells,
         **_labor_row_fields(lc),
@@ -542,7 +567,7 @@ async def generate_pay_run(
         by_emp[wid].append(ln)
 
     # LAB-01: SMR/package terms (pay type, piece rate) of the lines' execution packages
-    smr_terms = await load_smr_terms(tenant, org_id, [ln.get("execution_package_id") for ln in lines])
+    smr_terms = await load_smr_terms(tenant, org_id, lines)
 
     pids = list({ln["project_id"] for ln in lines if ln["project_id"]})
     proj_map = {}
@@ -607,7 +632,7 @@ async def generate_pay_run(
         e = earned_from_labor(lc)
         amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
         prev_paid = round(already_paid.get(wid, 0), 2)
-        remaining = round(e["earned"] - prev_paid, 2)
+        remaining, correction = remaining_and_correction(e["earned"], prev_paid, 0, wid)
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
 
         # Per-day breakdown
@@ -732,6 +757,7 @@ async def generate_pay_run(
             "previously_paid": prev_paid,
             "paid_now_amount": 0,
             "remaining_after_payment": remaining,
+            "correction_item": correction,
             "open_advances": adv_by_user.get(wid, []),
             "sites": sites,
             "day_cells": day_cells,
@@ -758,8 +784,12 @@ async def generate_pay_run(
             "hours": round(sum(r["approved_hours"] for r in rows), 1),
             "earned": round(sum(r["earned_amount"] for r in rows), 2),
             "remaining": round(sum(r["remaining_after_payment"] for r in rows), 2),
+            "corrections": round(sum((r.get("correction_item") or {}).get("amount", 0) for r in rows), 2),
         },
-        "warnings": [f"Има {overlap_count} съществуващи плащания за този период"] if overlap_count > 0 else [],
+        "warnings": ([f"Има {overlap_count} съществуващи плащания за този период"] if overlap_count > 0 else [])
+                    + [f"Корекция по FLOW-028: {r['first_name']} {r['last_name']} — платено с "
+                       f"{r['correction_item']['amount']} EUR повече от заработеното"
+                       for r in rows if r.get("correction_item")],
     }
 
 
@@ -821,9 +851,9 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             "paid_now_amount": paid_now,
         })
 
-        remaining = round(
-            row["earned_amount"] + total_bonuses - total_deductions - row["previously_paid"] - paid_now, 2
-        )
+        remaining, correction = remaining_and_correction(
+            row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
+        row = dict(row, correction_item=correction)
 
         frozen_row = {
             "employee_id": eid,
@@ -1456,7 +1486,9 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
                 total_deductions += a.amount
         # R0-05: no amount sent → 0 (never the whole remaining amount).
         paid_now = round(_money_float(ovr.paid_now_amount), 2)
-        remaining = round(row["earned_amount"] + total_bonuses - total_deductions - row["previously_paid"] - paid_now, 2)
+        remaining, correction = remaining_and_correction(
+            row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
+        row = dict(row, correction_item=correction)
         existing_row = existing_row_map.get(eid, {}) or {}
         day_cells = row.get("day_cells") or existing_row.get("day_cells") or []
 

@@ -102,7 +102,7 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
     for wr in reports:
         for i, line in enumerate(wr.get("lines", [])):
             hours = float(line.get("hours", 0) or 0)
-            if hours <= 0 and line.get("approved_quantity") in (None, ""):
+            if hours <= 0 and line.get("quantity") in (None, ""):
                 continue
             act_name = line.get("activity_name", "")
             matched_pkg = pkg_by_name.get(act_name.lower().strip())
@@ -120,7 +120,7 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
             by_worker.setdefault(wr["user_id"], []).append(nl)
 
     smr_terms = await load_smr_terms(
-        tenant, org_id, [nl["execution_package_id"] for ls in by_worker.values() for nl in ls])
+        tenant, org_id, [nl for ls in by_worker.values() for nl in ls])
 
     # Clear old synced entries for this project (a derived projection, rebuilt below)
     await tenant.labor_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "work_report_sync"})

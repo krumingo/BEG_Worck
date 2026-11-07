@@ -120,7 +120,7 @@ async def get_all_reports(
             org_id=org_id, date_from=date_from, date_to=date_to, worker_id=wid,
             status_filter="APPROVED")
     smr_terms = await load_smr_terms(
-        tenant, org_id, [ln.get("execution_package_id") for ls in full_by_worker.values() for ln in ls])
+        tenant, org_id, [ln for ls in full_by_worker.values() for ln in ls])
     labor_by_id = {}
     for wid, wlines in full_by_worker.items():
         lc = compute_person_labor(prof_map.get(wid, {}), wlines, smr_terms)

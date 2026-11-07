@@ -18,10 +18,12 @@ from app.tenancy.data_access import TenantData
 
 NORMAL_DAY = 8
 
-# LAB-01: line-level labor terms (FLOW-028 pay type per SMR line, akord quantity/price,
-# FLOW-019 DOWNTIME). Passed through unchanged; priced only by app.services.labor_cost.
-LABOR_LINE_FIELDS = ("pay_type", "quantity", "approved_quantity", "unit", "piece_rate",
-                     "cost_type", "execution_package_id")
+# LAB-01: line-level labor facts (entered quantity, unit, FLOW-019 DOWNTIME, the SMR
+# package the line names). Passed through for display/classification only.
+# LAB-01-B (FG-64): pay_type, piece_rate and approved_quantity are NOT read from the
+# worker-filled line at all — the price comes from the package/contract and the
+# approved quantity from an approval record (app.services.labor_cost).
+LABOR_LINE_FIELDS = ("quantity", "unit", "cost_type", "execution_package_id")
 
 
 def _labor_fields(src: dict) -> dict:

@@ -24,3 +24,10 @@ Per-line amounts of one person add up to the cent to that person's total.
 | All-reports listing `labor_value` (`routes/all_reports.py`) | hours × rate (× OT coef) for every status | the service amount for approved lines; non-approved = 0 |
 
 ## Tests (`tests-LAB-01.txt`)
+
+## LAB-01-B (FLOW Guard pass 5: FG-64, FG-66) — `tests-LAB-01-B.txt`
+- **FG-64:** nothing that prices a line is read from the worker-filled report line.
+  - The line's `pay_type`, `piece_rate` and `approved_quantity` are ignored, and the normalizer no longer passes them through.
+  - The piece rate and pay type come only from the SMR package (`execution_packages.labor_piece_rate` / `labor_pay_type`). The package must belong to the line's project. The approval record may name the package.
+  - The approved quantity comes only from `labor_quantity_approvals`: status `approved`, an `approved_by`, and an approver who is not the worker. No writer exists yet; that approval flow is FG-65, Krum decides.
+- **FG-66:** `remaining_after_payment` is never negative. When previously paid exceeds the re-priced earned amount, remaining is 0 and the row carries `correction_item` (`FLOW028_CORRECTION`, amount, reason). The preview totals have `corrections`, and the preview shows a warning. Paying 0 on such a row is allowed; any positive amount is refused.

@@ -81,7 +81,7 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_PEOPLE,
               "users", "persons", "employee_profiles", "brigades", "attendance_entries",
               "work_sessions", "employee_daily_reports", "daily_work_logs", "work_reports",
-              "labor_entries", "reminder_logs", "notifications"),
+              "labor_entries", "labor_quantity_approvals", "reminder_logs", "notifications"),
     **_family(FAMILY_PARTIES,
               "companies", "clients", "counterparties", "subcontractors",
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",

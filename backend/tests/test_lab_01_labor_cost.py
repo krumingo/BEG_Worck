@@ -12,6 +12,15 @@ docs/architecture/tasks/LAB-01_LABOR_COST_PER_FLOW_019_028.md — tests:
 * an existing confirmed Pay Run is not re-priced; an open one only by an explicit edit,
   with old → new kept in its history.
 
+LAB-01-B (FLOW Guard pass 5):
+
+* FG-64 — the piece rate comes ONLY from the SMR package/contract and the approved
+  quantity ONLY from an approval record (``labor_quantity_approvals``) by someone other
+  than the worker. A worker who writes his own pay type / rate / quantity on the report
+  line changes nothing; a self-approval and a package of another project change nothing;
+* FG-66 — previously paid above the re-priced earned → remaining 0 + a FLOW-028
+  correction item, never a negative remaining.
+
 Pure-function cases run without a database. The route cases run in-process against
 ``mongomock_motor`` and, when ``W0_03_REAL_MONGO_URL`` names a disposable LOCAL MongoDB,
 again against it (one database per test, dropped afterwards). Authentication is real.
@@ -34,6 +43,17 @@ P_START, P_END = "2026-10-05", "2026-10-11"
 DAYS = ["2026-10-05", "2026-10-06", "2026-10-07", "2026-10-08", "2026-10-09"]
 
 
+def _terms(packages=None, quantities=None):
+    """In-memory pricing terms in the shape load_smr_terms returns."""
+    pk = {pid: dict(t, id=pid, project_id=t.get("project_id", "prj")) for pid, t in (packages or {}).items()}
+    q = {rid: {"report_id": rid, "approved_quantity": qty, "status": "approved", "approved_by": "boss"}
+         for rid, qty in (quantities or {}).items()}
+    return {"packages": pk, "quantities": q}
+
+
+PKG_AK = {"pkg-ak": {"labor_pay_type": "Akord", "labor_piece_rate": 5}}
+
+
 def _ln(rid, day="2026-10-05", hours=8, status="APPROVED", **kw):
     d = {"id": rid, "worker_id": "w", "date": day, "hours": hours, "status": status,
          "project_id": "prj", "smr_type": "Шпакловка"}
@@ -45,8 +65,8 @@ def _ln(rid, day="2026-10-05", hours=8, status="APPROVED", **kw):
 def test_akord_is_approved_quantity_times_piece_rate_not_hours():
     # 40 h; the profile has an hourly rate 20 → hours × rate would be 800 (FG-48)
     prof = {"pay_type": "Akord", "hourly_rate": 20}
-    lines = [_ln("r%d" % i, DAYS[i], 8, approved_quantity=24, unit="m2", piece_rate=5) for i in range(5)]
-    lc = compute_person_labor(prof, lines)
+    lines = [_ln("r%d" % i, DAYS[i], 8, unit="m2", execution_package_id="pkg-ak") for i in range(5)]
+    lc = compute_person_labor(prof, lines, _terms(PKG_AK, {"r%d" % i: 24 for i in range(5)}))
     assert lc["total"] == 600.0 and lc["akord_total"] == 600.0
     assert all(r["amount"] == 120.0 and r["pay_type"] == "Akord" for r in lc["lines"])
     assert lc["approved_hours"] == 40
@@ -57,9 +77,9 @@ def test_akord_is_approved_quantity_times_piece_rate_not_hours():
 def test_akord_unapproved_quantity_does_not_count():
     prof = {"pay_type": "Akord", "hourly_rate": 20}
     # quantity entered but not approved; and a whole report still a draft
-    lines = [_ln("r1", quantity=120, unit="m2", piece_rate=5),
-             _ln("r2", status="DRAFT", approved_quantity=120, piece_rate=5)]
-    lc = compute_person_labor(prof, lines)
+    lines = [_ln("r1", quantity=120, unit="m2", execution_package_id="pkg-ak"),
+             _ln("r2", status="DRAFT", execution_package_id="pkg-ak")]
+    lc = compute_person_labor(prof, lines, _terms(PKG_AK, {"r2": 120}))
     assert lc["total"] == 0.0
     assert [r["report_id"] for r in lc["excluded"]] == ["r2"]
     assert [w["code"] for w in lc["dq_warnings"]] == [DQ_AKORD_NO_APPROVED_QTY]
@@ -67,23 +87,56 @@ def test_akord_unapproved_quantity_does_not_count():
 
 def test_akord_without_piece_rate_is_dq_and_zero_never_the_hourly_rate():
     prof = {"pay_type": "Akord", "hourly_rate": 20}
-    lc = compute_person_labor(prof, [_ln("r1", approved_quantity=120, unit="m2")])
+    pkg = {"pkg-x": {"labor_pay_type": "Akord"}}
+    lc = compute_person_labor(prof, [_ln("r1", unit="m2", execution_package_id="pkg-x")],
+                              _terms(pkg, {"r1": 120}))
     assert lc["total"] == 0.0
     assert [w["code"] for w in lc["dq_warnings"]] == [DQ_AKORD_NO_PIECE_RATE]
 
 
-def test_pay_type_and_piece_rate_come_from_the_line_or_smr_before_the_profile():
+def test_pay_type_and_piece_rate_come_from_the_smr_package_before_the_profile():
     prof = {"pay_type": "Daily", "daily_rate": 100}
-    terms = {"pkg-1": {"id": "pkg-1", "labor_pay_type": "Akord", "labor_piece_rate": 4}}
-    lines = [_ln("a", DAYS[0], 8, execution_package_id="pkg-1", approved_quantity=50),   # SMR → akord
-             _ln("b", DAYS[1], 8, pay_type="Akord", piece_rate=3, approved_quantity=10),  # line → akord
-             _ln("c", DAYS[2], 8)]                                                          # profile → daily
+    terms = _terms({"pkg-1": {"labor_pay_type": "Akord", "labor_piece_rate": 4}}, {"a": 50})
+    lines = [_ln("a", DAYS[0], 8, execution_package_id="pkg-1"),   # SMR → akord
+             _ln("c", DAYS[2], 8)]                                  # profile → daily
     lc = compute_person_labor(prof, lines, terms)
     by = {r["report_id"]: r for r in lc["lines"]}
     assert (by["a"]["pay_type_source"], by["a"]["amount"]) == ("smr", 200.0)
-    assert (by["b"]["pay_type_source"], by["b"]["amount"]) == ("line", 30.0)
     assert (by["c"]["pay_type_source"], by["c"]["amount"]) == ("profile", 100.0)
-    assert lc["total"] == 330.0
+    assert lc["total"] == 300.0
+
+
+# ═══════════════════════════════════════════════════════════════ FG-64 (forbidden)
+def test_fg64_worker_written_rate_quantity_and_pay_type_on_the_line_have_no_effect():
+    # akord worker writes his own approved quantity and a piece rate on the line
+    prof = {"pay_type": "Akord", "hourly_rate": 20}
+    lc = compute_person_labor(prof, [_ln("r1", approved_quantity=999, piece_rate=999, unit="m2",
+                                         execution_package_id="pkg-ak")], _terms(PKG_AK))
+    assert lc["total"] == 0.0
+    assert [w["code"] for w in lc["dq_warnings"]] == [DQ_AKORD_NO_APPROVED_QTY]
+    # with a real approval the package price wins over the worker's 999
+    lc = compute_person_labor(prof, [_ln("r1", approved_quantity=999, piece_rate=999,
+                                         execution_package_id="pkg-ak")], _terms(PKG_AK, {"r1": 10}))
+    assert lc["total"] == 50.0
+    # no package price → the line's own price is still ignored
+    lc = compute_person_labor(prof, [_ln("r1", piece_rate=999, execution_package_id="pkg-x")],
+                              _terms({"pkg-x": {"labor_pay_type": "Akord"}}, {"r1": 10}))
+    assert lc["total"] == 0.0 and [w["code"] for w in lc["dq_warnings"]] == [DQ_AKORD_NO_PIECE_RATE]
+    # an akord worker writing pay_type Hourly on his line is not paid hours × rate
+    lc = compute_person_labor(prof, [_ln("r1", pay_type="Hourly")], _terms())
+    assert lc["lines"][0]["pay_type"] == "Akord" and lc["total"] == 0.0
+    # a salary worker writing pay_type Akord + rate + quantity stays on salary
+    lc = compute_person_labor({"pay_type": "Daily", "daily_rate": 100},
+                              [_ln("r1", pay_type="Akord", piece_rate=999, approved_quantity=999)], _terms())
+    assert lc["lines"][0]["pay_type"] == "Daily" and lc["total"] == 100.0
+
+
+def test_fg64_package_of_another_project_is_not_a_price():
+    prof = {"pay_type": "Akord"}
+    terms = _terms({"pkg-other": {"labor_pay_type": "Akord", "labor_piece_rate": 50,
+                                  "project_id": "prj-OTHER"}}, {"r1": 10})
+    lc = compute_person_labor(prof, [_ln("r1", execution_package_id="pkg-other")], terms)
+    assert lc["total"] == 0.0
 
 
 # ═══════════════════════════════════════════════════════════════ pure: salary
@@ -163,12 +216,25 @@ async def _seed(op):
         await op.users.insert_one({"id": wid, "org_id": ORG, "role": "Worker", "is_active": True,
                                    "email": wid + "@lab01.example", "first_name": wid, "last_name": "W"})
         await op.employee_profiles.insert_one(dict(prof, org_id=ORG, user_id=wid))
+    await op.execution_packages.insert_one({"id": "pkg-ak", "org_id": ORG, "project_id": "prj-1",
+                                            "activity_name": "Шпакловка (акорд пакет)", "labor_pay_type": "Akord",
+                                            "labor_piece_rate": 5})
     reps = []
-    # akord: 40 h, 5 × 24 m2 approved × 5 EUR → 600; one more line with an UNAPPROVED quantity
+    # akord: 40 h, 5 × 24 m2 approved (approval records) × 5 EUR (package) → 600. The worker
+    # also wrote approved_quantity / piece_rate himself on the lines — ignored (FG-64).
+    # One more line ak-x: quantity entered, a SELF-approval only → does not count.
+    approvals = []
     for i, d in enumerate(DAYS):
-        reps.append(_report("ak-%d" % i, "w-akord", d, "prj-1", 8, approved_quantity=24,
-                            quantity=24, unit="m2", piece_rate=5))
-    reps.append(_report("ak-x", "w-akord", "2026-10-10", "prj-1", 4, quantity=30, unit="m2", piece_rate=5))
+        reps.append(_report("ak-%d" % i, "w-akord", d, "prj-1", 8, approved_quantity=500,
+                            quantity=24, unit="m2", piece_rate=50, execution_package_id="pkg-ak"))
+        approvals.append({"id": "qa-%d" % i, "org_id": ORG, "report_id": "ak-%d" % i,
+                          "approved_quantity": 24, "status": "approved", "approved_by": "admin",
+                          "approved_at": d + "T18:00:00"})
+    reps.append(_report("ak-x", "w-akord", "2026-10-10", "prj-1", 4, quantity=30, unit="m2",
+                        execution_package_id="pkg-ak"))
+    approvals.append({"id": "qa-x", "org_id": ORG, "report_id": "ak-x", "approved_quantity": 30,
+                      "status": "approved", "approved_by": "w-akord"})          # self-approval
+    await op.labor_quantity_approvals.insert_many(approvals)
     # monthly: 100 / day; split between two projects on one day; a downtime line; a draft
     reps += [
         _report("m-1", "w-month", DAYS[0], "prj-1", 8),
@@ -345,18 +411,53 @@ def test_labor_sync_reads_approved_work_reports_only(monkeypatch, backend):
              "lines": [{"activity_name": "Шпакловка", "hours": 8}]},
             {"id": "wr-ak", "org_id": ORG, "project_id": "prj-1", "user_id": "w-akord",
              "date": DAYS[0], "status": "Approved",
-             "lines": [{"activity_name": "Шпакловка", "hours": 8, "approved_quantity": 30, "piece_rate": 5}]},
+             "lines": [{"activity_name": "Шпакловка", "hours": 8, "approved_quantity": 999, "piece_rate": 999}]},
             {"id": "wr-nr", "org_id": ORG, "project_id": "prj-1", "user_id": "w-norate",
              "date": DAYS[0], "status": "Approved",
              "lines": [{"activity_name": "Шпакловка", "hours": 8}]},
         ])
+        await op.labor_quantity_approvals.insert_one(
+            {"id": "qa-wr", "org_id": ORG, "report_id": "wr-ak:0", "approved_quantity": 30,
+             "execution_package_id": "pkg-ak", "status": "approved", "approved_by": "admin"})
         user = {"id": "admin", "org_id": ORG, "role": "Admin"}
         res = await sync_labor_entries_from_work_reports({"project_id": "prj-1"}, user)
         assert res["synced"] == 3
         entries = {e["work_report_id"]: e for e in await op.labor_entries.find({}, {"_id": 0}).to_list(100)}
         assert sorted(entries) == ["wr-ak", "wr-nr", "wr-ok"]
         assert entries["wr-ok"]["labor_cost"] == 100.0
-        assert entries["wr-ak"]["labor_cost"] == 150.0                    # 30 × 5, not 8 h × 15
+        assert entries["wr-ak"]["labor_cost"] == 150.0     # approved 30 × package 5; not 8 h × 15, not 999 × 999
         assert entries["wr-nr"]["labor_cost"] is None                     # no rate → no cost, not 25
         assert entries["wr-nr"]["dq_warnings"] == [DQ_MISSING_RATE]
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg66_paid_above_repriced_earned_is_a_correction_not_a_negative_remaining(monkeypatch, backend):
+    async def scenario(c, op):
+        # a confirmed pre-LAB-01 run paid 660 for the akord worker (44 h × 15); earned is now 600
+        await op.pay_runs.insert_one({
+            "id": "run-old", "org_id": ORG, "number": "PR-0001", "status": "confirmed", "version": 1,
+            "period_start": P_START, "period_end": P_END, "week_number": 41, "paid_at": None,
+            "employee_rows": [{"employee_id": "w-akord", "earned_amount": 660.0, "paid_now_amount": 660.0}],
+            "totals": {"earned": 660.0}, "history": []})
+        before = await op.pay_runs.find_one({"id": "run-old"}, {"_id": 0})
+        rows = await _preview(c)
+        ak = rows["w-akord"]
+        assert ak["earned_amount"] == 600.0 and ak["previously_paid"] == 660.0
+        assert ak["remaining_after_payment"] == 0.0                      # never -60
+        assert ak["correction_item"]["type"] == "FLOW028_CORRECTION"
+        assert ak["correction_item"]["amount"] == 60.0
+        assert rows["w-month"]["correction_item"] is None
+        # creating a run freezes the correction item and still no negative remaining
+        body = {"run_type": "weekly", "period_start": P_START, "period_end": P_END,
+                "rows": [{"employee_id": "w-akord"}], "status": "draft"}
+        r = await c.post("/api/pay-runs", json=body, headers=_token())
+        assert r.status_code == 200, r.text
+        er = r.json()["employee_rows"][0]
+        assert er["remaining_after_payment"] == 0.0 and er["correction_item"]["amount"] == 60.0
+        assert r.json()["totals"]["remaining"] == 0.0
+        # paying anything more is still refused
+        body["rows"] = [{"employee_id": "w-akord", "paid_now_amount": 1}]
+        assert (await c.post("/api/pay-runs", json=body, headers=_token())).status_code == 400
+        # the old run itself is not touched
+        assert await op.pay_runs.find_one({"id": "run-old"}, {"_id": 0}) == before
     run(monkeypatch, scenario, backend)

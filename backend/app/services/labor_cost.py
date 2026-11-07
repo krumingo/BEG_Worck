@@ -22,13 +22,20 @@ Canon applied
 
 Pay type priority (FLOW-028 "на ниво отчетен СМР ред/пакет, а не само в профила")
 ----------------------------------------------------------------------------------
-1. ``line.pay_type`` — set on the report line;
-2. the SMR / execution package terms: ``execution_packages.labor_pay_type`` of the
+1. the SMR / execution package terms: ``execution_packages.labor_pay_type`` of the
    line's ``execution_package_id``;
-3. ``employee_profiles.pay_type`` (fallback; "Monthly" when the profile has none).
-The piece rate comes from ``line.piece_rate``, else ``labor_piece_rate`` of the
-execution package. The profile ``hourly_rate`` is NEVER used as a piece rate.
-DOWNTIME lines are paid as time: the time pay type of the line/package/profile,
+2. ``employee_profiles.pay_type`` (fallback; "Monthly" when the profile has none).
+
+LAB-01-B (FG-64): NOTHING that prices a line is read from the report line itself —
+the worker fills that line in (``PUT /daily-reports`` does not validate day_entries).
+* ``line.pay_type`` / ``line.piece_rate`` / ``line.approved_quantity`` are IGNORED;
+* the piece rate comes ONLY from the package/contract (``labor_piece_rate``);
+  the profile ``hourly_rate`` is never a piece rate;
+* the approved quantity comes ONLY from an approval record in
+  ``labor_quantity_approvals`` (``report_id``, ``approved_quantity``, ``status``
+  "approved", ``approved_by``, ``approved_at``) whose approver is not the worker.
+  No writer for that collection exists yet — the approval flow is FG-65 (Krum).
+DOWNTIME lines are paid as time: the time pay type of the package/profile,
 or "Hourly" (profile ``hourly_rate``) when that is Akord.
 
 Sum rule: the per-line amounts of one person add up exactly (to the cent) to
@@ -78,24 +85,39 @@ def _norm_pay_type(value):
     return v  # unknown → treated as "mixed" by the time formula (as before)
 
 
-def resolve_pay_type(line: dict, profile: dict, smr_terms: dict = None):
-    """(pay_type, source) by the documented priority line → SMR → profile."""
-    pt = _norm_pay_type(line.get("pay_type"))
-    if pt:
-        return pt, "line"
-    terms = (smr_terms or {}).get(line.get("execution_package_id") or "") or {}
+def _packages(terms):
+    return (terms or {}).get("packages") or {}
+
+
+def _quantities(terms):
+    return (terms or {}).get("quantities") or {}
+
+
+def _package(line: dict, terms: dict = None) -> dict:
+    """The SMR package that prices ``line``: the one named by the quantity approval record
+    (approver-written) when there is one, else the line's; only a package of the line's
+    own project counts — a worker cannot re-point a line to another project's price."""
+    rec = _quantities(terms).get(line.get("id") or "") or {}
+    pkg_id = rec.get("execution_package_id") or line.get("execution_package_id") or ""
+    pkg = _packages(terms).get(pkg_id) or {}
+    if pkg and pkg.get("project_id") and pkg.get("project_id") != line.get("project_id"):
+        return {}
+    return pkg
+
+
+def resolve_pay_type(line: dict, profile: dict, terms: dict = None):
+    """(pay_type, source) by the documented priority SMR package → profile.
+    The worker-editable ``line.pay_type`` is ignored (FG-64)."""
+    terms = _package(line, terms)
     pt = _norm_pay_type(terms.get("labor_pay_type"))
     if pt:
         return pt, "smr"
     return (_norm_pay_type(profile.get("pay_type")) or "Monthly"), "profile"
 
 
-def resolve_piece_rate(line: dict, smr_terms: dict = None):
-    """(piece_rate, source) — line, then SMR/package terms. Never the profile."""
-    r = _num(line.get("piece_rate"))
-    if r is not None and r > 0:
-        return r, "line"
-    terms = (smr_terms or {}).get(line.get("execution_package_id") or "") or {}
+def resolve_piece_rate(line: dict, terms: dict = None):
+    """(piece_rate, source) — ONLY the SMR package/contract. Never the line, never the profile."""
+    terms = _package(line, terms)
     r = _num(terms.get("labor_piece_rate"))
     if r is not None and r > 0:
         return r, "smr"
@@ -185,6 +207,14 @@ def _line_base(line: dict) -> dict:
     }
 
 
+def resolve_approved_quantity(line: dict, terms: dict = None):
+    """The approved quantity — ONLY from an approval record, never the line (FG-64)."""
+    rec = _quantities(terms).get(line.get("id") or "")
+    if not rec:
+        return None
+    return _num(rec.get("approved_quantity"))
+
+
 def compute_person_labor(profile: dict, lines: list, smr_terms: dict = None) -> dict:
     """The labor cost of ONE person over ``lines`` (normalized report lines).
 
@@ -207,7 +237,8 @@ def compute_person_labor(profile: dict, lines: list, smr_terms: dict = None) -> 
         cost_type = _cost_type(ln)
         pay_type, pt_src = resolve_pay_type(ln, profile, smr_terms)
         rec = dict(base, cost_type=cost_type, pay_type=pay_type, pay_type_source=pt_src,
-                   quantity=_num(ln.get("quantity")), approved_quantity=_num(ln.get("approved_quantity")),
+                   quantity=_num(ln.get("quantity")),
+                   approved_quantity=resolve_approved_quantity(ln, smr_terms),
                    unit=ln.get("unit") or "", piece_rate=None, rate=None, amount=0.0, formula="", dq=[])
         if cost_type == DQ_DOWNTIME_UNCLASSIFIED:
             rec["dq"].append(DQ_DOWNTIME_UNCLASSIFIED)
@@ -324,16 +355,38 @@ def person_summary_formula(result: dict) -> str:
     return "; ".join(parts) or "0"
 
 
-async def load_smr_terms(tenant: TenantData, org_id: str, package_ids) -> dict:
-    """{execution_package_id: {labor_pay_type, labor_piece_rate}} for the given ids."""
-    ids = sorted({p for p in package_ids if p})
-    if not ids:
-        return {}
-    pkgs = await tenant.execution_packages.find(
-        {"org_id": org_id, "id": {"$in": ids}},
-        {"_id": 0, "id": 1, "labor_pay_type": 1, "labor_piece_rate": 1},
-    ).to_list(len(ids))
-    return {p["id"]: p for p in pkgs}
+async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
+    """The pricing terms of ``lines`` from records the worker cannot edit (FG-64)::
+
+        {"packages":   {execution_package_id: {labor_pay_type, labor_piece_rate}},
+         "quantities": {report_line_id: approval record}}
+
+    A quantity approval counts only with status "approved", an ``approved_by`` and an
+    approver who is not the worker of the line (no self-approval).
+    """
+    lines = [ln for ln in (lines or []) if isinstance(ln, dict)]
+    worker_of = {ln.get("id"): ln.get("worker_id") for ln in lines if ln.get("id")}
+    quantities = {}
+    if worker_of:
+        recs = await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "report_id": {"$in": sorted(worker_of)}, "status": "approved"},
+            {"_id": 0},
+        ).to_list(len(worker_of) * 2)
+        for r in recs:
+            rid, by = r.get("report_id"), r.get("approved_by")
+            if not by or by == worker_of.get(rid):
+                continue
+            quantities[rid] = r
+    pkg_ids = sorted({ln.get("execution_package_id") for ln in lines if ln.get("execution_package_id")}
+                     | {r.get("execution_package_id") for r in quantities.values() if r.get("execution_package_id")})
+    packages = {}
+    if pkg_ids:
+        pkgs = await tenant.execution_packages.find(
+            {"org_id": org_id, "id": {"$in": pkg_ids}},
+            {"_id": 0, "id": 1, "project_id": 1, "labor_pay_type": 1, "labor_piece_rate": 1},
+        ).to_list(len(pkg_ids))
+        packages = {p["id"]: p for p in pkgs}
+    return {"packages": packages, "quantities": quantities}
 
 
 async def project_labor_cost(org_id: str, project_id: str, date_from: str = None,
@@ -373,8 +426,7 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
         all_lines = await fetch_normalized_report_lines(
             org_id=org_id, date_from=d_from, date_to=d_to, worker_id=wid, status_filter="APPROVED")
         all_by_worker[wid] = all_lines
-    pkg_ids = {ln.get("execution_package_id") for ls in all_by_worker.values() for ln in ls}
-    smr_terms = await load_smr_terms(tenant, org_id, pkg_ids)
+    smr_terms = await load_smr_terms(tenant, org_id, [ln for ls in all_by_worker.values() for ln in ls])
 
     for wid in workers:
         res = compute_person_labor(prof_map.get(wid, {}), all_by_worker[wid], smr_terms)
