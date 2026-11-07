@@ -74,7 +74,7 @@ def test_r36_put_corrector_corrects_an_approved_report_with_audit(monkeypatch, w
         await _old_report(op)
         out = await daily_reports.update_daily_report("REP", {"day_entries": [
             {"id": "e1", "project_id": "P", "hours_worked": 6}]}, U(who))
-        assert out["total_hours"] == 6 and out["approval_status"] == "APPROVED"
+        assert out["total_hours"] == 6 and out["approval_status"] == "SUBMITTED" and out["approved_by"] is None  # LAB-01-I
         assert out["report_version"] == 1 and out["corrected_by"] == who
         assert (await op.labor_quantity_approvals.find_one({"id": "qa"}))["status"] == "void"
         audits = await _audits(op)
@@ -163,7 +163,10 @@ def test_r36_technician_draft_per_role_on_an_approved_report(monkeypatch, who, c
             assert out["hours"] == 6 and out["report_version"] == 1 and out["corrected_by"] == who
             audits = await _audits(op, "D")
             assert [a["action"] for a in audits] == ["daily_report.corrected"]
-            assert audits[0]["structured_diff"] == {"before": {"hours": 8}, "after": {"hours": 6}}
+            diff = audits[0]["structured_diff"]
+            assert (diff["before"]["hours"], diff["after"]["hours"]) == (8, 6)
+            # LAB-01-I: the approved report went back to SUBMITTED, visible in the trail
+            assert (diff["before"]["status"], diff["after"]["status"]) == ("Approved", "SUBMITTED")
         else:
             with pytest.raises(HTTPException) as ex:
                 await technician.update_draft("D", technician.DraftLineUpdate(hours=0.5), U(who))
@@ -206,7 +209,7 @@ def test_r36_batch_corrector_corrects_an_approved_report_with_audit(monkeypatch,
         res = await daily_reports.batch_save_daily_entries(_batch(6), U(who))
         assert res["employees_saved"] == 1
         rep = await op.employee_daily_reports.find_one({"id": "REP"}, {"_id": 0})
-        assert rep["total_hours"] == 6 and rep["report_version"] == 1 and rep["approval_status"] == "APPROVED"
+        assert rep["total_hours"] == 6 and rep["report_version"] == 1 and rep["approval_status"] == "SUBMITTED"  # LAB-01-I
         assert (await op.labor_quantity_approvals.find_one({"id": "qa"}))["status"] == "void"
         audits = await _audits(op)
         assert [a["action"] for a in audits] == ["daily_report.corrected"]

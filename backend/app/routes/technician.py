@@ -1387,7 +1387,8 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     # LAB-01-H (R36): the author (who entered it, or the worker it is for) corrects their own
     # Draft / returned report; Admin, Owner or the project's SiteManager corrects ANY report,
     # an approved one included — with an AuditEvent (before / after).
-    from app.services.report_corrections import CORRECTOR, audit_report_correction, authorize_report_edit
+    from app.services.report_corrections import (CORRECTOR, audit_report_correction, authorize_report_edit,
+                                                 correction_fields, reopen_effects)
     mode = await authorize_report_edit(
         user, doc, projects=[doc.get("project_id")],
         author_ids=(doc.get("submitted_by"), doc.get("worker_id")),
@@ -1401,15 +1402,17 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
         update["hours"] = round(data.hours, 2)
     if data.notes is not None:
         update["notes"] = data.notes
-    if mode == CORRECTOR:
-        update.update({"corrected_by": user["id"], "corrected_at": now})
-    before = {k: doc.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at")}
+    set_fields, add = correction_fields(doc, user, mode, now)  # LAB-01-I: approved → SUBMITTED
+    update.update(set_fields)
+    before = {k: doc.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at", "reopened_by_correction")}
 
     # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
     from app.services.labor_cost import void_labor_approvals
     await void_labor_approvals(tenant, user["org_id"], draft_id, user["id"],
                                "report_corrected" if mode == CORRECTOR else "draft_edited")
-    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    await tenant.employee_daily_reports.update_one(
+        {"id": draft_id}, {"$set": update, **({"$addToSet": add} if add else {})})
+    await reopen_effects(tenant, user["org_id"], doc, user, now)
     await audit_report_correction(db, user=user, mode=mode, report=doc, before=before,
                                   after={k: update[k] for k in before}, endpoint="PUT /technician/draft/{id}")
     return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
