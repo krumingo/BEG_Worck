@@ -652,6 +652,47 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                               for x in [e.get(k)] if isinstance(x, str)
                                               and MONEY_TEXT.search(x)}),
                         "leaks_900": "900" in r.text, "leaks_124": "124.0" in r.text})
+        # SEC-02-G (audit SEC71-04; R31): the band — snapshot status, alarm severity, the
+        # ?severity= filter, /alarms/count — with ONE paid worker on P1 and with TWO (a
+        # second paid session added for the call and removed after).
+        band_rows = []
+        second = {"id": sid("A", "ws_band"), "org_id": fx["A"]["tenant_id"],
+                  "worker_id": fx["A"]["users"]["driver"]["id"], "site_id": p1,
+                  "smr_type_id": "Мазилка", "started_at": "2026-11-05T07:00:00",
+                  "ended_at": "2026-11-05T15:00:00", "duration_hours": 8, "labor_cost": 500}
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            for paid in (1, 2):
+                if paid == 2:
+                    tc.portal.call(lambda: op_db.work_sessions.insert_one(dict(second)))
+                for role in ("requester", "technician", "viewer", "accountant"):
+                    hdr = {"Authorization": "Bearer " + tokens[("A", role)]}
+                    cnt = tc.get("/api/alarms/count", headers=hdr)
+                    crit = tc.get("/api/alarms", params={"severity": "critical"}, headers=hdr)
+                    dash = tc.get("/api/alarms/dashboard", headers=hdr)
+                    gen = tc.post("/api/sites/%s/pulse/generate" % p1,
+                                  params={"date": "2026-11-06"}, headers=hdr)
+                    one = tc.get("/api/alarms/" + stored, headers=hdr)
+                    items = (crit.json() or {}).get("items", []) if crit.status_code == 200 else []
+                    band_rows.append({
+                        "mode": mode, "paid_workers": paid, "role": role,
+                        "legacy_role": fx["A"]["users"][role]["role"],
+                        "count_status": cnt.status_code,
+                        "count": cnt.json() if cnt.status_code == 200 else None,
+                        "critical_list": [(i.get("type"), i.get("severity"), i.get("message"))
+                                          for i in items],
+                        "dashboard_by_severity": (dash.json() or {}).get("by_severity")
+                        if dash.status_code == 200 else None,
+                        "one_status": one.status_code,
+                        "generate_status": gen.status_code,
+                        "snapshot": (gen.json() or {}).get("budget_snapshot")
+                        if gen.status_code == 200 else None,
+                        "generate_budget_alerts": [a.get("type") for a in
+                                                   ((gen.json() or {}).get("alerts") or [])
+                                                   if gen.status_code == 200 and "budget"
+                                                   in str(a.get("type"))]})
+                if paid == 2:
+                    tc.portal.call(lambda: op_db.work_sessions.delete_one({"id": second["id"]}))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -667,6 +708,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "pulse_one_paid_worker": pulse_paid,
         "pulse_budget_alerts": alert_rows,
         "alarms": alarm_rows,
+        "band_paid_workers": band_rows,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -845,7 +887,7 @@ def check_pulse_one_paid_worker(rows: List[Dict[str, Any]]) -> None:
         else:
             assert r["total_labor_cost"] is None and r["smr_total_cost"] == [None], r
             assert not r["has_workers"], r
-            assert r["budget_snapshot"] == {"total_budget": 5000.0, "status": "ok"}, r
+            assert r["budget_snapshot"] == {"total_budget": 5000.0}, r   # SEC71-04: no status
 
 
 def check_pulse_budget_alerts(rows: List[Dict[str, Any]]) -> None:
@@ -863,18 +905,21 @@ def check_pulse_budget_alerts(rows: List[Dict[str, Any]]) -> None:
         assert r["status"] == 200 and isinstance(r["alerts"], list), r
         budget = [a for a in r["alerts"] if a.get("type") in ("budget_warning",
                                                               "budget_attention")]
-        assert len(budget) == 1, r
         if r["legacy_role"] in FINANCE:
+            assert len(budget) == 1, r
             assert budget[0]["type"] == "budget_warning", r
             assert expect[r["case"]] in budget[0]["message"], r
             continue
-        assert budget == [GENERIC_BUDGET_ALERT], r
+        # SEC-02-G (SEC71-04): P1 has ONE paid worker — not even the generic alert or the
+        # snapshot status (no band to bisect on); with 2+ paid see check_band_two_paid
+        assert budget == [], r
         for a in r["alerts"]:
             for k in _TEXT_KEYS:
                 assert not (isinstance(a.get(k), str) and MONEY_TEXT.search(a[k])), (r, a)
-        assert r["budget_snapshot"] == {"total_budget": 5000.0, "status": r["budget_snapshot"]
-                                        ["status"]}, r
-        seen.setdefault(r["mode"], []).append(json.dumps(budget, sort_keys=True))
+        assert r["budget_snapshot"] == {"total_budget": 5000.0}, r
+        snap = {k: float(v) if isinstance(v, (int, float)) else v
+                for k, v in (r["budget_snapshot"] or {}).items()}   # 5000 (generated) == 5000.0
+        seen.setdefault(r["mode"], []).append(json.dumps([budget, snap], sort_keys=True))
     for mode, texts in seen.items():
         assert len(set(texts)) == 1 and len(texts) == 4, (mode, texts)   # no threshold told
 
@@ -888,9 +933,17 @@ def check_alarms(rows: List[Dict[str, Any]]) -> None:
     from app.permissions.finance_read import GENERIC_BUDGET_ALERT, GENERIC_ALARM_RULE_NAME
     assert len(rows) == len(MODES) * 4 * 4
     for r in rows:
-        assert r["status"] == 200, r
+        # SEC-02-G (SEC71-04): a non-finance read of P1's money alarm by id is a 404
+        assert r["status"] == (404 if r["case"] == "one" and r["legacy_role"] not in FINANCE
+                               else 200), r
         budget = [e for e in r["events"] if e["type"] == "budget"]
-        assert budget, r                                  # the alarm is there for everyone
+        if r["legacy_role"] not in FINANCE:
+            # SEC-02-G (SEC71-04): P1 has ONE paid worker — its money alarm is not shown
+            # to a non-finance role at all (no band); see check_band_two_paid for 2+
+            assert budget == [] and r["money_text"] == [], r
+            assert not r["leaks_900"] and not r["leaks_124"], r
+            continue
+        assert budget, r
         if r["legacy_role"] in FINANCE:
             assert any(MONEY_TEXT_OK in e["message"] for e in budget
                        for MONEY_TEXT_OK in ("900.0%", "124.0%")), r
@@ -901,6 +954,45 @@ def check_alarms(rows: List[Dict[str, Any]]) -> None:
             assert e["message"] == GENERIC_BUDGET_ALERT["message"], r
             assert e["rule_name"] == GENERIC_ALARM_RULE_NAME and e["severity"] == "warning", r
             assert not {"metric_value", "threshold", "details"} & set(e["context_keys"]), r
+
+
+def check_band_two_paid(rows: List[Dict[str, Any]]) -> None:
+    """SEC-02-G (audit SEC71-04, addendum F; R31): with ONE paid worker on P1 a role
+    without the finance right gets no band of P1's labor cost at all — no snapshot status,
+    no budget alert, its money alarm is not in the list, the ?severity= filter, the counts,
+    the dashboard, nor readable by id (404). With TWO paid workers the band is allowed:
+    status, severity and counts are there (still without amount / percent / metric).
+    Finance roles always get everything."""
+    from app.permissions.finance_read import GENERIC_BUDGET_ALERT
+    assert len(rows) == len(MODES) * 2 * 4
+    for r in rows:
+        assert r["count_status"] == 200, r
+        # pulse/generate is R20-2B: finance roles and the Technical Manager (member) only
+        tm_or_fin = r["legacy_role"] in FINANCE or r["legacy_role"] == "SiteManager"
+        assert r["generate_status"] == (200 if tm_or_fin else 403), r
+        if not tm_or_fin:
+            r = {**r, "snapshot": None, "generate_budget_alerts": None}
+        if r["legacy_role"] in FINANCE:
+            assert r["count"]["critical"] >= 1 and r["critical_list"], r
+            assert r["one_status"] == 200 and "status" in r["snapshot"], r
+            assert r["generate_budget_alerts"], r
+            continue
+        if r["paid_workers"] == 1:
+            assert r["count"]["critical"] == 0 and r["count"]["total"] == 0, r
+            assert r["critical_list"] == [] and r["one_status"] == 404, r
+            assert r["dashboard_by_severity"] == {"critical": 0, "warning": 0, "info": 0}, r
+            if tm_or_fin:
+                assert r["snapshot"] == {"total_budget": 5000}, r
+                assert r["generate_budget_alerts"] == [], r
+        else:
+            assert r["count"]["critical"] >= 1 and r["one_status"] == 200, r
+            assert r["critical_list"] and all(
+                t == "budget" and sev == "critical" and m == GENERIC_BUDGET_ALERT["message"]
+                for t, sev, m in r["critical_list"]), r
+            assert r["dashboard_by_severity"]["critical"] >= 1, r
+            if tm_or_fin:
+                assert set(r["snapshot"]) == {"total_budget", "status"}, r
+                assert r["generate_budget_alerts"] == ["budget_attention"], r
 
 
 def check_mirrors(mirrors: List[Dict[str, Any]]) -> None:
@@ -1323,6 +1415,9 @@ def test_sec71_02_pulse_counts_only_paid_workers(monkeypatch):
 
     async def yes(*_a, **_k):
         return True
+    async def two_paid(_u, _sites):           # SEC71-04 is tested on its own below
+        return set()
+    monkeypatch.setattr(money_write, "single_paid_sites", two_paid)
     monkeypatch.setattr(money_write, "money_values_visible", no)
     monkeypatch.setattr(money_write, "budget_view_visible", yes)
     run = lambda: asyncio.run(handler(site_id="P1", user={"id": "sm"}, _sec02_request=None))
@@ -1400,6 +1495,9 @@ def test_sec71_03_budget_alert_text_gives_no_amount(monkeypatch):
             return tm
         monkeypatch.setattr(money_write, "money_values_visible", mv)
         monkeypatch.setattr(money_write, "budget_view_visible", bv)
+    async def two_paid(_u, _sites):           # SEC71-04 is tested on its own below
+        return set()
+    monkeypatch.setattr(money_write, "single_paid_sites", two_paid)
     run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=None))
     for tm in (True, False):                       # Technical Manager / any other role
         visible(False, tm)
@@ -1439,8 +1537,8 @@ def test_sec71_03_budget_alert_text_gives_no_amount(monkeypatch):
 def test_fg111_alarms_give_no_amount_metric_or_threshold():
     """SEC-02-G (FLOW Guard FG-111): every /alarms reader strips money for a caller
     without the finance right (R20-5M, registered); an alarm event loses metric_value /
-    threshold / details, and a money alarm gets the generic text, rule name and severity
-    — the same for an 80 % and a 100 % rule, stored or just evaluated."""
+    threshold / details, and a money alarm gets the generic text and rule name — the same
+    for an 80 % and a 100 % rule, stored or just evaluated."""
     from app.routes import alarms
     from app.permissions.finance_read import (strip_money, by_route, R20_5M, MONEY_TEXT,
                                               GENERIC_BUDGET_ALERT, GENERIC_ALARM_RULE_NAME)
@@ -1465,9 +1563,14 @@ def test_fg111_alarms_give_no_amount_metric_or_threshold():
                      "page": 1, "page_size": 50})
     b = strip_money({"items": [ev("Бюджет над 100%", "critical", 900.0, 100)], "total": 1,
                      "page": 1, "page_size": 50})
-    assert a == b, (a, b)                                 # no band, no amount
+    # no amount; the band (severity) is the rule's — shown only with 2+ paid workers on
+    # the site, else the alarm is left out (SEC71-04, test_sec71_04_* below)
+    sev = lambda x: {**x, "items": [{k: v for k, v in i.items() if k != "severity"}
+                                    for i in x["items"]]}
+    assert sev(a) == sev(b), (a, b)
+    assert (a["items"][0]["severity"], b["items"][0]["severity"]) == ("warning", "critical")
     e = a["items"][0]
-    assert e["message"] == GENERIC_BUDGET_ALERT["message"] and e["severity"] == "warning"
+    assert e["message"] == GENERIC_BUDGET_ALERT["message"]
     assert e["rule_name"] == GENERIC_ALARM_RULE_NAME
     assert e["context"] == {"entity_id": "P1", "entity_type": "project"}
     assert a["total"] == 1 and e["id"] == "e" and e["status"] == "active"
@@ -1481,6 +1584,78 @@ def test_fg111_alarms_give_no_amount_metric_or_threshold():
                          "events": [ev("x", "critical", 124.0, 80)]})
     assert not MONEY_TEXT.search(evald["events"][0]["message"]) and \
         "124" not in json.dumps(evald, ensure_ascii=False)
+
+
+def test_sec71_04_no_band_with_fewer_than_two_paid_workers(monkeypatch):
+    """SEC-02-G (audit SEC71-04 BLOCKING, addendum F; R31): the band of a hidden "spent"
+    (status on_track / warning / over_budget, green / yellow / red, the over / warning
+    counts, the biggest overrun) is bisectable by moving the budget, so it goes with the
+    spent. On the pulse: a site whose cumulative labor cost has fewer than 2 paid workers
+    gives a non-finance role no snapshot status and no budget alert — the same answer on
+    track and over budget; with 2+ paid workers the band stays."""
+    import asyncio
+    from app.permissions import money_write
+    from app.permissions.finance_read import r31_view
+
+    def pulse(status, alert_type):
+        return {"site_id": "P1", "date": "2026-11-06",
+                "alerts": [{"type": alert_type, "message": "Бюджетът е 85.0% изхарчен",
+                            "severity": "warning"},
+                           {"type": "no_report", "message": "Липсва дневен отчет",
+                            "severity": "info"}] if alert_type else
+                          [{"type": "no_report", "message": "Липсва дневен отчет",
+                            "severity": "info"}],
+                "workers": [{"worker_id": "t", "labor_cost": 90.0, "smr_types": ["Мазилка"]}],
+                "total_labor_cost": 90.0,
+                "budget_snapshot": {"total_budget": 10.0, "total_spent": 6200.0,
+                                    "burn_pct": 62000.0, "status": status}}
+
+    @money_write.strip_pulse_for_non_finance
+    async def handler(site_id: str, user: dict = None):
+        return current
+
+    def setup(fin, tm, single):
+        async def mv(*_a, **_k):
+            return fin
+
+        async def bv(*_a, **_k):
+            return tm
+
+        async def sp(_u, sites):
+            return {x for x in sites if x in single}
+        monkeypatch.setattr(money_write, "money_values_visible", mv)
+        monkeypatch.setattr(money_write, "budget_view_visible", bv)
+        monkeypatch.setattr(money_write, "single_paid_sites", sp)
+    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=None))
+    for tm in (True, False):
+        setup(False, tm, {"P1"})
+        answers = []
+        for status, alert in (("on_track", None), ("warning", "budget_warning"),
+                              ("over_budget", "budget_warning")):
+            current = pulse(status, alert)
+            v = run()
+            assert "status" not in (v.get("budget_snapshot") or {}), v
+            assert [a["type"] for a in v["alerts"]] == ["no_report"], v
+            answers.append(json.dumps(v, sort_keys=True, ensure_ascii=False))
+        assert len(set(answers)) == 1                     # nothing to bisect on
+    setup(False, True, set())                             # 2+ paid workers: band allowed
+    current = pulse("over_budget", "budget_warning")
+    v = run()
+    assert v["budget_snapshot"] == {"total_budget": 10.0, "status": "over_budget"}
+    assert [a["type"] for a in v["alerts"]] == ["budget_attention", "no_report"]
+    setup(True, False, {"P1"})
+    assert run() is current                               # finance: everything
+    # the budget screens: the band of a hidden spent goes with it (R31 rows / summary)
+    body = {"summary": {"total_planned_cost": 100, "total_actual_cost": 90,
+                        "overall_status": "over", "warning_count": 0, "over_count": 1,
+                        "biggest_overrun_activity": "Мазилка", "total_planned_hours": 8},
+            "activities": [{"name": "Мазилка", "planned_cost": 100, "actual_cost": 90,
+                            "status": "over", "planned_hours": 8}]}
+    one = r31_view(body, {"мазилка": {"t"}}, 1)
+    assert one["summary"] == {"total_planned_cost": 100, "total_planned_hours": 8}, one
+    assert one["activities"] == [{"name": "Мазилка", "planned_cost": 100, "planned_hours": 8}]
+    two = r31_view(body, {"мазилка": {"t", "u"}}, 2)
+    assert two["summary"]["overall_status"] == "over" and two["activities"][0]["status"] == "over"
 
 
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
@@ -1543,6 +1718,7 @@ def test_the_committed_evidence_satisfies_the_package():
     check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
     check_pulse_budget_alerts(data["pulse_budget_alerts"])
     check_alarms(data["alarms"])
+    check_band_two_paid(data["band_paid_workers"])
 
 
 def test_the_audit_scan_finds_no_money_for_non_finance_roles():
@@ -1624,6 +1800,25 @@ def test_the_audit_pulse_generate_probe_finds_nothing():
         assert "pulse/generate → 403" in out.stdout, out.stdout[-2000:]
 
 
+@pytest.mark.skipif(bool(_real_refusal()), reason=_real_refusal() or "ok")
+def test_the_audit_band_bisection_probe_finds_nothing():
+    """SEC-02-G (audit SEC71-04, addendum F): the audit's probe
+    docs/audit/probes/sec02/probe_sec71_d1_band_bisect.py (claude/audit-log; vendored
+    unchanged as tools/audit_probe_sec71_d1_band_bisect.py) moves P1's budget as the
+    Technical Manager and reads the generated pulse's status, in off/shadow/enforce. With
+    one paid worker on P1 there is no status to bisect on: FAILS none."""
+    probe = BACKEND / "tools" / "audit_probe_sec71_d1_band_bisect.py"
+    # the in-process tests above leave MONGO_URL on a closed port; the probe needs the real one
+    env = dict(os.environ, MONGO_URL=os.environ["W0_03_REAL_MONGO_URL"],
+               PYTHONPATH=str(BACKEND))
+    out = subprocess.run([sys.executable, str(probe)], cwd=str(BACKEND), env=env,
+                         capture_output=True, text=True, timeout=900)
+    assert out.returncode == 0, out.stderr[-2000:]
+    assert "FAILS: none" in out.stdout, out.stdout[-2000:]
+    for mode in MODES:
+        assert "%s: first answer" % mode in out.stdout, out.stdout[-2000:]
+
+
 def test_the_post_scan_finds_no_money_for_non_finance_roles():
     """SEC-02-E: tools/sec02_money_scan_post.py — every POST/PUT x 5 non-finance roles x
     3 modes, database restored after each call: no answer with money, except the Technical
@@ -1672,6 +1867,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
     check_pulse_budget_alerts(data["pulse_budget_alerts"])
     check_alarms(data["alarms"])
+    check_band_two_paid(data["band_paid_workers"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r.get("money_keys")) for r in data["rows"]} == \

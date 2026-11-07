@@ -1,7 +1,7 @@
 """
 Routes - Site Pulse (daily automated snapshots).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 
@@ -88,7 +88,8 @@ async def generate_all(
 
 @router.get("/pulse/summary")
 @strip_money_for_non_finance   # SEC-02-B (R20-5M)
-async def get_pulse_summary(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_pulse_summary(request: Request, date: Optional[str] = None,
+                            user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     items = await tenant.site_pulses.find(
@@ -99,9 +100,19 @@ async def get_pulse_summary(date: Optional[str] = None, user: dict = Depends(get
     total_hours = round(sum(p.get("total_hours", 0) for p in items), 2)
     total_labor = round(sum(p.get("total_labor_cost", 0) for p in items), 2)
     total_material = round(sum(p.get("total_material_cost", 0) for p in items), 2)
+    # SEC-02-G (audit SEC71-04; R31): no budget band of a single-paid-worker site for a
+    # caller without the finance right — its money alerts are left out (count included).
+    from app.permissions.money_write import (money_values_visible, single_paid_sites,
+                                             drop_band_alerts)
+    single = set()
+    if not await money_values_visible(request, user):
+        single = await single_paid_sites(user, [p.get("site_id") for p in items])
     all_alerts = []
     for p in items:
-        for a in p.get("alerts", []):
+        alerts = p.get("alerts", [])
+        if p.get("site_id") in single:
+            alerts = drop_band_alerts(alerts)
+        for a in alerts:
             all_alerts.append({**a, "site_name": p.get("site_name", ""), "site_id": p.get("site_id")})
 
     return {

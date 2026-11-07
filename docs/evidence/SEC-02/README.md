@@ -499,8 +499,28 @@ Route-ът е R20-2B (SiteManager член на проекта може да з�
 * скенерите обхождат `/alarms*` (GET) и `POST /alarms/evaluate` / `PUT …` (POST/PUT) със seed-натата аларма; текст с %/валута е hit. GET 5640 / 0 hits, POST/PUT 4575 / 0 hits;
 * контрапроба `sec02g_fg111_counter_check.txt`: при `5af530e` нито един reader не е в регистъра и отговорът е суров.
 
+### SEC71-04 (Допълнение F, БЛОКИРАЩО, ДОКАЗАНО) = дълг D1 — бисекция на лентата
+Лентата не беше груба. Техническият ръководител може да upsert-не бюджета на дейността и да генерира pulse. `budget_snapshot.status` (on_track / warning / over_budget) се смята спрямо **кумулативния** разход за труд на обекта. Пробата на одита `probe_sec71_d1_band_bisect.py` с бисекция по бюджета извежда **6196.90 при реални 6200.00 за 21 стъпки** в off/shadow/enforce (контрапроба при `02a1441`).
+
+Поправка (Р31, същото правило като SEC71-02): за роля без финансово право, когато разходът за труд в обхвата идва от **< 2 платени работника** (`money_write.single_paid_sites`: приключени сесии на обекта, кумулативно, работник с ненулево заплащане — същото, което сравняват pulse статусът и бюджетната аларма), **няма лента**:
+* pulse (`/sites/{id}/pulse`, `/pulse/range`, `/pulse/today`, `POST …/pulse/generate`): `budget_snapshot` остава само с `total_budget`, без `status`; бюджетните алерти (и генеричният) се махат. Отговорът е еднакъв при on_track, warning и over_budget;
+* `/pulse/summary`: паричните алерти на такъв обект и броят им се махат;
+* `/alarms`, `?severity=` филтърът, `/alarms/count`, `/alarms/dashboard` (by_severity, by_type, by_site, recent и тренд), `/alarms/{id}` (404), acknowledge / resolve (404), `POST /alarms/evaluate`: паричните аларми на такъв обект не съществуват за роля без финансово право (`money_alarm_exclusion` — `$nor` в самата заявка, така че и бройките са без тях). Отговорът е като при „няма данни“, еднакво за всички прагове;
+* бюджетните екрани (R31 редове / проектна сума): лента, изчислена от скрит „изхарчено“, се маха заедно с него — `status`, `*_status`, severity, health, color, броячите `warning_/over_/red_/yellow_/green_count`, `biggest_overrun_*` (`finance_read._BAND` в `_drop_actual`);
+* при **≥ 2 платени работника** лентата остава (сборът е разрешен по Р31): status, severity, бройки. Пак без сума, процент и metric. Затова severity на паричната аларма вече не се изравнява (FG-111 запазва генеричния текст и име);
+* финансовите роли виждат всичко.
+
+Доказателство:
+* пробата на одита е копирана **непроменена** като `backend/tools/audit_probe_sec71_d1_band_bisect.py` и се пуска като тест `test_the_audit_band_bisection_probe_finds_nothing`: off/shadow/enforce → статус няма, „derived spent 0.02 vs actual 6200.00“, **FAILS: none**. Контрапроба при `02a1441` — FAILS в трите режима (`sec02g_sec71_04_counter_check.txt`);
+* unit `test_sec71_04_no_band_with_fewer_than_two_paid_workers`: pulse изглед (TM и друга роля), on_track / warning / over_budget → еднакъв отговор без статус и алерт; 2 платени → статус и генеричен алерт; финансови → всичко; R31 изгледът маха `status` / `overall_status` / броячите / `biggest_overrun_activity` при 1 работник и ги пази при 2;
+* реален Mongo, harness `band_paid_workers`, 3 режима × SiteManager / Technician / Viewer / Accountant:
+  * 1 платен работник: count 0 / 0, `?severity=critical` празен, alarm по id → 404, dashboard by_severity нули, generate → snapshot само total_budget, без бюджетен алерт;
+  * 2 платени (втора платена сесия, добавена за проверката): count critical ≥ 1, severity critical с генеричен текст, status в snapshot, генеричен алерт;
+  * Accountant — пълно и в двата случая;
+* `check_alarms` и `check_pulse_budget_alerts` са затегнати: при P1 (1 платен) не-финансовите роли нямат бюджетна аларма / алерт / статус.
+
 ### Дълг / решение за Крум
-* **SEC-02-G-D1:** техническият ръководител запазва `budget_snapshot.status` (ok / warning / over_budget) — решение от SEC-02-E. Статусът казва в коя лента е обектът (>80 % / >100 %). Това е граница, не сума, но при един работник и видим бюджет дава долна граница на заплащането му. Същото важи за самото наличие на генеричния алерт / аларма, за филтъра `GET /alarms?severity=critical` (severity в базата е тази на правилото) и за бройките в `/alarms/count`. Дали не-финансовите роли да виждат лентата, е бизнес решение.
+* **SEC-02-G-D1 — ЗАТВОРЕН от SEC71-04 (Допълнение F):** лентата (status / severity / count / филтър / наличие на аларма или алерт) не се показва на роля без финансово право при < 2 платени работника; при ≥ 2 остава, както позволява Р31.
 
 ## Rollback
 

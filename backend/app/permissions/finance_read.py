@@ -446,8 +446,9 @@ _TEXT_KEYS = ("message", "text", "title", "detail", "description", "label")
 # SEC-02-G (FLOW Guard FG-111, addendum E): an alarm event (app.services.alarm_engine) —
 # "<обект>: бюджет 900.0% изхарчен" + context.metric_value / threshold. Without the finance
 # right: no metric_value / threshold / details for ANY alarm; a money alarm type gets the
-# generic text, a generic rule name (an admin's name may hold the threshold) and one
-# severity (two rules at 80 % / 100 % would tell the band).
+# generic text and a generic rule name (an admin's name may hold the threshold). Its
+# severity is the band: allowed with 2+ paid workers on the site (R31), else the alarm is
+# not shown at all (SEC71-04, money_write.money_alarm_exclusion).
 MONEY_ALARM_TYPES: FrozenSet[str] = frozenset(
     {"budget", "overhead", "pricing", "procurement", "custom"})
 GENERIC_ALARM_RULE_NAME = "Бюджетна аларма"
@@ -464,7 +465,9 @@ def money_free_alarm(d: dict) -> dict:
         out["context"] = {k: v for k, v in out["context"].items()
                           if k not in _ALARM_CONTEXT_HIDDEN}
     if out.get("type") in MONEY_ALARM_TYPES:
-        out.update({"message": GENERIC_BUDGET_ALERT["message"], "severity": "warning",
+        # SEC-02-G (SEC71-04): the severity (the band) stays — a money alarm of a site with
+        # fewer than 2 paid workers is not shown at all (money_write.money_alarm_exclusion)
+        out.update({"message": GENERIC_BUDGET_ALERT["message"],
                     "rule_name": GENERIC_ALARM_RULE_NAME})
     elif isinstance(out.get("message"), str) and MONEY_TEXT.search(out["message"]):
         out["message"] = "Има предупреждение — подробности при финансите"
@@ -527,8 +530,22 @@ def _is_actual(key: str) -> bool:
     return bool(_ACTUAL.search(k)) and not _PLANNED.search(k)
 
 
+# SEC-02-G (audit SEC71-04, addendum F; R31): a band computed from the hidden "spent"
+# (on_track / warning / over_budget, green / yellow / red, how many rows are over, which
+# one overran most) is bisectable — the Technical Manager can move the budget and watch it
+# flip — so it goes together with the spent it is computed from.
+_BAND = _re.compile(r"(^status$|_status$|severity|health|colou?r$|band|^level$|traffic|"
+                    r"^(red|yellow|green|warning|over|overrun|at_risk|on_track|over_budget)"
+                    r"_count$|overrun)")
+
+
+def _is_band(key: str) -> bool:
+    return bool(_BAND.search(key.lower()))
+
+
 def _drop_actual(d: dict) -> dict:
-    return {k: v for k, v in d.items() if not (isinstance(k, str) and _is_actual(k))}
+    return {k: v for k, v in d.items()
+            if not (isinstance(k, str) and (_is_actual(k) or _is_band(k)))}
 
 
 def r31_view(value, workers_by_smr: Dict[str, set], project_workers: int):

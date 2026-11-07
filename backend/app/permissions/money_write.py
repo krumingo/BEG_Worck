@@ -430,6 +430,7 @@ def strip_pulse_for_non_finance(fn):
             return result
         body = jsonable_encoder(result)
         own: dict = {}
+        single: dict = {}
 
         async def view(pulse):
             if not isinstance(pulse, dict):
@@ -453,6 +454,17 @@ def strip_pulse_for_non_finance(fn):
                     snap = pulse["budget_snapshot"]
                     out["budget_snapshot"] = {k: snap[k] for k in ("total_budget", "status")
                                               if k in snap}
+            # SEC-02-G (audit SEC71-04; R31): the snapshot status and the budget alerts are
+            # the band of the site's CUMULATIVE labor cost; with fewer than 2 paid workers
+            # behind it, moving the budget and watching the band bisects his pay — no band.
+            if site not in single:
+                single[site] = bool(await single_paid_sites(user, [site])) if site else True
+            if single[site]:
+                if isinstance(out.get("budget_snapshot"), dict):
+                    out["budget_snapshot"] = {k: v for k, v in out["budget_snapshot"].items()
+                                              if k == "total_budget"}
+                if isinstance(out.get("alerts"), list):
+                    out["alerts"] = drop_band_alerts(out["alerts"])
             out.pop("workers", None)
             return out
 
@@ -559,6 +571,42 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
         return {w for w, v in m.items() if round(v, 2) != 0}
     by_smr = {k: paid(m) for k, m in pay_by_smr.items()}
     return by_smr, len(paid(pay))
+
+
+async def single_paid_sites(user: dict, site_ids) -> set:
+    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (ended work
+    sessions — what the pulse snapshot status and the budget alarm compare to the budget)
+    comes from fewer than 2 paid workers. Their band (status / severity / alert) is not
+    shown to a caller without the finance right: moving the budget and watching the band
+    flip would bisect that one worker's pay."""
+    out = set()
+    for site in {x for x in site_ids if x}:
+        if (await project_labor_workers(user, site, "sessions"))[1] < 2:
+            out.add(site)
+    return out
+
+
+async def money_alarm_exclusion(user: dict) -> dict:
+    """SEC-02-G (SEC71-04): a Mongo filter part that leaves out the money alarms of the
+    single-paid-worker sites — for list, count, dashboard, the ?severity= filter, one event,
+    acknowledge / resolve. ``{}`` when there is nothing to leave out."""
+    from app.tenancy.data_access import TenantData
+    from app.permissions.finance_read import MONEY_ALARM_TYPES
+    tenant = TenantData.for_user(db, user)
+    types = sorted(MONEY_ALARM_TYPES)
+    sites = await tenant.alarm_events.distinct(
+        "site_id", {"org_id": user["org_id"], "type": {"$in": types}})
+    hidden = await single_paid_sites(user, sites)
+    if not hidden:
+        return {}
+    return {"$nor": [{"type": {"$in": types}, "site_id": {"$in": sorted(hidden)}}]}
+
+
+def drop_band_alerts(alerts) -> list:
+    """The alert list without its budget / money alerts (SEC71-04: no band at all)."""
+    from app.permissions.finance_read import MONEY_ALERT_TYPES
+    return [a for a in alerts or [] if not (isinstance(a, dict) and a.get("type") in
+                                            (MONEY_ALERT_TYPES | {"budget_attention"}))]
 
 
 async def r31_budget_view(user: dict, project_id: str, body, *, source: str = "sessions",
