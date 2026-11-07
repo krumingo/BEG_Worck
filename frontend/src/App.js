@@ -7,6 +7,8 @@ import PlatformAdminGuard from "@/components/PlatformAdminGuard";
 import PlatformLayout from "@/components/PlatformLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PlanSelectionPage from "@/pages/PlanSelectionPage";
 import BillingSettingsPage from "@/pages/BillingSettingsPage";
 import BillingSuccessPage from "@/pages/BillingSuccessPage";
@@ -196,6 +198,9 @@ function AppRoutes() {
       {/* Public company routes */}
       <Route path="/login" element={<CompanyPublicRoute><LoginPage /></CompanyPublicRoute>} />
       <Route path="/signup" element={<CompanyPublicRoute><SignupPage /></CompanyPublicRoute>} />
+      {/* AUTH-01: password recovery. The reset link works with or without a session. */}
+      <Route path="/forgot-password" element={<CompanyPublicRoute><ForgotPasswordPage /></CompanyPublicRoute>} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/billing/cancel" element={<BillingCancelPage />} />
       {/* Public offer review - no auth needed */}
       <Route path="/offers/review/:reviewToken" element={<OfferReviewPage />} />
