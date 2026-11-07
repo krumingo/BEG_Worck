@@ -428,3 +428,43 @@ def test_o16_reader_interleaved_with_publish(monkeypatch):
         print("O16 before", before, "| reader interleaved with publish ->", during, "| allocate", w.status_code, "| after", after)
         assert during in (before, after), f"O16 FAIL: reader saw {during}"
     _run(monkeypatch, "enforce", scenario)
+
+
+@pytest.mark.parametrize("mode", ["off", "shadow", "enforce"])
+def test_o17_reader_paused_after_pointer_read(monkeypatch, mode):
+    """O17 (OH74-05 fix at 45178ac): the reader is frozen right AFTER it read the publish
+    pointers (``_read_current_pointers``) while a full allocate of S2 stages + publishes,
+    then resumes. Must see the old value or the new one — never 0, never both."""
+    async def scenario(c, op):
+        from app.services import overhead_lifecycle as ol
+        from app.services.project_pnl import compute_project_pnl
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        s1 = (await _compute(c, "2026-10-01", "2026-10-31")).json()
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        await _cost(c, cat["id"], date="2026-10-20", amount=400.0)
+        s2 = (await _compute(c, "2026-10-01", "2026-10-31")).json()
+        before = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        reached, proceed = asyncio.Event(), asyncio.Event()
+        orig = ol._read_current_pointers
+        armed = {"on": True}
+
+        async def paused(tenant):
+            out = await orig(tenant)
+            if armed["on"]:
+                armed["on"] = False
+                reached.set()
+                await asyncio.wait_for(proceed.wait(), 15)
+            return out
+        monkeypatch.setattr(ol, "_read_current_pointers", paused)
+        reader = asyncio.create_task(compute_project_pnl(ORG, PROJ_A))
+        await asyncio.wait_for(reached.wait(), 15)
+        w = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate", json={"method": "PersonDays"}, headers=_h(key=_key()))
+        proceed.set()
+        during = (await reader)["expense"]["overhead"]
+        after = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
+        print("O17", mode, "before", before, "| reader paused after pointer read ->", during, "| allocate", w.status_code, "| after", after)
+        assert w.status_code == 200 and before != after
+        assert during in (before, after), f"O17 FAIL: reader saw {during}"
+    _run(monkeypatch, mode, scenario)
