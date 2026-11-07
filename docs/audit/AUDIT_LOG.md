@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
@@ -137,8 +137,8 @@ Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b
 | #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #64 | `frontend/src/components/DashboardLayout.js` |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 
 Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
 
@@ -1007,10 +1007,10 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 | #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 
 
 ---
@@ -1081,7 +1081,7 @@ The comment on #69 still applies.
 | Pair | Status |
 |---|---|
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
@@ -1123,10 +1123,10 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 
 | Pair | Status |
 |---|---|
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
-| #55 5C | `4a3d15c` | **FINDINGS (blocking): C26E-1 Р28 modes diverge with the real company-scope SiteManager assignment** (enforce lets non-member SM write on any project); C26D-L1 fixed; probes PASS | 2026-11-06 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 
 
 ---
@@ -1867,7 +1867,7 @@ Merge-tree, `e733c66` against each:
 |---|---|
 | #69, #70 | clean |
 | #56 | conflict: `store.py` (recipe above) + the A2B inventory |
-| #55, #71 | conflict: the A2B inventory only |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 
 **Rollout risk (not a code defect; for Krum).** If a production or staging database already has duplicate idempotency rows or `(tenant_id, sequence)` events, which are likely given IDEM-IDX-1 and the `record_event` debt, the **app refuses to start** after deploy, by design. Before deploying, run the dry run `scripts/w0_04_bootstrap_audit_indexes.py` against a copy of the data, as the HANDOFF says.
 
@@ -1946,7 +1946,7 @@ Gates:
 | #71 `f17f7e5` | conflict: `all_reports.py`, **`labor_smr.py`**, A2B inventory |
 | #69 `6d43284` | conflict: **`labor_smr.py`** |
 | #70 `31ed258` | conflict: `project_pnl.py` |
-| #55, #72 | clean |
+| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
 
 - The HANDOFF names `expected_actual` / `activity_budgets` / `project_pnl` / `all_reports` with respect to #71 only.
 - It does not mention that `labor_smr.py` `sync-from-work-reports` was rewritten by both #69 and #73:
@@ -1954,3 +1954,45 @@ Gates:
   - #73, branched from main, keeps `delete_many` (`labor_smr.py:126`) and has no SEC guard.
 - A merge that takes #73's version would bring back the hard delete of synced labor rows (CLAUDE.md §2.9) and drop the R16 guard.
 - The LAB-01 pricing must be ported into #69's reversal-based sync.
+
+
+## #55 5C-C26f @ `3777d71` — 2026-11-07 ~00:30 UTC — FINDINGS (1)
+
+Delta:
+- `ensure_project_relation`: one rule in both modes. When only project-bound roles grant the action, an in-date `project_team` row is needed on every project **touched**. Enforce: `ensure_enforce_project_relation` runs after the scope gate.
+- The C26e rule "no warehouse location for project-bound roles" is dropped.
+- F-16: the canonical GETs go through `_legacy_read` / `_read_project_relation`.
+- R32: `WAREHOUSE_VALUE_ROLES = {"warehouse"}` sees warehouse values.
+- FG-53: a move from a project bucket binds `project_id` to the source.
+- FG-55: no `parent_project_id` in 422 contexts.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + c23 | **713 passed** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/221 |
+| A1 | 0/448 |
+| R0 | 814 |
+
+Probes:
+- c24, c24b, c25, c26, c26b, c26d: all pass.
+- **C26E-1 CLOSED (PROVED),** `test_probe_pr55_c26e_real_assignments.py` with the real company-scope `site_manager` grant: non-member accept / consume / return → **DENIED `R28_PROJECT_RELATION_REQUIRED` in off AND enforce**.
+- **R32,** `probe_pr55_c26a_value_leak.py` in enforce and off, as the Warehousekeeper:
+  - stock (`total_value`, `layers.unit_value`), history (`rows.unit_value`) and the dispatch response (`unit_value`, `layer_allocations`) now show values. That is intended under R32; the probe's "LEAKS" label now reflects R32, not a defect.
+  - **integrity-warnings stay hidden** (`values_hidden=True`).
+  - Open question for Krum: history and stock rows of *project* buckets (consumption and фира values) are also visible to the keeper. Is that "project finance" under R32?
+
+**C26F-1 (MEDIUM-HIGH): dropping the location rule opens warehouse-only commands to any SiteManager. PROVED** with `docs/audit/probes/pr55/test_probe_pr55_c26f_warehouse_only.py`.
+- Setup: the real company-scope `site_manager` grant, member of **no** project.
+
+| Command | off | enforce |
+|---|---|---|
+| `quarantine_entry` at the central warehouse (WH free → WH quarantine) | **ALLOWED** (+1 row) | **ALLOWED** (+1 row) |
+| accept of a warehouse → warehouse transfer (`accept_delivery` into WH_B) | **ALLOWED** (+1 row) | **ALLOWED** (+1 row) |
+
+- Cause: the `site_manager` catalog holds `warehouse.quarantine_entry` and `warehouse.accept_delivery`. `ensure_project_relation` checks only the projects a command touches. A warehouse-only command touches none, so no relation is required.
+- At `4a3d15c` (C26e), off denied these ("location outside the role's project scope"); enforce already allowed them through the company scope.
+- So C26f now makes the two modes agree on the **wider** answer: a site role can quarantine central stock and take custody of an inter-warehouse transfer (FLOW-009 / CLAUDE.md §16).
+- Fix direction: for project-bound granting roles, require that the command touches at least one project, and the relation on all of them. In other words, keep the C26e location rule, in both modes.
