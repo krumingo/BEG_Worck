@@ -94,10 +94,14 @@ async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str
     if kw.replay_id:
         doc = await coll.find_one({"id": kw.replay_id}, {"_id": 0})
         return {"archived": True, "deleted": False, "id": kw.replay_id, "record": doc}
-    if existing.get("status") == STATUS_ARCHIVED:
+    # OH74-02: THIS operation (same key) already archived it and was interrupted before
+    # its audit — the retry resumes and completes the audit, with no second status change
+    resumed = (existing.get("status") == STATUS_ARCHIVED
+               and existing.get("archive_operation_key") == kw.key)
+    if existing.get("status") == STATUS_ARCHIVED and not resumed:
         raise await kw.refuse(HTTPException(status_code=409, detail={
             "error_code": "ALREADY_ARCHIVED", "message": "Записът вече е архивиран"}))
-    if usage:
+    if usage and not resumed:
         raise await kw.refuse(HTTPException(status_code=409, detail={
             "error_code": "OVERHEAD_RECORD_IN_USE",
             "message": "Записът е използван и не може да бъде изтрит или архивиран",
@@ -110,10 +114,12 @@ async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str
             "archived_by_user_id": user["id"],
             "archived_by_name": user.get("name", user.get("email", "")),
             "archive_reason": reason,
+            "archive_operation_key": kw.key,     # OH74-02: whose archive this is
             "updated_at": now,
         }
-        won = await coll.update_one({"id": record_id, "status": NOT_ARCHIVED}, {"$set": archive})
-        if won.modified_count != 1:
+        won = None if resumed else await coll.update_one(
+            {"id": record_id, "status": NOT_ARCHIVED}, {"$set": archive})
+        if won is not None and won.modified_count != 1:
             # OH01-2: a concurrent request archived it first — this one wrote nothing
             # and must not claim (or audit) the archive.
             raise HTTPException(status_code=409, detail={
@@ -126,9 +132,12 @@ async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str
                 structured_diff={"status": {"before": existing.get("status"),
                                             "after": STATUS_ARCHIVED}},
                 idempotency_key=kw.key)
+
+        async def _legacy_audit():
             await log_audit(user["org_id"], user["id"], user["email"], "archived", entity_type,
                             record_id, {"reason": reason})
         await kw.wf.step("audit", _audit)
+        await kw.wf.step("legacy_audit", _legacy_audit)
         kw.result_id = record_id
     doc = await coll.find_one({"id": record_id}, {"_id": 0})
     return {"archived": True, "deleted": False, "id": record_id, "record": doc}
@@ -548,6 +557,9 @@ async def compute_overhead_snapshot(
     rate_per_person_day = round(total_overhead / total_person_days, 2) if total_person_days > 0 else 0
     rate_per_hour = round(total_overhead / total_hours, 2) if total_hours > 0 else 0
     
+    # OH74-01: the per-project basis is FROZEN with the totals — an allocation uses only it
+    allocation_basis = await _allocation_basis(tenant, org_id, period_start, period_end)
+
     # 6. Create immutable snapshot — FG-86: as the new version of the period's snapshot
     await _refuse_overlap(tenant, period_start, period_end)       # D6: before any write
     kw = await KeyedWrite.begin(db, user, "overhead.snapshot.compute", idempotency_key,
@@ -572,6 +584,9 @@ async def compute_overhead_snapshot(
         "computed_by_user_id": user["id"],
         "computed_by_name": user.get("name", user.get("email", "")),
         "notes": data.notes,
+        # stored as lists: a project id is data, never a document key
+        "allocation_basis": {m: [{"project_id": k, "basis": v} for k, v in sorted(b.items())]
+                             for m, b in allocation_basis.items()},
         "active_period_key": "%s|%s" % (org_id, period_key(period_start, period_end)),
         "superseded_by": None,
     }
@@ -614,6 +629,8 @@ async def compute_overhead_snapshot(
                                  "version": snapshot["snapshot_version"],
                                  "total_overhead": total_overhead, "method": data.method},
                 idempotency_key=kw.key)
+
+        async def _legacy_audit():
             await log_audit(user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot", sid, {
                 "period": f"{period_start} - {period_end}",
                 "total_overhead": total_overhead,
@@ -621,6 +638,7 @@ async def compute_overhead_snapshot(
                 "snapshot_version": snapshot["snapshot_version"],
             })
         await kw.wf.step("audit", _audit)
+        await kw.wf.step("legacy_audit", _legacy_audit)
         kw.result_id = sid
     return {k: v for k, v in snapshot.items() if k != "_id"}
 
@@ -661,6 +679,70 @@ async def get_overhead_snapshot(snapshot_id: str, user: dict = Depends(require_m
     return snapshot
 
 
+async def _allocation_basis(tenant: TenantData, org_id: str, period_start: str,
+                            period_end: str) -> dict:
+    """OH74-01: the per-project basis of BOTH methods for one period, read once. Frozen in
+    the snapshot at compute time, so an allocation never mixes a frozen denominator with
+    numerators read later."""
+    pd = await tenant.attendance_entries.aggregate([
+        {"$match": {"org_id": org_id, "date": {"$gte": period_start, "$lte": period_end},
+                    "status": {"$in": ["Present", "Late"]},
+                    "project_id": {"$exists": True, "$ne": None}}},
+        {"$group": {"_id": "$project_id",
+                    "person_days": {"$addToSet": {"user_id": "$user_id", "date": "$date"}}}},
+        {"$project": {"project_id": "$_id", "count": {"$size": "$person_days"}}},
+    ]).to_list(None)
+    hrs = await tenant.work_reports.aggregate([
+        {"$match": {"org_id": org_id, "date": {"$gte": period_start, "$lte": period_end},
+                    "status": {"$in": ["Submitted", "Approved"]}}},
+        {"$group": {"_id": "$project_id", "total_hours": {"$sum": "$total_hours"}}},
+    ]).to_list(None)
+    return {
+        "PersonDays": {r["project_id"]: r["count"] for r in pd if r.get("project_id")},
+        "Hours": {r["_id"]: round(r["total_hours"], 2) for r in hrs if r.get("_id")},
+    }
+
+
+async def _person_days_total(tenant: TenantData, org_id: str, start: str, end: str) -> int:
+    """The snapshot's person-day total, read now (the rule of compute step 3)."""
+    r = await tenant.attendance_entries.aggregate([
+        {"$match": {"org_id": org_id, "date": {"$gte": start, "$lte": end},
+                    "status": {"$in": ["Present", "Late"]}}},
+        {"$group": {"_id": {"user_id": "$user_id", "date": "$date"}}},
+        {"$count": "total"}]).to_list(None)
+    return r[0]["total"] if r else 0
+
+
+async def _hours_total(tenant: TenantData, org_id: str, start: str, end: str) -> float:
+    """The snapshot's hours total, read now (the rule of compute step 4)."""
+    r = await tenant.work_reports.aggregate([
+        {"$match": {"org_id": org_id, "date": {"$gte": start, "$lte": end},
+                    "status": {"$in": ["Submitted", "Approved"]}}},
+        {"$group": {"_id": None, "total_hours": {"$sum": "$total_hours"}}}]).to_list(None)
+    return round(r[0]["total_hours"], 2) if r else 0
+
+
+def _split_cents(total_overhead: float, basis: dict, total_basis: float):
+    """OH74-01: ``total_overhead`` split by share of ``total_basis`` in whole cents
+    (largest remainder), plus the UNALLOCATED remainder (basis outside any project —
+    FLOW-024 keeps "остатъка", it never disappears). Returns ({project: amount}, unallocated);
+    their sum is EXACTLY the snapshot total."""
+    total_c = int(round(total_overhead * 100))
+    denom = max(float(total_basis), float(sum(basis.values())))
+    raw = {pid: total_c * b / denom for pid, b in sorted(basis.items())}
+    raw_unalloc = total_c - sum(raw.values())
+    buckets = dict(raw)
+    if raw_unalloc > 1e-9:
+        buckets[None] = raw_unalloc
+    cents = {k: int(v) for k, v in buckets.items()}
+    rest = total_c - sum(cents.values())
+    for k in sorted(buckets, key=lambda k: (-(buckets[k] - cents[k]), str(k)))[:rest]:
+        cents[k] += 1
+    assert sum(cents.values()) == total_c, (cents, total_c)
+    unallocated = cents.pop(None, 0)
+    return {k: v / 100 for k, v in cents.items()}, unallocated / 100
+
+
 @router.post("/overhead/snapshots/{snapshot_id}/allocate")
 async def allocate_overhead_to_projects(
     snapshot_id: str,
@@ -686,107 +768,61 @@ async def allocate_overhead_to_projects(
     method = data.method
     
     # OH-01: nothing is deleted here — the previous version is superseded below.
-    allocations = []
+    # OH74-01: numerators AND denominator from ONE frozen basis — the snapshot's own.
+    total_key = "total_person_days" if method == "PersonDays" else "total_hours"
+    total_basis = snapshot.get(total_key) or 0
+    if total_basis == 0:
+        raise HTTPException(status_code=400, detail="No person-days to allocate"
+                            if method == "PersonDays" else "No hours to allocate")
+    frozen_rows = (snapshot.get("allocation_basis") or {}).get(method)
+    frozen = None if frozen_rows is None else {r["project_id"]: r["basis"] for r in frozen_rows}
+    if frozen is None:
+        # a pre-OH74 snapshot has no frozen basis: use the current source only when its
+        # total still IS the snapshot's total — otherwise the source changed after the
+        # snapshot and a new snapshot is required (never 200 % of the overhead)
+        current = (await _allocation_basis(tenant, org_id, period_start, period_end))[method]
+        now_total = await (_person_days_total if method == "PersonDays" else _hours_total)(
+            tenant, org_id, period_start, period_end)
+        if round(float(now_total), 2) != round(float(total_basis), 2):
+            raise HTTPException(status_code=409, detail={
+                "error_code": "SNAPSHOT_SOURCE_CHANGED",
+                "message": "Данните за периода са променени след snapshot-а; "
+                           "изчислете нов snapshot и разпределете него",
+                "snapshot_basis": total_basis, "current_basis": now_total})
+        frozen = current
+    amounts, unallocated = _split_cents(total_overhead, frozen, total_basis)
+    proj_list = await tenant.projects.find(
+        {"id": {"$in": sorted(amounts)}}, {"_id": 0, "id": 1, "code": 1, "name": 1}).to_list(None)
+    projects = {p["id"]: p for p in proj_list}
     now = datetime.now(timezone.utc).isoformat()
-    
-    if method == "PersonDays":
-        total_person_days = snapshot["total_person_days"]
-        if total_person_days == 0:
-            raise HTTPException(status_code=400, detail="No person-days to allocate")
-        
-        pipeline = [
-            {"$match": {
-                "org_id": org_id,
-                "date": {"$gte": period_start, "$lte": period_end},
-                "status": {"$in": ["Present", "Late"]},
-                "project_id": {"$exists": True, "$ne": None}
-            }},
-            {"$group": {
-                "_id": "$project_id",
-                "person_days": {"$addToSet": {"user_id": "$user_id", "date": "$date"}}
-            }},
-            {"$project": {"project_id": "$_id", "count": {"$size": "$person_days"}}}
-        ]
-        result = await tenant.attendance_entries.aggregate(pipeline).to_list(None)
-        
-        project_ids = [r["project_id"] for r in result]
-        projects = {}
-        if project_ids:
-            proj_cursor = tenant.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "code": 1, "name": 1})
-            proj_list = await proj_cursor.to_list(None)
-            projects = {p["id"]: p for p in proj_list}
-        
-        for r in result:
-            proj_id = r["project_id"]
-            proj_days = r["count"]
-            allocated = round(total_overhead * (proj_days / total_person_days), 2)
-            proj_info = projects.get(proj_id, {})
-            alloc = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "overhead_snapshot_id": snapshot_id,
-                "project_id": proj_id,
-                "project_code": proj_info.get("code", ""),
-                "project_name": proj_info.get("name", ""),
-                "basis_person_days": proj_days,
-                "basis_hours": 0,
-                "allocated_amount": allocated,
-                "created_at": now,
-            }
-            allocations.append(alloc)
-    else:
-        total_hours = snapshot["total_hours"]
-        if total_hours == 0:
-            raise HTTPException(status_code=400, detail="No hours to allocate")
-        
-        pipeline = [
-            {"$match": {
-                "org_id": org_id,
-                "date": {"$gte": period_start, "$lte": period_end},
-                "status": {"$in": ["Submitted", "Approved"]}
-            }},
-            {"$group": {
-                "_id": "$project_id",
-                "total_hours": {"$sum": "$total_hours"}
-            }}
-        ]
-        result = await tenant.work_reports.aggregate(pipeline).to_list(None)
-        
-        project_ids = [r["_id"] for r in result if r["_id"]]
-        projects = {}
-        if project_ids:
-            proj_cursor = tenant.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "code": 1, "name": 1})
-            proj_list = await proj_cursor.to_list(None)
-            projects = {p["id"]: p for p in proj_list}
-        
-        for r in result:
-            proj_id = r["_id"]
-            if not proj_id:
-                continue
-            proj_hours = r["total_hours"]
-            allocated = round(total_overhead * (proj_hours / total_hours), 2)
-            proj_info = projects.get(proj_id, {})
-            alloc = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "overhead_snapshot_id": snapshot_id,
-                "project_id": proj_id,
-                "project_code": proj_info.get("code", ""),
-                "project_name": proj_info.get("name", ""),
-                "basis_person_days": 0,
-                "basis_hours": round(proj_hours, 2),
-                "allocated_amount": allocated,
-                "created_at": now,
-            }
-            allocations.append(alloc)
-    
+    allocations = []
+    for proj_id, allocated in sorted(amounts.items()):
+        proj_info = projects.get(proj_id, {})
+        allocations.append({
+            "id": str(uuid.uuid4()),
+            "org_id": org_id,
+            "overhead_snapshot_id": snapshot_id,
+            "project_id": proj_id,
+            "project_code": proj_info.get("code", ""),
+            "project_name": proj_info.get("name", ""),
+            "basis_person_days": frozen[proj_id] if method == "PersonDays" else 0,
+            "basis_hours": frozen[proj_id] if method != "PersonDays" else 0,
+            "allocated_amount": allocated,
+            "created_at": now,
+        })
+    # OH74-01: checked before ANY write — the version's allocated + unallocated IS the snapshot
+    if int(round(sum(a["allocated_amount"] for a in allocations) * 100)) + \
+            int(round(unallocated * 100)) != int(round(total_overhead * 100)):
+        raise HTTPException(status_code=500, detail={"error_code": "ALLOCATION_TOTAL_MISMATCH"})
+
     return await _write_allocation_version(tenant, user, snapshot_id, method, allocations,
-                                           idempotency_key)
+                                           idempotency_key, unallocated)
 
 
 async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id: str,
                                     method: str, allocations: list,
-                                    idempotency_key: Optional[str]) -> dict:
+                                    idempotency_key: Optional[str],
+                                    unallocated: float = 0.0) -> dict:
     """OH-01: version N+1 of the snapshot's allocation. Order: the previous version is
     marked ``superseded_by`` FIRST, then the new rows are inserted — a report never sees two
     versions at once (the sum is never doubled). Each step runs once per Idempotency-Key."""
@@ -826,7 +862,8 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
             cas = {"id": snapshot_id, "allocation_version": prev} if prev is not None \
                 else {"id": snapshot_id, "allocation_version": {"$exists": False}}
             won = await tenant.overhead_snapshots.update_one(
-                cas, {"$set": {"allocation_version": nxt, "current_allocation_batch_id": batch_id}})
+                cas, {"$set": {"allocation_version": nxt, "current_allocation_batch_id": batch_id,
+                               "current_unallocated_amount": unallocated}})
             if won.modified_count != 1:
                 raise HTTPException(status_code=409, detail={
                     "error_code": "ALLOCATION_VERSION_CONFLICT",
@@ -873,8 +910,10 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
                 reason="overhead allocation version %d of snapshot %s" % (version, snapshot_id),
                 structured_diff={"overhead_snapshot_id": snapshot_id, "version": version,
                                  "method": method, "project_count": len(allocations),
-                                 "total_allocated": total},
+                                 "total_allocated": total, "unallocated": unallocated},
                 idempotency_key=kw.key)
+
+        async def _legacy_audit():
             await log_audit(user["org_id"], user["id"], user["email"], "allocated", "overhead_snapshot", snapshot_id, {
                 "method": method,
                 "project_count": len(allocations),
@@ -883,10 +922,12 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
                 "allocation_batch_id": batch_id,
             })
         await kw.wf.step("audit", _audit)
+        await kw.wf.step("legacy_audit", _legacy_audit)
         kw.result_id = batch_id
 
     return {"allocations": [{k: v for k, v in a.items() if k != "_id"} for a in allocations],
-            "allocation_batch_id": batch_id, "allocation_version": version}
+            "allocation_batch_id": batch_id, "allocation_version": version,
+            "unallocated_amount": unallocated}
 
 
 @router.get("/overhead/allocations")

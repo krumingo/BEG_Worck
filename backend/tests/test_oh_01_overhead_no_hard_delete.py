@@ -734,3 +734,143 @@ def test_18_startup_and_onboarding_create_the_overhead_indexes():
     onboarding = (root / "app" / "tenancy" / "onboarding.py").read_text(encoding="utf-8")
     assert "await ensure_overhead_indexes(db)" in server
     assert "await ensure_overhead_indexes(op_db)" in onboarding
+
+
+# ═══════════════════════════════════════════════════════════════════ 19. OH74-01
+async def _alloc_sum(op, sid):
+    rows = await op.project_overhead_allocations.find(
+        {"overhead_snapshot_id": sid, "superseded_by": None}, {"_id": 0}).to_list(None)
+    return int(round(sum(r["allocated_amount"] for r in rows) * 100)), rows
+
+
+@pytest.mark.parametrize("method", ["Hours", "PersonDays"])
+def test_19_late_source_data_never_changes_the_allocated_total(monkeypatch, backend, mode, method):
+    """OH74-01 (Codex): a report/attendance added AFTER the snapshot made an Hours
+    allocation total 200 for a snapshot of 100 (current numerators / frozen denominator).
+    Now the allocation uses the snapshot's FROZEN basis: total == snapshot, exactly."""
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=100.0)
+        snap = await _snapshot(c)
+        assert snap["total_overhead"] == 100.0
+        # late data in the same period, after the snapshot
+        await op.work_reports.insert_one({"id": "wr-late", "org_id": ORG, "project_id": PROJ_A,
+                                          "date": "2026-10-07", "status": "Approved",
+                                          "total_hours": 40})
+        await op.attendance_entries.insert_many([
+            {"id": "att-late-%d" % i, "org_id": ORG, "user_id": u, "date": "2026-10-07",
+             "status": "Present", "project_id": PROJ_A}
+            for i, u in enumerate(("owner", "admin", "accountant", "sitemanager"))])
+        r = await c.post(f"/api/overhead/snapshots/{snap['id']}/allocate",
+                         json={"method": method}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        total_c, rows = await _alloc_sum(op, snap["id"])
+        assert total_c + int(round(r.json()["unallocated_amount"] * 100)) == 10000
+        assert total_c == 10000                      # every frozen basis row has a project
+        by_p = {x["project_id"]: x["allocated_amount"] for x in rows}
+        assert by_p == {PROJ_A: 75.0, PROJ_B: 25.0}  # 30h/10h and 3/1 person-days, frozen
+        assert await _pnl_overhead(op) == 100.0
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_20_legacy_snapshot_without_frozen_basis_refuses_a_changed_source(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        legacy = {"id": "legacy-s", "org_id": ORG, "period_start": "2026-10-01",
+                  "period_end": "2026-10-31", "method": "Hours", "total_overhead": 100.0,
+                  "total_person_days": 4, "total_hours": 40,
+                  "computed_at": "2026-10-31T00:00:00"}
+        await op.overhead_snapshots.insert_one(dict(legacy))
+        url = "/api/overhead/snapshots/legacy-s/allocate"
+        # source unchanged -> allowed, exact total
+        r = await c.post(url, json={"method": "Hours"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert (await _alloc_sum(op, "legacy-s"))[0] == 10000
+        # source changed after the snapshot -> 409, nothing written
+        await op.work_reports.insert_one({"id": "wr-late", "org_id": ORG, "project_id": PROJ_A,
+                                          "date": "2026-10-07", "status": "Approved",
+                                          "total_hours": 40})
+        before = await _dump(op)
+        n_keys = await op.audit_idempotency.count_documents({})
+        r = await c.post(url, json={"method": "Hours"}, headers=_h(key=_key()))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SNAPSHOT_SOURCE_CHANGED"
+        assert await _dump(op) == before
+        assert await op.audit_idempotency.count_documents({}) == n_keys
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_21_cents_are_split_exactly_and_the_remainder_is_kept(monkeypatch, backend, mode):
+    """100.00 over three equal bases -> 33.34 + 33.33 + 33.33 (largest remainder); basis
+    outside any project stays an explicit unallocated remainder (FLOW-024: "остатъка")."""
+    async def scenario(c, op):
+        await op.projects.insert_one({"id": "P-OH01-C", "org_id": ORG, "code": "C",
+                                      "name": "Project C", "status": "Active"})
+        base = {"org_id": ORG, "method": "Hours", "total_overhead": 100.0,
+                "total_person_days": 0, "computed_at": "2026-10-31T00:00:00",
+                "superseded_by": None}
+        await op.overhead_snapshots.insert_one({**base, "id": "s3", "period_start": "2025-01-01",
+            "period_end": "2025-01-31", "total_hours": 3, "allocation_basis": {"Hours": [
+                {"project_id": p, "basis": 1} for p in (PROJ_A, PROJ_B, "P-OH01-C")]}})
+        r = await c.post("/api/overhead/snapshots/s3/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        amounts = sorted(a["allocated_amount"] for a in r.json()["allocations"])
+        assert amounts == [33.33, 33.33, 33.34] and r.json()["unallocated_amount"] == 0
+        # 10 h in the snapshot, only 7 h on projects -> 30.00 stays unallocated, total exact
+        await op.overhead_snapshots.insert_one({**base, "id": "s4", "period_start": "2025-02-01",
+            "period_end": "2025-02-28", "total_hours": 10, "allocation_basis": {"Hours": [
+                {"project_id": PROJ_A, "basis": 4}, {"project_id": PROJ_B, "basis": 3}]}})
+        r = await c.post("/api/overhead/snapshots/s4/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert {a["project_id"]: a["allocated_amount"] for a in body["allocations"]} == {
+            PROJ_A: 40.0, PROJ_B: 30.0}
+        assert body["unallocated_amount"] == 30.0
+        s4 = await op.overhead_snapshots.find_one({"id": "s4"})
+        assert s4["current_unallocated_amount"] == 30.0
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 22. OH74-02
+def test_22_interrupted_archive_is_completed_by_the_same_key(monkeypatch, backend, mode):
+    """OH74-02 (Codex): the status was set, the AuditEvent failed, and the same-key retry got
+    409 ALREADY_ARCHIVED with 0 events. Now the retry resumes its OWN operation: exactly one
+    canonical event, one legacy row, no second status change; another key is still 409."""
+    async def scenario(c, op):
+        from app.routes import overhead
+        cat = await _category(c, "Lone")
+        real = overhead.audit_overhead_event
+        calls = {"n": 0}
+
+        async def flaky(*a, **k):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("audit store down")
+            return await real(*a, **k)
+        monkeypatch.setattr(overhead, "audit_overhead_event", flaky)
+        key = _key()
+        url = f"/api/overhead/categories/{cat['id']}?reason=dup"
+        try:
+            r = await c.delete(url, headers=_h(key=key))
+            assert r.status_code >= 500, r.text
+        except RuntimeError:
+            pass                                    # the in-process transport re-raises it
+        doc = await op.overhead_categories.find_one({"id": cat["id"]})
+        assert doc["status"] == "archived"
+        archived_at = doc["archived_at"]
+        assert await op.audit_events.count_documents(
+            {"action": "overhead.overhead_category.archived"}) == 0
+        r = await c.delete(url, headers=_h(key=key))           # same key: resume
+        assert r.status_code == 200 and r.json()["archived"] is True, r.text
+        assert await op.audit_events.count_documents(
+            {"action": "overhead.overhead_category.archived", "entity_id": cat["id"]}) == 1
+        assert await op.audit_logs.count_documents(
+            {"action": "archived", "entity_id": cat["id"]}) == 1
+        assert (await op.overhead_categories.find_one({"id": cat["id"]}))["archived_at"] == archived_at
+        r = await c.delete(url, headers=_h(key=key))           # replay: same answer, no write
+        assert r.status_code == 200
+        assert await op.audit_events.count_documents(
+            {"action": "overhead.overhead_category.archived"}) == 1
+        r = await c.delete(url, headers=_h(key=_key()))        # unrelated archive: 409
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "ALREADY_ARCHIVED"
+    run(monkeypatch, backend, mode, scenario)
