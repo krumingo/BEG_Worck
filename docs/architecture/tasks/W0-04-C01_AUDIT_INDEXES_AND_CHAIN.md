@@ -20,3 +20,6 @@
 - Поправка: редактирай съобщението и веригата (`from None` или санитизирано съобщение), пази типизирания отказ + diagnostic reference; детайлите за редовете — само в отделния operator report (dry-run скрипта). Без промяна в поведението fail-closed.
 - Тестове (sentinel стойности за ключ и tenant): startup path, lazy guard, реалния error middleware — сентинелите не се появяват в caplog/traceback.
 - Gates както досега; HANDOFF коментар в PR #72 с новия head.
+
+## Допълнение B (07.11) — FLOW Guard FG-117 (low) @ cb5d061
+Грешките за индексите все още съдържат името на tenant базата данни. Замени го с непрозрачен ref (напр. хеш/номер на tenant в registry, без името на фирмата/ЕИК); името остава само в отделния operator report на dry-run скрипта. Sentinel тест с име на база. HANDOFF в PR #72.
