@@ -30,7 +30,7 @@ from fastapi import HTTPException
 from app.audit.idempotency import (
     begin_idempotent, complete_idempotent, fail_idempotent, mark_idempotent_step,
     request_fingerprint, IdempotencyConflict,
-    IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
+    IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_IN_PROGRESS,
 )
 
 ERROR_SYNC_FAILED = "PERMISSION_SYNC_FAILED"
@@ -66,6 +66,13 @@ class RecoverableWrite:
             raise HTTPException(status_code=409, detail={
                 "error_code": "IDEMPOTENCY_CONFLICT",
                 "message": "The same operation key was already used with a different payload",
+                **self.record_ref})
+        if self.state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
+            # W0-04-C01 F-69-01: a concurrent retry of this failed key won the
+            # retake and is performing the write; this request must not.
+            raise HTTPException(status_code=409, detail={
+                "error_code": "IDEMPOTENCY_IN_PROGRESS",
+                "message": "The same operation is being retried right now; try again later",
                 **self.record_ref})
         record = self.state.get("record") or {}
         self.steps_done = set(record.get("steps_done") or [])

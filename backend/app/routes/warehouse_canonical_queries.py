@@ -20,6 +20,7 @@ from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData
 from app.tenancy.guard import TenantContext
 from app.permissions.deps import require_permission
+from app.services.warehouse_movements.legacy_gate import catalog_legacy_check  # Р28 / PM-01
 
 from app.services.warehouse_movements import LocationKey, LocationType, MovementState
 from app.services.warehouse_movements.queries import (
@@ -464,7 +465,7 @@ async def read_stock(
     location_id: str = Query(...),
     state: str = Query("free"),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.read_stock", module="warehouse")),
+        "warehouse.read_stock", module="warehouse", legacy_check=catalog_legacy_check("warehouse.read_stock"))),
 ) -> Dict[str, Any]:
     try:
         key = LocationKey(
@@ -490,7 +491,7 @@ async def read_stock(
 async def read_balance_by_location(
     item_id: str,
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.read_stock", module="warehouse")),
+        "warehouse.read_stock", module="warehouse", legacy_check=catalog_legacy_check("warehouse.read_stock"))),
 ) -> Dict[str, Any]:
     """CODEX C11.7 + C13.5 — balances are filtered by the caller's
     authorized location/project RoleAssignments, resolved via the
@@ -534,7 +535,7 @@ async def read_history(
     limit: int = Query(100, ge=1, le=1000),
     cursor_after: Optional[str] = None,
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.read_history", module="warehouse")),
+        "warehouse.read_history", module="warehouse", legacy_check=catalog_legacy_check("warehouse.read_history"))),
 ) -> Dict[str, Any]:
     await _authorize_resource_scope(
         ctx, action="warehouse.read_history",
@@ -573,7 +574,7 @@ PROJECT_SCOPED_WARNING_CODES = frozenset({
 @router.get("/integrity-warnings")
 async def read_integrity_warnings(
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.read_stock", module="warehouse")),
+        "warehouse.read_stock", module="warehouse", legacy_check=catalog_legacy_check("warehouse.read_stock"))),
 ) -> Dict[str, Any]:
     """CODEX C11.7 + C13.5 — integrity warnings are filtered to the
     caller's authorized locations/projects, resolved via the real

@@ -64,8 +64,10 @@ def _edit(lines, price=20):
 
 
 def _pay(finance, amount):
+    import uuid
     return finance.add_invoice_payment(INV, {"amount": amount, "method": "BankTransfer",
-                                             "account_id": "acc-c26"}, user=OWNER)
+                                             "account_id": "acc-c26"}, user=OWNER,
+                                       idempotency_key="k-" + uuid.uuid4().hex)   # PAY-01 (#70)
 
 
 async def _header(db):
@@ -221,3 +223,27 @@ async def test_fg140_send_and_delete_are_conditional(canonical_mongo_db, allow_a
         assert exc.value.detail["error_code"] == "INVOICE_NOT_DRAFT"
     monkeypatch.setattr(TenantCollection, "get", real_get)
     assert await _header(db) == before
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_fg140_claim_honours_the_pay01_invoice_lock(canonical_mongo_db, allow_always_gate,
+                                                          monkeypatch, mode):
+    """While a PAY-01 payment / allocation holds the invoice row lock
+    (finance._invoice_lock), a claiming writer (here: cancel) gets 409
+    INVOICE_BUSY and writes nothing; once released it proceeds."""
+    from datetime import datetime, timezone
+    from app.services.invoice_state import ROW_LOCK_FIELD
+    db, lines, finance = await _invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    await db["invoices"].update_one({"id": INV}, {"$set": {ROW_LOCK_FIELD: {
+        "token": "t", "at": datetime.now(timezone.utc).isoformat()}}})
+    before = await _header(db)
+    with pytest.raises(HTTPException) as exc:
+        await finance.cancel_invoice(INV, user=OWNER)
+    assert exc.value.status_code == 409 and exc.value.detail["error_code"] == "INVOICE_BUSY"
+    with pytest.raises(HTTPException) as exc:
+        await _edit(lines)
+    assert exc.value.status_code == 409 and exc.value.detail["error_code"] == "INVOICE_BUSY"
+    assert await _header(db) == before
+    await db["invoices"].update_one({"id": INV}, {"$unset": {ROW_LOCK_FIELD: ""}})
+    out = await finance.cancel_invoice(INV, user=OWNER)
+    assert out["status"] == "Cancelled"

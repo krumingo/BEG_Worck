@@ -10,6 +10,10 @@ Output: <out>/<release_id>/{artifact.tar, manifest.json, build_info.json, SHA256
 build_info.json (RC-01, beg.build-info/v1) carries the same commit as manifest.release.app.commit;
 write_build_info.py --from-bundle stamps a build context with it.
 
+Non-production only (R26): --flag-override KEY=VALUE --flag-override-reason TEXT records the
+deployment's flag value (e.g. staging PERMISSION_SERVICE_MODE=shadow) in the manifest's
+feature_flags snapshot instead of the layout default; refused for production.
+
 Fails closed (exit 2) when the archive is not byte-identical to the Git tree, a build
 input is not versioned, the compose layout drifted, the target is not reachable from
 the release ref, the previous release is not an ancestor, or the manifest is invalid.
@@ -51,6 +55,43 @@ def _actor(explicit):
     name = explicit or os.environ.get("USER") or os.environ.get("USERNAME") or "unknown"
     name = re.sub(r"[^A-Za-z0-9._-]", "-", name).strip("-") or "unknown"
     return name[:64]
+
+
+# R26 (ST-02-C03): a non-production deployment parameter that replaces a layout flag default.
+# Recorded in the immutable manifest's existing feature_flags snapshot (expected + source), so
+# manifests stay beg.release-manifest/v1 and older validators accept them unchanged.
+FLAG_OVERRIDE_SOURCE = mf.FLAG_OVERRIDE_PREFIX.rstrip(" (")
+FLAG_OVERRIDE_VALUES = {"PERMISSION_SERVICE_MODE": ("off", "shadow", "enforce")}
+OVERRIDE_REASON = re.compile(r"^[A-Za-z0-9 ._:/@%+=,()-]{1,120}$")
+
+
+def flag_snapshot(layout_flags, environment, overrides, reason):
+    """feature_flags snapshot of the manifest: layout defaults, or a validated deployment parameter."""
+    flags = {k: {"expected": v, "source": "app default; the key must be absent from .env or equal"}
+             for k, v in layout_flags.items()}
+    if not overrides:
+        if reason:
+            raise ReleaseError("--flag-override-reason without --flag-override")
+        return flags, {}
+    if environment == "production":
+        raise ReleaseError("--flag-override is not allowed for production (flags come from the versioned layout)")
+    if not reason or not OVERRIDE_REASON.match(reason):
+        raise ReleaseError("--flag-override needs --flag-override-reason (plain text, e.g. 'R15 staging default')")
+    applied = {}
+    for item in overrides:
+        key, sep, value = item.partition("=")
+        if not sep or key in applied:
+            raise ReleaseError("invalid or repeated --flag-override %r (KEY=VALUE, each key once)" % item)
+        if key not in layout_flags:
+            raise ReleaseError("--flag-override %s: not a flag of the versioned layout" % key)
+        allowed = FLAG_OVERRIDE_VALUES.get(key)
+        if not mf.SAFE_VALUE.match(value) or (allowed and value not in allowed):
+            raise ReleaseError("--flag-override %s: value not allowed%s" % (key, " (%s)" % "/".join(allowed) if allowed else ""))
+        applied[key] = value
+        flags[key] = {"expected": value,
+                      "source": "%s (%s): %s; layout default %s; set by the deployment overlay, not .env"
+                                % (FLAG_OVERRIDE_SOURCE, environment, reason, layout_flags[key])}
+    return flags, applied
 
 
 def build(args):
@@ -133,13 +174,18 @@ def build(args):
         typ, _, ref = item.partition(":")
         approvals.append({"type": typ, "ref": ref})
 
+    feature_flags, flag_overrides = flag_snapshot(layout["feature_flags"], args.environment,
+                                                  args.flag_override, args.flag_override_reason)
     smoke = dict(layout["smoke"])
     smoke["containers"] = [services[n]["container"] for n in sorted(services)]
-    config_version = inputs.sha256_json({
+    config_doc = {
         "layout": layout["layout"], "layout_files": layout_sha,
         "required_env_keys": layout["required_env_keys"], "feature_flags": layout["feature_flags"],
         "build_args": {n: s["build_args"] for n, s in layout["services"].items()}, "smoke": smoke,
-    })
+    }
+    if flag_overrides:  # absent without overrides: the configuration version of existing releases is unchanged
+        config_doc["feature_flag_overrides"] = flag_overrides
+    config_version = inputs.sha256_json(config_doc)
     prev_ref = None
     if previous:
         prev_ref = {"release_id": previous["release"]["release_id"],
@@ -168,8 +214,7 @@ def build(args):
         "configuration": {"version": config_version, "layout_source_commit": tools_commit,
                           "layout_files": layout_sha, "required_env_keys": layout["required_env_keys"],
                           "build_args": {n: s["build_args"] for n, s in layout["services"].items()}},
-        "feature_flags": {k: {"expected": v, "source": "app default; the key must be absent from .env or equal"}
-                          for k, v in layout["feature_flags"].items()},
+        "feature_flags": feature_flags,
         "entitlements": {"status": "NOT_IMPLEMENTED", "snapshot": None, "reference": "W0-08"},
         "build": {"tool": TOOL_VERSION, "python": platform.python_version(), "git": git_version,
                   "services": services, "unpinned_base_images": unpinned, "rebuild_reason": reason,
@@ -259,6 +304,10 @@ def main(argv=None):
     p.add_argument("--declare-migration", action="append")
     p.add_argument("--migration-approval")
     p.add_argument("--created-by")
+    p.add_argument("--flag-override", action="append",
+                   help="KEY=VALUE, non-production only (R26): the deployment's flag value replaces the layout default "
+                        "in the manifest's feature_flags snapshot; KEY must be a layout flag")
+    p.add_argument("--flag-override-reason", help="required with --flag-override, e.g. 'R15 staging default'")
     args = p.parse_args(argv)
     try:
         return build(args)

@@ -1,0 +1,32 @@
+# ST-02 checks on cbb8bdb63c53fe6698c7d6bbd6e23e7ca12caaeb (2026-11-06T15:26:27Z), run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 204 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 414 unit(s) checked, 0 violation(s)
+## tests/test_r0_0*.py (MONGO_URL + W0_03_REAL_MONGO_URL = disposable local mongo:7.0 rs0)
+814 passed, 6 warnings in 175.34s (0:02:55)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+15 failed, 1085 passed, 50 skipped, 6 warnings in 72.28s (0:01:12)
+## ST-02: tests/test_st_02_staging_stack.py --noconftest
+50 passed in 0.37s
+## ST-01: tests/test_st_01_staging_fixtures.py --noconftest (+ real mongo)
+31 passed, 6 warnings in 43.37s
+## ops/release tests
+Ran 79 tests in 80.369s
+
+OK (skipped=1)

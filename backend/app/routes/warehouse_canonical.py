@@ -28,6 +28,7 @@ from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData
 from app.tenancy.guard import TenantContext
 from app.permissions.deps import require_permission
+from app.services.warehouse_movements.legacy_gate import catalog_legacy_check  # Р28 / PM-01
 
 from app.services.warehouse_movements import (
     CanonicalAction,
@@ -100,6 +101,10 @@ class MovementCommandBody(BaseModel):
     # 5C-C21 F-13 — the receiving warehouse of transfer_warehouse_to_warehouse
     # (credited only on acceptance; `destination` stays in_transit).
     transfer_target: Optional[LocationBody] = None
+
+    @validator("quantity", "unit_value", "requested_quantity", "accepted_quantity")
+    def _decimal_fields(cls, v):
+        return _finite_decimal_str(v)
 
     @validator("action")
     def _known_action(cls, v: str) -> str:
@@ -188,7 +193,7 @@ async def post_movement(
     ctx: TenantContext = Depends(require_permission(
         "warehouse.write_command",     # outer gate; per-action gate runs inside the service
         module="warehouse",
-    )),
+        legacy_check=catalog_legacy_check("warehouse.write_command"))),
 ) -> MovementCommandResponse:
     """One endpoint; the `action` field in the body chooses the behavior.
 
@@ -258,6 +263,22 @@ async def post_movement(
 # (PROJECT_WRITEOFF_RULE) instead of the coarse `warehouse.write_command`.
 # Every other warehouse command is unchanged.
 # -----------------------------------------------------------------------
+def _finite_decimal_str(v):
+    """5C-C26l (PM-01 matrix): a quantity / value field must be a finite
+    decimal — otherwise 422 at the request, never a 500 from ``Decimal()``
+    deep in the handler (the PM-01 harness found POST /project-writeoff →
+    500 on a non-numeric quantity)."""
+    if v is None:
+        return v
+    try:
+        d = Decimal(str(v))
+    except Exception:
+        raise ValueError("must be a decimal number")
+    if not d.is_finite():
+        raise ValueError("must be a finite decimal number")
+    return str(v)
+
+
 class ProjectWriteOffBody(BaseModel):
     project_id: str = Field(..., min_length=1)
     subproject_id: Optional[str] = None
@@ -269,6 +290,10 @@ class ProjectWriteOffBody(BaseModel):
     file_ids: List[str] = Field(..., min_items=1)
     notes: Optional[str] = None
     occurred_at: Optional[str] = None
+
+    @validator("quantity")
+    def _decimal_quantity(cls, v):
+        return _finite_decimal_str(v)
 
 
 async def require_project_writeoff(

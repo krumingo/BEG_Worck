@@ -1,0 +1,70 @@
+{
+  "result": "PASS",
+  "checks": [
+    {
+      "check": "sha256sums.match",
+      "status": "PASS",
+      "detail": "19 files"
+    },
+    {
+      "check": "manifest.valid",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "tools.match_manifest",
+      "status": "PASS",
+      "detail": "16 tool files from 8e3b1901938d"
+    },
+    {
+      "check": "artifact.sha256",
+      "status": "PASS",
+      "detail": "37c5a64574032c3e87ec03c546d30def8cfb8e697d6650c0c33e2c4f23f8a91c"
+    },
+    {
+      "check": "artifact.tree_identity",
+      "status": "PASS",
+      "detail": "archive hashes to 560f7ad48b3dbef87898cdfb97a3dd91c78de973, manifest tree 560f7ad48b3dbef87898cdfb97a3dd91c78de973, 1286 files"
+    },
+    {
+      "check": "artifact.no_env_files",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "migrations.not_declared",
+      "status": "PASS",
+      "detail": "W0-09A never runs migrations; declared migrations need a separate approved step"
+    },
+    {
+      "check": "layout.Dockerfile.backend",
+      "status": "PASS",
+      "detail": "matches the versioned layout file"
+    },
+    {
+      "check": "layout.Dockerfile.frontend",
+      "status": "PASS",
+      "detail": "matches the versioned layout file"
+    },
+    {
+      "check": "layout.docker-compose.yml",
+      "status": "PASS",
+      "detail": "matches the versioned layout file"
+    },
+    {
+      "check": "env.present",
+      "status": "PASS",
+      "detail": ""
+    },
+    {
+      "check": "env.required_keys",
+      "status": "PASS",
+      "detail": "6 required key names present (values not read into output)"
+    },
+    {
+      "check": "flag.PERMISSION_SERVICE_MODE",
+      "status": "PASS",
+      "detail": "absent (app default) or equal to expected"
+    }
+  ]
+}

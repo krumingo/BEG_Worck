@@ -1,0 +1,41 @@
+{
+  "schema": "beg.pm-01-permission-matrix/v1",
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "requester": "SiteManager",
+    "technician": "Technician",
+    "accountant": "Accountant",
+    "warehousekeeper": "Warehousekeeper",
+    "driver": "Driver",
+    "viewer": "Viewer"
+  },
+  "role_ids": {
+    "owner": "owner",
+    "admin": "admin",
+    "requester": "site_manager",
+    "technician": "LEGACY_TECHNICIAN",
+    "accountant": "accountant",
+    "warehousekeeper": "warehouse",
+    "driver": "driver",
+    "viewer": "LEGACY_VIEWER"
+  },
+  "modes": [
+    "off",
+    "shadow",
+    "enforce"
+  ],
+  "routes": 767,
+  "cells": 18408,
+  "caller_tenant": "A (ST-01 synthetic)",
+  "path_values": {
+    "project_id": "<tenant A project_id>",
+    "warehouse_id": "<tenant A warehouse_id>",
+    "user_id": "<tenant A user_id>",
+    "org_id": "<tenant A org_id>"
+  },
+  "seconds": 140.5,
+  "slow_calls": [],
+  "mongo": "local replica set (oplog)",
+  "outbound_http": "closed local port"
+}

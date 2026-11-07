@@ -27,6 +27,12 @@ from fastapi import HTTPException
 
 NOT_DRAFT = "INVOICE_NOT_DRAFT"
 STATUS_CHANGED = "INVOICE_STATUS_CHANGED"
+BUSY = "INVOICE_BUSY"
+
+# PAY-01 (#70) row lock on the invoice / payment document (``finance._row_lock``):
+# the field and the staleness window — one definition, used by both.
+ROW_LOCK_FIELD = "allocation_lock"
+PAYMENT_LOCK_STALE_SECONDS = 30
 
 
 def status_conflict(code: str, invoice_id: str, status: Optional[str]) -> HTTPException:
@@ -42,15 +48,28 @@ async def claim_invoice(tenant, invoice_id: str, *, session,
                         code: str = STATUS_CHANGED) -> Optional[dict]:
     """Read the invoice in ``session`` and claim it: a CAS write on the
     invoice document conditioned on its status (``allowed`` or not
-    ``forbidden``). 409 when the status does not qualify; None when the
-    invoice does not exist (the caller keeps its own 404 / orphan rule)."""
+    ``forbidden``) AND on no live PAY-01 row lock (a payment / allocation
+    being written under ``finance._invoice_lock``). 409 when the status does
+    not qualify (``code``) or the invoice is locked (INVOICE_BUSY); None when
+    the invoice does not exist (the caller keeps its own 404 / orphan rule)."""
+    from datetime import datetime, timedelta, timezone
     invoice = await tenant.invoices.get(invoice_id, session=session)
     if invoice is None:
         return None
     cond = ({"$in": list(allowed)} if allowed is not None
             else {"$nin": list(forbidden or ())})
+    stale = (datetime.now(timezone.utc)
+             - timedelta(seconds=PAYMENT_LOCK_STALE_SECONDS)).isoformat()
     res = await tenant.invoices.update_one(
-        {"id": invoice_id, "status": cond}, {"$inc": {"edit_seq": 1}}, session=session)
+        {"id": invoice_id, "status": cond,
+         "$or": [{ROW_LOCK_FIELD: {"$exists": False}},
+                 {ROW_LOCK_FIELD + ".at": {"$lt": stale}}]},
+        {"$inc": {"edit_seq": 1}}, session=session)
     if res.matched_count == 0:
+        lock = invoice.get(ROW_LOCK_FIELD) or {}
+        if lock and str(lock.get("at") or "") >= stale:
+            raise HTTPException(status_code=409, detail={
+                "error_code": BUSY, "invoice_id": invoice_id,
+                "message": "Фактурата се обработва от друга заявка — опитайте отново"})
         raise status_conflict(code, invoice_id, invoice.get("status"))
     return invoice

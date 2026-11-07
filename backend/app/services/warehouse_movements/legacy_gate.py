@@ -192,6 +192,22 @@ async def ensure_enforce_project_relation(ctx, tenant_db, inp, *, load_assignmen
         await _projects_touched(tenant_db, inp.tenant_id, inp), now=now)
 
 
+def catalog_legacy_check(action: str):
+    """Р28 at the ROUTE (PM-01 gate, merge of main into #55): the off / shadow
+    ``legacy_check`` of a canonical warehouse route — the legacy session role,
+    mapped by LEGACY_ROLE_MAP, must hold ``action`` in its catalog actions:
+    the same rule the enforce evaluator applies to the company-scope
+    assignment the product grants that role. So off / shadow refuse at the
+    same point with the same answer as enforce (403 before body validation /
+    handler), not later with 422 / 400 / 405 or, for a read, not at all."""
+    async def _check(user, request) -> bool:
+        from app.permissions.catalog import role_actions
+        role_id = legacy_role_id(user)
+        return bool((user or {}).get("id")) and role_id is not None \
+            and action in role_actions(role_id)
+    return _check
+
+
 # ───────────── 5C-C26f — F-16: canonical READS through the same gate ─────────────
 
 async def legacy_read_roles(ctx, *, permission: str) -> set:

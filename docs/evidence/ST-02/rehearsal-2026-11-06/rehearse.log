@@ -1,0 +1,488 @@
+[2026-11-06T15:21:20Z] staging layout root /tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3 prepared (project begwork-staging, port 18080, PERMISSION_SERVICE_MODE=enforce)
+[2026-11-06T15:21:20Z] PASS X+1 is a descendant of X 1c01f6721170176553dd7c71c833fa54a9d89278 -> 07da9aba0711c0b0784bee8e58c5669ce81a93c1
+[2026-11-06T15:21:21Z] bundle rel-20261106T152121Z-1c01f6721170 commit 1c01f6721170176553dd7c71c833fa54a9d89278 tree 4932685cd1492d4f04a91615e7cf1e8e60354b96 verified (release_sha256 8d089441ecb85df863cb28c5c615899e08270b3185a10ea56732ae56374517d1)
+[2026-11-06T15:21:24Z] staging MongoDB replica set rs0 primary is begwork-staging-mongo (volume begwork-staging_mongo_data, not published)
+[2026-11-06T15:21:24Z] staging_deploy.sh --initial rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:21:24Z] W0-09A deploy: base=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3 bundle=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/releases/rel-20261106T152121Z-1c01f6721170 actor=unknown evidence=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152124Z-deploy-16286
+[2026-11-06T15:21:24Z] verifier: sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
+[2026-11-06T15:21:24Z] ST-02 staging initial: project=begwork-staging port=18080 PERMISSION_SERVICE_MODE=enforce force_smoke_fail=0
+[2026-11-06T15:21:24Z] === A) PRECHECK (read-only) ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 1c01f6721170
+    [PASS] artifact.sha256 - 3561b9beeb630e22d3707ae38fc2a180c37a62e057a4080b5c0a389354b199d9
+    [PASS] artifact.tree_identity - archive hashes to 4932685cd1492d4f04a91615e7cf1e8e60354b96, manifest tree 4932685cd1492d4f04a91615e7cf1e8e60354b96, 1276 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] layout.Dockerfile.backend - matches the versioned layout file
+    [PASS] layout.Dockerfile.frontend - matches the versioned layout file
+    [PASS] layout.docker-compose.yml - matches the versioned layout file
+    [PASS] env.present
+    [PASS] env.required_keys - 6 required key names present (values not read into output)
+    [PASS] flag.PERMISSION_SERVICE_MODE - absent (app default) or equal to expected
+    RESULT PASS
+[2026-11-06T15:21:25Z]   isolation of the merged compose model:
+    isolation: project begwork-staging, containers begwork-staging-{backend,frontend,mongo}, only 127.0.0.1:18080->frontend:80, network begwork-staging_net, mongo replica set on begwork-staging_mongo_data, ENV=staging, flag = parameter, no real-provider keys
+    ISOLATION PASS
+[2026-11-06T15:21:25Z]   manifest services_to_rebuild=backend,frontend; staging rebuilds backend,frontend (build identity in every image)
+[2026-11-06T15:21:25Z]   staging MongoDB container begwork-staging-mongo id=249a13154cf7 (not part of any release)
+[2026-11-06T15:21:25Z] === PRECHECK PASSED ===
+[2026-11-06T15:21:25Z] === B) DEPLOY ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 1c01f6721170
+    [PASS] artifact.sha256 - 3561b9beeb630e22d3707ae38fc2a180c37a62e057a4080b5c0a389354b199d9
+    [PASS] artifact.tree_identity - archive hashes to 4932685cd1492d4f04a91615e7cf1e8e60354b96, manifest tree 4932685cd1492d4f04a91615e7cf1e8e60354b96, 1276 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] stage.tree_identity - tree 4932685cd1492d4f04a91615e7cf1e8e60354b96 verified (1276 files)
+    RESULT PASS
+    {
+      "build_sha": "1c01f6721170176553dd7c71c833fa54a9d89278",
+      "build_time": "2026-11-06T14:43:17Z",
+      "written": [
+        "/target/backend/BUILD_INFO.json",
+        "/target/frontend/BUILD_INFO.json"
+      ]
+    }
+[2026-11-06T15:21:26Z]   RC-01 build identity stamped: backend/BUILD_INFO.json=d7e9c248806f4e7eccf1ab1aa79d462700ede2d3,frontend/BUILD_INFO.json=d7e9c248806f4e7eccf1ab1aa79d462700ede2d3
+    [PASS] tree.identity - tree 4932685cd1492d4f04a91615e7cf1e8e60354b96 verified (1276 files, legacy extras: backend/BUILD_INFO.json,frontend/BUILD_INFO.json)
+    RESULT PASS
+[2026-11-06T15:21:29Z] compose up -d --no-deps --build backend frontend -> exit 0 (output: /tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152124Z-deploy-16286/compose-deploy.log)
+[2026-11-06T15:21:29Z] === C) SMOKE ===
+[2026-11-06T15:21:34Z]   health /api/health -> 200
+[2026-11-06T15:21:34Z]   containers running: begwork-staging-backend,begwork-staging-frontend
+[2026-11-06T15:22:19Z]   restart count stable over 45s
+[2026-11-06T15:22:19Z]   GET /api/health -> 200
+[2026-11-06T15:22:19Z]   GET / -> 200
+[2026-11-06T15:22:19Z]   GET /api/roles -> 200
+[2026-11-06T15:22:19Z]   GET /api/modules -> 200
+[2026-11-06T15:22:19Z]   begwork-staging-backend log since 2026-11-06T15:21:25Z: no startup/config errors
+[2026-11-06T15:22:20Z]   flag PERMISSION_SERVICE_MODE set and equal to expectation
+[2026-11-06T15:22:20Z]   runtime images of rel-20261106T152121Z-1c01f6721170 protected as beg-release/<service>:rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:22:20Z] === SMOKE PASSED === runtime: backend=sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166,frontend=sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7
+[2026-11-06T15:22:20Z] record: DEPLOYED (/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152124Z-deploy-16286/record.json)
+[2026-11-06T15:22:20Z] === DEPLOYED rel-20261106T152121Z-1c01f6721170 (1c01f6721170176553dd7c71c833fa54a9d89278) on begwork-staging — rollback target NONE; migrations NOT_RUN ===
+[2026-11-06T15:22:20Z] PASS X initial deploy exit 0 (DEPLOYED) exit 0
+[2026-11-06T15:22:20Z] PASS X record is a valid beg.deployment-record/v1 
+[2026-11-06T15:22:20Z] PASS X /api/version build_sha == bundle commit 1c01f6721170176553dd7c71c833fa54a9d89278
+[2026-11-06T15:22:20Z] PASS X environment_label == staging 
+[2026-11-06T15:22:20Z] PASS X UI bundle embeds the bundle SHA 
+(trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/usr/local/lib/python3.11/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+{
+  "schema": "beg.st-01-seed-report/v1",
+  "marker": "st-01",
+  "generated_at": "2026-11-06T15:22:21.532248+00:00",
+  "database": "st02_staging",
+  "system_database": "st02_staging_system",
+  "created": {
+    "tenants": 2,
+    "users": 20,
+    "memberships": 18,
+    "role_assignments": 18,
+    "projects": 2,
+    "warehouses": 2,
+    "subscriptions": 2
+  },
+  "updated": {
+    "tenants": 0,
+    "users": 0,
+    "memberships": 0,
+    "role_assignments": 0,
+    "projects": 0,
+    "warehouses": 0,
+    "subscriptions": 0
+  },
+  "unchanged": {
+    "tenants": 0,
+    "users": 2,
+    "memberships": 0,
+    "role_assignments": 0,
+    "projects": 0,
+    "warehouses": 0,
+    "subscriptions": 0
+  },
+  "tenants": [
+    {
+      "key": "A",
+      "tenant_id": "4840700d-2d3e-456f-b587-630f4b8c1f6d",
+      "name": "ST01 Synthetic Tenant A",
+      "slug": "st01-synthetic-tenant-a",
+      "users": [
+        {
+          "key": "owner",
+          "id": "20022986-f411-42e6-9a30-807fa215fb9c",
+          "email": "st01.owner@tenant-a.st01.test",
+          "role": "Owner",
+          "role_id": "owner",
+          "assumption": false
+        },
+        {
+          "key": "admin",
+          "id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+          "email": "st01.admin@tenant-a.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": false
+        },
+        {
+          "key": "requester",
+          "id": "6cfe542e-1709-524c-96c7-7feab0262d42",
+          "email": "st01.requester@tenant-a.st01.test",
+          "role": "SiteManager",
+          "role_id": "site_manager",
+          "assumption": true
+        },
+        {
+          "key": "approver",
+          "id": "3b9984de-750c-5190-88fd-0ef64572e6df",
+          "email": "st01.approver@tenant-a.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": true
+        },
+        {
+          "key": "denied",
+          "id": "99eac073-7e8b-5c10-8c02-3386f659bccd",
+          "email": "st01.denied@tenant-a.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": true
+        },
+        {
+          "key": "warehousekeeper",
+          "id": "462d068c-be9c-5d71-abfb-a474657f5886",
+          "email": "st01.warehousekeeper@tenant-a.st01.test",
+          "role": "Warehousekeeper",
+          "role_id": "warehouse",
+          "assumption": false
+        },
+        {
+          "key": "technician",
+          "id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+          "email": "st01.technician@tenant-a.st01.test",
+          "role": "Technician",
+          "role_id": "LEGACY_TECHNICIAN",
+          "assumption": false
+        },
+        {
+          "key": "accountant",
+          "id": "369712bd-f368-5d8d-bf43-0851f544db32",
+          "email": "st01.accountant@tenant-a.st01.test",
+          "role": "Accountant",
+          "role_id": "accountant",
+          "assumption": false
+        },
+        {
+          "key": "viewer",
+          "id": "97e68a39-31af-5487-ab45-b21e80bceddc",
+          "email": "st01.viewer@tenant-a.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": false
+        },
+        {
+          "key": "driver",
+          "id": "033c2876-b271-5c1c-a703-8ec9c0ad0073",
+          "email": "st01.driver@tenant-a.st01.test",
+          "role": "Driver",
+          "role_id": "driver",
+          "assumption": false
+        }
+      ],
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "project_code": "ST01-A-001",
+      "warehouse_id": "bf8aa6c3-fade-5b51-9568-b21d52d0d2aa",
+      "warehouse_code": "ST01-A-W1"
+    },
+    {
+      "key": "B",
+      "tenant_id": "e810e3cc-3f85-4cea-baa1-9540bc0e584e",
+      "name": "ST01 Synthetic Tenant B",
+      "slug": "st01-synthetic-tenant-b",
+      "users": [
+        {
+          "key": "owner",
+          "id": "d6ab619b-1422-4f96-962b-86d46a2d1956",
+          "email": "st01.owner@tenant-b.st01.test",
+          "role": "Owner",
+          "role_id": "owner",
+          "assumption": false
+        },
+        {
+          "key": "admin",
+          "id": "1484d8c5-180f-5f27-8fbc-6f7b6c4d2be8",
+          "email": "st01.admin@tenant-b.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": false
+        },
+        {
+          "key": "requester",
+          "id": "ccd5b3cb-0ef4-5580-88fb-990007ff086a",
+          "email": "st01.requester@tenant-b.st01.test",
+          "role": "SiteManager",
+          "role_id": "site_manager",
+          "assumption": true
+        },
+        {
+          "key": "approver",
+          "id": "9eb8492c-5789-5b27-9e11-70883d1de3f5",
+          "email": "st01.approver@tenant-b.st01.test",
+          "role": "Admin",
+          "role_id": "admin",
+          "assumption": true
+        },
+        {
+          "key": "denied",
+          "id": "7f49b829-5ff5-540c-9cfa-6e95d511fc2d",
+          "email": "st01.denied@tenant-b.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": true
+        },
+        {
+          "key": "warehousekeeper",
+          "id": "22c6154d-5ed4-52ba-a6bf-df14dded9dee",
+          "email": "st01.warehousekeeper@tenant-b.st01.test",
+          "role": "Warehousekeeper",
+          "role_id": "warehouse",
+          "assumption": false
+        },
+        {
+          "key": "technician",
+          "id": "76e13e35-b362-5593-b92a-e3342cf6b3bf",
+          "email": "st01.technician@tenant-b.st01.test",
+          "role": "Technician",
+          "role_id": "LEGACY_TECHNICIAN",
+          "assumption": false
+        },
+        {
+          "key": "accountant",
+          "id": "2a4539a1-1174-5b64-9d40-de3fc9391ec4",
+          "email": "st01.accountant@tenant-b.st01.test",
+          "role": "Accountant",
+          "role_id": "accountant",
+          "assumption": false
+        },
+        {
+          "key": "viewer",
+          "id": "f279350a-2888-5e11-bd88-f115c5d05e08",
+          "email": "st01.viewer@tenant-b.st01.test",
+          "role": "Viewer",
+          "role_id": "LEGACY_VIEWER",
+          "assumption": false
+        },
+        {
+          "key": "driver",
+          "id": "aedfb392-c975-5161-b41f-5843af74c5d9",
+          "email": "st01.driver@tenant-b.st01.test",
+          "role": "Driver",
+          "role_id": "driver",
+          "assumption": false
+        }
+      ],
+      "project_id": "f98582a0-08fd-54a4-9ecb-ee7f268834b7",
+      "project_code": "ST01-B-001",
+      "warehouse_id": "b67ec7f4-ffa0-50fc-917f-b71fc7ab367e",
+      "warehouse_code": "ST01-B-W1"
+    }
+  ]
+}
+[2026-11-06T15:22:23Z] seed_synthetic.py exit 0
+[2026-11-06T15:22:23Z] PASS ST-01 seed of tenants A/B exit 0 
+{"scenarios": {"pass": 0, "fail": 0, "blocked": 12}, "steps": {"pass": 10, "fail": 0, "blocked": 30}, "total_scenarios": 12}
+[2026-11-06T15:22:30Z] run_scenarios.py exit 0 -> scenarios.json
+[2026-11-06T15:22:30Z] PASS ST-01 scenarios ran with evidence (exit 0 or 1, not 2/3) exit 0
+[2026-11-06T15:22:31Z] bundle rel-20261106T152231Z-07da9aba0711 commit 07da9aba0711c0b0784bee8e58c5669ce81a93c1 tree f08e24cc5c2fc628416bdb17934f9139c44184c2 verified (release_sha256 0ff1f998636c828278fb2ebc313f68f2229a5b697c439d67b7b1a4a0c16cf498)
+[2026-11-06T15:22:31Z] staging_deploy.sh --deploy --force-smoke-fail rel-20261106T152231Z-07da9aba0711
+[2026-11-06T15:22:31Z] W0-09A deploy: base=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3 bundle=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/releases/rel-20261106T152231Z-07da9aba0711 actor=unknown evidence=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152231Z-deploy-17711
+[2026-11-06T15:22:31Z] verifier: sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
+[2026-11-06T15:22:31Z] ST-02 staging deploy: project=begwork-staging port=18080 PERMISSION_SERVICE_MODE=enforce force_smoke_fail=1
+[2026-11-06T15:22:31Z] === A) PRECHECK (read-only) ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 07da9aba0711
+    [PASS] artifact.sha256 - 8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d
+    [PASS] artifact.tree_identity - archive hashes to f08e24cc5c2fc628416bdb17934f9139c44184c2, manifest tree f08e24cc5c2fc628416bdb17934f9139c44184c2, 1282 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] layout.Dockerfile.backend - matches the versioned layout file
+    [PASS] layout.Dockerfile.frontend - matches the versioned layout file
+    [PASS] layout.docker-compose.yml - matches the versioned layout file
+    [PASS] env.present
+    [PASS] env.required_keys - 6 required key names present (values not read into output)
+    [PASS] flag.PERMISSION_SERVICE_MODE - absent (app default) or equal to expected
+    RESULT PASS
+[2026-11-06T15:22:32Z]   isolation of the merged compose model:
+    isolation: project begwork-staging, containers begwork-staging-{backend,frontend,mongo}, only 127.0.0.1:18080->frontend:80, network begwork-staging_net, mongo replica set on begwork-staging_mongo_data, ENV=staging, flag = parameter, no real-provider keys
+    ISOLATION PASS
+[2026-11-06T15:22:32Z]   manifest services_to_rebuild=backend; staging rebuilds backend,frontend (build identity in every image)
+[2026-11-06T15:22:32Z]   staging MongoDB container begwork-staging-mongo id=249a13154cf7 (not part of any release)
+[2026-11-06T15:22:32Z]   state: current rel-20261106T152121Z-1c01f6721170 (1c01f6721170) -> target rel-20261106T152231Z-07da9aba0711 (07da9aba0711)
+[2026-11-06T15:22:32Z]   live source tree must be exactly the recorded current release (+ its BUILD_INFO.json):
+    [PASS] tree.identity - tree 4932685cd1492d4f04a91615e7cf1e8e60354b96 verified (1276 files, legacy extras: backend/BUILD_INFO.json,frontend/BUILD_INFO.json)
+    RESULT PASS
+[2026-11-06T15:22:33Z]   running images are the recorded runtime of rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:22:33Z]   containers running and endpoints healthy before deploy
+[2026-11-06T15:22:34Z]   staging backup: st02-20261106T152233Z.archive.gz (13420 bytes)
+[2026-11-06T15:22:34Z]   backup OK: st02-20261106T152233Z.archive.gz
+[2026-11-06T15:22:34Z] === PRECHECK PASSED ===
+[2026-11-06T15:22:34Z] === B) DEPLOY ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 07da9aba0711
+    [PASS] artifact.sha256 - 8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d
+    [PASS] artifact.tree_identity - archive hashes to f08e24cc5c2fc628416bdb17934f9139c44184c2, manifest tree f08e24cc5c2fc628416bdb17934f9139c44184c2, 1282 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] stage.tree_identity - tree f08e24cc5c2fc628416bdb17934f9139c44184c2 verified (1282 files)
+    RESULT PASS
+    {
+      "build_sha": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "build_time": "2026-11-06T14:43:25Z",
+      "written": [
+        "/target/backend/BUILD_INFO.json",
+        "/target/frontend/BUILD_INFO.json"
+      ]
+    }
+[2026-11-06T15:22:35Z]   RC-01 build identity stamped: backend/BUILD_INFO.json=68411d1bf75cda5ff2d4a127a4a26e68bcdd51f2,frontend/BUILD_INFO.json=68411d1bf75cda5ff2d4a127a4a26e68bcdd51f2
+[2026-11-06T15:22:35Z]   runtime images of rel-20261106T152121Z-1c01f6721170 protected as beg-release/<service>:rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:22:35Z]   rollback anchor: repo.rollback-rel-20261106T152121Z-1c01f6721170; repo now holds rel-20261106T152231Z-07da9aba0711
+    [PASS] tree.identity - tree f08e24cc5c2fc628416bdb17934f9139c44184c2 verified (1282 files, legacy extras: backend/BUILD_INFO.json,frontend/BUILD_INFO.json)
+    RESULT PASS
+[2026-11-06T15:22:39Z] compose up -d --no-deps --build backend frontend -> exit 0 (output: /tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152231Z-deploy-17711/compose-deploy.log)
+[2026-11-06T15:22:39Z] === C) SMOKE ===
+[2026-11-06T15:22:39Z]   CONTROLLED SMOKE FAILURE armed: smoke also requires GET /api/st02-forced-smoke-failure (does not exist -> 404)
+[2026-11-06T15:22:44Z]   health /api/health -> 200
+[2026-11-06T15:22:44Z]   containers running: begwork-staging-backend,begwork-staging-frontend
+[2026-11-06T15:23:29Z]   restart count stable over 45s
+[2026-11-06T15:23:29Z]   GET /api/health -> 200
+[2026-11-06T15:23:29Z]   GET / -> 200
+[2026-11-06T15:23:30Z]   GET /api/roles -> 200
+[2026-11-06T15:23:30Z]   GET /api/modules -> 200
+[2026-11-06T15:23:30Z] !!! AUTO-ROLLBACK: GET /api/st02-forced-smoke-failure returned 404
+[2026-11-06T15:23:30Z]   failed release rel-20261106T152231Z-07da9aba0711 was running: backend=sha256:cbf5e1a450d060dd0953f0236e50803d4dbcf3582e93ffd7d7bbb737a9517cf3,frontend=sha256:d9ca9ae26c2bd9642c22eb7d52f48f1f218c600ebd78bf37e20d659824b9b7fc
+[2026-11-06T15:23:30Z]   failed release was serving /api/version build_sha=07da9aba0711c0b0784bee8e58c5669ce81a93c1
+[2026-11-06T15:23:30Z]   failed tree kept as repo.failed-rel-20261106T152231Z-07da9aba0711-20261106T152330Z
+    [PASS] tree.identity - tree 4932685cd1492d4f04a91615e7cf1e8e60354b96 verified (1276 files, legacy extras: backend/BUILD_INFO.json,frontend/BUILD_INFO.json)
+    RESULT PASS
+[2026-11-06T15:23:30Z]   backend: recorded runtime image sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166 re-tagged as begwork-staging-backend
+[2026-11-06T15:23:30Z]   frontend: recorded runtime image sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7 re-tagged as begwork-staging-frontend
+[2026-11-06T15:23:33Z] compose up -d --no-deps --no-build --force-recreate backend frontend -> exit 0 (output: /tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152231Z-deploy-17711/compose-rollback-exact.log)
+[2026-11-06T15:23:33Z]   backend: container begwork-staging-backend runs the recorded runtime image sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166
+[2026-11-06T15:23:33Z]   frontend: container begwork-staging-frontend runs the recorded runtime image sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7
+[2026-11-06T15:23:33Z]   post-rollback smoke:
+[2026-11-06T15:23:38Z]   health /api/health -> 200
+[2026-11-06T15:23:38Z]   containers running: begwork-staging-backend,begwork-staging-frontend
+[2026-11-06T15:24:23Z]   restart count stable over 45s
+[2026-11-06T15:24:23Z]   GET /api/health -> 200
+[2026-11-06T15:24:23Z]   GET / -> 200
+[2026-11-06T15:24:23Z]   GET /api/roles -> 200
+[2026-11-06T15:24:23Z]   GET /api/modules -> 200
+[2026-11-06T15:24:23Z]   begwork-staging-backend log since 2026-11-06T15:23:30Z: no startup/config errors
+[2026-11-06T15:24:23Z]   flag PERMISSION_SERVICE_MODE set and equal to expectation
+[2026-11-06T15:24:24Z] ROLLED BACK (source-exact and runtime-exact: recorded images restored)
+[2026-11-06T15:24:24Z]   staging MongoDB container unchanged (249a13154cf7): data was not touched
+[2026-11-06T15:24:24Z] ROLLED BACK: live release is still rel-20261106T152121Z-1c01f6721170 (1c01f6721170); state unchanged
+[2026-11-06T15:24:24Z] record: ROLLED_BACK (/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152231Z-deploy-17711/record.json)
+[2026-11-06T15:24:24Z] PASS X+1 forced-failure deploy exit 1 (auto rollback) exit 1
+[2026-11-06T15:24:24Z] PASS record ROLLED_BACK with runtime_rollback EXACT_IMAGE ROLLED_BACK / EXACT_IMAGE
+[2026-11-06T15:24:24Z] PASS rollback record is a valid beg.deployment-record/v1 
+[2026-11-06T15:24:24Z] PASS rollback reason is the controlled smoke failure GET /api/st02-forced-smoke-failure returned 404
+[2026-11-06T15:24:24Z] PASS X+1 images were really built and started before the failure backend frontend
+[2026-11-06T15:24:24Z] PASS the failed attempt really served X+1 (/api/version during the failed smoke) 07da9aba0711c0b0784bee8e58c5669ce81a93c1
+[2026-11-06T15:24:24Z] PASS the failed attempt ran image IDs different from X backend=sha256:cbf5e1a450d060dd0953f0236e50803d4dbcf3582e93ffd7d7bbb737a9517cf3,frontend=sha256:d9ca9ae26c2bd9642c22eb7d52f48f1f218c600ebd78bf37e20d659824b9b7fc
+[2026-11-06T15:24:24Z] PASS current release is still X rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:24:24Z] PASS running image IDs == recorded image IDs of X backend=sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166,frontend=sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7
+[2026-11-06T15:24:24Z] PASS after rollback /api/version == X 1c01f6721170176553dd7c71c833fa54a9d89278
+[2026-11-06T15:24:24Z] PASS synthetic data kept (per-collection counts equal) 
+[2026-11-06T15:24:24Z] PASS MongoDB container not recreated 
+[2026-11-06T15:24:24Z] staging_deploy.sh --deploy rel-20261106T152231Z-07da9aba0711
+[2026-11-06T15:24:24Z] W0-09A deploy: base=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3 bundle=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/releases/rel-20261106T152231Z-07da9aba0711 actor=unknown evidence=/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152424Z-deploy-19956
+[2026-11-06T15:24:25Z] verifier: sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
+[2026-11-06T15:24:25Z] ST-02 staging deploy: project=begwork-staging port=18080 PERMISSION_SERVICE_MODE=enforce force_smoke_fail=0
+[2026-11-06T15:24:25Z] === A) PRECHECK (read-only) ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 07da9aba0711
+    [PASS] artifact.sha256 - 8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d
+    [PASS] artifact.tree_identity - archive hashes to f08e24cc5c2fc628416bdb17934f9139c44184c2, manifest tree f08e24cc5c2fc628416bdb17934f9139c44184c2, 1282 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] layout.Dockerfile.backend - matches the versioned layout file
+    [PASS] layout.Dockerfile.frontend - matches the versioned layout file
+    [PASS] layout.docker-compose.yml - matches the versioned layout file
+    [PASS] env.present
+    [PASS] env.required_keys - 6 required key names present (values not read into output)
+    [PASS] flag.PERMISSION_SERVICE_MODE - absent (app default) or equal to expected
+    RESULT PASS
+[2026-11-06T15:24:25Z]   isolation of the merged compose model:
+    isolation: project begwork-staging, containers begwork-staging-{backend,frontend,mongo}, only 127.0.0.1:18080->frontend:80, network begwork-staging_net, mongo replica set on begwork-staging_mongo_data, ENV=staging, flag = parameter, no real-provider keys
+    ISOLATION PASS
+[2026-11-06T15:24:26Z]   manifest services_to_rebuild=backend; staging rebuilds backend,frontend (build identity in every image)
+[2026-11-06T15:24:26Z]   staging MongoDB container begwork-staging-mongo id=249a13154cf7 (not part of any release)
+[2026-11-06T15:24:26Z]   state: current rel-20261106T152121Z-1c01f6721170 (1c01f6721170) -> target rel-20261106T152231Z-07da9aba0711 (07da9aba0711)
+[2026-11-06T15:24:26Z]   live source tree must be exactly the recorded current release (+ its BUILD_INFO.json):
+    [PASS] tree.identity - tree 4932685cd1492d4f04a91615e7cf1e8e60354b96 verified (1276 files, legacy extras: backend/BUILD_INFO.json,frontend/BUILD_INFO.json)
+    RESULT PASS
+[2026-11-06T15:24:26Z]   running images are the recorded runtime of rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:24:26Z]   containers running and endpoints healthy before deploy
+[2026-11-06T15:24:27Z]   staging backup: st02-20261106T152426Z.archive.gz (13392 bytes)
+[2026-11-06T15:24:27Z]   backup OK: st02-20261106T152426Z.archive.gz
+[2026-11-06T15:24:27Z] === PRECHECK PASSED ===
+[2026-11-06T15:24:27Z] === B) DEPLOY ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 07da9aba0711
+    [PASS] artifact.sha256 - 8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d
+    [PASS] artifact.tree_identity - archive hashes to f08e24cc5c2fc628416bdb17934f9139c44184c2, manifest tree f08e24cc5c2fc628416bdb17934f9139c44184c2, 1282 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] stage.tree_identity - tree f08e24cc5c2fc628416bdb17934f9139c44184c2 verified (1282 files)
+    RESULT PASS
+    {
+      "build_sha": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "build_time": "2026-11-06T14:43:25Z",
+      "written": [
+        "/target/backend/BUILD_INFO.json",
+        "/target/frontend/BUILD_INFO.json"
+      ]
+    }
+[2026-11-06T15:24:28Z]   RC-01 build identity stamped: backend/BUILD_INFO.json=68411d1bf75cda5ff2d4a127a4a26e68bcdd51f2,frontend/BUILD_INFO.json=68411d1bf75cda5ff2d4a127a4a26e68bcdd51f2
+[2026-11-06T15:24:28Z]   runtime images of rel-20261106T152121Z-1c01f6721170 protected as beg-release/<service>:rel-20261106T152121Z-1c01f6721170
+[2026-11-06T15:24:28Z]   rollback anchor: repo.rollback-rel-20261106T152121Z-1c01f6721170; repo now holds rel-20261106T152231Z-07da9aba0711
+    [PASS] tree.identity - tree f08e24cc5c2fc628416bdb17934f9139c44184c2 verified (1282 files, legacy extras: backend/BUILD_INFO.json,frontend/BUILD_INFO.json)
+    RESULT PASS
+[2026-11-06T15:24:32Z] compose up -d --no-deps --build backend frontend -> exit 0 (output: /tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152424Z-deploy-19956/compose-deploy.log)
+[2026-11-06T15:24:32Z] === C) SMOKE ===
+[2026-11-06T15:24:37Z]   health /api/health -> 200
+[2026-11-06T15:24:37Z]   containers running: begwork-staging-backend,begwork-staging-frontend
+[2026-11-06T15:25:22Z]   restart count stable over 45s
+[2026-11-06T15:25:22Z]   GET /api/health -> 200
+[2026-11-06T15:25:22Z]   GET / -> 200
+[2026-11-06T15:25:22Z]   GET /api/roles -> 200
+[2026-11-06T15:25:22Z]   GET /api/modules -> 200
+[2026-11-06T15:25:22Z]   begwork-staging-backend log since 2026-11-06T15:24:27Z: no startup/config errors
+[2026-11-06T15:25:22Z]   flag PERMISSION_SERVICE_MODE set and equal to expectation
+[2026-11-06T15:25:23Z]   runtime images of rel-20261106T152231Z-07da9aba0711 protected as beg-release/<service>:rel-20261106T152231Z-07da9aba0711
+[2026-11-06T15:25:23Z] === SMOKE PASSED === runtime: backend=sha256:c606392a171927489c4a633530d220cbb8bcd7d143657313b7cf3bb3d3703015,frontend=sha256:16a455b234836c7e1196a7b3555b2854b049f04ba58a5b3f93676d905846de39
+[2026-11-06T15:25:23Z] record: DEPLOYED (/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3/release-state/history/20261106T152424Z-deploy-19956/record.json)
+[2026-11-06T15:25:23Z] === DEPLOYED rel-20261106T152231Z-07da9aba0711 (07da9aba0711c0b0784bee8e58c5669ce81a93c1) on begwork-staging — rollback target rel-20261106T152121Z-1c01f6721170; migrations NOT_RUN ===
+[2026-11-06T15:25:23Z] PASS X+1 deploy exit 0 (DEPLOYED) exit 0
+[2026-11-06T15:25:23Z] PASS X+1 record is a valid beg.deployment-record/v1 
+[2026-11-06T15:25:23Z] PASS X+1 runtime image IDs differ from X backend=sha256:c606392a171927489c4a633530d220cbb8bcd7d143657313b7cf3bb3d3703015,frontend=sha256:16a455b234836c7e1196a7b3555b2854b049f04ba58a5b3f93676d905846de39
+[2026-11-06T15:25:23Z] PASS rollback target recorded = X with its image IDs 
+[2026-11-06T15:25:23Z] PASS X+1 /api/version build_sha == bundle commit 07da9aba0711c0b0784bee8e58c5669ce81a93c1
+[2026-11-06T15:25:23Z] PASS X+1 UI bundle embeds the bundle SHA 
+[2026-11-06T15:25:23Z] PASS synthetic data kept across X -> X+1 
+{"scenarios": {"pass": 0, "fail": 0, "blocked": 12}, "steps": {"pass": 10, "fail": 0, "blocked": 30}, "total_scenarios": 12}
+[2026-11-06T15:25:31Z] run_scenarios.py exit 0 -> scenarios.json
+[2026-11-06T15:25:31Z] PASS ST-01 scenarios on X+1 ran with evidence (exit 0 or 1) exit 0
+[2026-11-06T15:25:31Z] rehearsal PASS: 29/29 checks passed -> /tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-evidence3/summary.json
+exit 0

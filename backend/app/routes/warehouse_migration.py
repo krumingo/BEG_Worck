@@ -18,6 +18,7 @@ from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData
 from app.tenancy.guard import TenantContext
 from app.permissions.deps import require_permission
+from app.services.warehouse_movements.legacy_gate import catalog_legacy_check  # Р28 / PM-01
 
 from app.services.warehouse_movements.migration_readiness import (
     free_text_to_item_report,
@@ -42,7 +43,7 @@ def _tenant_for(user: dict) -> TenantData:
 async def free_text_to_item(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.migration.readiness", module="warehouse")),
+        "warehouse.migration.readiness", module="warehouse", legacy_check=catalog_legacy_check("warehouse.migration.readiness"))),
 ) -> Dict[str, Any]:
     tenant = _tenant_for(user)
     return await free_text_to_item_report(
@@ -54,7 +55,7 @@ async def free_text_to_item(
 async def main_to_central(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.migration.readiness", module="warehouse")),
+        "warehouse.migration.readiness", module="warehouse", legacy_check=catalog_legacy_check("warehouse.migration.readiness"))),
 ) -> Dict[str, Any]:
     tenant = _tenant_for(user)
     return await main_to_central_report(
@@ -66,7 +67,7 @@ async def main_to_central(
 async def legacy_writer_inventory(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.migration.readiness", module="warehouse")),
+        "warehouse.migration.readiness", module="warehouse", legacy_check=catalog_legacy_check("warehouse.migration.readiness"))),
 ) -> Dict[str, Any]:
     return legacy_writer_inventory_report()
 
@@ -75,7 +76,7 @@ async def legacy_writer_inventory(
 async def ledger_batch_reconciliation(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.migration.readiness", module="warehouse")),
+        "warehouse.migration.readiness", module="warehouse", legacy_check=catalog_legacy_check("warehouse.migration.readiness"))),
 ) -> Dict[str, Any]:
     tenant = _tenant_for(user)
     return await ledger_batch_reconciliation_report(
@@ -87,7 +88,7 @@ async def ledger_batch_reconciliation(
 async def execute_migration_route(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.migration.execute", module="warehouse")),
+        "warehouse.migration.execute", module="warehouse", legacy_check=catalog_legacy_check("warehouse.migration.execute"))),
 ) -> None:
     """TASK 5C hard boundary: refuse any execute call."""
     try:
