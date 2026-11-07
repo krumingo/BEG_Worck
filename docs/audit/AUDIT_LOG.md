@@ -4546,3 +4546,16 @@ My 16-name × 10-type matrix (160 cases): **0 mismatches**. The threshold is sho
 - Observation (usability, not security): `alarm_engine` branches on the type only, so a budget rule with an unlisted metric name is still a % rule. Non-finance users won't see its threshold. Fails closed by design.
 - No UI or seed sets metric names (API only).
 - Runtime `b71g` (bisect probe, sec02, W0, R0, PM-01, merge) was re-started after a second machine restart (~21:19 UTC).
+
+#71 @ `b1ab349` runtime — **full PASS**.
+
+| Check | Result |
+|---|---|
+| bisect probe × 3 modes | pulse 0.02 / 6200; 404 oracles same; auto_resolve 0 steps; band-varies False; only FAILS line = the known-pay variant (R42, accepted) |
+| sec02 | 30 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main touches inventories, `run_meta` and the `idempotency.js` pair.
