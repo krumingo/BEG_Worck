@@ -1,0 +1,34 @@
+# W0-04-C02 FG-126 (2026-11-07), commit 3a419cb on main 7b6da64, from backend/ with PYTHONPATH=.
+# real Mongo: disposable local mongo:7.0 replica set rs0 (docker, mirror.gcr.io), removed afterwards
+## baseline main 7b6da64
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+192 passed, 6 warnings in 146.94s (0:02:26)
+## R0 (real mongo)
+814 passed, 6 warnings in 139.85s (0:02:19)
+## W0 DB-free
+15 failed, 1094 passed, 79 skipped, 6 warnings in 59.69s
+## W0 real mongo
+15 failed, 1173 passed, 6 warnings in 108.43s (0:01:48)
+## W0-04-C02 3a419cb
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+196 passed, 6 warnings in 148.70s (0:02:28)
+## R0 (real mongo)
+814 passed, 6 warnings in 140.83s (0:02:20)
+## W0 DB-free
+15 failed, 1094 passed, 83 skipped, 6 warnings in 59.65s
+## W0 real mongo
+15 failed, 1177 passed, 6 warnings in 112.23s (0:01:52)
+## PM-01 (real mongo)
+6 passed, 6 warnings in 153.93s (0:02:33)
+## stability: C01 -k 'parallel or fg57 or no_index or retries or retake or f72 or fg117 or fg126' x10
+     10 23 passed, 19 deselected, 1 warning
+## W0 failures identical to main 7b6da64 in both runs (15, test_w0_03e_legacy_routes); delta +4 = test_fg126 (codes 85/86/67/plain)
+## negative control: main 7b6da64 indexes.py with test_fg126_*: 4 failed (raw driver error with the database namespace re-raised)
