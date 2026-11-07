@@ -74,3 +74,4 @@ merge with #69 @ 3fb55f2 (7-step procedure, unchanged): SEC-01 30/30, OH-01 219,
 tests/test_oh_01_overhead_no_hard_delete.py: 225 passed (new test_31 legacy-only project x2 backends x3 modes; test_27/28 updated; these 13 cases FAIL on 878628f)
 reader fallback (chosen over a backfill: read-only, no migration): project_overhead_current() counts a legacy row, labelled "преизчислява се", for every month without a current OH-01 allocation covering it; once OH-01 covers the month the legacy figure is out. Legacy-only project: 200 visible + labelled (not 0); after an OH-01 allocation for Oct: 300 (Oct) + 120 (Sep legacy, labelled) = 420. Nothing written, nothing deleted.
 R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
+merge with #69 @ 3fb55f2 (7-step procedure, unchanged): SEC-01 30/30, OH-01 225, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0
