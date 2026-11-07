@@ -34,7 +34,7 @@ def test_p3_period_edit_orphan(monkeypatch):
         b2 = dict(_body(), period_start="2026-09-01", period_end="2026-09-07")
         p = await c.patch("/api/pay-runs/" + rid, json=b2, headers=_token())
         recs = await op.payroll_corrections.find({}, {"_id": 0}).to_list(10)
-        print("P3 patch", p.status_code, [(x["period_start"], x["status"], x.get("pay_run_ids")) for x in recs])
+        print("P3 patch", p.status_code, [(x.get("period_start"), x.get("status"), x.get("pay_run_ids")) for x in recs])
     run(monkeypatch, scenario, "real")
 
 

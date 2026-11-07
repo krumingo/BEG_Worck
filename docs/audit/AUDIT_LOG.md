@@ -1664,8 +1664,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `90a582b` | **PASS** (+48 PM-01 rows for the #56 auth routes only) | 2026-11-07 |
-| #73 LAB-01 | `3107ba0` | **PASS** (RETAKE-1 closed: explicit STARTED; P5 on merge with #72 → 1 run) | 2026-11-07 |
-| #75 LAB-02 | `ba08ab5` | **PASS** (RETAKE-1 + LAB02-1 closed) | 2026-11-07 |
+| #73 LAB-01 | `b5384cd` | **FINDINGS: PM73-01 BLOCKING** (PM-01 test red: 18 reset cells 403→404 new + 6 pay-runs cells stale since LAB-01-E) | 2026-11-07 |
+| #75 LAB-02 | `c34480b` | **FINDINGS: PM75-01 BLOCKING** (PM-01 test red: 18 reset cells 403→404 from merged LAB-01-L); FG-101 itself PASS | 2026-11-07 |
 | #74 OH-01 | `6a4ac5b` | **FINDINGS: OH74-05 BLOCKING** (current_allocations reads rows before the pointer → reader sees 0 during publish); Codex OH74-03/04 probes pass | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -3346,3 +3346,43 @@ Gates on `0713a81`:
 | A1 | 0/418 |
 | R0 | **814** |
 | merge-tree #72 `3606766` / main | clean |
+
+
+## #73 LAB-01-L @ `b5384cd` and #75 LAB-02-C @ `c34480b` — 2026-11-07 ~11:55 UTC — FINDINGS (1 blocking each)
+
+**#73 FG-99:**
+- `reset_daily_report` calls `authorize_report_edit`, which applies:
+  - the R36 roles: Admin, Owner, or the SiteManager of every project of the report;
+  - the payroll lock decided from pay-run lines (LAB-01-J).
+- Reset handles both date formats.
+- Reset writes a `daily_report.reset` AuditEvent with before/after.
+
+**#75 FG-101:**
+- A second approval of the same version without `replaces_approval_id` naming an active record → 409 `ALREADY_APPROVED`; a stale id → 409.
+- The void is a CAS on `modified_count`.
+- `pending` exposes `approval.id`, and the UI sends it back.
+- Two existing tests now send `replaces_approval_id`. This follows the design change; nothing is weakened.
+
+**PM73-01 / PM75-01, BLOCKING, PROVED:** `test_pm_01_permission_matrix::test_a_fresh_real_mongo_run_reproduces_the_committed_matrix` fails.
+- **Reset cells, 18, on both PRs:** `POST /daily-reports/{id}/reset` for requester / technician / accountant / warehousekeeper / driver / viewer: committed 403, fresh **404**. The role check moved after the report lookup. Low side effect: an existence oracle within the tenant.
+- **Pay-run cells, 6, #73 only:** `POST /pay-runs` owner/admin, 400 → **428**. Already red at `3107ba0`, verified by running PM-01 there: LAB-01-E made the key mandatory and the matrix was never regenerated. Earlier rounds did not run PM-01 on #73; that was my miss.
+- **Fix:** a role pre-check before the lookup (or accept 404), then `--harness` regeneration.
+- PR comments 6704503510 (#73) and 6705198745 (#75) updated.
+
+| Gate | #73 `b5384cd` | #75 `c34480b` |
+|---|---|---|
+| `test_lab_0*`, real Mongo | 99 passed, 1 skipped | 140 passed, 1 skipped |
+| probes | `lab01h_r36` 3 pass; `lab01f` 5 pass; `lab01e` needs #72 (P1 8 runs alone, as before) | `lab02` Q1 [200, 409×3], 1 approved; Q2–Q4 pass; `lab02_retake` R1 pass; `lab01h` 3 pass |
+| W0 | same 15 | same 15 |
+| A2C | 0/207 | 0/208 |
+| A1 | 0/420 | 0/422 |
+| R0 | 814 | 814 |
+| PM-01 | **1 failed (24 cells)** | **1 failed (18 cells)** |
+| trial merge + #72 `90a582b` (= main + #72) | `ownership.py` resolved; `test_lab_0*` **100 passed**; lab01e P1 1 run, P3 400, P4 503, P5 1 run | `ownership.py` / `server.py` / `run_meta` resolved; `test_lab_0*` **141 passed**; Q1, R1 pass |
+
+Probe fix: `lab01e` P3 now prints with `.get` (the corrections rows no longer carry `period_start`); the result is 400, as before.
+
+Low notes:
+- The reset AuditEvent is written after the status write, with no key, so a crash leaves a reset with no event.
+- A SiteManager author can reset their own report (R36-consistent; four-eyes holds at approval).
+- An FG-101 correction voids before it inserts, so a crash leaves the line with no active approval until a reload and re-approval (this predates FG-101).
