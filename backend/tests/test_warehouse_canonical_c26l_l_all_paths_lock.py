@@ -325,3 +325,114 @@ async def test_fg109_reallocation_racing_a_delivery_never_counts_twice(
             await rebuild_from_ledger(db, tenant_id=T)
         got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
         assert got == (pytest.approx(want[0]), pytest.approx(want[1])), i
+
+
+# ═══════════════════ Addendum M — FG-124: the deprecated allocation path ═══════════════════
+
+DEPRECATED_P = {"allocation_type": "project", "allocation_ref_id": PROJECT}
+
+
+async def _deprecated_line(db):
+    """L carried ONLY by the deprecated single allocation (allocations [])."""
+    await db["invoice_lines"].update_one({"id": IL}, {"$set": {**DEPRECATED_P,
+                                                                "allocations": []}})
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_fg124_deprecated_allocation_inputs_are_locked_too(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """d98cead: PUT allocation_type / allocation_ref_id moved a linked line
+    to Q (P/Q 100/100). Now every allocation input → 409, nothing written."""
+    from app.models.invoice_lines import InvoiceLineUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch,
+                                          mode, allocations=None)
+    await _deprecated_line(db)
+    routes = _routes(monkeypatch, client, db)
+    await svc.execute(_ctx(mode, "Owner"), db, run.coll, _receipt(PRJ, "10"))
+    before = await _line(db)
+    for body in ({"allocation_ref_id": Q},
+                 {"allocation_type": "warehouse", "allocation_ref_id": "wh_1"},
+                 {"allocation_type": "client"},
+                 {"allocations": []}):
+        with pytest.raises(HTTPException) as exc:
+            await routes.update_invoice_line(IL, InvoiceLineUpdate(**body), user=OWNER)
+        assert exc.value.status_code == 409, body
+        assert exc.value.detail["error_code"] == "INVOICE_LINE_ALLOCATION_LOCKED"
+        assert await _line(db) == before, body
+    # a field the line is not costed by still saves
+    await routes.update_invoice_line(IL, InvoiceLineUpdate(notes="бележка"), user=OWNER)
+    assert (await _line(db))["notes"] == "бележка"
+    for i in range(3):
+        if i:
+            await rebuild_from_ledger(db, tenant_id=T)
+        got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
+        assert got == (pytest.approx(100.0), 0), i
+
+
+@pytest.mark.parametrize("rep", range(10))
+@pytest.mark.parametrize("mode", MODES)
+async def test_fg124_deprecated_reallocation_racing_a_delivery(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode, rep):
+    """Concurrently: PUT allocation_ref_id P → Q, and deliver L into P.
+    Exactly one wins; never P/Q 100/100 (live + rebuild ×2)."""
+    from app.models.invoice_lines import InvoiceLineUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch,
+                                          mode, allocations=None)
+    await _deprecated_line(db)
+    routes = _routes(monkeypatch, client, db)
+
+    async def _put():
+        # odd runs: the delivery gets a head start, so both orders are hit
+        await asyncio.sleep(0.2 if rep % 2 else 0)
+        return await routes.update_invoice_line(IL, InvoiceLineUpdate(allocation_ref_id=Q),
+                                                user=OWNER)
+    realloc, delivery = await asyncio.gather(
+        _put(), svc.execute(_ctx(mode, "Owner"), db, run.coll, _receipt(PRJ, "10")),
+        return_exceptions=True)
+    if isinstance(delivery, Exception):
+        assert isinstance(delivery, InvoiceLineProjectMismatchError), delivery
+        assert not isinstance(realloc, Exception), realloc
+        want = (0.0, 100.0)
+    else:
+        assert isinstance(realloc, HTTPException) and realloc.status_code == 409, realloc
+        want = (100.0, 0.0)
+    for i in range(3):
+        if i:
+            await rebuild_from_ledger(db, tenant_id=T)
+        got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
+        assert got == (pytest.approx(want[0]), pytest.approx(want[1])), i
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_f55_c26_03_http_put_of_the_legacy_allocation_is_409(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """Codex F-55-C26-03 (= FG-124), its exact repro over HTTP: a legacy line
+    (allocations [], allocation_type=project, allocation_ref_id=P) in a
+    Draft invoice, a linked direct delivery of 10 into P, then as Owner
+    PUT /api/invoice-lines/{L} {"allocation_type":"project",
+    "allocation_ref_id":"Q"} → was 200 (P → Q); now 409
+    INVOICE_LINE_ALLOCATION_LOCKED, the line byte-equal, P/Q 100/0."""
+    import httpx
+    from fastapi import FastAPI
+    from app.deps.modules import require_m5
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch,
+                                          mode, allocations=None)
+    await _deprecated_line(db)
+    routes = _routes(monkeypatch, client, db)
+    await svc.execute(_ctx(mode, "Owner"), db, run.coll, _receipt(PRJ, "10"))
+    app = FastAPI()
+    app.include_router(routes.router, prefix="/api")
+    app.dependency_overrides[require_m5] = lambda: OWNER
+    before = await _line(db)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://t") as http:
+        r = await http.put(f"/api/invoice-lines/{IL}",
+                           json={"allocation_type": "project", "allocation_ref_id": Q})
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"]["error_code"] == "INVOICE_LINE_ALLOCATION_LOCKED"
+    assert await _line(db) == before
+    for i in range(3):
+        if i:
+            await rebuild_from_ledger(db, tenant_id=T)
+        got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
+        assert got == (pytest.approx(100.0), 0), i

@@ -38,7 +38,12 @@ def _tenant(user: dict) -> TenantData:
 
 
 # 5C-C26l Addendum L — FG-109: the fields a linked line is costed by.
-LOCKED_WHEN_LINKED = ("allocations", "qty", "unit", "unit_price")
+# Addendum M — FG-124: EVERY allocation input, the deprecated single
+# allocation (allocation_type / allocation_ref_id) included — it is still
+# read as the line's allocation when allocations[] is empty
+# (canonical_material_cost.effective_allocations / normalize_allocations).
+LOCKED_WHEN_LINKED = ("allocations", "allocation_type", "allocation_ref_id",
+                      "qty", "unit", "unit_price")
 
 
 async def _unless_linked(tenant: TenantData, line_id: str, write) -> None:
