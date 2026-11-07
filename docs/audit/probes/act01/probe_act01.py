@@ -103,5 +103,53 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                 (nk.status_code, r1.status_code, r3.status_code) != (428, 201, 409) or cnt("client_acts") - b0 != 1 or r2.json() != r1.json() or evs != 1:
             F.append("%s A5 %s" % (mode, (nk.status_code, r1.status_code, r2.status_code, r3.status_code, evs)))
         restore()
+        if os.environ.get("PROBE_ACT_B") == "1":          # #77 8188689 (Addendum B)
+            from app.services import client_acts as ca
+            tv = tc.post("/api/auth/login", json={"email": fx["A"]["users"]["viewer"]["email"], "password": T.SYNTH_PASSWORD}).json()["token"]
+            HV = {"Authorization": "Bearer " + tv, "Idempotency-Key": uuid.uuid4().hex}
+            a = tc.post("/api/client-acts", json=body("L1", 3), headers=H()).json()
+            v = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=HV)
+            nk = tc.post("/api/client-acts/%s/confirm" % a["id"], headers={"Authorization": "Bearer " + tok})
+            st0 = q(lambda: op.client_acts.find_one({"id": a["id"]}, {"_id": 0, "status": 1}))["status"]
+            # A8: a crash in the confirm's audit write -> full rollback; same-key retry -> once
+            orig = ca._audit; fail = [True]
+            async def flaky(*aa, **kk):
+                if fail[0] and kk.get("action", "").endswith("confirmed"):
+                    fail[0] = False
+                    raise RuntimeError("synthetic crash in the confirm audit")
+                return await orig(*aa, **kk)
+            ca._audit = flaky
+            k = "cf-" + uuid.uuid4().hex[:6]
+            c1 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k))
+            st1 = q(lambda: op.client_acts.find_one({"id": a["id"]}, {"_id": 0, "status": 1}))["status"]
+            ev1 = cnt("audit_events", {"entity_id": a["id"], "action": {"$regex": "confirm"}})
+            ca._audit = orig
+            c2 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k))
+            c3 = tc.post("/api/client-acts/%s/confirm" % a["id"], headers=H(k))
+            st2 = q(lambda: op.client_acts.find_one({"id": a["id"]}, {"_id": 0, "status": 1}))["status"]
+            ev2 = cnt("audit_events", {"entity_id": a["id"], "action": {"$regex": "confirm"}})
+            print(mode, "A7 viewer", v.status_code, "nokey", nk.status_code, "status", st0,
+                  "| A8 crash", c1.status_code, st1, "events", ev1, "-> retry", c2.status_code, c3.status_code, st2, "events", ev2)
+            if (v.status_code, nk.status_code, st0) != (403, 428, "Draft") or c1.status_code < 500 and c1.status_code != 500                     or st1 != "Draft" or ev1 != 0 or c2.status_code != 200 or st2 != "Accepted" or ev2 != 1:
+                F.append("%s A7/A8 %s" % (mode, (v.status_code, nk.status_code, st0, c1.status_code, st1, ev1, c2.status_code, st2, ev2)))
+            restore()
+            # A9: exact price 12.345 x 100 -> 1234.50 (half up on the line value only)
+            q(lambda: op.offers.update_one({"id": i["O1"], "lines.id": i["L1"]}, {"$set": {
+                "lines.$.material_unit_cost": 12.345, "lines.$.labor_unit_cost": 0, "lines.$.qty": 1000}}))
+            r = tc.post("/api/client-acts", json=body("L1", 100), headers=H())
+            ln = (r.json().get("lines") or [{}])[0] if r.status_code == 201 else {}
+            rw = tc.post("/api/client-acts", json={"project_id": P, "lines": [{"offer_line_id": i["L1"], "executed_qty": 1, "unit_price": 12.35}]}, headers=H())
+            print(mode, "A9", r.status_code, "unit", ln.get("unit_price"), "total", ln.get("line_total"), "| 12.35 given ->", rw.status_code)
+            if ln.get("unit_price") != 12.345 or ln.get("line_total") != 1234.5 or rw.status_code != 422:
+                F.append("%s A9 %s %s %s" % (mode, ln.get("unit_price"), ln.get("line_total"), rw.status_code))
+            # A10: a non-finance GET shows no prices
+            tt = tc.post("/api/auth/login", json={"email": fx["A"]["users"]["technician"]["email"], "password": T.SYNTH_PASSWORD}).json()["token"]
+            g = tc.get("/api/client-acts", params={"project_id": P}, headers={"Authorization": "Bearer " + tt})
+            txt = g.text
+            leak = [k for k in ("unit_price", "line_total", "subtotal", "vat_amount", '"total"', "1234.5", "12.345") if k in txt]
+            print(mode, "A10 technician GET", g.status_code, "money keys present:", leak or "none")
+            if g.status_code == 200 and leak:
+                F.append("%s A10 non-finance sees %s" % (mode, leak))
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")
