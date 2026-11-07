@@ -1,0 +1,303 @@
+{
+  "task": "LAB02-0c85678",
+  "sha": "0c85678",
+  "started": "2026-11-07T08:55:15.220Z",
+  "steps": [
+    {
+      "step": "0 seed: tenant, Accountant, SiteManager of the project, Technician-worker on akord, SMR „Шпакловка“ (м2), the worker's draft report of 8 h (8 attendance Present)",
+      "pass": true,
+      "detail": {
+        "draft": 200,
+        "report_id": "b1bf163e-478a-4eca-8972-4c1adc93cc1e"
+      }
+    },
+    {
+      "step": "1.1 [390 Счетоводител] screen „Количества и акорд“ opens with the tab „Акордни цени“ and no approval tab; the SMR „Шпакловка“ is listed",
+      "pass": true,
+      "detail": {
+        "excerpt": "Количества и акорд Акордът се плаща само по одобрено количество × акордна цена по СМР (FLOW-028). Обект Витоша Акордни цени Шпакловка версия 0 — по профила — Ак"
+      },
+      "screenshot": "01_1_1_390_screen_opens_with_the_tab_and_no.png"
+    },
+    {
+      "step": "1.2 [390 Счетоводител] sets Akord 5 EUR / м2 on „Шпакловка“ with a reason → „версия 1“; the API holds pay type Akord, rate 5, version 1",
+      "pass": true,
+      "detail": {
+        "pay_type": "Akord",
+        "rate": 5,
+        "version": 1,
+        "audit_events": 1
+      },
+      "screenshot": "02_1_2_390_sets_Akord_5_EUR_2_on_with_a_rea.png"
+    },
+    {
+      "step": "1.3 [390] the finance screen is in Bulgarian and has no horizontal scroll",
+      "pass": false,
+      "detail": {
+        "no_hscroll": true,
+        "latin_words": [
+          "FLOW"
+        ],
+        "chars": 266,
+        "cyrillic": 206
+      }
+    },
+    {
+      "step": "1.4 (R31) the SiteManager and the worker cannot read piece rates: both 403",
+      "pass": true,
+      "detail": {
+        "sm": 403,
+        "worker": 403
+      }
+    },
+    {
+      "step": "2.1 [390 worker] in the draft editor „Изработено количество (м2, бр., м…)“ he enters 120 and saves → „Черновата е обновена“; the report holds quantity 120",
+      "pass": true,
+      "detail": {
+        "quantity": 120,
+        "status": "Draft"
+      },
+      "screenshot": "03_2_1_390_worker_in_the_draft_editor_2_he_.png"
+    },
+    {
+      "step": "2.2 [390 worker] the technician screen with the quantity field: Bulgarian, no horizontal scroll",
+      "pass": true,
+      "detail": {
+        "no_hscroll": true,
+        "latin_words": [],
+        "chars": 264,
+        "cyrillic": 174
+      }
+    },
+    {
+      "step": "3.0 the SiteManager approves the daily report itself (API — the approval list of reports has no phone path in this bot) → APPROVED",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "report_status": "APPROVED"
+      }
+    },
+    {
+      "step": "3.1 [390 SiteManager] sees the worker's line: „Въведено от работника: 120“, SMR „Шпакловка (м2)“, no piece-rate tab",
+      "pass": true,
+      "detail": {
+        "line": "Иван Бот 2026-11-07 · Шпакловка · 8 ч Чака одобрение Въведено от работника: 120 Количество (м2) СМР Шпакловка (м2) Бележка Одобри количеството Престой"
+      },
+      "screenshot": "04_3_1_390_SiteManager_sees_the_worker_s_li.png"
+    },
+    {
+      "step": "3.2 [390 SiteManager] „Одобри количеството“ → „одобрено: 120 м2“ and NO price is shown to him (R31)",
+      "pass": true,
+      "detail": {
+        "excerpt": " 8 ч Одобрено Въведено от работника: 120одобрено: 120 м2 Количество (м2) СМР Шпакловка (м2) Б"
+      },
+      "screenshot": "05_3_2_390_SiteManager_120_2_and_NO_price_i.png"
+    },
+    {
+      "step": "3.2b [390 SiteManager] the success message „Количеството е одобрено“ is shown to the user after approving",
+      "pass": false,
+      "detail": {
+        "message_visible": false,
+        "toast_elements_on_page": 0,
+        "note": "screens call toast() from sonner; no <Toaster/> is mounted anywhere in the app (also on main), so none of the messages of this screen can be seen"
+      },
+      "screenshot": "06_3_2b_390_SiteManager_the_success_message.png"
+    },
+    {
+      "step": "3.3 [390 SiteManager] the approval screen is in Bulgarian and has no horizontal scroll",
+      "pass": false,
+      "detail": {
+        "no_hscroll": true,
+        "latin_words": [
+          "FLOW"
+        ],
+        "chars": 292,
+        "cyrillic": 203
+      }
+    },
+    {
+      "step": "3.4 the approval is stored with the SMR terms snapshot: 120 м2, rate 5 for finance; the SiteManager's response carries no piece_rate",
+      "pass": true,
+      "detail": {
+        "finance": {
+          "qty": 120,
+          "unit": "м2",
+          "piece_rate": 5
+        },
+        "site_manager_keys": [
+          "approved_quantity",
+          "unit",
+          "execution_package_id",
+          "approved_by",
+          "approved_at"
+        ]
+      }
+    },
+    {
+      "step": "4.1 [API] pay-run preview for the day: the akord worker earns 600 = 120 м2 × 5",
+      "pass": true,
+      "detail": {
+        "earned_amount": 600,
+        "labor_amount": 600,
+        "downtime_amount": 0
+      }
+    },
+    {
+      "step": "4.2 [390 Админ] the „Седмичен“ pay-run screen shows 600 on the worker's row",
+      "pass": true,
+      "detail": {
+        "row": " ИБ Иван Бот Akord × За плащане 8.0ч · 600 — — — — — — 600"
+      },
+      "screenshot": "07_4_2_390_the_pay_run_screen_shows_600_on_.png"
+    },
+    {
+      "step": "4.3 [390 Админ] pay-run screen: Bulgarian (Latin words listed), no page-level horizontal scroll",
+      "pass": false,
+      "detail": {
+        "no_hscroll": true,
+        "latin_words": [
+          "Akord"
+        ],
+        "chars": 431,
+        "cyrillic": 253
+      }
+    },
+    {
+      "step": "4.4 [390 Админ] the approval screen shows the akord formula „120 м2 × 5 = 600“",
+      "pass": true,
+      "detail": {},
+      "screenshot": "08_4_4_390_the_approval_screen_shows_the_ak.png"
+    },
+    {
+      "step": "5.1 [API] the worker tries to approve his own entry (1000 м2): refused 403; the list and the DOWNTIME/LABOR classification are 403 as well",
+      "pass": true,
+      "detail": {
+        "approve": 403,
+        "pending": 403,
+        "classify": 403,
+        "detail": "Only Admin, Owner or the project's SiteManager approves"
+      }
+    },
+    {
+      "step": "5.2 nothing changed: the approval stays 120 м2 and the pay run still shows 600",
+      "pass": true,
+      "detail": {
+        "earned_amount": 600,
+        "approvals_active": 1
+      }
+    },
+    {
+      "step": "5.3 [390 worker] opening the approval screen directly: he is sent away (landed /tech), no approval button",
+      "pass": true,
+      "detail": {
+        "landed": "/tech"
+      },
+      "screenshot": "09_5_3_390_worker_opening_the_approval_scre.png"
+    },
+    {
+      "step": "6.1 [API] the approver edits the report line afterwards (quantity 120 → 100, R36): 200, the old approval is VOID (kept), version bumped, the pay run no longer shows 600",
+      "pass": true,
+      "detail": {
+        "status": 200,
+        "version_before": 2,
+        "version_after": 3,
+        "voided": 1,
+        "earned_after_edit": 0
+      }
+    },
+    {
+      "step": "6.2 [390 SiteManager] the line is waiting for approval again: „Въведено от работника: 100“, button „Одобри количеството“ (not „Коригирай“), no „одобрено:“ text",
+      "pass": true,
+      "detail": {
+        "line": "Иван Бот 2026-11-07 · Шпакловка · 8 ч Чака одобрение Въведено от работника: 100 Количество (м2) СМР Шпакловка (м2) Бележка Одобри количеството Престой"
+      },
+      "screenshot": "10_6_2_390_SiteManager_the_line_is_waiting_.png"
+    },
+    {
+      "step": "6.3 [API] approving the OLD report version is refused with 409 (stale version)",
+      "pass": true,
+      "detail": {
+        "status": 409,
+        "detail": "The report changed (version 3, not 2); reload"
+      }
+    },
+    {
+      "step": "7.1 [390 SiteManager] „Престой“ without a reason is refused on screen („Напишете причина за престоя“) and writes nothing",
+      "pass": false,
+      "detail": {
+        "rows_written": 0
+      },
+      "screenshot": "11_7_1_390_SiteManager_without_a_reason_is_.png"
+    },
+    {
+      "step": "7.2 [390 SiteManager] reason „Дъжд — няма достъп до обекта“ + „Престой“ → „Редът е отбелязан като престой“; an active DOWNTIME classification with the reason is stored",
+      "pass": true,
+      "detail": {
+        "classification": [
+          {
+            "cost_type": "DOWNTIME",
+            "reason": "Дъжд — няма достъп до обекта",
+            "classified_by": "28b3c114-33a0-4b4c-af75-4dd22aa18374"
+          }
+        ]
+      },
+      "screenshot": "12_7_2_390_SiteManager_reason_an_active_DOW.png"
+    },
+    {
+      "step": "7.3 [API] the pay run shows the line as downtime apart from labor: downtime_amount > 0, labor_amount 0",
+      "pass": true,
+      "detail": {
+        "earned_amount": 120,
+        "labor_amount": 0,
+        "downtime_amount": 120
+      }
+    },
+    {
+      "step": "7.4 [390 SiteManager] the screen after the DOWNTIME mark: Bulgarian, no horizontal scroll",
+      "pass": false,
+      "detail": {
+        "no_hscroll": true,
+        "latin_words": [
+          "FLOW"
+        ],
+        "chars": 280,
+        "cyrillic": 197
+      },
+      "screenshot": "13_7_4_390_SiteManager_the_screen_after_the.png"
+    },
+    {
+      "step": "7.5 [390 Админ] the pay-run screen after the DOWNTIME mark no longer shows 600 for the worker (no akord pay for the downtime line)",
+      "pass": true,
+      "detail": {
+        "row": " ИБ Иван Бот Akord × За плащане 8.0ч · 120 — — — — — — 120"
+      },
+      "screenshot": "14_7_5_390_the_pay_run_screen_after_the_DOW.png"
+    },
+    {
+      "step": "8 no hard delete: the replaced approval and the classification records are kept (void/active rows exist), AuditEvents written for terms, approval, correction and classification",
+      "pass": true,
+      "detail": {
+        "actions": [
+          "labor_terms.set",
+          "daily_report.edited",
+          "labor_quantity.approved",
+          "daily_report.corrected",
+          "labor_line.classified"
+        ]
+      }
+    }
+  ],
+  "facts": {
+    "P": "a3225de5-38a2-4e25-a14d-7667e860fd21",
+    "worker": "ac8903d0-14fb-4b5f-b3f1-3741b486d147",
+    "sm": "28b3c114-33a0-4b4c-af75-4dd22aa18374",
+    "today": "2026-11-07",
+    "reportId": "b1bf163e-478a-4eca-8972-4c1adc93cc1e",
+    "staleAudit": 4
+  },
+  "passed": 23,
+  "total": 29,
+  "no_screen": 0,
+  "verdict": "FAIL",
+  "finished": "2026-11-07T08:56:35.915Z"
+}
