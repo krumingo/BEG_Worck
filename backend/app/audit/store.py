@@ -15,10 +15,13 @@ per-tenant AuditEvent requirement of W0-01.
 
 This module is additive: nothing existing is imported from it yet.
 """
+import asyncio
 import hashlib
 import json
+import random
 from typing import Dict, Any, Optional, List, Tuple
 
+from app.audit import indexes as _ix
 from app.audit.envelope import (
     build_event,
     validate_event,
@@ -34,9 +37,69 @@ _HASH_EXCLUDED = {"_id", "integrity_hash"}
 
 GENESIS_HASH = "0" * 64
 
+# W0-04-C01 (FG-37): concurrent appends to one tenant chain race for the next
+# sequence. The unique (tenant_id, sequence) index lets exactly one win; the
+# others re-read the chain head and try again, a bounded number of times.
+CHAIN_APPEND_MAX_ATTEMPTS = 100
+_CHAIN_RETRY_MAX_DELAY_S = 0.05
+
 
 class AuditAppendOnlyViolation(RuntimeError):
     """Raised when code attempts to mutate an existing audit event."""
+
+
+class AuditChainContention(RuntimeError):
+    """The chain head kept moving for CHAIN_APPEND_MAX_ATTEMPTS tries; nothing was written."""
+
+
+class AuditChainUnprotected(RuntimeError):
+    """The unique (tenant_id, sequence) index on audit_events is missing and
+    cannot be created (a conflicting index, existing duplicates, an error).
+
+    Without it two concurrent appends can take the same sequence and fork the
+    chain silently (FG-57), so record_event refuses to append. Nothing is
+    dropped or deleted; see scripts/w0_04_bootstrap_audit_indexes.py.
+    """
+
+
+CHAIN_INDEX_KEYS = [("tenant_id", 1), ("sequence", 1)]
+
+
+def _protects_chain(info: Dict[str, Any]) -> bool:
+    return _ix.protects(info, CHAIN_INDEX_KEYS)
+
+
+def _is_mongo_handle(handle) -> bool:
+    return _ix.is_mongo_handle(handle)
+
+
+async def _require_chain_index(db, *, create: bool = True) -> None:
+    """FG-57: never append to a chain the database cannot keep linear.
+
+    The index normally exists (startup / onboarding, W0-04-C01). A database
+    that missed both gets exactly the planned unique index here, before its
+    first append; if MongoDB refuses it, the append is refused. Inside an open
+    transaction (create=False) it only checks: call ensure_chain_index() before
+    the transaction starts.
+    """
+    await _ix.require_unique_index(db, AUDIT_COLLECTION, CHAIN_INDEX_KEYS,
+                                   AuditChainUnprotected, create=create)
+
+
+async def ensure_chain_index(db) -> None:
+    """Public: guarantee the chain index BEFORE opening a transaction that appends."""
+    await _require_chain_index(db, create=True)
+
+
+def _is_sequence_collision(exc) -> bool:
+    """True when a DuplicateKeyError is the (tenant_id, sequence) race, not a
+    duplicate event_id (which is a real error and is never retried)."""
+    details = getattr(exc, "details", None) or {}
+    pattern = details.get("keyPattern") or {}
+    if pattern:
+        return "sequence" in pattern and "event_id" not in pattern
+    text = str(exc)
+    return "sequence" in text and "event_id" not in text
 
 
 def canonical_hash(event: Dict[str, Any]) -> str:
@@ -112,16 +175,37 @@ async def record_event(db, event: Dict[str, Any], session=None) -> Dict[str, Any
     The event must come from build_event(). Returns the stored event
     including its sequence and hashes. ``session`` (optional) runs the chain
     read and the append inside the caller's MongoDB transaction (R0-04).
+
+    Concurrency (W0-04-C01): relies on the unique (tenant_id, sequence) index.
+    Outside a transaction a missing index is created first (FG-57) and a lost
+    race is retried from the new chain head, so no event is dropped and the
+    chain stays linear. Inside one (``session``) the index is only CHECKED —
+    building it would wait on the transaction's own lock; the transaction
+    runner calls ensure_chain_index() before it starts — and a collision is
+    raised so the transaction is retried as a whole.
     """
     validate_event(event)
-    previous = await _last_event(db, event["tenant_id"], session=session)
-    chained = chain_hashes(event, previous)
-    if session is None:
-        await db[AUDIT_COLLECTION].insert_one(dict(chained))
-    else:
-        await db[AUDIT_COLLECTION].insert_one(dict(chained), session=session)
-    chained.pop("_id", None)
-    return chained
+    await _require_chain_index(db, create=session is None)
+    from pymongo.errors import DuplicateKeyError
+    for attempt in range(1, CHAIN_APPEND_MAX_ATTEMPTS + 1):
+        previous = await _last_event(db, event["tenant_id"], session=session)
+        chained = chain_hashes(event, previous)
+        try:
+            if session is None:
+                await db[AUDIT_COLLECTION].insert_one(dict(chained))
+            else:
+                await db[AUDIT_COLLECTION].insert_one(dict(chained), session=session)
+        except DuplicateKeyError as exc:
+            # Another append took this sequence: re-read the head and re-link.
+            if session is not None or not _is_sequence_collision(exc):
+                raise
+            await asyncio.sleep(random.uniform(0, min(_CHAIN_RETRY_MAX_DELAY_S, 0.002 * attempt)))
+            continue
+        chained.pop("_id", None)
+        return chained
+    # F-72-01: no tenant id in a message that may be logged.
+    raise AuditChainContention(
+        "audit chain: no free sequence after %d attempts" % CHAIN_APPEND_MAX_ATTEMPTS)
 
 
 # ---------------------------------------------------------------------------
@@ -192,3 +276,14 @@ async def verify_tenant_chain(db, tenant_id: str) -> Tuple[bool, Optional[str]]:
     if not events:
         return True, None
     return verify_chain(events)
+
+
+async def has_event(db, *, tenant_id: str, action: str, entity_id: str) -> bool:
+    """True when the tenant's chain already holds an event of ``action`` for ``entity_id``.
+
+    For actions that happen at most once per entity (a payment is reversed once, an
+    allocation is cancelled once) this is the event's stable identity: a recovering write
+    checks it before recording, so a retry never leaves the event missing nor duplicated."""
+    found = await db[AUDIT_COLLECTION].find_one(
+        {"tenant_id": tenant_id, "action": action, "entity_id": entity_id}, {"_id": 0, "event_id": 1})
+    return found is not None
