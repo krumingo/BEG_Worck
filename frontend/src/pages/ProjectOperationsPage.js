@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,7 @@ import {
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 
 export default function ProjectOperationsPage() {
+  const clientActKey = useRef(null); // ACT-01 (R29): Idempotency-Key of the pending act
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
@@ -102,6 +103,28 @@ export default function ProjectOperationsPage() {
   // Confirm wrapper
   const showConfirm = (action, label, onConfirm) => {
     setConfirmDialog({ action, label, onConfirm });
+  };
+
+  // ACT-01: a client act is a money write — one Idempotency-Key per submission (R29), kept
+  // for a retry only while the server has not answered; the 409/422 reason is shown in
+  // Bulgarian (e.g. "над остатъка", "различна цена от офертата").
+  const createClientActFromOffer = async (offerId, payload) => {
+    setSaving(true);
+    if (!clientActKey.current) {
+      clientActKey.current = window.crypto?.randomUUID ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    try {
+      await API.post(`/client-acts/from-offer/${offerId}`, payload,
+        { headers: { "Idempotency-Key": clientActKey.current } });
+      clientActKey.current = null;
+      setDialog(null);
+      fetchAll();
+    } catch (err) {
+      if (err.response) clientActKey.current = null;
+      const detail = err.response?.data?.detail;
+      alert((detail && typeof detail === "object" ? detail.message : detail) || "Грешка");
+    } finally { setSaving(false); }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -340,7 +363,7 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => handleSave(`/client-acts/from-offer/${form.source_offer_id}`, { percent: parseFloat(form.percent) || 100, act_date: form.act_date })} disabled={saving || !form.source_offer_id} data-testid="save-ca-btn"><Check className="w-4 h-4 mr-1" />Създай</Button>
+            <Button onClick={() => createClientActFromOffer(form.source_offer_id, { percent: parseFloat(form.percent) || 100, act_date: form.act_date })} disabled={saving || !form.source_offer_id} data-testid="save-ca-btn"><Check className="w-4 h-4 mr-1" />Създай</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
