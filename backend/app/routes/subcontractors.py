@@ -598,15 +598,30 @@ async def create_subcontractor_payment(
 
 
 _COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
+_RESERVED_IDS = {"$ifNull": ["$cap_reservations", []]}
 
 
-async def _reserve_within_certified(tenant, pkg_id: str, amount: float) -> None:
-    """Add ``amount`` to the package's ``committed_paid_total`` only if the result stays
-    within ``certified_total`` (cent tolerance); otherwise 409 PAYMENT_EXCEEDS_CERTIFIED."""
+async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservation_id: str) -> None:
+    """Reserve ``amount`` of the package's ``certified_total`` for ONE payment, atomically.
+
+    SEC-01-C03 addendum C (Codex F-69-03): the reservation carries the payment's key-derived
+    id (``cap_reservations``). A retry of the same key after a crash between this update and
+    the step bookkeeping finds its own id and changes nothing — it never reserves twice and is
+    never refused by its own earlier reservation. One conditional update on one document: it
+    matches when the id is already reserved, or when ``committed + amount <= certified``
+    (cent tolerance). Otherwise 409 PAYMENT_EXCEEDS_CERTIFIED, nothing written."""
+    already = {"$in": [reservation_id, _RESERVED_IDS]}
     res = await tenant.subcontractor_packages.update_one(
-        {"id": pkg_id, "$expr": {"$lte": [{"$add": [_COMMITTED, amount]},
-                                          {"$add": [{"$ifNull": ["$certified_total", 0]}, 0.005]}]}},
-        [{"$set": {"committed_paid_total": {"$round": [{"$add": [_COMMITTED, amount]}, 2]}}}])
+        {"id": pkg_id, "$or": [
+            {"cap_reservations": reservation_id},
+            {"$expr": {"$lte": [{"$add": [_COMMITTED, amount]},
+                                {"$add": [{"$ifNull": ["$certified_total", 0]}, 0.005]}]}}]},
+        [{"$set": {
+            "committed_paid_total": {"$cond": [already, _COMMITTED,
+                                               {"$round": [{"$add": [_COMMITTED, amount]}, 2]}]},
+            "cap_reservations": {"$cond": [already, _RESERVED_IDS,
+                                           {"$concatArrays": [_RESERVED_IDS, [reservation_id]]}]},
+        }}])
     if res.matched_count == 0:
         raise HTTPException(status_code=409, detail={
             "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
@@ -622,7 +637,8 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
     # certified total, atomically (one conditional update: two payments under different keys
     # cannot both pass). Over the cap -> 409, nothing written. FLOW-021 allows more only with
     # an Approval (W0-07), which does not exist yet -> refused. Done once per key.
-    await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, amount))
+    await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, amount,
+                                                             payment["id"]))
     async with mw.insert_once():   # SEC-01-C03-C (F-69-01): atomic, _id = key-derived id
         await tenant.finance_payments.insert_one(mw.unique({
             "id": ledger_id, "org_id": org_id,

@@ -242,6 +242,72 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         race: List[Dict[str, Any]] = []
         fg90: List[Dict[str, Any]] = []
         fg105: List[Dict[str, Any]] = []
+        f6903: List[Dict[str, Any]] = []
+
+        def reserve_crash_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            from app.permissions import workflow
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            original = workflow.mark_idempotent_step
+
+            def crash_once():
+                state = {"armed": True}
+
+                async def failing(db_, *, step, **kw):
+                    if step == "reserve" and state["armed"]:
+                        state["armed"] = False   # the reservation is committed; its step is not
+                        raise RuntimeError("injected crash after the cap reservation")
+                    return await original(db_, step=step, **kw)
+                return failing
+
+            def snapshot_pkg():
+                pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                    {"id": pkg_id}, {"_id": 0}))
+                allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                    {"package_id": pkg_id}, {"_id": 0, "amount": 1}).to_list(1000))
+                ledger = tc.portal.call(lambda: op_db.finance_payments.count_documents(
+                    {"subcontractor_payment_id": {"$exists": True}}))
+                return {"committed": pkg.get("committed_paid_total"), "paid": pkg.get("paid_total"),
+                        "allocations": len(allocs), "allocations_sum": round(
+                            sum(float(a["amount"]) for a in allocs), 2), "ledger_rows": ledger}
+
+            out: Dict[str, Any] = {"mode": mode}
+            for case, certified, retries in (("cap_100_sequential", 100, 1),
+                                             ("cap_1000_sequential", 1000, 1),
+                                             ("cap_100_concurrent_x10", 100, 10)):
+                tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                    {"id": pkg_id}, {"$set": {"certified_total": certified}}))
+                ledger0 = snapshot_pkg()["ledger_rows"]
+                idem = uuid.uuid4().hex
+                body = {**base, "amount": 60}
+                workflow.mark_idempotent_step = crash_once()
+                try:
+                    first = tc.post("/api/subcontractor-payments", json=body,
+                                    headers={**hdr, "Idempotency-Key": idem})
+                finally:
+                    workflow.mark_idempotent_step = original
+                after_crash = snapshot_pkg()
+
+                async def retry_n(n=retries):
+                    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                                 base_url="http://testserver") as ac:
+                        return await asyncio.gather(*[ac.post(
+                            "/api/subcontractor-payments", json=body,
+                            headers={**hdr, "Idempotency-Key": idem}) for _ in range(n)])
+                resps = tc.portal.call(retry_n)
+                final = snapshot_pkg()
+                final["ledger_rows"] -= ledger0
+                after_crash["ledger_rows"] -= ledger0
+                out[case] = {"first_status": first.status_code, "after_crash": after_crash,
+                             "retry_statuses": sorted(r.status_code for r in resps),
+                             "retry_error_codes": sorted({str(((r.json() or {}).get("detail") or {})
+                                                              .get("error_code"))
+                                                          for r in resps if r.status_code >= 400}),
+                             "final": final}
+                restore_all()
+            return out
 
         def many_payments_probe(mode: str) -> Dict[str, Any]:
             base = body_for("subpay", fx["A"], c02)
@@ -501,6 +567,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             fg90.append(certified_cap_probe(mode))
             # FG-105: paid_total counts more than 200 earlier payments.
             fg105.append(many_payments_probe(mode))
+            # F-69-03: crash right after the cap reservation; the same key must finish once.
+            f6903.append(reserve_crash_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -514,6 +582,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "fg29_project_in_tenant": fg29, "fg15_labor_money": fg15,
         "f69_02_computed_routes": computed, "f69_01_interrupted_payment_race": race,
         "fg90_certified_cap": fg90, "fg105_many_payments": fg105,
+        "f69_03_reserve_crash": f6903,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -625,6 +694,20 @@ def check_result(result: Dict[str, Any]) -> None:
     for r in rows:   # 250 earlier payments of 1 + this one: all counted (before: only 200)
         assert r == {"mode": r["mode"], "earlier_payments": 250, "status": 201,
                      "paid_total": 251.0, "payable_total": 749.0}, r
+    rows = result["f69_03_reserve_crash"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for case in ("cap_100_sequential", "cap_1000_sequential", "cap_100_concurrent_x10"):
+            c = r[case]
+            assert c["first_status"] == 500, (case, r)
+            # the crash left the reservation and nothing else
+            assert c["after_crash"] == {"committed": 60.0, "paid": 0, "allocations": 0,
+                                        "allocations_sum": 0, "ledger_rows": 0}, (case, r)
+            assert 201 in c["retry_statuses"] and set(c["retry_statuses"]) <= {201, 409}, (case, r)
+            assert "PAYMENT_EXCEEDS_CERTIFIED" not in c["retry_error_codes"], (case, r)
+            # finished exactly once: 1 ledger row, 1 allocation of 60, committed 60 (no phantom)
+            assert c["final"] == {"committed": 60.0, "paid": 60.0, "allocations": 1,
+                                  "allocations_sum": 60.0, "ledger_rows": 1}, (case, r)
 
 
 def check_computed_and_race(result: Dict[str, Any]) -> None:
