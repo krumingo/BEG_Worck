@@ -104,3 +104,14 @@ Per-line amounts of one person add up to the cent to that person's total.
 - **Interpretation:** a report already in payroll (`payroll_status` batched/paid) gets 409 for everyone. FLOW-028 says "Корекции след плащане: няма тихо редактиране", so these go through the correction / reversal path, not an in-place edit.
 - **Batch-save:** all existing reports are checked first; one refusal means nothing is written, including new reports in the same batch.
 - **Tests:** `tests/test_lab_01_h_r36.py`, 25 cases across Admin / Owner / SiteManager of the project / SiteManager of another project / Technician / Accountant / author × draft / returned / submitted / approved / payroll. FG-73 and FG-79 tests were updated to R36.
+
+## LAB-01-I (LAB01H-1 — CLAUDE.md §8/§16 four-eyes; R36 stays) — `tests-LAB-01-I.txt`
+- **A correction never keeps a report approved.** Correcting an APPROVED report, by anyone allowed under R36 (PUT, technician draft or batch-save), sends it back to **SUBMITTED**:
+  - `approved_by` / `approved_at` are cleared and `payroll_ready` is turned off;
+  - its quantity approvals are voided;
+  - the work sessions its approval created are flagged `voided_by_correction`, and the budget hours are given back, as `reset` does;
+  - the change is recorded in `reopened_by_correction` and `correctors`;
+  - a DQ alert `DAILY_REPORT_CORRECTED_AFTER_APPROVAL` is opened.
+- **Four-eyes on approval:** `approve_report_one` (single and bulk) refuses anyone who authored the report (worker / submitted_by / created_by) or corrected it (`correctors`). The single route returns 403.
+- **Payroll** counts the corrected hours only after a different person re-approves the report.
+- A report that is already in payroll stays 409.

@@ -15,7 +15,8 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.tenancy.data_access import TenantData
 from app.services.labor_cost import void_labor_approvals
-from app.services.report_corrections import CORRECTOR, audit_report_correction, authorize_report_edit
+from app.services.report_corrections import (CORRECTOR, audit_report_correction, authorize_report_edit,
+                                             correction_fields, reopen_effects, self_approval_ids)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -323,13 +324,16 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
 
     now = datetime.now(timezone.utc).isoformat()
     update["updated_at"] = now
-    if mode == CORRECTOR:
-        update.update({"corrected_by": user["id"], "corrected_at": now})
-    before = {k: report.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at")}
+    # LAB-01-I (LAB01H-1): a corrected APPROVED report goes back to SUBMITTED
+    set_fields, add = correction_fields(report, user, mode, now)
+    update.update(set_fields)
+    before = {k: report.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at", "reopened_by_correction")}
     # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
     await void_labor_approvals(tenant, org_id, report_id, user["id"],
                                "report_corrected" if mode == CORRECTOR else "report_edited")
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
+    await tenant.employee_daily_reports.update_one(
+        {"id": report_id}, {"$set": update, **({"$addToSet": add} if add else {})})
+    await reopen_effects(tenant, org_id, report, user, now)
     await audit_report_correction(db, user=user, mode=mode, report=report, before=before,
                                   after={k: update[k] for k in before}, endpoint="PUT /daily-reports/{id}")
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
@@ -375,6 +379,9 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     status = report.get("approval_status") or report.get("status", "")
     if status == "APPROVED":
         return {"status": "failed", "report_id": rid, "reason": "already_approved"}
+    # LAB-01-I (LAB01H-1, CLAUDE §8): nobody approves a report they authored or corrected
+    if actor.get("id") in self_approval_ids(report):
+        return {"status": "failed", "report_id": rid, "reason": "self_approval"}
 
     worker_id = report.get("worker_id", "")
     hours = float(report.get("hours") or report.get("hours_worked") or 0)
@@ -564,6 +571,7 @@ _APPROVE_FAIL_MSG = {
     "negative_split_value": "Отрицателни часове в разделението.",
     "coefficient_must_be_at_least_1": "Коефициентът за извънреден труд трябва да е поне 1.",
     "reason_required": "Изисква се причина за override на извънреден труд.",
+    "self_approval": "Не можете да одобрите отчет, който сте създали или поправили — одобрява друг човек.",
 }
 
 
@@ -585,7 +593,8 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     res = await approve_report_one(report, user, override=(data or {}).get("override"),
                                    block_overtime_without_override=False)
     if res["status"] == "failed":
-        raise HTTPException(status_code=400, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
+        code = 403 if res["reason"] == "self_approval" else 400
+        raise HTTPException(status_code=code, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
     if res["status"] == "blocked":  # not expected on single path
         raise HTTPException(status_code=409, detail="overtime_requires_override")
 
@@ -1069,12 +1078,14 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             merged_total = round(sum(e["hours_worked"] for e in merged), 2)
             mode = modes[emp_id]
             change = {"day_entries": merged, "total_hours": merged_total, "updated_at": now}
-            if mode == CORRECTOR:
-                change.update({"corrected_by": user["id"], "corrected_at": now})
+            set_fields, add = correction_fields(existing, user, mode, now)  # LAB-01-I
+            change.update(set_fields)
             # LAB-01-D (FG-72): bump + void BEFORE the content write
             await void_labor_approvals(tenant, org_id, existing["id"], user["id"],
                                        "report_corrected" if mode == CORRECTOR else "batch_saved")
-            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": change})
+            await tenant.employee_daily_reports.update_one(
+                {"id": existing["id"]}, {"$set": change, **({"$addToSet": add} if add else {})})
+            await reopen_effects(tenant, org_id, existing, user, now)
             await audit_report_correction(
                 db, user=user, mode=mode, report=existing,
                 before={"day_entries": old_entries, "total_hours": existing.get("total_hours")},

@@ -1,0 +1,13 @@
+# LAB-01-I checks (2026-11-07), parent 6763970 + LAB-01-I working tree, run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+## LAB-01 tests (labor_cost + d + e + h_r36 + i_four_eyes) --noconftest (mongomock + real mongo:7.0 rs0)
+SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:286: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
+83 passed, 1 skipped, 1 warning in 4.72s
+## tests/test_r0_0*.py --noconftest (real mongo:7.0 rs0)
+814 passed, 6 warnings in 160.79s (0:02:40)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings in 71.78s (0:01:11)
+  non-legacy_routes failures: 0
