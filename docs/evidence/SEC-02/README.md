@@ -352,6 +352,42 @@ Merge commit `0d30eae`, без rebase и без конфликт в кода. П
 * **SEC-02-D-D1:** правилото брои работниците по име на СМР. СМР с различно изписване в сесиите и в бюджета се брои като отделно (безопасно: показва по-малко).
 * **SEC-02-D-D2:** статусът на реда (ok / over) и часовете по СМР остават. При един работник часовете по СМР са негови часове, но без пари (позволено — часове не са заплата).
 
+## SEC-02-E (07.11.2026) — одит SEC02D-1: `POST /sites/{id}/pulse/generate` и всички парични POST/PUT
+
+Находка на одита @ `e6ea838` (HIGH), Р20/Р31. `POST /api/sites/{id}/pulse/generate` имаше само `get_current_user` и не махаше нищо. Warehousekeeper без членство и Viewer получаваха `workers[].labor_cost`, `total_labor_cost` и `budget_snapshot.total_spent`, в off и enforce. Всеки можеше и да прегенерира запазените pulse-ове.
+
+### Поправка
+1. `POST /sites/{id}/pulse/generate` — пазач `require_project_budget_read(..., project_from="site")`, действие `finance.site_pulse_generate.execute` (R20-2B): финансовите роли + SiteManager, член днес на обекта; всички други → 403 (в enforce + AuditEvent). Отговорът минава през `strip_pulse_for_non_finance` (R31 изгледът).
+2. `POST /pulse/generate-all` — само финансовите роли (`finance.pulse_generate_all.execute`).
+3. Натрупаният `budget_snapshot.total_spent` в запазените дневни pulse-ове: два дни се различават с труда на един ден, т.е. със заплатата на един работник в ден с един човек (част (b) на пробата). За SiteManager в pulse остават **само `total_budget` и `status`**. „Изхарчено“ той вижда в бюджетните екрани (текущо, по правилата на Р31).
+4. Същото извеждане чрез разлика е възможно и с `expected-actual?date_from=&date_to=` — за роля без финансово право филтърът по дати вече се пренебрегва (целият обект).
+
+### Обхождане на всички POST/PUT (точка 3 от одита)
+`backend/tools/sec02_money_scan_post.py`: същият регулярен израз и seed като GET скенера. Минава **всеки POST и PUT** (без auth/billing/platform/users/internal/dev), тялото е генерирано от OpenAPI като в PM-01, базата се връща след всяко извикване (oplog). Роли: SiteManager, Technician, Warehousekeeper, Driver, Viewer × off/shadow/enforce.
+
+Първо пускане: **18 route-а** с пари към роля без финансово право. Всички са в регистъра:
+
+| Route | Правило | Защо |
+|---|---|---|
+| `POST /price-modifiers/calculate`, `POST /resource-model/worker-cost-preview`, `…/subcontractor-burden-preview` | R20-1 (финансови роли) | ценово / разходно изчисление |
+| `POST /smr-analyses/{id}/recalculate`, `…/recalculate-with-modifiers`, `POST /smr-analyses/from-offer/{id}`, `POST /revenue-snapshots/from-offer/{id}`, `POST /client-acts/from-offer/{id}`, `PUT /client-acts/{id}`, `PUT /execution-packages/{id}` | R20-2 | паричен документ; затваря част от SEC-01-C02-D4 |
+| `POST /budget-freezes/{project_id}` | R20-2B | бюджет: финансови роли + SiteManager член (в отговора само бюджети) |
+| `POST /extra-works/ai-proposal`, `POST /projects/{id}/activity-budgets/calculate-all-snapshots`, `…/{budget_id}/calculate-snapshot`, `POST /offers/{id}/send`, `PUT /offers/{id}`, `POST /warehouse/batches` | R20-5M (махат се парите, route-ът пази правилото си) | смесен отговор; `avg_daily_wage` е средна надница |
+| `POST /api/supplier-invoices` | преценено: не е пари | ставката на ДДС, повторена от входа на самия викащ |
+
+Второ пускане (`scan_sec02e_post.json`): **4575 извиквания, 0 попадения.** `allowed_budget_view` е само SiteManager на своя обект (`budget-freezes`, `pulse/generate` — само бюджет). Тестове `test_the_post_scan_finds_no_money_for_non_finance_roles`; GET скенерът — пак 5640 / 0.
+
+### Доказателство за SEC02D-1
+* Пробата на одита `docs/audit/probes/sec02/probe_sec02_d_pulse_generate.py` е копирана **непроменена** като `backend/tools/audit_probe_sec02_d_pulse_generate.py` и пусната като тест `test_the_audit_pulse_generate_probe_finds_nothing` (off и enforce): `pulse/generate → 403` за Warehousekeeper и Viewer, `FAILS: none`.
+* Контрапроба (`sec02d1_counter_check.txt`): при `e6ea838` и двете роли получават 200 с `labor_cost` 200.0.
+
+### PM-01
+Регенерирана с harness-а: спрямо SEC-02-D @ `e6ea838` — **195 клетки**. 13 route-а × 5 роли без финансово право × 3 режима → 403; в enforce + `audit_events` (действия `.execute` / `.update`). Спрямо #69 @ `6d43284` — 1584 клетки.
+
+### Дълг
+* **SEC-02-E-D1:** `POST /warehouse/batches` иска от склададжията единична цена (формата), а Р20 казва „в склада само количества“. Отговорът вече е без цената; самото въвеждане е решение за 5C-C25 / FG-23.
+* **SEC-02-E-D2:** POST скенерът генерира само задължителните полета на тялото. Route-ове, които отговарят 422 без пълно тяло, не са проверени с истински данни.
+
 ## Rollback
 
 Revert на commit-а. Няма миграция и няма запис в данни. Проектните назначения, синхронизирани след SEC-02, носят три допълнителни read действия; при стария код те просто не се ползват.
