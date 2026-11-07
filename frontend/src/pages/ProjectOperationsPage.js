@@ -329,7 +329,7 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", form))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
+            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", { ...form, amount: Number(form.amount) }))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

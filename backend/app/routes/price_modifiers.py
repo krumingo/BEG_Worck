@@ -12,6 +12,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import require_money_write, OWNER_ADMIN_ROLES, require_finance_read
+from app.permissions.money_input import project_in_tenant  # SEC-01-C03-B (FG-29)
 from app.services.price_modifiers import (
     get_effective_modifiers, apply_modifiers_to_price,
     DEFAULT_MODIFIERS, DEFAULT_AUTO_RULES, MODIFIER_KEYS,
@@ -112,6 +113,7 @@ async def update_project_modifiers(
     user: dict = Depends(require_m2),
 ):
     tenant = _tenant(user)
+    await project_in_tenant(tenant, project_id)  # SEC-01-C03-B (FG-29): before any write
     now = datetime.now(timezone.utc).isoformat()
     update = {"updated_at": now, "updated_by": user["id"]}
     if data.modifiers:

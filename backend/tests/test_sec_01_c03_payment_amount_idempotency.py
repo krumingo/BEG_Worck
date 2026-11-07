@@ -51,7 +51,8 @@ MODES = ("off", "shadow", "enforce")
 DB_PREFIX_OP, DB_PREFIX_SYS = "c03_op_", "c03_sys_"
 SYNTH_PASSWORD = "C03-Synthetic-Pass-2026!"     # synthetic users of a scratch database
 AUDIT = {"audit_events", "audit_logs", "audit_chain_heads", "audit_chain", "audit_idempotency"}
-INVALID = ("nan", "inf", "-inf", "1e309", "", "abc", -1, 0, "<missing>")
+# SEC-01-C03-B (FG-47): a numeric STRING and a boolean are refused too (the rule of #70).
+INVALID = ("nan", "inf", "-inf", "1e309", "", "abc", "10", True, [10], -1, 0, "<missing>")
 
 # (key, path, amount field, business collections the valid call writes, handler)
 ENDPOINTS = (
@@ -209,12 +210,15 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         rows: List[Dict[str, Any]] = []
         sequences: List[Dict[str, Any]] = []
         r1: List[Dict[str, Any]] = []
+        fg29: List[Dict[str, Any]] = []
+        fg15: List[Dict[str, Any]] = []
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for key, _path, field, colls, _h in ENDPOINTS:
                 base = body_for(key, fx["A"], c02)
                 for value in INVALID:
-                    if key == "subpay_vat" and value in (0, "", "<missing>"):
+                    if key == "subpay_vat" and (value == "<missing>" or
+                                                (type(value) is int and value == 0)):
                         continue                  # a zero/absent VAT is a valid payment
                     res = post("accountant", key, with_value(base, field, value),
                                uuid.uuid4().hex)
@@ -264,6 +268,51 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     r1.append({"mode": mode, "user": ukey, "project": target, "probe": key, **res})
                     if res["written"]:
                         restore_all()
+            # FG-29: the project must exist in THIS tenant (Accountant of A, finance role).
+            foreign, unknown = fx["B"]["project_id"], "c03-no-such-project"
+            cases = [("labor", foreign, "B's project"), ("labor", unknown, "unknown"),
+                     ("labor", None, "missing"), ("waste", foreign, "B's project"),
+                     ("waste", unknown, "unknown"), ("pm_put", foreign, "B's project"),
+                     ("pm_put", unknown, "unknown")]
+            for key, pid, what in cases:
+                if key == "pm_put":
+                    before = tc.portal.call(lambda: pm._last_ts(oplog))
+                    resp = tc.put("/api/price-modifiers/project/%s" % pid, json={"modifiers": {}},
+                                  headers={"Authorization": "Bearer " + tokens["accountant"]})
+                    written = tc.portal.call(lambda: pm.writes_with_org(client, oplog, before,
+                                                                        dbs, snap))
+                    res = {"status": resp.status_code, "written": sorted({short(n) for n, _ in written}),
+                           "business_written": sorted({short(n) for n, _ in written
+                                                       if n.split(".", 1)[1] not in AUDIT})}
+                else:
+                    body = body_for(key, fx["A"], c02)
+                    if key == "labor":
+                        body["project_id"] = pid
+                        if pid is None:
+                            body.pop("project_id")
+                    res = post("accountant", key, body, uuid.uuid4().hex, project_id=pid)
+                    res.pop("body")
+                fg29.append({"mode": mode, "probe": key, "project": what, **res})
+                if res["written"]:
+                    restore_all()
+            # FG-15: an R16 member (Technician on P1) writes labor but never sees the rate or
+            # cost — neither in the response nor in a replay; the Accountant sees them.
+            for ukey in ("technician", "accountant"):
+                body = body_for("labor", fx["A"], c02)
+                idem = uuid.uuid4().hex
+                first = post(ukey, "labor", body, idem)
+                again = post(ukey, "labor", body, idem)
+                stored = tc.portal.call(lambda: op_db.labor_entries.find_one(
+                    {"id": (first["body"] or {}).get("id")}, {"_id": 0}))
+                fg15.append({"mode": mode, "user": ukey,
+                             "status": [first["status"], again["status"]],
+                             "response_money_keys": sorted(
+                                 k for k in ("hourly_rate", "labor_cost") if k in first["body"]),
+                             "replay_money_keys": sorted(
+                                 k for k in ("hourly_rate", "labor_cost") if k in again["body"]),
+                             "stored_money_keys": sorted(
+                                 k for k in ("hourly_rate", "labor_cost") if k in (stored or {}))})
+                restore_all()
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -274,6 +323,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "mongo": "local replica set (oplog)", "outbound_http": "closed local port",
         "seconds": round(time.time() - started, 1),
         "amount_rows": rows, "idempotency_sequences": sequences, "sec_r1": r1,
+        "fg29_project_in_tenant": fg29, "fg15_labor_money": fg15,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -363,24 +413,38 @@ def check_result(result: Dict[str, Any]) -> None:
         else:
             assert r["status"] == 403 and r["business_written"] == [], r
 
+    fg29 = result["fg29_project_in_tenant"]
+    assert len(fg29) == 7 * len(MODES)
+    for r in fg29:
+        expected = 422 if r["project"] == "missing" else 404
+        assert r["status"] == expected and r["business_written"] == [], r
+
+    fg15 = result["fg15_labor_money"]
+    assert {(r["mode"], r["user"]) for r in fg15} == {
+        (m, u) for m in MODES for u in ("technician", "accountant")}
+    for r in fg15:
+        assert r["status"] == [201, 201], r
+        assert r["stored_money_keys"] == ["hourly_rate", "labor_cost"], r
+        visible = [] if r["user"] == "technician" else ["hourly_rate", "labor_cost"]
+        assert r["response_money_keys"] == visible and r["replay_money_keys"] == visible, r
+
 
 # ═════════════════════════════════════════════════════════════════════ DB-free tests
 def test_money_value_accepts_only_finite_positive_numbers():
     from fastapi import HTTPException
     from app.permissions.money_input import money_value
     assert money_value(10) == 10.0
-    assert money_value("12.5") == 12.5
-    assert money_value(" 3 ") == 3.0
+    assert money_value(12.5) == 12.5
     assert money_value(1e300) == 1e300                       # no upper limit in the canon
     assert money_value(0, allow_zero=True) == 0.0
-    for bad in ("nan", "NaN", "inf", "-inf", "Infinity", "1e309", "", "  ", "abc", "1,5",
-                -1, -0.01, 0, "0", None, True, False, [], {}, float("nan"), float("inf"),
-                10 ** 400):
+    # FG-47: only a JSON number (the rule of #70) — numeric text and booleans are refused
+    for bad in ("12.5", " 3 ", "10", "nan", "NaN", "inf", "-inf", "Infinity", "1e309", "",
+                "  ", "abc", "1,5", -1, -0.01, 0, "0", None, True, False, [], [10], {},
+                float("nan"), float("inf"), 10 ** 400):
         with pytest.raises(HTTPException) as exc:
             money_value(bad)
         assert exc.value.status_code == 422
-        assert exc.value.detail["error_code"] == "AMOUNT_INVALID"
-    for bad in (-1, "nan", "inf"):
+    for bad in (-1, "nan", "inf", "0", False):
         with pytest.raises(HTTPException):
             money_value(bad, allow_zero=True)
 

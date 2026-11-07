@@ -83,13 +83,18 @@
   "1e309",
   "",
   "abc",
+  "10",
+  true,
+  [
+   10
+  ],
   -1,
   0,
   "<missing>"
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 16.4,
+ "seconds": 15.0,
  "amount_rows": [
   {
    "mode": "off",
@@ -99,7 +104,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -109,7 +114,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -119,7 +124,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -129,7 +134,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -139,7 +144,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -149,7 +154,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -159,7 +196,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -169,7 +206,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -179,7 +216,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -189,7 +226,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -199,7 +236,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -209,7 +246,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -219,7 +256,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -229,7 +266,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -239,7 +276,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -249,7 +318,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -259,7 +328,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -269,7 +338,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -279,7 +348,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -289,7 +358,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -299,7 +368,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -309,7 +378,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -319,7 +388,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -329,7 +398,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -339,7 +440,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -349,7 +450,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -359,7 +460,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -369,7 +470,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -379,7 +480,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -389,7 +490,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -399,7 +500,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -409,7 +510,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -419,7 +520,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -429,7 +562,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -439,7 +572,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -449,7 +582,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -459,7 +592,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -469,7 +602,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -479,7 +612,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -489,7 +622,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -499,7 +632,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -509,7 +642,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -519,7 +684,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -529,7 +694,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -539,7 +704,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -549,7 +714,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -559,7 +724,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -569,7 +734,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -579,7 +744,17 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -589,7 +764,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -599,7 +806,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -609,7 +816,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -619,7 +826,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -629,7 +836,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -639,7 +846,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -649,7 +856,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -659,7 +866,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "off",
@@ -669,7 +908,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -679,7 +918,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -689,7 +928,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -699,7 +938,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -709,7 +948,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -719,7 +958,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -729,7 +968,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -755,11 +994,43 @@
    "mode": "off",
    "probe": "waste",
    "field": "qty",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
    "value": -1,
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -769,7 +1040,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "off",
@@ -789,7 +1060,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -799,7 +1070,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -809,7 +1080,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -819,7 +1090,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -829,7 +1100,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -839,7 +1110,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -849,7 +1152,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -859,7 +1162,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -869,7 +1172,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -879,7 +1182,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -889,7 +1192,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -899,7 +1202,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -909,7 +1212,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -919,7 +1222,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -929,7 +1232,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -939,7 +1274,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -949,7 +1284,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -959,7 +1294,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -969,7 +1304,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -979,7 +1314,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -989,7 +1324,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -999,7 +1334,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1009,7 +1344,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1019,7 +1354,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1029,7 +1396,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1039,7 +1406,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1049,7 +1416,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1059,7 +1426,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1069,7 +1436,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1079,7 +1446,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1089,7 +1456,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1099,7 +1466,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1109,7 +1476,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1119,7 +1518,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1129,7 +1528,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1139,7 +1538,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1149,7 +1548,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1159,7 +1558,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1169,7 +1568,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1179,7 +1578,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1189,7 +1588,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1199,7 +1598,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1209,7 +1640,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1219,7 +1650,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1229,7 +1660,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1239,7 +1670,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1249,7 +1680,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1259,7 +1690,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1269,7 +1700,17 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1279,7 +1720,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1289,7 +1762,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1299,7 +1772,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1309,7 +1782,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1319,7 +1792,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1329,7 +1802,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1339,7 +1812,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1349,7 +1822,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1359,7 +1864,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1369,7 +1874,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1379,7 +1884,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1389,7 +1894,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1399,7 +1904,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1409,7 +1914,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1419,7 +1924,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1445,11 +1950,43 @@
    "mode": "shadow",
    "probe": "waste",
    "field": "qty",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
    "value": -1,
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1459,7 +1996,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "shadow",
@@ -1479,7 +2016,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1489,7 +2026,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1499,7 +2036,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1509,7 +2046,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1519,7 +2056,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1529,7 +2066,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1539,7 +2108,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1549,7 +2118,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1559,7 +2128,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1569,7 +2138,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1579,7 +2148,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1589,7 +2158,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1599,7 +2168,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1609,7 +2178,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1619,7 +2188,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1629,7 +2230,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1639,7 +2240,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1649,7 +2250,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1659,7 +2260,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1669,7 +2270,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1679,7 +2280,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1689,7 +2290,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1699,7 +2300,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1709,7 +2310,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1719,7 +2352,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1729,7 +2362,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1739,7 +2372,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1749,7 +2382,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1759,7 +2392,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1769,7 +2402,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1779,7 +2412,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1789,7 +2422,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1799,7 +2432,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1809,7 +2474,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1819,7 +2484,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1829,7 +2494,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1839,7 +2504,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1849,7 +2514,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1859,7 +2524,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1869,7 +2534,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1879,7 +2544,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1889,7 +2554,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1899,7 +2596,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1909,7 +2606,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1919,7 +2616,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1929,7 +2626,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1939,7 +2636,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1949,7 +2646,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1959,7 +2656,17 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1969,7 +2676,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1979,7 +2718,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1989,7 +2728,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -1999,7 +2738,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2009,7 +2748,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2019,7 +2758,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2029,7 +2768,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2039,7 +2778,39 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2049,7 +2820,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2059,7 +2830,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2069,7 +2840,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2079,7 +2850,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2089,7 +2860,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2099,7 +2870,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2109,7 +2880,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2135,11 +2906,43 @@
    "mode": "enforce",
    "probe": "waste",
    "field": "qty",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
    "value": -1,
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -2149,7 +2952,7 @@
    "status": 422,
    "business_written": [],
    "written": [],
-   "error_code": "AMOUNT_INVALID"
+   "error_code": null
   },
   {
    "mode": "enforce",
@@ -3156,6 +3959,295 @@
     "op.audit_events"
    ],
    "error_code": "PERMISSION_DENIED"
+  }
+ ],
+ "fg29_project_in_tenant": [
+  {
+   "mode": "off",
+   "probe": "labor",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "project": "missing",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "PROJECT_REQUIRED"
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "pm_put",
+   "project": "B's project",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "pm_put",
+   "project": "unknown",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "project": "missing",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "PROJECT_REQUIRED"
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "pm_put",
+   "project": "B's project",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "pm_put",
+   "project": "unknown",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "project": "missing",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "PROJECT_REQUIRED"
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "pm_put",
+   "project": "B's project",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "pm_put",
+   "project": "unknown",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  }
+ ],
+ "fg15_labor_money": [
+  {
+   "mode": "off",
+   "user": "technician",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [],
+   "replay_money_keys": [],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "off",
+   "user": "accountant",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "replay_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "user": "technician",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [],
+   "replay_money_keys": [],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "user": "accountant",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "replay_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "user": "technician",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [],
+   "replay_money_keys": [],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "user": "accountant",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "replay_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
   }
  ]
 }

@@ -252,10 +252,9 @@ SUCCESS = {e[1]: e[4] for e in ENDPOINTS}
 # Debt SEC-01-D1 (not fixed here — CLAUDE.md §18: technical anomalies are recorded, Krum
 # decides): these handlers write without checking that {project_id} is a project of the
 # caller's tenant. The write still goes to the caller's own tenant (org_id).
-CROSS_TENANT_UNCHECKED_PROJECT = {
-    "/api/price-modifiers/project/{project_id}",
-    "/api/projects/{project_id}/material-waste",
-}
+# SEC-01-C03-B (FG-29) closed debt SEC-01-D1: price-modifiers and material-waste now check
+# that the project exists in the caller's tenant -> 404, nothing written. No route is left.
+CROSS_TENANT_UNCHECKED_PROJECT: set = set()
 
 
 def check_rows(rows: List[Dict[str, Any]]) -> None:

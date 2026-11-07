@@ -18,7 +18,8 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.permissions.money_write import (require_field_cost_write, require_finance_read, money_values_visible, without_keys, strip_money_for_non_finance)
 from app.permissions.finance_read import LABOR_MONEY_FIELDS
-from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.permissions.money_input import (MoneyWrite, money_value, project_in_tenant,  # SEC-01-C03
+                                         labor_money_visible, without_labor_money)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -62,6 +63,7 @@ async def create_labor_entry(
     tenant = _tenant(user)
     org_id = user["org_id"]
     hours = money_value(data.get("hours"), "hours")  # SEC-01-C03: finite > 0, else 422 before any write
+    await project_in_tenant(tenant, data.get("project_id"))  # SEC-01-C03-B (FG-29)
     now = datetime.now(timezone.utc).isoformat()
 
     entry = {
@@ -89,23 +91,19 @@ async def create_labor_entry(
         entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
 
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
-    # SEC-02-B (FG-15, R20-5): R16 lets a member Technician/SiteManager WRITE labor, but the
-    # employee's rate and the cost are money — the stored row keeps them; neither the
-    # response nor an Idempotency-Key REPLAY of it shows them to a caller without the
-    # finance right.
-    show_money = await money_values_visible(request, user)
+    # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
+    # a replay shows them to a caller without the finance right (an R16 member).
+    show_money = await labor_money_visible(request, user)
     if mw.replay_id:
         replay = await tenant.labor_entries.find_one({"id": mw.replay_id}, {"_id": 0})
-        return replay if show_money or replay is None else without_keys(replay, LABOR_MONEY_FIELDS)
+        return replay if show_money else without_labor_money(replay)
     entry["id"] = mw.new_id("labor_entry")
     async with mw:
         if await mw.needs_insert(tenant.labor_entries, entry["id"]):
             await tenant.labor_entries.insert_one(entry)
         mw.result_id = entry["id"]
     out = {k: v for k, v in entry.items() if k != "_id"}
-    if not show_money:
-        out = without_keys(out, LABOR_MONEY_FIELDS)
-    return out
+    return out if show_money else without_labor_money(out)
 
 
 @router.post("/labor-entries/sync-from-work-reports")

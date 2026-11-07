@@ -21,7 +21,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.permissions.money_write import require_money_write, require_finance_read, strip_money_for_non_finance
-from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.permissions.money_input import MoneyWrite, money_value, project_in_tenant  # SEC-01-C03
 
 router = APIRouter(tags=["Subcontractors"])
 
@@ -530,7 +530,7 @@ async def create_subcontractor_payment(
     amount = money_value(data.get("amount"))
     vat_raw = data.get("vat_amount")
     vat_amount = round(money_value(vat_raw, "vat_amount", allow_zero=True), 2) \
-        if vat_raw not in (None, "") else 0.0  # input VAT (без ДДС amount stays in `amount`)
+        if vat_raw is not None else 0.0  # input VAT (без ДДС amount stays in `amount`)
 
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -538,6 +538,7 @@ async def create_subcontractor_payment(
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
+    await project_in_tenant(tenant, pkg.get("project_id"))  # SEC-01-C03-B (FG-29)
 
     now = datetime.now(timezone.utc).isoformat()
 

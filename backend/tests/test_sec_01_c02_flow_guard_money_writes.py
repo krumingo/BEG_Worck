@@ -253,6 +253,8 @@ def expected(key: str, legacy_role: str, tenant: str, target: Optional[str]) -> 
         allowed = legacy_role in FINANCE or (legacy_role in FIELD_MEMBER and target == "P1")
         if not allowed:
             return deny
+        if target == "XA" and key in ("labor_create", "waste_create"):
+            return {"status": 404, "writes": False}      # SEC-01-C03-B (FG-29)
         writes = not (key in WRITES_ONLY_WITH_SOURCE_DATA and target in ("P2", "XA"))
         return {"status": ok, "writes": writes}
     if legacy_role not in FINANCE:

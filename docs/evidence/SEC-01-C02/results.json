@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.5,
+ "seconds": 25.2,
  "rows": [
   {
    "mode": "off",
@@ -5255,14 +5255,10 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -5274,14 +5270,10 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -5713,14 +5705,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -5732,14 +5720,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10965,14 +10949,10 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10984,14 +10964,10 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -11423,14 +11399,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -11442,14 +11414,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -17037,14 +17005,10 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -17056,14 +17020,10 @@
    "method": "POST",
    "path": "/api/labor-entries",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.labor_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -17531,14 +17491,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -17550,14 +17506,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "XA",
-   "status": 201,
+   "status": 404,
    "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {

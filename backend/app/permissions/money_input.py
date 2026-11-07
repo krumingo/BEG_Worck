@@ -9,9 +9,10 @@ R16). The audit of PR #69 @ f33b2ba proved two defects on ``POST /subcontractor-
    Outflow row was written to ``finance_payments``, then the response failed with 500;
 2. two identical POSTs wrote two Outflow rows (a plain retry = a double payment).
 
-``money_value`` — a money/quantity field must be a FINITE number > 0 (``allow_zero`` for
-an optional tax part). Anything else -> 422 ``AMOUNT_INVALID``, raised before any write.
-The canon and the models define no upper limit, so only finiteness is required.
+``money_value`` — a money/quantity field must be a JSON number, finite and > 0
+(``allow_zero`` for an optional tax part); the rule of PR #70 (``app/services/money_amount``,
+FG-47). Anything else -> 422, raised before any write. The canon and the models define no
+upper limit, so only finiteness is required.
 
 ``MoneyWrite`` — the ``Idempotency-Key`` header on the canonical W0-04 registry
 (``app.audit.idempotency``, collection ``audit_idempotency``) through the same
@@ -31,7 +32,6 @@ The canon and the models define no upper limit, so only finiteness is required.
 The key is scoped per tenant, per action and per user: another user's key never
 replays (or reveals) someone else's response.
 """
-import math
 import uuid
 from typing import Any, Awaitable, Callable, Dict, Optional
 
@@ -42,8 +42,8 @@ from app.audit.idempotency import (
 )
 from app.db import db
 from app.permissions.workflow import RecoverableWrite
+from app.services.money_amount import is_number, positive_amount
 
-ERROR_AMOUNT_INVALID = "AMOUNT_INVALID"
 ERROR_IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS"
 ERROR_MONEY_WRITE_FAILED = "MONEY_WRITE_FAILED"
 ERROR_KEY_REQUIRED = "IDEMPOTENCY_KEY_REQUIRED"
@@ -52,33 +52,59 @@ MAX_KEY_LENGTH = 200
 _NS = uuid.UUID("7d6c3f0e-5c1a-4f43-9a51-5ec01c03a001")
 
 
-def _invalid(field: str, allow_zero: bool) -> HTTPException:
-    rule = "≥ 0" if allow_zero else "> 0"
-    return HTTPException(status_code=422, detail={
-        "error_code": ERROR_AMOUNT_INVALID, "field": field,
-        "message": "„%s“ трябва да е крайно число %s" % (field, rule)})
-
-
 def money_value(value: Any, field: str = "amount", *, allow_zero: bool = False) -> float:
     """``value`` as a finite float > 0 (``>= 0`` with ``allow_zero``), else 422.
 
-    Accepts a JSON number or a numeric string (the forms send strings); refuses
-    booleans, None, "", NaN, ±Infinity and anything that overflows a float (1e309).
+    SEC-01-C03-B (FG-47): the SAME rule as PR #70 (``app/services/money_amount.py``, copied
+    byte for byte so the two PRs merge without conflict): only a JSON number — a string
+    (numeric text too), a boolean, None, a list, NaN, ±Infinity and 1e309 are refused.
     """
-    if value is None or isinstance(value, bool):
-        raise _invalid(field, allow_zero)
-    try:
-        if isinstance(value, (int, float)):
-            number = float(value)
-        elif isinstance(value, str) and value.strip():
-            number = float(value.strip())
-        else:
-            raise _invalid(field, allow_zero)
-    except (ValueError, OverflowError):
-        raise _invalid(field, allow_zero) from None
-    if not math.isfinite(number) or number < 0 or (number == 0 and not allow_zero):
-        raise _invalid(field, allow_zero)
-    return number
+    if allow_zero and is_number(value) and value == 0:
+        return 0.0
+    return positive_amount(value, field)
+
+
+async def project_in_tenant(tenant, project_id: Any) -> None:
+    """SEC-01-C03-B (FG-29): ``project_id`` must name a project of THIS tenant, else nothing
+    is written — 422 when it is missing, 404 when no such project exists here (a project of
+    another tenant is "missing", never revealed). ``tenant`` is the request's TenantData."""
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PROJECT_REQUIRED", "message": "Обектът (project_id) е задължителен"})
+    if not await tenant.projects.find_one({"id": project_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Project not found")
+
+
+# SEC-01-C03-B (FG-15): money keys of a labor row (the same set as SEC-02's LABOR_MONEY_FIELDS).
+LABOR_MONEY_FIELDS = frozenset({"hourly_rate", "labor_cost"})
+
+
+async def labor_money_visible(request, user: Dict[str, Any]) -> bool:
+    """FG-15 / R20-5: may this caller see the rate and cost of a labor row?
+
+    R16 lets a member SiteManager/Technician WRITE labor, but the employee's rate and the
+    cost are money. off/shadow: the legacy finance roles. enforce: the Permission Service on
+    ``labor.entry.create`` at COMPANY scope — only a company assignment (Owner/Admin/
+    Accountant) holds it there; an R16 member holds it only on the project-scope mirror,
+    which never covers a company-level request (``service._scope_covers``). No denial audit:
+    a hidden value is not a refused action.
+    """
+    from app.permissions.deps import current_mode, MODE_ENFORCE
+    from app.permissions.money_write import FINANCE_WRITE_ROLES
+    if current_mode() != MODE_ENFORCE:
+        return user.get("role") in FINANCE_WRITE_ROLES
+    from app.tenancy.guard import get_tenant_context
+    from app.permissions.service import evaluate_permission
+    ctx = await get_tenant_context(request, user)
+    decision = await evaluate_permission(ctx, "labor.entry.create", module=None,
+                                         scope_type=None, scope_id=None)
+    return bool(decision.allowed)
+
+
+def without_labor_money(row: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if row is None:
+        return None
+    return {k: v for k, v in row.items() if k not in LABOR_MONEY_FIELDS}
 
 
 class MoneyWrite:
