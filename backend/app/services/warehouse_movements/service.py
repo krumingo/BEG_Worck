@@ -706,6 +706,7 @@ class CommandService:
             await self._bind_subproject_parent(tenant_db, inp)
             self._bind_write_off_project(inp)
             await self._bind_project_from_locations(tenant_db, inp)
+            await self._check_invoice_line_delivery(tenant_db, tenant_collection, inp)
         except InvariantViolationError as exc:
             binding_error = exc
             inp.project_id = await self._location_project(tenant_db, inp)
@@ -1732,6 +1733,55 @@ class CommandService:
                 await ensure_enforce_project_relation(
                     ctx, tenant_db, inp,
                     load_assignments=getattr(self._gate, "_assignments_loader", None))
+
+    @staticmethod
+    async def _check_invoice_line_delivery(tenant_db, tenant_collection,
+                                           inp: CommandInput) -> None:
+        """5C-C26l — Codex F-55-C26-02 (D-04: one lot is cost once).
+
+        A direct delivery (RECEIVE_FROM_SUPPLIER_TO_PROJECT) that names
+        invoice line L must go to a project L is allocated to — the
+        DB-resolved destination project (subproject → parent). Otherwise L's
+        allocated project would keep L as Path B while the destination
+        recognises the same lot through the canon. Also refused: delivering
+        more than L's allocation to that project still not delivered (when
+        the units are comparable). 422 INVOICE_LINE_PROJECT_MISMATCH, nothing
+        written (held back until the rights check — FG-55)."""
+        if inp.action != CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT \
+                or not inp.invoice_line_id or not inp.project_id:
+            return
+        from app.services.canonical_material_cost import effective_allocations, _norm_unit
+        from app.services.warehouse_movements.errors import InvoiceLineProjectMismatchError
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(tenant_db, inp.tenant_id)
+        line = await tenant.invoice_lines.find_one(
+            {"id": inp.invoice_line_id},
+            {"_id": 0, "id": 1, "qty": 1, "unit": 1, "allocations": 1,
+             "allocation_type": 1, "allocation_ref_id": 1})
+        mine = [a for a in effective_allocations(line or {})
+                if a["type"] == "project" and a["ref_id"] == inp.project_id]
+        if not mine:
+            raise InvoiceLineProjectMismatchError(
+                "the invoice line is not allocated to the delivery's project",
+                context={"invoice_line_id": inp.invoice_line_id})
+        if any(a["qty"] is None for a in mine) or \
+                _norm_unit(line.get("unit")) not in ("", _norm_unit(inp.unit)):
+            return            # quantity not comparable — the allocation check stands
+        allocated = Decimal(str(sum(a["qty"] for a in mine)))
+        delivered = Decimal("0")
+        async for row in tenant_collection.find(
+                {"action": CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT.value,
+                 "invoice_line_id": inp.invoice_line_id, "project_id": inp.project_id},
+                {"_id": 0, "quantity": 1, "idempotency_key": 1}):
+            if inp.idempotency_key and row.get("idempotency_key") == inp.idempotency_key:
+                return        # a replay of this very delivery — idempotency answers
+            delivered += Decimal(str(row.get("quantity") or "0"))
+        if delivered + Decimal(str(inp.quantity)) > allocated:
+            raise InvoiceLineProjectMismatchError(
+                "the delivery exceeds the invoice line's allocation to the project",
+                context={"invoice_line_id": inp.invoice_line_id,
+                         "allocated": str(allocated), "delivered": str(delivered),
+                         "quantity": str(inp.quantity)})
 
     @staticmethod
     async def _location_project(tenant_db, inp: CommandInput) -> Optional[str]:

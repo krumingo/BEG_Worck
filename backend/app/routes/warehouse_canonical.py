@@ -151,6 +151,7 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         "CROSS_TENANT": 403,
         "IDEMPOTENCY_CONFLICT": 409,
         "INVARIANT_VIOLATION": 422,
+        "INVOICE_LINE_PROJECT_MISMATCH": 422,
         "NEGATIVE_STOCK": 422,
         "ORIGIN_ACCEPTANCE_OVERRUN": 422,
         "QUARANTINE_STATE_VIOLATION": 422,

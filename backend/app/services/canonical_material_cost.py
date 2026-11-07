@@ -251,6 +251,10 @@ async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
 #        PATH_B_LINK_AMBIGUOUS — warehouse receipts of L exceed its warehouse
 #          allocation but L is split over several projects: which project's
 #          part went through the warehouse is not in the data.
+#        PATH_B_LINK_PROJECT_CONFLICT (5C-C26l, Codex F-55-C26-02) — L was
+#          delivered directly into ANOTHER project than it is allocated to
+#          (legacy data; new ones are refused 422): the lot counts once, on
+#          the canonical destination; raised on both projects.
 
 PATH_B_RECEIPT_ACTIONS: Tuple[str, ...] = (
     "receive_from_supplier", "receive_from_supplier_to_project")
@@ -423,16 +427,82 @@ def path_b_split(line: dict, project_id: str, links: List[dict]) -> Dict[str, An
     excess = max(to_warehouse - wh_alloc, 0.0)
     covered = direct_to_me
     warning = None
+    only_me = all(a["ref_id"] == project_id for a in proj_allocs)
     if excess > 0:
-        only_me = all(a["ref_id"] == project_id for a in proj_allocs)
         if only_me:
             covered += excess
         else:
             warning = "PATH_B_LINK_AMBIGUOUS"
+    # 5C-C26l — Codex F-55-C26-02 (legacy data, D-04): direct deliveries of L
+    # into ANOTHER project Q beyond Q's own allocation of L are the lot L
+    # allocated here — counted once, on the canonical destination Q. When this
+    # project is L's only project allocation the covered quantity leaves its
+    # Path B; otherwise which project's part went to Q is not in the data. In
+    # both cases PATH_B_LINK_PROJECT_CONFLICT is raised (and on Q, see
+    # project_link_conflicts). New deliveries like this are refused (422).
+    to_other: Dict[Any, float] = {}
+    for r in receipts:
+        if r.get("action") == "receive_from_supplier_to_project" and not _is_to(r, project_id):
+            q = r.get("project_id") or (r.get("destination") or {}).get("location_id")
+            to_other[q] = to_other.get(q, 0.0) + (_f(r.get("quantity")) or 0.0)
+    excess_other = sum(
+        max(qty - sum(a["qty"] or 0.0 for a in proj_allocs if a["ref_id"] == q), 0.0)
+        for q, qty in to_other.items())
+    if excess_other > 0:
+        if only_me:
+            covered += excess_other
+        warning = "PATH_B_LINK_PROJECT_CONFLICT"
     covered = min(covered, alloc_qty)
     uncovered = alloc_qty - covered
     return _out(uncovered * unit_price, warning,
                 "proven" if covered > 0 else "none", uncovered)
+
+
+async def project_link_conflicts(tenant, org_id: str, project_id: str) -> List[dict]:
+    """5C-C26l (Codex F-55-C26-02) — the destination side: canonical direct
+    deliveries into THIS project that carry an invoice line allocated to it
+    for less than was delivered (or not at all). The lot is counted here (the
+    canon); the warning makes the conflicting allocation visible."""
+    delivered: Dict[str, float] = {}
+    units: Dict[str, set] = {}
+    async for row in tenant.warehouse_transactions.find(
+            {"org_id": org_id, "action": "receive_from_supplier_to_project",
+             "project_id": project_id, "invoice_line_id": {"$nin": [None, ""]}},
+            {"_id": 0, "invoice_line_id": 1, "quantity": 1, "unit": 1}):
+        lid = row["invoice_line_id"]
+        delivered[lid] = delivered.get(lid, 0.0) + (_f(row.get("quantity")) or 0.0)
+        units.setdefault(lid, set()).add(_norm_unit(row.get("unit")))
+    if not delivered:
+        return []
+    out = []
+    async for line in tenant.invoice_lines.find(
+            {"org_id": org_id, "id": {"$in": sorted(delivered)}}, {"_id": 0}):
+        lid = line.get("id")
+        mine = [a for a in effective_allocations(line)
+                if a["type"] == "project" and a["ref_id"] == project_id]
+        if mine and any(a["qty"] is None for a in mine):
+            continue                       # whole-line allocation: not comparable
+        allocated = sum(a["qty"] or 0.0 for a in mine)
+        comparable = units.get(lid, set()) <= {_norm_unit(line.get("unit")), ""}
+        if allocated == 0 or (comparable and delivered[lid] > allocated):
+            out.append({"code": "PATH_B_LINK_PROJECT_CONFLICT", "project_id": project_id,
+                        "invoice_line_id": lid, "invoice_id": line.get("invoice_id"),
+                        "description": line.get("description"),
+                        "delivered_qty": delivered[lid], "allocated_qty": allocated,
+                        "rule": PATH_B_RULE})
+    missing = set(delivered) - {w["invoice_line_id"] for w in out} - {
+        ln_id async for ln_id in _existing_line_ids(tenant, org_id, delivered)}
+    for lid in sorted(missing):            # line unknown in this tenant
+        out.append({"code": "PATH_B_LINK_PROJECT_CONFLICT", "project_id": project_id,
+                    "invoice_line_id": lid, "delivered_qty": delivered[lid],
+                    "allocated_qty": 0.0, "rule": PATH_B_RULE})
+    return out
+
+
+async def _existing_line_ids(tenant, org_id, ids):
+    async for line in tenant.invoice_lines.find(
+            {"org_id": org_id, "id": {"$in": sorted(ids)}}, {"_id": 0, "id": 1}):
+        yield line["id"]
 
 
 async def legacy_issue_rows(tenant, org_id: str, project_id: str) -> List[dict]:
@@ -617,6 +687,12 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         lines.append(line)
         counted_invoice.append(line)
 
+    # 5C-C26l (F-55-C26-02) — the destination side of a cross-project link.
+    seen_conflicts = {(w["code"], w.get("invoice_line_id")) for w in path_b_warnings}
+    for w in await project_link_conflicts(tenant, org_id, project_id):
+        if (w["code"], w["invoice_line_id"]) not in seen_conflicts:
+            path_b_warnings.append(w)
+
     # 5C-C26 point 3 — legacy issues carry no invoice-line / lot reference:
     # an overlap with a counted Path B line of the same material cannot be
     # proven or refuted from the data. Warn; never change the sum silently.
@@ -748,6 +824,12 @@ async def path_b_integrity_warnings(tenant, org_id: str) -> List[dict]:
         for a in effective_allocations(line):
             if a["type"] == "project" and a["ref_id"]:
                 project_ids.add(a["ref_id"])
+    # 5C-C26l — destination projects of linked direct deliveries too.
+    for pid in await tenant.warehouse_transactions.distinct(
+            "project_id", {"org_id": org_id, "action": "receive_from_supplier_to_project",
+                           "invoice_line_id": {"$nin": [None, ""]}}):
+        if pid:
+            project_ids.add(pid)
     out: List[dict] = []
     for pid in sorted(project_ids):
         cost = await project_material_cost(tenant, org_id, pid)

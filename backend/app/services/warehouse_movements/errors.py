@@ -45,6 +45,12 @@ class InvariantViolationError(WarehouseMovementError):
     error_code = "INVARIANT_VIOLATION"
 
 
+class InvoiceLineProjectMismatchError(InvariantViolationError):
+    """5C-C26l (Codex F-55-C26-02): a direct delivery names an invoice line
+    that is not (or no longer) allocated to the delivery's project."""
+    error_code = "INVOICE_LINE_PROJECT_MISMATCH"
+
+
 class NegativeStockError(InvariantViolationError):
     """Normal stock cannot silently become negative (FLOW-009)."""
     error_code = "NEGATIVE_STOCK"
