@@ -1664,7 +1664,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
-| #73 LAB-01 | `c422cbd` | **PASS** (LAB01B-1 closed: package only from approver record; PUT validates day_entries); declared debt: akord 0 until FG-65 | 2026-11-07 |
+| #73 LAB-01 | `21d4ed1` | **PASS** (FG-72 approval binding, FG-73 owner-only PUT, FG-66 correction records); low latent: correction update can reset a non-pending record | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2315,3 +2315,43 @@ Gates:
 | R0 | 814 |
 
 Info: the 422 tells a SiteManager allowed on P1 that the dispatch is addressed elsewhere (not where). That is acceptable, because the rights check passed first.
+
+
+## #73 LAB-01-D @ `21d4ed1` — 2026-11-07 ~04:00 UTC — PASS (1 latent low note)
+
+Delta:
+- FG-72: approvals are keyed `approval_key(report, entry, version)`. Every content change (owner PUT, batch save, technician draft edit, reject, reset) calls `void_labor_approvals`, which does `report_version += 1` and marks the approvals `void` (kept, never deleted). Duplicate entry ids → 400 on PUT; in pricing a duplicate key is counted once, with DQ `DUPLICATE_REPORT_ENTRY`.
+- FG-73: `PUT /daily-reports/{id}` is owner-only, Admin included (pending Krum).
+- FG-66: `payroll_corrections` records (pending_approval, AuditEvent, DQ alert, never applied automatically; superseded, never deleted).
+- FG-76: `progress-warnings` reads the LAB-01 function.
+
+Writers of report content vs voiding (code read):
+- Every `employee_daily_reports` update that changes content voids: `daily_reports.py:309` PUT, `:1024` batch save, `technician.py:1399` draft edit; reject `:529` and reset `:647` void too.
+- The approve path (`:500`, status + frozen split) and `payroll_sync` (payroll status only) do not change content and correctly do not void.
+
+New probe `docs/audit/probes/lab01/probe_lab01d_binding.py` (production `compute_person_labor`). Package A Akord, piece 6; approval for (r1, e1, v0), qty 10:
+
+| Case | Result |
+|---|---|
+| B1 r1/e1/v0 | 60 |
+| B2 the same entry twice | **60, not 120** (+ DQ `DUPLICATE_REPORT_ENTRY`) |
+| B3 edited, version 1 | **0** (approval void) |
+| B4 e2 of the same report | 0 (not priced by e1's approval) |
+
+Other probes:
+- `probe_lab01.py`: L1 updated to the new approval key → 600 at 40 h and at 10 h.
+- `probe_lab01b_package_pointer.py`: FAILS none.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*` | **37 passed** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0 | 814 |
+
+Notes, not blocking:
+- **(a) Latent, low:** in `sync_run_corrections` (`payroll_corrections.py:116-128`) the `else` branch rewrites **any** existing record whose status is not pending-with-the-same-amount back to `pending_approval`, clearing `approval_id`. That includes a record already approved or applied. Today only pending and superseded exist, because there is no approval runtime. Once FG-65 approvals exist, an edited run could silently reopen an approved or applied correction. Guard it: only update pending or superseded; otherwise create a new correction version.
+- **(b)** `void_labor_approvals` runs after the content write as a separate operation. A crash between the two leaves the edited content with the old version, so the old approval would still match. This is narrow; a transaction or "bump version first" would close it.

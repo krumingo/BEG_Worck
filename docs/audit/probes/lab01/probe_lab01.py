@@ -31,8 +31,13 @@ ak = {"id": "r1", "status": "APPROVED", "date": "2026-11-02", "project_id": "p",
       "pay_type": "Akord", "approved_quantity": 120, "piece_rate": 5, "unit": "m2"}
 # LAB-01-B (FG-64): line-level pay_type / piece_rate / approved_quantity are ignored; terms come from the
 # package (labor_pay_type Akord, labor_piece_rate 5) and an approval record (approver != worker).
+try:   # LAB-01-D (FG-72): approvals keyed by (report, entry, version)
+    from app.services.labor_cost import approval_key as _ak
+    _qkey = _ak("r1", None, 0)
+except ImportError:
+    _qkey = "r1"
 TERMS = {"packages": {"pkgA": {"id": "pkgA", "project_id": "p", "labor_pay_type": "Akord", "labor_piece_rate": 5}},
-         "quantities": {"r1": {"report_id": "r1", "approved_quantity": 120, "status": "approved", "approved_by": "boss",
+         "quantities": {_qkey: {"report_id": "r1", "approved_quantity": 120, "status": "approved", "approved_by": "boss",
                                "execution_package_id": "pkgA"}}}
 ak = dict(ak, execution_package_id="pkgA")
 r40 = compute_person_labor({"hourly_rate": 15, "pay_type": "Hourly"}, [dict(ak, hours=40)], TERMS)
