@@ -4559,3 +4559,30 @@ My 16-name × 10-type matrix (160 cases): **0 mismatches**. The threshold is sho
 | PM-01 | 6 |
 
 The merge with main touches inventories, `run_meta` and the `idempotency.js` pair.
+
+### main → `2ec61f3` (#72 + #70 + #78)
+
+Codex results:
+
+| PR | Result |
+|---|---|
+| #74 | PASS |
+| #78 | PASS, merged |
+| #76 | **CHANGES_REQUESTED** |
+
+The #76 findings:
+
+- **F-76-01:** an ordinary payment can exceed the contract cap when an advance exists.
+- **F-76-02:** the audit record is duplicated after a crash.
+
+**Audit miss (#76 @ `542fa2c`, which I passed).**
+
+- My `subadv` probe tested advances against the cap (S8 / S9: concurrent advances; committed counts toward the cap), but **not an ordinary payment after an advance**.
+- The crash probes S4 / S5 checked "one of everything" on business rows, but **not the AuditEvent count after the crash-and-retry**.
+
+For the #76 fix head, add:
+
+- (a) advance A, then ordinary payments up to and past `cap − A`, including concurrently, with exact 201 / 409 boundaries;
+- (b) a crash at each step, then same-key retry → exactly 1 AuditEvent per business action.
+
+Trial merges now use main `2ec61f3`.
