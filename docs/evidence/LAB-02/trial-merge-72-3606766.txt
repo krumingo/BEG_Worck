@@ -1,0 +1,21 @@
+# Trial merge (local, not pushed): #75 @ 59fd3a7 + #72 @ 3606766 → 6ac4b15 (2026-11-07)
+# conflicts: tenancy/ownership.py ORG_KEYED (both added collections) and server.py startup (both added index bootstraps) — resolved by keeping both
+## A2C guard
+W0-03E-A2C tenant boundary guard: 216 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 436 unit(s) checked, 0 violation(s)
+## concurrency: FG-85 (one key → one Pay Run) + LAB02-1 (one active approval), real mongo:7.0 rs0
+8 passed, 31 deselected, 1 warning in 1.80s
+## LAB-02 + LAB-01 tests (mongomock + real)
+129 passed, 1 warning in 11.66s
+## #72 tests (W0-04-C01 + AUTH-01/02 + R0-03)
+150 passed, 6 warnings in 187.49s (0:03:07)
+## PM-01
+1 failed, 4 passed, 1 skipped, 6 warnings in 2.35s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 165.01s (0:02:45)
+## W0 DB-free
+15 failed, 1093 passed, 70 skipped, 6 warnings in 77.23s (0:01:17)
+  non-legacy_routes failures: 0
+  PM-01 failure: test_the_committed_matrix_covers_every_route_role_and_mode_served_today — 'not in matrix': POST /api/auth/forgot-password, POST /api/auth/reset-password
+  the same failure on #72 @ 3606766 alone (1 failed, 4 passed, 1 skipped) — #72's AUTH-01 routes are not yet in docs/evidence/PM-01/matrix.csv; not caused by LAB-01/LAB-02 (on #75 alone PM-01: 5 passed, 1 skipped)
