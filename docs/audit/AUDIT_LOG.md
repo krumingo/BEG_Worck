@@ -2265,3 +2265,17 @@ Gates:
 | A2C | 0/208 |
 | A1 | 0/422 |
 | R0 | **814** |
+
+
+### #71 @ `71f9bbe` — FG-63 narrow-window check (requested by @parent) — holds
+
+Probe `docs/audit/probes/sec02/probe_sec02_e_narrow_window.py`: a member SiteManager, work sessions plus approved daily reports, off and enforce.
+
+| Case | Request | Result |
+|---|---|---|
+| 2 workers on 2 days | one-day window (only worker 1's day) | 200 with `actual_cost` / `clean_labor_cost` **410** — the two-worker all-time total, not worker 1's 200 |
+| `PROBE_SINGLE=1` (one worker in the whole project) | either window | only the planned **budget** 5000 (allowed); actual and labor cost hidden |
+
+- Why the one-day window shows 410: for a caller without the finance right the window is deliberately **ignored**. `routes/expected_actual.py:47-50` sets `date_from = date_to = None` (SEC-02-E, anti-differencing).
+- So one worker's pay is not exposed by a narrow window. **FG-63 holds.** The probe's "FAILS" lines are false positives: it flagged the planned budget and the two-worker total.
+- Residual (info, the same class as noted before; inherent to R31 "spent"): the all-time total grows day by day. A SiteManager who polls once per day can take the difference, which is that day's labor. On a day with a single worker, that is that worker's pay. Mitigation would be coarser publication (for example weekly, k-anonymous deltas); this is Krum's call.
