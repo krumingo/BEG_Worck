@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
@@ -137,8 +137,8 @@ Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b
 | #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #64 | `frontend/src/components/DashboardLayout.js` |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 
 Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
 
@@ -1007,10 +1007,10 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 
 
 ---
@@ -1081,7 +1081,7 @@ The comment on #69 still applies.
 | Pair | Status |
 |---|---|
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
@@ -1123,10 +1123,10 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 
 | Pair | Status |
 |---|---|
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 
 
 ---
@@ -1663,8 +1663,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `e733c66` | **PASS** (fixes IDEM-IDX-1; chain linear under 50 concurrent; #56 recipe verified); rollout risk: startup refuses on existing duplicates | 2026-11-07 |
-| #73 LAB-01 | `709815d` | **PASS** (FG-48/51, no default rate, downtime apart, Pay Run == spent); notes: akord = 0 in production until quantity approval exists (declared); **merge notes incomplete** (labor_smr × #69/#71 FG-26 delete_many; project_pnl × #70) | 2026-11-07 |
+| #72 W0-04-C01 | `009ac1d` | **PASS** (FG-57: lazy unique chain index or AuditChainUnprotected); notes: no equivalent guard for the idempotency index; create_index inside a #56 transaction | 2026-11-07 |
+| #73 LAB-01 | `fa3e23a` | **FINDINGS: LAB01B-1** worker-editable line package pointer picks pay type / piece rate (latent until packages carry terms); FG-64/66 otherwise OK | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -1867,7 +1867,7 @@ Merge-tree, `e733c66` against each:
 |---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #56 | conflict: `store.py` (recipe above) + the A2B inventory |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 
 **Rollout risk (not a code defect; for Krum).** If a production or staging database already has duplicate idempotency rows or `(tenant_id, sequence)` events, which are likely given IDEM-IDX-1 and the `record_event` debt, the **app refuses to start** after deploy, by design. Before deploying, run the dry run `scripts/w0_04_bootstrap_audit_indexes.py` against a copy of the data, as the HANDOFF says.
 
@@ -1946,7 +1946,7 @@ Gates:
 | #71 SEC-02 | `b37909f` | **PASS** (SEC02D-1 closed; POST/PUT sweep clean); FG-63 + #69 re-merge pending | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 `31ed258` | conflict: `project_pnl.py` |
-| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
 
 - The HANDOFF names `expected_actual` / `activity_budgets` / `project_pnl` / `all_reports` with respect to #71 only.
 - It does not mention that `labor_smr.py` `sync-from-work-reports` was rewritten by both #69 and #73:
@@ -2101,3 +2101,101 @@ My own sweep: `probe_sec02_unregistered_money_gets.py` with `PROBE_METHOD=POST` 
 - Limitation: an empty body is refused with 422 by most routes, so this corroborates the PR's own scan but does not prove the absence of a leak.
 
 Note: E-D1 (the keeper enters a unit price) is intended under R32, per @parent.
+
+
+## #55 5C-C26h @ `518aab4` — 2026-11-07 ~02:00 UTC — PASS
+
+Delta:
+- FG-59/61: the projects touched come from DB-resolved locations; a body `project_id` must name one, except for dispatch, reserve and release.
+- FG-55: rights are decided before a binding error. A caller who is not allowed gets the same 403, and the denial names only what the caller sent.
+- FG-60: member-scoped reads — `_member_scope` / `_within_member_scope`; balance and history are filtered to member projects.
+
+Probes:
+- New `test_probe_pr55_c26h_reads.py`, a SiteManager member of P1 only, real company grant:
+
+| Read | off | enforce |
+|---|---|---|
+| unfiltered history | only P1 rows (`p-c22`) | only P1 rows (`p-c22`) |
+| history with `project_id = P2` | **403** | **403** |
+| history with `location = WH` | **403** | **403** |
+| balance | no P2 locations | no P2 locations |
+
+- c26e_real (DENIED, relation required), c26f_warehouse_only (DENIED, project required), and c24, c24b, c25, c26, c26b, c26d: all pass.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + c23 | **746 passed** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/221 |
+| A1 | 0/448 |
+| R0 | 814 |
+
+Note (code read, low): history is narrowed **after** `limit` / `cursor`, so a member page can be short or empty while `next_cursor` advances. This is a UX point, not a leak.
+
+## #72 W0-04-C01 FG-57 @ `009ac1d` — 2026-11-07 ~02:05 UTC — PASS (2 notes)
+
+Delta: `record_event` → `_require_chain_index`. If the unique `(tenant_id, sequence)` index is missing, it creates exactly that index; a conflict, duplicates or an error → `AuditChainUnprotected`, and nothing is appended. A positive result is cached per (client, database).
+
+Probe `docs/audit/probes/w004/probe_w004_fg57.py`. All PROVED:
+
+| Case | Result |
+|---|---|
+| G1 | database with **no** indexes, 30 concurrent `record_event` → index created lazily, 30 stored, sequences 1..30, chain True |
+| G2 | non-unique `(tenant_id, sequence)` index → `AuditChainUnprotected`, 0 appended |
+| G3 | an existing fork (2 rows with sequence 1) → `AuditChainUnprotected`, both rows kept |
+
+`probe_w004_c01.py` I1–I6 still pass.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_w0_04*` | 52 passed |
+| W0 | 1092/15/63, same 15 failures |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | 814 |
+
+**On the deviation from a pure refusal (asked by @parent):** creating the planned index lazily is acceptable.
+- It is the same index startup and onboarding create, and it drops or deletes nothing.
+- On a conflict or a fork it still refuses.
+- The result is the same safety (no fork) without blocking a database that only missed startup.
+
+Notes, not blocking:
+- **(a) No symmetric guard for idempotency.** `begin_idempotent` has no equivalent guard. Probe G4: a database that missed startup and onboarding still gives **6/6 STARTED** for one key. A tenant database that enters the registry after startup without onboarding (migration or backfill provisioning) stays unprotected until the next restart. Suggestion: the same lazy guard for `audit_idempotency` (`id` and `(tenant_id, action, key)`).
+- **(b) After the #56 merge:** `record_event(session=...)` will call `_require_chain_index` without the session. If the index is ever missing, `create_index` runs while the caller's transaction is open on the same collection, which may block until the transaction times out. This is rare, because startup creates the index. Run the index check before opening the transaction, or note it in the merge recipe.
+
+## #73 LAB-01-B @ `fa3e23a` — 2026-11-07 ~02:10 UTC — FINDINGS (1, latent)
+
+Delta:
+- FG-64: `line.pay_type`, `line.piece_rate` and `line.approved_quantity` are ignored.
+  - The pay type and piece rate come only from the package (`execution_packages.labor_pay_type` / `labor_piece_rate`), restricted to the line's own project.
+  - The quantity comes only from `labor_quantity_approvals` with status approved, `approved_by` set, and approver ≠ worker.
+- FG-66: remaining is never negative; the excess becomes a `FLOW028_CORRECTION` item.
+
+Probes and gates:
+- `probe_lab01.py`: L1 updated to package + approval terms → 600 at 40 h and at 10 h. The old L1 relied on line fields, which are now ignored by design. L3, L4, L5 and L6 still pass (Pay Run == spent: 360 == 300 + 60).
+- `tests/test_lab_01*`: 22 passed.
+- W0: 1085/15/50; A2C 0; A1 0; R0 814.
+
+**LAB01B-1 (MEDIUM-HIGH, latent): the worker still picks the package that prices the line. PROVED** at function level (production `compute_person_labor` and `load_smr_terms` shapes) with `docs/audit/probes/lab01/probe_lab01b_package_pointer.py`.
+- `_package()` uses the approval record's `execution_package_id`, **else `line.execution_package_id`**. Only a package of another project is refused.
+- `PUT /daily-reports/{id}` stores `day_entries` dicts unvalidated (`daily_reports.py:252-264`; FG-64 itself says so). The normalizer passes `execution_package_id` through, so the worker sets it on a DRAFT, and approval does not reset it.
+
+Results:
+
+| Case | no package | package A (Hourly) | package B (Daily) |
+|---|---|---|---|
+| P1 time work: profile Monthly 1100/22 = 50 per day, 12 h | **50** | **180** | **120** |
+
+| Case | package C (piece 2) | package D (piece 9) |
+|---|---|---|
+| P2 akord: approval record with qty 100 but no `execution_package_id` | **200** | **900** |
+
+- Latent: nothing writes `labor_pay_type` / `labor_piece_rate` on packages yet, so it is not exploitable today. It becomes exploitable once packages carry terms (FG-65 / quantity approval).
+- Fix direction:
+  - take the pricing package only from the approver-written approval record (require `execution_package_id` there);
+  - for time work, ignore package pay types not set by the approver, or validate `day_entries` against the SMR assignment;
+  - never price from a worker-editable pointer.

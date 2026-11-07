@@ -29,8 +29,14 @@ def check(c, label):
 
 ak = {"id": "r1", "status": "APPROVED", "date": "2026-11-02", "project_id": "p", "worker_id": "w",
       "pay_type": "Akord", "approved_quantity": 120, "piece_rate": 5, "unit": "m2"}
-r40 = compute_person_labor({"hourly_rate": 15, "pay_type": "Hourly"}, [dict(ak, hours=40)])
-r10 = compute_person_labor({"hourly_rate": 15, "pay_type": "Hourly"}, [dict(ak, hours=10)])
+# LAB-01-B (FG-64): line-level pay_type / piece_rate / approved_quantity are ignored; terms come from the
+# package (labor_pay_type Akord, labor_piece_rate 5) and an approval record (approver != worker).
+TERMS = {"packages": {"pkgA": {"id": "pkgA", "project_id": "p", "labor_pay_type": "Akord", "labor_piece_rate": 5}},
+         "quantities": {"r1": {"report_id": "r1", "approved_quantity": 120, "status": "approved", "approved_by": "boss",
+                               "execution_package_id": "pkgA"}}}
+ak = dict(ak, execution_package_id="pkgA")
+r40 = compute_person_labor({"hourly_rate": 15, "pay_type": "Hourly"}, [dict(ak, hours=40)], TERMS)
+r10 = compute_person_labor({"hourly_rate": 15, "pay_type": "Hourly"}, [dict(ak, hours=10)], TERMS)
 check(r40["total"] == 600 and r10["total"] == 600, "L1 FG-48 akord 40h→%s, 10h→%s (expect 600/600)" % (r40["total"], r10["total"]))
 real = {"id": "r2", "status": "APPROVED", "date": "2026-11-02", "project_id": "p", "worker_id": "w", "hours": 8, "smr_type": "Мазилка"}
 r2 = compute_person_labor({"hourly_rate": 15, "pay_type": "Akord"}, [real])
