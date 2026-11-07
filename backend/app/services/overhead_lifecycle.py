@@ -197,6 +197,10 @@ async def ensure_overhead_indexes(db) -> None:
     onboarding (``onboarding.onboard_tenant``) — never on a request path. Idempotent."""
     await ensure_allocation_indexes(db)
     await ensure_snapshot_indexes(db)
+    # the lock rows' collection exists from startup too: a request never creates a
+    # collection (no implicit "create" command on a request path)
+    await db[PERIOD_LOCKS_COLLECTION].create_index([("org_id", 1), ("name", 1)],
+                                                   name="oh01_period_lock_org_name")
 
 
 #: D6: the org-wide lock name for computing ANY snapshot (overlap checks need it).
