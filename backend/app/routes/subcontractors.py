@@ -936,7 +936,8 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
         "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
                                "subcontractor_payment_id": payment["id"],
                                "account_id": account_id,
-                               "advance_deducted": deducted}))
+                               "advance_deducted": deducted},
+        entry_id=mw.new_id("audit_payment")))      # F-76-02: exactly one row (as #69)
     if deducted > 0:
         await _record_act_deduction(mw, tenant, user, act, deducted, payment["id"], now,
                                     reservation_id=payment["id"])

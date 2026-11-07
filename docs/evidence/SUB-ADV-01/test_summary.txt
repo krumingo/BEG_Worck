@@ -59,3 +59,9 @@ W0 DB-free: 15 failed, 1094 passed, 79 skipped — identical to main d226c49 (sa
 Guards: A1 438 / 0; A2C 217 / 0; A1 inventory = script output (main + #69 rows); A2B inventory §1 regenerated (audit.py writer line 80 -> 88)
 PM-01 fresh run on the merged tree reproduces the committed (merged) matrix: 0 added / 0 removed / 0 changed
 Frontend: yarn test 7 suites, 117 tests passed; yarn build compiled (no warning in changed files)
+
+## F-76-02 follow-up (audit after c4de7c9): the ordinary payment's audit row
+log_audit "subcontractor_payment_created" (the #69 step) now has entry_id=mw.new_id("audit_payment"), as #69 does
+3 modes: crash right after the payment audit, then 2 same-key retries -> [500, 201, 201], 1 audit row, 1 payment, paid 500
+counter-check without the entry_id (f76_02_payment_counter_check.json): 2 audit rows in every mode
+real Mongo SUB-ADV-01 + SEC-01 + PAY-01 + W0-04-C01: 706 passed; R0 814; W0 15/1094/79 (= main); A1 438/0; A2C 217/0

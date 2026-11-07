@@ -374,6 +374,19 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                 "audit_rows": audits("subcontractor_advance_deducted") - d0,
                                 "act_entries": len(act2.get("advance_deductions") or []),
                                 "deducted": pkg_state()["advance_deducted_total"]}
+            # the ordinary payment's audit row too (the #69 step, entry_id "audit_payment")
+            p0 = audits("subcontractor_payment_created")
+            key = uuid.uuid4().hex
+            body = {"package_id": rid("pkg"), "act_id": rid("act1"), "amount": 500}
+            first = post_crashing("audit", "accountant", pay_url, body, key)
+            r1 = slim(call("POST", "accountant", pay_url, body, key))
+            r2 = slim(call("POST", "accountant", pay_url, body, key))
+            out["payment"] = {"statuses": [first["status"], r1["status"], r2["status"]],
+                              "audit_rows": audits("subcontractor_payment_created") - p0,
+                              "payment_rows": tc.portal.call(
+                                  lambda: op_db.subcontractor_payments.count_documents(
+                                      {"package_id": rid("pkg"), "kind": {"$ne": "advance"}})),
+                              "paid": pkg_state()["paid_total"]}
             restore_all()
             return out
 
@@ -813,6 +826,8 @@ def check_result(result: Dict[str, Any]) -> None:
                                 "advance_rows": 1, "advance_total": 1000}, r
         assert r["deduction"] == {"statuses": [500, 201, 201], "audit_rows": 1,
                                   "act_entries": 1, "deducted": 100}, r
+        assert r["payment"] == {"statuses": [500, 201, 201], "audit_rows": 1,
+                                "payment_rows": 1, "paid": 500}, r
 
     rev = result["reversal"]
     assert [r["mode"] for r in rev] == list(MODES)
