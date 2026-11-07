@@ -44,3 +44,8 @@ Canon: FLOW-028 (akord = approved quantity × agreed piece rate), FLOW-019 (DOWN
   - quantity entry follows R36.
 - PM-01 matrix regenerated (+144 cells; no difference between the three modes).
 - **Bot scenario** (`bot/`): a real backend and the production build, Playwright at 390×844 — **8/8 passed**. The screenshots are in `bot/screens/`.
+
+## LAB-02-C01 — merged LAB-01-I (four-eyes) — `tests-LAB-02-C01.txt`
+- **Quantity entry:** `PUT /labor-quantities/entry` on an APPROVED report sends it back to SUBMITTED, exactly like the other R36 corrections (approved_by cleared, approvals void, DQ alert, `correctors`).
+- **Approve / classify:** `POST /labor-quantities/approve` and `/classify` refuse anyone who authored or corrected the report (`self_approval_ids`), as well as the worker.
+- **Test:** the admin corrects a quantity → the report is SUBMITTED → the admin gets 403 on approval → the SiteManager gets 200.

@@ -199,9 +199,9 @@ def test_a_report_change_voids_the_approval(monkeypatch, backend):
         r = await c.put("/api/labor-quantities/entry", json={"report_id": "R-AK", "quantity": 130}, headers=H("admin", False))
         assert r.status_code == 200, r.text
         assert (await op.labor_quantity_approvals.find_one({}))["status"] == "void"
-        row = (await _preview(c))["w-ak"]
-        assert row["earned_amount"] == 0.0
-        assert [w["code"] for w in row["labor_dq_warnings"]] == ["AKORD_NO_APPROVED_QUANTITY"]
+        # LAB-01-I: the corrected report is SUBMITTED again — nothing of it is payable
+        assert "w-ak" not in await _preview(c)
+        assert (await op.employee_daily_reports.find_one({"id": "R-AK"}))["status"] == "SUBMITTED"
         # an approval for the OLD version is refused (stale)
         r = await c.post("/api/labor-quantities/approve", json={
             "report_id": "R-AK", "report_version": 1, "approved_quantity": 130,
@@ -334,4 +334,21 @@ def test_quantity_entry_follows_r36(monkeypatch, backend):
                             headers=H("w-ak", False))).status_code == 400
         assert (await c.put("/api/labor-quantities/entry", json={"report_id": "R-AK", "quantity": 5},
                             headers=H("sm", False))).status_code == 200
+    run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-01-I four-eyes here too
+def test_quantity_correction_reopens_the_report_and_the_corrector_cannot_approve(monkeypatch, backend):
+    async def scenario(c, op):
+        await _approve_flow(c, op)
+        r = await c.put("/api/labor-quantities/entry", json={"report_id": "R-AK", "quantity": 130},
+                        headers=H("admin", False))
+        assert r.status_code == 200 and r.json()["status"] == "SUBMITTED"
+        doc = await op.employee_daily_reports.find_one({"id": "R-AK"}, {"_id": 0})
+        assert doc["approved_by"] is None and doc["correctors"] == ["admin"]
+        assert await op.dq_alerts.count_documents({"code": "DAILY_REPORT_CORRECTED_AFTER_APPROVAL"}) == 1
+        body = {"report_id": "R-AK", "report_version": doc["report_version"], "approved_quantity": 130,
+                "execution_package_id": "pkg-sh"}
+        assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("admin"))).status_code == 403
+        assert (await c.post("/api/labor-quantities/approve", json=body, headers=H("sm"))).status_code == 200
     run(monkeypatch, scenario, backend)

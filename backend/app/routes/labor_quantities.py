@@ -32,7 +32,8 @@ from pydantic import BaseModel
 from app.db import db
 from app.deps.auth import can_manage_project, get_current_user
 from app.services.labor_cost import approval_key, void_labor_approvals
-from app.services.report_corrections import CORRECTOR, audit_report_correction, authorize_report_edit
+from app.services.report_corrections import (CORRECTOR, audit_report_correction, authorize_report_edit,
+                                             correction_fields, reopen_effects, self_approval_ids)
 from app.tenancy.data_access import TenantData
 
 router = APIRouter(tags=["Labor quantities (LAB-02)"])
@@ -153,10 +154,12 @@ def _require_approver_role(user: dict):
         raise HTTPException(status_code=403, detail="Only Admin, Owner or the project's SiteManager approves")
 
 
-async def _require_approver(user: dict, line: dict):
-    """Admin, Owner or the SiteManager of the line's project — never the worker himself."""
-    if user.get("id") == line.get("worker_id"):
-        raise HTTPException(status_code=403, detail="A worker cannot approve or classify their own work")
+async def _require_approver(user: dict, line: dict, doc: Optional[dict] = None):
+    """Admin, Owner or the SiteManager of the line's project — never the worker himself, nor
+    anyone who authored or corrected the report (LAB-01-I four-eyes, CLAUDE §8)."""
+    if user.get("id") == line.get("worker_id") or user.get("id") in self_approval_ids(doc or {}):
+        raise HTTPException(status_code=403, detail=(
+            "A person cannot approve or classify work they reported or corrected — another approver does"))
     if user.get("role") in ("Admin", "Owner"):
         return
     if user.get("role") == "SiteManager" and line.get("project_id") and \
@@ -253,14 +256,18 @@ async def enter_quantity(data: QuantityEntryInput, user: dict = Depends(get_curr
     now = _now()
     await void_labor_approvals(tenant, org_id, data.report_id, user["id"],
                                "quantity_corrected" if mode == CORRECTOR else "quantity_entered")
-    extra = {"corrected_by": user["id"], "corrected_at": now} if mode == CORRECTOR else {}
+    # LAB-01-I: a corrected APPROVED report goes back to SUBMITTED (four-eyes re-approval)
+    extra, add = correction_fields(doc, user, mode, now)
+    push = {"$addToSet": add} if add else {}
     if data.entry_id:
         await tenant.employee_daily_reports.update_one(
             {"org_id": org_id, "id": data.report_id, "day_entries.id": data.entry_id},
-            {"$set": {"day_entries.$.quantity": qty, "updated_at": now, **extra}})
+            {"$set": {"day_entries.$.quantity": qty, "updated_at": now, **extra}, **push})
     else:
         await tenant.employee_daily_reports.update_one(
-            {"org_id": org_id, "id": data.report_id}, {"$set": {"quantity": qty, "updated_at": now, **extra}})
+            {"org_id": org_id, "id": data.report_id},
+            {"$set": {"quantity": qty, "updated_at": now, **extra}, **push})
+    await reopen_effects(tenant, org_id, doc, user, now)
     await audit_report_correction(db, user=user, mode=mode, report=doc,
                                   before={"quantity": line.get("quantity"), "entry_id": data.entry_id},
                                   after={"quantity": qty, "entry_id": data.entry_id},
@@ -337,7 +344,7 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
 
     async def perform(key):
         doc, line = await _locate(tenant, org_id, data.report_id, data.entry_id)
-        await _require_approver(user, line)
+        await _require_approver(user, line, doc)
         if line["status"] not in REPORT_DECIDABLE:
             raise HTTPException(status_code=409, detail="Only a submitted or approved report gets a quantity decision")
         if int(data.report_version) != line["report_version"]:
@@ -408,7 +415,7 @@ async def classify_line(data: ClassifyInput, user: dict = Depends(get_current_us
 
     async def perform(key):
         doc, line = await _locate(tenant, org_id, data.report_id, data.entry_id)
-        await _require_approver(user, line)
+        await _require_approver(user, line, doc)
         if int(data.report_version) != line["report_version"]:
             raise HTTPException(status_code=409, detail=(
                 f"The report changed (version {line['report_version']}, not {data.report_version}); reload"))
