@@ -110,9 +110,11 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     # ── f. OVERHEAD ────────────────────────────────────────────────
     # OH74-03: the published (current) version of each period — never 0, never both
-    from app.services.overhead_lifecycle import current_allocations
-    allocs = await current_allocations(tenant, {"org_id": org_id, "project_id": project_id})
-    overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
+    # FG-127: the ONE project-overhead helper every reader uses (same legacy fallback, label)
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    _oh = await project_overhead_current(tenant, project_id)
+    allocs = _oh["rows"]
+    overhead = _oh["amount"]
     # R38: the old allocation still counts while its period is recomputed — say so
     overhead_recalculating = any(a.get("recalculating") for a in allocs)
 
@@ -161,8 +163,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
             "overhead": overhead,
-            "overhead_recalculating": overhead_recalculating,
-            "overhead_label": "преизчислява се" if overhead_recalculating else None,
+            **recalculating_fields(overhead_recalculating),  # FG-127: same fields everywhere
             "other_cost": other_cost,
             "total_expense": total_expense,
         },

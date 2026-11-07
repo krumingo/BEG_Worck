@@ -214,8 +214,9 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Overhead allocation from pools
     # OH74-03: the published (current) version of each period — never 0, never both
-    from app.services.overhead_lifecycle import current_allocations
-    allocs = await current_allocations(tenant, {"org_id": org_id, "project_id": project_id})
+    # FG-127: the ONE project-overhead helper every reader uses (same legacy fallback, label)
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    allocs = (await project_overhead_current(tenant, project_id))["rows"]
     overhead_by_pool = {"administration": 0, "base_warehouse": 0, "transport": 0, "general": 0}
     for a in allocs:
         pool = a.get("pool", "general")
@@ -253,8 +254,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "insurance_burden": insurance_burden,
         "overhead_allocation": total_overhead_alloc,
         # R38: the old allocation still counts while its period is recomputed
-        "overhead_recalculating": any(a.get("recalculating") for a in allocs),
-        "overhead_label": "преизчислява се" if any(a.get("recalculating") for a in allocs) else None,
+        **recalculating_fields(any(a.get("recalculating") for a in allocs)),  # FG-127
         "overhead_by_pool": {k: round(v, 2) for k, v in overhead_by_pool.items()},
         "subcontractor_burden": sub_burden,
         "contract_burden": contract_burden,

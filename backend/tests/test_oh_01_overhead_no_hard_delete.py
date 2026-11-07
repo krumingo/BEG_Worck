@@ -119,7 +119,11 @@ def _app(monkeypatch, op, sysdb, mode):
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    for module in (appdb, deps_auth, deps_modules, utils_audit, overhead, project_pnl):
+    from app.services import (project_financial_results, paid_labor, resource_model,
+                              resolve_hourly_rate, overhead_realtime)
+    for module in (appdb, deps_auth, deps_modules, utils_audit, overhead, project_pnl,
+                   project_financial_results, paid_labor, resource_model, resolve_hourly_rate,
+                   overhead_realtime):
         monkeypatch.setattr(module, "db", op)
     try:    # PR #69 (SEC-01): compute is guarded by require_money_write, which compares
         # the resolved tenant database with ITS legacy handle — absent on main.
@@ -1148,7 +1152,7 @@ def test_27_every_view_reads_the_one_oh01_allocation(monkeypatch, backend, mode)
         # nothing allocated in OH-01 yet: the legacy full_cost figure stays visible in the
         # views that showed it on main (addendum 2, R38), project P&L never read it
         v0 = await _views(c, op)
-        assert v0.pop("pnl") == 0 and set(v0.values()) == {9999.0}, v0
+        assert set(v0.values()) == {9999.0}, v0               # FG-127: P&L too
         r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
                          headers=_h(key=_key()))
         assert r.status_code == 200, r.text
@@ -1252,7 +1256,11 @@ async def _labels(c, op):
     prof = (await c.get(f"/api/project-profit/{PROJ_A}", headers=_h())).json()["expenses"]
     pkg = (await c.get("/api/execution-packages/PKG-A/net-financial", headers=_h())).json()["costs"]
     byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()["periods"]
-    oct_ = next(p for p in byp if p["period"] == "2026-10")
+    # profit-by-period labels PER MONTH; project level = labelled when any month is
+    any_rc = any(p["overhead_recalculating"] for p in byp)
+    oct_ = {"overhead_recalculating": any_rc, "overhead_label": "преизчислява се" if any_rc else None}
+    assert all(p["overhead_label"] == ("преизчислява се" if p["overhead_recalculating"] else None)
+               for p in byp)
     proj = (await c.post(f"/api/overhead-allocation/compute/{PROJ_A}", json={}, headers=_h())).json()
     return {name: (v["overhead_recalculating"], v["overhead_label"]) for name, v in (
         ("pnl", e), ("net_profit", net), ("profit_summary", prof), ("package", pkg),
@@ -1301,10 +1309,8 @@ def test_31_legacy_only_project_keeps_its_value_labelled(monkeypatch, backend, m
             {"org_id": ORG, "project_id": PROJ_A, "period": "2026-10", "allocated_amount": 80.0}])
         before = await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None)
         v = await _views(c, op)
-        assert v.pop("pnl") == 0                                   # P&L never read it (main)
         assert set(v.values()) == {200.0}, v                       # still visible, not 0
         labels = await _labels(c, op)
-        labels.pop("pnl")
         assert set(labels.values()) == {(True, "преизчислява се")}, labels
         byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()["periods"]
         assert {p["period"]: p["overhead"] for p in byp} == {"2026-09": 120.0, "2026-10": 80.0}
@@ -1316,7 +1322,6 @@ def test_31_legacy_only_project_keeps_its_value_labelled(monkeypatch, backend, m
                          headers=_h(key=_key()))
         assert r.status_code == 200, r.text
         v = await _views(c, op)
-        assert v.pop("pnl") == 300.0
         assert set(v.values()) == {420.0}, v                       # 300 (Oct OH-01) + 120 (Sep)
         byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()["periods"]
         by = {p["period"]: p for p in byp}
@@ -1324,4 +1329,57 @@ def test_31_legacy_only_project_keeps_its_value_labelled(monkeypatch, backend, m
         assert by["2026-09"]["overhead"] == 120.0
         assert by["2026-09"]["overhead_label"] == "преизчислява се"
         assert await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None) == before
+    run_views(monkeypatch, backend, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════════════════════════ 32. FG-127
+def test_32_one_helper_every_reader_same_amount_and_label(monkeypatch, backend, mode):
+    """FG-127 (CLAUDE.md §2.12): for the same legacy month P&L / financial results showed
+    323.25 and net / project profit 823.25 — two readers, two answers. Now EVERY reader
+    (project P&L, financial results, net profit, profit summary, profit by period, package
+    margin, the legacy projection) goes through project_overhead_current(): one amount, one
+    label, at every step (legacy only -> OH-01 + legacy month -> recompute -> allocate)."""
+    async def scenario(c, op):
+        from app.services.project_financial_results import compute_financial_results
+        await op.execution_packages.insert_one({"id": "PKG-A", "org_id": ORG, "project_id": PROJ_A,
+                                                "used_hours": 30, "sale_total": 1000})
+        await op.project_overhead_alloc.insert_many([
+            {"org_id": ORG, "project_id": PROJ_A, "period": "2026-08", "allocated_amount": 500.0},
+            {"org_id": ORG, "project_id": PROJ_A, "period": "2026-10", "allocated_amount": 23.25}])
+
+        async def every_reader():
+            v = await _views(c, op)
+            lab = await _labels(c, op)
+            fr = (await compute_financial_results(ORG, PROJ_A))["fully_loaded"]
+            proj = (await c.post(f"/api/overhead-allocation/compute/{PROJ_A}", json={},
+                                 headers=_h())).json()
+            v["financial_results"] = fr["overhead_allocation"]
+            lab["financial_results"] = (fr["overhead_recalculating"], fr["overhead_label"])
+            v["legacy_projection"] = proj["allocated"]
+            return v, lab
+
+        v, lab = await every_reader()                     # legacy only
+        assert set(v.values()) == {523.25}, v
+        assert set(lab.values()) == {(True, "преизчислява се")}, lab
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s1 = await _snapshot(c)
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        v, lab = await every_reader()                     # Oct OH-01 300 + Aug legacy 500
+        assert set(v.values()) == {800.0}, v
+        assert set(lab.values()) == {(True, "преизчислява се")}, lab   # Aug is still legacy
+        await _cost(c, cat["id"], date="2026-10-20", amount=400.0)
+        s2 = await _snapshot(c)
+        v, lab = await every_reader()                     # recompute: the old Oct kept
+        assert set(v.values()) == {800.0}, v
+        assert set(lab.values()) == {(True, "преизчислява се")}, lab
+        r = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        v, lab = await every_reader()                     # Oct OH-01 600 + Aug legacy 500
+        assert set(v.values()) == {1100.0}, v
+        assert len(set(lab.values())) == 1, lab           # one label everywhere
     run_views(monkeypatch, backend, mode, scenario)

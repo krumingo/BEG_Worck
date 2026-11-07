@@ -75,3 +75,8 @@ tests/test_oh_01_overhead_no_hard_delete.py: 225 passed (new test_31 legacy-only
 reader fallback (chosen over a backfill: read-only, no migration): project_overhead_current() counts a legacy row, labelled "преизчислява се", for every month without a current OH-01 allocation covering it; once OH-01 covers the month the legacy figure is out. Legacy-only project: 200 visible + labelled (not 0); after an OH-01 allocation for Oct: 300 (Oct) + 120 (Sep legacy, labelled) = 420. Nothing written, nothing deleted.
 R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
 merge with #69 @ 3fb55f2 (7-step procedure, unchanged): SEC-01 30/30, OH-01 225, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0
+
+## OH-01 addendum 3 (07.11 @ a584206, FG-127): one project-overhead helper for every reader — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 231 passed (new test_32 x2 backends x3 modes over 7 readers incl. project P&L and financial results; test_27/31 updated; these 18 cases FAIL on 997abdc)
+project_pnl and project_financial_results now read project_overhead_current() (same legacy fallback, same recalculating_fields label) like net profit / profit summary / profit by period / package / legacy projection: legacy only 523.25 labelled everywhere -> OH-01 Oct + legacy Aug 800 -> recompute 800 -> allocate 1100, one amount and one label in all 7
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0; yarn test 96
