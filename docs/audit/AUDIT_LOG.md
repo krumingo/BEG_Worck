@@ -4181,3 +4181,17 @@ The merge with main is clean.
 | X4 legacy chain (OV1 Accepted + OV2 Sent from before OFF-01) | accept OV2 → **200**, so two versions are Accepted; ACT-01 then refuses both (SUPERSEDED / LINEAGE_UNKNOWN), so no double billing. Observation: `/accept` should refuse when another version of the family is already Accepted |
 
 I updated PR comment 6710829710 to "resolved". Gates: `b79a` (#79) and `bx` (merged tree) are running.
+
+### #79 @ `449c1f4` gates — PASS (OFF79-03 medium stays open as non-blocking)
+
+| Gate | Result |
+|---|---|
+| off01 + audit_probe | 108 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The PM-01 diff vs main is only `+POST /api/offers/{offer_id}/cancel`. The merge with main is clean.
+
+Merged tree #77 × #79 so far: act01 110, off01 108, R0 814, PM-01 6. W0 is running.
