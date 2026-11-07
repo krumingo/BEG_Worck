@@ -4082,3 +4082,50 @@ The gates (`b55c`) are running.
 | D-OFF01-3, -4, -6, -8, -9, -10, -11 | OK as debt |
 
 Gates: `b79` (running).
+
+### #69 @ `da47777` (SEC-01, contains main) — PASS
+
+`probes/sec01/probe_f6903.py` × 3 modes: **FAILS none**.
+
+| Case | Result |
+|---|---|
+| F1 crash after the cap reservation, then same-key retry | 1 ledger row; committed 60 = paid 60 = Σ rows |
+| F2 6 concurrent same-key retries | 1 × 201 + 5 × 409; one of everything |
+| F3 phantom (abandoned key holds 60) | a new 50 → 409, a new 40 → 201 (committed 100, paid 40) |
+
+| Gate | Result |
+|---|---|
+| sec01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+### #73 @ `0c0f5f8` / #75 @ `c68c942` (both already merged with main) — PASS
+
+| Check | #73 | #75 |
+|---|---|---|
+| lab | 117 | 158 |
+| reset | 26 | 26 |
+| PAY | 630 | 630 |
+| probes | lab01e P1 / P4 / P5 | lab02 4 + retake 1 |
+| billing `test_17_F04` | — | 6 |
+| W0 | same 15 | same 15 |
+| A2C / A1 | 0 / 0 | 0 / 0 |
+| R0 | 814 | 814 |
+| PM-01 | 6 | 6 |
+
+The merge commits were already byte-checked CLEAN.
+
+### #79 @ `ea9df81` gates
+
+| Gate | Result |
+|---|---|
+| off01 | 42 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The PM-01 matrix diff vs main is **only** `+offers,POST,/api/offers/{offer_id}/cancel`. Merge with main: clean. OFF79-01 remains blocking; Addendum A is pending.

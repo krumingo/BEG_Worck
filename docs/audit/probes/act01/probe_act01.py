@@ -174,8 +174,15 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                         mode, tag, s_, val(u_), av, u_, tot.get("acted_units")))
                 return ok
             rng = random.Random(131)
+            frozen = {}
+            def frozen_ok(tag):
+                for aid, want in frozen.items():
+                    got = q(lambda: op.client_acts.find_one({"id": aid}, {"_id": 0, "lines": 1, "total": 1}))
+                    if (got["total"], [l["line_total"] for l in got["lines"]]) != want:
+                        F.append("%s C %s: CONFIRMED act %s changed %s -> %s" % (mode, tag, aid[:8], want, (got["total"], [l["line_total"] for l in got["lines"]])))
+                        frozen[aid] = (got["total"], [l["line_total"] for l in got["lines"]])
             for rnd in range(3):
-                restore(); drafts = []
+                restore(); drafts = []; frozen.clear()
                 for step in range(25):
                     s_, u_, _ = state(); room = 1000000 - u_
                     op_ = rng.choice(["new", "new", "put", "burst", "confirm", "split"])
@@ -197,8 +204,10 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                         drafts += [x.json()["id"] for x in rs if x.status_code == 201]
                     elif op_ == "confirm" and drafts:
                         aid = drafts.pop(rng.randrange(len(drafts)))
-                        tc.post("/api/client-acts/%s/confirm" % aid, headers=H())
-                    check("r%d s%d %s" % (rnd, step, op_))
+                        if tc.post("/api/client-acts/%s/confirm" % aid, headers=H()).status_code == 200:
+                            g_ = q(lambda: op.client_acts.find_one({"id": aid}, {"_id": 0, "lines": 1, "total": 1}))
+                            frozen[aid] = (g_["total"], [l["line_total"] for l in g_["lines"]])
+                    check("r%d s%d %s" % (rnd, step, op_)); frozen_ok("r%d s%d %s" % (rnd, step, op_))
                 # move one draft to another line (its LD part is released), then fill LD exactly
                 if drafts:
                     tc.put("/api/client-acts/%s" % drafts[0], json={"lines": [{"offer_line_id": i["L1"], "executed_qty": 1}]}, headers=H())
@@ -210,7 +219,29 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                 print(mode, "C r%d" % rnd, "fill", r.status_code, "sum", s_, "acted", u_ / 10000, "acted_value", tot.get("acted_value"), "| +0.0001 ->", over.status_code)
                 if r.status_code != 201 or s_ != Dm("1234.50") or over.status_code != 409:
                     F.append("%s C r%d fill %s sum %s over %s" % (mode, rnd, r.status_code, s_, over.status_code))
-                check("r%d full" % rnd)
+                check("r%d full" % rnd); frozen_ok("r%d full" % rnd)
+                print(mode, "C r%d confirmed acts tracked %d" % (rnd, len(frozen)))
+            # C3: confirm of one draft racing an edit of another draft on the same offer line, x10
+            hist3 = collections.Counter()
+            for rnd in range(10):
+                restore()
+                a = tc.post("/api/client-acts", json=body("LD", 0.3), headers=H()).json()["id"]
+                b = tc.post("/api/client-acts", json=body("LD", 0.3), headers=H()).json()["id"]
+                c_ = tc.post("/api/client-acts", json=body("LD", 33.3333), headers=H()).json()["id"]
+                rs = q(lambda: gather([("POST", "/api/client-acts/%s/confirm" % b, None, H()),
+                                       ("PUT", "/api/client-acts/%s" % a, {"lines": [{"offer_line_id": i["L1"], "executed_qty": 1}]}, H()),
+                                       ("PUT", "/api/client-acts/%s" % c_, {"lines": [{"offer_line_id": i["LD"], "executed_qty": 7.7777}]}, H())]))
+                hist3[tuple(x.status_code for x in rs)] += 1
+                bv = q(lambda: op.client_acts.find_one({"id": b}, {"_id": 0, "total": 1, "status": 1}))
+                s_, u_, _ = state()
+                fill = tc.post("/api/client-acts", json=body("LD", (1000000 - u_) / 10000), headers=H())
+                tc.post("/api/client-acts/%s/confirm" % c_, headers=H())
+                bv2 = q(lambda: op.client_acts.find_one({"id": b}, {"_id": 0, "total": 1, "status": 1}))
+                check("C3 r%d" % rnd)
+                s_, u_, _ = state()
+                if s_ != Dm("1234.50") or bv != bv2 or any(x.status_code >= 500 for x in rs):
+                    F.append("%s C3 r%d: %s sum %s confirmed b %s -> %s" % (mode, rnd, [x.status_code for x in rs], s_, bv, bv2))
+            print(mode, "C3 confirm || 2 draft edits x10:", dict(hist3))
             restore()
         if os.environ.get("PROBE_ACT_C2") == "1":         # FG-131 minimal repro: a line moved off LD
             for first in (0.3, 33):
