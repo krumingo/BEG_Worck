@@ -46,13 +46,22 @@ LOCKED_WHEN_LINKED = ("allocations", "allocation_type", "allocation_ref_id",
                       "qty", "unit", "unit_price")
 
 
-async def _unless_linked(tenant: TenantData, line_id: str, write) -> None:
+# Codex F-55-C26-04: the inputs the derived money / allocation fields
+# (line totals, VAT, qty_allocated / qty_unallocated / is_fully_allocated)
+# are computed from. A PUT without any of them is metadata only.
+DERIVED_INPUTS = LOCKED_WHEN_LINKED + ("vat_percent",)
+
+
+async def _unless_linked(tenant: TenantData, line_id: str, write, *,
+                         refuse_if_linked: bool = True) -> None:
     """FG-109 (D-04): once a canonical warehouse movement links the line, its
     allocation / qty / unit / price are locked — 409, nothing written.
     Decided in one transaction under the per-line lock the canonical
-    receipts take (``app.services.invoice_line_lock``)."""
+    receipts take (``app.services.invoice_line_lock``); ``write`` reads the
+    current row in that transaction (F-55-C26-04)."""
     try:
-        await write_unless_linked(mongo_client, tenant, line_id, write)
+        await write_unless_linked(mongo_client, tenant, line_id, write,
+                                  refuse_if_linked=refuse_if_linked)
     except InvoiceLineAllocationLocked as exc:
         raise HTTPException(status_code=409, detail=exc.detail())
 
@@ -520,52 +529,56 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
         raise HTTPException(status_code=400, detail="Can only edit lines of Draft invoices")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
-    
-    # Handle allocations update
-    if "allocations" in update and update["allocations"]:
-        qty = update.get("qty", line.get("qty", 1))
-        allocs = update["allocations"]
-        total_allocated = sum(a["qty"] for a in allocs)
-        
-        if total_allocated > qty:
-            raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({qty})")
-        
-        require_full = await get_org_require_full_allocation(tenant)
-        if require_full and abs(total_allocated - qty) > 0.0001:
-            raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {qty}")
-        
-        await validate_allocation_refs(tenant, allocs)
-        update["allocations"] = [a if isinstance(a, dict) else a.model_dump() for a in allocs]
-    
+
     # Handle scan_line_ref
     if "scan_line_ref" in update and update["scan_line_ref"]:
         update["scan_line_ref"] = update["scan_line_ref"] if isinstance(update["scan_line_ref"], dict) else update["scan_line_ref"].model_dump()
-    
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    
-    # Merge and recompute
-    merged = {**line, **update}
-    merged = compute_line_totals(merged)
-    merged = compute_allocation_stats(merged)
-    
-    patch = {
-        **update,
-        "line_total_ex_vat": merged["line_total_ex_vat"],
-        "vat_amount": merged["vat_amount"],
-        "line_total_inc_vat": merged["line_total_inc_vat"],
-        "qty_allocated": merged.get("qty_allocated", 0),
-        "qty_unallocated": merged.get("qty_unallocated", 0),
-        "is_fully_allocated": merged.get("is_fully_allocated", False),
-    }
 
-    async def _write(session):
-        await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},
-                                              session=session)
-    if any(k in update for k in LOCKED_WHEN_LINKED):
-        await _unless_linked(tenant, line_id, _write)            # FG-109
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    if not any(k in update for k in DERIVED_INPUTS):
+        # Codex F-55-C26-04: a metadata-only PUT writes ONLY the fields it
+        # was sent (+ updated_at) — never the derived money / allocation
+        # fields, which a concurrent writer may have changed since the read.
+        await tenant.invoice_lines.update_one({"id": line_id}, {"$set": update})
     else:
-        await _write(None)
-    
+        if "allocations" in update and update["allocations"]:
+            update["allocations"] = [a if isinstance(a, dict) else a.model_dump()
+                                     for a in update["allocations"]]
+            await validate_allocation_refs(tenant, update["allocations"])
+        require_full = await get_org_require_full_allocation(tenant)
+
+        async def _write(session):
+            # F-55-C26-04: read, validate, compute and write in ONE
+            # transaction under the per-line lock — from the CURRENT row.
+            current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0},
+                                                          session=session)
+            if not current:
+                raise HTTPException(status_code=404, detail="Invoice line not found")
+            if "allocations" in update and update["allocations"]:
+                qty = update.get("qty", current.get("qty", 1))
+                total_allocated = sum(a["qty"] for a in update["allocations"])
+                if total_allocated > qty:
+                    raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({qty})")
+                if require_full and abs(total_allocated - qty) > 0.0001:
+                    raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {qty}")
+            merged = compute_allocation_stats(compute_line_totals({**current, **update}))
+            patch = {
+                **update,
+                "line_total_ex_vat": merged["line_total_ex_vat"],
+                "vat_amount": merged["vat_amount"],
+                "line_total_inc_vat": merged["line_total_inc_vat"],
+                "qty_allocated": merged.get("qty_allocated", 0),
+                "qty_unallocated": merged.get("qty_unallocated", 0),
+                "is_fully_allocated": merged.get("is_fully_allocated", False),
+            }
+            await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},
+                                                  session=session)
+        # FG-109 / FG-124: the costing inputs are refused (409) on a linked
+        # line; vat_percent alone is not costing but still derives totals.
+        await _unless_linked(tenant, line_id, _write,
+                             refuse_if_linked=any(k in update for k in LOCKED_WHEN_LINKED))
+
     # Recalculate invoice
     await recalculate_invoice_totals(tenant, line["invoice_id"])
     
@@ -590,32 +603,36 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
     if not line:
         raise HTTPException(status_code=404, detail="Invoice line not found")
     
-    qty_purchased = line.get("qty", 0)
-    
     # Validate allocations
     allocs = [a.model_dump() for a in data.allocations]
     total_allocated = sum(a["qty"] for a in allocs)
-    
-    if total_allocated > qty_purchased:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Total allocated qty ({total_allocated}) exceeds purchased qty ({qty_purchased})"
-        )
-    
+
     # Check if full allocation required
     require_full = await get_org_require_full_allocation(tenant)
-    if require_full and abs(total_allocated - qty_purchased) > 0.0001:
-        raise HTTPException(
-            status_code=400, 
-            detail=f"Full allocation required by organization settings. Allocated: {total_allocated}, Required: {qty_purchased}. Unallocated: {qty_purchased - total_allocated}"
-        )
-    
+
     # Validate all refs exist
     await validate_allocation_refs(tenant, allocs)
-    
+
     now = datetime.now(timezone.utc).isoformat()
-    
+
     async def _write(session):
+        # Codex F-55-C26-04: the purchased qty is read in the lock
+        # transaction, not from the row read before it.
+        current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "qty": 1},
+                                                      session=session)
+        if not current:
+            raise HTTPException(status_code=404, detail="Invoice line not found")
+        qty_purchased = current.get("qty", 0)
+        if total_allocated > qty_purchased:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Total allocated qty ({total_allocated}) exceeds purchased qty ({qty_purchased})"
+            )
+        if require_full and abs(total_allocated - qty_purchased) > 0.0001:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Full allocation required by organization settings. Allocated: {total_allocated}, Required: {qty_purchased}. Unallocated: {qty_purchased - total_allocated}"
+            )
         await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
             "allocations": allocs,
             "qty_allocated": round(total_allocated, 4),
@@ -624,7 +641,7 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
             "updated_at": now,
         }}, session=session)
     await _unless_linked(tenant, line_id, _write)                # FG-109
-    
+
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_line_allocated", "invoice_line", line_id,
                     {"allocations_count": len(allocs), "total_allocated": total_allocated})
     

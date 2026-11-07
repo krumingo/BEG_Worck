@@ -436,3 +436,83 @@ async def test_f55_c26_03_http_put_of_the_legacy_allocation_is_409(
             await rebuild_from_ledger(db, tenant_id=T)
         got = ((await run.cost(PROJECT))["total_cost"], (await run.cost(Q))["total_cost"])
         assert got == (pytest.approx(100.0), 0), i
+
+
+
+# ═══════════════════ Codex F-55-C26-04 — stale derived values ═══════════════════
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_f55_c26_04_a_paused_notes_put_never_writes_stale_money(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """Codex's interleaving over HTTP: L (Draft, 10 @10, allocated P);
+    PUT {"notes"} pauses right before its write (after reading the row);
+    PUT {"unit_price": 20} completes (line total 200); a linked direct
+    delivery of 5 @20 into P is accepted; the notes PUT resumes. 94c0571:
+    the notes PUT wrote the stale line_total_ex_vat 100 → P = 150. Now the
+    line keeps unit_price 20 / total 200 and P = 200, live + rebuild ×2."""
+    import httpx
+    from fastapi import FastAPI
+    from app.deps.modules import require_m5
+    from app.tenancy.data_access import TenantCollection
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    routes = _routes(monkeypatch, client, db)
+    app = FastAPI()
+    app.include_router(routes.router, prefix="/api")
+    app.dependency_overrides[require_m5] = lambda: OWNER
+
+    reached, release = asyncio.Event(), asyncio.Event()
+    real_update_one = TenantCollection.update_one
+
+    async def paused_update_one(self, flt, update, **kw):
+        if "notes" in (update.get("$set") or {}) and not release.is_set():
+            reached.set()
+            await release.wait()                  # the notes PUT, right before its write
+        return await real_update_one(self, flt, update, **kw)
+    monkeypatch.setattr(TenantCollection, "update_one", paused_update_one)
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                 base_url="http://t") as http:
+        notes = asyncio.create_task(
+            http.put(f"/api/invoice-lines/{IL}", json={"notes": "review-paused"}))
+        await asyncio.wait_for(reached.wait(), 10)
+        r = await http.put(f"/api/invoice-lines/{IL}", json={"unit_price": 20})
+        assert r.status_code == 200, r.text
+        delivery = _inp(CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT, T, source=SUP,
+                        destination=PRJ, quantity=Decimal("5"), unit_value=Decimal("20"),
+                        invoice_line_id=IL)
+        await svc.execute(_ctx(mode, "Owner"), db, run.coll, delivery)
+        release.set()
+        r = await notes
+        assert r.status_code == 200, r.text
+    line = await _line(db)
+    assert line["notes"] == "review-paused"
+    assert (line["unit_price"], line["line_total_ex_vat"]) == (20, 200)
+    await _p_cost(db, run, 200.0)
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_f55_c26_04_a_paused_allocate_reads_the_current_qty(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """The same pattern for /allocate: its qty_unallocated is computed from
+    the qty read IN the lock transaction, not from a row read before it."""
+    from app.models.invoice_lines import InvoiceLineAllocationsUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    routes = _routes(monkeypatch, client, db)
+    real_get = routes.validate_allocation_refs
+    reached, release = asyncio.Event(), asyncio.Event()
+
+    async def paused_validate(tenant, allocs):
+        await real_get(tenant, allocs)
+        if not release.is_set():
+            reached.set()
+            await release.wait()          # after the pre-transaction read
+    monkeypatch.setattr(routes, "validate_allocation_refs", paused_validate)
+    alloc = asyncio.create_task(routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
+        allocations=[{"type": "project", "ref_id": PROJECT, "qty": 10}]), user=OWNER))
+    await asyncio.wait_for(reached.wait(), 10)
+    # a qty change lands after the pre-transaction read, before the write
+    await db["invoice_lines"].update_one({"id": IL}, {"$set": {"qty": 20}})
+    release.set()
+    await alloc
+    line = await _line(db)
+    assert (line["qty_allocated"], line["qty_unallocated"]) == (10, 10)

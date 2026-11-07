@@ -84,20 +84,27 @@ def _transactions_unsupported(exc: Exception) -> bool:
 
 
 async def write_unless_linked(client, tenant, line_id: str,
-                              write: Callable[[Optional[object]], Awaitable[None]]) -> None:
-    """Run ``write(session)`` only if no canonical movement links the line;
-    otherwise raise :class:`InvoiceLineAllocationLocked` (nothing written).
-    On a replica set the check and the write are one transaction under the
-    line lock. A deployment without transactions (no canonical warehouse
-    there) falls back to check-then-write."""
+                              write: Callable[[Optional[object]], Awaitable[None]], *,
+                              refuse_if_linked: bool = True) -> None:
+    """Run ``write(session)`` in one transaction under the line lock, and —
+    with ``refuse_if_linked`` — only if no canonical movement links the line
+    (otherwise :class:`InvoiceLineAllocationLocked`, nothing written).
+
+    5C-C26l (Codex F-55-C26-04): ``write`` must read the CURRENT row with
+    ``session`` and compute what it writes from it — never from a row read
+    before the transaction — so a concurrent writer of the same line (the
+    same lock) cannot be overwritten with stale derived values.
+    A deployment without transactions (no canonical warehouse there) falls
+    back to check-then-write."""
     await ensure_line_lock(tenant, line_id)
 
     async def _body(session):
         if session is not None:
             await bump_line_lock(tenant, line_id, session=session)
-        moved = await first_linked_movement(tenant, line_id, session=session)
-        if moved:
-            raise InvoiceLineAllocationLocked(line_id, moved)
+        if refuse_if_linked:
+            moved = await first_linked_movement(tenant, line_id, session=session)
+            if moved:
+                raise InvoiceLineAllocationLocked(line_id, moved)
         await write(session)
 
     try:
