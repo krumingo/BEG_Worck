@@ -4499,3 +4499,21 @@ FG-140 claim / CAS is present in `update_invoice`, `update_invoice_lines`, send,
 **`TenantData.transaction_client`** is the motor client of the tenant's own DB. `run_transaction` only opens a session with it; every read and write stays `TenantData`-scoped. It adds no cross-tenant capability (the same client is already `app.db.client`).
 
 Runtime `b55n` (rs1) is running: c26l_n FG-140 races, wh55 probes ×3, PAY, 43 warehouse files, W0, R0, PM-01.
+
+### #79 @ `2379d07` gates — **full PASS**
+
+Clean venv `pip install -r requirements.txt -r requirements-dev.txt` (as the repo instructs); `pip check` is clean.
+
+| Gate | Result |
+|---|---|
+| OFF-01 suite + audit_probe in the clean venv | **231 passed, 0 skipped** |
+| R43 `test_23` | 3 passed (runs, does not skip) |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main is clean.
+
+- With `requirements.txt` alone, 15 mongomock-backend tests fail with `ModuleNotFoundError: mongomock_motor`. That is expected: it lives in `requirements-dev.txt`, documented as required for tests. Not a defect.
+- OFF79-01 / 03 / 04 / 05 / 06 are all resolved. Remaining debts (D-OFF01-1, -15 etc.) are as judged earlier.
