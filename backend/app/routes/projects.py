@@ -22,6 +22,7 @@ from app.deps.auth import (
     can_access_project, can_manage_project, get_user_project_ids,
 )
 from app.deps.modules import enforce_limit
+from app.permissions.money_write import check_money_write
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
 
@@ -163,10 +164,16 @@ async def list_projects(
     return projects
 
 @router.post("/projects", status_code=201)
-async def create_project(data: ProjectCreate, user: dict = Depends(get_current_user)):
+async def create_project(data: ProjectCreate, request: Request,
+                         user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions to create projects")
+    if data.owner_type or data.owner_id:
+        # SEC-01-C01 (R14): the paying client of a project is a money write — the same
+        # rule as PATCH /projects/{id}/client-link, before any read or write.
+        await check_money_write(request, user, "project.client_link.update",
+                                module="M5", resource_type="project")
     await enforce_limit(user["org_id"], "projects")
     if data.status not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(PROJECT_STATUSES)}")
@@ -251,7 +258,8 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     return project
 
 @router.put("/projects/{project_id}")
-async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depends(get_current_user)):
+async def update_project(project_id: str, data: ProjectUpdate, request: Request,
+                         user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
     if not project:
@@ -259,6 +267,11 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if any(f in update and update[f] != project.get(f) for f in ("owner_type", "owner_id")):
+        # SEC-01-C01 (R14): changing the paying client is a money write — the same rule
+        # as PATCH /projects/{id}/client-link, before any write. Unchanged values pass.
+        await check_money_write(request, user, "project.client_link.update",
+                                module="M5", resource_type="project")
     if "status" in update and update["status"] not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
     
@@ -461,7 +474,8 @@ async def add_team_member(project_id: str, data: TeamMemberAdd, user: dict = Dep
 
         def _sync():
             return sync_project_membership(_ctx, data.user_id, rid, project_id,
-                                           data.role_in_project, True, actor_id=user["id"])
+                                           data.role_in_project, True, actor_id=user["id"],
+                                           from_date=data.from_date, to_date=data.to_date)
         if _mode == MODE_SHADOW:
             # PR-06: in shadow the legacy membership write above is the truth and
             # stays done; a sync failure is observed (warning + FAILED reservation)

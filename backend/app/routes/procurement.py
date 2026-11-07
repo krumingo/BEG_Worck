@@ -16,6 +16,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -365,7 +366,14 @@ async def get_supplier_invoice(inv_id: str, user: dict = Depends(require_m2)):
 
 
 @router.put("/supplier-invoices/{inv_id}")
-async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_supplier_invoice(
+    inv_id: str,
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "procurement.supplier_invoice.update", module='M2',
+        resource_type="supplier_invoice")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     """Update invoice header and lines (review/correction)"""
     tenant = _tenant(user)
     inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})

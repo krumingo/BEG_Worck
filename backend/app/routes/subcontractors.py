@@ -6,7 +6,7 @@ Phase 3: Subcontractor Acts (Certified Expense)
 Phase 4: Subcontractor Payments
 Phase 5: Profit Integration (extends revenue_expense)
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional, List
 import logging
 
@@ -20,6 +20,8 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.permissions.money_write import require_money_write
+from app.permissions.money_input import MoneyWrite, money_value, project_in_tenant  # SEC-01-C03
 
 router = APIRouter(tags=["Subcontractors"])
 
@@ -430,7 +432,13 @@ async def list_subcontractor_acts(project_id: Optional[str] = None, package_id: 
 
 
 @router.post("/subcontractor-acts/{act_id}/confirm")
-async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2)):
+async def confirm_subcontractor_act(
+    act_id: str,
+    _sec01: dict = Depends(require_money_write(
+        "subcontract.act_confirm.execute", module="M2",
+        resource_type="subcontractor_act")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     tenant = _tenant(user)
     act = await tenant.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
@@ -467,7 +475,8 @@ async def confirm_subcontractor_act(act_id: str, user: dict = Depends(require_m2
 
     await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
         "certified_total": round(total_cert, 2),
-        "payable_total": round(total_cert - (await tenant.subcontractor_packages.find_one({"id": pkg_id})).get("paid_total", 0), 2),
+        # SUB-ADV-01: what is still owed = certified - paid - advance already deducted.
+        "payable_total": _payable(total_cert, await tenant.subcontractor_packages.find_one({"id": pkg_id})),
         "remaining_contract_total": round(contract_total - total_cert, 2),
         "status": pkg_status, "updated_at": now,
     }})
@@ -491,18 +500,56 @@ async def _get_next_pay_no(org_id):
 
 
 @router.post("/subcontractor-payments", status_code=201)
-async def create_subcontractor_payment(data: dict, user: dict = Depends(require_m2)):
+async def create_subcontractor_payment(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.subcontractor_payment.create", module="M2",
+        resource_type="subcontractor_payment")),  # SEC-01-C02 (R14, FG-27): before any read
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """A real payment to a subcontractor (SEC-01-C02, FG-27).
+
+    CLAUDE.md §2.5/§7: every real money movement is in the ONE payment ledger
+    (FLOW-006). Until W0-05 builds the Payment Core, that ledger is ``finance_payments``
+    (IMPLEMENTATION_WAVES.md W0-05: "един finance_payments write service"). So a payment
+    is accepted ONLY when its cash/bank account resolves and the Outflow row is written
+    to ``finance_payments``; otherwise 409 BEFORE any write — never a payment that
+    exists only in ``subcontractor_payments``. ``subcontractor_payments`` stays the
+    package's allocation record (the row points to its ledger row), not a second ledger.
+    SEC-01-C03: ``amount`` must be a finite number > 0 and ``vat_amount`` finite >= 0
+    (422 before any read or write); an ``Idempotency-Key`` replays the original payment
+    instead of writing a second Outflow (``app/permissions/money_input.py``).
+    Debt SEC-01-C02-D1 (remaining): not yet through a W0-05 write service, no Approval,
+    no reversal API (W0-05 / R1 Payment).
+    """
+    amount = money_value(data.get("amount"))
+    vat_raw = data.get("vat_amount")
+    vat_amount = round(money_value(vat_raw, "vat_amount", allow_zero=True), 2) \
+        if vat_raw is not None else 0.0  # input VAT (без ДДС amount stays in `amount`)
+    # SUB-ADV-01 (R39): the advance is its own record (POST .../advances, Owner/Accountant);
+    # an ordinary payment can never be booked as one.
+    if data.get("payment_type") == ADVANCE_KIND:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ADVANCE_NOT_A_PAYMENT",
+            "message": "Авансът се дава с отделния запис „Аванс към подизпълнител“"})
+    # SUB-ADV-01 (FLOW-021, CLAUDE §7): the part of the act settled by an earlier advance is
+    # deducted EXPLICITLY (``advance_deducted``), on a named act — never silently netted.
+    ded_raw = data.get("advance_deducted")
+    advance_deducted = round(money_value(ded_raw, "advance_deducted", allow_zero=True), 2) \
+        if ded_raw is not None else 0.0
+    if advance_deducted > 0 and data.get("act_id") is None:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ADVANCE_DEDUCTION_NEEDS_ACT",
+            "message": "Авансът се приспада по конкретен потвърден акт (act_id)"})
+
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkg_id = data.get("package_id")
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
-
-    amount = float(data.get("amount", 0))
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Amount must be positive")
-    vat_amount = round(float(data.get("vat_amount", 0) or 0), 2)  # input VAT (без ДДС amount stays in `amount`)
+    await project_in_tenant(tenant, pkg.get("project_id"))  # SEC-01-C03-B (FG-29)
 
     now = datetime.now(timezone.utc).isoformat()
 
@@ -510,12 +557,31 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
     req_account_id = data.get("account_id")
     if req_account_id:
         account = await tenant.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
     else:
         account = await tenant.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
-    account_id = account["id"] if account else None
+    if not account:
+        # FG-27: no account -> no ledger row -> no payment (nothing is written).
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_LEDGER_ACCOUNT_REQUIRED",
+            "message": "Плащането трябва да мине през платежния регистър: изберете "
+                       "сметка (Каса/Банка)"})
+    account_id = account["id"]
+
+    # SEC-01-C03-D (FG-90, FLOW-021 "плащане над измереното без Approval"): a named act must
+    # be a CONFIRMED act of this package; the cap itself is reserved atomically below.
+    act_id = data.get("act_id")
+    act = None
+    if act_id is not None:
+        act = await _confirmed_act(tenant, act_id, pkg_id)
+
+    mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
+    if mw.replay_id:            # the same request again: the original payment, no new row
+        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
 
     payment = {
-        "id": str(uuid.uuid4()), "org_id": org_id,
+        "id": mw.new_id("subcontractor_payment"), "org_id": org_id,
         "project_id": pkg["project_id"], "subcontractor_id": pkg["subcontractor_id"],
         "package_id": pkg_id, "act_id": data.get("act_id"),
         "payment_no": await _get_next_pay_no(org_id),
@@ -525,19 +591,188 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         "payment_method": data.get("payment_method", "bank"),
         "notes": data.get("notes", ""),
         "status": "completed",
+        "kind": PAYMENT_KIND,
+        "advance_deducted": advance_deducted,
         "account_id": account_id,
         "created_at": now,
     }
-    await tenant.subcontractor_payments.insert_one(payment)
 
-    # Cash outflow from the chosen account (Каса/Банка) — keeps cash flow / account balance correct
-    if account_id:
-        await tenant.finance_payments.insert_one({
-            "id": str(uuid.uuid4()), "org_id": org_id,
+    # The ledger row first (FG-27): the cash outflow from the chosen account (Каса/Банка)
+    # in finance_payments; the package's allocation record points to it.
+    ledger_id = mw.new_id("finance_payment")
+    payment["finance_payment_id"] = ledger_id
+    async with mw:
+        await _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now,
+                                           act=act)
+        mw.result_id = payment["id"]
+    # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost the
+    # insert answers with the same payment (same payment_no) as the one that won it.
+    return await tenant.subcontractor_payments.find_one({"id": payment["id"]}, {"_id": 0})
+
+
+_COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
+_RESERVED_IDS = {"$ifNull": ["$cap_reservations", []]}   # F-69-03 (#69)
+_ADV_TOTAL = {"$ifNull": ["$advance_total", 0]}
+_ADV_DEDUCTED = {"$ifNull": ["$advance_deducted_total", 0]}
+_CENT = 0.005
+
+# SUB-ADV-01 — kinds of rows in ``subcontractor_payments`` (the package's allocation record;
+# the cash itself is ONE row in ``finance_payments``, FLOW-006). A row without ``kind`` is
+# a legacy ordinary payment.
+PAYMENT_KIND = "payment"
+ADVANCE_KIND = "advance"
+NOT_ADVANCE = {"kind": {"$ne": ADVANCE_KIND}}
+
+
+def _payable(certified: float, pkg: Optional[dict]) -> float:
+    """What is still owed on the package: certified - paid - advance deducted (>= 0)."""
+    pkg = pkg or {}
+    return max(0.0, round(float(certified or 0) - float(pkg.get("paid_total") or 0)
+                          - float(pkg.get("advance_deducted_total") or 0), 2))
+
+
+async def _confirmed_act(tenant, act_id: str, pkg_id: str) -> dict:
+    act = await tenant.subcontractor_acts.find_one(
+        {"id": act_id, "package_id": pkg_id},
+        {"_id": 0, "id": 1, "status": 1, "certified_total": 1, "act_no": 1})
+    if not act:
+        raise HTTPException(status_code=404, detail="Act not found in this package")
+    if act.get("status") != "confirmed":
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+            "message": "Плаща се само по потвърден акт"})
+    return act
+
+
+async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservation_id: str,
+                                    deducted: float = 0.0, act: Optional[dict] = None) -> None:
+    """One atomic, conditional update of the package (R40: the cap is per package).
+
+    ``committed_paid_total`` = ordinary payments + advance deducted on acts. It grows by
+    ``amount + deducted`` only if ALL hold, in the same update (two requests under different
+    keys can never both pass):
+
+      * committed + amount + deducted <= certified_total   (FG-90, PAYMENT_EXCEEDS_CERTIFIED)
+      * deducted <= advance_total - advance_deducted_total (ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING)
+      * deducted on this act + deducted <= the act's certified total
+                                                         (ADVANCE_DEDUCTION_EXCEEDS_ACT)
+
+    The advance itself never enters ``committed_paid_total``: it is not a payment for a
+    measured quantity (R39) and is not an overpayment under FG-90.
+
+    SEC-01-C03 addendum C (Codex F-69-03, #69): the reservation carries ``reservation_id``
+    (``cap_reservations``); a retry of the same key that finds its id changes nothing."""
+    already = {"$in": [reservation_id, _RESERVED_IDS]}
+
+    def once(field_expr, new_value):        # unchanged when this id is already reserved
+        return {"$cond": [already, field_expr, new_value]}
+    conds = [{"$lte": [{"$add": [_COMMITTED, amount + deducted]},
+                       {"$add": [{"$ifNull": ["$certified_total", 0]}, _CENT]}]}]
+    sets = {"committed_paid_total": once(_COMMITTED, {"$round": [
+                {"$add": [_COMMITTED, amount + deducted]}, 2]}),
+            "cap_reservations": once(_RESERVED_IDS, {"$concatArrays": [_RESERVED_IDS,
+                                                                       [reservation_id]]})}
+    if deducted > 0:
+        path = "advance_deducted_by_act.%s" % act["id"]
+        by_act = {"$ifNull": ["$" + path, 0]}
+        conds.append({"$lte": [deducted, {"$add": [{"$subtract": [_ADV_TOTAL, _ADV_DEDUCTED]},
+                                                    _CENT]}]})
+        conds.append({"$lte": [{"$add": [by_act, deducted]},
+                               float(act.get("certified_total") or 0) + _CENT]})
+        sets["advance_deducted_total"] = once(_ADV_DEDUCTED, {"$round": [
+            {"$add": [_ADV_DEDUCTED, deducted]}, 2]})
+        sets[path] = once(by_act, {"$round": [{"$add": [by_act, deducted]}, 2]})
+    res = await tenant.subcontractor_packages.update_one(
+        {"id": pkg_id, "$or": [{"cap_reservations": reservation_id},
+                               {"$expr": {"$and": conds}}]}, [{"$set": sets}])
+    if res.matched_count:
+        return
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0}) or {}
+    if deducted > 0:
+        outstanding = float(pkg.get("advance_total") or 0) - float(pkg.get("advance_deducted_total") or 0)
+        if deducted > outstanding + _CENT:
+            raise HTTPException(status_code=409, detail={
+                "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+                "message": "Приспаднатият аванс надвишава неприспаднатия остатък на аванса "
+                           "(остатък %.2f)" % max(0.0, outstanding)})
+        done = float((pkg.get("advance_deducted_by_act") or {}).get(act["id"]) or 0)
+        if done + deducted > float(act.get("certified_total") or 0) + _CENT:
+            raise HTTPException(status_code=409, detail={
+                "error_code": "ADVANCE_DEDUCTION_EXCEEDS_ACT",
+                "message": "Приспаднатият аванс надвишава удостовереното по акта"})
+    raise HTTPException(status_code=409, detail={
+        "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+        "message": "Плащането надвишава актуваното (сертифицираното) по пакета; "
+                   "над измереното се плаща само с одобрение (FLOW-021)"})
+
+
+async def _refresh_package_totals(tenant, pkg_id: str, now: str) -> None:
+    """The package's visible totals (SUB-ADV-01 §4) from its rows and its counters.
+
+    paid_total        ordinary payments (cash), advances excluded;
+    advance_total     advances given (cash) — counter, written with the advance;
+    advance_deducted_total  advance deducted on acts — counter, reserved atomically;
+    advance_outstanding     advance_total - advance_deducted_total;
+    payable_total     certified - paid - advance deducted (>= 0);
+    cash_out_total    the whole cash flow to the package: advances + ordinary payments
+                      (= аванс + плащания по актове бруто − приспаднато)."""
+    # FG-105 (#69): summed in the database — every payment of the package is counted.
+    agg = await tenant.subcontractor_payments.aggregate([
+        {"$match": {"package_id": pkg_id, "status": "completed", **NOT_ADVANCE}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+    ]).to_list(1)
+    paid = round(float(agg[0]["total"]) if agg else 0.0, 2)
+    await tenant.subcontractor_packages.update_one({"id": pkg_id}, [{"$set": {
+        "paid_total": paid,
+        "advance_total": {"$round": [_ADV_TOTAL, 2]},
+        "advance_deducted_total": {"$round": [_ADV_DEDUCTED, 2]},
+        "advance_outstanding": {"$round": [{"$subtract": [_ADV_TOTAL, _ADV_DEDUCTED]}, 2]},
+        "payable_total": {"$max": [0, {"$round": [{"$subtract": [
+            {"$subtract": [{"$ifNull": ["$certified_total", 0]}, paid]}, _ADV_DEDUCTED]}, 2]}]},
+        "cash_out_total": {"$round": [{"$add": [_ADV_TOTAL, paid]}, 2]},
+        "updated_at": now,
+    }}])
+
+
+async def _record_act_deduction(mw, tenant, user, act: dict, deducted: float,
+                                payment_id: Optional[str], now: str, reason: str = "") -> None:
+    """The deduction, visible ON the act (``advance_deducted`` + one entry in
+    ``advance_deductions``) and as an AuditEvent; each done once per Idempotency-Key."""
+    entry = {"id": mw.new_id("advance_deduction"), "amount": deducted,
+             "subcontractor_payment_id": payment_id, "reason": reason,
+             "by_user_id": user["id"], "at": now}
+    await mw.step("act_deduction", lambda: tenant.subcontractor_acts.update_one(
+        {"id": act["id"]},
+        {"$inc": {"advance_deducted": deducted}, "$push": {"advance_deductions": entry},
+         "$set": {"updated_at": now}}))
+    await mw.step("audit_deduction", lambda: log_audit(
+        user["org_id"], user["id"], user.get("email", ""), "subcontractor_advance_deducted",
+        "subcontractor_act", act["id"], {"amount": deducted, "deduction_id": entry["id"],
+                                         "subcontractor_payment_id": payment_id,
+                                         "reason": reason}))
+
+
+async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now,
+                                       act: Optional[dict] = None):
+    """The writes of one subcontractor payment; each one done once per Idempotency-Key."""
+    org_id, pkg_id, amount = user["org_id"], payment["package_id"], payment["amount"]
+    deducted = float(payment.get("advance_deducted") or 0)
+    account_id = account["id"]
+    # SEC-01-C03-D (FG-90): the FIRST write reserves the amount against the package's
+    # certified total, atomically (one conditional update: two payments under different keys
+    # cannot both pass). Over the cap -> 409, nothing written. FLOW-021 allows more only with
+    # an Approval (W0-07), which does not exist yet -> refused. Done once per key.
+    # SUB-ADV-01: the advance deducted on the act is reserved in the SAME update; F-69-03: the
+    # reservation carries the payment's key-derived id (a retry never reserves twice).
+    await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, amount,
+                                                               payment["id"], deducted, act))
+    async with mw.insert_once():   # SEC-01-C03-C (F-69-01): atomic, _id = key-derived id
+        await tenant.finance_payments.insert_one(mw.unique({
+            "id": ledger_id, "org_id": org_id,
             "direction": "Outflow", "amount": amount,
             "currency": pkg.get("currency", "EUR"),
             "date": payment["payment_date"],
-            "method": (account.get("account_type", "Cash") if account else "Cash"),
+            "method": account.get("account_type", "Cash"),
             "account_id": account_id,
             "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
             "reference": payment["payment_no"],
@@ -545,19 +780,20 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
             "project_id": pkg["project_id"],
             "subcontractor_payment_id": payment["id"],
             "created_at": now, "updated_at": now,
-        })
+        }))
+    async with mw.insert_once():
+        await tenant.subcontractor_payments.insert_one(mw.unique(payment))
+    await mw.step("audit", lambda: log_audit(
+        org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
+        "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
+                               "subcontractor_payment_id": payment["id"],
+                               "account_id": account_id,
+                               "advance_deducted": deducted}))
+    if deducted > 0:
+        await _record_act_deduction(mw, tenant, user, act, deducted, payment["id"], now)
 
-    # Update package paid totals
-    all_pays = await tenant.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)
-    total_paid = sum(p["amount"] for p in all_pays)
-    certified = pkg.get("certified_total", 0)
-    payable = round(certified - total_paid, 2)
-
-    await tenant.subcontractor_packages.update_one({"id": pkg_id}, {"$set": {
-        "paid_total": round(total_paid, 2), "payable_total": max(0, payable), "updated_at": now,
-    }})
-
-    return {k: v for k, v in payment.items() if k != "_id"}
+    # Package totals (SUB-ADV-01: advances are not counted in paid_total)
+    await _refresh_package_totals(tenant, pkg_id, now)
 
 
 @router.get("/subcontractor-payments")
@@ -567,6 +803,228 @@ async def list_subcontractor_payments(project_id: Optional[str] = None, package_
     if project_id: q["project_id"] = project_id
     if package_id: q["package_id"] = package_id
     return await tenant.subcontractor_payments.find(q, {"_id": 0}).sort("created_at", -1).to_list(200)
+
+
+# ═══════════════════════════════════════════════════════════════════
+# SUB-ADV-01 — ADVANCE TO A SUBCONTRACTOR, DEDUCTED EXPLICITLY ON ACTS
+# ═══════════════════════════════════════════════════════════════════
+# R39 (Krum 07.11.2026): an advance is its own record, through the ONE payment ledger
+# (FLOW-006), deducted from the following acts, its remainder tracked; only Owner or
+# Accountant give it. R40: the payment cap is per package. FLOW-021 forbids "аванс без
+# прихващане/остатък"; CLAUDE §7 forbids automatic netting — the deduction is an explicit
+# action on an act (``advance_deducted`` on a payment, or the deduction endpoint below).
+
+ADVANCE_ROLES = ("Owner", "Accountant")          # R39 — legacy role strings (off/shadow)
+_REASON_MAX = 500
+_FORBIDDEN_CHARS = {"\u200b", "\u200c", "\u200d", "\u2060", "\ufeff", "\u061c",
+                    "\u200e", "\u200f", *[chr(c) for c in range(0x202a, 0x202f)],
+                    *[chr(c) for c in range(0x2066, 0x206a)]}
+
+
+def _reason(value, field: str = "reason", required: bool = True) -> str:
+    """A short human reason: text, at most 500 characters, no control/bidi/zero-width
+    characters (the PAY-01 rule for reasons); else 422 before any write."""
+    if value is None and not required:
+        return ""
+    text = value.strip() if isinstance(value, str) else None
+    bad = (text is None or (required and not text) or len(text) > _REASON_MAX
+           or any((ord(ch) < 32 and ch not in "\t") or ord(ch) == 127 or ch in _FORBIDDEN_CHARS
+                  for ch in text))
+    if bad:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "REASON_INVALID",
+            "message": "Причината е задължителна: текст до %d знака без контролни знаци"
+                       % _REASON_MAX})
+    return text
+
+
+_ADV_RESERVED_IDS = {"$ifNull": ["$advance_reservations", []]}
+
+
+async def _reserve_advance(tenant, pkg_id: str, amount: float, advance_id: str) -> None:
+    """FG-114: add ``amount`` to ``advance_total`` only if, in the same update,
+
+        (advance_total - advance_deducted_total)   advance not yet deducted
+      + committed_paid_total                       ordinary payments + advance deducted
+      + amount                                     <= contract_total (cent tolerance).
+
+    The deducted part of the advance is counted once (inside committed), so the left side is
+    the whole money already taken on for the package. The reservation carries the advance's
+    key-derived id (``advance_reservations``, as F-69-03): a retry of the same key that finds
+    it changes nothing. Over the cap -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE, nothing written."""
+    already = {"$in": [advance_id, _ADV_RESERVED_IDS]}
+    taken = {"$add": [{"$subtract": [_ADV_TOTAL, _ADV_DEDUCTED]}, _COMMITTED, amount]}
+    res = await tenant.subcontractor_packages.update_one(
+        {"id": pkg_id, "$or": [
+            {"advance_reservations": advance_id},
+            {"$expr": {"$lte": [taken, {"$add": [{"$ifNull": ["$contract_total", 0]}, _CENT]}]}}]},
+        [{"$set": {
+            "advance_total": {"$cond": [already, _ADV_TOTAL,
+                                        {"$round": [{"$add": [_ADV_TOTAL, amount]}, 2]}]},
+            "advance_reservations": {"$cond": [already, _ADV_RESERVED_IDS, {"$concatArrays": [
+                _ADV_RESERVED_IDS, [advance_id]]}]},
+        }}])
+    if res.matched_count == 0:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "ADVANCE_EXCEEDS_PACKAGE_VALUE",
+            "message": "Авансът заедно с поетите задължения по пакета надвишава договорната "
+                       "стойност на пакета"})
+
+
+@router.post("/subcontractor-packages/{pkg_id}/advances", status_code=201)
+async def create_subcontractor_advance(
+    pkg_id: str,
+    data: dict,
+    _adv: dict = Depends(require_money_write(
+        "finance.subcontractor_advance.create", module="M2",
+        resource_type="subcontractor_advance", roles=ADVANCE_ROLES)),  # R39: before any read
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """An advance to the subcontractor of a package (SUB-ADV-01, R39).
+
+    Body: ``amount`` (finite > 0), ``reason`` (required), ``advance_date``, ``account_id``
+    (default: the first Cash account), ``notes``. The cash is ONE Outflow row in
+    ``finance_payments`` (FLOW-006); the package's record is a ``subcontractor_payments`` row
+    with ``kind = "advance"`` that points to it (``finance_payment_id``) and the ledger row
+    points back (``subcontractor_payment_id``) — so a finance reversal of it is refused with
+    409 SOURCE_MODULE_REVERSAL_REQUIRED (FG-45, PR #70) until the module reverses it.
+    FG-114: the advance is first reserved against the package's contract value (atomic,
+    ``_reserve_advance``); a package without a contract value -> 422. The advance is not
+    an ordinary payment: it is not capped by the certified total (FG-90) and does not enter
+    ``committed_paid_total``; it is deducted later, explicitly, on acts.
+    Idempotency-Key required (R29); AuditEvent ``subcontractor_advance_created``.
+    """
+    amount = round(money_value(data.get("amount")), 2)
+    reason = _reason(data.get("reason"))
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+    await project_in_tenant(tenant, pkg.get("project_id"))
+    if pkg.get("status") in ("draft", "closed"):
+        raise HTTPException(status_code=409, detail={
+            "error_code": "ADVANCE_PACKAGE_NOT_ACTIVE",
+            "message": "Аванс се дава само по потвърден, незатворен пакет"})
+    contract_total = pkg.get("contract_total")
+    if not isinstance(contract_total, (int, float)) or isinstance(contract_total, bool) \
+            or not contract_total > 0:
+        # FG-114: an advance is tied to a contract/scope (FLOW-006); with no contract value
+        # there is nothing to deduct it from (FLOW-021) -> refused before any write.
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ADVANCE_PACKAGE_VALUE_REQUIRED",
+            "message": "Пакетът няма договорна стойност — авансът няма към какво да се прихване"})
+    req_account_id = data.get("account_id")
+    if req_account_id:
+        account = await tenant.financial_accounts.find_one({"id": req_account_id, "org_id": org_id})
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+    else:
+        account = await tenant.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
+    if not account:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_LEDGER_ACCOUNT_REQUIRED",
+            "message": "Авансът трябва да мине през платежния регистър: изберете "
+                       "сметка (Каса/Банка)"})
+
+    mw = await MoneyWrite.begin(user, "finance.subcontractor_advance.create", idempotency_key,
+                                {**data, "package_id": pkg_id})
+    if mw.replay_id:
+        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
+
+    now = datetime.now(timezone.utc).isoformat()
+    advance = {
+        "id": mw.new_id("subcontractor_advance"), "org_id": org_id,
+        "project_id": pkg["project_id"], "subcontractor_id": pkg["subcontractor_id"],
+        "package_id": pkg_id, "act_id": None,
+        "kind": ADVANCE_KIND, "payment_type": ADVANCE_KIND,
+        "payment_no": await _get_next_pay_no(org_id),
+        "payment_date": data.get("advance_date") or now[:10],
+        "amount": amount, "vat_amount": 0.0, "currency": pkg.get("currency", "EUR"),
+        "payment_method": data.get("payment_method", "bank"),
+        "reason": reason, "notes": data.get("notes", ""),
+        "status": "completed", "account_id": account["id"],
+        "created_by": user["id"], "created_at": now,
+    }
+    ledger_id = mw.new_id("finance_payment")
+    advance["finance_payment_id"] = ledger_id
+    async with mw:
+        # FG-114: the FIRST write reserves the advance against the package's contract value,
+        # atomically (one conditional update; concurrent advances under different keys can
+        # never together pass the cap). Over it -> 409, nothing written.
+        await mw.step("advance_reserve", lambda: _reserve_advance(tenant, pkg_id, amount,
+                                                                  advance["id"]))
+        async with mw.insert_once():
+            await tenant.finance_payments.insert_one(mw.unique({
+                "id": ledger_id, "org_id": org_id,
+                "direction": "Outflow", "amount": amount,
+                "currency": pkg.get("currency", "EUR"),
+                "date": advance["payment_date"],
+                "method": account.get("account_type", "Cash"),
+                "account_id": account["id"],
+                "counterparty_name": pkg.get("subcontractor_name") or "Подизпълнител",
+                "reference": advance["payment_no"],
+                "note": "Аванс към подизпълнител: %s" % reason,
+                "project_id": pkg["project_id"],
+                "subcontractor_payment_id": advance["id"],   # FG-45 origin (PR #70)
+                "subcontractor_advance": True,
+                "created_at": now, "updated_at": now,
+            }))
+        async with mw.insert_once():
+            await tenant.subcontractor_payments.insert_one(mw.unique(advance))
+        await mw.step("audit", lambda: log_audit(
+            org_id, user["id"], user.get("email", ""), "subcontractor_advance_created",
+            "payment", ledger_id, {"amount": amount, "package_id": pkg_id, "reason": reason,
+                                   "subcontractor_payment_id": advance["id"],
+                                   "account_id": account["id"]}))
+        await _refresh_package_totals(tenant, pkg_id, now)
+        mw.result_id = advance["id"]
+    return await tenant.subcontractor_payments.find_one({"id": advance["id"]}, {"_id": 0})
+
+
+@router.post("/subcontractor-acts/{act_id}/advance-deduction", status_code=201)
+async def deduct_advance_on_act(
+    act_id: str,
+    data: dict,
+    _ded: dict = Depends(require_money_write(
+        "subcontract.advance_deduction.execute", module="M2",
+        resource_type="subcontractor_act")),     # Owner/Admin/Accountant: before any read
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """Deduct advance on a confirmed act WITHOUT a cash payment (SUB-ADV-01 §2) — e.g. an
+    act fully covered by the advance. Body: ``amount`` (finite > 0), ``reason`` (optional).
+    The same atomic package reservation as a payment with ``advance_deducted`` (the deducted
+    part settles the act and counts against the certified total, R40); written on the act
+    and as an AuditEvent. No ledger row: no money moves. Idempotency-Key required (R29)."""
+    amount = round(money_value(data.get("amount")), 2)
+    reason = _reason(data.get("reason"), required=False)
+    tenant = _tenant(user)
+    act_row = await tenant.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]},
+                                                       {"_id": 0, "package_id": 1})
+    if not act_row:
+        raise HTTPException(status_code=404, detail="Act not found")
+    pkg_id = act_row["package_id"]
+    pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]},
+                                                       {"_id": 0, "project_id": 1})
+    if not pkg:
+        raise HTTPException(status_code=404, detail="Package not found")
+    await project_in_tenant(tenant, pkg.get("project_id"))
+    act = await _confirmed_act(tenant, act_id, pkg_id)
+
+    mw = await MoneyWrite.begin(user, "subcontract.advance_deduction.execute", idempotency_key,
+                                {**data, "act_id": act_id})
+    if mw.replay_id:
+        return await tenant.subcontractor_acts.find_one({"id": mw.replay_id}, {"_id": 0})
+    now = datetime.now(timezone.utc).isoformat()
+    async with mw:
+        await mw.step("reserve", lambda: _reserve_within_certified(
+            tenant, pkg_id, 0.0, mw.new_id("advance_deduction"), amount, act))
+        await _record_act_deduction(mw, tenant, user, act, amount, None, now, reason)
+        await _refresh_package_totals(tenant, pkg_id, now)
+        mw.result_id = act_id
+    return await tenant.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
 
 
 # ═══════════════════════════════════════════════════════════════════

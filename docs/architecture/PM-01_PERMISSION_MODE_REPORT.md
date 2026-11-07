@@ -129,12 +129,16 @@
 Мярката е каталогът на ролите по FLOW-002 (`app/permissions/catalog.py`), не мое мнение:
 * **Viewer** — „само четене; всяко четене е през членство в проекта, на ниво фирма не дава нищо“;
 * **Driver** — без никакви действия;
-* **Technician** — само подаване на актив за приемане;
+* **Technician** — само подаване на актив за приемане; **освен** труд и фира на обект, на който е член (Р16, Крум 06.11.2026 — бележка на SEC-01-C02 / FG-31: каталогът тук не е „трябва“ за труда и фирата; правилото е Р16, и SiteManager също);
 * **Warehousekeeper** — подаване на актив, предложение за Master Data, четене на Master Data.
 
 В теста тези потребители **не са членове на нито един проект**. Въпреки това в `off` (и еднакво в `shadow` и `enforce`):
 
-### 5.1. Viewer записва (28 endpoint-а)
+### 5.1. Viewer записва (28 endpoint-а — долна граница)
+
+> **SEC-01-C02 (FG-31):** списъкът е **долна граница**, не пълен списък. Харнесът вика всеки route с несъществуващи id и празно тяло, затова DELETE по id, плащане по пакет и „sync от съществуващи данни“ нямат върху какво да действат и не показват запис (§7.6). Пропуснати тук и доказани с проби върху съществуващи записи: `DELETE /api/price-modifiers/project/{id}` (FG-25 → SEC-01-C01), `POST /api/labor-entries/sync-from-work-reports` (FG-26 → C01 + C02, без изтриване), `POST /api/subcontractor-payments` (FG-27 → C02) и паричните записи на FG-30 (C02). Пробите: `tests/test_sec_01_c01_all_money_writes.py`, `tests/test_sec_01_c02_flow_guard_money_writes.py`; разликата в матрицата — `docs/evidence/SEC-01-C02/pm01_cells_changed.csv`.
+
+> **SEC-01 (Р14):** 8 от тези endpoint-а (`cash-transactions`, `bonus-payments`, `overhead-transactions`, `overhead-snapshots`, `price-modifiers/project/{project_id}`, `labor-entries`, `material-waste`, `client-link`) вече връщат 403 без запис за всички роли освен Owner/Admin/Accountant, еднакво в трите режима. Таблицата по-долу е състоянието на `main` @ `07da9ab`; актуалната матрица е `docs/evidence/PM-01/matrix.csv`, разликата клетка по клетка — `docs/evidence/SEC-01/pm01_cells_closed.csv` (120 клетки).
 
 Тези извиквания **реално записаха** в базата (oplog). Последната колона показва, че Driver, Technician и Warehousekeeper могат същото.
 

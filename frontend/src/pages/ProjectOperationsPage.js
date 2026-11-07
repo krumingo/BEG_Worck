@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import { createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,13 @@ import {
   Shield, AlertTriangle, DollarSign, Building2,
 } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
+
+// SEC-01-C03: the money POSTs of this page carry an Idempotency-Key (a retry or a
+// double click never writes a second payment). SUB-ADV-01: the advance too.
+const MONEY_POSTS = new Set(["/subcontractor-payments", "/overhead-snapshots"]);
+const isMoneyPost = (endpoint) => MONEY_POSTS.has(endpoint) || /^\/subcontractor-packages\/[^/]+\/advances$/.test(endpoint);
+const money = (v) => (Number(v) || 0).toFixed(2);
+const moneyKeys = createIdempotencyHolder();
 
 export default function ProjectOperationsPage() {
   const { projectId } = useParams();
@@ -89,13 +97,17 @@ export default function ProjectOperationsPage() {
   const handleSave = async (endpoint, payload, method = "post") => {
     setSaving(true);
     try {
-      if (method === "post") await API.post(endpoint, payload);
+      if (method === "post" && isMoneyPost(endpoint)) {
+        await API.post(endpoint, payload, idempotencyHeaders(moneyKeys.keyFor(endpoint, payload)));
+        moneyKeys.done();
+      } else if (method === "post") await API.post(endpoint, payload);
       else await API.put(endpoint, payload);
       setDialog(null);
       setConfirmDialog(null);
       fetchAll();
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка");
+      const detail = err.response?.data?.detail;
+      alert(detail?.message || detail || "Грешка");
     } finally { setSaving(false); }
   };
 
@@ -143,12 +155,15 @@ export default function ProjectOperationsPage() {
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Договор</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Сертифицирано</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground text-right">Платено</TableHead>
+                <TableHead className="text-[10px] uppercase text-muted-foreground text-right" title="Дадени аванси към подизпълнителя">Аванси</TableHead>
+                <TableHead className="text-[10px] uppercase text-muted-foreground text-right" title="Аванс, приспаднат по актове">Приспаднато</TableHead>
+                <TableHead className="text-[10px] uppercase text-muted-foreground text-right" title="Аванс, който още не е приспаднат">Остатък аванс</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground">Статус</TableHead>
                 <TableHead className="text-[10px] uppercase text-muted-foreground w-[160px]">Действия</TableHead>
               </TableRow></TableHeader>
               <TableBody>
                 {packages.length === 0 ? (
-                  <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Няма пакети</TableCell></TableRow>
+                  <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Няма пакети</TableCell></TableRow>
                 ) : packages.map((pkg, i) => {
                   const sub = subs.find(s => s.id === pkg.subcontractor_id);
                   return (
@@ -158,6 +173,9 @@ export default function ProjectOperationsPage() {
                       <TableCell className="text-right font-mono text-sm">{pkg.contract_total?.toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-sm text-emerald-400">{pkg.certified_total?.toFixed(2)}</TableCell>
                       <TableCell className="text-right font-mono text-sm">{pkg.paid_total?.toFixed(2)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm" data-testid={`pkg-advance-${i}`}>{money(pkg.advance_total)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm" data-testid={`pkg-advance-deducted-${i}`}>{money(pkg.advance_deducted_total)}</TableCell>
+                      <TableCell className="text-right font-mono text-sm text-amber-400" data-testid={`pkg-advance-outstanding-${i}`}>{money(pkg.advance_outstanding)}</TableCell>
                       <TableCell><Badge variant="outline" className="text-[9px]">{pkg.status}</Badge></TableCell>
                       <TableCell>
                         <div className="flex gap-1">
@@ -166,6 +184,7 @@ export default function ProjectOperationsPage() {
                             <>
                               <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, lines: [], act_date: new Date().toISOString().split("T")[0], notes: "" }); setDialog({ type: "new-act", pkg }); }} data-testid={`new-act-${i}`}><FileText className="w-3 h-3 mr-0.5" />Акт</Button>
                               <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ package_id: pkg.id, amount: "", payment_date: new Date().toISOString().split("T")[0], payment_type: "partial", payment_method: "bank", account_id: (accounts.find(a => a.account_type === "Cash") || accounts[0] || {}).id || "", notes: "" }); setDialog({ type: "new-pay", pkg }); }} data-testid={`new-pay-${i}`}><CreditCard className="w-3 h-3 mr-0.5" />Плати</Button>
+                              <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => { setForm({ amount: "", reason: "", advance_date: new Date().toISOString().split("T")[0], account_id: (accounts.find(a => a.account_type === "Cash") || accounts[0] || {}).id || "", notes: "" }); setDialog({ type: "new-advance", pkg }); }} data-testid={`new-advance-${i}`}><DollarSign className="w-3 h-3 mr-0.5" />Аванс</Button>
                             </>
                           )}
                         </div>
@@ -305,7 +324,26 @@ export default function ProjectOperationsPage() {
           <DialogHeader><DialogTitle><CreditCard className="w-5 h-5 text-emerald-500 inline mr-2" />Плащане</DialogTitle></DialogHeader>
           <div className="space-y-2 py-2">
             <div className="p-2 rounded bg-muted/30 text-sm"><span className="text-muted-foreground">Пакет:</span> <span className="font-mono">{dialog?.pkg?.package_no}</span></div>
+            <div className="p-2 rounded bg-muted/30 text-xs grid grid-cols-2 gap-1" data-testid="pay-pkg-summary">
+              <span className="text-muted-foreground">Удостоверено:</span><span className="font-mono text-right">{money(dialog?.pkg?.certified_total)}</span>
+              <span className="text-muted-foreground">Платено:</span><span className="font-mono text-right">{money(dialog?.pkg?.paid_total)}</span>
+              <span className="text-muted-foreground">Аванси:</span><span className="font-mono text-right">{money(dialog?.pkg?.advance_total)}</span>
+              <span className="text-muted-foreground">Приспаднато:</span><span className="font-mono text-right">{money(dialog?.pkg?.advance_deducted_total)}</span>
+              <span className="text-muted-foreground">Остатък аванс:</span><span className="font-mono text-right text-amber-400">{money(dialog?.pkg?.advance_outstanding)}</span>
+            </div>
+            <div><Label className="text-xs">По акт</Label>
+              <Select value={form.act_id || "none"} onValueChange={v => setForm({...form, act_id: v === "none" ? "" : v, advance_deducted: v === "none" ? "" : form.advance_deducted})}>
+                <SelectTrigger className="bg-background h-9"><SelectValue placeholder="Без акт" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Без акт</SelectItem>
+                  {subActs.filter(a => a.package_id === dialog?.pkg?.id && a.status === "confirmed").map(a => <SelectItem key={a.id} value={a.id}>{a.act_no} ({money(a.certified_total)} €{a.advance_deducted ? `, приспаднат аванс ${money(a.advance_deducted)}` : ""})</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label className="text-xs">Сума (EUR) *</Label><Input type="number" step="0.01" value={form.amount || ""} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background font-mono" /></div>
+            {form.act_id && (Number(dialog?.pkg?.advance_outstanding) || 0) > 0 && (
+              <div><Label className="text-xs">Приспаднат аванс (EUR) — остатък {money(dialog?.pkg?.advance_outstanding)}</Label><Input type="number" step="0.01" min="0" value={form.advance_deducted || ""} onChange={e => setForm({...form, advance_deducted: e.target.value})} className="bg-background font-mono" data-testid="pay-advance-deducted" /></div>
+            )}
             <div><Label className="text-xs">От сметка (Каса/Банка)</Label>
               <Select value={form.account_id || ""} onValueChange={v => setForm({...form, account_id: v})}>
                 <SelectTrigger className="bg-background h-9"><SelectValue placeholder="Избери сметка…" /></SelectTrigger>
@@ -319,7 +357,38 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", form))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
+            <Button onClick={() => {
+              const { act_id, advance_deducted, ...rest } = form;
+              const deducted = Number(advance_deducted) || 0;
+              const payload = { ...rest, amount: Number(form.amount), ...(act_id ? { act_id } : {}), ...(act_id && deducted > 0 ? { advance_deducted: deducted } : {}) };
+              showConfirm("pay", deducted > 0 ? `Потвърди плащане ${form.amount} € и приспаднат аванс ${money(deducted)} €?` : `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", payload));
+            }} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* SUB-ADV-01: Advance to a subcontractor (Owner/Accountant, R39) */}
+      <Dialog open={dialog?.type === "new-advance"} onOpenChange={() => setDialog(null)}>
+        <DialogContent className="sm:max-w-[400px] bg-card border-border" data-testid="new-advance-dialog">
+          <DialogHeader><DialogTitle><DollarSign className="w-5 h-5 text-amber-500 inline mr-2" />Аванс към подизпълнител</DialogTitle></DialogHeader>
+          <div className="space-y-2 py-2">
+            <div className="p-2 rounded bg-muted/30 text-sm"><span className="text-muted-foreground">Пакет:</span> <span className="font-mono">{dialog?.pkg?.package_no}</span> · <span className="text-muted-foreground">Остатък аванс:</span> <span className="font-mono">{money(dialog?.pkg?.advance_outstanding)}</span></div>
+            <p className="text-[11px] text-muted-foreground">Авансът се приспада изрично от следващите актове („Приспаднат аванс“ при плащане).</p>
+            <div><Label className="text-xs">Сума (EUR) *</Label><Input type="number" step="0.01" value={form.amount || ""} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background font-mono" data-testid="advance-amount" /></div>
+            <div><Label className="text-xs">Причина *</Label><Input value={form.reason || ""} onChange={e => setForm({...form, reason: e.target.value})} maxLength={500} placeholder="Аванс по договор…" className="bg-background" data-testid="advance-reason" /></div>
+            <div><Label className="text-xs">От сметка (Каса/Банка)</Label>
+              <Select value={form.account_id || ""} onValueChange={v => setForm({...form, account_id: v})}>
+                <SelectTrigger className="bg-background h-9"><SelectValue placeholder="Избери сметка…" /></SelectTrigger>
+                <SelectContent>
+                  {accounts.map(a => <SelectItem key={a.id} value={a.id}>{a.name} ({a.account_type === "Cash" ? "Каса" : "Банка"})</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label className="text-xs">Дата</Label><Input type="date" value={form.advance_date || ""} onChange={e => setForm({...form, advance_date: e.target.value})} className="bg-background" /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
+            <Button onClick={() => showConfirm("advance", `Потвърди аванс ${form.amount} €?`, () => handleSave(`/subcontractor-packages/${dialog?.pkg?.id}/advances`, { ...form, amount: Number(form.amount) }))} disabled={saving || !form.amount || !(form.reason || "").trim()} className="bg-amber-600 hover:bg-amber-700" data-testid="save-advance-btn"><DollarSign className="w-4 h-4 mr-1" />Дай аванс</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

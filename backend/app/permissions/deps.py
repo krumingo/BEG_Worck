@@ -95,8 +95,14 @@ def require_permission(
     resource_type: Optional[str] = None,
     legacy_check: Optional[Callable[[dict, Request], Any]] = None,
     amount_getter: Optional[Callable[[Request], Optional[float]]] = None,
+    scope_id_getter: Optional[Callable[[Request], Any]] = None,
 ) -> Callable[..., Awaitable[TenantContext]]:
-    """Build a FastAPI dependency that authorizes `action` for this route."""
+    """Build a FastAPI dependency that authorizes `action` for this route.
+
+    ``scope_id_getter`` (SEC-01-C01): an optional (sync or async) callable that
+    returns the scope id from the request when it is not a path parameter (e.g.
+    ``project_id`` in a JSON body). Used only when ``scope_id_param`` is not set.
+    """
 
     async def dependency(request: Request,
                          user: dict = Depends(get_current_user)) -> TenantContext:
@@ -110,6 +116,10 @@ def require_permission(
             return LegacyCompatContext(user, mode=mode)
 
         scope_id = request.path_params.get(scope_id_param) if scope_id_param else None
+        if scope_id is None and scope_id_getter is not None:
+            scope_id = scope_id_getter(request)
+            if inspect.isawaitable(scope_id):
+                scope_id = await scope_id
         amount = amount_getter(request) if amount_getter else None
 
         if mode == MODE_SHADOW:

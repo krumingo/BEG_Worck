@@ -1,0 +1,35 @@
+# SUB-ADV-01 test summaries (branch claude/sub-adv-01-advance, base #69 @ ccab244, local real MongoDB 7.0 replica set rs0)
+## SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo (W0_03_REAL_MONGO_URL set)
+44 passed
+## SUB-ADV-01 harness (docs/evidence/SUB-ADV-01/results.json), 3 modes
+roles: Owner, Accountant -> 201; Admin, SiteManager, Technician, Viewer, Driver -> 403, 0 business writes (R39)
+advance 1000 -> act 3000 paid amount 2000 + advance_deducted 1000 -> paid 2000, advance outstanding 0, committed 3000, payable 200 (package certified 3200), cash out 3000; ledger +1000 +2000; act advance_deducted 1000
+ordinary 200.01 over the per-package cap -> 409 PAYMENT_EXCEEDS_CERTIFIED; deduction > outstanding -> 409 ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING; deduction > act -> 409 ADVANCE_DEDUCTION_EXCEEDS_ACT; all 0 writes
+deduction without cash on act2 (200, Admin) -> 201, committed 3200, then ordinary 0.01 -> 409; C02 package 101 > 100 -> 409 (unchanged)
+6 concurrent advances with ONE key -> 1 advance row, 1 ledger row, advance_total 1000
+no key -> 428; no reason / nan -> 422; deduction without act -> 422; payment_type advance -> 422; unknown package -> 404; 0 writes
+DELETE /finance/payments/{advance ledger row} -> 409 SOURCE_MODULE_REVERSAL_REQUIRED, 0 writes
+## tests/test_r0_0*.py (real Mongo)
+814 passed (baseline 814)
+## W0 DB-free (tests/test_w0_*.py --noconftest)
+15 failed, 1085 passed, 50 skipped (baseline identical; the same 15 test_w0_03e_legacy_routes failures)
+## Guards
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+A1 inventory: regenerated table identical to the committed one
+## PM-01 matrix re-run
+48 cells added (2 new routes x 8 roles x 3 modes, pm01_cells_added.csv), 0 existing cells changed; Admin -> 403 on advances
+## Frontend
+yarn test: 6 suites, 96 tests passed; yarn build: Compiled with warnings (none in ProjectOperationsPage.js)
+
+## Addendum A (07.11) — merge of #69 @ 3fb55f2 + FG-114 + FG-115
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo: 44 passed (C03 includes #69's F-69-03 tests)
+FG-114, 3 modes: 1 000 000 on contract 5000 -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE, 0 writes; at taken 3500/5000: 1500.01 -> 409, 1500 -> 201;
+  6 concurrent advances of 1000 with DIFFERENT keys on contract 5000 -> [201 x5, 409], 5 advance rows, 5 ledger rows, advance_total 5000;
+  package without contract value -> 422 ADVANCE_PACKAGE_VALUE_REQUIRED, 0 writes
+FG-115, 3 modes (package 2: contract 1000, act 400): advance 1000 -> P&L subcontractor_cost +0, operating subcontractor_direct +0, cash paid_subcontractors +1000;
+  deduction 400 on the act -> P&L +400, operating +400, cash still +1000; then advance 0.01 -> 409 (600 + 400 = 1000)
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15 test_w0_03e_legacy_routes)
+Guards: A1 422 units / 0 violations; A2C 208 modules / 0 violations; A1 inventory table unchanged
+PM-01 fresh real-Mongo run reproduces the committed matrix (no route added in addendum A)
