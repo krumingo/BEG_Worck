@@ -1664,7 +1664,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
-| #73 LAB-01 | `00324ab` | **PASS** (D-C01 closes both latent notes: decided corrections never rewritten; void before content write); low notes E2/E3/E4 | 2026-11-07 |
+| #73 LAB-01 | `c4ddd33` | **PASS** (LAB-01-E FG-78/79/80 + R29 on POST /pay-runs); **merge order: #72 before #73** (R29 race-safe only with #72 indexes) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2419,3 +2419,44 @@ Notes, not blocking; all latent until FG-65 approvals exist:
 - **Supersede alert:** the supersede path resolves `dq_alerts` by `(entity_type, entity_id)` with no `code` filter, so it could resolve a LOCKED alert instead of the PENDING one. Unlikely in the current flow.
 
 Environment note: the audit Mongo container was recreated; `mongo_up.sh` now uses host networking on 27019, so that RS discovery works with `replicaSet=rs0`.
+
+
+## #73 LAB-01-E @ `c4ddd33` — 2026-11-07 ~05:25 UTC — PASS (one merge-order condition)
+
+Delta `00324ab..c4ddd33` (fast-forward, 1 commit), audited at the orchestrator's request:
+- **FG-78** `technician.py:1387-1393`: PUT draft returns 403 unless the caller is `submitted_by` or `worker_id`, and 400 unless the status is `Draft`. Submitted reports change only through approve, reject or reset. Read in code; covered by `test_fg78_*`.
+- **FG-79** `daily_reports.py:1010-1029`: batch-save first loads every existing (employee, date) report and checks owner (`employee_id`/`created_by`) and status (DRAFT/REJECTED). Any refusal gives 403 (not owner) or 409 (status) before any write. Read in code; the PR test checks that nothing is written. Residual: a check-then-write window (TOCTOU) if the status changes between the two loops. Low.
+- **FG-80 corrections:** keyed per overpayment, `overpayment:employee:<id>:period:<s>..<e>:source:paid_pay_runs_of_period`; the uuid5 id is derived from it and runs are collected in `pay_run_ids` (`$addToSet`). Supersede now goes by the same key, only for employees present in this run without an item.
+  - An employee removed from a run no longer supersedes their correction. That is consistent with per-overpayment keying, since other runs may still see it.
+  - Overlapping periods (a week inside a month) give different keys, so one overpayment could get two records. Suspicion, not probed; correction records are never auto-applied.
+- **FG-80 R29** `pay_runs.py:802-847`: no key or blank → 428; key over 200 chars → 400; same key and body → replay of the first run (`idempotent_replay`); other body → 409; in progress → 409; a failed attempt can be retried under the same key.
+  - **Note, low:** `_create_pay_run` writes `pay_runs.insert_one`, then `sync_run_corrections`, then `payment_slips.insert_many`, with no transaction. A crash after the insert marks the key failed, so a retry creates a second run. This was not atomic before either.
+- **Test-client key hook** (`tests/pay_run_idempotency.py`): adds a fresh key **only** when the request has none. R0-05/R0-06/LAB-01 assertions are unchanged (the diff only adds `event_hooks`). The 428 is still tested without the hook (`test_fg80_no_header_at_all_is_refused`, `test_fg80_r29_*` blank key). **No assertion weakened.**
+- Frontend `PayRunsPage.js`: one key per request body via `useRef`, reset after success, reused on retry of the same body.
+
+New probe `docs/audit/probes/lab01/test_probe_lab01e_payrun_r29.py` (real Mongo RS, one test per process):
+
+| Case | Tree | Result |
+|---|---|---|
+| P1: 8 concurrent POSTs with the **same** key, fresh DB | `c4ddd33` alone | **8 runs**, all 200. `audit_idempotency` has only `_id` (no unique `id` index on main) |
+| P1 | trial merge `c4ddd33` + #72 `8ac194a` | **1 run**, 1×200 + 7×409. PROVED fixed by #72's lazy unique-index guard |
+| P3: PATCH a draft run to another period | `c4ddd33` | 400 (period change refused), so no orphan correction |
+
+**Condition, PROVED:** R29 on POST /pay-runs is race-safe only once #72 (W0-04-C01 indexes and guards) is in. **#72 must merge before or together with #73.** This is the same class as IDEM-IDX-1 on #69. Not blocking #73 itself.
+
+Gates on `c4ddd33`:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*`, real Mongo RS | **47 passed** |
+| W0 DB-free | 1085/15/50, same 15 |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0, real Mongo | 814 |
+| `yarn build` (frontend, same deps as wt70) | **Done**, compiled |
+| merge-tree main / #72 | clean / clean |
+| merge-tree #69 | `labor_smr.py` (known LAB01-M1) |
+| merge-tree #70 | `project_pnl.py` (known) |
+| merge-tree #71 | `all_reports.py`, `labor_smr.py`, A2B inventory (known) |
+
+Environment: the dockerd restart was blocked by a stale `/var/run/docker.pid`; it was removed and the RS brought back up.
