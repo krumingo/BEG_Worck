@@ -234,9 +234,11 @@ def test_o9_allocate_superseded_and_period_switch(monkeypatch):
         r1 = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "PersonDays"}, headers=_h(key=_key()))
         r2 = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate", json={"method": "PersonDays"}, headers=_h(key=_key()))
         tot = round(sum(x["allocated_amount"] for x in await op.project_overhead_allocations.find({"superseded_by": None}).to_list(None)), 2)
-        print("O9 current rows after S2 compute", cur, "| alloc S1 again", r1.status_code,
+        rec = await op.project_overhead_allocations.count_documents({"superseded_by": None, "recalculating": True})
+        print("O9 current rows after S2 compute", cur, "(recalculating", rec, ") | alloc S1 again", r1.status_code,
               (r1.json().get("detail") or {}).get("error_code"), "| alloc S2", r2.status_code, "total", tot, "snap", s2["total_overhead"])
-        assert cur == 0 and r1.status_code == 409 and r2.status_code == 200 and tot == s2["total_overhead"]
+        # R38 (>= 39eafdf): S1's allocation keeps counting, labelled, until S2 is allocated
+        assert r1.status_code == 409 and r2.status_code == 200 and tot == s2["total_overhead"]
     _run(monkeypatch, "enforce", scenario)
 
 
@@ -285,4 +287,79 @@ def test_o11_concurrent_overlapping_computes(monkeypatch):
                   "active", [(a["period_start"], a["period_end"]) for a in act])
             bad += len(act) > 1
         assert bad == 0
+    _run(monkeypatch, "enforce", scenario)
+
+
+
+def test_o12_codex_basis_changes_after_snapshot(monkeypatch):
+    """O12 OH74-01 (Codex): snapshot computed, THEN attendance / hours change (new project
+    days, deleted days) -> allocation still sums to the snapshot total (never 200 %), both methods."""
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        out = {}
+        for method in ("PersonDays", "Hours"):
+            r = await c.post("/api/overhead/snapshots/compute", headers=_h(key=_key()), json={
+                "period_start": "2026-10-01", "period_end": "2026-10-31", "method": method})
+            assert r.status_code == 200, r.text
+            snap = r.json()
+            # the source changes AFTER the snapshot: 6 more person-days / 90 more hours on project B
+            await op.attendance_entries.insert_many([{"id": "x%s%d" % (method, i), "org_id": ORG, "user_id": "u%d" % i,
+                "date": "2026-10-2%d" % i, "status": "Present", "project_id": "P-OH01-B"} for i in range(6)])
+            await op.work_reports.insert_one({"id": "wx" + method, "org_id": ORG, "project_id": "P-OH01-B",
+                "date": "2026-10-20", "status": "Approved", "total_hours": 90})
+            a = await c.post(f"/api/overhead/snapshots/{snap['id']}/allocate", json={"method": method}, headers=_h(key=_key()))
+            body = a.json()
+            tot = round(sum(x["allocated_amount"] for x in body.get("allocations", [])), 2)
+            out[method] = (a.status_code, tot, body.get("unallocated_amount"), snap["total_overhead"])
+            await op.attendance_entries.delete_many({"id": {"$regex": "^x"}})
+            await op.work_reports.delete_many({"id": {"$regex": "^wx"}})
+        print("O12", out)
+        for m, (code, tot, un, total) in out.items():
+            assert code == 200 and round(tot + (un or 0), 2) == total, (m, out[m])
+    _run(monkeypatch, "enforce", scenario)
+
+
+def test_o13_cents_largest_remainder(monkeypatch):
+    """O13: 100.00 over 3 equal bases -> 33.34/33.33/33.33, sum exactly 100.00 (no lost cent)."""
+    from app.routes.overhead import _split_cents
+    a, u = _split_cents(100.0, {"A": 1, "B": 1, "C": 1}, 3)
+    b, v = _split_cents(0.05, {"A": 1, "B": 1, "C": 1}, 4)   # 1/4 unallocated
+    c_, w = _split_cents(1234.57, {"A": 3.33, "B": 6.67}, 10.0)
+    print("O13", a, u, "|", b, v, "|", c_, w)
+    assert round(sum(a.values()) + u, 2) == 100.0 and sorted(a.values()) == [33.33, 33.33, 33.34]
+    assert round(sum(b.values()) + v, 2) == 0.05
+    assert round(sum(c_.values()) + w, 2) == 1234.57
+
+
+def test_o14_archive_resume_after_interrupt(monkeypatch):
+    """O14 OH74-02: the archive write lands, the audit step crashes; the SAME key retried ->
+    200, exactly 1 overhead.overhead_cost.archived event, archived once."""
+    async def scenario(c, op):
+        from app.services import overhead_lifecycle as ol
+        cat = await _category(c)
+        cost = await _cost(c, cat["id"], date="2025-01-10")
+        key = _key()
+        real = ol.audit_overhead_event
+        calls = {"n": 0}
+
+        async def boom(*a, **kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise RuntimeError("crash after the archive write")
+            return await real(*a, **kw)
+        import app.routes.overhead as ov
+        monkeypatch.setattr(ov, "audit_overhead_event", boom)
+        try:
+            r1 = await c.delete(f"/api/overhead/costs/{cost['id']}", headers=_h(key=key))
+            r1 = r1.status_code
+        except RuntimeError:
+            r1 = "crashed"
+        st1 = (await op.overhead_costs.find_one({"id": cost["id"]})).get("status")
+        r2 = await c.delete(f"/api/overhead/costs/{cost['id']}", headers=_h(key=key))
+        n_ev = await op.audit_events.count_documents({"entity_id": cost["id"], "action": "overhead.overhead_cost.archived"})
+        r3 = await c.delete(f"/api/overhead/costs/{cost['id']}", headers=_h(key=_key()))
+        print("O14 first", r1, "status", st1, "| retry same key", r2.status_code, "| events", n_ev,
+              "| other key", r3.status_code)
+        assert r2.status_code == 200 and n_ev == 1 and r3.status_code == 409
     _run(monkeypatch, "enforce", scenario)

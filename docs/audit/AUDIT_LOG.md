@@ -12,7 +12,7 @@
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `f71dce2` | **PASS** (C01-E F-70-01/02 serialised reversal + audit-once; IN_PROGRESS→409; merge with #72@13dd8d7 clean, 588 passed) | 2026-11-07 |
-| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
+| #69 SEC-01 | `6af0e98` | **PASS** (F-69-01 keyed inserts on `_id`; F-69-02 R29 on sync/recompute/compute) | 2026-11-07 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -1664,9 +1664,9 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `13dd8d7` | **PASS** (F-69-01: FAILED→STARTED retake is a CAS, losers IN_PROGRESS); breaks unaware callers in #73/#75 (see RETAKE-1) | 2026-11-07 |
-| #73 LAB-01 | `ca81286` | LAB01H-1 closed; **RETAKE-1 BLOCKING on merge with #72@13dd8d7** (pay_runs treats IN_PROGRESS as STARTED → 3 runs from one key) | 2026-11-07 |
-| #75 LAB-02 | `70cb594` | **RETAKE-1 BLOCKING on merge with #72** (labor_quantities._idempotent → 4 approvals from one key); LAB02-1 medium; 2 commits text-only | 2026-11-07 |
-| #74 OH-01 | `6c5c5cf` | **PASS** (D6 overlap refused, OH01-3 closed: indexes at startup/onboarding; #69 merge + results diff → SEC-01 30/30) | 2026-11-07 |
+| #73 LAB-01 | `6ac47d0` | FG-91 PASS; **RETAKE-1 still open** (blocking on merge with #72) | 2026-11-07 |
+| #75 LAB-02 | `7156140` | FG-92/93/94 PASS; **RETAKE-1 still open**; LAB02-1 open | 2026-11-07 |
+| #74 OH-01 | `39eafdf` | **PASS** (OH74-01 frozen basis + largest remainder; OH74-02 resumable archive; R38; FG-98) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -3049,3 +3049,92 @@ Interrupt-before/after-audit recovery is covered by the PR's `test_pay_01_c01_e_
 - RETAKE-1 applies (above).
 - LAB02-1 stands.
 - The real-Mongo LAB-02 suite, R0 and PM-01 for #73/#75 will be run in isolation at the fix round.
+
+
+## #73 LAB-01-J @ `6ac47d0` and #75 LAB-02-B @ `7156140` — 2026-11-07 ~10:30 UTC
+
+**#73 FG-91:**
+- `report_corrections.report_in_payroll` decides "in payroll" from the **Pay Run lines**: `employee_rows.day_cells.report_ids`, `day_cells.reports.report_id` and `selected_report_ids`, matching the report id and `<report>_<entry>` for the old format, on runs that are confirmed/paid/paying/payment_failed/reopened or have a `paid_at`. `payroll_status` is still honoured too.
+- `authorize_report_edit(..., tenant=)` refuses with 409 on PUT `/daily-reports`, batch-save, PUT `/technician/draft`, and (on #75) `enter_quantity`.
+- The fields exist on frozen runs (`pay_runs.py:541/737/802`).
+
+**#75 FG-93/FG-94:**
+- approve/classify call `refuse_if_in_payroll` (409);
+- classify on a draft → 409;
+- the FG-92 regression tests are added.
+
+Gates:
+
+| Gate | #73 `6ac47d0` | #75 `7156140` |
+|---|---|---|
+| `tests/test_lab_0*.py`, real Mongo, run in isolation | 87 passed, 1 skipped (fg85, needs #72) | 118 passed, 1 skipped |
+| W0 | 1085/15/50, same 15 | same |
+| A2C | 0/207 | 0/208 |
+| A1 | 0/420 | 0/422 |
+| R0 | (covered by #75) | **814** |
+| PM-01 | (covered by #75) | 6 passed |
+
+**RETAKE-1 still open on both heads**: `pay_runs.create_pay_run` and `labor_quantities._idempotent` still only test DUPLICATE. LAB02-1 is still open.
+
+
+## #74 OH-01-B @ `39eafdf` — 2026-11-07 ~10:40 UTC — PASS
+
+`cee2023`:
+- **OH74-01:** compute freezes `allocation_basis` (per project, both methods) in the snapshot. Allocate uses ONLY the frozen basis and the snapshot total; `_split_cents` uses largest remainder in whole cents, plus an explicit `unallocated` remainder, and the sum is checked before any write (`ALLOCATION_TOTAL_MISMATCH`). A pre-OH74 snapshot allocates from the current source only if its total is unchanged; otherwise 409 `SNAPSHOT_SOURCE_CHANGED`.
+- **OH74-02:** the archive stores `archive_operation_key`, so the same key resumes an interrupted archive and finishes the audit (with `legacy_audit` as its own step).
+
+`39eafdf`:
+- **R38:** a recompute marks the old allocations `recalculating` (they keep counting; P&L/financial results show `overhead_recalculating` and the label "преизчислява се") until the new snapshot's allocation supersedes them period-wide.
+- **FG-98:** startup indexes every Tenant Registry database.
+
+Probes `oh01/test_probe_oh01.py` (O9 updated for R38; new O12–O14), real Mongo RS:
+
+| Probe | Result |
+|---|---|
+| O1, O2, O5, O7, O8, O10, O11 | unchanged, pass |
+| O9 (R38) | after S2 compute, S1's 2 rows stay current; allocate S1 → 409 `SNAPSHOT_SUPERSEDED`; allocate S2 → total 400 = snapshot |
+| **O12** (Codex: +6 person-days and +90 h on project B **after** the snapshot) | PersonDays 200, total 400.00; Hours 200, total 400.00 (unallocated 0). **Never 200 %** |
+| **O13** `_split_cents` | 100 over 3 → 33.34/33.33/33.33; 0.05 over 3 of a 4-basis → 0.02/0.01/0.01 + 0.01 unallocated; 1234.57 → 411.11/823.46. Exact sums |
+| **O14**: the audit step crashes after the archive write, then the same key is retried | first: crash, status archived; retry → **200, exactly 1 archived event**; another key → 409. PROVED |
+
+Gates on `39eafdf`:
+
+| Gate | Result |
+|---|---|
+| OH-01 tests | **140 passed** |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | **814** |
+| PM-01 | 6 passed |
+| `yarn build` | compiled |
+| merge-tree #73 | clean |
+| merge-tree main / #72 | `server.py` (startup blocks) |
+| merge-tree #69 | `overhead.py` + matrix (the known compute-signature resolution) |
+
+
+## #69 SEC-01-C03-C @ `6af0e98` — 2026-11-07 ~10:45 UTC — PASS
+
+- **F-69-01:** `MoneyWrite.unique(doc)` sets `_id` = the key-derived id and `insert_once()` swallows only a duplicate on `{_id}`. Two attempts of one key (resumed or concurrent) can never both insert, even without the idempotency index. It replaces the racy `needs_insert` read, and is used in labor entry, material waste, full_cost, subcontractors, reports.
+- **F-69-02:** R29 (428) on labor sync, package recompute, overhead compute; the computed answer is stored as a `json:` result reference and replayed.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_sec_01_*.py`, enforce, real Mongo | **30 passed** |
+| `sec01/probe_sec01_c01_r16.py` | FAILS none |
+| `sec01/probe_sec01_c02_payments.py` | P2/P3/P4 as before; the "P1" entry is the known stale label (keyless → 428 now) |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/207 |
+| A1 | 0/420 |
+| R0 | **814** |
+| PM-01 | 6 passed |
+
+merge-tree:
+- main, #72, #71: clean;
+- #70: A1 inventory + `idempotency.js`;
+- #73: `labor_smr.py` (known LAB01-M1);
+- #74: `overhead.py` + matrix (known).
+
+With #72: `MoneyWrite` goes through `RecoverableWrite`, which maps `IDEMPOTENCY_IN_PROGRESS` to 409, so it is safe.
