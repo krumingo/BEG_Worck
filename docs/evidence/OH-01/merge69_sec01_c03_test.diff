@@ -1,0 +1,13 @@
+diff --git a/backend/tests/test_sec_01_c03_payment_amount_idempotency.py b/backend/tests/test_sec_01_c03_payment_amount_idempotency.py
+index 8defce9..31617ab 100644
+--- a/backend/tests/test_sec_01_c03_payment_amount_idempotency.py
++++ b/backend/tests/test_sec_01_c03_payment_amount_idempotency.py
+@@ -562,7 +562,7 @@ def check_computed_and_race(result: Dict[str, Any]) -> None:
+             continue
+         assert r["other_body"] == {"status": 409, "business_written": []}, r
+         if r["route"] == "overhead_compute":
+-            assert r["first"]["business_written"] == ["op.overhead_snapshots"], r
++            assert r["first"]["business_written"] == ["op.overhead_period_locks", "op.overhead_snapshots"]  # OH-01: the period-lock row, r
+             assert r["admin_snapshots_after"] == 1, r          # same key twice: 1 snapshot
+     race = result["f69_01_interrupted_payment_race"]
+     assert [r["mode"] for r in race] == list(MODES)

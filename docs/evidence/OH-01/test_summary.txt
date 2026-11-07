@@ -44,3 +44,4 @@ tests/test_oh_01_overhead_no_hard_delete.py: 140 passed (new test_23 R38, test_2
 R38: compute marks the old allocation "recalculating" (P&L keeps it, overhead_label "преизчислява се"); the new allocation supersedes it at write: 400 -> 400 labelled -> 800, never 0 and never both
 FG-98: startup indexes the operational DB and every Tenant Registry database (unreadable registry fails the start)
 R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0; yarn test 96, build ok
+merge with #69 @ 6af0e98 (F-69-02 adds MoneyWrite on compute): one key path kept (OH-01 KeyedWrite; #69's own comment: "#74's version of this block wins"); SEC-01 30/30, OH-01 140, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0 — after the 6-step procedure in HANDOFF OH-01-C (diffs: merge69_sec01_c01_results.diff, merge69_sec01_c03_results.diff, merge69_sec01_c03_test.diff)
