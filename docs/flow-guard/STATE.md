@@ -1,12 +1,12 @@
 # FLOW GUARD — състояние
 
-Последен проход: **7** — 07.11.2026 04:50 UTC (периодичен).
+Последен проход: **8** — 07.11.2026 06:50 UTC (периодичен).
 
 ## Последно проверен SHA по клон
 
 | Клон / PR | Проверен SHA | Проход | Бележка |
 |---|---|---|---|
-| `main` | `35ae10b` | 7 | merge PM-01 (#68), ST-02 (#67). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7) |
+| `main` | `35ae10b` | 8 | merge PM-01 (#68), ST-02 (#67). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7), FLOW-020 (8) |
 | #55 `task5c/live-ops-01-canonical-stock-core` | `f0d86ab` | 7 | склад: FLOW-009/020/008, Р10/Р11/Р13 |
 | #56 `claude/auth-owner-recovery-forgot-password-sfv359` | `3234446` | 2 | auth: FLOW-002/040, Р6. Изостава от main (база `c0e34e1`) |
 | #67 `claude/st-02-staging-stack` | `675faba` | 4 | слят в main (`35ae10b`) |
@@ -15,8 +15,9 @@
 | #70 `claude/pay-01-payment-reversal` | `31ed258` | 5 | PAY-01, FLOW-006, Р23 |
 | #71 `claude/sec-02-finance-read` | `dee0610` | 7 | SEC-02, Р20/Р31 |
 | #72 `claude/w0-04-c01-audit-indexes` | `8ac194a` | 6 | W0-04-C01, FLOW-040 |
-| #73 `claude/lab-01-labor-cost` | `00324ab` | 7 | LAB-01, FLOW-019/028 |
-| пакети (`claude/happy-meitner-bmcnel`) | `ac74fe9` | 7 | 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
+| #73 `claude/lab-01-labor-cost` | `c4ddd33` | 8 | LAB-01, FLOW-019/028 |
+| `claude/oh-01-overhead` (OH-01) | `09409f0` | 8 | FLOW-024 |
+| пакети (`claude/happy-meitner-bmcnel`) | `ab74e23` | 8 | OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
 ## Отворени PR, непрегледани в този проход
 
@@ -35,4 +36,5 @@
 | FLOW-019 | 5 | `COVERAGE.md` |
 | FLOW-008 | 6 | `COVERAGE.md` |
 | FLOW-024 | 7 | `COVERAGE.md` |
-| следващ: FLOW-020 | — | — |
+| FLOW-020 | 8 | `COVERAGE.md` |
+| следващ: FLOW-021 | — | — |
