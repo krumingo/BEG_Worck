@@ -167,7 +167,7 @@ app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in appro
 app/routes/auth.py:115 users.find in login()
 app/tenancy/data_access.py:400 offers.find in resolve_review_token()
 app/tenancy/identity.py:72 users.find in users_with_email()
-app/tenancy/project_team.py:267 project_team.count_documents in ownerless_row_count()
+app/tenancy/project_team.py:292 project_team.count_documents in ownerless_row_count()
 ```
 
 </details>

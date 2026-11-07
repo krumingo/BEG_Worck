@@ -66,7 +66,93 @@ ACTIONS: Set[str] = {
     # In MASTER_DATA_MODE=enforce a legacy identity hard delete is a Master Data
     # adapter write and needs this action; default deny for every other role.
     "master_data.legacy.delete",
+    # SEC-01 (R14, Krum 06.11.2026; PM-01 §5.1): money writes are for the finance
+    # roles only — Owner/Admin (full set) and Accountant. Same rule as the sibling
+    # writes (routes/clients.py:27-29, routes/finance.py:36-38). One action per
+    # endpoint; no other role is granted any of them.
+    "finance.cash_transaction.create",       # POST /api/finance/cash-transactions
+    "finance.overhead_transaction.create",   # POST /api/finance/overhead-transactions
+    "finance.bonus_payment.create",          # POST /api/finance/bonus-payments
+    "finance.overhead_snapshot.create",      # POST /api/overhead-snapshots
+    "pricing.project_modifier.update",       # PUT  /api/price-modifiers/project/{project_id}
+    "labor.entry.create",                    # POST /api/labor-entries
+    "material_waste.entry.create",           # POST /api/projects/{project_id}/material-waste
+    "project.client_link.update",            # PATCH /api/projects/{project_id}/client-link
+                                             # + PUT/POST /api/projects when owner_* changes (C01)
+    # SEC-01-C01 (R14 + R16, Krum 06.11.2026): every other write route on the same
+    # resources. One action per endpoint.
+    "labor.work_report_sync.execute",        # POST /api/labor-entries/sync-from-work-reports
+    "labor.package_recompute.execute",       # POST /api/execution-packages/recompute-labor/{project_id}
+    "finance.overhead_snapshot_compute.execute",  # POST /api/overhead/snapshots/compute
+    "pricing.project_modifier.delete",       # DELETE /api/price-modifiers/project/{project_id} (refused 409)
+    "pricing.org_modifier.update",           # PUT  /api/price-modifiers/org (Owner/Admin only)
+    # SEC-01-C02 (R14, Krum 06.11.2026; FLOW Guard FG-27, FG-30): the remaining money
+    # writes a Viewer could reach. One action per endpoint; finance roles only.
+    "finance.subcontractor_payment.create",  # POST /api/subcontractor-payments (FG-27)
+    "revenue.client_act_confirm.execute",    # POST /api/client-acts/{act_id}/confirm
+    "subcontract.act_confirm.execute",       # POST /api/subcontractor-acts/{act_id}/confirm
+    "procurement.supplier_invoice.update",   # PUT  /api/supplier-invoices/{inv_id}
+    "overhead.worker_calendar.create",       # POST /api/worker-calendar
+    "overhead.worker_calendar.update",       # PUT  /api/worker-calendar/{entry_id}
+    "overhead.worker_calendar_bulk.execute", # POST /api/worker-calendar/bulk
+    "overhead.worker_calendar_sync.execute", # POST /api/worker-calendar/sync-from-sessions
+    "finance.overhead_allocation.execute",   # POST /api/overhead-allocation/compute/{project_id}
+    "ocr_invoice.intake.approve",            # PUT  /api/ocr-invoice/{intake_id}/approve
+    "sales.sale_commit.execute",             # POST /api/sales/commit
+    "pricing.material_price_refresh.execute",  # POST /api/pricing/refresh
 }
+
+# SEC-01: the money-write actions above, granted to Accountant (Owner/Admin get them
+# through their full set).
+MONEY_WRITE_ACTIONS: Set[str] = {
+    "finance.cash_transaction.create",
+    "finance.overhead_transaction.create",
+    "finance.bonus_payment.create",
+    "finance.overhead_snapshot.create",
+    "pricing.project_modifier.update",
+    "labor.entry.create",
+    "material_waste.entry.create",
+    "project.client_link.update",
+    # SEC-01-C01
+    "labor.work_report_sync.execute",
+    "labor.package_recompute.execute",
+    "finance.overhead_snapshot_compute.execute",
+    "pricing.project_modifier.delete",
+}
+# SEC-01-C02 (R14; FG-27, FG-30): same rule, same holders (Owner/Admin/Accountant).
+MONEY_WRITE_ACTIONS_C02: Set[str] = {
+    "finance.subcontractor_payment.create",
+    "revenue.client_act_confirm.execute",
+    "subcontract.act_confirm.execute",
+    "procurement.supplier_invoice.update",
+    "overhead.worker_calendar.create",
+    "overhead.worker_calendar.update",
+    "overhead.worker_calendar_bulk.execute",
+    "overhead.worker_calendar_sync.execute",
+    "finance.overhead_allocation.execute",
+    "ocr_invoice.intake.approve",
+    "sales.sale_commit.execute",
+    "pricing.material_price_refresh.execute",
+}
+MONEY_WRITE_ACTIONS |= MONEY_WRITE_ACTIONS_C02
+
+# SEC-01-C01 (R16, Krum 06.11.2026): labor entries and material waste. Owner/Admin/
+# Accountant everywhere (company scope, above); SiteManager and Technician ONLY on the
+# projects they are members of — granted on the project-scope assignment that mirrors
+# the project_team membership (app/permissions/sync.py, scripts/w0_02_bootstrap_*),
+# never at company scope. Viewer/Driver/every other role: never, member or not.
+FIELD_COST_WRITE_ACTIONS: Set[str] = {
+    "labor.entry.create",
+    "labor.work_report_sync.execute",
+    "labor.package_recompute.execute",
+    "material_waste.entry.create",
+}
+# role_id (canonical or legacy) of the company roles R16 lets write on member projects.
+FIELD_COST_MEMBER_ROLE_IDS: Set[str] = {"site_manager", "LEGACY_TECHNICIAN"}
+
+# SEC-01-C01: Owner/Admin only (the existing rule of PUT /price-modifiers/org,
+# routes/price_modifiers.py) — through their full set; granted to no other role.
+ORG_PRICING_ACTIONS: Set[str] = {"pricing.org_modifier.update"}
 
 # Verbs whose DENIAL is security/business significant and must be audited
 # (guardrail: do not flood the chain with ordinary read/list denials).
@@ -111,7 +197,8 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "master_data.entity.read"}},
     "accountant":      {"label_bg": "Счетоводство",           "actions": {"user.read",
                                                                       "master_data.pending.read",
-                                                                      "master_data.entity.read"}},
+                                                                      "master_data.entity.read",
+                                                                      *MONEY_WRITE_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read"}},
@@ -136,6 +223,20 @@ CANONICAL_ROLES: Dict[str, dict] = {
 # on a project-scope assignment). Reproduces can_access_project / can_manage_project.
 PROJECT_MEMBER_ACTIONS = ["budget.read"]
 PROJECT_MANAGER_ACTIONS = ["budget.read", "budget.write"]
+
+
+def project_membership_actions(role_id: str, role_in_project: str) -> list:
+    """Explicit permissions of the project-scope assignment mirroring one membership.
+
+    budget.* as before (SiteManager in the project: +write). SEC-01-C01 (R16): a member
+    whose COMPANY role is SiteManager or Technician also gets the field cost writes of
+    THIS project. Any other role (Viewer, Driver, ...) gets nothing more, member or not.
+    """
+    base = list(PROJECT_MANAGER_ACTIONS if role_in_project == "SiteManager"
+                else PROJECT_MEMBER_ACTIONS)
+    if role_id in FIELD_COST_MEMBER_ROLE_IDS:
+        base += sorted(FIELD_COST_WRITE_ACTIONS)
+    return base
 
 # ---------------------------------------------------------------------------
 # LEGACY compatibility roles — transitional only, NOT FLOW-002 canon.
