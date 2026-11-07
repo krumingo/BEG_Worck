@@ -9,7 +9,7 @@
   "mongo": "local replica set (oplog, transactions)",
   "outbound_http": "closed local port",
   "schema": "beg.act-01-results/v1",
-  "seconds": 19.5,
+  "seconds": 20.1,
   "service_present": true
  },
  "modes": {
@@ -17,35 +17,37 @@
    "accepted_not_edited": {
     "confirm": {
      "body": {
-      "accepted_at": "2026-11-07T14:05:10.216225+00:00",
+      "accepted_at": "2026-11-07T14:31:50.080684+00:00",
       "accepted_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:10.196580+00:00",
+      "created_at": "2026-11-07T14:31:50.059337+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "e808773b-9374-5a28-b698-8347976f85e8",
+      "id": "ef4c1ebc-9e17-506c-b794-984775d56962",
       "lines": [
        {
         "activity_code": "L1",
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
+        "currency": "EUR",
         "executed_percent": 10.0,
         "executed_qty": 1.0,
-        "id": "caaadd16-1577-4e8f-9cf1-0e8a4e0f6c57",
+        "id": "e5275ec3-55d3-4f9e-9c52-1842ca1015b9",
         "line_total": 10.0,
         "note": null,
         "offer_id": "act01-o1",
         "offer_line_id": "act01-l1",
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -57,9 +59,9 @@
       "status": "Accepted",
       "subtotal": 10.0,
       "total": 12.0,
-      "updated_at": "2026-11-07T14:05:10.216225+00:00",
+      "updated_at": "2026-11-07T14:31:50.080684+00:00",
       "vat_amount": 2.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_acts"
@@ -110,10 +112,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:10.510233+00:00",
+      "created_at": "2026-11-07T14:31:50.325689+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "d092e6ae-37dc-54a9-ad6a-51c2d41a4159",
+      "id": "a16eff4b-b788-57ae-bc6c-603f80682478",
       "lines": [
        {
         "acted_qty_total": 1.0,
@@ -122,9 +124,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 10.0,
         "executed_qty": 1.0,
-        "id": "aaf93d1a-d369-43ba-8016-5794c3c5f144",
+        "id": "764e453a-2513-420d-baa5-be3c9f6f1f99",
         "line_total": 10.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -133,12 +136,13 @@
         "remaining_value": 90.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -150,9 +154,9 @@
       "status": "Draft",
       "subtotal": 10.0,
       "total": 12.0,
-      "updated_at": "2026-11-07T14:05:10.510233+00:00",
+      "updated_at": "2026-11-07T14:31:50.325689+00:00",
       "vat_amount": 2.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -196,10 +200,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:05.672632+00:00",
+      "created_at": "2026-11-07T14:31:45.293364+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "374016c7-f4e0-566f-b695-e58a27e7e213",
+      "id": "72023c7e-cdd1-51d8-a3eb-81509f7d99c3",
       "lines": [
        {
         "acted_qty_total": 4.0,
@@ -208,9 +212,10 @@
         "activity_name": "ACT-01 LX",
         "contracted_qty": 4.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 100.0,
         "executed_qty": 4.0,
-        "id": "d807ccec-4487-4206-95ee-9bfe1457abbe",
+        "id": "031dda17-ebc4-413c-8234-b3b4f239fab0",
         "line_total": 100.0,
         "note": null,
         "offer_id": "act01-ox",
@@ -219,12 +224,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 25.0
+        "unit_price": 25.0,
+        "vat_percent": 9.0
        }
       ],
       "notes": "От оферта OFF-0003",
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -235,10 +241,10 @@
       ],
       "status": "Draft",
       "subtotal": 100.0,
-      "total": 120.0,
-      "updated_at": "2026-11-07T14:05:05.672632+00:00",
-      "vat_amount": 20.0,
-      "vat_percent": 20
+      "total": 109.0,
+      "updated_at": "2026-11-07T14:31:45.293364+00:00",
+      "vat_amount": 9.0,
+      "vat_percent": 9.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -326,10 +332,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:09.888541+00:00",
+      "created_at": "2026-11-07T14:31:49.695847+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "a5ecd524-6516-5950-80f3-32e5fda77571",
+      "id": "9136dbf9-f235-56b7-a126-ec045b26713c",
       "lines": [
        {
         "acted_qty_total": 4.0,
@@ -338,9 +344,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 40.0,
         "executed_qty": 4.0,
-        "id": "318d1fc3-e06a-4456-b484-e8af04e37d0c",
+        "id": "b79ef645-24eb-486f-82bc-cde330fdecae",
         "line_total": 40.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -349,12 +356,13 @@
         "remaining_value": 60.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -366,9 +374,9 @@
       "status": "Draft",
       "subtotal": 40.0,
       "total": 48.0,
-      "updated_at": "2026-11-07T14:05:09.888541+00:00",
+      "updated_at": "2026-11-07T14:31:49.695847+00:00",
       "vat_amount": 8.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -391,10 +399,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:09.888541+00:00",
+      "created_at": "2026-11-07T14:31:49.695847+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "a5ecd524-6516-5950-80f3-32e5fda77571",
+      "id": "9136dbf9-f235-56b7-a126-ec045b26713c",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -403,9 +411,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "01477172-3bd5-4cc6-b099-417596af5c41",
+        "id": "f1898a3d-fbc3-41b3-801a-5370750c728f",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -414,12 +423,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -431,10 +441,10 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:09.954712+00:00",
+      "updated_at": "2026-11-07T14:31:49.789879+00:00",
       "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -469,10 +479,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0009",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:09.994142+00:00",
+      "created_at": "2026-11-07T14:31:49.838045+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "e0a1f0de-aad0-5e7e-a7b7-3f6f1626a5b6",
+      "id": "afc0bdeb-5413-55aa-ba01-66b558cc722b",
       "lines": [
        {
         "acted_qty_total": 10.0,
@@ -481,9 +491,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 80.0,
         "executed_qty": 8.0,
-        "id": "68f348c3-9c32-4e33-9a4a-e4bfd9c1b63f",
+        "id": "fdc4b214-0a7a-49e6-bf7c-cbe03afb05e6",
         "line_total": 80.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -492,12 +503,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -509,9 +521,9 @@
       "status": "Draft",
       "subtotal": 80.0,
       "total": 96.0,
-      "updated_at": "2026-11-07T14:05:09.994142+00:00",
+      "updated_at": "2026-11-07T14:31:49.838045+00:00",
       "vat_amount": 16.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -572,10 +584,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:09.888541+00:00",
+      "created_at": "2026-11-07T14:31:49.695847+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "a5ecd524-6516-5950-80f3-32e5fda77571",
+      "id": "9136dbf9-f235-56b7-a126-ec045b26713c",
       "lines": [
        {
         "acted_qty_total": 6.0,
@@ -584,9 +596,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 60.0,
         "executed_qty": 6.0,
-        "id": "0365fc0d-4555-4f16-a174-a3b07dca858a",
+        "id": "c7c4c23b-d71b-4dc5-843f-94a66231fb05",
         "line_total": 60.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -595,12 +608,13 @@
         "remaining_value": 40.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -612,10 +626,10 @@
       "status": "Draft",
       "subtotal": 60.0,
       "total": 72.0,
-      "updated_at": "2026-11-07T14:05:09.920876+00:00",
+      "updated_at": "2026-11-07T14:31:49.742185+00:00",
       "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "vat_amount": 12.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -637,10 +651,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:05:06.553041+00:00",
+     "created_at": "2026-11-07T14:31:46.223180+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "b29035f8-aced-5f1d-a341-5af5e7f64070",
+     "id": "5b25b1e2-5ad8-5389-8704-da2537ec211d",
      "lines": [
       {
        "acted_qty_total": 4.0,
@@ -649,9 +663,10 @@
        "activity_name": "ACT-01 LX",
        "contracted_qty": 4.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 100.0,
        "executed_qty": 4.0,
-       "id": "bd2bd76b-21f8-4743-a442-d05ac70f56cb",
+       "id": "f8c124b8-704a-4920-8c0a-106ecfcc6650",
        "line_total": 100.0,
        "note": null,
        "offer_id": "act01-ox",
@@ -660,12 +675,13 @@
        "remaining_value": 0.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 25.0
+       "unit_price": 25.0,
+       "vat_percent": 9.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -676,10 +692,10 @@
      ],
      "status": "Draft",
      "subtotal": 100.0,
-     "total": 120.0,
-     "updated_at": "2026-11-07T14:05:06.553041+00:00",
-     "vat_amount": 20.0,
-     "vat_percent": 20
+     "total": 109.0,
+     "updated_at": "2026-11-07T14:31:46.223180+00:00",
+     "vat_amount": 9.0,
+     "vat_percent": 9.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -796,10 +812,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:06.705851+00:00",
+      "created_at": "2026-11-07T14:31:46.417483+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "0b946c63-4bd9-52e2-b958-7c1107e12bd7",
+      "id": "b8b9b479-e44f-553f-bd81-4b84e4506490",
       "lines": [
        {
         "acted_qty_total": 5.0,
@@ -808,9 +824,10 @@
         "activity_name": "ACT-01 L2",
         "contracted_qty": 5.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 1.0,
-        "id": "b4956b52-a3f2-478b-a157-58ff6ab8f212",
+        "id": "2faec85e-2558-408f-a325-8cc4eacace3b",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -819,12 +836,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 20.0
+        "unit_price": 20.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -836,9 +854,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:06.705851+00:00",
+      "updated_at": "2026-11-07T14:31:46.417483+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -882,10 +900,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:05:10.787952+00:00",
+     "created_at": "2026-11-07T14:31:50.937584+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "87fc4871-834b-504e-893c-2daa2546f0c4",
+     "id": "a34543e1-a682-5afa-928c-d4cf783b7d78",
      "lines": [
       {
        "acted_qty_total": 3.0,
@@ -894,9 +912,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 30.0,
        "executed_qty": 3.0,
-       "id": "b52fa9aa-a5ca-4929-a7d3-9e739f9db20c",
+       "id": "e1b08989-03f4-4d98-b38c-407b90f5ae1d",
        "line_total": 30.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -905,12 +924,13 @@
        "remaining_value": 70.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -922,9 +942,9 @@
      "status": "Draft",
      "subtotal": 30.0,
      "total": 36.0,
-     "updated_at": "2026-11-07T14:05:10.787952+00:00",
+     "updated_at": "2026-11-07T14:31:50.937584+00:00",
      "vat_amount": 6.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -973,6 +993,300 @@
      "ACT-0008",
      "ACT-0009"
     ]
+   },
+   "offer_versions": {
+    "acted_LV1": 4.0,
+    "acted_LV2": 0.0,
+    "extra": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0009",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:50.825690+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "62f15b7b-fe3a-5f25-80d8-1aa725172435",
+      "lines": [
+       {
+        "acted_qty_total": 1.0,
+        "acted_value_total": 25.0,
+        "activity_code": "LX",
+        "activity_name": "ACT-01 LX",
+        "contracted_qty": 4.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 25.0,
+        "executed_qty": 1.0,
+        "id": "89db7d9f-37fb-4274-b420-583e7cf638d2",
+        "line_total": 25.0,
+        "note": null,
+        "offer_id": "act01-ox",
+        "offer_line_id": "act01-lx",
+        "remaining_qty": 3.0,
+        "remaining_value": 75.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 25.0,
+        "vat_percent": 9.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 1,
+      "source_offer_id": "act01-ox",
+      "source_offer_ids": [
+       "act01-ox"
+      ],
+      "status": "Draft",
+      "subtotal": 25.0,
+      "total": 27.25,
+      "updated_at": "2026-11-07T14:31:50.825690+00:00",
+      "vat_amount": 2.25,
+      "vat_percent": 9.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 201,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ]
+    },
+    "from_v1": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "grow": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "release": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0008",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:50.613938+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "10dd5c89-a732-572e-8892-e7441576ba02",
+      "lines": [
+       {
+        "acted_qty_total": 4.0,
+        "acted_value_total": 40.0,
+        "activity_code": "LV1",
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 40.0,
+        "executed_qty": 4.0,
+        "id": "3324cabe-5977-4a87-9003-fe2d0898e024",
+        "line_total": 40.0,
+        "note": null,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "remaining_qty": 6.0,
+        "remaining_value": 60.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 10.0,
+        "vat_percent": 20.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 2,
+      "source_offer_id": "act01-ov1",
+      "source_offer_ids": [
+       "act01-ov1"
+      ],
+      "status": "Draft",
+      "subtotal": 40.0,
+      "total": 48.0,
+      "updated_at": "2026-11-07T14:31:50.736561+00:00",
+      "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "vat_amount": 8.0,
+      "vat_percent": 20.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 200,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts"
+     ]
+    },
+    "v1_after": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "v1_first": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0008",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:50.613938+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "10dd5c89-a732-572e-8892-e7441576ba02",
+      "lines": [
+       {
+        "acted_qty_total": 6.0,
+        "acted_value_total": 60.0,
+        "activity_code": "LV1",
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 60.0,
+        "executed_qty": 6.0,
+        "id": "917a9f4b-9568-42e1-a5cd-f00da2f765ec",
+        "line_total": 60.0,
+        "note": null,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "remaining_qty": 4.0,
+        "remaining_value": 40.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 10.0,
+        "vat_percent": 20.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 1,
+      "source_offer_id": "act01-ov1",
+      "source_offer_ids": [
+       "act01-ov1"
+      ],
+      "status": "Draft",
+      "subtotal": 60.0,
+      "total": 72.0,
+      "updated_at": "2026-11-07T14:31:50.613938+00:00",
+      "vat_amount": 12.0,
+      "vat_percent": 20.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 201,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ]
+    },
+    "v2_after": {
+     "body": {
+      "detail": {
+       "accepted_versions": [
+        1,
+        2
+       ],
+       "error_code": "OFFER_VERSION_LINEAGE_UNKNOWN",
+       "message": "Офертата има повече от една приета версия, а редовете на версиите не са свързани помежду си — вече актуваното по старата версия не може да се приспадне. Актуването по тази оферта е спряно до решение.",
+       "offer_id": "act01-ov2"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_LINEAGE_UNKNOWN",
+     "message": "Офертата има повече от една приета версия, а редовете на версиите не са свързани помежду си — вече актуваното по старата версия не може да се приспадне. Актуването по тази оферта е спряно до решение.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "v2_not_accepted": {
+     "body": {
+      "detail": {
+       "error_code": "OFFER_LINE_NOT_FOUND",
+       "message": "Редът от офертата не е намерен в приета оферта на този обект",
+       "offer_line_id": "act01-lv2"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_LINE_NOT_FOUND",
+     "message": "Редът от офертата не е намерен в приета оферта на този обект",
+     "status": 422,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    }
    },
    "other_project_line": {
     "body": {
@@ -1063,6 +1377,22 @@
         "remaining_value": 100.0,
         "unit": "m2",
         "unit_price": 25.0
+       },
+       {
+        "acted_qty": 0.0,
+        "acted_value": 0.0,
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "offer_no": "OFF-0005",
+        "offer_type": "main",
+        "over_acted": false,
+        "remaining_qty": 10.0,
+        "remaining_value": 100.0,
+        "unit": "m2",
+        "unit_price": 10.0
        }
       ],
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -1079,10 +1409,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:05.389735+00:00",
+       "created_at": "2026-11-07T14:31:45.061219+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "c1097886-4ec8-5366-aead-8928e769455a",
+       "id": "c7fe64cd-4883-59e7-b3b1-26396fb57ca0",
        "lines": [
         {
          "acted_qty_total": 3.0,
@@ -1091,9 +1421,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 30.0,
          "executed_qty": 3.0,
-         "id": "3c63ba61-80e6-469a-87ff-5bc430698690",
+         "id": "48e7751c-aed1-48ca-a5cb-23c19a0f5408",
          "line_total": 30.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1102,12 +1433,13 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1119,9 +1451,9 @@
        "status": "Draft",
        "subtotal": 30.0,
        "total": 36.0,
-       "updated_at": "2026-11-07T14:05:05.389735+00:00",
+       "updated_at": "2026-11-07T14:31:45.061219+00:00",
        "vat_amount": 6.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -1144,10 +1476,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:05.428706+00:00",
+       "created_at": "2026-11-07T14:31:45.100744+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "4168d727-5c16-5bf5-89db-cc0fceaea1d3",
+       "id": "9de44caa-52dd-53f9-ad94-a7b82c01437f",
        "lines": [
         {
          "acted_qty_total": 6.0,
@@ -1156,9 +1488,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 30.0,
          "executed_qty": 3.0,
-         "id": "6c3a819e-1095-4e43-9e3a-fd262f179905",
+         "id": "5a828ed6-a4de-4539-8fc5-92e635e72d00",
          "line_total": 30.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1167,12 +1500,13 @@
          "remaining_value": 40.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1184,9 +1518,9 @@
        "status": "Draft",
        "subtotal": 30.0,
        "total": 36.0,
-       "updated_at": "2026-11-07T14:05:05.428706+00:00",
+       "updated_at": "2026-11-07T14:31:45.100744+00:00",
        "vat_amount": 6.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -1209,10 +1543,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0010",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:05.476339+00:00",
+       "created_at": "2026-11-07T14:31:45.137934+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "6d43b372-b27e-510d-ad86-f3c5da8e1ac8",
+       "id": "1cf204ce-666b-5380-a23c-fd8e9cd1ab30",
        "lines": [
         {
          "acted_qty_total": 10.0,
@@ -1221,9 +1555,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 40.0,
          "executed_qty": 4.0,
-         "id": "c5c3edd0-8f49-46ed-842a-e06b7b8b60bf",
+         "id": "eab5554a-9166-4c95-af99-8a9484336857",
          "line_total": 40.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1232,12 +1567,13 @@
          "remaining_value": 0.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1249,9 +1585,9 @@
        "status": "Draft",
        "subtotal": 40.0,
        "total": 48.0,
-       "updated_at": "2026-11-07T14:05:05.476339+00:00",
+       "updated_at": "2026-11-07T14:31:45.137934+00:00",
        "vat_amount": 8.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -1296,10 +1632,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:05:04.952732+00:00",
+     "created_at": "2026-11-07T14:31:44.584456+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "2f6ee860-fed4-5a76-ac03-2ef07f9a73be",
+     "id": "87e703d6-b2c6-5985-8ee1-7e3e0c481e77",
      "lines": [
       {
        "acted_qty_total": 2.0,
@@ -1308,9 +1644,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 20.0,
        "executed_qty": 2.0,
-       "id": "6e394956-c13f-45be-8f53-c39907248372",
+       "id": "4a0e533a-bbed-449d-8004-27d8070dcfd0",
        "line_total": 20.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -1319,12 +1656,13 @@
        "remaining_value": 80.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1336,9 +1674,9 @@
      "status": "Draft",
      "subtotal": 20.0,
      "total": 24.0,
-     "updated_at": "2026-11-07T14:05:04.952732+00:00",
+     "updated_at": "2026-11-07T14:31:44.584456+00:00",
      "vat_amount": 4.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -1361,10 +1699,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:05:05.062797+00:00",
+     "created_at": "2026-11-07T14:31:44.722101+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "7d27e300-9fd8-5ce4-ae66-61c6a70e1a1d",
+     "id": "8c797429-044e-5eac-9210-c4d4d6a84609",
      "lines": [
       {
        "acted_qty_total": 2.0,
@@ -1373,9 +1711,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 20.0,
        "executed_qty": 2.0,
-       "id": "19ba249c-ea03-4bc6-888f-0672292bb9d8",
+       "id": "df13dc04-ffa1-4ef9-a4b8-89101adf87a2",
        "line_total": 20.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -1384,12 +1723,13 @@
        "remaining_value": 80.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1401,9 +1741,9 @@
      "status": "Draft",
      "subtotal": 20.0,
      "total": 24.0,
-     "updated_at": "2026-11-07T14:05:05.062797+00:00",
+     "updated_at": "2026-11-07T14:31:44.722101+00:00",
      "vat_amount": 4.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -1428,12 +1768,12 @@
       "status": 409
      },
      {
-      "act_number": null,
-      "status": 409
-     },
-     {
       "act_number": "ACT-0008",
       "status": 201
+     },
+     {
+      "act_number": null,
+      "status": 409
      },
      {
       "act_number": null,
@@ -1451,19 +1791,7 @@
     "big_acted": 10.0,
     "small": [
      {
-      "act_number": "ACT-0011",
-      "status": 201
-     },
-     {
-      "act_number": "ACT-0009",
-      "status": 201
-     },
-     {
-      "act_number": null,
-      "status": 409
-     },
-     {
-      "act_number": "ACT-0008",
+      "act_number": "ACT-0012",
       "status": 201
      },
      {
@@ -1471,7 +1799,19 @@
       "status": 201
      },
      {
-      "act_number": "ACT-0012",
+      "act_number": "ACT-0008",
+      "status": 201
+     },
+     {
+      "act_number": "ACT-0011",
+      "status": 201
+     },
+     {
+      "act_number": null,
+      "status": 409
+     },
+     {
+      "act_number": "ACT-0009",
       "status": 201
      }
     ],
@@ -1480,7 +1820,7 @@
    "race_numbers": {
     "responses": [
      {
-      "act_number": "ACT-0011",
+      "act_number": "ACT-0013",
       "status": 201
      },
      {
@@ -1488,19 +1828,19 @@
       "status": 201
      },
      {
-      "act_number": "ACT-0009",
-      "status": 201
-     },
-     {
       "act_number": "ACT-0010",
       "status": 201
      },
      {
-      "act_number": "ACT-0013",
+      "act_number": "ACT-0012",
       "status": 201
      },
      {
-      "act_number": "ACT-0012",
+      "act_number": "ACT-0011",
+      "status": 201
+     },
+     {
+      "act_number": "ACT-0009",
       "status": 201
      }
     ]
@@ -1513,10 +1853,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:07.217479+00:00",
+      "created_at": "2026-11-07T14:31:46.911346+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "55dcd90e-14b7-5a72-a73c-c70de8bd5bc6",
+      "id": "8e2ce472-cded-5689-82bd-1224b8f4303c",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -1525,9 +1865,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "0f2a8956-0b44-42b5-9cc4-2aca3d16d0ce",
+        "id": "84ea49a6-acd3-49c6-a183-78dc77e8fd25",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -1536,12 +1877,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1553,9 +1895,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:07.217479+00:00",
+      "updated_at": "2026-11-07T14:31:46.911346+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [],
      "error_code": null,
@@ -1568,10 +1910,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:07.217479+00:00",
+      "created_at": "2026-11-07T14:31:46.911346+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "55dcd90e-14b7-5a72-a73c-c70de8bd5bc6",
+      "id": "8e2ce472-cded-5689-82bd-1224b8f4303c",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -1580,9 +1922,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "0f2a8956-0b44-42b5-9cc4-2aca3d16d0ce",
+        "id": "84ea49a6-acd3-49c6-a183-78dc77e8fd25",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -1591,12 +1934,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1608,9 +1952,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:07.217479+00:00",
+      "updated_at": "2026-11-07T14:31:46.911346+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -1633,7 +1977,7 @@
       "detail": {
        "error_code": "IDEMPOTENCY_CONFLICT",
        "idempotency_action": "revenue.client_act.create",
-       "idempotency_key": "18e2072c-c072-5aa6-9d53-a81d983b56a4:d81771e67119474aa4b4835ef3ec444c",
+       "idempotency_key": "18e2072c-c072-5aa6-9d53-a81d983b56a4:76fc9b7d3ddc401ca441d9255063c524",
        "message": "The same operation key was already used with a different payload"
       }
      },
@@ -1675,10 +2019,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:10.632026+00:00",
+      "created_at": "2026-11-07T14:31:50.455477+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "ba55bfe5-7cb5-5b4d-b613-9b827fcc36d1",
+      "id": "8f9bc763-9dad-515c-b821-1b7fff8bf1e1",
       "lines": [
        {
         "acted_qty_total": 3.0,
@@ -1687,9 +2031,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 30.0,
         "executed_qty": 3.0,
-        "id": "705568c1-f316-43e9-8bad-716885f5de73",
+        "id": "3baed131-7d59-4bb7-a9ae-1a4eb37488a2",
         "line_total": 30.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -1698,12 +2043,13 @@
         "remaining_value": 70.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1715,9 +2061,9 @@
       "status": "Draft",
       "subtotal": 30.0,
       "total": 36.0,
-      "updated_at": "2026-11-07T14:05:10.632026+00:00",
+      "updated_at": "2026-11-07T14:31:50.455477+00:00",
       "vat_amount": 6.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [],
      "error_code": null,
@@ -1735,10 +2081,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:08.104260+00:00",
+       "created_at": "2026-11-07T14:31:47.792181+00:00",
        "created_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "currency": "EUR",
-       "id": "087cf52a-b97d-50ef-8ca7-62fce0aa7a61",
+       "id": "209a7d19-1c6e-5262-8232-d9438fc273f7",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -1747,9 +2093,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "cca68e3b-24c7-4c41-8330-988759d2daa6",
+         "id": "2dcd63ee-19dd-4d65-80ef-f3c74c0311f1",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1758,7 +2105,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -1767,9 +2115,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "49850ace-fa5c-4cf2-9f10-2c9796f8a420",
+         "id": "be65f571-de3e-4be7-a171-034ee782ed13",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1778,12 +2127,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1795,9 +2145,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:08.104260+00:00",
+       "updated_at": "2026-11-07T14:31:47.792181+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -1820,10 +2170,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:08.058155+00:00",
+       "created_at": "2026-11-07T14:31:47.744103+00:00",
        "created_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "currency": "EUR",
-       "id": "a2b72d1b-1edf-58a4-a8a9-6bb5e6b9c318",
+       "id": "76962446-ba7c-5e2b-be09-24fc9878de57",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -1832,9 +2182,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "0d7b5a8a-9010-4fa6-9170-26dacdf7e8b7",
+         "id": "465759c9-8903-49b2-b011-099ea184a8ef",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1843,12 +2194,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -1860,9 +2212,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:05:08.058155+00:00",
+       "updated_at": "2026-11-07T14:31:47.744103+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -1897,9 +2249,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "38d6d2c6-8900-48a0-80b4-ba5535758acd",
+         "id": "77558f12-a18f-4a7e-8aff-8673a2698bbe",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -1908,10 +2261,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -1921,10 +2275,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:08.146359+00:00",
+       "updated_at": "2026-11-07T14:31:47.829375+00:00",
        "updated_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -1991,6 +2345,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -2008,10 +2378,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:07.874166+00:00",
+       "created_at": "2026-11-07T14:31:47.534918+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "b828d2cf-a8c3-5fd7-aa24-ad7a129bfcac",
+       "id": "49ba6b14-d119-5e5f-9c2b-cae03c2226d8",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -2020,9 +2390,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "73428499-11b5-4e91-99c0-b388ebe7783c",
+         "id": "0363c9fc-f20b-43e8-9ec7-3687da36be33",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2031,7 +2402,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -2040,9 +2412,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "5f10d8f8-406a-4023-8d35-58ae435cfdd2",
+         "id": "588c3e00-03b1-460b-8aa7-e8269644468f",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2051,12 +2424,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -2068,9 +2442,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:07.874166+00:00",
+       "updated_at": "2026-11-07T14:31:47.534918+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -2093,10 +2467,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:07.821008+00:00",
+       "created_at": "2026-11-07T14:31:47.488224+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "833deb3c-0f1e-5629-b5f4-57b7d30d5baf",
+       "id": "17dffaa1-2418-5f29-8e4a-e57a741c951e",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -2105,9 +2479,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "786f655e-180f-4ab3-a367-120d64f9f108",
+         "id": "a4c32006-b7a1-464a-9608-e6d974e6ead6",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2116,12 +2491,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -2133,9 +2509,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:05:07.821008+00:00",
+       "updated_at": "2026-11-07T14:31:47.488224+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -2170,9 +2546,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "958d9666-e647-4057-b61f-67df0ea48fc0",
+         "id": "190f558f-8259-46ee-9544-16296edfeee9",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2181,10 +2558,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -2194,10 +2572,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:07.911232+00:00",
+       "updated_at": "2026-11-07T14:31:47.584781+00:00",
        "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -2264,6 +2642,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -2345,10 +2739,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:07.608262+00:00",
-       "created_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "created_at": "2026-11-07T14:31:47.283706+00:00",
+       "created_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "currency": "EUR",
-       "id": "77835b79-d8c7-5757-91d4-1a4faa50abf3",
+       "id": "db5176f8-f289-5d29-b6aa-c5eb3147511c",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -2357,9 +2751,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "bcc6ba71-9a04-427a-a48b-a65aaac5b99a",
+         "id": "c8280974-8753-4692-834b-e37f5282fb18",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2368,7 +2763,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -2377,9 +2773,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "c049a38c-10ab-4b4b-a3a7-95e433699f5b",
+         "id": "f8a5d83a-83c1-48f9-be54-49059e5b9868",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2388,12 +2785,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -2405,9 +2803,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:07.608262+00:00",
+       "updated_at": "2026-11-07T14:31:47.283706+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -2430,10 +2828,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:07.562153+00:00",
-       "created_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "created_at": "2026-11-07T14:31:47.233367+00:00",
+       "created_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "currency": "EUR",
-       "id": "b0d2c5ee-04de-585c-9ec4-8436d95bdada",
+       "id": "36323af8-2a2b-518b-9ce0-e7a86ad63a58",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -2442,9 +2840,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "72cb4ec6-011f-43d2-9c06-e41a4a32de3c",
+         "id": "1ff7c703-6a32-4dc1-a10c-3368998d9c5d",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2453,12 +2852,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -2470,9 +2870,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:05:07.562153+00:00",
+       "updated_at": "2026-11-07T14:31:47.233367+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -2507,9 +2907,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "8b131b06-326f-406c-b29e-b7869bc92c1e",
+         "id": "6108ad65-0868-4b56-873c-ee1f69bfb9d9",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -2518,10 +2919,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -2531,10 +2933,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:07.651368+00:00",
-       "updated_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "updated_at": "2026-11-07T14:31:47.323631+00:00",
+       "updated_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -2601,6 +3003,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -2874,35 +3292,37 @@
    "accepted_not_edited": {
     "confirm": {
      "body": {
-      "accepted_at": "2026-11-07T14:04:58.683676+00:00",
+      "accepted_at": "2026-11-07T14:31:38.288980+00:00",
       "accepted_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:58.659752+00:00",
+      "created_at": "2026-11-07T14:31:38.269240+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b709c5ec-e35c-55c7-ac95-5ade89dd3a45",
+      "id": "e59e7530-26fd-533a-9959-f5017bc9f14f",
       "lines": [
        {
         "activity_code": "L1",
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
+        "currency": "EUR",
         "executed_percent": 10.0,
         "executed_qty": 1.0,
-        "id": "451383e8-7b25-4fde-b9fa-c8d02ae614d4",
+        "id": "a4317a88-a1b1-48ab-b8e9-58617a924aa7",
         "line_total": 10.0,
         "note": null,
         "offer_id": "act01-o1",
         "offer_line_id": "act01-l1",
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -2914,9 +3334,9 @@
       "status": "Accepted",
       "subtotal": 10.0,
       "total": 12.0,
-      "updated_at": "2026-11-07T14:04:58.683676+00:00",
+      "updated_at": "2026-11-07T14:31:38.288980+00:00",
       "vat_amount": 2.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_acts"
@@ -2967,10 +3387,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:58.915205+00:00",
+      "created_at": "2026-11-07T14:31:38.501457+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "f33b3ad0-ed20-56df-ae5f-1b899ced6318",
+      "id": "015a2496-88ba-58a7-853e-62e71a855f92",
       "lines": [
        {
         "acted_qty_total": 1.0,
@@ -2979,9 +3399,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 10.0,
         "executed_qty": 1.0,
-        "id": "be76003e-c93d-4457-a70c-51aa5ed5f169",
+        "id": "b15e1202-82de-4893-9d2c-703ba98a5b03",
         "line_total": 10.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -2990,12 +3411,13 @@
         "remaining_value": 90.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3007,9 +3429,9 @@
       "status": "Draft",
       "subtotal": 10.0,
       "total": 12.0,
-      "updated_at": "2026-11-07T14:04:58.915205+00:00",
+      "updated_at": "2026-11-07T14:31:38.501457+00:00",
       "vat_amount": 2.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3053,10 +3475,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:55.484878+00:00",
+      "created_at": "2026-11-07T14:31:35.238829+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "cfe15816-989c-509b-b5ed-fc2a1782da0e",
+      "id": "c1ae0d78-4abe-5ca9-ba22-846fb44d03d8",
       "lines": [
        {
         "acted_qty_total": 4.0,
@@ -3065,9 +3487,10 @@
         "activity_name": "ACT-01 LX",
         "contracted_qty": 4.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 100.0,
         "executed_qty": 4.0,
-        "id": "ab4db81f-43d4-4984-a249-7807b3867286",
+        "id": "d19cebf3-c432-4512-bc52-0cd3832d8214",
         "line_total": 100.0,
         "note": null,
         "offer_id": "act01-ox",
@@ -3076,12 +3499,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 25.0
+        "unit_price": 25.0,
+        "vat_percent": 9.0
        }
       ],
       "notes": "От оферта OFF-0003",
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3092,10 +3516,10 @@
       ],
       "status": "Draft",
       "subtotal": 100.0,
-      "total": 120.0,
-      "updated_at": "2026-11-07T14:04:55.484878+00:00",
-      "vat_amount": 20.0,
-      "vat_percent": 20
+      "total": 109.0,
+      "updated_at": "2026-11-07T14:31:35.238829+00:00",
+      "vat_amount": 9.0,
+      "vat_percent": 9.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3183,10 +3607,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:58.372018+00:00",
+      "created_at": "2026-11-07T14:31:38.039595+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b840c8f2-0901-55c6-9b1e-ad8012f73a4f",
+      "id": "e142d6dc-a408-5e07-a1f2-bf800a8278ed",
       "lines": [
        {
         "acted_qty_total": 4.0,
@@ -3195,9 +3619,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 40.0,
         "executed_qty": 4.0,
-        "id": "e0918ee4-af9d-49bb-a74d-65ce4bf561f2",
+        "id": "113a8fa8-f6cc-4e86-874b-715d92884dfc",
         "line_total": 40.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -3206,12 +3631,13 @@
         "remaining_value": 60.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3223,9 +3649,9 @@
       "status": "Draft",
       "subtotal": 40.0,
       "total": 48.0,
-      "updated_at": "2026-11-07T14:04:58.372018+00:00",
+      "updated_at": "2026-11-07T14:31:38.039595+00:00",
       "vat_amount": 8.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3248,10 +3674,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:58.372018+00:00",
+      "created_at": "2026-11-07T14:31:38.039595+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b840c8f2-0901-55c6-9b1e-ad8012f73a4f",
+      "id": "e142d6dc-a408-5e07-a1f2-bf800a8278ed",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -3260,9 +3686,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "4b082df6-6152-49cb-8793-ea4115ef7ad6",
+        "id": "fa175433-580c-4327-a9b5-7cd027a3595a",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -3271,12 +3698,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3288,10 +3716,10 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:04:58.429573+00:00",
+      "updated_at": "2026-11-07T14:31:38.084657+00:00",
       "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3326,10 +3754,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0009",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:58.471242+00:00",
+      "created_at": "2026-11-07T14:31:38.111562+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "33dddb55-7464-5692-b69d-79775836e8c2",
+      "id": "416a9196-89d6-5d9d-b916-6e1504a9773e",
       "lines": [
        {
         "acted_qty_total": 10.0,
@@ -3338,9 +3766,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 80.0,
         "executed_qty": 8.0,
-        "id": "fbe90ea6-4c74-43f9-8d35-bf261ea4402c",
+        "id": "a4f69506-6298-47af-9dd8-0782b5504a35",
         "line_total": 80.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -3349,12 +3778,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3366,9 +3796,9 @@
       "status": "Draft",
       "subtotal": 80.0,
       "total": 96.0,
-      "updated_at": "2026-11-07T14:04:58.471242+00:00",
+      "updated_at": "2026-11-07T14:31:38.111562+00:00",
       "vat_amount": 16.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3429,10 +3859,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:58.372018+00:00",
+      "created_at": "2026-11-07T14:31:38.039595+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b840c8f2-0901-55c6-9b1e-ad8012f73a4f",
+      "id": "e142d6dc-a408-5e07-a1f2-bf800a8278ed",
       "lines": [
        {
         "acted_qty_total": 6.0,
@@ -3441,9 +3871,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 60.0,
         "executed_qty": 6.0,
-        "id": "e12d318f-fcf8-4486-b7d7-d273e10ac9f3",
+        "id": "121c16a8-4273-4ffd-8696-b79032973cf8",
         "line_total": 60.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -3452,12 +3883,13 @@
         "remaining_value": 40.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3469,10 +3901,10 @@
       "status": "Draft",
       "subtotal": 60.0,
       "total": 72.0,
-      "updated_at": "2026-11-07T14:04:58.395972+00:00",
+      "updated_at": "2026-11-07T14:31:38.062891+00:00",
       "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "vat_amount": 12.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3494,10 +3926,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:04:56.084679+00:00",
+     "created_at": "2026-11-07T14:31:35.839202+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "b68ebf31-7e84-5a5a-9bdf-146d9ef81c8a",
+     "id": "80cfdd8f-beed-5954-8315-285ef4211cf8",
      "lines": [
       {
        "acted_qty_total": 4.0,
@@ -3506,9 +3938,10 @@
        "activity_name": "ACT-01 LX",
        "contracted_qty": 4.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 100.0,
        "executed_qty": 4.0,
-       "id": "0ce91791-fd46-45de-b4ab-66d6b943c0cb",
+       "id": "5e18da8b-0b12-4124-bf3d-17c8da19e9d9",
        "line_total": 100.0,
        "note": null,
        "offer_id": "act01-ox",
@@ -3517,12 +3950,13 @@
        "remaining_value": 0.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 25.0
+       "unit_price": 25.0,
+       "vat_percent": 9.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3533,10 +3967,10 @@
      ],
      "status": "Draft",
      "subtotal": 100.0,
-     "total": 120.0,
-     "updated_at": "2026-11-07T14:04:56.084679+00:00",
-     "vat_amount": 20.0,
-     "vat_percent": 20
+     "total": 109.0,
+     "updated_at": "2026-11-07T14:31:35.839202+00:00",
+     "vat_amount": 9.0,
+     "vat_percent": 9.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -3653,10 +4087,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:56.196318+00:00",
+      "created_at": "2026-11-07T14:31:36.018663+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "44ca7e55-cdd1-5ceb-bddf-656577f06b3b",
+      "id": "ca5dd699-be42-5041-893e-f9b7d2328051",
       "lines": [
        {
         "acted_qty_total": 5.0,
@@ -3665,9 +4099,10 @@
         "activity_name": "ACT-01 L2",
         "contracted_qty": 5.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 1.0,
-        "id": "ced9c45e-72a0-429d-a1db-b504f4003f93",
+        "id": "f7585b27-f0b4-47e0-bcac-70b6e7ff9e4c",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -3676,12 +4111,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 20.0
+        "unit_price": 20.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3693,9 +4129,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:04:56.196318+00:00",
+      "updated_at": "2026-11-07T14:31:36.018663+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -3739,10 +4175,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:04:59.151907+00:00",
+     "created_at": "2026-11-07T14:31:39.069684+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "60840f05-4724-5f8a-a155-db25a06efa8d",
+     "id": "9219c80f-4030-5118-a1db-478cd56bda46",
      "lines": [
       {
        "acted_qty_total": 3.0,
@@ -3751,9 +4187,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 30.0,
        "executed_qty": 3.0,
-       "id": "b119a44b-893b-4d47-ae27-6ab634539ccb",
+       "id": "f69bf621-65b0-4b57-9949-6825ba3b6b5e",
        "line_total": 30.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -3762,12 +4199,13 @@
        "remaining_value": 70.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3779,9 +4217,9 @@
      "status": "Draft",
      "subtotal": 30.0,
      "total": 36.0,
-     "updated_at": "2026-11-07T14:04:59.151907+00:00",
+     "updated_at": "2026-11-07T14:31:39.069684+00:00",
      "vat_amount": 6.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -3830,6 +4268,300 @@
      "ACT-0008",
      "ACT-0009"
     ]
+   },
+   "offer_versions": {
+    "acted_LV1": 4.0,
+    "acted_LV2": 0.0,
+    "extra": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0009",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:38.961785+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "ba2c0a47-4ee0-53c2-ab89-9b66fa6c9e97",
+      "lines": [
+       {
+        "acted_qty_total": 1.0,
+        "acted_value_total": 25.0,
+        "activity_code": "LX",
+        "activity_name": "ACT-01 LX",
+        "contracted_qty": 4.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 25.0,
+        "executed_qty": 1.0,
+        "id": "4fe44e4b-8607-4e46-90ea-8765958ecf0d",
+        "line_total": 25.0,
+        "note": null,
+        "offer_id": "act01-ox",
+        "offer_line_id": "act01-lx",
+        "remaining_qty": 3.0,
+        "remaining_value": 75.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 25.0,
+        "vat_percent": 9.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 1,
+      "source_offer_id": "act01-ox",
+      "source_offer_ids": [
+       "act01-ox"
+      ],
+      "status": "Draft",
+      "subtotal": 25.0,
+      "total": 27.25,
+      "updated_at": "2026-11-07T14:31:38.961785+00:00",
+      "vat_amount": 2.25,
+      "vat_percent": 9.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 201,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ]
+    },
+    "from_v1": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "grow": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "release": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0008",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:38.779782+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "d22b2156-7b3f-5706-a2ea-40293483bf19",
+      "lines": [
+       {
+        "acted_qty_total": 4.0,
+        "acted_value_total": 40.0,
+        "activity_code": "LV1",
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 40.0,
+        "executed_qty": 4.0,
+        "id": "a88349ad-6871-423f-ba1e-ab440a379ff2",
+        "line_total": 40.0,
+        "note": null,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "remaining_qty": 6.0,
+        "remaining_value": 60.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 10.0,
+        "vat_percent": 20.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 2,
+      "source_offer_id": "act01-ov1",
+      "source_offer_ids": [
+       "act01-ov1"
+      ],
+      "status": "Draft",
+      "subtotal": 40.0,
+      "total": 48.0,
+      "updated_at": "2026-11-07T14:31:38.885234+00:00",
+      "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "vat_amount": 8.0,
+      "vat_percent": 20.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 200,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts"
+     ]
+    },
+    "v1_after": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "v1_first": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0008",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:38.779782+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "d22b2156-7b3f-5706-a2ea-40293483bf19",
+      "lines": [
+       {
+        "acted_qty_total": 6.0,
+        "acted_value_total": 60.0,
+        "activity_code": "LV1",
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 60.0,
+        "executed_qty": 6.0,
+        "id": "459f1218-b6c1-4065-a919-996a807001cb",
+        "line_total": 60.0,
+        "note": null,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "remaining_qty": 4.0,
+        "remaining_value": 40.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 10.0,
+        "vat_percent": 20.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 1,
+      "source_offer_id": "act01-ov1",
+      "source_offer_ids": [
+       "act01-ov1"
+      ],
+      "status": "Draft",
+      "subtotal": 60.0,
+      "total": 72.0,
+      "updated_at": "2026-11-07T14:31:38.779782+00:00",
+      "vat_amount": 12.0,
+      "vat_percent": 20.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 201,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ]
+    },
+    "v2_after": {
+     "body": {
+      "detail": {
+       "accepted_versions": [
+        1,
+        2
+       ],
+       "error_code": "OFFER_VERSION_LINEAGE_UNKNOWN",
+       "message": "Офертата има повече от една приета версия, а редовете на версиите не са свързани помежду си — вече актуваното по старата версия не може да се приспадне. Актуването по тази оферта е спряно до решение.",
+       "offer_id": "act01-ov2"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_LINEAGE_UNKNOWN",
+     "message": "Офертата има повече от една приета версия, а редовете на версиите не са свързани помежду си — вече актуваното по старата версия не може да се приспадне. Актуването по тази оферта е спряно до решение.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "v2_not_accepted": {
+     "body": {
+      "detail": {
+       "error_code": "OFFER_LINE_NOT_FOUND",
+       "message": "Редът от офертата не е намерен в приета оферта на този обект",
+       "offer_line_id": "act01-lv2"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_LINE_NOT_FOUND",
+     "message": "Редът от офертата не е намерен в приета оферта на този обект",
+     "status": 422,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    }
    },
    "other_project_line": {
     "body": {
@@ -3920,6 +4652,22 @@
         "remaining_value": 100.0,
         "unit": "m2",
         "unit_price": 25.0
+       },
+       {
+        "acted_qty": 0.0,
+        "acted_value": 0.0,
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "offer_no": "OFF-0005",
+        "offer_type": "main",
+        "over_acted": false,
+        "remaining_qty": 10.0,
+        "remaining_value": 100.0,
+        "unit": "m2",
+        "unit_price": 10.0
        }
       ],
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -3936,10 +4684,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:55.329574+00:00",
+       "created_at": "2026-11-07T14:31:35.077341+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "b989cb7b-b4c9-576d-b488-1c52e2b0b530",
+       "id": "c17b1a27-2023-508c-b8ce-1e2ec12ba1f4",
        "lines": [
         {
          "acted_qty_total": 3.0,
@@ -3948,9 +4696,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 30.0,
          "executed_qty": 3.0,
-         "id": "46e71bd0-32fb-457c-a0fc-47f00bca6b9b",
+         "id": "8ac35cc0-dad9-49d0-8b6d-d285b67e06f9",
          "line_total": 30.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -3959,12 +4708,13 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -3976,9 +4726,9 @@
        "status": "Draft",
        "subtotal": 30.0,
        "total": 36.0,
-       "updated_at": "2026-11-07T14:04:55.329574+00:00",
+       "updated_at": "2026-11-07T14:31:35.077341+00:00",
        "vat_amount": 6.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4001,10 +4751,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:55.359893+00:00",
+       "created_at": "2026-11-07T14:31:35.099562+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "53df6deb-f470-5995-905c-3d8dc3f5418d",
+       "id": "f9d31458-791b-5d55-9230-031310270929",
        "lines": [
         {
          "acted_qty_total": 6.0,
@@ -4013,9 +4763,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 30.0,
          "executed_qty": 3.0,
-         "id": "d8138444-7236-406a-b970-edffe5523242",
+         "id": "9555cac0-55dd-4b0f-873b-bbc32724e071",
          "line_total": 30.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4024,12 +4775,13 @@
          "remaining_value": 40.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4041,9 +4793,9 @@
        "status": "Draft",
        "subtotal": 30.0,
        "total": 36.0,
-       "updated_at": "2026-11-07T14:04:55.359893+00:00",
+       "updated_at": "2026-11-07T14:31:35.099562+00:00",
        "vat_amount": 6.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4066,10 +4818,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0010",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:55.384849+00:00",
+       "created_at": "2026-11-07T14:31:35.121092+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "f595cdce-fee8-5753-9741-65b345a129d1",
+       "id": "ec22710a-295a-5802-b940-93514b52fcc2",
        "lines": [
         {
          "acted_qty_total": 10.0,
@@ -4078,9 +4830,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 40.0,
          "executed_qty": 4.0,
-         "id": "6e6a72b4-6e10-41a4-9a07-d92b65d3dce3",
+         "id": "f71b1fec-7f8a-49eb-94be-5b566ae3bed5",
          "line_total": 40.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4089,12 +4842,13 @@
          "remaining_value": 0.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4106,9 +4860,9 @@
        "status": "Draft",
        "subtotal": 40.0,
        "total": 48.0,
-       "updated_at": "2026-11-07T14:04:55.384849+00:00",
+       "updated_at": "2026-11-07T14:31:35.121092+00:00",
        "vat_amount": 8.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4153,10 +4907,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:04:54.978408+00:00",
+     "created_at": "2026-11-07T14:31:34.730848+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "032bc624-5bbe-5255-862f-e425ec07d3f1",
+     "id": "189e8ec0-4f41-5aa2-b23b-bbe1c4fd8036",
      "lines": [
       {
        "acted_qty_total": 2.0,
@@ -4165,9 +4919,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 20.0,
        "executed_qty": 2.0,
-       "id": "0ea8d6ba-25c4-426b-80e0-48e540105bef",
+       "id": "e9af10d1-940a-4b53-b90e-31143a401b59",
        "line_total": 20.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -4176,12 +4931,13 @@
        "remaining_value": 80.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4193,9 +4949,9 @@
      "status": "Draft",
      "subtotal": 20.0,
      "total": 24.0,
-     "updated_at": "2026-11-07T14:04:54.978408+00:00",
+     "updated_at": "2026-11-07T14:31:34.730848+00:00",
      "vat_amount": 4.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -4218,10 +4974,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:04:55.077771+00:00",
+     "created_at": "2026-11-07T14:31:34.850934+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "dd853ec7-891a-521d-abdd-a0b7b018db57",
+     "id": "6ef21a17-5826-5299-811b-5a34d48d6175",
      "lines": [
       {
        "acted_qty_total": 2.0,
@@ -4230,9 +4986,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 20.0,
        "executed_qty": 2.0,
-       "id": "e78a93f2-8ced-4a52-b5cb-f7cfa27a1588",
+       "id": "fcd22d4b-600d-4d35-998b-ca1ed8921824",
        "line_total": 20.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -4241,12 +4998,13 @@
        "remaining_value": 80.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4258,9 +5016,9 @@
      "status": "Draft",
      "subtotal": 20.0,
      "total": 24.0,
-     "updated_at": "2026-11-07T14:04:55.077771+00:00",
+     "updated_at": "2026-11-07T14:31:34.850934+00:00",
      "vat_amount": 4.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -4308,11 +5066,15 @@
     "big_acted": 10.0,
     "small": [
      {
-      "act_number": "ACT-0012",
-      "status": 201
+      "act_number": null,
+      "status": 409
      },
      {
       "act_number": "ACT-0008",
+      "status": 201
+     },
+     {
+      "act_number": "ACT-0010",
       "status": 201
      },
      {
@@ -4320,15 +5082,11 @@
       "status": 201
      },
      {
-      "act_number": null,
-      "status": 409
-     },
-     {
       "act_number": "ACT-0009",
       "status": 201
      },
      {
-      "act_number": "ACT-0010",
+      "act_number": "ACT-0012",
       "status": 201
      }
     ],
@@ -4336,6 +5094,10 @@
    },
    "race_numbers": {
     "responses": [
+     {
+      "act_number": "ACT-0012",
+      "status": 201
+     },
      {
       "act_number": "ACT-0013",
       "status": 201
@@ -4345,7 +5107,7 @@
       "status": 201
      },
      {
-      "act_number": "ACT-0010",
+      "act_number": "ACT-0008",
       "status": 201
      },
      {
@@ -4353,11 +5115,7 @@
       "status": 201
      },
      {
-      "act_number": "ACT-0008",
-      "status": 201
-     },
-     {
-      "act_number": "ACT-0012",
+      "act_number": "ACT-0010",
       "status": 201
      }
     ]
@@ -4370,10 +5128,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:56.581545+00:00",
+      "created_at": "2026-11-07T14:31:36.391528+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "47286e49-f43e-5c4b-b20e-3dd039c85fbe",
+      "id": "4ec7800d-7d01-5506-bc12-041c6354a0c7",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -4382,9 +5140,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "023a01ca-aa92-49e5-8438-189a40b0bf75",
+        "id": "c624ec32-12ab-4e61-baa9-6775198f3821",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -4393,12 +5152,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4410,9 +5170,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:04:56.581545+00:00",
+      "updated_at": "2026-11-07T14:31:36.391528+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [],
      "error_code": null,
@@ -4425,10 +5185,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:56.581545+00:00",
+      "created_at": "2026-11-07T14:31:36.391528+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "47286e49-f43e-5c4b-b20e-3dd039c85fbe",
+      "id": "4ec7800d-7d01-5506-bc12-041c6354a0c7",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -4437,9 +5197,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "023a01ca-aa92-49e5-8438-189a40b0bf75",
+        "id": "c624ec32-12ab-4e61-baa9-6775198f3821",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -4448,12 +5209,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4465,9 +5227,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:04:56.581545+00:00",
+      "updated_at": "2026-11-07T14:31:36.391528+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -4490,7 +5252,7 @@
       "detail": {
        "error_code": "IDEMPOTENCY_CONFLICT",
        "idempotency_action": "revenue.client_act.create",
-       "idempotency_key": "18e2072c-c072-5aa6-9d53-a81d983b56a4:3e0b5ccacd1b4e679b2e885531402a10",
+       "idempotency_key": "18e2072c-c072-5aa6-9d53-a81d983b56a4:46d6cc6f18d443879510ee633bd03b7b",
        "message": "The same operation key was already used with a different payload"
       }
      },
@@ -4532,10 +5294,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:59.028787+00:00",
+      "created_at": "2026-11-07T14:31:38.627113+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "00a9fd7a-8bb7-59ba-a73c-63af71222760",
+      "id": "e080e2a4-b587-5dca-b337-613332aec8e5",
       "lines": [
        {
         "acted_qty_total": 3.0,
@@ -4544,9 +5306,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 30.0,
         "executed_qty": 3.0,
-        "id": "23bdc116-bdaf-404b-a55d-5804bbd664da",
+        "id": "c961ad92-feaa-4d51-b2f8-56d26d6e3a9a",
         "line_total": 30.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -4555,12 +5318,13 @@
         "remaining_value": 70.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4572,9 +5336,9 @@
       "status": "Draft",
       "subtotal": 30.0,
       "total": 36.0,
-      "updated_at": "2026-11-07T14:04:59.028787+00:00",
+      "updated_at": "2026-11-07T14:31:38.627113+00:00",
       "vat_amount": 6.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [],
      "error_code": null,
@@ -4592,10 +5356,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:57.254645+00:00",
+       "created_at": "2026-11-07T14:31:37.054956+00:00",
        "created_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "currency": "EUR",
-       "id": "ed9eb114-c499-57b4-9b2c-41b67224a66f",
+       "id": "890b055c-8fea-5da3-8171-b6038c7e597b",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -4604,9 +5368,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "f0b90887-fef5-4777-ac09-d1ff5b2dec8b",
+         "id": "e7970b22-607d-4923-8d69-e82023559bb9",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4615,7 +5380,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -4624,9 +5390,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "53004d6d-5060-4008-98f2-c0e5df674112",
+         "id": "c54560b4-134d-40db-ae24-50664e84cfc5",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4635,12 +5402,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4652,9 +5420,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:04:57.254645+00:00",
+       "updated_at": "2026-11-07T14:31:37.054956+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4677,10 +5445,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:57.225667+00:00",
+       "created_at": "2026-11-07T14:31:37.028364+00:00",
        "created_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "currency": "EUR",
-       "id": "2820bd05-4852-5f4e-8c5e-4e7a0d3dfde9",
+       "id": "7ebc5842-5f59-5514-961d-1e34b39634a7",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -4689,9 +5457,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "bd98ff5e-1f8d-43f2-8e46-ec49ef3d9b2d",
+         "id": "fe28b5a2-4f74-44b3-a2eb-99d1437dbc7d",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4700,12 +5469,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4717,9 +5487,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:04:57.225667+00:00",
+       "updated_at": "2026-11-07T14:31:37.028364+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4754,9 +5524,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "f33e47e2-9cea-48dc-8e27-f5238aef6bb0",
+         "id": "3ff929bf-8e4a-4923-9c54-6dfe1765516a",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4765,10 +5536,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -4778,10 +5550,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:04:57.282570+00:00",
+       "updated_at": "2026-11-07T14:31:37.073816+00:00",
        "updated_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4848,6 +5620,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -4865,10 +5653,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:57.044123+00:00",
+       "created_at": "2026-11-07T14:31:36.884475+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "5a47bd45-e342-537d-932b-ec9bc4d276c6",
+       "id": "b0541205-0857-51e1-9d7c-6604b99be7e3",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -4877,9 +5665,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "9613ae0a-9db7-47b1-a243-a31c50c32a95",
+         "id": "b1d5ca29-2c23-4453-83a2-ae499bbac4f0",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4888,7 +5677,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -4897,9 +5687,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "ca4a1fc6-0957-47d0-adac-8f27c594e691",
+         "id": "f0c462cb-8127-4621-b1d4-930785770c9e",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4908,12 +5699,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4925,9 +5717,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:04:57.044123+00:00",
+       "updated_at": "2026-11-07T14:31:36.884475+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -4950,10 +5742,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:57.008695+00:00",
+       "created_at": "2026-11-07T14:31:36.849650+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "c66fabfd-0234-5de3-a233-5c3ccfc1795d",
+       "id": "73ed5b57-6571-5443-b8aa-79f90c5e186a",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -4962,9 +5754,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "84590c48-63f9-47c8-8845-49b2f1fc6dd7",
+         "id": "6bc8c13e-375a-4a1f-ba71-c01a4c032de8",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -4973,12 +5766,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -4990,9 +5784,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:04:57.008695+00:00",
+       "updated_at": "2026-11-07T14:31:36.849650+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -5027,9 +5821,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "9485681a-e17c-498b-aaf4-e5f237ba1ed4",
+         "id": "28e94967-c7b0-4c0f-880c-e0e5714fe044",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -5038,10 +5833,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -5051,10 +5847,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:04:57.071428+00:00",
+       "updated_at": "2026-11-07T14:31:36.917996+00:00",
        "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -5121,6 +5917,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -5180,10 +5992,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:56.869878+00:00",
-       "created_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "created_at": "2026-11-07T14:31:36.701213+00:00",
+       "created_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "currency": "EUR",
-       "id": "81dcf3ed-ef63-557f-82e4-736050e45e26",
+       "id": "84b6e73a-1e22-57e1-b3dc-e63948a6287e",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -5192,9 +6004,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "431edc24-e3c5-4542-989a-ca112fb527fc",
+         "id": "a0f652df-a646-48e1-84e6-d4a860942808",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -5203,7 +6016,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -5212,9 +6026,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "48c2270a-0912-4f07-9836-3a46162526b2",
+         "id": "6ded3e21-c8df-45da-a6ec-5f2c8bf86237",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -5223,12 +6038,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -5240,9 +6056,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:04:56.869878+00:00",
+       "updated_at": "2026-11-07T14:31:36.701213+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -5265,10 +6081,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:56.836085+00:00",
-       "created_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "created_at": "2026-11-07T14:31:36.667450+00:00",
+       "created_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "currency": "EUR",
-       "id": "fccc2e2a-c278-5210-821a-510c8f921cb6",
+       "id": "61d9d57e-1cb4-51b2-9a99-befb65a9df31",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -5277,9 +6093,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "522ea779-1271-4fb9-8602-4c395c9926e7",
+         "id": "d0e42752-a2fb-49e0-9252-84b086e6231e",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -5288,12 +6105,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -5305,9 +6123,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:04:56.836085+00:00",
+       "updated_at": "2026-11-07T14:31:36.667450+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -5342,9 +6160,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "bef3b426-039f-43a6-ada7-9a0aa57fccb6",
+         "id": "7c167dda-051a-4484-a57d-bb626c1563f8",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -5353,10 +6172,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -5366,10 +6186,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:04:56.899076+00:00",
-       "updated_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "updated_at": "2026-11-07T14:31:36.727961+00:00",
+       "updated_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -5436,6 +6256,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -5621,35 +6457,37 @@
    "accepted_not_edited": {
     "confirm": {
      "body": {
-      "accepted_at": "2026-11-07T14:05:04.149342+00:00",
+      "accepted_at": "2026-11-07T14:31:43.514385+00:00",
       "accepted_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:04.126940+00:00",
+      "created_at": "2026-11-07T14:31:43.488707+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "fb9e8b24-96ca-5669-9382-fa2c031dfe25",
+      "id": "ffc72b35-1be9-5c88-9cd5-00b85250b0b9",
       "lines": [
        {
         "activity_code": "L1",
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
+        "currency": "EUR",
         "executed_percent": 10.0,
         "executed_qty": 1.0,
-        "id": "38847e1b-1fe9-4b91-9213-b005dd10a980",
+        "id": "f979c09d-8974-4548-9f20-7001c1134480",
         "line_total": 10.0,
         "note": null,
         "offer_id": "act01-o1",
         "offer_line_id": "act01-l1",
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -5661,9 +6499,9 @@
       "status": "Accepted",
       "subtotal": 10.0,
       "total": 12.0,
-      "updated_at": "2026-11-07T14:05:04.149342+00:00",
+      "updated_at": "2026-11-07T14:31:43.514385+00:00",
       "vat_amount": 2.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_acts"
@@ -5714,10 +6552,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:04.387529+00:00",
+      "created_at": "2026-11-07T14:31:43.729222+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "a09f3b25-c79c-5542-ac1e-f594cd5ea728",
+      "id": "e552f71e-9199-5b7f-81e5-a096baaea438",
       "lines": [
        {
         "acted_qty_total": 1.0,
@@ -5726,9 +6564,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 10.0,
         "executed_qty": 1.0,
-        "id": "a1a03112-42e8-47f4-8d23-6aa5223dd9ee",
+        "id": "b032a305-142e-42a6-8e99-17056bfff124",
         "line_total": 10.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -5737,12 +6576,13 @@
         "remaining_value": 90.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -5754,9 +6594,9 @@
       "status": "Draft",
       "subtotal": 10.0,
       "total": 12.0,
-      "updated_at": "2026-11-07T14:05:04.387529+00:00",
+      "updated_at": "2026-11-07T14:31:43.729222+00:00",
       "vat_amount": 2.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -5800,10 +6640,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:04:59.883710+00:00",
+      "created_at": "2026-11-07T14:31:39.881233+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b2054ad4-1dcd-5865-949b-8a077c604223",
+      "id": "7d2d0ac1-03e5-50c1-ab56-1c7fd21a06a9",
       "lines": [
        {
         "acted_qty_total": 4.0,
@@ -5812,9 +6652,10 @@
         "activity_name": "ACT-01 LX",
         "contracted_qty": 4.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 100.0,
         "executed_qty": 4.0,
-        "id": "de832fdb-861f-4cd6-90ae-6154d40fbace",
+        "id": "a2459c25-6479-4c4c-913b-c1df78ec36e4",
         "line_total": 100.0,
         "note": null,
         "offer_id": "act01-ox",
@@ -5823,12 +6664,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 25.0
+        "unit_price": 25.0,
+        "vat_percent": 9.0
        }
       ],
       "notes": "От оферта OFF-0003",
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -5839,10 +6681,10 @@
       ],
       "status": "Draft",
       "subtotal": 100.0,
-      "total": 120.0,
-      "updated_at": "2026-11-07T14:04:59.883710+00:00",
-      "vat_amount": 20.0,
-      "vat_percent": 20
+      "total": 109.0,
+      "updated_at": "2026-11-07T14:31:39.881233+00:00",
+      "vat_amount": 9.0,
+      "vat_percent": 9.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -5930,10 +6772,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:03.848182+00:00",
+      "created_at": "2026-11-07T14:31:43.204120+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b601b3db-9750-5948-847c-a3079b4a87db",
+      "id": "a63bc21d-b3d2-5c11-a531-85ef40e9bd36",
       "lines": [
        {
         "acted_qty_total": 4.0,
@@ -5942,9 +6784,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 40.0,
         "executed_qty": 4.0,
-        "id": "27ab4181-fac4-46d2-be15-3a615a2d33ff",
+        "id": "e990e02b-966b-4514-8340-169389f66558",
         "line_total": 40.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -5953,12 +6796,13 @@
         "remaining_value": 60.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -5970,9 +6814,9 @@
       "status": "Draft",
       "subtotal": 40.0,
       "total": 48.0,
-      "updated_at": "2026-11-07T14:05:03.848182+00:00",
+      "updated_at": "2026-11-07T14:31:43.204120+00:00",
       "vat_amount": 8.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -5995,10 +6839,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:03.848182+00:00",
+      "created_at": "2026-11-07T14:31:43.204120+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b601b3db-9750-5948-847c-a3079b4a87db",
+      "id": "a63bc21d-b3d2-5c11-a531-85ef40e9bd36",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -6007,9 +6851,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "60198336-ba74-4003-88e6-17e2f781d0cb",
+        "id": "ecb50cc8-8770-4e8b-af23-7b89d3d7b2a7",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -6018,12 +6863,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6035,10 +6881,10 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:03.912207+00:00",
+      "updated_at": "2026-11-07T14:31:43.265677+00:00",
       "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -6073,10 +6919,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0009",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:03.942241+00:00",
+      "created_at": "2026-11-07T14:31:43.302379+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "0bd0a019-a3b6-51de-9da1-8c1e31476037",
+      "id": "cda060f8-4ac0-55cd-ae69-19585457a969",
       "lines": [
        {
         "acted_qty_total": 10.0,
@@ -6085,9 +6931,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 80.0,
         "executed_qty": 8.0,
-        "id": "67922251-9317-4627-ba45-4b1978bb9355",
+        "id": "5d486848-a59b-496c-8a88-313ac77a10ad",
         "line_total": 80.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -6096,12 +6943,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6113,9 +6961,9 @@
       "status": "Draft",
       "subtotal": 80.0,
       "total": 96.0,
-      "updated_at": "2026-11-07T14:05:03.942241+00:00",
+      "updated_at": "2026-11-07T14:31:43.302379+00:00",
       "vat_amount": 16.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -6176,10 +7024,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:03.848182+00:00",
+      "created_at": "2026-11-07T14:31:43.204120+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "b601b3db-9750-5948-847c-a3079b4a87db",
+      "id": "a63bc21d-b3d2-5c11-a531-85ef40e9bd36",
       "lines": [
        {
         "acted_qty_total": 6.0,
@@ -6188,9 +7036,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 60.0,
         "executed_qty": 6.0,
-        "id": "8bcb623c-0798-4bcf-82bd-48b20cf2c093",
+        "id": "9e9d6abb-0025-481a-a7ce-a36e07246de9",
         "line_total": 60.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -6199,12 +7048,13 @@
         "remaining_value": 40.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6216,10 +7066,10 @@
       "status": "Draft",
       "subtotal": 60.0,
       "total": 72.0,
-      "updated_at": "2026-11-07T14:05:03.881876+00:00",
+      "updated_at": "2026-11-07T14:31:43.235594+00:00",
       "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "vat_amount": 12.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -6241,10 +7091,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:05:00.615647+00:00",
+     "created_at": "2026-11-07T14:31:40.584414+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "5ce181d3-bff6-5686-83a8-11983b7eeb91",
+     "id": "0921a4df-23e5-52f6-bdf8-0a017673f4a4",
      "lines": [
       {
        "acted_qty_total": 4.0,
@@ -6253,9 +7103,10 @@
        "activity_name": "ACT-01 LX",
        "contracted_qty": 4.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 100.0,
        "executed_qty": 4.0,
-       "id": "c930f3ec-d8ff-4618-bf2f-7b2943bee953",
+       "id": "73b99f90-a2c8-4606-ab19-22e0add9b990",
        "line_total": 100.0,
        "note": null,
        "offer_id": "act01-ox",
@@ -6264,12 +7115,13 @@
        "remaining_value": 0.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 25.0
+       "unit_price": 25.0,
+       "vat_percent": 9.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6280,10 +7132,10 @@
      ],
      "status": "Draft",
      "subtotal": 100.0,
-     "total": 120.0,
-     "updated_at": "2026-11-07T14:05:00.615647+00:00",
-     "vat_amount": 20.0,
-     "vat_percent": 20
+     "total": 109.0,
+     "updated_at": "2026-11-07T14:31:40.584414+00:00",
+     "vat_amount": 9.0,
+     "vat_percent": 9.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -6400,10 +7252,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:00.781390+00:00",
+      "created_at": "2026-11-07T14:31:40.734862+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "28b0dece-86d1-5950-868f-e420b385c35e",
+      "id": "288ff019-3374-5083-9025-678a7d43a36a",
       "lines": [
        {
         "acted_qty_total": 5.0,
@@ -6412,9 +7264,10 @@
         "activity_name": "ACT-01 L2",
         "contracted_qty": 5.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 1.0,
-        "id": "bc4f7f4d-7c41-4ce8-a73a-a57c3a5c82c8",
+        "id": "be7e11d4-7c0c-443e-93d1-9264dd2914ca",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -6423,12 +7276,13 @@
         "remaining_value": 0.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 20.0
+        "unit_price": 20.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6440,9 +7294,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:00.781390+00:00",
+      "updated_at": "2026-11-07T14:31:40.734862+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -6486,10 +7340,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:05:04.699104+00:00",
+     "created_at": "2026-11-07T14:31:44.353747+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "d98de282-8421-5429-919f-79f4eed689de",
+     "id": "2ca4f3c5-abb5-5615-80bc-3ded648a63ab",
      "lines": [
       {
        "acted_qty_total": 3.0,
@@ -6498,9 +7352,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 30.0,
        "executed_qty": 3.0,
-       "id": "e822d9d3-13aa-4fc7-ab8d-6220504b3d34",
+       "id": "ba635099-3a2e-4afb-81dd-a42629d7ce34",
        "line_total": 30.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -6509,12 +7364,13 @@
        "remaining_value": 70.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6526,9 +7382,9 @@
      "status": "Draft",
      "subtotal": 30.0,
      "total": 36.0,
-     "updated_at": "2026-11-07T14:05:04.699104+00:00",
+     "updated_at": "2026-11-07T14:31:44.353747+00:00",
      "vat_amount": 6.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -6577,6 +7433,300 @@
      "ACT-0008",
      "ACT-0009"
     ]
+   },
+   "offer_versions": {
+    "acted_LV1": 4.0,
+    "acted_LV2": 0.0,
+    "extra": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0009",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:44.235405+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "12740b1b-1346-589f-a36d-a57643744f5b",
+      "lines": [
+       {
+        "acted_qty_total": 1.0,
+        "acted_value_total": 25.0,
+        "activity_code": "LX",
+        "activity_name": "ACT-01 LX",
+        "contracted_qty": 4.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 25.0,
+        "executed_qty": 1.0,
+        "id": "835c9981-b7ab-4c30-b1a5-d0b4a1781d14",
+        "line_total": 25.0,
+        "note": null,
+        "offer_id": "act01-ox",
+        "offer_line_id": "act01-lx",
+        "remaining_qty": 3.0,
+        "remaining_value": 75.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 25.0,
+        "vat_percent": 9.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 1,
+      "source_offer_id": "act01-ox",
+      "source_offer_ids": [
+       "act01-ox"
+      ],
+      "status": "Draft",
+      "subtotal": 25.0,
+      "total": 27.25,
+      "updated_at": "2026-11-07T14:31:44.235405+00:00",
+      "vat_amount": 2.25,
+      "vat_percent": 9.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 201,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ]
+    },
+    "from_v1": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "grow": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "release": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0008",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:44.047690+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "0ba75ea3-82f0-58ad-aaca-8d1f5ff65dec",
+      "lines": [
+       {
+        "acted_qty_total": 4.0,
+        "acted_value_total": 40.0,
+        "activity_code": "LV1",
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 40.0,
+        "executed_qty": 4.0,
+        "id": "cadd81fc-ffe3-4ac9-98a3-5469619287db",
+        "line_total": 40.0,
+        "note": null,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "remaining_qty": 6.0,
+        "remaining_value": 60.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 10.0,
+        "vat_percent": 20.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 2,
+      "source_offer_id": "act01-ov1",
+      "source_offer_ids": [
+       "act01-ov1"
+      ],
+      "status": "Draft",
+      "subtotal": 40.0,
+      "total": 48.0,
+      "updated_at": "2026-11-07T14:31:44.147955+00:00",
+      "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "vat_amount": 8.0,
+      "vat_percent": 20.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 200,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts"
+     ]
+    },
+    "v1_after": {
+     "body": {
+      "detail": {
+       "current_offer_id": "act01-ov2",
+       "current_version": 2,
+       "error_code": "OFFER_VERSION_SUPERSEDED",
+       "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+       "offer_id": "act01-ov1"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_SUPERSEDED",
+     "message": "Тази версия на офертата е заменена от по-нова приета версия (v2). Актува се само по действащата версия.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "v1_first": {
+     "body": {
+      "act_date": "2026-11-07",
+      "act_number": "ACT-0008",
+      "actuation_mode": "fixed_price",
+      "created_at": "2026-11-07T14:31:44.047690+00:00",
+      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+      "currency": "EUR",
+      "id": "0ba75ea3-82f0-58ad-aaca-8d1f5ff65dec",
+      "lines": [
+       {
+        "acted_qty_total": 6.0,
+        "acted_value_total": 60.0,
+        "activity_code": "LV1",
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "currency": "EUR",
+        "executed_percent": 60.0,
+        "executed_qty": 6.0,
+        "id": "cd1f7815-88bb-47da-b1ff-e051d35ff61d",
+        "line_total": 60.0,
+        "note": null,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "remaining_qty": 4.0,
+        "remaining_value": 40.0,
+        "sort_order": 0,
+        "unit": "m2",
+        "unit_price": 10.0,
+        "vat_percent": 20.0
+       }
+      ],
+      "notes": null,
+      "number_source": "counter",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
+      "period_from": null,
+      "period_to": null,
+      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "revision": 1,
+      "source_offer_id": "act01-ov1",
+      "source_offer_ids": [
+       "act01-ov1"
+      ],
+      "status": "Draft",
+      "subtotal": 60.0,
+      "total": 72.0,
+      "updated_at": "2026-11-07T14:31:44.047690+00:00",
+      "vat_amount": 12.0,
+      "vat_percent": 20.0
+     },
+     "business_written": [
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ],
+     "error_code": null,
+     "message": null,
+     "status": 201,
+     "written": [
+      "op.audit_events",
+      "op.audit_idempotency",
+      "op.client_act_line_totals",
+      "op.client_acts",
+      "op.org_counters"
+     ]
+    },
+    "v2_after": {
+     "body": {
+      "detail": {
+       "accepted_versions": [
+        1,
+        2
+       ],
+       "error_code": "OFFER_VERSION_LINEAGE_UNKNOWN",
+       "message": "Офертата има повече от една приета версия, а редовете на версиите не са свързани помежду си — вече актуваното по старата версия не може да се приспадне. Актуването по тази оферта е спряно до решение.",
+       "offer_id": "act01-ov2"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_VERSION_LINEAGE_UNKNOWN",
+     "message": "Офертата има повече от една приета версия, а редовете на версиите не са свързани помежду си — вече актуваното по старата версия не може да се приспадне. Актуването по тази оферта е спряно до решение.",
+     "status": 409,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    },
+    "v2_not_accepted": {
+     "body": {
+      "detail": {
+       "error_code": "OFFER_LINE_NOT_FOUND",
+       "message": "Редът от офертата не е намерен в приета оферта на този обект",
+       "offer_line_id": "act01-lv2"
+      }
+     },
+     "business_written": [],
+     "error_code": "OFFER_LINE_NOT_FOUND",
+     "message": "Редът от офертата не е намерен в приета оферта на този обект",
+     "status": 422,
+     "written": [
+      "op.audit_idempotency"
+     ]
+    }
    },
    "other_project_line": {
     "body": {
@@ -6667,6 +7817,22 @@
         "remaining_value": 100.0,
         "unit": "m2",
         "unit_price": 25.0
+       },
+       {
+        "acted_qty": 0.0,
+        "acted_value": 0.0,
+        "activity_name": "ACT-01 LV1",
+        "contracted_qty": 10.0,
+        "contracted_value": 100.0,
+        "offer_id": "act01-ov1",
+        "offer_line_id": "act01-lv1",
+        "offer_no": "OFF-0005",
+        "offer_type": "main",
+        "over_acted": false,
+        "remaining_qty": 10.0,
+        "remaining_value": 100.0,
+        "unit": "m2",
+        "unit_price": 10.0
        }
       ],
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -6683,10 +7849,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:59.713788+00:00",
+       "created_at": "2026-11-07T14:31:39.632925+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "7626ee9d-1b2b-52fa-8905-e2a91a1c01ac",
+       "id": "bd877409-b470-5c87-adf6-1df3bbde5833",
        "lines": [
         {
          "acted_qty_total": 3.0,
@@ -6695,9 +7861,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 30.0,
          "executed_qty": 3.0,
-         "id": "b13a8400-79a7-4aad-b717-362a5b8f4bab",
+         "id": "027771e9-ba01-4228-b15a-2b55ac7a180f",
          "line_total": 30.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -6706,12 +7873,13 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6723,9 +7891,9 @@
        "status": "Draft",
        "subtotal": 30.0,
        "total": 36.0,
-       "updated_at": "2026-11-07T14:04:59.713788+00:00",
+       "updated_at": "2026-11-07T14:31:39.632925+00:00",
        "vat_amount": 6.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -6748,10 +7916,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:59.740167+00:00",
+       "created_at": "2026-11-07T14:31:39.665858+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "78a00252-1642-5044-8703-cdca52534589",
+       "id": "7cbd766c-b398-5302-a074-e98836a318f2",
        "lines": [
         {
          "acted_qty_total": 6.0,
@@ -6760,9 +7928,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 30.0,
          "executed_qty": 3.0,
-         "id": "0bc1e5c4-f356-43d1-86d1-1e37c60abdac",
+         "id": "b4005e2a-8da9-4676-8527-bcf45332ba87",
          "line_total": 30.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -6771,12 +7940,13 @@
          "remaining_value": 40.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6788,9 +7958,9 @@
        "status": "Draft",
        "subtotal": 30.0,
        "total": 36.0,
-       "updated_at": "2026-11-07T14:04:59.740167+00:00",
+       "updated_at": "2026-11-07T14:31:39.665858+00:00",
        "vat_amount": 6.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -6813,10 +7983,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0010",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:04:59.769688+00:00",
+       "created_at": "2026-11-07T14:31:39.705641+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "28435ab4-8a53-5cda-b34c-f6a07106882b",
+       "id": "d89f2407-5c67-57fb-ad62-a4a01e79ac3b",
        "lines": [
         {
          "acted_qty_total": 10.0,
@@ -6825,9 +7995,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 40.0,
          "executed_qty": 4.0,
-         "id": "b5745789-b73f-4037-ba7f-a20927210539",
+         "id": "7faed64e-9586-4f38-9e2a-c630e2b47725",
          "line_total": 40.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -6836,12 +8007,13 @@
          "remaining_value": 0.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6853,9 +8025,9 @@
        "status": "Draft",
        "subtotal": 40.0,
        "total": 48.0,
-       "updated_at": "2026-11-07T14:04:59.769688+00:00",
+       "updated_at": "2026-11-07T14:31:39.705641+00:00",
        "vat_amount": 8.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -6900,10 +8072,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:04:59.349837+00:00",
+     "created_at": "2026-11-07T14:31:39.245036+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "a504d57e-0a29-5d11-9688-420686b77d6f",
+     "id": "733ad02b-b9f8-5eed-a91c-aac89f6bc6d9",
      "lines": [
       {
        "acted_qty_total": 2.0,
@@ -6912,9 +8084,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 20.0,
        "executed_qty": 2.0,
-       "id": "f959184b-1a78-4464-840f-704334ccc05e",
+       "id": "ed6ac087-aec5-46d4-8522-84ec15b2cda3",
        "line_total": 20.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -6923,12 +8096,13 @@
        "remaining_value": 80.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -6940,9 +8114,9 @@
      "status": "Draft",
      "subtotal": 20.0,
      "total": 24.0,
-     "updated_at": "2026-11-07T14:04:59.349837+00:00",
+     "updated_at": "2026-11-07T14:31:39.245036+00:00",
      "vat_amount": 4.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -6965,10 +8139,10 @@
      "act_date": "2026-11-07",
      "act_number": "ACT-0008",
      "actuation_mode": "fixed_price",
-     "created_at": "2026-11-07T14:04:59.475760+00:00",
+     "created_at": "2026-11-07T14:31:39.350219+00:00",
      "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "currency": "EUR",
-     "id": "89757918-79c0-5c3d-93a0-cd4cd43f1789",
+     "id": "6fc44c1a-3b45-5379-af1e-13cdbfe801d4",
      "lines": [
       {
        "acted_qty_total": 2.0,
@@ -6977,9 +8151,10 @@
        "activity_name": "ACT-01 L1",
        "contracted_qty": 10.0,
        "contracted_value": 100.0,
+       "currency": "EUR",
        "executed_percent": 20.0,
        "executed_qty": 2.0,
-       "id": "de9880f9-b63b-474f-a670-5ec0d114332d",
+       "id": "e12d0c3a-60f1-4931-8b57-94e2bf7cb296",
        "line_total": 20.0,
        "note": null,
        "offer_id": "act01-o1",
@@ -6988,12 +8163,13 @@
        "remaining_value": 80.0,
        "sort_order": 0,
        "unit": "m2",
-       "unit_price": 10.0
+       "unit_price": 10.0,
+       "vat_percent": 20.0
       }
      ],
      "notes": null,
      "number_source": "counter",
-     "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+     "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
      "period_from": null,
      "period_to": null,
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7005,9 +8181,9 @@
      "status": "Draft",
      "subtotal": 20.0,
      "total": 24.0,
-     "updated_at": "2026-11-07T14:04:59.475760+00:00",
+     "updated_at": "2026-11-07T14:31:39.350219+00:00",
      "vat_amount": 4.0,
-     "vat_percent": 20
+     "vat_percent": 20.0
     },
     "business_written": [
      "op.client_act_line_totals",
@@ -7059,11 +8235,7 @@
       "status": 201
      },
      {
-      "act_number": "ACT-0010",
-      "status": 201
-     },
-     {
-      "act_number": "ACT-0012",
+      "act_number": "ACT-0011",
       "status": 201
      },
      {
@@ -7071,11 +8243,15 @@
       "status": 409
      },
      {
-      "act_number": "ACT-0011",
+      "act_number": "ACT-0009",
       "status": 201
      },
      {
-      "act_number": "ACT-0009",
+      "act_number": "ACT-0010",
+      "status": 201
+     },
+     {
+      "act_number": "ACT-0012",
       "status": 201
      }
     ],
@@ -7084,11 +8260,11 @@
    "race_numbers": {
     "responses": [
      {
-      "act_number": "ACT-0008",
+      "act_number": "ACT-0010",
       "status": 201
      },
      {
-      "act_number": "ACT-0012",
+      "act_number": "ACT-0008",
       "status": 201
      },
      {
@@ -7096,15 +8272,15 @@
       "status": 201
      },
      {
-      "act_number": "ACT-0010",
+      "act_number": "ACT-0011",
+      "status": 201
+     },
+     {
+      "act_number": "ACT-0012",
       "status": 201
      },
      {
       "act_number": "ACT-0013",
-      "status": 201
-     },
-     {
-      "act_number": "ACT-0011",
       "status": 201
      }
     ]
@@ -7117,10 +8293,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:01.207677+00:00",
+      "created_at": "2026-11-07T14:31:41.178137+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "39081fd8-2523-5a24-a74e-cdd7480d7bad",
+      "id": "a61a33c4-cc78-57db-b324-38044c483e07",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -7129,9 +8305,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "ae0ff358-6536-4080-a16b-492cb62598b7",
+        "id": "c682fde3-7724-4434-bed1-e5725973cbbe",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -7140,12 +8317,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7157,9 +8335,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:01.207677+00:00",
+      "updated_at": "2026-11-07T14:31:41.178137+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [],
      "error_code": null,
@@ -7172,10 +8350,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:01.207677+00:00",
+      "created_at": "2026-11-07T14:31:41.178137+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "39081fd8-2523-5a24-a74e-cdd7480d7bad",
+      "id": "a61a33c4-cc78-57db-b324-38044c483e07",
       "lines": [
        {
         "acted_qty_total": 2.0,
@@ -7184,9 +8362,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 20.0,
         "executed_qty": 2.0,
-        "id": "ae0ff358-6536-4080-a16b-492cb62598b7",
+        "id": "c682fde3-7724-4434-bed1-e5725973cbbe",
         "line_total": 20.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -7195,12 +8374,13 @@
         "remaining_value": 80.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7212,9 +8392,9 @@
       "status": "Draft",
       "subtotal": 20.0,
       "total": 24.0,
-      "updated_at": "2026-11-07T14:05:01.207677+00:00",
+      "updated_at": "2026-11-07T14:31:41.178137+00:00",
       "vat_amount": 4.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [
       "op.client_act_line_totals",
@@ -7237,7 +8417,7 @@
       "detail": {
        "error_code": "IDEMPOTENCY_CONFLICT",
        "idempotency_action": "revenue.client_act.create",
-       "idempotency_key": "18e2072c-c072-5aa6-9d53-a81d983b56a4:9d751e1e6092495dbf610c7b4397dd80",
+       "idempotency_key": "18e2072c-c072-5aa6-9d53-a81d983b56a4:0b80a72ec84d429c85a39a424ef11379",
        "message": "The same operation key was already used with a different payload"
       }
      },
@@ -7279,10 +8459,10 @@
       "act_date": "2026-11-07",
       "act_number": "ACT-0008",
       "actuation_mode": "fixed_price",
-      "created_at": "2026-11-07T14:05:04.516104+00:00",
+      "created_at": "2026-11-07T14:31:43.875275+00:00",
       "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
       "currency": "EUR",
-      "id": "6bb5c1d2-c641-5c5f-a903-8e683c3b0e6e",
+      "id": "ad6cc774-c2d4-57a2-b002-c6339d6ed755",
       "lines": [
        {
         "acted_qty_total": 3.0,
@@ -7291,9 +8471,10 @@
         "activity_name": "ACT-01 L1",
         "contracted_qty": 10.0,
         "contracted_value": 100.0,
+        "currency": "EUR",
         "executed_percent": 30.0,
         "executed_qty": 3.0,
-        "id": "4abf1a3a-c4f7-43fe-9bb8-db512af7f53d",
+        "id": "c23440eb-2c43-4df1-895b-e007c7c8a34d",
         "line_total": 30.0,
         "note": null,
         "offer_id": "act01-o1",
@@ -7302,12 +8483,13 @@
         "remaining_value": 70.0,
         "sort_order": 0,
         "unit": "m2",
-        "unit_price": 10.0
+        "unit_price": 10.0,
+        "vat_percent": 20.0
        }
       ],
       "notes": null,
       "number_source": "counter",
-      "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+      "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
       "period_from": null,
       "period_to": null,
       "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7319,9 +8501,9 @@
       "status": "Draft",
       "subtotal": 30.0,
       "total": 36.0,
-      "updated_at": "2026-11-07T14:05:04.516104+00:00",
+      "updated_at": "2026-11-07T14:31:43.875275+00:00",
       "vat_amount": 6.0,
-      "vat_percent": 20
+      "vat_percent": 20.0
      },
      "business_written": [],
      "error_code": null,
@@ -7339,10 +8521,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:01.979807+00:00",
+       "created_at": "2026-11-07T14:31:41.840803+00:00",
        "created_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "currency": "EUR",
-       "id": "b35ec587-e10a-5573-b201-a51b838ddb16",
+       "id": "dec46a8f-2097-57d1-a725-b4398d591b4a",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -7351,9 +8533,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "2407b1e4-6cc6-4217-ad21-baf00a0d1fa4",
+         "id": "9bf18060-7ee1-43cc-8ace-3986626f5fe7",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7362,7 +8545,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -7371,9 +8555,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "b5b8ff5e-773d-402d-b572-67dc8d7d0da7",
+         "id": "8bfd2a0d-eb4d-4f4d-8973-e95e903553a8",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7382,12 +8567,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7399,9 +8585,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:01.979807+00:00",
+       "updated_at": "2026-11-07T14:31:41.840803+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -7424,10 +8610,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:01.938956+00:00",
+       "created_at": "2026-11-07T14:31:41.810897+00:00",
        "created_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "currency": "EUR",
-       "id": "d08b87fe-8388-5ca4-9699-87ae8cb6d25d",
+       "id": "0d9681b4-bc47-5a4d-9a31-30b4fcd14c89",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -7436,9 +8622,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "4e190df9-f511-4b1e-97cc-fdc37582583e",
+         "id": "050a90b9-db19-4c73-a7bd-94915b175fa2",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7447,12 +8634,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7464,9 +8652,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:05:01.938956+00:00",
+       "updated_at": "2026-11-07T14:31:41.810897+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -7501,9 +8689,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "df36e48b-77b9-46ad-a9e7-56cf8d289bad",
+         "id": "a784d3a4-1a73-4353-aedb-11b1b9d2f3ed",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7512,10 +8701,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -7525,10 +8715,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:02.019992+00:00",
+       "updated_at": "2026-11-07T14:31:41.866522+00:00",
        "updated_by": "369712bd-f368-5d8d-bf43-0851f544db32",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -7595,6 +8785,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -7612,10 +8818,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:01.779044+00:00",
+       "created_at": "2026-11-07T14:31:41.653092+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "59488e90-c4b6-5116-9af0-688ac4cba5ca",
+       "id": "24ab8633-416c-583c-b354-c59aa47d8f7c",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -7624,9 +8830,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "746c149a-93e2-4154-b446-eafb4f19e6ae",
+         "id": "d4dc41b2-0568-47fa-ac89-f1d115d21643",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7635,7 +8842,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -7644,9 +8852,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "55b42a19-75e8-41f2-8e92-04b77f23c401",
+         "id": "0ce321ad-9bd1-4699-b18f-0ad571877e1a",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7655,12 +8864,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7672,9 +8882,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:01.779044+00:00",
+       "updated_at": "2026-11-07T14:31:41.653092+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -7697,10 +8907,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:01.740208+00:00",
+       "created_at": "2026-11-07T14:31:41.615225+00:00",
        "created_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "currency": "EUR",
-       "id": "13d9d9a5-76cd-5212-b127-a2c72812f6eb",
+       "id": "40423fe4-d9f9-5f0b-a823-4ed94291acdf",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -7709,9 +8919,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "387f137b-a37b-4934-9de7-faf615f8dd9c",
+         "id": "f162bef5-39d4-454a-87cf-e07e7c764eca",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7720,12 +8931,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7737,9 +8949,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:05:01.740208+00:00",
+       "updated_at": "2026-11-07T14:31:41.615225+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -7774,9 +8986,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "5562365a-47d4-4758-be2c-2320d3cc18e0",
+         "id": "dcde1d4d-bcef-4ac7-91a7-1498006413ee",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7785,10 +8998,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -7798,10 +9012,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:01.811618+00:00",
+       "updated_at": "2026-11-07T14:31:41.685724+00:00",
        "updated_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -7868,6 +9082,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
@@ -7927,10 +9157,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0009",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:01.581903+00:00",
-       "created_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "created_at": "2026-11-07T14:31:41.470587+00:00",
+       "created_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "currency": "EUR",
-       "id": "ece32ac5-4699-5c5d-9955-1a14e3b5ede5",
+       "id": "5aa211d3-d642-5018-9074-469809d6c914",
        "lines": [
         {
          "acted_qty_total": 2.0,
@@ -7939,9 +9169,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "99a620d2-3067-450c-8b66-c98dcfb0a5f7",
+         "id": "dc56e9a0-2736-4b69-965d-d2b7c1574aab",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7950,7 +9181,8 @@
          "remaining_value": 80.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         },
         {
          "acted_qty_total": 4.5,
@@ -7959,9 +9191,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 0.5,
-         "id": "fd068906-9ba6-4274-b298-6fd72d14b555",
+         "id": "e580d351-9b96-40c7-bbf1-10af4b0f6978",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -7970,12 +9203,13 @@
          "remaining_value": 10.0,
          "sort_order": 1,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": "От оферта OFF-0001",
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -7987,9 +9221,9 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:01.581903+00:00",
+       "updated_at": "2026-11-07T14:31:41.470587+00:00",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -8012,10 +9246,10 @@
        "act_date": "2026-11-07",
        "act_number": "ACT-0008",
        "actuation_mode": "fixed_price",
-       "created_at": "2026-11-07T14:05:01.536358+00:00",
-       "created_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "created_at": "2026-11-07T14:31:41.436219+00:00",
+       "created_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "currency": "EUR",
-       "id": "26de2f1d-366d-5d52-8200-146df4772ae3",
+       "id": "6d943008-881c-5863-9dc9-9652e883db73",
        "lines": [
         {
          "acted_qty_total": 1.0,
@@ -8024,9 +9258,10 @@
          "activity_name": "ACT-01 L1",
          "contracted_qty": 10.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 10.0,
          "executed_qty": 1.0,
-         "id": "1f8f233b-7c4b-42d7-a953-9160ba954bb9",
+         "id": "81dd5469-d57a-4fbe-855e-a8f8abfcedd5",
          "line_total": 10.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -8035,12 +9270,13 @@
          "remaining_value": 90.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 10.0
+         "unit_price": 10.0,
+         "vat_percent": 20.0
         }
        ],
        "notes": null,
        "number_source": "counter",
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "period_from": null,
        "period_to": null,
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -8052,9 +9288,9 @@
        "status": "Draft",
        "subtotal": 10.0,
        "total": 12.0,
-       "updated_at": "2026-11-07T14:05:01.536358+00:00",
+       "updated_at": "2026-11-07T14:31:41.436219+00:00",
        "vat_amount": 2.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -8089,9 +9325,10 @@
          "activity_name": "ACT-01 L2",
          "contracted_qty": 5.0,
          "contracted_value": 100.0,
+         "currency": "EUR",
          "executed_percent": 20.0,
          "executed_qty": 1.0,
-         "id": "bfe6539f-9fe4-4df4-a16d-b5726cff36af",
+         "id": "4aae6557-94e2-4f44-be18-94d8ecf20b69",
          "line_total": 20.0,
          "note": null,
          "offer_id": "act01-o1",
@@ -8100,10 +9337,11 @@
          "remaining_value": 70.0,
          "sort_order": 0,
          "unit": "m2",
-         "unit_price": 20.0
+         "unit_price": 20.0,
+         "vat_percent": 20.0
         }
        ],
-       "org_id": "f6199acd-9052-4d5d-8312-d65521906355",
+       "org_id": "62bb20f8-e7b3-43af-9473-91c3c8d64f95",
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
        "revision": 1,
        "source_offer_id": "act01-o1",
@@ -8113,10 +9351,10 @@
        "status": "Draft",
        "subtotal": 20.0,
        "total": 24.0,
-       "updated_at": "2026-11-07T14:05:01.610909+00:00",
-       "updated_by": "c1b51a7d-75ad-4ac6-9a66-71ecea72a357",
+       "updated_at": "2026-11-07T14:31:41.505214+00:00",
+       "updated_by": "cca71113-ba37-492b-84aa-96326baa3b77",
        "vat_amount": 4.0,
-       "vat_percent": 20
+       "vat_percent": 20.0
       },
       "business_written": [
        "op.client_act_line_totals",
@@ -8183,6 +9421,22 @@
          "remaining_value": 100.0,
          "unit": "m2",
          "unit_price": 25.0
+        },
+        {
+         "acted_qty": 0.0,
+         "acted_value": 0.0,
+         "activity_name": "ACT-01 LV1",
+         "contracted_qty": 10.0,
+         "contracted_value": 100.0,
+         "offer_id": "act01-ov1",
+         "offer_line_id": "act01-lv1",
+         "offer_no": "OFF-0005",
+         "offer_type": "main",
+         "over_acted": false,
+         "remaining_qty": 10.0,
+         "remaining_value": 100.0,
+         "unit": "m2",
+         "unit_price": 10.0
         }
        ],
        "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"

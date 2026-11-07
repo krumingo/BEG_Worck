@@ -72,6 +72,9 @@ LINES = {
     "LX": ("OX", 4.0, 20.0, 5.0),
     "LP2": ("OP2", 9.0, 2.0, 2.0),
     "LB": ("OB", 9.0, 2.0, 2.0),
+    # Addendum A: two versions of one offer (OFF-0005); v2 clones v1 with new line ids, 10 -> 12
+    "LV1": ("OV1", 10.0, 4.0, 6.0),
+    "LV2": ("OV2", 12.0, 4.0, 6.0),
 }
 PRICE = {k: round(v[2] + v[3], 2) for k, v in LINES.items()}
 CONCURRENT = 6
@@ -92,7 +95,8 @@ def _pm01():
 def ids(fx_a: Dict[str, Any]) -> Dict[str, str]:
     """Stable ids of the ACT-01 records (per scratch database)."""
     return {k: "act01-%s" % k.lower() for k in
-            ("O1", "O2", "OX", "OP2", "OB", "P2", "L1", "L2", "L3", "LX", "LP2", "LB", "LEGACY")}
+            ("O1", "O2", "OX", "OP2", "OB", "OV1", "OV2", "P2", "L1", "L2", "L3", "LX", "LP2",
+             "LB", "LV1", "LV2", "LEGACY")}
 
 
 async def seed_act01(op_db, fx: Dict[str, Any]) -> Dict[str, str]:
@@ -109,7 +113,11 @@ async def seed_act01(op_db, fx: Dict[str, Any]) -> Dict[str, str]:
         "OX": (a["tenant_id"], a["project_id"], "Accepted", "extra", "OFF-0003"),
         "OP2": (a["tenant_id"], i["P2"], "Accepted", "main", "OFF-0004"),
         "OB": (b["tenant_id"], b["project_id"], "Accepted", "main", "OFF-0001"),
+        "OV1": (a["tenant_id"], a["project_id"], "Accepted", "main", "OFF-0005"),
+        "OV2": (a["tenant_id"], a["project_id"], "Sent", "main", "OFF-0005"),   # accepted later
     }
+    versions = {"OV2": (2, "OV1")}
+    vat = {"OX": 9}                          # FLOW-003: the act takes the offer's VAT
     for okey, (org, project, status, otype, number) in offers.items():
         lines = []
         for n, (lkey, (lo, qty, mat, lab)) in enumerate(sorted(LINES.items())):
@@ -123,9 +131,12 @@ async def seed_act01(op_db, fx: Dict[str, Any]) -> Dict[str, str]:
         subtotal = round(sum(x["line_total"] for x in lines), 2)
         await op_db.offers.insert_one({
             "id": i[okey], "org_id": org, "project_id": project, "offer_no": number,
-            "title": "ACT-01 " + okey, "status": status, "version": 1, "offer_type": otype,
-            "currency": "EUR", "vat_percent": 20, "lines": lines, "subtotal": subtotal,
-            "vat_amount": round(subtotal * 0.2, 2), "total": round(subtotal * 1.2, 2),
+            "title": "ACT-01 " + okey, "status": status, "offer_type": otype,
+            "version": versions.get(okey, (1, None))[0],
+            "parent_offer_id": i[versions[okey][1]] if okey in versions else None,
+            "currency": "EUR", "vat_percent": vat.get(okey, 20), "lines": lines,
+            "subtotal": subtotal, "vat_amount": round(subtotal * vat.get(okey, 20) / 100, 2),
+            "total": round(subtotal * (100 + vat.get(okey, 20)) / 100, 2),
             "created_at": now, "updated_at": now, "_st01_marker": "st-01"})
     # A pre-ACT-01 act: 4 of the 5 m3 of L2 are already acted (Draft), number ACT-0007.
     await op_db.client_acts.insert_one({
@@ -460,7 +471,28 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                         "acted": acts_on("L1"),
                         "acts": count("client_acts", {"project_id": project})}
             scenario("resume_after_commit", resume)
-            # 23. the answer shows contracted / acted / remaining per line
+            # 23. addendum A: versions of one offer are one scope
+            def versions():
+                v1_first = post_act(act_body(line("LV1", 6)))            # v1 the only accepted
+                v2_not_accepted = post_act(act_body(line("LV2", 1)))     # v2 still Sent
+                tc.portal.call(lambda: op_db.offers.update_one(
+                    {"id": i["OV2"]}, {"$set": {"status": "Accepted",
+                                                "accepted_at": "2026-11-07T09:00:00+00:00"}}))
+                v1_after = post_act(act_body(line("LV1", 1)))            # superseded
+                v2_after = post_act(act_body(line("LV2", 1)))            # no line lineage
+                v1_id = v1_first["body"].get("id") if isinstance(v1_first["body"], dict) else None
+                release = call("PUT", "/api/client-acts/%s" % v1_id,
+                               body={"lines": [line("LV1", 4)]})          # releasing is allowed
+                grow = call("PUT", "/api/client-acts/%s" % v1_id, body={"lines": [line("LV1", 5)]})
+                from_v1 = call("POST", "/api/client-acts/from-offer/%s" % i["OV1"],
+                               body={"percent": 10})
+                extra = post_act(act_body(line("LX", 1)))                # own cap
+                return {"v1_first": v1_first, "v2_not_accepted": v2_not_accepted,
+                        "v1_after": v1_after, "v2_after": v2_after, "release": release,
+                        "grow": grow, "from_v1": from_v1, "extra": extra,
+                        "acted_LV1": acts_on("LV1"), "acted_LV2": acts_on("LV2")}
+            scenario("offer_versions", versions)
+            # 24. the answer shows contracted / acted / remaining per line
             scenario("line_view", lambda: post_act(act_body(line("L1", 3))))
             results["modes"][mode] = res
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
@@ -726,6 +758,32 @@ def test_a_retry_after_a_committed_but_unacknowledged_act_writes_no_second_act(r
     assert body["lines"][0]["executed_qty"] == 3.0
     assert not [n for n in cell["retry"]["business_written"] if n != "op.audit_events"], cell
     assert cell["acted"] == 3.0 and cell["acts"] == 2, cell         # legacy act + one
+
+
+def test_only_the_latest_accepted_version_of_an_offer_is_acted(r):
+    """ACT-01 addendum A (FLOW-003 "Версии", FLOW-005)."""
+    v = r["offer_versions"]
+    created(v["v1_first"])
+    # v2 not accepted yet: its lines are no basis at all
+    assert v["v2_not_accepted"]["status"] == 422, v["v2_not_accepted"]
+    assert v["v2_not_accepted"]["error_code"] == "OFFER_LINE_NOT_FOUND"
+    for name, code in (("v1_after", "OFFER_VERSION_SUPERSEDED"), ("grow", "OFFER_VERSION_SUPERSEDED"),
+                       ("from_v1", "OFFER_VERSION_SUPERSEDED"),
+                       ("v2_after", "OFFER_VERSION_LINEAGE_UNKNOWN")):
+        assert v[name]["status"] == 409 and v[name]["error_code"] == code, (name, v[name])
+        nothing(v[name])
+    assert v["release"]["status"] == 200, v["release"]
+    assert v["acted_LV1"] == 4.0 and v["acted_LV2"] == 0.0, v
+    created(v["extra"])                                      # an additional offer: own cap
+
+
+def test_vat_and_currency_come_from_the_accepted_offer(r):
+    body = created(r["extra_offer_line"])                    # OX: 4 x 25.00, VAT 9 %
+    assert (body["subtotal"], body["vat_percent"], body["vat_amount"], body["total"]) == \
+        (100.0, 9.0, 9.0, 109.0), body
+    assert body["currency"] == "EUR" and body["lines"][0]["vat_percent"] == 9.0
+    other = created(r["line_view"])                          # O1: 20 %
+    assert (other["vat_percent"], other["vat_amount"]) == (20.0, 6.0), other
 
 
 # ── correction ─────────────────────────────────────────────────────────────────────

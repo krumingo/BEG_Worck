@@ -71,7 +71,7 @@ COUNTER_TYPE = "client_act_number"
 NUMBER_SOURCE = "counter"
 QTY_SCALE = 10_000                    # quantities are compared in 1/10 000 of a unit
 PRICE_TOLERANCE = 0.005               # prices are kept to the cent (offers round to 2)
-VAT_PERCENT = 20                      # unchanged from the pre-ACT-01 code
+VAT_PERCENT = 20                      # the offer model's default (models/offers.py)
 ACCEPTED = "Accepted"
 DRAFT = "Draft"
 MAX_KEY_LENGTH = 200
@@ -221,6 +221,73 @@ async def resolve_offer_lines(tenant: TenantData, project_id: str, line_ids: Lis
     return out
 
 
+async def check_offer_version(tenant: TenantData, offer: Dict[str, Any], session=None) -> None:
+    """ACT-01 addendum A (FLOW-003 "Версии", FLOW-005): the versions of one offer are ONE
+    scope — acting is allowed only on the latest accepted version.
+
+    A version family is the set of offers of the same project and ``offer_no`` linked by
+    ``parent_offer_id`` (``POST /offers/{id}/new-version``) — the link, not the number alone,
+    because offer numbers are not guaranteed unique. With more than one accepted version:
+      * a line of a superseded version -> 409 ``OFFER_VERSION_SUPERSEDED``;
+      * a line of the latest version   -> 409 ``OFFER_VERSION_LINEAGE_UNKNOWN``: the model has
+        no line-to-line link between versions (a new version clones the lines with new ids,
+        a line edit regenerates every id, ``activity_code`` is optional free text), so the
+        quantity already acted on the previous version cannot be counted into the current
+        cap — and two caps are never added together. Debt D1.
+    An additional offer (``offer_type`` "extra", its own number) is new scope with its own cap.
+    """
+    family_candidates = await tenant.offers.find(
+        {"project_id": offer.get("project_id"), "offer_no": offer.get("offer_no")},
+        {"_id": 0, "id": 1, "parent_offer_id": 1, "version": 1, "status": 1,
+         "accepted_at": 1, "created_at": 1}, session=session).to_list(None)
+    by_id = {o["id"]: o for o in family_candidates}
+    links: Dict[str, set] = {oid: set() for oid in by_id}
+    for o in family_candidates:
+        parent = o.get("parent_offer_id")
+        if parent in by_id:
+            links[o["id"]].add(parent)
+            links[parent].add(o["id"])
+    family, todo = set(), [offer["id"]]
+    while todo:
+        oid = todo.pop()
+        if oid in family or oid not in by_id:
+            continue
+        family.add(oid)
+        todo.extend(links[oid])
+    accepted = [by_id[oid] for oid in family if by_id[oid].get("status") == ACCEPTED]
+    if len(accepted) <= 1:
+        return
+    latest = max(accepted, key=lambda o: (int(o.get("version") or 1),
+                                          str(o.get("accepted_at") or ""), str(o.get("created_at") or "")))
+    if latest["id"] != offer["id"]:
+        raise _err(409, "OFFER_VERSION_SUPERSEDED",
+                   "Тази версия на офертата е заменена от по-нова приета версия (v%s). "
+                   "Актува се само по действащата версия." % latest.get("version"),
+                   offer_id=offer["id"], current_offer_id=latest["id"],
+                   current_version=latest.get("version"))
+    raise _err(409, "OFFER_VERSION_LINEAGE_UNKNOWN",
+               "Офертата има повече от една приета версия, а редовете на версиите не са "
+               "свързани помежду си — вече актуваното по старата версия не може да се "
+               "приспадне. Актуването по тази оферта е спряно до решение.",
+               offer_id=offer["id"], accepted_versions=sorted(
+                   int(o.get("version") or 1) for o in accepted))
+
+
+async def check_versions_for(tenant: TenantData, resolved: Dict[str, Tuple[Dict, Dict]],
+                             deltas: Dict[str, int], session) -> None:
+    """The version rule for every offer whose lines GROW in this write (a reduction —
+    releasing quantity — is always allowed)."""
+    seen = set()
+    for olid, delta in sorted(deltas.items()):
+        if delta <= 0 or olid not in resolved:
+            continue
+        offer = resolved[olid][0]
+        if offer["id"] in seen:
+            continue
+        seen.add(offer["id"])
+        await check_offer_version(tenant, offer, session)
+
+
 def build_lines(raw_lines: List[Dict[str, Any]], resolved: Dict[str, Tuple[Dict, Dict]],
                 keep_ids: bool = False) -> List[Dict[str, Any]]:
     """The stored act lines: everything money-relevant from the offer line."""
@@ -243,6 +310,8 @@ def build_lines(raw_lines: List[Dict[str, Any]], resolved: Dict[str, Tuple[Dict,
             "executed_percent": round(executed / contracted * 100, 1) if contracted > 0 else 0,
             "unit_price": price,
             "line_total": round(executed * price, 2),
+            "vat_percent": _offer_vat(offer),
+            "currency": offer.get("currency") or "EUR",
             "note": raw.get("note"),
             "sort_order": n,
         })
@@ -478,11 +547,29 @@ def _lines_digest(lines: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             for ln in lines or []]
 
 
-def _totals(lines: List[Dict[str, Any]]) -> Dict[str, float]:
+def _offer_vat(offer: Dict[str, Any]) -> float:
+    """The VAT % of the accepted offer (FLOW-003: the approval binds the version's price,
+    ДДС/валута). An offer row without the field gets the offer model's default."""
+    value = offer.get("vat_percent")
+    return float(VAT_PERCENT if value is None else value)
+
+
+def _totals(lines: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Net / VAT / gross kept apart (FLOW-006); VAT per line at its offer's rate."""
     subtotal = round(sum(float(ln.get("line_total") or 0) for ln in lines), 2)
-    return {"subtotal": subtotal, "vat_percent": VAT_PERCENT,
-            "vat_amount": round(subtotal * VAT_PERCENT / 100, 2),
-            "total": round(subtotal * (100 + VAT_PERCENT) / 100, 2)}
+    vat = round(sum(float(ln.get("line_total") or 0) * float(ln.get("vat_percent", VAT_PERCENT)) / 100
+                    for ln in lines), 2)
+    rates = sorted({float(ln.get("vat_percent", VAT_PERCENT)) for ln in lines})
+    currencies = sorted({ln.get("currency") or "EUR" for ln in lines})
+    if len(currencies) > 1:
+        raise _err(422, "ACT_MIXED_CURRENCY",
+                   "Редовете на акта са от оферти в различни валути (%s); един акт е в една "
+                   "валута" % ", ".join(currencies))
+    return {"subtotal": subtotal,
+            # one rate -> that rate; no lines -> the default; mixed rates -> None (per line)
+            "vat_percent": rates[0] if len(rates) == 1 else (None if rates else float(VAT_PERCENT)),
+            "vat_amount": vat, "total": round(subtotal + vat, 2),
+            "currency": currencies[0] if currencies else None}
 
 
 # ═══════════════════════════════════════════════════════════════════ transactions
@@ -526,6 +613,8 @@ async def create_act(database, *, user: Dict[str, Any], project_id: str,
             raise _err(422, "OFFER_LINE_NOT_IN_SOURCE_OFFER",
                        "Редовете трябва да са от посочената оферта (source_offer_id)")
         lines = build_lines(raw_lines, resolved)
+        totals = _totals(lines)
+        await check_versions_for(tenant, resolved, _deltas(lines), session)
         for olid, delta in sorted(_deltas(lines).items()):
             offer, ol = resolved[olid]
             await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
@@ -539,7 +628,8 @@ async def create_act(database, *, user: Dict[str, Any], project_id: str,
             "number_source": NUMBER_SOURCE, "actuation_mode": "fixed_price",
             "act_date": header.get("act_date") or now[:10],
             "period_from": header.get("period_from"), "period_to": header.get("period_to"),
-            "lines": lines, **_totals(lines), "currency": header.get("currency") or "EUR",
+            "lines": lines, **totals,
+            "currency": totals["currency"] or header.get("currency") or "EUR",
             "notes": header.get("notes"), "status": DRAFT, "revision": 1,
             "created_at": now, "updated_at": now, "created_by": user["id"],
         }
@@ -578,7 +668,10 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
                                                  [ln["offer_line_id"] for ln in raw_lines], session)
             check_against_offer(raw_lines, resolved)
             lines = build_lines(raw_lines, resolved, keep_ids=True)
+            totals = _totals(lines)
             old, nxt = _deltas(act.get("lines") or []), _deltas(lines)
+            await check_versions_for(tenant, resolved,
+                                     {k: nxt.get(k, 0) - old.get(k, 0) for k in nxt}, session)
             for olid in sorted(set(old) | set(nxt)):
                 delta = nxt.get(olid, 0) - old.get(olid, 0)
                 if delta == 0:
@@ -589,7 +682,7 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
                     offer, ol = await _offer_of_line(tenant, olid, session)
                 await reserve(tenant, offer=offer, offer_line=ol, delta=delta, session=session)
             new["lines"] = lines
-            new.update(_totals(lines))
+            new.update({k: v for k, v in totals.items() if k != "currency" or v})
             new["source_offer_ids"] = sorted({ln["offer_id"] for ln in lines})
             diff.update({"before": _lines_digest(act.get("lines") or []),
                          "after": _lines_digest(lines), "subtotal_before": act.get("subtotal"),

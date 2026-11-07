@@ -35,3 +35,18 @@ FAILED/ERROR names new on ACT-01: none.
 Only on main: the 2 PM-01 tests (stale matrix, fixed by the regeneration) and 3 ST-02 setup errors
 ("bundle directory already exists" — the two suites ran in parallel and shared one /tmp/pytest-of-root
 release directory; environmental, not ACT-01). +79 passed = 74 ACT-01 + 2 PM-01 + 3 ST-02.
+
+# ── Addendum A (offer versions) + D12 (VAT/currency from the offer), rerun on the new head ──
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 + PM-01
+harness_rc=0
+86 passed, 6 warnings in 198.17s (0:03:18)
+## R0
+814 passed, 6 warnings in 149.55s (0:02:29)
+## W0
+15 failed, 1135 passed, 6 warnings in 105.68s (0:01:45)
+SAME_15
+  test_act_01 against main 0f870c3 (re-recorded main-0f870c3-results.json): 75 failed / 5 passed
