@@ -398,6 +398,7 @@ async def get_project_package_breakdown(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/material-warnings/{project_id}")
+@strip_money_for_non_finance   # SEC-02-G (SEC71-03; R20-5M): EUR amounts in the warning text
 async def get_material_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Material cost warnings for a project"""
     tenant = _tenant(user)

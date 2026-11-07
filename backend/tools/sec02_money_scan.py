@@ -32,6 +32,8 @@ T = importlib.util.module_from_spec(spec); sys.modules["sec02t"] = T; spec.loade
 MONEY = re.compile(r"(cost|price|amount|salary|wage|profit|margin|revenue|hourly_rate|net_pay|"
                    r"vat|paid|balance|budget|_value$|^value$|payable|receivable|invoiced|earned|"
                    r"sale|markup|commission)", re.I)   # SEC-02-G: + sale/markup/commission
+# SEC-02-G (SEC71-03): an amount / percent inside an alert text is money too
+from app.permissions.finance_read import MONEY_TEXT, _TEXT_KEYS as TEXT_KEYS  # noqa: E402
 ROLES = ("requester", "technician", "warehousekeeper", "driver", "viewer")
 MODES = ("off", "shadow", "enforce")
 OUT = BACKEND.parent / "docs" / "evidence" / "SEC-02" / "scan_sec02b.json"
@@ -44,6 +46,8 @@ def money_hits(v, path="", out=None):
             p = path + "." + str(k)
             if isinstance(x, (int, float)) and not isinstance(x, bool) and x != 0 and MONEY.search(str(k)):
                 out.append(p)
+            elif isinstance(x, str) and k in TEXT_KEYS and MONEY_TEXT.search(x):
+                out.append(p + "=text")        # SEC-02-G (SEC71-03): money inside a text
             else:
                 money_hits(x, p, out)
     elif isinstance(v, list):
@@ -112,8 +116,8 @@ def child(mongo_url):
                     if hits:
                         # SEC-02-G (Codex SEC71-01): the budget view never carries a client
                         # price / sale / margin / profit — such a key is a hit, not "allowed"
-                        bad = [h for h in hits
-                               if budget_view_forbidden(re.split(r"[.\[\]]+", h.strip(".[]"))[-1])]
+                        bad = [h for h in hits if h.endswith("=text")      # SEC71-03
+                               or budget_view_forbidden(re.split(r"[.\[\]]+", h.strip(".[]"))[-1])]
                         if role == "requester" and path in budget_view and bad:
                             bucket, hits = results, bad
                         elif role == "requester" and path in budget_view:

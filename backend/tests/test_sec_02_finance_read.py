@@ -175,7 +175,9 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "total_labor_cost": 3200.0, "materials_used": [], "total_material_cost": 0,
             "budget_snapshot": {"total_budget": 5000.0, "total_spent": 3200.0,
                                 "remaining": 1800.0, "burn_pct": 64.0, "status": "ok"},
-            "alerts": []})
+            # SEC-02-G (SEC71-03): a stored alert with the >80 % text
+            "alerts": [{"type": "budget_warning", "message": "Бюджетът е 85.0% изхарчен",
+                        "severity": "warning"}]})
         await op_db.material_entries.insert_one({
             "id": sid(tkey, "me1"), "org_id": org, "project_id": p1, "material_name": "Probe",
             "qty": 5, "unit": "kg", "unit_cost": 7777.0, "total_cost": 7777.0,
@@ -216,11 +218,21 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "total_labor_cost": 160.0, "materials_used": [], "total_material_cost": 0,
             "budget_snapshot": {"total_budget": 5000.0, "total_spent": 3360.0,
                                 "remaining": 1640.0, "burn_pct": 67.2, "status": "ok"},
-            "alerts": []})
+            # SEC-02-G (Codex SEC71-03): a stored alert with the >100 % text
+            "alerts": [{"type": "budget_warning", "message": "Надхвърлен бюджет! (900.0%)",
+                        "severity": "critical"}]})
         await op_db.work_sessions.insert_one({
             "id": sid(tkey, "ws2"), "org_id": org, "worker_id": driver, "site_id": p1,
             "smr_type_id": "Мазилка", "started_at": "2026-11-02T07:00:00",
             "ended_at": "2026-11-02T15:00:00", "duration_hours": 8, "labor_cost": 0,
+            "created_at": now})
+        # SEC-02-G (SEC71-03): the SAME paid technician on 2026-11-04 — P1 stays a one-paid-
+        # worker site, and its cumulative burn is 6200 / 5000 = 124 % -> a generated pulse
+        # carries the ">100 %" budget alert.
+        await op_db.work_sessions.insert_one({
+            "id": sid(tkey, "ws3"), "org_id": org, "worker_id": tech, "site_id": p1,
+            "smr_type_id": "Мазилка", "started_at": "2026-11-04T07:00:00",
+            "ended_at": "2026-11-04T15:00:00", "duration_hours": 8, "labor_cost": 3000,
             "created_at": now})
 
 
@@ -560,6 +572,27 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     "smr_total_cost": [x.get("total_cost") for x in body.get("smr_summary") or []],
                     "has_workers": "workers" in body,
                     "budget_snapshot": body.get("budget_snapshot")})
+        # SEC-02-G (Codex SEC71-03): the budget alert text — stored (>80 %, >100 %),
+        # generated (>100 %) and generated on demand (>100 %) — one paid worker on P1.
+        alert_rows = []
+        p1 = fx["A"]["project_id"]
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            for role in ("requester", "accountant"):
+                hdr = {"Authorization": "Bearer " + tokens[("A", role)]}
+                for case, method, path, date in (
+                        ("stored_over_80", "GET", "/api/sites/%s/pulse", "2026-11-02"),
+                        ("stored_over_100", "GET", "/api/sites/%s/pulse", "2026-11-03"),
+                        ("generated_over_100", "POST", "/api/sites/%s/pulse/generate",
+                         "2026-11-04"),
+                        ("on_demand_over_100", "GET", "/api/sites/%s/pulse", "2026-11-05")):
+                    r = tc.request(method, path % p1, params={"date": date}, headers=hdr)
+                    body = r.json() if r.status_code == 200 else {}
+                    alert_rows.append({
+                        "mode": mode, "role": role, "case": case, "status": r.status_code,
+                        "legacy_role": fx["A"]["users"][role]["role"],
+                        "alerts": body.get("alerts"),
+                        "budget_snapshot": body.get("budget_snapshot")})
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -573,6 +606,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "labor_replay": replay,
         "price_modifier_audit": pm_audit,
         "pulse_one_paid_worker": pulse_paid,
+        "pulse_budget_alerts": alert_rows,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -752,6 +786,37 @@ def check_pulse_one_paid_worker(rows: List[Dict[str, Any]]) -> None:
             assert r["total_labor_cost"] is None and r["smr_total_cost"] == [None], r
             assert not r["has_workers"], r
             assert r["budget_snapshot"] == {"total_budget": 5000.0, "status": "ok"}, r
+
+
+def check_pulse_budget_alerts(rows: List[Dict[str, Any]]) -> None:
+    """SEC-02-G (Codex SEC71-03; R31): with ONE paid worker and a visible budget, the
+    budget alert text would give his pay ("900.0%" x budget). The Technical Manager gets
+    one generic budget alert — no amount, no percent, the SAME for >80 % and >100 %, for a
+    stored, a generated and an on-demand pulse; no text of any alert holds a number with
+    a % or a currency. Finance roles keep the full text."""
+    from app.permissions.finance_read import MONEY_TEXT, GENERIC_BUDGET_ALERT, _TEXT_KEYS
+    assert len(rows) == len(MODES) * 2 * 4
+    expect = {"stored_over_80": "85.0%", "stored_over_100": "900.0%",
+              "generated_over_100": "124.0%", "on_demand_over_100": "124.0%"}
+    seen = {}
+    for r in rows:
+        assert r["status"] == 200 and isinstance(r["alerts"], list), r
+        budget = [a for a in r["alerts"] if a.get("type") in ("budget_warning",
+                                                              "budget_attention")]
+        assert len(budget) == 1, r
+        if r["legacy_role"] in FINANCE:
+            assert budget[0]["type"] == "budget_warning", r
+            assert expect[r["case"]] in budget[0]["message"], r
+            continue
+        assert budget == [GENERIC_BUDGET_ALERT], r
+        for a in r["alerts"]:
+            for k in _TEXT_KEYS:
+                assert not (isinstance(a.get(k), str) and MONEY_TEXT.search(a[k])), (r, a)
+        assert r["budget_snapshot"] == {"total_budget": 5000.0, "status": r["budget_snapshot"]
+                                        ["status"]}, r
+        seen.setdefault(r["mode"], []).append(json.dumps(budget, sort_keys=True))
+    for mode, texts in seen.items():
+        assert len(set(texts)) == 1 and len(texts) == 4, (mode, texts)   # no threshold told
 
 
 def check_mirrors(mirrors: List[Dict[str, Any]]) -> None:
@@ -1200,6 +1265,93 @@ def test_sec71_02_pulse_counts_only_paid_workers(monkeypatch):
     assert all("total_cost" not in r for r in v["smr_summary"]) and v["total_labor_cost"] == 400.0
 
 
+def test_sec71_03_budget_alert_text_gives_no_amount(monkeypatch):
+    """SEC-02-G (Codex SEC71-03 [P1]; R31): "Надхвърлен бюджет! (900.0%)" next to a visible
+    budget of 10 gives 90 = one worker's pay. Without the finance right every money
+    alert becomes ONE generic budget alert (same for >80 % and >100 %), and any other
+    text with an amount / percent is replaced — in the pulse view (Technical Manager and
+    other roles), in strip_money (labor / material / progress warnings, pulse summary)
+    and in the budget view. Finance roles keep the full text."""
+    import asyncio
+    from app.permissions import money_write
+    from app.permissions.finance_read import (strip_money, without_budget_view_forbidden,
+                                              MONEY_TEXT, GENERIC_BUDGET_ALERT, _TEXT_KEYS)
+
+    def texts(v):
+        out = []
+        if isinstance(v, dict):
+            out += [x for k, x in v.items() if k in _TEXT_KEYS and isinstance(x, str)]
+            for x in v.values():
+                out += texts(x)
+        elif isinstance(v, list):
+            for x in v:
+                out += texts(x)
+        return out
+    over_100 = {"type": "budget_warning", "message": "Надхвърлен бюджет! (900.0%)",
+                "severity": "critical"}
+    over_80 = {"type": "budget_warning", "message": "Бюджетът е 85.0% изхарчен",
+               "severity": "warning"}
+    keep = [{"type": "overtime", "message": "Извънреден труд: 2ч", "severity": "info"},
+            {"type": "no_report", "message": "Липсва дневен отчет", "severity": "info"}]
+
+    def pulse(alert):
+        return {"site_id": "P1", "date": "2026-11-03", "alerts": [alert] + keep,
+                "workers": [{"worker_id": "t", "labor_cost": 90.0, "smr_types": ["Мазилка"]}],
+                "smr_summary": [{"smr_type": "Мазилка", "total_hours": 8, "total_cost": 90.0,
+                                 "workers_count": 1}],
+                "total_labor_cost": 90.0,
+                "budget_snapshot": {"total_budget": 10.0, "total_spent": 90.0,
+                                    "remaining": -80.0, "burn_pct": 900.0,
+                                    "status": "over_budget"}}
+
+    @money_write.strip_pulse_for_non_finance
+    async def handler(site_id: str, user: dict = None):
+        return current
+
+    def visible(fin, tm):
+        async def mv(*_a, **_k):
+            return fin
+
+        async def bv(*_a, **_k):
+            return tm
+        monkeypatch.setattr(money_write, "money_values_visible", mv)
+        monkeypatch.setattr(money_write, "budget_view_visible", bv)
+    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=None))
+    for tm in (True, False):                       # Technical Manager / any other role
+        visible(False, tm)
+        answers = []
+        for alert in (over_80, over_100):
+            current = pulse(alert)
+            v = run()
+            assert v["alerts"] == [GENERIC_BUDGET_ALERT] + keep, v
+            assert not any(MONEY_TEXT.search(x) for x in texts(v)), v
+            assert "900" not in json.dumps(v, ensure_ascii=False) and \
+                "90.0" not in json.dumps(v, ensure_ascii=False), v
+            answers.append(v["alerts"])
+        assert answers[0] == answers[1]            # the threshold is not told either
+    visible(True, False)
+    current = pulse(over_100)
+    assert run() is current                        # finance: the full text
+    # the other money texts, through strip_money / the budget view
+    warnings = {"warnings": [
+        {"type": "over_labor_budget", "package_id": "p", "activity": "Мазилка",
+         "message": "Мазилка: 90 EUR / 10 EUR budget (80 EUR over)"},
+        {"type": "over_material_budget", "message": "Мазилка: 12 EUR / 10 EUR бюджет (+2 EUR)"},
+        {"type": "missing_material_budget", "message": "Мазилка: разход 12 EUR без бюджет"},
+        {"type": "labor_ahead_of_progress", "message": "Мазилка: труд 90.0% vs прогрес 10%"},
+        {"type": "progress_lag", "message": "Мазилка: прогрес 10% но разход 90.0% от бюджет"},
+        {"type": "budget_overrun", "message": "Бюджетът за труд е надхвърлен: 900.0%"},
+        {"type": "client_receivable", "amount": 5.0, "message": "Вземания: 5.0 EUR"},
+        {"type": "unknown_new_alert", "message": "нещо 90 лв"},
+        {"type": "unmapped_time_entries", "message": "3 от 10 записа за труд нямат връзка"}]}
+    for f in (strip_money, without_budget_view_forbidden):
+        v = f(warnings)
+        assert not any(MONEY_TEXT.search(x) for x in texts(v)), (f, v)
+        assert [a["type"] for a in v["warnings"]][:7] == ["budget_attention"] * 7, v
+        assert v["warnings"][8]["message"] == "3 от 10 записа за труд нямат връзка"
+        assert "amount" not in v["warnings"][6]
+
+
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
     import asyncio
     from app.permissions.money_write import money_values_visible
@@ -1258,6 +1410,7 @@ def test_the_committed_evidence_satisfies_the_package():
     check_replay(data["labor_replay"])
     check_price_modifier_audit(data["price_modifier_audit"])
     check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
+    check_pulse_budget_alerts(data["pulse_budget_alerts"])
 
 
 def test_the_audit_scan_finds_no_money_for_non_finance_roles():
@@ -1305,7 +1458,7 @@ def test_sec71_01_no_allowed_budget_view_route_carries_a_forbidden_field():
             seen.add(path)
             for keys in cells.values():
                 assert keys, (name, path)
-                bad = [k for k in keys if budget_view_forbidden(leaf(k))]
+                bad = [k for k in keys if k.endswith("=text") or budget_view_forbidden(leaf(k))]
                 assert bad == [], (name, path, bad)
     assert "POST /api/budget-freezes/{project_id}" in seen
 
@@ -1385,6 +1538,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     check_replay(data["labor_replay"])
     check_price_modifier_audit(data["price_modifier_audit"])
     check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
+    check_pulse_budget_alerts(data["pulse_budget_alerts"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r.get("money_keys")) for r in data["rows"]} == \

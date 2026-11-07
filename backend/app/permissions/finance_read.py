@@ -277,6 +277,8 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/projects/{project_id}/activity-reports/{smr_type}", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/labor-warnings/{project_id}", MONEY_VALUES_READ, R20_5M,
        CANON_B + "; non-finance: current member projects only"),
+    _E("GET", "/api/material-warnings/{project_id}", MONEY_VALUES_READ, R20_5M,
+       CANON_B + "; SEC-02-G (SEC71-03): money in the warning text"),
     _E("GET", "/api/projects/{project_id}/activities-overview", MONEY_VALUES_READ, R20_5B, CANON_B43),
     _E("GET", "/api/projects/{project_id}/activity-budget-summary", MONEY_VALUES_READ, R20_5B,
        CANON_B43 + "; Accountant on every project"),
@@ -347,10 +349,11 @@ def budget_view_forbidden(key) -> bool:
 
 
 def without_budget_view_forbidden(value):
-    """A copy of ``value`` without any key the budget view must not carry, at any depth."""
+    """A copy of ``value`` without any key the budget view must not carry, at any depth.
+    SEC-02-G (SEC71-03): nor any amount / percent inside an alert text."""
     if isinstance(value, dict):
-        return {k: without_budget_view_forbidden(v) for k, v in value.items()
-                if not budget_view_forbidden(k)}
+        return money_free_alert({k: without_budget_view_forbidden(v) for k, v in value.items()
+                                 if not budget_view_forbidden(k)})
     if isinstance(value, list):
         return [without_budget_view_forbidden(v) for v in value]
     return value
@@ -402,13 +405,59 @@ def strip_money(value, keep=()):
     """A copy of a JSON-like value with every money key removed, at any depth.
 
     ``keep``: key names that are NOT money in this one response (e.g. a ``total`` that
-    counts warnings), declared next to the route."""
+    counts warnings), declared next to the route.
+    SEC-02-G (SEC71-03): alert / warning texts lose their amounts too (``money_free_alert``)."""
     if isinstance(value, dict):
         keys = list(value)
-        return {k: strip_money(v, keep) for k, v in value.items()
-                if not (isinstance(k, str) and is_money_key(k, keys, keep))}
+        return money_free_alert({k: strip_money(v, keep) for k, v in value.items()
+                                 if not (isinstance(k, str) and is_money_key(k, keys, keep))})
     if isinstance(value, list):
         return [strip_money(v, keep) for v in value]
+    return value
+
+
+# ── SEC-02-G (Codex SEC71-03 [P1]; R20, R31 FLOW-037 §3.4): money inside TEXT ─────────────
+# An alert such as "Надхвърлен бюджет! (900.0%)" next to a visible budget gives the spent
+# amount — on a one-worker day, his pay. A caller without the finance right gets ONE
+# generic budget alert instead of any money alert: no amount, no percent, and the same
+# type / severity / text whichever threshold fired (>80 % or >100 %, over budget or not).
+MONEY_ALERT_TYPES: FrozenSet[str] = frozenset({
+    "budget_warning", "budget_overrun", "budget_burn_high",           # pulse, progress
+    "over_labor_budget", "over_material_budget", "missing_material_budget",
+    "labor_ahead_of_progress", "materials_ahead_of_progress", "progress_lag",
+    "loan", "client_receivable"})
+GENERIC_BUDGET_ALERT = {"type": "budget_attention", "severity": "warning",
+                        "message": "Бюджетът изисква внимание — подробности при финансите"}
+# the safety net for any other text: a number followed by a percent or a currency
+MONEY_TEXT = _re.compile(r"\d\s*(%|eur\b|€|лв|bgn\b|usd\b|\$)", _re.I)
+_TEXT_KEYS = ("message", "text", "title", "detail", "description", "label")
+
+
+def money_free_alert(d: dict) -> dict:
+    """``d`` itself when it is no alert with money; else the money-free alert."""
+    if not isinstance(d, dict):
+        return d
+    texts = [k for k in _TEXT_KEYS if isinstance(d.get(k), str)]
+    if not texts:
+        return d
+    if d.get("type") in MONEY_ALERT_TYPES:
+        out = {k: v for k, v in d.items()
+               if k not in texts and k not in ("type", "severity")
+               and not isinstance(v, (int, float))}
+        out.update(GENERIC_BUDGET_ALERT)
+        return out
+    if any(MONEY_TEXT.search(d[k]) for k in texts):
+        return {**d, **{k: "Има предупреждение — подробности при финансите"
+                        for k in texts if MONEY_TEXT.search(d[k])}}
+    return d
+
+
+def without_money_text(value):
+    """``money_free_alert`` at any depth (for views that keep budget keys)."""
+    if isinstance(value, dict):
+        return money_free_alert({k: without_money_text(v) for k, v in value.items()})
+    if isinstance(value, list):
+        return [without_money_text(v) for v in value]
     return value
 
 
