@@ -1,0 +1,17 @@
+# OH-01 test summaries (branch claude/oh-01-overhead from main 35ae10b, local real MongoDB 7.0.34 replica set rs0)
+## OH-01, real Mongo + mongomock (W0_03_REAL_MONGO_URL set), PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider
+tests/test_oh_01_overhead_no_hard_delete.py: 43 passed (6 tests; 5 x 2 backends x 3 modes off/shadow/enforce, test_04 x 3 non-finance roles, + 1 static)
+## tests/test_r0_0*.py (real Mongo)
+main 35ae10b: 814 passed | OH-01: 814 passed
+## W0 DB-free (tests/test_w0_*.py --noconftest, no W0_03_REAL_MONGO_URL)
+main 35ae10b: 15 failed, 1085 passed, 50 skipped | OH-01: 15 failed, 1085 passed, 50 skipped (the same 15 test_w0_03e_legacy_routes failures, diffed by test id)
+## PM-01 permission matrix (real Mongo)
+before regeneration: 1 failed (36 cells differ) — expected; regenerated with `python tests/test_pm_01_permission_matrix.py --harness`
+36 cells changed (pm01_cells_changed.csv): 4 routes (DELETE overhead categories/costs/assets, POST allocate) x Owner/Admin/Accountant x 3 modes, 404 -> 428 IDEMPOTENCY_KEY_REQUIRED, wrote=no before and after (PM-01 sends no key)
+after: tests/test_pm_01_permission_matrix.py 6 passed
+## Guards
+W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
+## Frontend
+yarn test: 6 suites, 96 tests passed (src/lib/__tests__/idempotency.test.js is byte-identical to PR #69)
+yarn build: Compiled with warnings (no warning in the changed files)

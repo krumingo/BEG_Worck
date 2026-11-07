@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import API from "@/lib/api";
+import { createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,14 @@ import {
   Calculator, Plus, Pencil, Trash2, Loader2, Calendar, Filter, Play,
   BarChart3, TrendingUp, Users, Clock, Building2, Layers, Eye
 } from "lucide-react";
+
+// OH-01: an overhead delete is an archive (409 when the record is used) and needs an
+// Idempotency-Key (R29) — one key per click target, reused on a retry.
+const archiveKeys = createIdempotencyHolder();
+const errorText = (err, fallback) => {
+  const detail = err.response?.data?.detail;
+  return detail?.message || detail || fallback;
+};
 
 const FREQUENCIES = ["OneTime", "Monthly", "Weekly"];
 const ALLOCATION_TYPES = ["CompanyWide", "PerPerson", "PerAssetAmortized"];
@@ -149,10 +158,12 @@ export default function OverheadPage() {
   const handleDeleteCategory = async (cat) => {
     if (!confirm(t("common.confirmDelete"))) return;
     try {
-      await API.delete(`/overhead/categories/${cat.id}`);
+      const endpoint = `/overhead/categories/${cat.id}`;
+      await API.delete(endpoint, idempotencyHeaders(archiveKeys.keyFor(endpoint, null)));
+      archiveKeys.done();
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      alert(errorText(err, t("toast.deleteFailed")));
     }
   };
 
@@ -214,10 +225,12 @@ export default function OverheadPage() {
   const handleDeleteCost = async (cost) => {
     if (!confirm(t("common.confirmDelete"))) return;
     try {
-      await API.delete(`/overhead/costs/${cost.id}`);
+      const endpoint = `/overhead/costs/${cost.id}`;
+      await API.delete(endpoint, idempotencyHeaders(archiveKeys.keyFor(endpoint, null)));
+      archiveKeys.done();
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      alert(errorText(err, t("toast.deleteFailed")));
     }
   };
 
@@ -276,10 +289,12 @@ export default function OverheadPage() {
   const handleDeleteAsset = async (asset) => {
     if (!confirm(t("common.confirmDelete"))) return;
     try {
-      await API.delete(`/overhead/assets/${asset.id}`);
+      const endpoint = `/overhead/assets/${asset.id}`;
+      await API.delete(endpoint, idempotencyHeaders(archiveKeys.keyFor(endpoint, null)));
+      archiveKeys.done();
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      alert(errorText(err, t("toast.deleteFailed")));
     }
   };
 
