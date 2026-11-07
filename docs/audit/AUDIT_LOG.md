@@ -4411,3 +4411,20 @@ The only public routes are `GET /offers/review/{token}` and `POST …/respond`. 
 | **D-OFF01-15 plaintext `review_token`** | **acceptable as debt, not blocking.** It was already plaintext on main; the token is 96-bit random, scoped to one offer, and can only approve / reject / request revision of the current Sent version (409 / 410 after a new version, cancel or revoke). Main also already returns `review_token` to internal users in the project financial view (`projects.py` extra_offers projection). Condition: pair it with D-OFF01-1 (no expiry, no identity check) **before** a magic-link approval is treated as contractual evidence; until then the approval records `verification: link_token_only`. Cheap hardening worth doing early: drop `review_token` from list projections for roles that cannot send offers. |
 
 Gates: `b79d`, then #77 `b77e` (running).
+
+### #55 @ `cba5306` (Codex F-55-C26-04 + header recalc) — **full PASS**
+
+Re-run after the mongod crash, on the recreated rs1.
+
+| Gate | Result |
+|---|---|
+| warehouse canonical | **all 43 files, 1049 passed**, 0 bad (1010 at `94c0571`; +39 new) |
+| c26l_l | 153 |
+| A2C static guard | 32 (anchor not weakened; my own mutations caught) |
+| earlier wh55 probes × 3 modes | 13 |
+| **new F-55-C26-04 probe** | **42/42** × 3 modes |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+
+The merge with main conflicts in the same 3 files as before: `data_access.py`, A1 / A2B inventories. FG-140 (invoice edit ∥ send / pay) is pending as the next head.
