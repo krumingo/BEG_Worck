@@ -630,6 +630,20 @@ ENFORCE_EXTRA_WRITES = {
     ("GET", "/api/smr-analyses/{analysis_id}/export-excel"): "denial",
     ("GET", "/api/offers/{offer_id}/pdf"): "denial",
     ("GET", "/api/offers/{offer_id}/xlsx"): "denial",
+    # SEC-02-E (audit SEC02D-1 + POST/PUT money sweep): execute / update denials are audited.
+    ("POST", "/api/budget-freezes/{project_id}"): "denial",
+    ("POST", "/api/client-acts/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/price-modifiers/calculate"): "denial",
+    ("POST", "/api/pulse/generate-all"): "denial",
+    ("POST", "/api/resource-model/subcontractor-burden-preview"): "denial",
+    ("POST", "/api/resource-model/worker-cost-preview"): "denial",
+    ("POST", "/api/revenue-snapshots/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/sites/{site_id}/pulse/generate"): "denial",
+    ("POST", "/api/smr-analyses/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/smr-analyses/{analysis_id}/recalculate"): "denial",
+    ("POST", "/api/smr-analyses/{analysis_id}/recalculate-with-modifiers"): "denial",
+    ("PUT", "/api/client-acts/{act_id}"): "denial",
+    ("PUT", "/api/execution-packages/{pkg_id}"): "denial",
 }
 
 

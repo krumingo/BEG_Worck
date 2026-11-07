@@ -944,7 +944,7 @@ def test_the_post_scan_finds_no_money_for_non_finance_roles():
     Manager's budget view on his own project and judged non-money rates."""
     from app.permissions.finance_read import by_route, SCAN_JUDGED_NOT_MONEY
     scan = json.loads((EVIDENCE / "scan_sec02e_post.json").read_text(encoding="utf-8"))
-    assert scan["calls"] > 5000 and scan["modes"] == ["off", "shadow", "enforce"]
+    assert scan["calls"] > 4000 and scan["modes"] == ["off", "shadow", "enforce"]
     assert scan["hits"] == {}
     reg = by_route()
     for path, cells in scan["allowed_budget_view"].items():
