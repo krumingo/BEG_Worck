@@ -138,6 +138,23 @@ with TestClient(app, raise_server_exceptions=False) as tc:
     if steps >= 10 and abs(derived - actual) <= max(5.0, 0.001 * actual):
         F.append("auto_resolve oracle: TM derives %.2f (actual %.2f) from evaluate.resolved_events" % (derived, actual))
     q(lambda: op.alarm_rules.update_many({}, {"$set": {"is_active": False}}))
+    # (f) #71 bde1728: generic band oracles on other readers — expected-actual (any row status),
+    # morning-briefing (+compact): any band-like value that changes as the budget moves
+    import json as _json, re as _re
+    def band_sig(obj):
+        txt = _json.dumps(obj, ensure_ascii=False, sort_keys=True)
+        return tuple(sorted(set(_re.findall(r'"(?:status|budget_status|severity|band|level|health)": ?"([a-z_]+)"', txt))))
+    for label, path in (("expected-actual", "/api/projects/%s/expected-actual" % P1), ("morning-briefing", "/api/morning-briefing"),
+                        ("morning-briefing/compact", "/api/morning-briefing/compact")):
+        sigs = set()
+        for b in (1.0, 6000.0, 6300.0, 10**7):
+            tc.post("/api/projects/%s/activity-budgets" % P1, headers=H, json={"type": "AuditProbe", "subtype": "", "labor_budget": b, "materials_budget": 0})
+            r = tc.get(path, headers=H, params={"date": "2026-11-06"} if "morning" in path else None)
+            sigs.add((r.status_code, band_sig(r.json()) if r.status_code == 200 else ()))
+        varies = len(sigs) > 1
+        print("e90 band-varies %s: %s %s" % (label, varies, sorted(sigs)[:4]))
+        if varies:
+            F.append("%s: a band value changes with the budget on a single-paid site: %s" % (label, sorted(sigs)))
     # (d) known-pay variant: the TM's own paid session makes the site 2-paid; he knows his pay
     me = fx["A"]["users"]["requester"]["id"]
     q(lambda: op.work_sessions.insert_one({"id": "probe-own", "org_id": fx["A"]["tenant_id"], "worker_id": me, "site_id": P1,
