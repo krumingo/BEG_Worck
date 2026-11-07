@@ -91,6 +91,11 @@ ACTIONS: Set[str] = {
     # POST /warehouse/canonical/project-writeoff (write-off „фира" FROM A
     # PROJECT only). Who holds it and on which projects: PROJECT_WRITEOFF_RULE.
     "warehouse.project_writeoff",
+    # 5C-C26j — Р35: read the central warehouse (stock + prices, no
+    # movements) and the per-project purchase price history. Who and where:
+    # CENTRAL_STOCK_READ_ROLES / PRICE_HISTORY_RULE.
+    "warehouse.read_central_stock",
+    "warehouse.read_price_history",
     "warehouse.revision_adjustment",
     "warehouse.quarantine_entry",
     "warehouse.quarantine_release",
@@ -148,6 +153,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.quarantine_entry",
                                                                       # Р27: project write-off, member projects only.
                                                                       "warehouse.project_writeoff",
+                                                                      # Р35: central warehouse read + price history.
+                                                                      "warehouse.read_central_stock",
+                                                                      "warehouse.read_price_history",
                                                                       "warehouse.read_stock",
                                                                       "warehouse.read_history"}},
     "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
@@ -175,6 +183,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       # TASK 5C: accounting reads only, no stock writes —
                                                                       # except Р27: project write-off („фира") everywhere.
                                                                       "warehouse.project_writeoff",
+                                                                      # Р35: central warehouse + price history.
+                                                                      "warehouse.read_central_stock",
+                                                                      "warehouse.read_price_history",
                                                                       "warehouse.read_stock",
                                                                       "warehouse.read_history"}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
@@ -195,6 +206,7 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.quarantine_entry",
                                                                       "warehouse.quarantine_release",
                                                                       "warehouse.read_stock",
+                                                                      "warehouse.read_central_stock",
                                                                       "warehouse.read_history"}},
     "procurement":     {"label_bg": "Снабдител",              "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
@@ -205,6 +217,7 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.receive_from_supplier_to_project",
                                                                       "warehouse.return_to_supplier",
                                                                       "warehouse.read_stock",
+                                                                      "warehouse.read_central_stock",
                                                                       "warehouse.read_history"}},
     "office":          {"label_bg": "Офис",                   "actions": {"user.read",
                                                                       "master_data.pending.propose",
@@ -237,6 +250,24 @@ PROJECT_WRITEOFF_RULE: Dict[str, str] = {
     "admin": "everywhere",
     "accountant": "everywhere",
     "project_manager": "own_project",
+    "site_manager": "member",
+    "LEGACY_TECHNICIAN": "member",
+}
+
+# 5C-C26j — Р35 (Крум 07.11.2026): SiteManager and Technician read the central
+# warehouse (stock AND prices; movements there stay refused, Р28) and the
+# purchase price history of their projects. The legacy Technician is entitled
+# through these tables only — its catalog action set stays exact (W0-02).
+CENTRAL_STOCK_READ_ACTION = "warehouse.read_central_stock"
+CENTRAL_STOCK_READ_ROLES = frozenset({
+    "owner", "admin", "accountant", "warehouse", "procurement",
+    "site_manager", "LEGACY_TECHNICIAN",
+})
+PRICE_HISTORY_ACTION = "warehouse.read_price_history"
+PRICE_HISTORY_RULE: Dict[str, str] = {
+    "owner": "everywhere",
+    "admin": "everywhere",
+    "accountant": "everywhere",
     "site_manager": "member",
     "LEGACY_TECHNICIAN": "member",
 }

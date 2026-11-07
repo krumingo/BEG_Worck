@@ -16,11 +16,13 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import {
   ACTIONS, LOCATION_TYPES, STATES,
   postMovement, readBalance, readHistory, readIntegrityWarnings,
+  readCentralStock, readPriceHistory,
 } from "@/lib/warehouseCanonicalApi";
 import { stateLabel } from "@/lib/warehouseLabels";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   allowedCommandActions, canReadWarehouseHistory, canReadWarehouseStock,
+  canReadCentralStock, canReadPriceHistory,
 } from "@/lib/warehouseCanonicalAccess";
 
 // 5C-C19 F-6: each panel names the right it needs; the page shows only the
@@ -30,6 +32,9 @@ const PANELS = [
   { id: "history", label: "История", needs: "history" },
   { id: "commands", label: "Движения", needs: "write" },
   { id: "warnings", label: "Аларми", needs: "stock" },
+  // 5C-C26j — Р35
+  { id: "central", label: "Централен склад", needs: "central" },
+  { id: "prices", label: "Цени", needs: "prices" },
 ];
 
 /** The panels a role may open (5C-C19 F-6). */
@@ -38,6 +43,8 @@ export function visiblePanels(role) {
     stock: canReadWarehouseStock(role),
     history: canReadWarehouseHistory(role),
     write: allowedCommandActions(role).length > 0,
+    central: canReadCentralStock(role),
+    prices: canReadPriceHistory(role),
   };
   return PANELS.filter((p) => rights[p.needs]);
 }
@@ -509,6 +516,125 @@ export function WarningsPanel({ load = readIntegrityWarnings }) {
 }
 
 
+/**
+ * 5C-C26j — Р35: the central warehouse, stock AND prices (read only; the
+ * server hides what the role may not see and marks it values_hidden).
+ */
+export function CentralStockPanel({ load = readCentralStock }) {
+  const [itemId, setItemId] = useState("");
+  const [locationId, setLocationId] = useState("");
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const read = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await load({ itemId: itemId.trim(), locationId: locationId.trim() }));
+    } catch (e) {
+      setData(null);
+      setError(describeError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [itemId, locationId, load]);
+  return (
+    <div className="wh-panel">
+      <Field label="Артикул">
+        <input value={itemId} data-testid="wh-central-item"
+               onChange={e => setItemId(e.target.value)} />
+      </Field>
+      <Field label="Централен склад (id)">
+        <input value={locationId} data-testid="wh-central-location"
+               onChange={e => setLocationId(e.target.value)} />
+      </Field>
+      <Button onClick={read} disabled={loading || !itemId || !locationId}>
+        {loading ? "Четене..." : "Покажи наличност и цени"}
+      </Button>
+      {error ? <div className="wh-error" role="alert">Не е прочетено — {error}</div> : null}
+      {data ? (
+        <div className="wh-central" data-testid="wh-central-result">
+          <div>Количество: <b>{data.quantity}</b></div>
+          {data.total_value !== undefined
+            ? <div>Стойност: <b data-testid="wh-central-value">{data.total_value}</b></div>
+            : <div className="wh-empty">Стойностите не се показват за тази роля.</div>}
+          {(data.layers || []).map((l, i) => (
+            <div key={i} className="wh-stock-row" data-testid="wh-central-layer">
+              <span>{l.quantity}</span>
+              {l.unit_value !== undefined ? <span> × {l.unit_value}</span> : null}
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * 5C-C26j — Р35: per project, every article bought 2+ times with its
+ * purchases (unit price, supplier, date), a FLAG when the same supplier sold
+ * it at different prices, and the best price.
+ */
+export function PriceHistoryPanel({ load = readPriceHistory }) {
+  const [projectId, setProjectId] = useState("");
+  const [data, setData] = useState(null);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const read = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setData(await load({ projectId: projectId.trim() }));
+    } catch (e) {
+      setData(null);
+      setError(describeError(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [projectId, load]);
+  return (
+    <div className="wh-panel">
+      <Field label="Обект (id)">
+        <input value={projectId} data-testid="wh-prices-project"
+               onChange={e => setProjectId(e.target.value)} />
+      </Field>
+      <Button onClick={read} disabled={loading || !projectId}>
+        {loading ? "Четене..." : "Покажи ценова история"}
+      </Button>
+      {error ? <div className="wh-error" role="alert">Не е прочетено — {error}</div> : null}
+      {data && data.articles.length === 0
+        ? <div className="wh-empty" data-testid="wh-prices-empty">Няма артикул, купен 2 или повече пъти.</div>
+        : null}
+      {(data?.articles || []).map((a) => (
+        <div key={a.article} className="wh-price-article" data-testid="wh-price-article">
+          <div className="wh-price-head">
+            <b>{a.description || a.item_id}</b>
+            {a.flagged
+              ? <span className="wh-price-flag" data-testid="wh-price-flag">
+                  ⚑ Различни цени от един и същ доставчик
+                </span>
+              : null}
+          </div>
+          <div data-testid="wh-price-best">
+            Най-добра цена: {a.best_price.unit_price} ({a.best_price.supplier}, {a.best_price.date})
+          </div>
+          <table className="wh-price-table">
+            <thead><tr><th>Дата</th><th>Доставчик</th><th>Ед. цена</th><th>Кол.</th></tr></thead>
+            <tbody>
+              {a.purchases.map((p, i) => (
+                <tr key={i} data-testid="wh-price-row">
+                  <td>{p.date}</td><td>{p.supplier}</td><td>{p.unit_price}</td><td>{p.quantity}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+
 export default function CanonicalWarehousePage() {
   const { user } = useAuth();
   const role = user?.role;
@@ -537,6 +663,8 @@ export default function CanonicalWarehousePage() {
         {activeTab === "stock" && <StockPanel />}
         {activeTab === "history" && <HistoryPanel />}
         {activeTab === "warnings" && <WarningsPanel />}
+        {activeTab === "central" && <CentralStockPanel />}
+        {activeTab === "prices" && <PriceHistoryPanel />}
         {activeTab === "commands" && allowedActions.length > 0 && (
           <CommandForm onResult={setLastResult} allowedActions={allowedActions} />
         )}
@@ -590,6 +718,9 @@ const CANONICAL_WAREHOUSE_CSS = `
 .wh-empty { color: #777; padding: 24px 0; text-align: center; }
 .wh-warning-row { background: #fef3c7; padding: 10px 12px; border-radius: 8px; }
 .wh-warning-code { font-weight: 600; color: #92400e; }
+.wh-price-article { border-top: 1px solid #e5e7eb; padding: 8px 0; }
+.wh-price-flag { margin-left: 8px; color: #b91c1c; font-weight: 600; }
+.wh-price-table { width: 100%; font-size: 13px; }
 .wh-warning-row pre { font-size: 11px; white-space: pre-wrap; margin-top: 6px; }
 .wh-last-result { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
 .wh-last-result.ok { background: #ecfdf5; color: #065f46; }

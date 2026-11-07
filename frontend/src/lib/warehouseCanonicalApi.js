@@ -85,6 +85,21 @@ async function readHistory({ itemId, projectId, locationType, locationId,
   return data;
 }
 
+// 5C-C26j — Р35
+async function readCentralStock({ itemId, locationId, state = STATES.FREE }) {
+  const { data } = await API.get(`${BASE}/central-stock/${encodeURIComponent(itemId)}`, {
+    params: { location_id: locationId, state },
+  });
+  return data;
+}
+
+async function readPriceHistory({ projectId }) {
+  const { data } = await API.get(`${BASE}/price-history`, {
+    params: { project_id: projectId },
+  });
+  return data;
+}
+
 async function readIntegrityWarnings() {
   const { data } = await API.get(`${BASE}/integrity-warnings`);
   return data;
@@ -106,5 +121,5 @@ async function readMigrationReadiness(scope) {
 export {
   ACTIONS, LOCATION_TYPES, STATES,
   postMovement, readStock, readBalance, readHistory,
-  readIntegrityWarnings, readMigrationReadiness,
+  readIntegrityWarnings, readMigrationReadiness, readCentralStock, readPriceHistory,
 };

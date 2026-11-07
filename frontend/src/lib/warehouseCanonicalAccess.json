@@ -18,7 +18,9 @@
       "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
       "warehouse.quarantine_release",
+      "warehouse.read_central_stock",
       "warehouse.read_history",
+      "warehouse.read_price_history",
       "warehouse.read_stock",
       "warehouse.receive_from_supplier",
       "warehouse.receive_from_supplier_to_project",
@@ -39,7 +41,9 @@
       "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
       "warehouse.quarantine_release",
+      "warehouse.read_central_stock",
       "warehouse.read_history",
+      "warehouse.read_price_history",
       "warehouse.read_stock",
       "warehouse.receive_from_supplier",
       "warehouse.receive_from_supplier_to_project",
@@ -58,7 +62,9 @@
       "warehouse.consume_smr",
       "warehouse.project_writeoff",
       "warehouse.quarantine_entry",
+      "warehouse.read_central_stock",
       "warehouse.read_history",
+      "warehouse.read_price_history",
       "warehouse.read_stock",
       "warehouse.transfer_project_to_project",
       "warehouse.transfer_project_to_warehouse",
@@ -79,7 +85,9 @@
     ],
     "accountant": [
       "warehouse.project_writeoff",
+      "warehouse.read_central_stock",
       "warehouse.read_history",
+      "warehouse.read_price_history",
       "warehouse.read_stock"
     ],
     "warehouse": [
@@ -87,6 +95,7 @@
       "warehouse.dispatch_to_project",
       "warehouse.quarantine_entry",
       "warehouse.quarantine_release",
+      "warehouse.read_central_stock",
       "warehouse.read_history",
       "warehouse.read_stock",
       "warehouse.receive_from_supplier",
@@ -97,6 +106,7 @@
       "warehouse.write_command"
     ],
     "procurement": [
+      "warehouse.read_central_stock",
       "warehouse.read_history",
       "warehouse.read_stock",
       "warehouse.receive_from_supplier",
@@ -121,5 +131,21 @@
     "revision_adjustment": "warehouse.revision_adjustment",
     "quarantine_entry": "warehouse.quarantine_entry",
     "quarantine_release": "warehouse.quarantine_release"
-  }
+  },
+  "central_stock_read_roles": [
+    "LEGACY_TECHNICIAN",
+    "accountant",
+    "admin",
+    "owner",
+    "procurement",
+    "site_manager",
+    "warehouse"
+  ],
+  "price_history_roles": [
+    "LEGACY_TECHNICIAN",
+    "accountant",
+    "admin",
+    "owner",
+    "site_manager"
+  ]
 }

@@ -166,7 +166,8 @@ async def test_fg60_unfiltered_reads_show_only_member_projects(
     bal, hist = await _reads(q, mode, "site_manager", "SiteManager")
     in_bal, in_hist, other = _projects_in(bal, hist)
     want = {PROJECT} if member else set()
-    assert in_bal == want and in_hist <= want and other == set()
+    # 5C-C26j — Р35: the central warehouse rows are readable too.
+    assert in_bal == want and in_hist <= want and other <= {"central_warehouse"}
     if member:
         assert PROJECT in in_hist
     assert all(OTHER_PROJECT not in str(r) for r in hist["rows"])

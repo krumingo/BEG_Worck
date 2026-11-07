@@ -29,7 +29,10 @@ function visitAs(session) {
 const as = (role) => ({ user: { id: "u", role }, loading: false });
 const redirect = () => screen.queryByTestId("redirect")?.getAttribute("data-to") ?? null;
 
-test.each(["Warehousekeeper", "Owner", "Admin", "SiteManager", "Accountant", "procurement"])(
+// 5C-C26j — Р35: the Technician reads the central warehouse and its projects'
+// price history, so it now reaches the screen (with only those two tabs).
+test.each(["Warehousekeeper", "Owner", "Admin", "SiteManager", "Accountant", "procurement",
+           "Technician"])(
   "%s reaches the screen inside the shell", (role) => {
     visitAs(as(role));
     expect(screen.getByTestId("wh-screen")).toBeInTheDocument();
@@ -37,7 +40,7 @@ test.each(["Warehousekeeper", "Owner", "Admin", "SiteManager", "Accountant", "pr
     expect(redirect()).toBeNull();
   });
 
-test.each(["Technician", "Viewer", "Driver", "worker"])("%s is sent to /tech", (role) => {
+test.each(["Viewer", "Driver", "worker"])("%s is sent to /tech", (role) => {
   visitAs(as(role));
   expect(redirect()).toBe("/tech");
   expect(screen.queryByTestId("wh-screen")).toBeNull();

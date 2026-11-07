@@ -39,8 +39,24 @@ export function warehouseActions(role) {
 
 export const canReadWarehouseStock = (role) => warehouseActions(role).has(WH_READ_STOCK);
 export const canReadWarehouseHistory = (role) => warehouseActions(role).has(WH_READ_HISTORY);
+
+function catalogRole(role) {
+  if (!role || typeof role !== "string") return null;
+  return own(access.legacy_role_map, role) ? access.legacy_role_map[role] : role;
+}
+
+/** 5C-C26j — Р35: the central warehouse (stock + prices, read only) and the
+ * per-project purchase price history. The legacy Technician holds these
+ * through the catalog's rule tables only (copied here, pinned by the backend
+ * F-6 test). */
+export const canReadCentralStock = (role) =>
+  (access.central_stock_read_roles || []).includes(catalogRole(role));
+export const canReadPriceHistory = (role) =>
+  (access.price_history_roles || []).includes(catalogRole(role));
+
 export const canOpenCanonicalWarehouse = (role) =>
-  canReadWarehouseStock(role) || canReadWarehouseHistory(role);
+  canReadWarehouseStock(role) || canReadWarehouseHistory(role)
+  || canReadCentralStock(role) || canReadPriceHistory(role);
 
 /** Canonical actions this role may post, in picker order.
  * Needs both the outer route gate and the per-action right. */

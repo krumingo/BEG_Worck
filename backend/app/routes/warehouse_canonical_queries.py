@@ -210,6 +210,22 @@ async def _row_projects(ctx, row: dict, cache: dict) -> set:
     return out
 
 
+async def _row_in_scope(ctx, row: dict, scope: set, cache: dict) -> bool:
+    """FG-60 + Р35: a project-bound reader sees a row of a member project,
+    or a central-warehouse row that touches no other project."""
+    projects = await _row_projects(ctx, row, cache)
+    if projects:
+        return bool(projects & scope)
+    types = set()
+    if "location_type" in row:
+        types.add(row.get("location_type"))
+    for key in ("source", "destination", "transfer_target"):
+        lt, _ = _loc_fields(row.get(key))
+        if lt:
+            types.add(lt)
+    return bool(types & CENTRAL_LOCATION_TYPES)
+
+
 def _forbidden(action: str, **ctx_detail):
     return HTTPException(status_code=403, detail={
         "error_code": "PERMISSION_DENIED", "action": action,
@@ -274,6 +290,8 @@ async def _within_member_scope(ctx, action, *, location_type, location_id, proje
     if location_id and location_type not in {
             None, LocationType.IN_TRANSIT.value, LocationType.UNRESOLVED.value,
             LocationType.SUPPLIER.value}:
+        if location_type in CENTRAL_LOCATION_TYPES:
+            return            # Р35: the central warehouse is readable (no movements)
         bucket = await _bucket_project(ctx, location_type, location_id)
         if bucket is None or bucket not in scope:
             raise _forbidden(action, scope_type="location")
@@ -321,40 +339,79 @@ def is_money_key(key: Any) -> bool:
         key in VALUE_KEYS or bool(_MONEY_KEY.search(key)))
 
 
-async def _sees_values(ctx, *, warehouse_values: bool = True) -> bool:
-    """True when the caller may see money here. ``warehouse_values`` — the
-    payload is warehouse stock / prices (Р32: the warehousekeeper too);
-    False for project finance (the Path B integrity warnings)."""
-    roles = FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES
-    if warehouse_values:
-        roles = roles | WAREHOUSE_VALUE_ROLES
-    return await _role_in(ctx, roles)
+# Р34 / Р35 (Крум 07.11.2026) — which location types a role sees money on.
+WAREHOUSE_LOCATION_TYPES = frozenset({"central_warehouse", "small_warehouse"})
+CENTRAL_LOCATION_TYPES = frozenset({"central_warehouse"})
+R35_VALUE_ROLES = frozenset({"site_manager", "LEGACY_TECHNICIAN"})
+_NO_SCOPE_TYPES = frozenset({"in_transit", "unresolved", "supplier"})
 
 
-async def _role_in(ctx, roles) -> bool:
+async def _caller_roles(ctx) -> set:
+    """The caller's roles: off / shadow — the legacy session role (FG-39);
+    enforce — the active RoleAssignments (registry unreachable → none)."""
     from datetime import datetime, timezone
     from app.permissions import service as perm
-    from app.services.warehouse_movements.write_off_policy import _active_assignments
-    # 5C-C26d (FG-39) — off / shadow have no RoleAssignments decision: the
-    # legacy session role decides, mapped by the catalog's LEGACY_ROLE_MAP
-    # onto the same role sets (the C26c Р27 pattern). Shadow does not let
-    # the new decision change the outcome.
     from app.permissions.deps import MODE_OFF, MODE_SHADOW
+    from app.services.warehouse_movements.write_off_policy import _active_assignments
     if getattr(ctx, "mode", None) in (MODE_OFF, MODE_SHADOW):
         from app.permissions.catalog import LEGACY_ROLE_MAP
         user = getattr(ctx, "user", None) or {}
         role_id = LEGACY_ROLE_MAP.get(user.get("role") or "")
-        return role_id in roles
+        return {role_id} if role_id else set()
     user_id = getattr(ctx, "user_id", None)
     tenant_id = getattr(ctx, "tenant_id", None)
     if not user_id or not tenant_id:
-        return False
+        return set()
     try:
         loaded = await perm._load_assignments(user_id, tenant_id)
     except Exception:      # registry unreachable → no money (fail closed)
+        return set()
+    return {a.get("role_id") for a in _active_assignments(loaded, datetime.now(timezone.utc))}
+
+
+async def _value_scope(ctx):
+    """"all" — every value (Owner / Admin / Accountant; procurement unchanged);
+    otherwise the location types on which the caller sees money:
+      * warehousekeeper (Р32 + Р34): warehouse buckets only — never on a row
+        that touches a project (consumption, „фира", issue to a project);
+      * SiteManager / Technician (Р35): the central warehouse only;
+      * everyone else: none."""
+    roles = await _caller_roles(ctx)
+    if roles & (FINANCE_VALUE_ROLES | UNCHANGED_VALUE_ROLES):
+        return "all"
+    types = set()
+    if roles & WAREHOUSE_VALUE_ROLES:
+        types |= WAREHOUSE_LOCATION_TYPES
+    if roles & R35_VALUE_ROLES:
+        types |= CENTRAL_LOCATION_TYPES
+    return frozenset(types)
+
+
+def _value_visible(row: Dict[str, Any], types) -> bool:
+    """A row / bucket / envelope shows money only when it touches no project
+    and every location it touches is of a type the caller sees money on."""
+    if not types or row.get("project_id") or row.get("subproject_id"):
         return False
-    active = _active_assignments(loaded, datetime.now(timezone.utc))
-    return any(a.get("role_id") in roles for a in active)
+    locs = []
+    if "location_type" in row:
+        locs.append(row.get("location_type"))
+    for key in ("location", "source", "destination", "transfer_target"):
+        loc = row.get(key)
+        if isinstance(loc, dict):
+            locs.append(loc.get("location_type") or loc.get("type"))
+    seen = False
+    for lt in locs:
+        if lt in _NO_SCOPE_TYPES or lt is None:
+            continue
+        if lt not in types:
+            return False
+        seen = True
+    return seen
+
+
+async def _sees_values(ctx, *, warehouse_values: bool = True) -> bool:
+    """Compatibility: True only for the roles that see EVERY value."""
+    return (await _value_scope(ctx)) == "all"
 
 
 def strip_values(obj: Any) -> Any:
@@ -367,11 +424,36 @@ def strip_values(obj: Any) -> Any:
 
 
 async def _values_for(ctx, data: Dict[str, Any], *,
-                      warehouse_values: bool = True) -> Dict[str, Any]:
-    if await _sees_values(ctx, warehouse_values=warehouse_values):
+                      warehouse_values: bool = True, rows_key: Optional[str] = None,
+                      whole: bool = False) -> Dict[str, Any]:
+    """FG-23 / Р20 / Р32 / Р34 / Р35 — strip money the caller may not see.
+    ``warehouse_values=False`` — project finance (Path B warnings): only the
+    "all" roles. ``rows_key`` — decide per row (history / balances);
+    ``whole`` — decide for the payload as one row (stock bucket, envelope)."""
+    scope = await _value_scope(ctx)
+    if scope == "all":
         return data
-    out = strip_values(data)
-    out["values_hidden"] = True       # FG-23 / Р20 — the screen shows quantities only
+    if not warehouse_values or not scope or (rows_key is None and not whole):
+        out = strip_values(data)
+        out["values_hidden"] = True       # the screen shows quantities only
+        return out
+    if whole:
+        if _value_visible(data, scope):
+            return data
+        out = strip_values(data)
+        out["values_hidden"] = True
+        return out
+    out = dict(data)
+    rows, hidden = [], False
+    for row in data.get(rows_key) or []:
+        if _value_visible(row, scope):
+            rows.append(row)
+        else:
+            rows.append(strip_values(row))
+            hidden = True
+    out[rows_key] = rows
+    if hidden:
+        out["values_hidden"] = True
     return out
 
 
@@ -398,7 +480,7 @@ async def read_stock(
         location_type=location_type, location_id=location_id, project_id=None,
     )
     tenant = _tenant_from_ctx(ctx)
-    return await _values_for(ctx, await stock_at(
+    return await _values_for(ctx, whole=True, data=await stock_at(
         tenant.warehouse_transactions,
         tenant_id=ctx.tenant_id, item_id=item_id, location=key,
     ))
@@ -428,12 +510,12 @@ async def read_balance_by_location(
     scope = await _member_scope(ctx, "warehouse.read_stock")
     if scope is not None:
         cache: dict = {}
-        rows = [r for r in rows if (await _row_projects(ctx, r, cache)) & scope]
+        rows = [r for r in rows if await _row_in_scope(ctx, r, scope, cache)]
     from app.services.warehouse_movements.queries import ledger_checkpoint
     checkpoint = await ledger_checkpoint(
         tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
     )
-    return await _values_for(ctx, {
+    return await _values_for(ctx, rows_key="balances", data={
         "tenant_id": ctx.tenant_id,
         "item_id": item_id,
         "balances": rows,
@@ -473,9 +555,11 @@ async def read_history(
     if scope is not None:
         cache: dict = {}
         data["rows"] = [r for r in data.get("rows", [])
-                        if (await _row_projects(ctx, r, cache)) & scope]
+                        if await _row_in_scope(ctx, r, scope, cache)]
         data["scope"] = "member_projects"
-    return await _values_for(ctx, data)
+    # Р34 / Р35: money per row — a row that touches a project never shows it
+    # to the keeper / SiteManager / Technician.
+    return await _values_for(ctx, data, rows_key="rows")
 
 
 PROJECT_SCOPED_WARNING_CODES = frozenset({
@@ -534,3 +618,78 @@ async def read_integrity_warnings(
         data["warnings"] = filtered
         data["scope"] = "authorized_subset"
     return data
+
+
+# ═══════════════ 5C-C26j — Р35: central warehouse + price history ═══════════════
+
+async def require_r35_session(request: Request,
+                              user: dict = Depends(get_current_user)) -> TenantContext:
+    """Session for the Р35 reads in EVERY mode (Р28): off / shadow — the
+    legacy context; enforce — Tenant Guard. The decision is the Р35 rule
+    table (catalog), taken in the handler — the Technician is entitled there
+    only, its catalog actions stay exact (W0-02)."""
+    from app.permissions.deps import MODE_ENFORCE, current_mode
+    from app.tenancy.guard import LegacyCompatContext, get_tenant_context
+    mode = current_mode()
+    if mode != MODE_ENFORCE:
+        return LegacyCompatContext(user, mode=mode)
+    ctx = await get_tenant_context(request, user)
+    ctx.mode = mode
+    return ctx
+
+
+@router.get("/central-stock/{item_id}")
+async def read_central_stock(
+    item_id: str,
+    location_id: str = Query(...),
+    state: str = Query("free"),
+    ctx: TenantContext = Depends(require_r35_session),
+) -> Dict[str, Any]:
+    """Р35 (Крум 07.11.2026): the central warehouse's stock AND prices — for
+    the warehouse / finance roles and for SiteManager / Technician (read only;
+    movements there stay refused, Р28). Every other role → 403."""
+    from app.permissions.catalog import CENTRAL_STOCK_READ_ACTION, CENTRAL_STOCK_READ_ROLES
+    if not (await _caller_roles(ctx)) & CENTRAL_STOCK_READ_ROLES:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "action": CENTRAL_STOCK_READ_ACTION})
+    try:
+        key = LocationKey(LocationType.CENTRAL_WAREHOUSE, location_id,
+                          state=MovementState(state))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"error_code": "BAD_LOCATION",
+                                                     "message": str(exc)})
+    tenant = _tenant_from_ctx(ctx)
+    return await _values_for(ctx, whole=True, data=await stock_at(
+        tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
+        item_id=item_id, location=key))
+
+
+@router.get("/price-history")
+async def read_price_history(
+    project_id: str = Query(...),
+    ctx: TenantContext = Depends(require_r35_session),
+) -> Dict[str, Any]:
+    """Р35 — per article bought 2+ times on the project: every purchase (unit
+    price, supplier, date), a FLAG for the same supplier at different prices
+    and the best price. Finance roles: every project; SiteManager /
+    Technician: their in-date member projects. Others → 403 (the
+    warehousekeeper sees no project finance, Р34)."""
+    from app.permissions.catalog import PRICE_HISTORY_ACTION, PRICE_HISTORY_RULE
+    from app.services.warehouse_movements.price_history import (
+        price_history, project_purchases,
+    )
+    from app.services.warehouse_movements.write_off_policy import member_in_date
+    roles = await _caller_roles(ctx)
+    kinds = {PRICE_HISTORY_RULE.get(r) for r in roles} - {None}
+    tenant = _tenant_from_ctx(ctx)
+    allowed = "everywhere" in kinds or (
+        "member" in kinds and await member_in_date(tenant, ctx.user_id, project_id))
+    if not allowed:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "action": PRICE_HISTORY_ACTION})
+    purchases = await project_purchases(tenant, ctx.org_id, project_id)
+    articles = price_history(purchases)
+    return {"project_id": project_id, "articles": articles,
+            "flagged_articles": sum(1 for a in articles if a["flagged"]),
+            "purchases_considered": len(purchases),
+            "source": "canonical_receipts+invoice_lines"}

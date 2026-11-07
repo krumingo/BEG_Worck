@@ -224,7 +224,9 @@ async def test_foreign_tenant_subproject_has_no_parent_here(
 @pytest.mark.parametrize("legacy_role,sees", [
     ("Owner", True), ("Admin", True), ("Accountant", True),
     ("Warehousekeeper", True),  # Р32 (5C-C26f): warehouse values
-    ("SiteManager", False), ("Technician", False),
+    # 5C-C26j — Р35: SiteManager / Technician see the CENTRAL warehouse's
+    # prices (this read is the central warehouse wh_1).
+    ("SiteManager", True), ("Technician", True),
     ("Viewer", False), ("Driver", False)])
 async def test_fg39_values_by_legacy_role(canonical_mongo_db, allow_always_gate,
                                           monkeypatch, mode, legacy_role, sees):

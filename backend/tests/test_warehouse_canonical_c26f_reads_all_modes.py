@@ -44,10 +44,10 @@ ROLES = {
     # 5C-C26h (FG-60): a project-bound reader sees only its member projects —
     # a warehouse bucket is outside its scope; balance / warnings are
     # returned but filtered (test_warehouse_canonical_c26h_*).
-    "SiteManager-member": ("SiteManager", _real("site_manager"), True,
-                           EVERYTHING - {"stock_warehouse"}),
+    # 5C-C26j — Р35: the central warehouse is readable for a SiteManager.
+    "SiteManager-member": ("SiteManager", _real("site_manager"), True, EVERYTHING),
     "SiteManager-non-member": ("SiteManager", _real("site_manager"), False,
-                               {"balance", "warnings"}),
+                               {"stock_warehouse", "balance", "warnings"}),
     "Technician": ("Technician", _real("LEGACY_TECHNICIAN"), True, set()),
     "Viewer": ("Viewer", _real("LEGACY_VIEWER"), True, set()),
     "Driver": ("Driver", _real("driver"), True, set()),

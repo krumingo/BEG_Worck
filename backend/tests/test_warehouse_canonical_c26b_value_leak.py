@@ -100,38 +100,46 @@ async def _calls(client, gate, db, monkeypatch, role):
     return out
 
 
-async def test_c26a_1_2_non_finance_role_sees_no_money_anywhere(
+async def test_c26a_1_2_site_manager_sees_no_money_on_project_rows(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """C26A-1/2 with a non-finance role (SiteManager). 71c11da: POST dispatch
-    envelope.unit_value + layer_allocations[*].unit_value; integrity-warnings
-    counted_value / legacy_value. (Р32 moved the Warehousekeeper out of this
-    case — see the next test.)"""
+    """C26A-1/2 with SiteManager (member of the project). 71c11da: POST
+    dispatch envelope.unit_value + layer_allocations[*].unit_value;
+    integrity-warnings counted_value / legacy_value. Since Р35 (5C-C26j) the
+    SiteManager sees the CENTRAL warehouse's prices (stock, its receipts) —
+    but never money on a row towards a project, nor project finance."""
     client, db = canonical_mongo_db
     out = await _calls(client, allow_always_gate, db, monkeypatch, "site_manager")
     assert out["POST dispatch (replay)"]["replay"] is True
-    leaks = {name: money_keys(body) for name, body in out.items() if money_keys(body)}
-    assert leaks == {}, leaks
+    for name in ("POST dispatch (response)", "POST dispatch (replay)",
+                 "GET integrity-warnings"):
+        assert money_keys(out[name]) == [], name
     codes = [w["code"] for w in out["GET integrity-warnings"]["warnings"]]
     assert "PATH_B_LEGACY_OVERLAP_UNPROVEN" in codes          # still shown, without money
     env = out["POST dispatch (response)"]["envelope"]
     assert env["values_hidden"] is True and env["quantity"] == "4"
     assert [a["quantity"] for a in env["layer_allocations"]] == ["4"]
+    # Р35: the central warehouse — stock and its receipts — with prices.
+    assert Decimal(out["GET stock"]["total_value"]) == Decimal("100")
+    for row in out["GET history"]["rows"]:
+        if row.get("project_id") or (row.get("destination") or {}).get("location_type") \
+                in ("project", "subproject", "in_transit"):
+            assert money_keys(row) == [], row["action"]
 
 
-async def test_r32_warehousekeeper_sees_warehouse_prices_but_no_project_finance(
+async def test_r32_r34_warehousekeeper_sees_warehouse_prices_not_project_rows(
         canonical_mongo_db, allow_always_gate, monkeypatch):
-    """Р32 (Крум 06.11.2026): the warehousekeeper sees unit prices / values in
-    stock, balance, history and the command response (and its replay); the
-    integrity warnings' Path B amounts (project finance) stay hidden."""
+    """Р32 (Крум 06.11.2026): the warehousekeeper sees unit prices / values of
+    the WAREHOUSE (stock, receipts). Р34 (07.11.2026): never on a row towards a
+    project — the dispatch (issue to a project) response and its replay carry
+    quantities only; the integrity warnings' Path B amounts stay hidden."""
     client, db = canonical_mongo_db
     out = await _calls(client, allow_always_gate, db, monkeypatch, "warehouse")
     env = out["POST dispatch (response)"]["envelope"]
-    assert Decimal(env["layer_allocations"][0]["unit_value"]) == Decimal("10")
-    assert "values_hidden" not in env
-    assert out["POST dispatch (replay)"]["envelope"]["layer_allocations"] == \
-        env["layer_allocations"]
+    assert env["values_hidden"] is True and money_keys(env) == []
+    assert money_keys(out["POST dispatch (replay)"]) == []
     assert Decimal(out["GET stock"]["total_value"]) == Decimal("100")
-    assert all("unit_value" in r for r in out["GET history"]["rows"])
+    receipts = [r for r in out["GET history"]["rows"] if r["action"] == "receive_from_supplier"]
+    assert receipts and all("unit_value" in r for r in receipts)
     warnings = out["GET integrity-warnings"]
     assert warnings["values_hidden"] is True and money_keys(warnings) == []
     assert "PATH_B_LEGACY_OVERLAP_UNPROVEN" in [w["code"] for w in warnings["warnings"]]

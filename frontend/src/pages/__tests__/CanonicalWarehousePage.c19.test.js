@@ -122,7 +122,8 @@ describe("F-6 visibility follows the canonical rights", () => {
   it("Accountant (read-only) sees no write tab and no form", () => {
     mockRole = "Accountant";
     render(<CanonicalWarehousePage />);
-    expect(tabIds()).toEqual(["stock", "history", "warnings"]);
+    // 5C-C26j — Р35: + central warehouse (read) and price history.
+    expect(tabIds()).toEqual(["stock", "history", "warnings", "central", "prices"]);
     expect(screen.queryByTestId("wh-action-select")).toBeNull();
     expect(screen.queryByText("Запиши движение")).toBeNull();
   });
@@ -130,7 +131,8 @@ describe("F-6 visibility follows the canonical rights", () => {
   it("Warehousekeeper gets the write tab with exactly its actions (no consume)", () => {
     mockRole = "Warehousekeeper";
     render(<CanonicalWarehousePage />);
-    expect(tabIds()).toEqual(["stock", "history", "commands", "warnings"]);
+    // 5C-C26j — Р35: + central warehouse (read); no price history (Р34).
+    expect(tabIds()).toEqual(["stock", "history", "commands", "warnings", "central"]);
     openCommands();
     expect(options()).toEqual([
       "receive_from_supplier", "reserve", "release_reservation",
@@ -141,10 +143,14 @@ describe("F-6 visibility follows the canonical rights", () => {
     expect(options()).not.toContain("consume_to_smr");
   });
 
-  it.each(["Technician", "Viewer", "Driver", "", undefined])(
+  it.each(["Viewer", "Driver", "", undefined])(
     "%p gets no panel at all", (role) => {
       expect(visiblePanels(role)).toEqual([]);
     });
+
+  it("Technician gets only the Р35 read panels (central warehouse, prices)", () => {
+    expect(visiblePanels("Technician").map((p) => p.id)).toEqual(["central", "prices"]);
+  });
 
   it("SiteManager may consume — the form has an SMR field and posts smr_id", async () => {
     mockRole = "SiteManager";

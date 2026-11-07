@@ -131,10 +131,10 @@ async def _response(ctx, result) -> "MovementCommandResponse":
     """FG-23 (Р20) / audit C26A-1 — the command response is the stored
     envelope (fresh or idempotent replay); a role without a finance right
     gets it without money (unit_value, layer_allocations[*].unit_value, …)."""
-    from app.routes.warehouse_canonical_queries import _sees_values, strip_values
-    envelope = result.envelope
-    if not await _sees_values(ctx):
-        envelope = dict(strip_values(envelope or {}), values_hidden=True)
+    from app.routes.warehouse_canonical_queries import _values_for
+    # Р32 / Р34 / Р35: the envelope shows money only to the roles that see
+    # it on THIS movement (a keeper never on an issue to a project).
+    envelope = await _values_for(ctx, dict(result.envelope or {}), whole=True)
     return MovementCommandResponse(
         movement_id=result.movement_id, audit_event_id=result.audit_event_id,
         replay=result.replay, envelope=envelope)
