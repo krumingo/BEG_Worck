@@ -26,7 +26,10 @@ with TestClient(app, raise_server_exceptions=False) as tc:
     print("team:", tc.post("/api/projects/%s/team" % A["project_id"], json={"user_id": U["requester"]["id"], "role_in_project": "SiteManager"}, headers=Hadm).status_code)
     org, p1, day = A["tenant_id"], A["project_id"], "2026-11-04"
     w1, w2 = U["technician"]["id"], U["driver"]["id"]
-    for wid, smr, hrs, cost in ((w1, "Мазилка", 8, 200.0), (w2, "Шпакловка", 6, 210.0)):
+    seed = ((w1, "Мазилка", 8, 200.0), (w2, "Шпакловка", 6, 210.0))
+    if os.environ.get("PROBE_SINGLE") == "1":
+        seed = seed[:1]
+    for wid, smr, hrs, cost in seed:
         q(lambda: op.work_sessions.insert_one({"id": str(uuid.uuid4()), "org_id": org, "worker_id": wid, "site_id": p1,
             "smr_type_id": smr, "started_at": day + "T07:00:00", "ended_at": day + "T15:00:00",
             "duration_hours": hrs, "labor_cost": cost, "created_at": day}))
@@ -44,5 +47,7 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                 derived[ws[0].get("worker_id") or ws[0].get("name")] = (s["total_cost"], round(s["total_cost"] / ws[0]["hours"], 2))
     print("DERIVED per-worker (pay, rate/h):", derived)
     if derived: F.append("per-worker pay derivable from the SM budget view: %s" % derived)
+    if os.environ.get("PROBE_SINGLE") == "1" and j.get("total_labor_cost") not in (None, 0, 0.0):
+        F.append("single worker on site: total_labor_cost %s exposed" % j.get("total_labor_cost"))
     q(lambda: c.drop_database(os.environ["DB_NAME"])); q(lambda: c.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

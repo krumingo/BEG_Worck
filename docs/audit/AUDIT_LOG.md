@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #71 SEC-02 | `f17f7e5` | **FINDINGS: SEC02C-1 per-worker pay derivable from the SM pulse budget view**; scan clean | 2026-11-06 |
+| #71 SEC-02 | `e6ea838` | **FINDINGS: SEC02D-1** POST /sites/{id}/pulse/generate returns per-worker labor_cost to any role (pre-existing on main, outside the GET scan); SEC02C-1 CLOSED | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
 
@@ -1943,7 +1943,7 @@ Gates:
 
 | Against | Result |
 |---|---|
-| #71 `f17f7e5` | conflict: `all_reports.py`, **`labor_smr.py`**, A2B inventory |
+| #71 SEC-02 | `e6ea838` | **FINDINGS: SEC02D-1** POST /sites/{id}/pulse/generate returns per-worker labor_cost to any role (pre-existing on main, outside the GET scan); SEC02C-1 CLOSED | 2026-11-07 |
 | #69 `6d43284` | conflict: **`labor_smr.py`** |
 | #70 `31ed258` | conflict: `project_pnl.py` |
 | #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
@@ -1996,3 +1996,33 @@ Probes:
 - At `4a3d15c` (C26e), off denied these ("location outside the role's project scope"); enforce already allowed them through the company scope.
 - So C26f now makes the two modes agree on the **wider** answer: a site role can quarantine central stock and take custody of an inter-warehouse transfer (FLOW-009 / CLAUDE.md §16).
 - Fix direction: for project-bound granting roles, require that the command touches at least one project, and the relation on all of them. In other words, keep the C26e location rule, in both modes.
+
+
+## #71 SEC-02-D @ `e6ea838` (merges #69 `6d43284`) — 2026-11-07 ~00:40 UTC — FINDINGS (1)
+
+Delta: the R31 view strips per-worker identity and hours. Spent is shown only with 2+ workers, per SMR and at project level. FG-52 (428).
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo | **53 passed** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/207 |
+| A1 | 0/420 |
+| R0 | **814** |
+
+Scan `scan_e6ea838.json`: only the 3 noise routes.
+
+**SEC02C-1 CLOSED (PROVED).** `probe_sec02_c_pulse_derive.py`:
+- two workers on two SMR types → the SiteManager sees `workers` = null and `smr_summary` with hours only, so nothing can be derived;
+- `PROBE_SINGLE=1` (one worker) → `total_labor_cost` is hidden.
+- With `probe_sec02_d_pulse_generate.py` (B): cumulative `budget_snapshot.total_spent` is hidden on single-worker days (None), so differencing across days gives nothing.
+- Residual (info, inherent to R31): a SiteManager who approves the reports knows each worker's hours. Daily project totals with 2+ workers, combined with known hours over several days, form a linear system that can recover rates. This is for Krum, not a code defect.
+
+**SEC02D-1 (HIGH, money/privacy; pre-existing on main `pulse.py:46`, outside my GET-only scanner): PROVED** with `docs/audit/probes/sec02/probe_sec02_d_pulse_generate.py` (A), in off and enforce:
+- `POST /api/sites/{id}/pulse/generate` needs only `get_current_user` and has **no money strip**.
+- A **non-member Warehousekeeper** and a **Viewer** get 200 with `workers[].labor_cost` [200.0], `total_labor_cost` 200 and `budget_snapshot.total_spent` 200, i.e. each worker's pay.
+- It also lets any user write (regenerate) a stored pulse.
+- Fix direction: put the generate route behind a role guard (finance or member SiteManager) and the same `strip_pulse_for_non_finance` view; or make it return nothing but an id.
+- Suggestion: extend the money scan to POST compute/generate routes. My scanner covers GETs only.
