@@ -235,25 +235,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     
     now = datetime.now(timezone.utc).isoformat()
     
-    # Step 1: Create automatic backup of current state BEFORE restore
-    backup_version_number = await get_next_version_number(user["org_id"], offer_id)
-    backup_snapshot = await create_snapshot(offer)
-    
-    backup = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": offer["project_id"],
-        "offer_id": offer_id,
-        "version_number": backup_version_number,
-        "created_at": now,
-        "created_by": user["id"],
-        "note": f"Автоматичен backup преди възстановяване на v{version_number}",
-        "snapshot_json": backup_snapshot,
-        "is_auto_backup": True,
-    }
-    await tenant.offer_versions.insert_one(backup)
-    
-    # Step 2: Restore the snapshot to the current offer
+    # Step 1: Restore the snapshot to the current offer (one CAS, below)
     snapshot = version["snapshot_json"]
     
     # Prepare the update
@@ -281,7 +263,33 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
         update_data["vat_amount"] = vat_amount
         update_data["total"] = round(subtotal + vat_amount, 2)
     
-    await tenant.offers.update_one({"id": offer_id}, {"$set": update_data})
+    # OFF79-03: the restore is a CAS on the exact unsent draft that was read; a /send (or
+    # another write) that slipped in → 409, nothing restored, no backup written.
+    won = await tenant.offers.update_one(
+        {"id": offer_id, "status": "Draft", "sent_at": None, "superseded_by": None,
+         "updated_at": offer.get("updated_at")}, {"$set": update_data})
+    if won.modified_count != 1:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "OFFER_IN_USE",
+            "message": "Офертата вече е изпратена или променена — презаредете"})
+
+    # Step 2: the automatic backup of the state as it was before the restore
+    backup_version_number = await get_next_version_number(user["org_id"], offer_id)
+    backup_snapshot = await create_snapshot(offer)
+    
+    backup = {
+        "id": str(uuid.uuid4()),
+        "org_id": user["org_id"],
+        "project_id": offer["project_id"],
+        "offer_id": offer_id,
+        "version_number": backup_version_number,
+        "created_at": now,
+        "created_by": user["id"],
+        "note": f"Автоматичен backup преди възстановяване на v{version_number}",
+        "snapshot_json": backup_snapshot,
+        "is_auto_backup": True,
+    }
+    await tenant.offer_versions.insert_one(backup)
     
     await log_audit(user["org_id"], user["id"], user["email"], "version_restored", "offer", offer_id, {
         "restored_version": version_number,

@@ -175,6 +175,45 @@ async def _check_evidence_file(tenant: TenantData, offer: dict, file_id: str) ->
             "message": "Файлът-доказателство е свързан с друг запис"})
 
 
+# OFF79-03: every write to a draft carries "still an unsent draft" in its own filter, so a
+# read-then-write can never race /send (the loser gets 409, nothing written).
+DRAFT_FILTER = {"status": "Draft", "sent_at": None, "superseded_by": None}
+
+
+def _draft_lost() -> HTTPException:
+    return _conflict(OFFER_IN_USE, "Офертата вече е изпратена или променена — презаредете")
+
+
+async def _family_guard(tenant: TenantData, offer: dict, session) -> None:
+    """Legacy pairs (linked before OFF-01, the older one never marked superseded): no version
+    is accepted while another version of the same family is Accepted → 409
+    OFFER_FAMILY_ALREADY_ACCEPTED. The family is the ``parent_offer_id`` chain. A write to
+    the family's root makes two concurrent acceptances of one family conflict, so the
+    check-then-accept inside the transaction cannot be skewed."""
+    proj = {"_id": 0, "id": 1, "parent_offer_id": 1, "status": 1}
+    root, seen = offer, {offer["id"]}
+    for _ in range(100):                       # walk up to the root
+        pid = root.get("parent_offer_id")
+        if not pid or pid in seen:
+            break
+        parent = await tenant.offers.get(pid, proj, session=session)
+        if not parent:
+            break
+        seen.add(pid)
+        root = parent
+    family, frontier = {root["id"]: root}, [root["id"]]
+    while frontier and len(family) < 500:      # and down to every version
+        kids = await tenant.offers.find({"parent_offer_id": {"$in": frontier}}, proj,
+                                        session=session).to_list(500)
+        frontier = [k["id"] for k in kids if k["id"] not in family]
+        family.update({k["id"]: k for k in kids})
+    await tenant.offers.update_one({"id": root["id"]}, {"$inc": {"family_accept_guard": 1}},
+                                   session=session)
+    if any(v.get("status") == "Accepted" for k, v in family.items() if k != offer["id"]):
+        raise _conflict("OFFER_FAMILY_ALREADY_ACCEPTED",
+                        "Друга версия на тази оферта вече е одобрена. Моля, свържете се с изпълнителя.")
+
+
 def _require_key(header: Optional[str]) -> str:
     """R29: the PAY-01 rule, reused — no key → 428 before anything is written."""
     from app.routes.finance import _require_key as require_key
@@ -345,13 +384,15 @@ async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(re
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": update})
+    won = await _tenant(user).offers.update_one({"id": offer_id, **DRAFT_FILTER}, {"$set": update})
+    if won.matched_count != 1:
+        raise _draft_lost()
     
     # Recompute if vat changed
     if "vat_percent" in update:
         updated = await _tenant(user).offers.get(offer_id)
         updated = compute_offer_totals({k: v for k, v in updated.items() if k != "_id"})
-        await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
+        await _tenant(user).offers.update_one({"id": offer_id, **DRAFT_FILTER}, {"$set": {
             "subtotal": updated["subtotal"],
             "vat_amount": updated["vat_amount"],
             "total": updated["total"],
@@ -401,7 +442,9 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
     updated["vat_amount"] = offer["vat_amount"]
     updated["total"] = offer["total"]
     
-    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": updated})
+    won = await _tenant(user).offers.update_one({"id": offer_id, **DRAFT_FILTER}, {"$set": updated})
+    if won.matched_count != 1:
+        raise _draft_lost()
     await log_audit(user["org_id"], user["id"], user["email"], "offer_lines_updated", "offer", offer_id, 
                     {"line_count": len(lines)})
     
@@ -424,7 +467,21 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     now = datetime.now(timezone.utc).isoformat()
     review_token = offer.get("review_token") or str(uuid.uuid4()).replace("-", "")[:24]
     
-    # Save version snapshot before sending
+    # OFF79-03: the send is a CAS on the exact draft that was read (status, never sent,
+    # not superseded, same updated_at): a restore / edit that slipped in → 409, nothing
+    # sent. Only the winner writes the snapshot, so it always equals the sent offer.
+    won = await tenant.offers.update_one(
+        {"id": offer_id, **DRAFT_FILTER, "updated_at": offer.get("updated_at")}, {"$set": {
+            "status": "Sent", "sent_at": now, "sent_by": user["id"],
+            "review_token": review_token, "updated_at": now,
+            # OFF-01: the link is bound to this offer id + this exact version
+            "review_token_version": offer.get("version", 1),
+        }})
+    if won.modified_count != 1:
+        raise _conflict("OFFER_CHANGED",
+                        "Офертата беше променена докато се изпращаше — презаредете и изпратете отново")
+
+    # Save version snapshot of what was sent
     version_number = 1
     last_ver = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id}, sort=[("version_number", -1)]
@@ -447,13 +504,6 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
         "created_by": user["id"], "note": "Автоматичен snapshot при изпращане",
         "snapshot_json": snapshot, "is_auto_backup": True,
     })
-    
-    await _tenant(user).offers.update_one({"id": offer_id}, {"$set": {
-        "status": "Sent", "sent_at": now, "sent_by": user["id"],
-        "review_token": review_token, "updated_at": now,
-        # OFF-01: the link is bound to this offer id + this exact version
-        "review_token_version": offer.get("version", 1),
-    }})
     
     # Record event
     await tenant.offer_events.insert_one({
@@ -499,6 +549,7 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
         async def body(session):
             from pymongo import ReturnDocument
             now = datetime.now(timezone.utc).isoformat()
+            await _family_guard(tenant, offer, session)
             approval = {"method": data.approval_method, "channel": "internal",
                         "evidence_file_id": data.evidence_file_id, "note": data.note,
                         "version": version, "accepted_by": user["id"], "accepted_at": now}
@@ -1432,6 +1483,8 @@ async def respond_to_offer(review_token: str, data: dict,
 
         async def body(session):
             now = datetime.now(timezone.utc).isoformat()
+            if action == "approve":
+                await _family_guard(tenant, offer, session)
             update_fields = {"status": new_status, "client_comment": comment,
                              "client_name": client_name, "updated_at": now}
             if action == "approve":
