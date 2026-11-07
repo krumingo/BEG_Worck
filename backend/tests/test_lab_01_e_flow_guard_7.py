@@ -301,3 +301,26 @@ def test_fg85_concurrent_creates_with_one_key_give_one_run(monkeypatch):
         ids = {r.json()["id"] for r in rs if r.status_code == 200}
         assert len(ids) == 1
     run(monkeypatch, scenario, "real")
+
+
+# ═══════════════════════════════════════════════════════════════ audit RETAKE-1
+@pytest.mark.parametrize("state", [{"status": "failed"}, {"status": "weird"}, {}])
+def test_retake1_create_writes_only_on_an_explicit_started(monkeypatch, state):
+    """Defence in depth: whatever begin_idempotent answers that is not STARTED (or a
+    completed duplicate) is 409 — never a write."""
+    async def body():
+        import httpx
+        from app.audit import idempotency
+        from tests.test_lab_01_labor_cost import _Db, _app, _seed
+
+        async def fake_begin(*a, **kw):
+            return dict(state)
+        monkeypatch.setattr(idempotency, "begin_idempotent", fake_begin)
+        async with _Db("mongomock") as op:
+            await _seed(op)
+            app = _app(monkeypatch, op)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://x") as c:
+                r = await c.post("/api/pay-runs", json=_body(), headers=dict(_token(), **{"Idempotency-Key": "k"}))
+                assert r.status_code == 409, r.text
+                assert await op.pay_runs.count_documents({}) == 0
+    asyncio.run(body())
