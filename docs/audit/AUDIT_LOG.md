@@ -4034,3 +4034,19 @@ I updated PR comment 6695992847 to "resolved".
 Baseline at `94c0571`: F4 fails 10/10 (lost VAT, IL2 at 300 instead of 210) and F5 fails (derived values written on a linked line). F1–F3 can't be compared there: their pause hook isn't on the old path.
 
 The gates (`b55c`) are running.
+
+### #77 @ `611d17e` (merge main `611435e` + Addendum C FG-131) — **BLOCKING ACT77-02**
+
+- **Byte check CLEAN:** `611435e` equals `git merge-tree` of origin/main `d226c49` + `8188689`, except `docs/evidence/PM-01/run_meta.json`.
+- **Earlier checks still pass:** `probe_act01.py` with `PROBE_ACT_B=1` × 3 modes (A1 2/4 ×10, A2–A10).
+- **FG-131 randomized probe** (`PROBE_ACT_C=1`: new / split / PUT / burst of 8 / confirm, × 25 steps × 3 rounds × 3 modes): the invariant Σ line_total == round(acted × 12.345) and the `acted_value` counter hold at **every step**. They break at the **move-off** step: a PUT that takes LD off a Draft act. When LD is then full it ends at 1234.49 or **1234.51**.
+- **Minimal repro** (`PROBE_ACT_C2=1`), × 3 modes:
+
+| Steps | LD after the move | LD when full |
+|---|---|---|
+| acts 0.3 (3.70) + 0.3 (3.71), then PUT the first act → L1 | 3.71 (exact 3.70) | **1234.51 > 1234.50** |
+| the same with 33 + 33 | 407.38 (exact 407.39) | 1234.49 |
+
+- **Cause:** in `update_act`, when `mine` is empty `new_value = 0`. That drops the act's own historical value, not the cumulative change `value_at(u − d) − value_at(u)`, and the leftover cent has no line to sit on.
+- PR comment posted (blocking).
+- `acted_value` is a float `$inc`, so it carries float noise (1234.4899999999998). Informational only.

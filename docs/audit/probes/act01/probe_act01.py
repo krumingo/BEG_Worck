@@ -212,5 +212,22 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                     F.append("%s C r%d fill %s sum %s over %s" % (mode, rnd, r.status_code, s_, over.status_code))
                 check("r%d full" % rnd)
             restore()
+        if os.environ.get("PROBE_ACT_C2") == "1":         # FG-131 minimal repro: a line moved off LD
+            for first in (0.3, 33):
+                restore()
+                a1 = tc.post("/api/client-acts", json=body("LD", first), headers=H()).json()
+                a2 = tc.post("/api/client-acts", json=body("LD", first), headers=H()).json()
+                mv = tc.put("/api/client-acts/%s" % a1["id"], json={"lines": [{"offer_line_id": i["L1"], "executed_qty": 1}]}, headers=H())
+                acts = q(lambda: op.client_acts.find({}, {"_id": 0, "lines": 1}).to_list(None))
+                ld = lambda: sum(l["line_total"] for a in q(lambda: op.client_acts.find({}, {"_id": 0, "lines": 1}).to_list(None)) for l in a["lines"] if l["offer_line_id"] == i["LD"])
+                mid = round(ld(), 2)
+                fill = tc.post("/api/client-acts", json=body("LD", round(100 - first, 4)), headers=H())
+                print(mode, "C2 first %s: a1 %s a2 %s | move a1 -> L1 %s | LD sum %s (exact %s) | fill %s -> LD sum %s (offer line 1234.50)" % (
+                    first, a1["lines"][0]["line_total"], a2["lines"][0]["line_total"], mv.status_code, mid,
+                    float((__import__("decimal").Decimal(str(first)) * __import__("decimal").Decimal("12.345")).quantize(__import__("decimal").Decimal("0.01"), rounding="ROUND_HALF_UP")),
+                    fill.status_code, round(ld(), 2)))
+                if round(ld(), 2) != 1234.5:
+                    F.append("%s C2 first %s: full line sums to %s, not 1234.50" % (mode, first, round(ld(), 2)))
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")
