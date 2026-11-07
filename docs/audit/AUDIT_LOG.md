@@ -1663,7 +1663,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
+| #72 W0-04-C01 | `34ac9f4` | **PASS** (merge of main 0f870c3; store.py per recipe, check-only in tx, ensure_chain_index before session) | 2026-11-07 |
 | #73 LAB-01 | `6763970` | **FINDINGS**: LAB01H-1 HIGH/BLOCKING (R36 self-correction: SM/Admin raise own APPROVED hours, stays APPROVED) | 2026-11-07 |
 | #74 OH-01 | `6c5c5cf` | **PASS** (D6 overlap refused, OH01-3 closed: indexes at startup/onboarding; #69 merge + results diff → SEC-01 30/30) | 2026-11-07 |
 
@@ -2831,3 +2831,51 @@ Gates on `6763970`:
 | A1 | 0/420 |
 
 R0 was not re-run on `6763970` (last run 814 on `d0aa09a`); re-run at the fix round. merge-tree vs main: conflict in `tenancy/ownership.py`.
+
+
+## #72 W0-04-C01 @ `34ac9f4` — 2026-11-07 ~09:10 UTC — PASS (main merged; merge-order root)
+
+`e30c567` = merge of `8ac194a` (my last PASS) and main `0f870c3`; `34ac9f4` adds only `docs/evidence/W0-04-C01/tests.txt`. Against `git merge-tree 8ac194a 0f870c3` the merge commit differs in exactly three files:
+
+| File | Change |
+|---|---|
+| `audit/store.py` | conflict resolved per the recipe (below) |
+| `W0-03E-A2B_INVENTORY.md` | conflict, regenerated |
+| `services/auth_tx.py` | +5 lines, **not a conflict file**: `run_in_transaction` now calls `ensure_chain_index(db)` **before** `start_session` |
+
+`record_event` (`store.py`):
+- `_require_chain_index(db, create=session is None)`: **check-only inside a transaction** (an index build would wait on the transaction's own lock), create allowed outside.
+- `_last_event(..., session=session)` and `insert_one(..., session=session)`.
+- On `DuplicateKeyError`: `if session is not None or not _is_sequence_collision(exc): raise`. The recipe verified at e733c66; inside a transaction the whole transaction retries.
+
+Probes on `34ac9f4`, real Mongo RS:
+
+| Probe | Result |
+|---|---|
+| `w004/probe_w004_x56_tx_race.py` × 3 (each 3 rounds of 20 transactional + 20 plain appends on one tenant) | **0 transactional / 0 plain failures**, 120 stored, `verify_chain` (True, None) every run |
+| `w004/probe_w004_c01.py` (I1–I6) | **FAILS none** (I6: signup/onboarding → 200, idempotency unique keys `id`, `(tenant_id, action, key)`) |
+| `w004/probe_w004_fg57.py` | **FAILS none**. G1: no index, 30 concurrent → 0 errors, linear chain. G2 non-unique index → `AuditChainUnprotected`, 0 appended. G3 existing fork → refused, kept. G4: `begin_idempotent` with no index → 1 of 6 STARTED (the IDEM-IDX guard) |
+
+Gates on `34ac9f4`:
+
+| Gate | Result |
+|---|---|
+| W0 | **1092/15/67** (#72's own tests add 7 passed and 17 skipped); same 15 failures as `fail_56.txt` |
+| A2C | 0/212 |
+| A1 | 0/428 |
+| `tests/test_auth_0*.py` + `test_w0_04_c01_audit_indexes_and_chain.py`, real Mongo | **146 passed** |
+| R0 | **814** |
+
+merge-tree vs `34ac9f4`:
+- #69 and #70: clean.
+- #71: A2B inventory.
+- #55: `data_access.py` + inventory.
+- #73: `ownership.py`.
+- #74: `server.py`.
+
+These are the same conflicts the PRs have with main (they come from #56). lab01e P1 and oh01 O5 passed on the earlier #72 merges; the idempotency code is unchanged, so they will be re-run when #73/#74 rebase onto #72/main.
+
+**Environment incident (not a PR finding):**
+- The audit `mongod` died at 08:33 UTC with a WiredTiger panic: **"Too many open files"** (errno 24) during the #55 warehouse suite. Leftover test databases had exhausted file handles under the 20000 limit.
+- The #55 run at that time (775 passed / 38 errors) is therefore **invalid**; it is being re-run on a fresh container.
+- New `$S/mongo_clean.sh` drops leftover test databases. It dropped 87 after the auth tests alone. It now runs before and after long suites.
