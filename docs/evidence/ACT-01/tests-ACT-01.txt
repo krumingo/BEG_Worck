@@ -28,3 +28,10 @@ W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
   FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
   FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
   FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+## Full backend/tests (real Mongo URL set; REACT_APP_BACKEND_URL = closed port, so the legacy live-server tests fail on both sides)
+main 0f870c3 : 168 failed, 2312 passed, 996 errors
+ACT-01       : 166 failed, 2391 passed, 993 errors
+FAILED/ERROR names new on ACT-01: none.
+Only on main: the 2 PM-01 tests (stale matrix, fixed by the regeneration) and 3 ST-02 setup errors
+("bundle directory already exists" — the two suites ran in parallel and shared one /tmp/pytest-of-root
+release directory; environmental, not ACT-01). +79 passed = 74 ACT-01 + 2 PM-01 + 3 ST-02.
