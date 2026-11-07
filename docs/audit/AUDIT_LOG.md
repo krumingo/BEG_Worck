@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `c31c09a` | **FINDINGS: WH55-C26L-1 BLOCKING** (concurrent linked deliveries over-link the line; cost 300–350 for a line of 100) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `43477d8` | **PASS** (Addendum K closes WH55-C26L-1: 60/60 race rounds, crash leaves nothing) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `4b745f1` | **PASS** (C01-G fixes PAY70-04; N1–N4 24/24) | 2026-11-07 |
@@ -1663,9 +1663,9 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `90a582b` | **PASS** (+48 PM-01 rows for the #56 auth routes only) | 2026-11-07 |
-| #73 LAB-01 | `b5384cd` | **FINDINGS: PM73-01 BLOCKING** (PM-01 test red: 18 reset cells 403→404 new + 6 pay-runs cells stale since LAB-01-E) | 2026-11-07 |
-| #75 LAB-02 | `c34480b` | **FINDINGS: PM75-01 BLOCKING** (PM-01 test red: 18 reset cells 403→404 from merged LAB-01-L); FG-101 itself PASS | 2026-11-07 |
+| #72 W0-04-C01 | `cb5d061` | **PASS** (F-72-01: sentinel probe clean on 11 paths; leaks on 90a582b) | 2026-11-07 |
+| #73 LAB-01 | `4da2ee6` | **PASS** (PM73-01 closed; PM-01 real, not skipped) | 2026-11-07 |
+| #75 LAB-02 | `ef16a16` | **PASS** (PM75-01 closed; PM-01 real, not skipped) | 2026-11-07 |
 | #76 SUB-ADV-01 | `f42da33` | **PASS** (probe S1–S7 × 3 modes, on its own and + #72); notes D1–D3, merge with #70 conflicts in `finance.py` | 2026-11-07 |
 | #74 OH-01 | `6a4ac5b` | **FINDINGS: OH74-05 BLOCKING** (current_allocations reads rows before the pointer → reader sees 0 during publish); Codex OH74-03/04 probes pass | 2026-11-07 |
 
@@ -3491,3 +3491,95 @@ Debts and notes:
 - **Note:** like FG90-N1, a reservation that is never followed by its payment is never released. Retries resume it with the same key.
 
 No blocking finding, so no PR comment, per the one-comment rule.
+
+
+## #55 5C-C26l-K @ `43477d8` — 2026-11-07 ~12:50 UTC — PASS (WH55-C26L-1 closed)
+
+**The fix:** inside the movement transaction, `_lock_invoice_line` upserts `warehouse_ledger_counters` `_id=invoice_line_lock:<org>:<line>` with `$inc`, then `_check_invoice_line_delivery(session=)` re-decides on the transaction snapshot. Concurrent deliveries of the same line write-conflict, and `with_transaction` re-runs the loser.
+
+`probes/wh55/test_probe_c26l_link_race.py` (now asserts exact outcomes), `ROUNDS=10`, × off/shadow/enforce:
+
+| Case | Result |
+|---|---|
+| 6 → P | 1 accepted, P 5 linked, cost 50/50 live and after rebuild ×2 |
+| 3P + 3Q | 1 + 1 accepted, 50/50 |
+| **Total** | **60/60 pass** |
+| new `test_crash_after_lock_leaves_nothing` | the crash surfaces as `AuditChainWriteError`, with 0 lock documents and 0 linked rows; the next delivery is OK (1 row, lock `tenant_id` = org), cost 50 |
+
+**Hot spot:** one document per line, contended only by deliveries of the same line. A WriteConflict aborts and retries, never waits, so it cannot deadlock. The lock value is never read as data, and `rebuild_from_ledger` / cost readers never touch it. It is in the per-tenant database via TenantData.
+
+| Gate | Result |
+|---|---|
+| warehouse suite per file, enforce, real RS | **42 files, 896 passed**, 0 failed; includes c26l with Codex's repro |
+| W0 | same 15 |
+| A2C | 0/222 |
+| A1 | 0/450 |
+| R0 | **814** |
+
+Process note: the #72 sentinel probe (its own throwaway databases) ran once while this suite was in progress. Nothing failed.
+
+
+## #72 W0-04-C01 F-72-01 @ `cb5d061` — 2026-11-07 ~12:55 UTC — PASS
+
+**The fix:**
+- `AuditIndexError` and its subclasses carry `code` + `ref` and name only the database, collection and index (field names).
+- `AuditIndexDuplicates` is raised `from None`, with a report that has no `keyValue` or `errmsg`.
+- The lazy guard uses `safe_reason()` with fixed sentences.
+- `IdempotencyConflict(action)` carries no key.
+- `AuditChainContention` carries no tenant.
+- The three `MasterDataRefused` messages are key-free, also `from None`.
+
+**New probe `probes/w004/probe_f7201_sentinels.py`:** sentinels are planted as key, tenant and reservation id, and every path is driven for real on RS:
+
+| Path | `cb5d061` | `90a582b` (control) |
+|---|---|---|
+| L1 startup duplicates | clean | **LEAK** |
+| L2 lazy guard (create) | clean | **LEAK** |
+| L3 lazy guard (no create) | clean | clean |
+| L4 conflict | clean | **LEAK** |
+| L5 contention | clean | **LEAK** |
+| L7 fail-closed without index | clean | **LEAK** |
+| L6 real `ErrorHandlerMiddleware` /dup | clean | **LEAK** |
+| L6 /lazy | clean | **LEAK** |
+| L6 /conflict | clean | **LEAK** |
+| whole log | clean | **LEAK** |
+
+The probe catches the leaks on the control and finds none on the fix. Fail-closed holds: without an index → `IdempotencyUnprotected`.
+
+| Gate | Result |
+|---|---|
+| retake CAS × 10 rounds | 1 started + 5 duplicate each |
+| W0-04 + auth + W0-03 master data, real Mongo | **296 passed, 0 skipped** |
+| W0 (DB-free) | 1093/15/76, same 15; the +6 skips are the new real-only F-72-01 tests, which ran above |
+| A2C | 0/212 |
+| A1 | 0/428 |
+| R0 | **814** |
+| PM-01, real | 6 passed |
+
+merge-tree with #69 `3fb55f2`, #70 `4b745f1`, #73 `4da2ee6`, #74 `45178ac`, #75 `ef16a16`, #55 `43477d8`, #76 `f42da33`: only the known `ownership.py` / `server.py` / `data_access.py` / A2B / `run_meta` conflicts. #70: clean.
+
+Low observation: the successful startup INFO line names each tenant database (operator config, not data). Not an F-72-01 class leak.
+
+
+## #73 @ `4da2ee6` / #75 @ `ef16a16` — 2026-11-07 ~13:05 UTC — PASS (PM73-01 / PM75-01 closed)
+
+`reset_daily_report`:
+- a role outside `RESET_ROLES` (Admin/Owner/SiteManager) → 403 before the lookup;
+- a SiteManager on a missing report → 403.
+
+Matrix: #73 regenerated by the harness (6 pay-runs cells, 400 → 428); #75 changed 0 cells.
+
+| Gate | #73 `4da2ee6` | #75 `ef16a16` |
+|---|---|---|
+| PM-01 with `W0_03_REAL_MONGO_URL`, `-rs` | **6 passed, 0 skipped** | **6 passed, 0 skipped** |
+| reset row | 6 roles 403 × 3 modes; owner/admin 404 | same |
+| `test_lab_0*` | 107 passed, 1 skipped | 148 passed, 1 skipped |
+| W0 | same 15 | same 15 |
+| A2C | 0/207 | 0/208 |
+| A1 | 0/420 | 0/422 |
+| R0 | 814 | 814 |
+| + #72 `cb5d061`: lab | 108 passed | 149 passed |
+| + #72 `cb5d061`: probes | lab01e P1 1 run, P3 400, P4 503, P5 1 run | Q1 1 approved, R1 1 approval |
+| + #72 `cb5d061`: PM-01 | 6 | 6 |
+
+**PM-01 cross-check (orchestrator's ask):** every PM-01 run I did today passed `W0_03_REAL_MONGO_URL` explicitly. Each took about 145 s, which is the real fresh-run test, and none reported skipped. The #73 `b5384cd` failure itself came from that real test.

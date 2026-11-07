@@ -10,6 +10,7 @@ Copy into backend/tests/ and run on real Mongo (RS) with the warehouse canonical
 from __future__ import annotations
 
 import asyncio
+import os
 from decimal import Decimal
 
 import pytest
@@ -38,7 +39,7 @@ async def _one(run, dest, i):
 
 
 @pytest.mark.parametrize("shape", ["P", "PQ"])
-@pytest.mark.parametrize("rnd", range(3))
+@pytest.mark.parametrize("rnd", range(int(os.environ.get("ROUNDS", "3"))))
 async def test_concurrent_linked_deliveries(canonical_mongo_db, allow_always_gate, monkeypatch, shape, rnd):
     client, db = canonical_mongo_db
     run = await _setup(client, allow_always_gate, db, monkeypatch,
@@ -59,3 +60,34 @@ async def test_concurrent_linked_deliveries(canonical_mongo_db, allow_always_gat
     print("RACE-%s rnd %d: results %s linked qty %s cost P/Q %s" % (shape, rnd, sorted(res), linked, totals))
     assert all(v <= 5 for v in linked.values()), "OVER-LINKED: %s (allocation 5 each)" % linked
     assert all(p + q <= 100.0 + 1e-6 for p, q in totals), "COST ABOVE INVOICE 100: %s" % totals
+    assert sorted(res).count("ok") == (1 if shape == "P" else 2), res
+    assert all(t == (50.0, 50.0) for t in totals), totals
+
+
+# ── 43477d8 (Addendum K): a crash inside the movement transaction, after the line lock
+async def test_crash_after_lock_leaves_nothing(canonical_mongo_db, allow_always_gate, monkeypatch):
+    from app.services.warehouse_movements.service import CommandService
+    client, db = canonical_mongo_db
+    run = await _setup(client, allow_always_gate, db, monkeypatch,
+                       [{"type": "project", "ref_id": PROJECT, "qty": 5},
+                        {"type": "project", "ref_id": Q, "qty": 5}])
+    orig = CommandService._check_invoice_line_delivery
+    state = {"armed": True}
+
+    async def crash(tenant_db, tenant_collection, inp, *, session=None):
+        if session is not None and state["armed"]:
+            state["armed"] = False
+            raise RuntimeError("synthetic crash inside the transaction, after the lock write")
+        return await orig(tenant_db, tenant_collection, inp, session=session)
+    monkeypatch.setattr(CommandService, "_check_invoice_line_delivery", staticmethod(crash))
+    r1 = await _one(run, P_LOC, 100)
+    locks = await db["warehouse_ledger_counters"].count_documents({"name": "invoice_line_lock"})
+    rows = await db["warehouse_transactions"].count_documents({"invoice_line_id": IL})
+    print("CRASH →", r1, "lock docs", locks, "linked rows", rows)
+    assert r1 != "ok" and locks == 0 and rows == 0
+    r2 = await _one(run, P_LOC, 101)
+    rows = await db["warehouse_transactions"].count_documents({"invoice_line_id": IL})
+    lock = await db["warehouse_ledger_counters"].find_one({"name": "invoice_line_lock"}, {"_id": 1, "tenant_id": 1})
+    print("AFTER →", r2, "linked rows", rows, "lock", lock)
+    assert r2 == "ok" and rows == 1 and lock and lock["tenant_id"] == T
+    assert (await run.cost(PROJECT))["total_cost"] == 50.0
