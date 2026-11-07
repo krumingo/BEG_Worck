@@ -97,6 +97,10 @@ async def fetch_normalized_report_lines(
             "overtime_hours": float(ot) if ot is not None else None,
             "overtime_coefficient": d.get("overtime_coefficient"),
             **_labor_fields(d),
+            # LAB-01-D (FG-72): what a labor approval binds to
+            "report_doc_id": d.get("id", ""),
+            "entry_id": None,
+            "report_version": int(d.get("report_version") or 0),
         })
 
     # ── B) Old-style (structured with employee_id + day_entries) ───
@@ -153,6 +157,10 @@ async def fetch_normalized_report_lines(
                 "overtime_hours": None,
                 "overtime_coefficient": None,
                 **_labor_fields(entry),
+                # LAB-01-D (FG-72): what a labor approval binds to
+                "report_doc_id": d.get("id", ""),
+                "entry_id": entry.get("id", ""),
+                "report_version": int(d.get("report_version") or 0),
             })
 
     return lines

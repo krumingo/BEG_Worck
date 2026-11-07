@@ -113,6 +113,10 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
                 "execution_package_id": line.get("execution_package_id") or (matched_pkg or {}).get("id"),
                 "offer_line_id": (matched_pkg or {}).get("offer_line_id"),
                 "work_report_id": wr["id"],
+                # LAB-01-D (FG-72): what a labor approval binds to
+                "report_doc_id": wr["id"],
+                "entry_id": str(line.get("id") or i),
+                "report_version": int(wr.get("report_version") or 0),
             }
             for k in LABOR_LINE_FIELDS:
                 if k != "execution_package_id":

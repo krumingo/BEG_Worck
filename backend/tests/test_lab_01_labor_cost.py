@@ -53,7 +53,8 @@ def _terms(packages=None, quantities=None, approver_package="__only__"):
     q = {rid: {"report_id": rid, "approved_quantity": qty, "status": "approved", "approved_by": "boss",
                "execution_package_id": approver_package}
          for rid, qty in (quantities or {}).items()}
-    return {"packages": pk, "quantities": q}
+    from app.services.labor_cost import approval_key
+    return {"packages": pk, "quantities": {approval_key(rid): rec for rid, rec in q.items()}}
 
 
 PKG_AK = {"pkg-ak": {"labor_pay_type": "Akord", "labor_piece_rate": 5}}
@@ -154,13 +155,13 @@ def test_lab01c_probe_worker_chosen_package_does_not_change_pay():
         res[label] = compute_person_labor(prof, [ln], {"packages": pk, "quantities": {}})["total"]
     assert set(res.values()) == {50.0}, res
     # P2 akord: approval record WITHOUT a package; the line points to C or D → one number
-    q = {"r1": {"report_id": "r1", "approved_quantity": 100, "status": "approved", "approved_by": "boss"}}
+    q = {"r1||0": {"report_id": "r1", "approved_quantity": 100, "status": "approved", "approved_by": "boss"}}
     r2 = {pkg: compute_person_labor(prof, [dict(base, execution_package_id=pkg)],
                                     {"packages": pk, "quantities": q})["total"] for pkg in ("C", "D")}
     assert r2["C"] == r2["D"] == 50.0, r2
     # the APPROVER's record names the package → that price, whatever the line points to
     for line_pkg in ("C", "D", None):
-        qa = {"r1": dict(q["r1"], execution_package_id="C")}
+        qa = {"r1||0": dict(q["r1||0"], execution_package_id="C")}
         ln = dict(base, execution_package_id=line_pkg) if line_pkg else dict(base)
         lc = compute_person_labor(prof, [ln], {"packages": pk, "quantities": qa})
         assert lc["total"] == 200.0 and lc["lines"][0]["pay_type_source"] == "smr", line_pkg
@@ -183,7 +184,7 @@ def test_lab01c_load_terms_never_loads_the_lines_own_package():
                  {"id": "r2", "worker_id": "w", "project_id": "P", "execution_package_id": "D"}]
         terms = await load_smr_terms(tenant, ORG, lines)
         assert sorted(terms["packages"]) == ["C"]
-        assert sorted(terms["quantities"]) == ["r1"]
+        assert sorted(terms["quantities"]) == ["r1||0"]   # (report, entry, version) key
     asyncio.run(body())
 
 
@@ -513,7 +514,7 @@ def test_labor_sync_reads_approved_work_reports_only(monkeypatch, backend):
              "lines": [{"activity_name": "Шпакловка", "hours": 8}]},
         ])
         await op.labor_quantity_approvals.insert_one(
-            {"id": "qa-wr", "org_id": ORG, "report_id": "wr-ak:0", "approved_quantity": 30,
+            {"id": "qa-wr", "org_id": ORG, "report_id": "wr-ak", "entry_id": "0", "approved_quantity": 30,
              "execution_package_id": "pkg-ak", "status": "approved", "approved_by": "admin"})
         user = {"id": "admin", "org_id": ORG, "role": "Admin"}
         res = await sync_labor_entries_from_work_reports({"project_id": "prj-1"}, user)

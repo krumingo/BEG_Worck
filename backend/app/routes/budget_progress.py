@@ -367,15 +367,13 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
             "message": f"{missing_updates} от {len(pkgs)} пакета нямат въведен прогрес",
         })
 
-    # Budget burn warnings from work_sessions
+    # Budget burn warnings — LAB-01-D (FG-76): the ONE "spent" number (approved report
+    # lines, app.services.labor_cost), not work_sessions. DOWNTIME is not SMR burn.
+    from app.services.labor_cost import project_labor_cost
     budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "labor_cost": 1},
-    ).to_list(5000)
-    total_session_cost = sum(s.get("labor_cost", 0) for s in sessions)
+    total_session_cost = (await project_labor_cost(org_id, project_id))["labor_total"]
     total_labor_budget = sum(b.get("labor_budget", 0) for b in budgets)
     if total_labor_budget > 0:
         burn_pct = total_session_cost / total_labor_budget * 100

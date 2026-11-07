@@ -668,6 +668,10 @@ async def update_work_report(report_id: str, data: WorkReportUpdate, user: dict 
         update["status"] = "Draft"
         update["reject_reason"] = None
     await tenant.work_reports.update_one({"id": report_id}, {"$set": update})
+    # LAB-01-D (FG-72): a changed report voids its labor approvals (new version)
+    from app.services.labor_cost import void_labor_approvals
+    await void_labor_approvals(tenant, user["org_id"], report_id, user["id"], "work_report_edited",
+                               collection="work_reports")
     await log_audit(user["org_id"], user["id"], user["email"], "report_edited", "work_report", report_id)
     updated = await tenant.work_reports.find_one({"id": report_id}, {"_id": 0})
     return enrich_report(updated)

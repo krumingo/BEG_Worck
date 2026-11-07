@@ -14,6 +14,7 @@ from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.tenancy.data_access import TenantData
+from app.services.labor_cost import void_labor_approvals
 
 
 def _tenant(user: dict) -> TenantData:
@@ -256,6 +257,7 @@ def _clean_day_entries(entries) -> list:
     if not isinstance(entries, list):
         raise HTTPException(status_code=400, detail="day_entries must be a list")
     clean = []
+    seen_ids = set()
     for e in entries:
         if not isinstance(e, dict):
             raise HTTPException(status_code=400, detail="each day entry must be an object")
@@ -273,6 +275,10 @@ def _clean_day_entries(entries) -> list:
             raise HTTPException(status_code=400, detail="hours_worked cannot be negative")
         row = {k: e.get(k) for k in DAY_ENTRY_FIELDS if k in e}
         row["id"] = row.get("id") or str(uuid.uuid4())
+        # LAB-01-D (FG-72): entry ids are unique per report
+        if not isinstance(row["id"], str) or row["id"] in seen_ids:
+            raise HTTPException(status_code=400, detail=f"duplicate day entry id: {row['id']}")
+        seen_ids.add(row["id"])
         row["hours_worked"] = hours
         clean.append(row)
     return clean
@@ -285,7 +291,11 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    if report["approval_status"] not in ["DRAFT", "REJECTED"]:
+    # LAB-01-D (FG-73): only the report's owner edits their own draft; approvers act
+    # through the approval path (approve / reject / reset), never by editing the content.
+    if report.get("employee_id") != user.get("id"):
+        raise HTTPException(status_code=403, detail="Only the report owner can edit this report")
+    if report.get("approval_status") not in ["DRAFT", "REJECTED"]:
         raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED reports can be edited")
 
     allowed = ["day_status", "leave_from", "leave_to", "notes", "day_entries"]
@@ -297,6 +307,8 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
+    # LAB-01-D (FG-72): a changed report voids its labor approvals (new version)
+    await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_edited")
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -518,6 +530,7 @@ async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict
         "approval_status": "REJECTED", "status": "REJECTED",
         "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
     }})
+    await void_labor_approvals(tenant, actor["org_id"], rid, actor["id"], "report_rejected")  # FG-72
     return {"status": "ok", "report_id": rid}
 
 
@@ -637,6 +650,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
         "payroll_ready": False, "sessions_created": 0,
         "updated_at": now,
     }})
+    await void_labor_approvals(tenant, user["org_id"], report_id, user["id"], "report_reset")  # FG-72
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -1010,6 +1024,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
                 "day_entries": merged, "total_hours": merged_total, "updated_at": now,
             }})
+            await void_labor_approvals(tenant, org_id, existing["id"], user["id"], "batch_saved")  # FG-72
         else:
             report = {
                 "id": str(uuid.uuid4()),

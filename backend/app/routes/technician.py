@@ -1397,6 +1397,9 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
         update["notes"] = data.notes
 
     await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    # LAB-01-D (FG-72): a changed report voids its labor approvals (new version)
+    from app.services.labor_cost import void_labor_approvals
+    await void_labor_approvals(tenant, user["org_id"], draft_id, user["id"], "draft_edited")
     return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
 
 

@@ -15,6 +15,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
+from app.services.payroll_corrections import correction_id, sync_run_corrections
 from app.services.labor_cost import compute_person_labor, load_smr_terms, person_summary_formula
 from app.services.slip_payment_state import effective_slip, effective_slip_one, effective_slips, slip_status_clause
 from app.tenancy.data_access import TenantData
@@ -853,6 +854,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
 
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
+        if correction:  # LAB-01-D (FG-66): the item names its correction record
+            correction["correction_id"] = correction_id(org_id, run_id, eid)
         row = dict(row, correction_item=correction)
 
         frozen_row = {
@@ -975,6 +978,9 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     }
 
     await tenant.pay_runs.insert_one(pay_run)
+    # LAB-01-D (FG-66): overpayments → FLOW-028 correction records (pending Approval,
+    # AuditEvent, DQ alert); never applied automatically.
+    await sync_run_corrections(tenant, db, org_id, pay_run, user["id"])
     # Only generate slips for confirmed runs
     if data.status == "confirmed" and slips:
         await tenant.payment_slips.insert_many(slips)
@@ -1488,6 +1494,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         paid_now = round(_money_float(ovr.paid_now_amount), 2)
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
+        if correction:  # LAB-01-D (FG-66): the item names its correction record
+            correction["correction_id"] = correction_id(org_id, run_id, eid)
         row = dict(row, correction_item=correction)
         existing_row = existing_row_map.get(eid, {}) or {}
         day_cells = row.get("day_cells") or existing_row.get("day_cells") or []
@@ -1574,6 +1582,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
     })
     if res.matched_count == 0:
         raise await _conflict(tenant, org_id, run_id, PAID_RUN_LOCKED)
+    # LAB-01-D (FG-66): correction records follow the edited rows
+    await sync_run_corrections(tenant, db, org_id, {**run, "employee_rows": employee_rows}, user["id"])
 
     # Generate slips if confirming
     if data.status == "confirmed":

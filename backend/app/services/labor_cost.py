@@ -59,6 +59,21 @@ DQ_AKORD_NO_APPROVED_QTY = "AKORD_NO_APPROVED_QUANTITY"
 DQ_AKORD_NO_PIECE_RATE = "AKORD_NO_PIECE_RATE"
 DQ_MISSING_RATE = "MISSING_RATE"
 DQ_DOWNTIME_UNCLASSIFIED = "DOWNTIME_UNCLASSIFIED"
+DQ_DUPLICATE_ENTRY = "DUPLICATE_REPORT_ENTRY"
+
+
+def approval_key(report_id, entry_id=None, report_version=0) -> str:
+    """LAB-01-D (FG-72): a labor approval binds to (report id, report version, entry id)."""
+    return f"{report_id or ''}|{entry_id or ''}|{int(report_version or 0)}"
+
+
+def line_approval_key(line: dict) -> str:
+    return approval_key(line.get("report_doc_id") or line.get("id"), line.get("entry_id"),
+                        line.get("report_version"))
+
+
+def record_approval_key(rec: dict) -> str:
+    return approval_key(rec.get("report_id"), rec.get("entry_id"), rec.get("report_version"))
 
 
 def _num(value):
@@ -101,7 +116,7 @@ def _package(line: dict, terms: dict = None) -> dict:
     ``execution_package_id`` is a pointer the person filling the report can edit, so it
     never selects a price or pay type; with no approver-named package the line is priced
     by the profile. Only a package of the line's own project counts."""
-    rec = _quantities(terms).get(line.get("id") or "") or {}
+    rec = _quantities(terms).get(line_approval_key(line)) or {}
     pkg_id = rec.get("execution_package_id") or ""
     pkg = _packages(terms).get(pkg_id) or {}
     if pkg and pkg.get("project_id") and pkg.get("project_id") != line.get("project_id"):
@@ -212,8 +227,9 @@ def _line_base(line: dict) -> dict:
 
 
 def resolve_approved_quantity(line: dict, terms: dict = None):
-    """The approved quantity — ONLY from an approval record, never the line (FG-64)."""
-    rec = _quantities(terms).get(line.get("id") or "")
+    """The approved quantity — ONLY from an approval record, never the line (FG-64), bound
+    to this exact (report, version, entry) (FG-72)."""
+    rec = _quantities(terms).get(line_approval_key(line))
     if not rec:
         return None
     return _num(rec.get("approved_quantity"))
@@ -232,18 +248,24 @@ def compute_person_labor(profile: dict, lines: list, smr_terms: dict = None) -> 
     profile = profile or {}
     out_lines, excluded, dq = [], [], []
     akord_lines, time_groups = [], defaultdict(list)
+    seen_keys = set()  # FG-72: one approval / one entry is counted at most once
 
     for ln in lines or []:
         base = _line_base(ln)
         if not _is_approved(ln):
             excluded.append(dict(base, reason="not_approved"))
             continue
+        key = line_approval_key(ln)
+        duplicate = key in seen_keys
+        seen_keys.add(key)
         cost_type = _cost_type(ln)
         pay_type, pt_src = resolve_pay_type(ln, profile, smr_terms)
         rec = dict(base, cost_type=cost_type, pay_type=pay_type, pay_type_source=pt_src,
                    quantity=_num(ln.get("quantity")),
-                   approved_quantity=resolve_approved_quantity(ln, smr_terms),
+                   approved_quantity=None if duplicate else resolve_approved_quantity(ln, smr_terms),
                    unit=ln.get("unit") or "", piece_rate=None, rate=None, amount=0.0, formula="", dq=[])
+        if duplicate:
+            rec["dq"].append(DQ_DUPLICATE_ENTRY)
         if cost_type == DQ_DOWNTIME_UNCLASSIFIED:
             rec["dq"].append(DQ_DOWNTIME_UNCLASSIFIED)
         if cost_type == LABOR and pay_type == AKORD:
@@ -342,6 +364,7 @@ _DQ_MESSAGES = {
     DQ_AKORD_NO_PIECE_RATE: "Акорд без акордна цена по реда/СМР — не влиза в разхода (0).",
     DQ_MISSING_RATE: "Липсва ставка в профила — не влиза в разхода (0), без ставка по подразбиране.",
     DQ_DOWNTIME_UNCLASSIFIED: "Неуточнен престой — нужна е класификация (FLOW-019).",
+    DQ_DUPLICATE_ENTRY: "Повторен ред (същият отчет/версия/ред) — одобреното количество се брои само веднъж.",
 }
 
 
@@ -363,24 +386,32 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
     """The pricing terms of ``lines`` from records the worker cannot edit (FG-64)::
 
         {"packages":   {execution_package_id: {labor_pay_type, labor_piece_rate}},
-         "quantities": {report_line_id: approval record}}
+         "quantities": {approval_key(report, entry, version): approval record}}
 
     A quantity approval counts only with status "approved", an ``approved_by`` and an
     approver who is not the worker of the line (no self-approval).
     """
     lines = [ln for ln in (lines or []) if isinstance(ln, dict)]
-    worker_of = {ln.get("id"): ln.get("worker_id") for ln in lines if ln.get("id")}
+    # FG-72: an approval counts only for the exact (report, version, entry) of a line
+    worker_of = {line_approval_key(ln): ln.get("worker_id") for ln in lines
+                 if ln.get("report_doc_id") or ln.get("id")}
+    report_ids = sorted({ln.get("report_doc_id") or ln.get("id") for ln in lines
+                         if ln.get("report_doc_id") or ln.get("id")})
     quantities = {}
-    if worker_of:
+    if report_ids:
         recs = await tenant.labor_quantity_approvals.find(
-            {"org_id": org_id, "report_id": {"$in": sorted(worker_of)}, "status": "approved"},
+            {"org_id": org_id, "report_id": {"$in": report_ids}, "status": "approved"},
             {"_id": 0},
-        ).to_list(len(worker_of) * 2)
+        ).to_list(len(worker_of) * 4 + 10)
+        # deterministic: the earliest approval of a key wins, any second one is ignored
+        recs.sort(key=lambda r: (str(r.get("approved_at") or ""), str(r.get("id") or "")))
         for r in recs:
-            rid, by = r.get("report_id"), r.get("approved_by")
-            if not by or by == worker_of.get(rid):
+            key, by = record_approval_key(r), r.get("approved_by")
+            if key not in worker_of:            # another version / entry → void for this line
                 continue
-            quantities[rid] = r
+            if not by or by == worker_of[key]:  # no self-approval
+                continue
+            quantities.setdefault(key, r)
     # LAB-01-C: only approver-named packages are loaded — never the line's own pointer
     pkg_ids = sorted({r.get("execution_package_id") for r in quantities.values() if r.get("execution_package_id")})
     packages = {}
@@ -391,6 +422,21 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
         ).to_list(len(pkg_ids))
         packages = {p["id"]: p for p in pkgs}
     return {"packages": packages, "quantities": quantities}
+
+
+async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
+                               actor_id: str, reason: str,
+                               collection: str = "employee_daily_reports") -> int:
+    """LAB-01-D (FG-72): any change or reset of a report bumps its ``report_version`` and
+    voids every labor approval of it. The approval records stay (no delete), marked void."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    await tenant.collection(collection).update_one(
+        {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}})
+    res = await tenant.labor_quantity_approvals.update_many(
+        {"org_id": org_id, "report_id": report_id, "status": "approved"},
+        {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}})
+    return getattr(res, "modified_count", 0)
 
 
 async def project_labor_cost(org_id: str, project_id: str, date_from: str = None,
