@@ -363,3 +363,24 @@ def test_o14_archive_resume_after_interrupt(monkeypatch):
               "| other key", r3.status_code)
         assert r2.status_code == 200 and n_ev == 1 and r3.status_code == 409
     _run(monkeypatch, "enforce", scenario)
+
+
+def test_o15_retake_of_failed_allocate_key(monkeypatch):
+    """O15 (#72 RETAKE-1): the allocate key FAILED once; 6 concurrent identical retries ->
+    exactly one allocation version, the others 409."""
+    async def scenario(c, op):
+        from app.audit.idempotency import begin_idempotent, fail_idempotent, request_fingerprint
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        snap = await _snapshot(c)
+        key = "retake-" + _key()
+        kw_key = "owner:" + key        # KeyedWrite scopes the key per user
+        await begin_idempotent(op, tenant_id=ORG, key=kw_key, action="overhead.allocation.version",
+                               request_fingerprint=request_fingerprint({"snapshot_id": snap["id"], "method": "PersonDays"}))
+        await fail_idempotent(op, tenant_id=ORG, key=kw_key, action="overhead.allocation.version", error_code="x")
+        rs = await asyncio.gather(*[c.post(f"/api/overhead/snapshots/{snap['id']}/allocate", json={"method": "PersonDays"},
+                                           headers=_h(key=key)) for _ in range(6)])
+        batches = {a["allocation_batch_id"] for a in await op.project_overhead_allocations.find({}).to_list(None)}
+        print("O15 codes", sorted(r.status_code for r in rs), "batches", len(batches))
+        assert len(batches) == 1
+    _run(monkeypatch, "enforce", scenario)

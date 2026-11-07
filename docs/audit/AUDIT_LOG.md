@@ -1663,9 +1663,9 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `13dd8d7` | **PASS** (F-69-01: FAILED→STARTED retake is a CAS, losers IN_PROGRESS); breaks unaware callers in #73/#75 (see RETAKE-1) | 2026-11-07 |
-| #73 LAB-01 | `6ac47d0` | FG-91 PASS; **RETAKE-1 still open** (blocking on merge with #72) | 2026-11-07 |
-| #75 LAB-02 | `7156140` | FG-92/93/94 PASS; **RETAKE-1 still open**; LAB02-1 open | 2026-11-07 |
+| #72 W0-04-C01 | `3606766` | **PASS** (RETAKE-1 option (b): loser = DUPLICATE/STARTED + detail IN_PROGRESS) | 2026-11-07 |
+| #73 LAB-01 | `3107ba0` | **PASS** (RETAKE-1 closed: explicit STARTED; P5 on merge with #72 → 1 run) | 2026-11-07 |
+| #75 LAB-02 | `ba08ab5` | **PASS** (RETAKE-1 + LAB02-1 closed) | 2026-11-07 |
 | #74 OH-01 | `39eafdf` | **PASS** (OH74-01 frozen basis + largest remainder; OH74-02 resumable archive; R38; FG-98) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -3138,3 +3138,53 @@ merge-tree:
 - #74: `overhead.py` + matrix (known).
 
 With #72: `MoneyWrite` goes through `RecoverableWrite`, which maps `IDEMPOTENCY_IN_PROGRESS` to 409, so it is safe.
+
+
+## RETAKE-1 / LAB02-1 closed — #72 @ `3606766`, #73 @ `3107ba0`, #75 @ `ba08ab5` — 2026-11-07 ~11:10 UTC
+
+**#72 `a444095`:** the loser of a FAILED retake now returns `{status: DUPLICATE, prior_status: STARTED, detail: IDEMPOTENCY_IN_PROGRESS}`, which every caller already refuses. The resuming callers check `detail` **first** and refuse, never resume: `RecoverableWrite` → 409; `legacy_migration._begin` and `merge._run` → `MasterDataRefused` (before `merge`'s `resumed = DUPLICATE` logic).
+
+**#73 `3107ba0` / #75 `59fd3a7`:** `create_pay_run` and `labor_quantities._idempotent` write only on an explicit `STARTED` (defence in depth).
+
+**#75 `5c0a9ed`:** unique partial indexes `one_approved_per_line` (`labor_quantity_approvals`, status approved) and `one_active_per_line` (`labor_line_classifications`, status active) on (org, report, entry, version). Created at startup and lazily; a `DuplicateKeyError` on insert → 409.
+
+Trial merges with #72 `3606766` (the `ownership.py`/`server.py` conflicts resolved by keeping both sides):
+
+| Tree | Probe / suite | Result |
+|---|---|---|
+| #73 `3107ba0` + #72 | `lab01e::test_p5_retake_of_failed_key` × 3 | [200, 409 ×5], **1 pay run** each run |
+| | `tests/test_lab_0*.py` | **91 passed** (fg85 runs) |
+| #75 `ba08ab5` + #72 | `lab02_retake::test_r1` × 3 | [200, 409 ×5], **1 approval** each run |
+| | `tests/test_lab_0*.py` | **129 passed** |
+| #74 `26a135a` + #72 | new `oh01::test_o15_retake_of_failed_allocate_key` | [200, 409 ×5], **1 allocation batch** |
+| | OH-01 tests | 140 passed |
+| #70 `f71dce2` + #72 | `tests/test_pay_01_*.py` | **588 passed** |
+| #69 `ccab244` + #72 | `tests/test_sec_01_*.py` | **30 passed** |
+
+#72 `3606766` alone:
+
+| Probe / gate | Result |
+|---|---|
+| `retake_cas` | 1 started + 5 duplicate × 10 rounds |
+| x56 | 120 stored, chain True |
+| fg57 | FAILS none |
+| W0-04 + auth tests | **150 passed** |
+| W0 | 1093/15/70, same 15 |
+| A2C | 0/212 |
+| A1 | 0/428 |
+| R0 | **814** |
+
+#75 `ba08ab5` alone:
+
+| Probe / gate | Result |
+|---|---|
+| `lab02::test_q1` × 3 (4 concurrent approvals, different keys) | [200, 409 ×3], **1 approved record**, earned 550 |
+| Q2 / Q3 / Q4 | pass |
+| `test_lab_0*` | 128 passed, 1 skipped |
+| W0 | same 15 |
+| A2C | 0/208 |
+| A1 | 0/422 |
+| R0 | **814** |
+| PM-01 | 6 passed |
+
+**RETAKE-1 closed (PROVED). LAB02-1 closed (PROVED).** PR comments on #73 and #75 are updated to "resolved".
