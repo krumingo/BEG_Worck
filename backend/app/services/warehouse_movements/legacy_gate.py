@@ -63,7 +63,7 @@ async def _projects_touched(tenant_db, org_id: str, inp) -> Set[str]:
 async def ensure_project_relation(tenant_db, org_id: str, user_id: str,
                                   granting_roles, project_ids, *,
                                   now: Optional[datetime] = None,
-                                  deny=None) -> None:
+                                  deny=None, deny_no_project=None) -> None:
     """5C-C26f (C26E-1) — THE project-relation rule, both modes.
 
     ``granting_roles`` — the caller's roles that grant the action. If any of
@@ -77,6 +77,12 @@ async def ensure_project_relation(tenant_db, org_id: str, user_id: str,
     roles = set(granting_roles)
     if not roles or roles - (PROJECT_BOUND_ROLES | PM_ROLES):
         return
+    if not project_ids:
+        # 5C-C26g — audit C26F-1: a project-bound role acts only THROUGH a
+        # project. A command that touches no project (quarantine at the
+        # central warehouse, accepting a warehouse → warehouse transfer, …)
+        # is outside its scope — in every mode.
+        raise (deny_no_project or _no_project_denied)()
     tenant = TenantData.for_resolved_org(tenant_db, org_id)
     for project_id in sorted(set(project_ids)):
         ok = False
@@ -97,6 +103,13 @@ def _relation_denied(project_id: str):
 
 
 RELATION_REASON = "R28_PROJECT_RELATION_REQUIRED"
+NO_PROJECT_REASON = "R28_PROJECT_REQUIRED"
+
+
+def _no_project_denied():
+    return PermissionDeniedError(
+        "Р28: a project-bound role acts only through a project",
+        context={"reason_code": NO_PROJECT_REASON})
 
 
 async def ensure_legacy(ctx, tenant_db, inp, *, now: Optional[datetime] = None) -> str:
@@ -131,7 +144,9 @@ async def ensure_legacy(ctx, tenant_db, inp, *, now: Optional[datetime] = None) 
         await _projects_touched(tenant_db, org_id, inp), now=now,
         deny=lambda pid: _deny("not a member of the project with valid dates",
                                scope_type="project", scope_id=pid,
-                               reason_code=RELATION_REASON))
+                               reason_code=RELATION_REASON),
+        deny_no_project=lambda: _deny("a project-bound role acts only through a project",
+                                      reason_code=NO_PROJECT_REASON))
     return role_id
 
 

@@ -227,3 +227,45 @@ async def test_c26e_1_real_company_site_manager_same_in_every_mode(
             await CommandService(client).execute(_ctx(mode, "SiteManager"), db, run.coll, inp)
         assert exc.value.context["reason_code"] == "R28_PROJECT_RELATION_REQUIRED"
         assert await _count(db) == before
+
+
+# ═══════════ C26F-1 — audit probe test_probe_pr55_c26f_warehouse_only (5C-C26g) ═══════════
+
+@pytest.mark.parametrize("command", ["quarantine_entry_wh", "accept_w2w"])
+@pytest.mark.parametrize("mode", ["off", "shadow", "enforce"])
+@pytest.mark.parametrize("member", [False, True])
+async def test_c26f_1_project_bound_role_cannot_run_warehouse_only_commands(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode, command, member):
+    """A SiteManager (real company grant) — member of P1 or of nothing — runs
+    a command that touches NO project: quarantine entry at the central
+    warehouse, accepting a warehouse → warehouse transfer. 3777d71: ALLOWED
+    in off and enforce. Now R28_PROJECT_REQUIRED in every mode, 0 rows."""
+    from app.permissions import service as perm
+    from app.services.warehouse_movements.errors import PermissionDeniedError
+    from tests.test_warehouse_canonical_c22_all_reports_cutover import WH
+    from tests.test_warehouse_canonical_c26e_r28_all_modes import WH_B, _count, _ctx
+    client, db = canonical_mongo_db
+    _patch_dbs(monkeypatch, db)
+    await _seed(db)
+    run = _Run(client, allow_always_gate, db)
+    await run.receive("10", "10")
+    tr = await run(CanonicalAction.TRANSFER_WAREHOUSE_TO_WAREHOUSE, source=WH,
+                   transfer_target=WH_B, quantity=Decimal("2"))
+    if member:
+        await _member(db)
+    monkeypatch.setattr(perm, "_load_assignments", _loader(_real("site_manager")))
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
+    if command == "quarantine_entry_wh":
+        action, kw = CanonicalAction.QUARANTINE_ENTRY, dict(
+            source=WH, destination=LocationKey(WH.location_type, WH.location_id,
+                                               state=MovementState.QUARANTINE))
+    else:
+        action, kw = CanonicalAction.ACCEPT_PROJECT_DELIVERY, dict(
+            destination=WH_B, accepted_quantity=Decimal("2"),
+            dispatch_movement_id=tr.movement_id)
+    before = await _count(db)
+    with pytest.raises(PermissionDeniedError) as exc:
+        await CommandService(client).execute(_ctx(mode, "SiteManager"), db, run.coll,
+                                             _inp(action, T, quantity=Decimal("2"), **kw))
+    assert exc.value.context["reason_code"] == "R28_PROJECT_REQUIRED"
+    assert await _count(db) == before
