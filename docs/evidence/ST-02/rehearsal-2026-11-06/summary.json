@@ -1,0 +1,233 @@
+{
+  "bundles": {
+    "X": {
+      "artifact_sha256": "3561b9beeb630e22d3707ae38fc2a180c37a62e057a4080b5c0a389354b199d9",
+      "commit": "1c01f6721170176553dd7c71c833fa54a9d89278",
+      "files": 1276,
+      "previous": null,
+      "release_id": "rel-20261106T152121Z-1c01f6721170",
+      "release_sha256": "8d089441ecb85df863cb28c5c615899e08270b3185a10ea56732ae56374517d1",
+      "services_to_rebuild": [
+        "backend",
+        "frontend"
+      ],
+      "tree": "4932685cd1492d4f04a91615e7cf1e8e60354b96"
+    },
+    "X+1": {
+      "artifact_sha256": "8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d",
+      "commit": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "files": 1282,
+      "previous": "rel-20261106T152121Z-1c01f6721170",
+      "release_id": "rel-20261106T152231Z-07da9aba0711",
+      "release_sha256": "0ff1f998636c828278fb2ebc313f68f2229a5b697c439d67b7b1a4a0c16cf498",
+      "services_to_rebuild": [
+        "backend"
+      ],
+      "tree": "f08e24cc5c2fc628416bdb17934f9139c44184c2"
+    }
+  },
+  "checks": [
+    {
+      "check": "X+1 is a descendant of X",
+      "detail": "1c01f6721170176553dd7c71c833fa54a9d89278 -> 07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "result": "PASS"
+    },
+    {
+      "check": "X initial deploy exit 0 (DEPLOYED)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "X record is a valid beg.deployment-record/v1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X /api/version build_sha == bundle commit",
+      "detail": "1c01f6721170176553dd7c71c833fa54a9d89278",
+      "result": "PASS"
+    },
+    {
+      "check": "X environment_label == staging",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X UI bundle embeds the bundle SHA",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "ST-01 seed of tenants A/B exit 0",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "ST-01 scenarios ran with evidence (exit 0 or 1, not 2/3)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 forced-failure deploy exit 1 (auto rollback)",
+      "detail": "exit 1",
+      "result": "PASS"
+    },
+    {
+      "check": "record ROLLED_BACK with runtime_rollback EXACT_IMAGE",
+      "detail": "ROLLED_BACK / EXACT_IMAGE",
+      "result": "PASS"
+    },
+    {
+      "check": "rollback record is a valid beg.deployment-record/v1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "rollback reason is the controlled smoke failure",
+      "detail": "GET /api/st02-forced-smoke-failure returned 404",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 images were really built and started before the failure",
+      "detail": "backend frontend",
+      "result": "PASS"
+    },
+    {
+      "check": "the failed attempt really served X+1 (/api/version during the failed smoke)",
+      "detail": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "result": "PASS"
+    },
+    {
+      "check": "the failed attempt ran image IDs different from X",
+      "detail": "backend=sha256:cbf5e1a450d060dd0953f0236e50803d4dbcf3582e93ffd7d7bbb737a9517cf3,frontend=sha256:d9ca9ae26c2bd9642c22eb7d52f48f1f218c600ebd78bf37e20d659824b9b7fc",
+      "result": "PASS"
+    },
+    {
+      "check": "current release is still X",
+      "detail": "rel-20261106T152121Z-1c01f6721170",
+      "result": "PASS"
+    },
+    {
+      "check": "running image IDs == recorded image IDs of X",
+      "detail": "backend=sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166,frontend=sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7",
+      "result": "PASS"
+    },
+    {
+      "check": "after rollback /api/version == X",
+      "detail": "1c01f6721170176553dd7c71c833fa54a9d89278",
+      "result": "PASS"
+    },
+    {
+      "check": "synthetic data kept (per-collection counts equal)",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "MongoDB container not recreated",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 deploy exit 0 (DEPLOYED)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 record is a valid beg.deployment-record/v1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 runtime image IDs differ from X",
+      "detail": "backend=sha256:c606392a171927489c4a633530d220cbb8bcd7d143657313b7cf3bb3d3703015,frontend=sha256:16a455b234836c7e1196a7b3555b2854b049f04ba58a5b3f93676d905846de39",
+      "result": "PASS"
+    },
+    {
+      "check": "rollback target recorded = X with its image IDs",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 /api/version build_sha == bundle commit",
+      "detail": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 UI bundle embeds the bundle SHA",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "synthetic data kept across X -> X+1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "ST-01 scenarios on X+1 ran with evidence (exit 0 or 1)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "no secret value (JWT secret, seed password) in evidence",
+      "detail": {
+        "hits": [],
+        "scanned_files": 40,
+        "secret_values_checked": 2
+      },
+      "result": "PASS"
+    }
+  ],
+  "generated_at": "2026-11-06T15:25:31Z",
+  "project": "begwork-staging",
+  "result": "PASS",
+  "runtime_images": {
+    "X": "backend=sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166,frontend=sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7",
+    "X+1": "backend=sha256:c606392a171927489c4a633530d220cbb8bcd7d143657313b7cf3bb3d3703015,frontend=sha256:16a455b234836c7e1196a7b3555b2854b049f04ba58a5b3f93676d905846de39",
+    "X+1 failed attempt (rolled back)": "backend=sha256:cbf5e1a450d060dd0953f0236e50803d4dbcf3582e93ffd7d7bbb737a9517cf3,frontend=sha256:d9ca9ae26c2bd9642c22eb7d52f48f1f218c600ebd78bf37e20d659824b9b7fc",
+    "after rollback": "backend=sha256:ce7310d4752d38843c2c087134c307ab6bec282df4e19a4b8a8068bc9eb27166,frontend=sha256:cbdcb70a94e7770f1391b6f6f025405550d0df142152e7e47110ff69b068b9a7"
+  },
+  "scenario_results": {
+    "1-X/scenarios.json": {
+      "outcome": {
+        "exit_code": 0,
+        "reasons": [],
+        "status": "ok"
+      },
+      "scenarios": {
+        "blocked": 12,
+        "fail": 0,
+        "pass": 0
+      },
+      "steps": {
+        "blocked": 30,
+        "fail": 0,
+        "pass": 10
+      }
+    },
+    "3-X+1-deploy/scenarios.json": {
+      "outcome": {
+        "exit_code": 0,
+        "reasons": [],
+        "status": "ok"
+      },
+      "scenarios": {
+        "blocked": 12,
+        "fail": 0,
+        "pass": 0
+      },
+      "steps": {
+        "blocked": 30,
+        "fail": 0,
+        "pass": 10
+      }
+    }
+  },
+  "schema": "beg.st02-rehearsal/v1",
+  "staging_parameters": {
+    "ST02_HTTP_PORT": "18080",
+    "ST02_PERMISSION_SERVICE_MODE": "enforce",
+    "ST02_PROJECT": "begwork-staging"
+  },
+  "staging_root": "/tmp/claude-0/-home-user-BEG-Worck/3fb30e1f-b80c-5891-b993-a100f396f3de/scratchpad/st02-run3",
+  "url": "http://127.0.0.1:18080"
+}

@@ -670,21 +670,24 @@ def _shadow_or_off(effective: str, kind: str, ctx, payload, checks) -> Optional[
 async def _begin(db, tenant_id: str, action: str, key: str, fingerprint: str):
     """Reserve the idempotency key. Returns (state, replay_reference)."""
     from app.audit.idempotency import (
-        IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IdempotencyConflict,
-        _record_id, begin_idempotent)
+        IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
+        IDEMPOTENCY_IN_PROGRESS, IdempotencyConflict, _record_id, begin_idempotent)
     prior = await db[IDEMPOTENCY_COLLECTION].find_one({"id": _record_id(tenant_id, action, key),
                                                        "tenant_id": tenant_id},
                                                       {"_id": 0})
     if prior and prior.get("request_fingerprint") not in (None, fingerprint):
-        raise MasterDataRefused("idempotency key %r was already used for a different %s request"
-                                % (key, action))
+        raise MasterDataRefused("this operation key was already used for a different %s request"
+                                % action)
     if prior and prior.get("status") == IDEMPOTENCY_COMPLETED:
         return None, prior.get("result_reference")
     try:
         state = await begin_idempotent(db, tenant_id=tenant_id, key=key, action=action,
                                        request_fingerprint=fingerprint)
     except IdempotencyConflict as exc:
-        raise MasterDataRefused(str(exc)) from exc
+        raise MasterDataRefused(str(exc)) from None   # F-72-01: the message is key-free
+    if state.get("detail") == IDEMPOTENCY_IN_PROGRESS:
+        # W0-04-C01 F-69-01: a concurrent retry won the retake of this failed key.
+        raise MasterDataRefused("this operation key is being retried right now (%s)" % action)
     if state.get("status") == IDEMPOTENCY_DUPLICATE and state.get("prior_status") == IDEMPOTENCY_COMPLETED:
         return None, state.get("result_reference")
     return state, None
@@ -916,8 +919,8 @@ async def _begin_readonly(db, tenant_id: str, key: str, fingerprint: str):
     prior = await db[IDEMPOTENCY_COLLECTION].find_one(
         {"id": _record_id(tenant_id, ACTION_EXECUTE, key), "tenant_id": tenant_id}, {"_id": 0})
     if prior and prior.get("request_fingerprint") not in (None, fingerprint):
-        raise MasterDataRefused("idempotency key %r was already used for a different migration "
-                                "request" % key)
+        raise MasterDataRefused("this operation key was already used for a different migration "
+                                "request")
     if prior and prior.get("status") == IDEMPOTENCY_COMPLETED:
         return prior, prior.get("result_reference")
     return prior, None

@@ -1,0 +1,16 @@
+{
+  "api_status": 200,
+  "api_version": {
+    "build_sha": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+    "build_time": "2026-11-06T14:43:25Z",
+    "environment_label": "staging",
+    "source": "build-info-file"
+  },
+  "api_build_sha_equals_bundle": true,
+  "environment_label_is_staging": true,
+  "ui_scripts": [
+    "/static/js/main.a1564201.js"
+  ],
+  "ui_bundle_embeds_bundle_sha": true,
+  "bundle_commit": "07da9aba0711c0b0784bee8e58c5669ce81a93c1"
+}

@@ -26,6 +26,7 @@ concurrent requests with the same key cannot both win.
 """
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
@@ -35,10 +36,53 @@ IDEMPOTENCY_STARTED = "started"
 IDEMPOTENCY_COMPLETED = "completed"
 IDEMPOTENCY_FAILED = "failed"
 IDEMPOTENCY_DUPLICATE = "duplicate"
+# W0-04-C01 F-69-01 / RETAKE-1: the "detail" of a DUPLICATE result whose caller
+# lost the FAILED -> STARTED retake to a concurrent retry that is performing the
+# write right now. The top-level status stays DUPLICATE with prior_status
+# STARTED, which every caller already refuses (409); callers that RESUME an
+# interrupted STARTED attempt must check this detail and refuse instead.
+IDEMPOTENCY_IN_PROGRESS = "in_progress"
 
 
 class IdempotencyConflict(RuntimeError):
-    """Same idempotency key reused for a different request payload."""
+    """Same idempotency key reused for a different request payload.
+
+    W0-04-C01 F-72-01: the message names the action only, with a typed ``code``
+    and a diagnostic ``ref`` — never the raw key, the reservation id or the
+    tenant, so it is safe in a log or a traceback.
+    """
+
+    code = "IDEMPOTENCY_CONFLICT"
+
+    def __init__(self, action: str):
+        self.ref = uuid.uuid4().hex[:12]
+        self.action = action
+        super().__init__("[%s ref=%s] the operation key for action '%s' was already used "
+                         "with a different request payload" % (self.code, self.ref, action))
+
+
+class IdempotencyUnprotected(RuntimeError):
+    """audit_idempotency has no unique ``id`` index and it cannot be created.
+
+    Without it two concurrent requests with one key can both insert their
+    reservation and both perform the write (IDEM-IDX-1), so begin_idempotent
+    refuses instead. Nothing is dropped or deleted; see
+    scripts/w0_04_bootstrap_audit_indexes.py.
+    """
+
+
+IDEMPOTENCY_INDEX_KEYS = [("id", 1)]
+
+
+async def ensure_idempotency_index(db) -> None:
+    """Fail closed unless the reservation id is unique (W0-04-C01).
+
+    Normally created at startup / onboarding; a database that missed both gets
+    exactly the planned unique index before its first reservation.
+    """
+    from app.audit.indexes import require_unique_index
+    await require_unique_index(db, IDEMPOTENCY_COLLECTION, IDEMPOTENCY_INDEX_KEYS,
+                               IdempotencyUnprotected)
 
 
 def _now_iso() -> str:
@@ -71,13 +115,17 @@ async def begin_idempotent(
       - IDEMPOTENCY_STARTED   — key is new, caller must perform the write;
       - IDEMPOTENCY_DUPLICATE — key was seen before; "prior_status" tells
         whether the original completed, failed or is still running, and
-        "result_reference" carries the original result when completed.
+        "result_reference" carries the original result when completed;
+        when the key had FAILED and a concurrent retry won the retake, the
+        DUPLICATE carries prior_status STARTED and detail
+        IDEMPOTENCY_IN_PROGRESS: refuse (409), never resume, never write.
 
     Raises IdempotencyConflict when the key exists with a different
     request fingerprint.
     """
     if not key or not key.strip():
         raise ValueError("idempotency key must be non-empty")
+    await ensure_idempotency_index(db)
 
     record = {
         "id": _record_id(tenant_id, action, key),
@@ -110,25 +158,42 @@ async def begin_idempotent(
         and existing.get("request_fingerprint") is not None
         and existing["request_fingerprint"] != request_fingerprint
     ):
-        raise IdempotencyConflict(
-            f"Idempotency key '{key}' for action '{action}' was already used "
-            "with a different request payload"
-        )
+        raise IdempotencyConflict(action)
 
     # A FAILED attempt may be retried under the same key: the reservation
     # returns to STARTED and the caller performs the write again.
+    # F-69-01: the retake is a compare-and-set on status == FAILED that also
+    # writes this attempt's token. Of N concurrent retries exactly one update
+    # matches; the caller whose token is in the record afterwards is the single
+    # winner. Every other caller gets DUPLICATE / prior_status STARTED with
+    # detail IDEMPOTENCY_IN_PROGRESS and must refuse.
     if existing.get("status") == IDEMPOTENCY_FAILED:
+        attempt_token = uuid.uuid4().hex
         await db[IDEMPOTENCY_COLLECTION].update_one(
             {"id": record["id"], "status": IDEMPOTENCY_FAILED},
             {"$set": {
                 "status": IDEMPOTENCY_STARTED,
+                "attempt_token": attempt_token,
                 "reserved_at": _now_iso(),
                 "completed_at": None,
                 "error_code": None,
             }},
         )
         refreshed = await db[IDEMPOTENCY_COLLECTION].find_one({"id": record["id"]}, {"_id": 0})
-        return {"status": IDEMPOTENCY_STARTED, "record": refreshed, "retry_of_failed": True}
+        if refreshed is not None and refreshed.get("attempt_token") == attempt_token:
+            return {"status": IDEMPOTENCY_STARTED, "record": refreshed, "retry_of_failed": True}
+        existing = refreshed or existing
+        if existing.get("status") in (IDEMPOTENCY_STARTED, IDEMPOTENCY_FAILED):
+            # Lost the retake: another retry owns the write (or already failed
+            # it again) — never a second writer.
+            return {
+                "status": IDEMPOTENCY_DUPLICATE,
+                "prior_status": IDEMPOTENCY_STARTED,
+                "detail": IDEMPOTENCY_IN_PROGRESS,
+                "result_reference": None,
+                "record": existing,
+            }
+        # The winner already completed: fall through to an ordinary replay.
 
     return {
         "status": IDEMPOTENCY_DUPLICATE,
