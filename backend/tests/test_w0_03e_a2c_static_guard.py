@@ -166,8 +166,10 @@ REAL_MUTATIONS = [
      'invoice = await db.invoices.find_one({"id": invoice_id})',
      "A2C-IDENTITY"),
     ("app/routes/invoice_lines.py",
-     'await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {\n        **update,',
-     'await db.invoice_lines.update_one({"id": line_id}, {"$set": {\n        **update,',
+     # 5C-C26l Addendum L (FG-109): the PUT write moved into the per-line
+     # lock's write callback; the same raw-handle mutation of the same write.
+     'await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},',
+     'await db.invoice_lines.update_one({"id": line_id}, {"$set": patch},',
      "A2C-WRITE"),
     ("app/routes/warehouses.py",
      '*tenant.lookup("asset_items", "item_id", "item"),',

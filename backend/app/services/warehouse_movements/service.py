@@ -755,6 +755,16 @@ class CommandService:
         # Index verification once per db (fail-closed).
         await self._ensure_indexes(tenant_db)
 
+        # 5C-C26l Addendum L — the per-line lock document exists BEFORE the
+        # transaction (a $setOnInsert-only upsert, idempotent): a first
+        # transaction must not create the collection / document while a
+        # concurrent one does the same (MongoDB refuses that, not retried).
+        if inp.invoice_line_id and inp.action in (
+                CanonicalAction.RECEIVE_FROM_SUPPLIER,
+                CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT):
+            from app.services.invoice_line_lock import ensure_line_lock
+            await ensure_line_lock(tenant_collection.tenant, inp.invoice_line_id)
+
         # CODEX C14.1 — audit serialization under concurrent writes.
         # The previous service-level `_MAX_RETRIES=5` manual retry
         # exhausted under 10 concurrent cross-item writes because the
@@ -1013,11 +1023,17 @@ class CommandService:
         # 5C-C26l Addendum K (WH55-C26L-1) — the invoice-line decision of a
         # linked direct delivery is taken HERE, in the transaction, under the
         # line lock (the pre-check before the rights gate is not a guard).
-        if action == CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT and inp.invoice_line_id:
+        # 5C-C26l Addendum L (FG-108): EVERY linked supplier receipt —
+        # warehouse or direct — takes the same line lock, and the line's
+        # covered quantity counts all linked paths.
+        if action in (CanonicalAction.RECEIVE_FROM_SUPPLIER,
+                      CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT) \
+                and inp.invoice_line_id:
             await self._lock_invoice_line(tenant_collection, session=session,
                                           invoice_line_id=inp.invoice_line_id)
             await self._check_invoice_line_delivery(tenant_db, tenant_collection, inp,
                                                     session=session)
+            await self._check_invoice_line_total(tenant_collection, inp, session=session)
 
         # ------------------------------------------------------------
         # Resolve allocations + value per action type.
@@ -1809,14 +1825,53 @@ class CommandService:
         deliver against the same line both write it → MongoDB aborts one
         with a WriteConflict and ``with_transaction`` re-runs it, so the
         covered-quantity decision always sees the other's committed row."""
+        from app.services.invoice_line_lock import bump_line_lock
+        await bump_line_lock(tenant_collection.tenant, invoice_line_id, session=session)
+
+    @staticmethod
+    async def _check_invoice_line_total(tenant_collection, inp: CommandInput, *,
+                                        session) -> None:
+        """5C-C26l Addendum L — FG-108 (D-04): the quantity of an invoice
+        line covered through the canon is ALL its linked receipts — the
+        warehouse receipts (later dispatched / accepted on a project) AND
+        the direct deliveries. A linked receipt beyond the line's quantity
+        is the same lot a second time → 422 INVOICE_LINE_QTY_EXCEEDED,
+        nothing written. In the transaction, under the line lock. Only when
+        the quantities are comparable (line qty known, same unit); an
+        unknown line is the FG-53 debt for a warehouse receipt (a direct
+        delivery of an unknown line is already refused)."""
+        from app.services.canonical_material_cost import _norm_unit
+        from app.services.invoice_line_lock import LINKED_RECEIPT_ACTIONS
+        from app.services.warehouse_movements.errors import InvoiceLineQuantityExceededError
         tenant = tenant_collection.tenant
-        await tenant.warehouse_ledger_counters.update_one(
-            {"_id": f"invoice_line_lock:{tenant.org_id}:{invoice_line_id}"},
-            {"$inc": {"value": 1},
-             "$setOnInsert": {"tenant_id": tenant.org_id,
-                              "name": "invoice_line_lock",
-                              "invoice_line_id": invoice_line_id}},
-            upsert=True, session=session)
+        line = await tenant.invoice_lines.find_one(
+            {"id": inp.invoice_line_id}, {"_id": 0, "qty": 1, "unit": 1}, session=session)
+        if not line:
+            return
+        try:
+            line_qty = Decimal(str(line.get("qty"))) if line.get("qty") is not None else None
+        except Exception:
+            line_qty = None
+        unit = _norm_unit(line.get("unit"))
+        if line_qty is None or line_qty <= 0 or unit not in ("", _norm_unit(inp.unit)):
+            return
+        linked = Decimal("0")
+        async for row in tenant_collection.find(
+                {"action": {"$in": list(LINKED_RECEIPT_ACTIONS)},
+                 "invoice_line_id": inp.invoice_line_id},
+                {"_id": 0, "quantity": 1, "unit": 1, "idempotency_key": 1},
+                session=session):
+            if inp.idempotency_key and row.get("idempotency_key") == inp.idempotency_key:
+                return        # a replay of this very receipt — idempotency answers
+            if _norm_unit(row.get("unit")) not in ("", unit, _norm_unit(inp.unit)):
+                return        # a linked receipt in another unit: not comparable
+            linked += Decimal(str(row.get("quantity") or "0"))
+        if linked + Decimal(str(inp.quantity)) > line_qty:
+            raise InvoiceLineQuantityExceededError(
+                "the linked receipts would exceed the invoice line's quantity",
+                context={"invoice_line_id": inp.invoice_line_id,
+                         "line_qty": str(line_qty), "linked": str(linked),
+                         "quantity": str(inp.quantity)})
 
     @staticmethod
     async def _location_project(tenant_db, inp: CommandInput) -> Optional[str]:

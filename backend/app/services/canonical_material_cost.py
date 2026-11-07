@@ -255,6 +255,15 @@ async def project_cost_rows(tenant, org_id: str, project_id: str) -> List[dict]:
 #          delivered directly into ANOTHER project than it is allocated to
 #          (legacy data; new ones are refused 422): the lot counts once, on
 #          the canonical destination; raised on both projects.
+#        PATH_B_LINK_OVER_LINE (5C-C26l Addendum L, FG-108) — the linked
+#          supplier receipts of L (warehouse + direct) exceed L's quantity
+#          (legacy data; new ones are refused 422 INVOICE_LINE_QTY_EXCEEDED):
+#          the excess is the same lot a second time. It is taken off the
+#          direct deliveries of L, newest first (the warehouse lot is stock
+#          with FIFO layers, accepted / issued through the canon), as a
+#          negative ``over_link_exclusion`` line at the delivery's moment —
+#          the lot counts once. Warehouse-only excess changes no project
+#          cost (stock) and is warned on the integrity screen.
 
 PATH_B_RECEIPT_ACTIONS: Tuple[str, ...] = (
     "receive_from_supplier", "receive_from_supplier_to_project")
@@ -347,6 +356,8 @@ async def ledger_invoice_line_links(tenant, org_id: str, ids: List[str]) -> Dict
         {"org_id": org_id, "action": {"$exists": True}, "invoice_line_id": {"$in": ids}},
         {"_id": 0, "invoice_line_id": 1, "action": 1, "quantity": 1, "unit": 1,
          "destination": 1, "movement_id": 1,
+         # 5C-C26l Addendum L (FG-108): order + value of an over-linked lot.
+         "ledger_sequence": 1, "unit_value": 1, "total_value": 1, "recorded_at": 1,
          # 5C-C26k (F-55-C26-01): the server-bound project of the movement —
          # for a subproject destination, its DB-resolved parent (FG-38).
          "project_id": 1},
@@ -496,6 +507,111 @@ async def project_link_conflicts(tenant, org_id: str, project_id: str) -> List[d
         out.append({"code": "PATH_B_LINK_PROJECT_CONFLICT", "project_id": project_id,
                     "invoice_line_id": lid, "delivered_qty": delivered[lid],
                     "allocated_qty": 0.0, "rule": PATH_B_RULE})
+    return out
+
+
+def over_linked_lines(line: dict, links: List[dict]) -> Optional[Dict[str, Any]]:
+    """5C-C26l Addendum L (FG-108) — for one invoice line and its canonical
+    links: None, or {excess_qty, exclusions: [{row, qty}]} when the linked
+    supplier receipts exceed the line's quantity (comparable units only).
+    The excess is assigned to the direct deliveries, newest first."""
+    line_qty = _f(line.get("qty"))
+    if line_qty is None or line_qty <= 0:
+        return None
+    unit = _norm_unit(line.get("unit"))
+    receipts = [r for r in links if r.get("action") in PATH_B_RECEIPT_ACTIONS]
+    if not receipts or any(_norm_unit(r.get("unit")) not in ("", unit) for r in receipts):
+        return None
+    excess = sum(_f(r.get("quantity")) or 0.0 for r in receipts) - line_qty
+    if excess <= 1e-9:
+        return None
+    out = {"excess_qty": excess, "exclusions": []}
+    directs = sorted((r for r in receipts
+                      if r.get("action") == "receive_from_supplier_to_project"),
+                     key=lambda r: (r.get("ledger_sequence") or 0, r.get("movement_id") or ""),
+                     reverse=True)
+    left = excess
+    for r in directs:
+        if left <= 1e-9:
+            break
+        take = min(left, _f(r.get("quantity")) or 0.0)
+        if take > 0:
+            out["exclusions"].append({"row": r, "qty": take})
+            left -= take
+    return out
+
+
+def _row_unit_value(row: dict) -> float:
+    uv = _f(row.get("unit_value"))
+    if uv is not None:
+        return uv
+    qty, total = _f(row.get("quantity")), _f(row.get("total_value"))
+    return (total / qty) if qty and total is not None else 0.0
+
+
+async def project_over_link_exclusions(tenant, org_id: str, project_id: str):
+    """FG-108 legacy data — (exclusion lines, warnings) of THIS project: the
+    over-linked quantity of its linked direct deliveries."""
+    ids = sorted({lid for lid in await tenant.warehouse_transactions.distinct(
+        "invoice_line_id", {"org_id": org_id, "action": "receive_from_supplier_to_project",
+                            "project_id": project_id,
+                            "invoice_line_id": {"$nin": [None, ""]}}) if lid})
+    if not ids:
+        return [], []
+    links = await ledger_invoice_line_links(tenant, org_id, ids)
+    exclusions, warnings = [], []
+    async for line in tenant.invoice_lines.find(
+            {"org_id": org_id, "id": {"$in": ids}},
+            {"_id": 0, "id": 1, "qty": 1, "unit": 1, "invoice_id": 1, "description": 1}):
+        over = over_linked_lines(line, links.get(line["id"], []))
+        if not over:
+            continue
+        mine = [e for e in over["exclusions"] if e["row"].get("project_id") == project_id]
+        for e in mine:
+            r = e["row"]
+            at = canonical_moment(r)
+            exclusions.append({
+                "source": "dq_correction", "kind": "over_link_exclusion", "waste": False,
+                "value": -round(e["qty"] * _row_unit_value(r), 4), "qty": -e["qty"],
+                "item_id": None, "unit": r.get("unit"),
+                "material_name": line.get("description") or "", "package_id": None,
+                "at": at, "period": period_of(at), "ref": line["id"],
+                "movement_id": r.get("movement_id"),
+            })
+        warnings.append({
+            "code": "PATH_B_LINK_OVER_LINE", "project_id": project_id,
+            "invoice_line_id": line["id"], "invoice_id": line.get("invoice_id"),
+            "description": line.get("description"),
+            "line_qty": _f(line.get("qty")), "excess_qty": round(over["excess_qty"], 4),
+            "excluded_qty": round(sum(e["qty"] for e in mine), 4),
+            "linked_movement_ids": sorted(r.get("movement_id") for r in links.get(line["id"], [])
+                                          if r.get("movement_id")),
+            "rule": PATH_B_RULE,
+        })
+    return exclusions, warnings
+
+
+async def tenant_over_linked_warnings(tenant, org_id: str) -> List[dict]:
+    """FG-108 — every over-linked invoice line of the tenant (integrity
+    screen), including warehouse-only excess (no project cost changed)."""
+    ids = sorted({lid for lid in await tenant.warehouse_transactions.distinct(
+        "invoice_line_id", {"org_id": org_id, "action": {"$in": list(PATH_B_RECEIPT_ACTIONS)},
+                            "invoice_line_id": {"$nin": [None, ""]}}) if lid})
+    if not ids:
+        return []
+    links = await ledger_invoice_line_links(tenant, org_id, ids)
+    out = []
+    async for line in tenant.invoice_lines.find(
+            {"org_id": org_id, "id": {"$in": ids}},
+            {"_id": 0, "id": 1, "qty": 1, "unit": 1, "invoice_id": 1, "description": 1}):
+        over = over_linked_lines(line, links.get(line["id"], []))
+        if over:
+            out.append({"code": "PATH_B_LINK_OVER_LINE", "project_id": None,
+                        "invoice_line_id": line["id"], "invoice_id": line.get("invoice_id"),
+                        "description": line.get("description"),
+                        "line_qty": _f(line.get("qty")),
+                        "excess_qty": round(over["excess_qty"], 4),
+                        "rule": PATH_B_RULE})
     return out
 
 
@@ -693,6 +809,12 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         if (w["code"], w["invoice_line_id"]) not in seen_conflicts:
             path_b_warnings.append(w)
 
+    # 5C-C26l Addendum L (FG-108) — an over-linked lot counts once.
+    over_lines, over_warnings = await project_over_link_exclusions(tenant, org_id, project_id)
+    lines.extend(over_lines)
+    path_b_warnings.extend(over_warnings)
+    over_link_excluded = -sum(ln["value"] for ln in over_lines)
+
     # 5C-C26 point 3 — legacy issues carry no invoice-line / lot reference:
     # an overlap with a counted Path B line of the same material cannot be
     # proven or refuted from the data. Warn; never change the sum silently.
@@ -777,6 +899,8 @@ async def project_material_cost(tenant, org_id: str, project_id: str) -> Dict[st
         # 5C-C26 — selected lines' quantity allocated elsewhere (warehouse →
         # Path A, cost at ACCEPT; client); never project cost here.
         "invoice_path_a_cost": round(invoice_path_a, 2),
+        # 5C-C26l Addendum L (FG-108) — the over-linked part of direct deliveries.
+        "over_link_excluded_cost": round(over_link_excluded, 2),
         "path_b_rule": PATH_B_RULE,
         "path_b_warnings": path_b_warnings,
         "allocated_cost": round(allocated, 2),
@@ -834,6 +958,10 @@ async def path_b_integrity_warnings(tenant, org_id: str) -> List[dict]:
     for pid in sorted(project_ids):
         cost = await project_material_cost(tenant, org_id, pid)
         out.extend(cost["path_b_warnings"])
+    # FG-108 — over-linked lines no project shows (warehouse-only excess).
+    shown = {w.get("invoice_line_id") for w in out if w["code"] == "PATH_B_LINK_OVER_LINE"}
+    out.extend(w for w in await tenant_over_linked_warnings(tenant, org_id)
+               if w["invoice_line_id"] not in shown)
     return out
 
 

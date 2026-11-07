@@ -51,6 +51,12 @@ class InvoiceLineProjectMismatchError(InvariantViolationError):
     error_code = "INVOICE_LINE_PROJECT_MISMATCH"
 
 
+class InvoiceLineQuantityExceededError(InvariantViolationError):
+    """5C-C26l Addendum L (FG-108): the linked supplier receipts of an
+    invoice line (warehouse + direct) would exceed the line's quantity."""
+    error_code = "INVOICE_LINE_QTY_EXCEEDED"
+
+
 class NegativeStockError(InvariantViolationError):
     """Normal stock cannot silently become negative (FLOW-009)."""
     error_code = "NEGATIVE_STOCK"

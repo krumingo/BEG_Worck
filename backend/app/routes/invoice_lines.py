@@ -7,7 +7,8 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 
-from app.db import db
+from app.db import db, client as mongo_client
+from app.services.invoice_line_lock import InvoiceLineAllocationLocked, write_unless_linked
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
@@ -34,6 +35,21 @@ def _tenant(user: dict) -> TenantData:
     that returned and modified ANOTHER tenant's financial records.
     """
     return TenantData.for_user(db, user)
+
+
+# 5C-C26l Addendum L — FG-109: the fields a linked line is costed by.
+LOCKED_WHEN_LINKED = ("allocations", "qty", "unit", "unit_price")
+
+
+async def _unless_linked(tenant: TenantData, line_id: str, write) -> None:
+    """FG-109 (D-04): once a canonical warehouse movement links the line, its
+    allocation / qty / unit / price are locked — 409, nothing written.
+    Decided in one transaction under the per-line lock the canonical
+    receipts take (``app.services.invoice_line_lock``)."""
+    try:
+        await write_unless_linked(mongo_client, tenant, line_id, write)
+    except InvoiceLineAllocationLocked as exc:
+        raise HTTPException(status_code=409, detail=exc.detail())
 
 
 def finance_permission(user: dict) -> bool:
@@ -527,7 +543,7 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
     merged = compute_line_totals(merged)
     merged = compute_allocation_stats(merged)
     
-    await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
+    patch = {
         **update,
         "line_total_ex_vat": merged["line_total_ex_vat"],
         "vat_amount": merged["vat_amount"],
@@ -535,7 +551,15 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
         "qty_allocated": merged.get("qty_allocated", 0),
         "qty_unallocated": merged.get("qty_unallocated", 0),
         "is_fully_allocated": merged.get("is_fully_allocated", False),
-    }})
+    }
+
+    async def _write(session):
+        await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},
+                                              session=session)
+    if any(k in update for k in LOCKED_WHEN_LINKED):
+        await _unless_linked(tenant, line_id, _write)            # FG-109
+    else:
+        await _write(None)
     
     # Recalculate invoice
     await recalculate_invoice_totals(tenant, line["invoice_id"])
@@ -586,13 +610,15 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
     
     now = datetime.now(timezone.utc).isoformat()
     
-    await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
-        "allocations": allocs,
-        "qty_allocated": round(total_allocated, 4),
-        "qty_unallocated": round(qty_purchased - total_allocated, 4),
-        "is_fully_allocated": abs(total_allocated - qty_purchased) <= 0.0001,
-        "updated_at": now,
-    }})
+    async def _write(session):
+        await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
+            "allocations": allocs,
+            "qty_allocated": round(total_allocated, 4),
+            "qty_unallocated": round(qty_purchased - total_allocated, 4),
+            "is_fully_allocated": abs(total_allocated - qty_purchased) <= 0.0001,
+            "updated_at": now,
+        }}, session=session)
+    await _unless_linked(tenant, line_id, _write)                # FG-109
     
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_line_allocated", "invoice_line", line_id,
                     {"allocations_count": len(allocs), "total_allocated": total_allocated})
@@ -622,7 +648,10 @@ async def delete_invoice_line(line_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Can only delete lines of Draft invoices")
     
     invoice_id = line["invoice_id"]
-    await tenant.invoice_lines.delete_one({"id": line_id})
+
+    async def _write(session):
+        await tenant.invoice_lines.delete_one({"id": line_id}, session=session)
+    await _unless_linked(tenant, line_id, _write)    # FG-109: a linked line is never deleted
     
     # Recalculate invoice
     await recalculate_invoice_totals(tenant, invoice_id)
