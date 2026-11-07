@@ -72,3 +72,45 @@ def test_n3_new_key_on_leg2_recovers(monkeypatch, backend, mode):
         print("N3 new key on leg2 →", r.status_code)
         assert await _state(op, leg1) == ("reversed", 1) and await _state(op, leg2) == ("reversed", 1)
     run(monkeypatch, backend, mode, scenario)
+
+
+# ── #70 4b745f1 (C01-G): the remaining leg got an active allocation after the interruption
+def test_n4_remaining_leg_allocated(monkeypatch, backend, mode):
+    """URL = the Outflow leg; it is reversed, the run stops before the Inflow leg; then the
+    Inflow leg is allocated to an Issued invoice. A new key on the URL leg → 409
+    TRANSFER_LEG_ALLOCATED and nothing changes; after the allocation is cancelled a new key
+    completes the transfer."""
+    async def scenario(c, op):
+        from app.routes import finance
+        r = await c.post("/api/finance/transfers", headers=hdr("acct-a"),
+                         json={"from_account_id": BANK_A, "to_account_id": CASH_A, "amount": 50})
+        legs = await op.finance_payments.find({"transfer_id": r.json()["transfer_id"]}, {"_id": 0}).to_list(None)
+        out = next(l["id"] for l in legs if l["direction"] == "Outflow")
+        inn = next(l["id"] for l in legs if l["direction"] == "Inflow")
+        restore = _fail_before_nth(monkeypatch, finance, "_reverse_one", 2)
+        with pytest.raises(RuntimeError):
+            await reverse(c, out, key="k-n4-a")
+        restore()
+        assert (await _state(op, out))[0] == "reversed" and (await _state(op, inn))[0] != "reversed"
+        a = await c.post("/api/finance/payments/%s/allocate" % inn, headers=hdr("acct-a"),
+                         json={"allocations": [{"invoice_id": "inv-a1", "amount": 50}]})
+        print("N4 allocate remaining leg →", a.status_code, a.text[:120])
+        if a.status_code != 200:
+            return                                  # allocating a transfer leg is refused: path unreachable
+        before = await op.finance_payments.count_documents({})
+        r = await reverse(c, out, key="k-n4-b")
+        print("N4 new key on out leg →", r.status_code, r.text[:200])
+        assert r.status_code == 409 and "TRANSFER_LEG_ALLOCATED" in r.text
+        assert await op.finance_payments.count_documents({}) == before
+        assert (await _state(op, inn)) == (None, 0) or (await _state(op, inn))[0] != "reversed"
+        alloc = await op.payment_allocations.find_one({"payment_id": inn, "status": {"$ne": "cancelled"}}, {"_id": 0})
+        x = await c.request("DELETE", "/api/finance/invoices/inv-a1/payments/%s" % alloc["id"],
+                            headers=hdr("acct-a"), json={"reason": "probe"})
+        print("N4 cancel allocation →", x.status_code, x.text[:160])
+        st = await _state(op, inn)
+        if st[0] != "reversed":                    # cancel of the last allocation may itself reverse the leg
+            r = await reverse(c, out, key="k-n4-c")
+            print("N4 new key after cancel →", r.status_code)
+        assert await _state(op, out) == ("reversed", 1) and await _state(op, inn) == ("reversed", 1)
+        assert await op.audit_events.count_documents({"action": "finance.payment.reversed", "entity_id": inn}) == 1
+    run(monkeypatch, backend, mode, scenario)

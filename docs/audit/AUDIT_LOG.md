@@ -8,10 +8,10 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `4ed6077` | **PASS** (C26k, Codex F-55-C26-01 subproject direct delivery counted once) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `c31c09a` | **FINDINGS: WH55-C26L-1 BLOCKING** (concurrent linked deliveries over-link the line; cost 300–350 for a line of 100) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `0713a81` | **FINDINGS: PAY70-04 BLOCKING** (transfer left half-reversed when leg 2 was never marked and a new key retries leg 1 → 409) | 2026-11-07 |
+| #70 PAY-01 | `4b745f1` | **PASS** (C01-G fixes PAY70-04; N1–N4 24/24) | 2026-11-07 |
 | #69 SEC-01 | `ccab244` | **PASS** (FG-90 atomic certified-total reservation); note FG90-N1 (reservation never released on reversal) | 2026-11-07 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -3386,3 +3386,60 @@ Low notes:
 - The reset AuditEvent is written after the status write, with no key, so a crash leaves a reset with no event.
 - A SiteManager author can reset their own report (R36-consistent; four-eyes holds at approval).
 - An FG-101 correction voids before it inserts, so a crash leaves the line with no active approval until a reload and re-approval (this predates FG-101).
+
+
+## #70 PAY-01-C01-G @ `4b745f1` — 2026-11-07 ~12:10 UTC — PASS (PAY70-04 closed)
+
+`delete_payment`, in the `REVERSED and not retry` branch:
+- every leg that still counts is reversed (with the original reason), unless it has an active allocation, which gives 409 `TRANSFER_LEG_ALLOCATED`;
+- then `_repair_pair` runs for every leg;
+- then 409 `PAYMENT_ALREADY_REVERSED` with the repaired state (`reversals`, `completed_legs`).
+
+`probes/pay01/test_probe_f703_leg2_unmarked.py`, mongomock + real, off/shadow/enforce: **24/24**.
+
+| Case | Result |
+|---|---|
+| N1, new key on L1 | 409; both legs `reversed`, 1 row each |
+| N2, same key | 200 |
+| N3, new key on L2 | 200 |
+| **N4**, new: remaining Inflow leg allocated to an Issued invoice, then a new key on L1 | 409 `TRANSFER_LEG_ALLOCATED`, nothing written; cancelling the allocation reverses the leg (1 row, 1 event) |
+
+| Gate | Result |
+|---|---|
+| `test_pay_01_*`, real Mongo | **630 passed** |
+| probes `e_alloc_vs_reverse`, `d5`, `c01a`, `fg50` | FAILS none |
+| W0 | same 15 |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0 | **814** |
+| merge-tree #72 `90a582b` | clean |
+
+
+## #55 5C-C26l @ `c31c09a` — 2026-11-07 ~12:15 UTC — FINDINGS (1 blocking)
+
+The fix, for Codex F-55-C26-02:
+- `_check_invoice_line_delivery` (in the binding phase, held until the rights check): a linked direct delivery must go to a project L is allocated to (422 `INVOICE_LINE_PROJECT_MISMATCH`), and must not exceed L's remaining allocation to that project; a same-key replay is exempt.
+- `path_b_split` handles `to_other` / `excess_other`.
+- `project_link_conflicts` covers the destination side.
+- `PATH_B_LINK_PROJECT_CONFLICT` is raised once per project.
+
+**WH55-C26L-1, BLOCKING, PROVED** by `probes/wh55/test_probe_c26l_link_race.py` (real Mongo RS, enforce, 3 rounds × 2 shapes). L = 10 @10, allocated P 5 and Q 5; 6 concurrent linked deliveries of 5, different keys:
+
+| Shape | Accepted | Linked | Cost P/Q (live = rebuild ×2) |
+|---|---|---|---|
+| 6 → P | **6/6** | P **30** | **300 / 50** |
+| 3 → P + 3 → Q | **6/6** | P 15, Q 15 | **150 / 150** |
+
+The delivered sum is read before the transaction, and nothing serialises deliveries of one line. This is the programmer's recorded debt, now proven to over-link and to cost the line 3–3.5×.
+- **Fix:** an atomic per-line reservation (conditional `$inc`, as FG-90) or a line lock inside the movement transaction.
+- PR comment 6695125557 updated (blocking).
+
+| Gate | Result |
+|---|---|
+| c26l | **11 passed** (Codex repro 422; legacy conflict counted once, live and after rebuild ×2; warning on both projects once) |
+| other c26* | all pass (c26e 272) |
+| W0 | same 15 |
+| A2C | 0/222 |
+| A1 | 0/450 |
+
+The full warehouse suite and R0 will run with the fix head.
