@@ -4532,3 +4532,17 @@ The merge with main is clean.
 | PM-01 | 6 (767 routes / 18 408 cells; modes identical) |
 
 Static review is in the entry above. Ready for Codex.
+
+### #71 @ `b1ab349` (FG-141 explicit (type, metric) allowlist) — static PASS
+
+My 16-name × 10-type matrix (160 cases): **0 mismatches**. The threshold is shown only for (budget, `burn_pct`) in that set; `threshold_eur` is always dropped.
+
+| Case | Result |
+|---|---|
+| FLOW Guard case: budget / `amount_eur` / 48250 | `{metric, operator}`, **threshold hidden** |
+| all **11** allowlisted (type, metric) pairs | threshold shown |
+| budget rule with no metric | threshold hidden |
+
+- Observation (usability, not security): `alarm_engine` branches on the type only, so a budget rule with an unlisted metric name is still a % rule. Non-finance users won't see its threshold. Fails closed by design.
+- No UI or seed sets metric names (API only).
+- Runtime `b71g` (bisect probe, sec02, W0, R0, PM-01, merge) was re-started after a second machine restart (~21:19 UTC).
