@@ -523,3 +523,27 @@ Codex closed F-70-01 and F-70-02 and confirmed the STARTED guard.
 | A1 / A2C guards | 418 units / 206 modules, 0 violations |
 
 **A1 inventory:** regenerated. The read of a transfer's legs now selects every original leg, and there is one per-leg re-read; both are tenant-scoped. Totals: 374 accesses (FIXED 131, SAFE 243).
+
+## PAY-01-C01-G: a new key on a half-reversed transfer completes it (audit PAY70-04 @ 0713a81)
+
+**Finding (blocker, 6/6).**
+1. A transfer reversal is interrupted after leg 1 is fully done (row and event) but before leg 2 is marked.
+2. A retry with a **new** key on leg 1 got 409 "already reversed" and left leg 2 **active**. The transfer stayed half-reversed and one account was off by 50.
+
+The UI makes a fresh key on every click (`PaymentsPage.js:254`), so a user retrying after a 500 lands exactly here.
+
+**Fix.** This is the "already reversed and not a retry of the same key" branch of `delete_payment`, which runs under the sorted leg locks.
+- **Leg that still counts:** it is reversed first, with the original reversal reason and after the usual allocation check. If it has allocations → 409 `TRANSFER_LEG_ALLOCATED`.
+- **Reversed legs:** every reversed leg gets its missing row and event (`_repair_pair`), each exactly once.
+- **The answer:** it stays **409**, because a new key is not a second reversal. The detail now shows the repaired state: `{error_code: "PAYMENT_ALREADY_REVERSED", message, reversals: [{payment_id, status, reversal_payment_id}, …], completed_legs: [ids this request reversed]}`. The UI shows `detail.message`.
+- **New key on the active leg (leg 2):** the normal path reverses it, repairs leg 1 and answers 200 with both legs.
+
+**Tests.** These are in `test_pay_01_c01_e_serialisation.py`; mongomock + real Mongo, three modes: 12 cases.
+- **New key on leg 1:** 409 `PAYMENT_ALREADY_REVERSED` with `completed_legs = [leg 2]` and both legs `reversed`. Each leg has 1 reversal row and 1 event, and both account balances are back to their opening amounts. A further new key → 409 with `completed_legs = []` and nothing written.
+- **New key on leg 2:** 200 with both legs, and the same end state.
+
+| Run | Result |
+|---|---|
+| Both tests on 0713a81 | the new key on leg 1 **fails 6/6** (leg 2 stays active); the new key on leg 2 already held there (control) |
+| All `test_pay_01*` + A1 collision matrix + `test_w0_04*` | 667 passed |
+| A1 / A2C guards | 0 violations; the A1 inventory is unchanged (374) |

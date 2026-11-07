@@ -1901,9 +1901,31 @@ async def delete_payment(payment_id: str,
                 {"_id": 0}).to_list(10) or legs
             legs.sort(key=lambda leg: (leg["id"] != payment_id, leg["id"]))
         if payment.get("status") == PAYMENT_REVERSED and not retry:
-            for leg in legs:                       # complete what an interrupted request left
-                await _repair_pair(tenant, user, leg, req.key)
-            raise await _refuse(user, req, action, "Плащането вече е сторнирано")
+            # PAY70-04: a NEW key on a payment that is already reversed (the UI makes a fresh
+            # key per click, e.g. after a 500). Still 409 — it is not a second reversal — but an
+            # interrupted transfer reversal is completed first: a leg that still counts is
+            # reversed (with the original reason), every reversed leg gets its missing row /
+            # event, each exactly once. The answer shows the repaired state of every leg.
+            completed = []
+            for leg in legs:
+                if not payment_counts(leg):
+                    continue
+                if await tenant.payment_allocations.count(active_allocations({"payment_id": leg["id"]})):
+                    raise await _refuse(user, req, action, {
+                        "error_code": "TRANSFER_LEG_ALLOCATED",
+                        "message": "Другият крак на прехвърлянето има разпределения — отменете ги първо"})
+                if await _reverse_one(tenant, user, leg["id"], payment.get("reversal_reason") or req.reason,
+                                      req.key) is not None:
+                    completed.append(leg["id"])
+            state = []
+            for leg in legs:
+                current = await tenant.finance_payments.get(leg["id"], {"_id": 0})
+                await _repair_pair(tenant, user, current, req.key)
+                state.append({"payment_id": leg["id"], "status": current.get("status"),
+                              "reversal_payment_id": current.get("reversed_by_payment_id") or _reversal_id(leg["id"])})
+            raise await _refuse(user, req, action, {
+                "error_code": "PAYMENT_ALREADY_REVERSED", "message": "Плащането вече е сторнирано",
+                "reversals": state, "completed_legs": completed})
 
         # Check for allocations (cancel them on the invoice first — unchanged rule)
         for leg in legs:

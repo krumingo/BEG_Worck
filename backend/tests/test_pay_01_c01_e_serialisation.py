@@ -327,3 +327,66 @@ def test_f70_03_new_key_on_a_half_repaired_transfer_completes_rows_and_events(mo
             assert await op.audit_events.count_documents(
                 {"action": "finance.payment.reversed", "entity_id": leg["id"]}) == 1
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════ PAY70-04: new key, half-reversed transfer
+async def _half_reversed_transfer(c, op, monkeypatch):
+    """Leg 1 fully reversed (row + event), the request interrupted before leg 2 is marked."""
+    from app.routes import finance
+    r = await c.post("/api/finance/transfers", headers=hdr("acct-a"),
+                     json={"from_account_id": BANK_A, "to_account_id": CASH_A, "amount": 50})
+    assert r.status_code == 201, r.text
+    legs = await op.finance_payments.find({"transfer_id": r.json()["transfer_id"]}, {"_id": 0}).to_list(None)
+    legs.sort(key=lambda l: l["id"])
+    _fail_on_call(monkeypatch, finance, "_reverse_one", 2, False)      # leg 2 never marked
+    with pytest.raises(RuntimeError):
+        await reverse(c, legs[0]["id"], key="k-g-first")
+    first = await op.finance_payments.find_one({"id": legs[0]["id"]}, {"_id": 0})
+    second = await op.finance_payments.find_one({"id": legs[1]["id"]}, {"_id": 0})
+    assert first["status"] == "reversed" and "status" not in second    # the half-reversed state
+    return legs
+
+
+async def _assert_transfer_fully_reversed(c, op, legs):
+    for leg in legs:
+        row = await op.finance_payments.find_one({"id": leg["id"]}, {"_id": 0})
+        assert row["status"] == "reversed" and "allocation_lock" not in row, row
+        assert await op.finance_payments.count_documents({"reverses_payment_id": leg["id"]}) == 1
+        assert await op.audit_events.count_documents(
+            {"action": "finance.payment.reversed", "entity_id": leg["id"]}) == 1
+    accounts = {a["id"]: a["current_balance"]
+                for a in (await c.get("/api/finance/accounts", headers=hdr("acct-a"))).json()}
+    assert accounts[BANK_A] == 5000.0 and accounts[CASH_A] == 1000.0, accounts   # no account off by 50
+
+
+def test_pay70_04_new_key_on_reversed_leg_completes_the_transfer(monkeypatch, backend, mode):
+    """The audit's path: a NEW key on leg 1 (already reversed) → 409, but leg 2 is reversed
+    first (row + event once) and the answer shows both legs reversed."""
+    async def scenario(c, op):
+        legs = await _half_reversed_transfer(c, op, monkeypatch)
+        r = await reverse(c, legs[0]["id"], key="k-g-new")               # a fresh key, as the UI sends
+        assert r.status_code == 409, r.text
+        d = r.json()["detail"]
+        assert d["error_code"] == "PAYMENT_ALREADY_REVERSED" and d["message"]
+        assert d["completed_legs"] == [legs[1]["id"]]
+        assert sorted((x["payment_id"], x["status"]) for x in d["reversals"]) == sorted(
+            (leg["id"], "reversed") for leg in legs)
+        await _assert_transfer_fully_reversed(c, op, legs)
+        # once more with yet another key: nothing left to complete, nothing written
+        before = await snap(op, ("finance_payments", "payment_allocations", "audit_events"))
+        r2 = await reverse(c, legs[0]["id"], key="k-g-new-2")
+        assert r2.status_code == 409 and r2.json()["detail"]["completed_legs"] == []
+        assert await snap(op, ("finance_payments", "payment_allocations", "audit_events")) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_pay70_04_new_key_on_the_active_leg_completes_the_transfer(monkeypatch, backend, mode):
+    """The same state, a new key on leg 2 (still active): the normal path reverses it, repairs
+    leg 1 if needed, and answers 200 with both legs."""
+    async def scenario(c, op):
+        legs = await _half_reversed_transfer(c, op, monkeypatch)
+        r = await reverse(c, legs[1]["id"], key="k-g-leg2")
+        assert r.status_code == 200, r.text
+        assert sorted(x["payment_id"] for x in r.json()["reversals"]) == sorted(l["id"] for l in legs)
+        await _assert_transfer_fully_reversed(c, op, legs)
+    run(monkeypatch, backend, mode, scenario)
