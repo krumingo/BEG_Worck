@@ -1,3 +1,4 @@
+import uuid
 """CLAUDE AUDIT probe SEC-01-C01 (#69): R16 member-project rule edge cases, real server.app, 3 modes.
 
     cd <PR worktree>/backend && PYTHONPATH=. MONGO_URL='mongodb://127.0.0.1:27019/?directConnection=true' python <this>
@@ -23,6 +24,14 @@ PW = "Probe-Synthetic-Pass-2026!"
 app = server.app; app.router.on_startup.clear(); app.router.on_shutdown.clear()
 res, fails = {}, []
 with TestClient(app, raise_server_exceptions=False) as tc:
+    # R29 (#69 6d43284+): money POSTs need an Idempotency-Key — add a fresh one to every write.
+    _orig_request = tc.request
+    def _keyed(method, url, **kw):
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            h = dict(kw.get("headers") or {}); h.setdefault("Idempotency-Key", "auto-" + uuid.uuid4().hex); kw["headers"] = h
+        return _orig_request(method, url, **kw)
+    tc.request = _keyed
+    tc.post = lambda url, **kw: _keyed("POST", url, **kw)
     cli = tc.portal.call(lambda: AsyncIOMotorClient(os.environ["MONGO_URL"]))
     op, sysdb = cli[os.environ["DB_NAME"]], cli[os.environ["BEG_SYSTEM_DB"]]
     rep = tc.portal.call(lambda: seed_mod.seed(op, sysdb, PW))

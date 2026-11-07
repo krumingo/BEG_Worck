@@ -8,11 +8,11 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -137,8 +137,8 @@ Heads: main `c0e34e1`, #53 `e2a07ee`, #54 `48306ba`, #55 `2bb81fc`, #56 `dae097b
 | #54 × #55 | `backend/app/permissions/catalog.py`, `backend/app/routes/procurement.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #56 | `backend/app/audit/store.py`, `backend/app/tenancy/data_access.py` |
 | #54 × #64 | `frontend/src/components/DashboardLayout.js` |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 
 Clean pairs: main×#53, main×#54, main×#56, main×#64, #53×#56, #53×#64, #56×#64.
 
@@ -900,9 +900,9 @@ A comment was posted on #69 (CLAUDE AUDIT, internal).
 | Pair | Status |
 |---|---|
 | #56 × #55 | conflict (`data_access.py`, A2B inventory) |
-| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #56 × main / #67 / #68 / #69 | clean |
-| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
 
 ---
@@ -1007,10 +1007,10 @@ The comment on #69 still applies.
 
 | Pair | Status |
 |---|---|
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
-| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 
 
 ---
@@ -1081,7 +1081,7 @@ The comment on #69 still applies.
 | Pair | Status |
 |---|---|
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 
 - On the merged #70 + #55 tree, `services/project_pnl.py` keeps `active_payments` on `other_cost` (semantic check ✔).
 - The textually clean #70 × #69 merge is **semantically wrong**: see INT-70x69.
@@ -1123,10 +1123,10 @@ Invoice lines are built with **origin/main's own `compute_line_totals` + `comput
 
 | Pair | Status |
 |---|---|
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 
 
 ---
@@ -1327,7 +1327,7 @@ Merge-tree, `64418eb` against each:
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #71 SEC-02 | `e6ea838` | **FINDINGS: SEC02D-1** POST /sites/{id}/pulse/generate returns per-worker labor_cost to any role (pre-existing on main, outside the GET scan); SEC02C-1 CLOSED | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
-| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
 
 ## #70 PAY-01-C01 @ `8910939` — 2026-11-06 ~21:05 UTC — PASS
@@ -1661,7 +1661,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 
 | PR | Route | Without the index (as the app leaves it) | With `create_index("id", unique=True)` |
 |---|---|---|---|
-| #69 SEC-01 | `6d43284` | **PASS** (R29 428 keyless); IDEM-IDX-1 applies | 2026-11-06 |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `e733c66` | **PASS** (fixes IDEM-IDX-1; chain linear under 50 concurrent; #56 recipe verified); rollout risk: startup refuses on existing duplicates | 2026-11-07 |
 | #73 LAB-01 | `709815d` | **PASS** (FG-48/51, no default rate, downtime apart, Pay Run == spent); notes: akord = 0 in production until quantity approval exists (declared); **merge notes incomplete** (labor_smr × #69/#71 FG-26 delete_many; project_pnl × #70) | 2026-11-07 |
@@ -1865,9 +1865,9 @@ Merge-tree, `e733c66` against each:
 
 | Against | Result |
 |---|---|
-| #69, #70 | clean |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #56 | conflict: `store.py` (recipe above) + the A2B inventory |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 
 **Rollout risk (not a code defect; for Krum).** If a production or staging database already has duplicate idempotency rows or `(tenant_id, sequence)` events, which are likely given IDEM-IDX-1 and the `record_event` debt, the **app refuses to start** after deploy, by design. Before deploying, run the dry run `scripts/w0_04_bootstrap_audit_indexes.py` against a copy of the data, as the HANDOFF says.
 
@@ -1944,9 +1944,9 @@ Gates:
 | Against | Result |
 |---|---|
 | #71 SEC-02 | `e6ea838` | **FINDINGS: SEC02D-1** POST /sites/{id}/pulse/generate returns per-worker labor_cost to any role (pre-existing on main, outside the GET scan); SEC02C-1 CLOSED | 2026-11-07 |
-| #69 `6d43284` | conflict: **`labor_smr.py`** |
+| #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 `31ed258` | conflict: `project_pnl.py` |
-| #55 5C | `3777d71` | **FINDINGS: C26F-1** (dropped location rule → non-member SiteManager can quarantine warehouse stock and accept W→W transfers, both modes); C26E-1 CLOSED; R32/F-16/FG-53/55 OK | 2026-11-07 |
+| #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
 
 - The HANDOFF names `expected_actual` / `activity_budgets` / `project_pnl` / `all_reports` with respect to #71 only.
 - It does not mention that `labor_smr.py` `sync-from-work-reports` was rewritten by both #69 and #73:
@@ -2026,3 +2026,52 @@ Scan `scan_e6ea838.json`: only the 3 noise routes.
 - It also lets any user write (regenerate) a stored pulse.
 - Fix direction: put the generate route behind a role guard (finance or member SiteManager) and the same `strip_pulse_for_non_finance` view; or make it return nothing but an id.
 - Suggestion: extend the money scan to POST compute/generate routes. My scanner covers GETs only.
+
+
+## #55 5C-C26g @ `81e412c` — 2026-11-07 ~00:50 UTC — PASS
+
+Delta: `ensure_project_relation` refuses `R28_PROJECT_REQUIRED` when only project-bound roles grant the action and the command touches no project, in every mode.
+
+Probes, with the real company-scope `site_manager` grant, member of nothing:
+
+| Probe | Result |
+|---|---|
+| `test_probe_pr55_c26f_warehouse_only.py` | `quarantine_entry` at WH and accept of a W→W transfer → **DENIED `R28_PROJECT_REQUIRED` in off AND enforce**. **C26F-1 CLOSED (PROVED)** |
+| `test_probe_pr55_c26e_real_assignments.py` | non-member accept / consume / return → DENIED `R28_PROJECT_RELATION_REQUIRED` in both modes; C26E-1 stays closed |
+| c24, c24b, c25, c26, c26b, c26d | all pass, one test per process |
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| Warehouse canonical + c23 | **725 passed** (the member SiteManager's legitimate commands in the C26e matrix still pass) |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/221 |
+| A1 | 0/448 |
+| R0 | 814 |
+
+Still open, for Krum: the R32 question about project-bucket values shown to the keeper. Not a defect.
+
+## #69 SEC-01-C03 Addendum B @ `7300864` — 2026-11-07 ~00:55 UTC — PASS
+
+Delta:
+- FG-47: `money_value` = PR #70's `positive_amount`, so only JSON numbers are accepted.
+- FG-29: `project_in_tenant` on labor and material waste (422 when missing, 404 for another tenant's project).
+- FG-15: `labor_money_visible` strips the labor rate and cost from the response and from a replay.
+- The price_modifiers and subcontractors tweaks are small.
+
+Frontend check for FG-47 (numeric strings are now refused): the only callers are `MaterialWastePanel.js` (`qty: parseFloat`) and `ProjectOperationsPage.js` (`amount: Number(...)` / `parseFloat`). Both send numbers, so there is no regression.
+
+Probes:
+- `probe_sec01_c02_payments.py` (with the index): P1b key replay → identical response, +1, other body → 409; P1c → +1; P2 NaN → 422; P3 → 404.
+- siblings: FAILS none.
+- r16: updated to send an Idempotency-Key per write (R29 refuses keyless writes) → FAILS none. Before the update it reported 428s, which were only the stale probe.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_sec_01_*` | 30 passed |
+| W0 | 1085/15/50 |
+| A1 | 0/420 |
+| A2C | 0/207 |
