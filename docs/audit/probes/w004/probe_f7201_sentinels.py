@@ -90,6 +90,28 @@ async def main():
     except Exception as exc:  # noqa: BLE001
         OUT.append("L7 fail-closed: %s" % type(exc).__name__)
         leak("L7 %s" % type(exc).__name__, str(exc), tb(exc))
+    # L9 (#78 FG-126): a NON-duplicate create_index failure whose driver errmsg names the
+    # "<db>.<collection>" namespace -> still refused (fail-closed), no db name anywhere
+    from pymongo.errors import OperationFailure
+    db5 = c[SD + "e"]
+    class _Coll:
+        def __init__(self, real): self._r = real
+        def __getattr__(self, k): return getattr(self._r, k)
+        async def create_index(self, *a, **k):
+            raise OperationFailure("cannot create index in namespace %s.%s (sim)" % (db5.name, self._r.name), code=67,
+                                   details={"errmsg": "ns %s.%s" % (db5.name, self._r.name), "code": 67})
+    class _Db:
+        def __init__(self, real): self._r = real; self.name = real.name; self.client = real.client
+        def __getitem__(self, k): return _Coll(self._r[k])
+        def __getattr__(self, k): return getattr(self._r, k)
+    try:
+        await ix.ensure_audit_indexes(_Db(db5))
+        F.append("L9 NOT fail-closed: a failed index build was not refused")
+    except Exception as exc:  # noqa: BLE001
+        OUT.append("L9 fail-closed: %s" % type(exc).__name__)
+        leak("L9 non-duplicate build failure %s" % type(exc).__name__, str(exc), tb(exc),
+             "" if exc.__suppress_context__ else repr(exc.__context__), repr(exc.__cause__))
+    await c.drop_database(db5.name)
     # L8 (FG-117): the startup INFO line for a successful index creation
     db4 = c[SD + "d"]
     rep = await ix.ensure_audit_indexes(db4)

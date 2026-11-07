@@ -3813,3 +3813,21 @@ PR comment 6695992847 updated (blocking).
 
 - **#71 known-pay variant:** decided by Krum as **R42** (recorded @ `940bd49`). The R31 threshold stays at 2 paid workers, and the known-pay derivation is accepted. It is **not a finding**.
 - **SEC71-05:** dispatched to SEC-02 as Addendum H. It will be re-checked on the next #71 head.
+
+
+### #78 W0-04-C02 @ `48e28da` (FG-126) — PASS (real W0-04 run pending in batch b5)
+
+- **The change:** a non-duplicate `create_index` failure in `ensure_audit_indexes` now raises `AuditIndexError` (`database_ref` + `safe_reason`, raised `from None`) instead of re-raising the driver error, whose errmsg names `<db>.<collection>`.
+- **New L9** in `probes/w004/probe_f7201_sentinels.py`: a database proxy whose `create_index` raises `OperationFailure` (code 67, errmsg with the database name).
+
+| Head | L9 result |
+|---|---|
+| `48e28da` | `AuditIndexError`, fail-closed; all 13 paths clean |
+| `7b6da64` (control) | raw `OperationFailure` leaks the database-name marker |
+
+| Gate | Result |
+|---|---|
+| W0 | 1094/15/83, same 15 |
+| A2C | 0/212 |
+| A1 | 0/428 |
+| merge-tree vs main `d226c49` | clean |
