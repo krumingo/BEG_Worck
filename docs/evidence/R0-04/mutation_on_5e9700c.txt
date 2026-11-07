@@ -1,0 +1,11 @@
+# new/changed tests run against 5e9700c (C01 head, before the merge), mongomock
+=================================== FAILURES ===================================
+FAILED tests/test_auth_01_r0_04_merge.py::test_duplicate_identity_login_contract_is_unchanged_and_recorded
+FAILED tests/test_auth_01_r0_04_merge.py::test_reset_writes_one_canonical_audit_event_and_keeps_the_legacy_row
+FAILED tests/test_auth_01_r0_04_merge.py::test_recovery_cli_writes_one_canonical_audit_event
+FAILED tests/test_auth_01_r0_04_merge.py::test_a_failing_audit_event_rolls_the_whole_reset_back
+FAILED tests/test_auth_01_c01_corrections.py::test_f03_an_email_of_another_organization_cannot_be_created
+FAILED tests/test_auth_01_c01_corrections.py::test_f03_one_identity_implementation_and_one_duplicates_report
+FAILED tests/test_auth_01_password_recovery.py::test_a_case_only_duplicate_fails_closed
+FAILED tests/test_auth_01_password_recovery.py::test_user_create_refuses_a_case_variant_of_an_existing_email
+8 failed, 3 passed in 21.25s
