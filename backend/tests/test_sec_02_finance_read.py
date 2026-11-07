@@ -1730,6 +1730,36 @@ def test_fg133_alarm_rules_give_only_known_condition_keys(monkeypatch):
             assert "6200" not in json.dumps(out), out
 
 
+def test_fg141_money_metric_rules_give_no_threshold():
+    """SEC-02-G (FLOW Guard FG-141, addendum I): a rule on a money metric (EUR) gives a
+    caller without the finance right no threshold / secondary_threshold; percent, hours
+    and days thresholds stay; the rule name (admin text) stays."""
+    from app.permissions.finance_read import safe_alarm_rule, is_money_metric
+    assert all(is_money_metric(m) for m in ("amount_eur", "limit_eur", "spent_eur",
+                                             "labor_cost", "spent", "budget_amount",
+                                             "invoice_total_bgn"))
+    assert not any(is_money_metric(m) for m in ("burn_pct", "budget_pct", "progress_pct",
+                                                 "overtime_hours", "days_left",
+                                                 "overhead_change_percent", "", None))
+    rule = lambda cond: {"id": "r", "name": "Разход над 5000 EUR", "type": "custom",
+                         "condition": cond}
+    v = safe_alarm_rule(rule({"metric": "amount_eur", "operator": ">", "threshold": 5000,
+                              "secondary_metric": "progress_pct", "secondary_operator": "<",
+                              "secondary_threshold": 50}))
+    assert v["condition"] == {"metric": "amount_eur", "operator": ">",
+                              "secondary_metric": "progress_pct", "secondary_operator": "<",
+                              "secondary_threshold": 50}, v
+    assert v["name"] == "Разход над 5000 EUR"            # admin text, decided: stays
+    v = safe_alarm_rule(rule({"metric": "burn_pct", "operator": ">", "threshold": 80,
+                              "secondary_metric": "limit_eur", "secondary_operator": ">",
+                              "secondary_threshold": 1000}))
+    assert v["condition"] == {"metric": "burn_pct", "operator": ">", "threshold": 80,
+                              "secondary_metric": "limit_eur", "secondary_operator": ">"}, v
+    for m, thr in (("overtime_hours", 10), ("days_left", 7), ("burn_pct", 100)):
+        assert safe_alarm_rule(rule({"metric": m, "threshold": thr}))["condition"] == \
+            {"metric": m, "threshold": thr}
+
+
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
     import asyncio
     from app.permissions.money_write import money_values_visible
