@@ -23,3 +23,13 @@
 - **FG-15:** POST `/labor-entries` и Idempotency replay (`labor_smr.py:91,97`) да не връщат `hourly_rate`/`labor_cost` на роли без финансово право (както в #71) — #69 може да се слее преди #71.
 - **FG-47:** правилото за сума — като в #70 (`money_amount.py`): само JSON число; низ „12“, bool, списък → 422. Ако #70 вече го има, ползвай същия модул по същия път (бъдещ merge без конфликт) или същата логика.
 - **FG-29:** price-modifiers / material-waste / labor-entries / subcontractor payment: `project_id` трябва да съществува в този tenant, иначе 404/422 и нищо записано.
+
+## Допълнение C (07.11) — Codex F-69-03 [P1] @ ccab244 (коментар 6706168604)
+Прекъсване след резервацията на сертифицирания лимит прави същия-ключ плащане невъзможно.
+- Къде: `backend/app/routes/subcontractors.py:603–614` (`_reserve_within_certified`), извикано на ред 625; `mw.step("reserve")` се записва след commit на резервацията.
+- Repro: certified 100; плащане 60 с ключ K, прекъсване след commit на резервацията, преди `mw.step("reserve")`; retry с K. Сега: 500, после 409 PAYMENT_EXCEEDS_CERTIFIED във всички 3 режима; committed=60, paid=0, без ledger ред; всеки retry добавя още 60.
+- Очаквано: retry разпознава собствената си резервация → 1 ledger ред 60, 1 allocation 60, committed=60, paid=60.
+- Поправка: резервацията носи трайна операционна идентичност (idempotency key/attempt) и се разпознава атомарно при retry — или резервация + step в една транзакция. Никога не освобождавай чужда резервация, никога over-cap.
+- Тестове (real Mongo, 3 режима): crash след reserve → retry завършва точно веднъж; случай с висок лимит, където повторно увеличение би оставило фантомен committed; конкурентни retry-та ×10.
+- Merge бележка: при комбинация с #74 на compute остава само `KeyedWrite` от #74.
+- FG-105 продължава. HANDOFF в PR #69 с новия head.

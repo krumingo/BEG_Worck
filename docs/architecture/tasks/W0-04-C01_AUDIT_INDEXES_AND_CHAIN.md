@@ -12,3 +12,11 @@
 4. Миграция/rollout: какво става със съществуващи tenant бази (индексите се добавят при първия старт); ако има дубликати, които пречат на unique индекса — отчет, не триене.
 Внимание: `app/audit/store.py` се пипа и от PR #56 (AUTH-02) — минимален diff, опиши в HANDOFF как се слива с #56; #69 и #70 ще вземат main след merge.
 `HANDOFF W0-04-C01`.
+
+## Допълнение A (07.11) — Codex F-72-01 [P2] @ 90a582b (коментар 6706021060)
+Отказът „index unprotected / duplicates“ записва в общите логове tenant ID и целия операционен ключ.
+- Къде: `backend/app/audit/indexes.py:223–227` (lazy guard, `str(exc)` в съобщението), `:124–132` (startup `AuditIndexDuplicates` с `raise ... from exc`, който носи Mongo E11000 errmsg/keyValue), `backend/app/middleware/error_handler.py:21` (пълен traceback).
+- Очаквано: fail-closed отказ с безопасен код, имена на колекция/индекс и подсказка за оператора. Без суров ключ, reservation id, tenant съдържание или Mongo errmsg/keyValue в лога.
+- Поправка: редактирай съобщението и веригата (`from None` или санитизирано съобщение), пази типизирания отказ + diagnostic reference; детайлите за редовете — само в отделния operator report (dry-run скрипта). Без промяна в поведението fail-closed.
+- Тестове (sentinel стойности за ключ и tenant): startup path, lazy guard, реалния error middleware — сентинелите не се появяват в caplog/traceback.
+- Gates както досега; HANDOFF коментар в PR #72 с новия head.
