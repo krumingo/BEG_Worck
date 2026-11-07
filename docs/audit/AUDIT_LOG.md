@@ -4050,3 +4050,35 @@ The gates (`b55c`) are running.
 - **Cause:** in `update_act`, when `mine` is empty `new_value = 0`. That drops the act's own historical value, not the cumulative change `value_at(u − d) − value_at(u)`, and the leftover cent has no line to sit on.
 - PR comment posted (blocking).
 - `acted_value` is a float `$inc`, so it carries float noise (1234.4899999999998). Informational only.
+
+### #79 OFF-01 @ `ea9df81` (FG-129 / FG-130) — **BLOCKING OFF79-01**
+
+**Static review.** The new-version, accept, public respond and cancel routes each make one conditional write (`superseded_by: None`, status, version) inside a transaction together with the canonical AuditEvent, and each requires R29 through PAY-01's `_require_key` / `_once`. Revoking a review link keeps the token. DELETE is allowed only for a never-sent Draft.
+
+**Probe** `probes/off01/test_probe_off01.py` (PR harness, third RS on 27039) × 3 modes: **9 failed / 45 passed**. All 9 failures are O1.
+
+| Case | Result |
+|---|---|
+| **O1** restore on Sent | **200, total 1200 → 12**; the client approves by link → **Accepted at 12**, with version 1 and the same token |
+| **O1** restore on Accepted | price rewritten (1200 → 12) |
+| **O1** restore on Superseded | price rewritten (1200 → 12) |
+| O2 public 409 | no leak |
+| O3 same token in A and B | 404, both untouched |
+| O4 4-way race ×10 | exactly 1 winner every time, state matches, 1 event |
+| O5 key reused on another offer | 409 `IDEMPOTENCY_KEY_REUSED`; replay gives the same answer, 1 event |
+| O6 DELETE matrix | 409 / 409 / 409 / 200 |
+| O7 accept with a non-existent `evidence_file_id` | 200 (observation OFF79-02) |
+
+- **OFF79-01:** D-OFF01-7 is a live FG-129 bypass. Fix: restore only for a never-sent Draft, and no hard delete of snapshots. PR comment posted (blocking).
+
+**Debt review**
+
+| Debt | Verdict |
+|---|---|
+| D-OFF01-7 | **blocking** (= OFF79-01) |
+| D-OFF01-2 | **high, needs a decision before ACT-01 and OFF-01 are both on main**. v1 stays Accepted after a new version, so an accepted v2 means two accepted versions, and ACT-01 caps per offer line (new line ids) → the contract value can be acted twice |
+| D-OFF01-1 (link has no expiry or identity check) | real FLOW-003 gap, pre-existing; OK as tracked debt |
+| D-OFF01-5 (internal accept doesn't require a carrier) / OFF79-02 | OK as debt |
+| D-OFF01-3, -4, -6, -8, -9, -10, -11 | OK as debt |
+
+Gates: `b79` (running).
