@@ -979,3 +979,27 @@ def test_23_the_client_sees_only_the_combined_unit_price(monkeypatch, backend, m
         for word in ("Мат.", "Труд", "40.00", "60.00", "400.00", "600.00"):
             assert word not in text, (word, text)
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════ audit OFF79-05 (same class as ACT77-01): a brand-new tenant database
+def test_24_a_fresh_tenant_takes_concurrent_first_offer_writes(monkeypatch, backend, mode):
+    """OFF79-05: on a tenant without audit_logs / offer_events, reject ∥ new-version failed
+    with "Collection namespace audit_logs is already in use" from the new-version
+    transaction — MongoDB creates a missing collection implicitly inside a transaction.
+    Every round starts with those collections absent (a fresh tenant), ×60."""
+    async def scenario(c, op):
+        bad = []
+        for i in range(60):
+            for coll in ("audit_logs", "offer_events"):
+                await op[coll].drop()
+            oid, tok = "fr-%d" % i, "tfr%02d" % i + "x" * 19
+            await op.offers.insert_one(offer_doc(oid, token=tok))
+            rs = await asyncio.gather(
+                c.post("/api/offers/%s/reject" % oid, headers=hdr("admin-a"), json={"reason": "скъпо"}),
+                new_version(c, oid),
+                respond(c, tok, "revision"))
+            if any(r.status_code >= 500 for r in rs):
+                bad.append((i, [(r.status_code, r.text[:160]) for r in rs]))
+            assert await op.offers.count_documents({"parent_offer_id": oid}) <= 1
+        assert bad == [], bad
+    run(monkeypatch, backend, mode, scenario)
