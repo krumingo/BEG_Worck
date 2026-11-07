@@ -215,7 +215,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # Overhead allocation from pools
     allocs = await tenant.project_overhead_allocations.find(
         {"org_id": org_id, "project_id": project_id, "superseded_by": None},  # OH-01: current version
-        {"_id": 0, "allocated_amount": 1, "pool": 1},
+        {"_id": 0, "allocated_amount": 1, "pool": 1, "recalculating": 1},
     ).to_list(50)
     overhead_by_pool = {"administration": 0, "base_warehouse": 0, "transport": 0, "general": 0}
     for a in allocs:
@@ -253,6 +253,9 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "operating_result": operating_result_val,
         "insurance_burden": insurance_burden,
         "overhead_allocation": total_overhead_alloc,
+        # R38: the old allocation still counts while its period is recomputed
+        "overhead_recalculating": any(a.get("recalculating") for a in allocs),
+        "overhead_label": "преизчислява се" if any(a.get("recalculating") for a in allocs) else None,
         "overhead_by_pool": {k: round(v, 2) for k, v in overhead_by_pool.items()},
         "subcontractor_burden": sub_burden,
         "contract_burden": contract_burden,

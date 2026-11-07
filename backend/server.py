@@ -398,8 +398,10 @@ async def startup():
     await project_team.ensure_indexes(db)
     # OH-01 (OH01-3): the overhead unique indexes (one allocation version, one active
     # snapshot per period) at startup, never on a request path.
-    from app.services.overhead_lifecycle import ensure_overhead_indexes
-    await ensure_overhead_indexes(db)
+    # FG-98: every database of the Tenant Registry too, not only the default one.
+    from app.services.overhead_lifecycle import ensure_overhead_indexes_for_installation
+    from app.tenancy import registry as _oh01_registry
+    await ensure_overhead_indexes_for_installation(db, _oh01_registry.system_db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

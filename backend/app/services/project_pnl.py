@@ -111,9 +111,11 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     # ── f. OVERHEAD ────────────────────────────────────────────────
     allocs = await tenant.project_overhead_allocations.find(
         {"org_id": org_id, "project_id": project_id, "superseded_by": None},  # OH-01: current version
-        {"_id": 0, "allocated_amount": 1}
+        {"_id": 0, "allocated_amount": 1, "recalculating": 1}
     ).to_list(50)
     overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
+    # R38: the old allocation still counts while its period is recomputed — say so
+    overhead_recalculating = any(a.get("recalculating") for a in allocs)
 
     # ── f2. OTHER — documentless cash expenses booked straight to the project ──
     other_docs = await tenant.finance_payments.find(
@@ -160,6 +162,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
             "overhead": overhead,
+            "overhead_recalculating": overhead_recalculating,
+            "overhead_label": "преизчислява се" if overhead_recalculating else None,
             "other_cost": other_cost,
             "total_expense": total_expense,
         },

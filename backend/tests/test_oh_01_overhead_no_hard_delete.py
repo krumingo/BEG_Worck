@@ -511,7 +511,8 @@ def test_10_one_active_snapshot_per_period_never_double_counted(monkeypatch, bac
         assert s2["snapshot_version"] == 2 and s1["snapshot_version"] == 1
         old = await op.overhead_snapshots.find_one({"id": s1["id"]}, {"_id": 0})
         assert old["superseded_by"] == s2["id"] and "active_period_key" not in old
-        assert await _pnl_overhead(op) == 0          # s1's allocations went with it
+        # R38: s1's allocation still counts (labelled) until s2 is allocated — never 0
+        assert await _pnl_overhead(op) == pytest.approx(s1["total_overhead"], abs=0.02)
         r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate",
                          json={"method": "PersonDays"}, headers=_h(key=_key()))
         assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SNAPSHOT_SUPERSEDED"
@@ -547,6 +548,7 @@ def test_11_legacy_snapshot_of_the_period_is_superseded_too(monkeypatch, backend
         s = await _snapshot(c)
         assert s["snapshot_version"] == 2
         assert (await op.overhead_snapshots.find_one({"id": "legacy-snap"}))["superseded_by"] == s["id"]
+        assert await _pnl_overhead(op) == 431.0              # R38: kept while recomputed
         r = await c.post(f"/api/overhead/snapshots/{s['id']}/allocate",
                          json={"method": "PersonDays"}, headers=_h(key=_key()))
         assert r.status_code == 200, r.text
@@ -732,7 +734,7 @@ def test_18_startup_and_onboarding_create_the_overhead_indexes():
     root = Path(__file__).resolve().parent.parent
     server = (root / "server.py").read_text(encoding="utf-8")
     onboarding = (root / "app" / "tenancy" / "onboarding.py").read_text(encoding="utf-8")
-    assert "await ensure_overhead_indexes(db)" in server
+    assert "await ensure_overhead_indexes_for_installation(db, _oh01_registry.system_db)" in server
     assert "await ensure_overhead_indexes(op_db)" in onboarding
 
 
@@ -874,3 +876,78 @@ def test_22_interrupted_archive_is_completed_by_the_same_key(monkeypatch, backen
         r = await c.delete(url, headers=_h(key=_key()))        # unrelated archive: 409
         assert r.status_code == 409 and r.json()["detail"]["error_code"] == "ALREADY_ARCHIVED"
     run(monkeypatch, backend, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════════════════════════ 23. R38
+def test_23_recompute_keeps_the_old_allocation_labelled_until_the_new_one(monkeypatch, backend, mode):
+    """R38 (Krum 07.11.2026, FG-97): while a period is recomputed and the new allocation
+    does not exist yet, P&L shows the OLD allocation with "преизчислява се" — never 0, never
+    both. The old one is superseded only when the new allocation is written."""
+    async def scenario(c, op):
+        from app.services.project_pnl import compute_project_pnl
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s1 = await _snapshot(c)
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        pnl = await compute_project_pnl(ORG, PROJ_A)
+        assert pnl["expense"]["overhead_recalculating"] is False and pnl["expense"]["overhead_label"] is None
+        a_before = pnl["expense"]["overhead"]
+        await _cost(c, cat["id"], date="2026-10-20", amount=400.0)     # the period changes
+        s2 = await _snapshot(c)                                        # recompute
+        assert s2["total_overhead"] == 800.0
+        pnl = await compute_project_pnl(ORG, PROJ_A)
+        assert pnl["expense"]["overhead"] == a_before                  # the OLD one, not 0
+        assert pnl["expense"]["overhead_recalculating"] is True
+        assert pnl["expense"]["overhead_label"] == "преизчислява се"
+        assert await _pnl_overhead(op) == pytest.approx(400.0, abs=0.02)   # not 0, not 1200
+        r = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        pnl = await compute_project_pnl(ORG, PROJ_A)
+        assert pnl["expense"]["overhead_recalculating"] is False and pnl["expense"]["overhead_label"] is None
+        assert await _pnl_overhead(op) == pytest.approx(800.0, abs=0.02)   # the new one only
+        old = await op.project_overhead_allocations.find(
+            {"overhead_snapshot_id": s1["id"]}).to_list(None)
+        assert old and all(x["superseded_by"] for x in old)            # superseded at write
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 24. FG-98
+def test_24_startup_indexes_every_registered_tenant_database(monkeypatch, backend):
+    """FG-98: ensure_overhead_indexes_for_installation covers the operational database
+    and every database the Tenant Registry names; an unreadable registry fails."""
+    async def scenario(c, op):
+        from app.services.overhead_lifecycle import (
+            ALLOCATION_VERSION_INDEX, SNAPSHOT_PERIOD_INDEX,
+            ensure_overhead_indexes_for_installation)
+        client = op.client
+        extra = ["oh_01_t2_" + uuid.uuid4().hex[:8], "oh_01_t3_" + uuid.uuid4().hex[:8]]
+        sysdb = client["oh_01_sysreg_" + uuid.uuid4().hex[:8]]
+        try:
+            await sysdb.tenant_registry.insert_many([
+                {"id": "t-op", "database_name": op.name},
+                {"id": "t2", "database_name": extra[0]},
+                {"id": "t3", "database_name": extra[1]},
+                {"id": "t-none"}])                                   # no database: skipped
+            names = await ensure_overhead_indexes_for_installation(op, sysdb)
+            assert names == [op.name] + extra
+            for name in names:
+                d = client[name]
+                assert ALLOCATION_VERSION_INDEX in await d.project_overhead_allocations.index_information()
+                assert SNAPSHOT_PERIOD_INDEX in await d.overhead_snapshots.index_information()
+                assert "oh01_period_lock_org_name" in await d.overhead_period_locks.index_information()
+            assert await ensure_overhead_indexes_for_installation(op, sysdb) == names  # idempotent
+
+            class _Broken:
+                def __getitem__(self, k):
+                    raise RuntimeError("registry down")
+            with pytest.raises(RuntimeError):
+                await ensure_overhead_indexes_for_installation(op, _Broken())
+        finally:
+            if backend == "real":
+                for n in extra + [sysdb.name]:
+                    await client.drop_database(n)
+    run(monkeypatch, backend, "off", scenario)

@@ -203,6 +203,23 @@ async def ensure_overhead_indexes(db) -> None:
                                                    name="oh01_period_lock_org_name")
 
 
+async def ensure_overhead_indexes_for_installation(op_db, system_db) -> list:
+    """FG-98: application startup — the operational database AND every database the
+    Tenant Registry names get the OH-01 indexes (the enumeration of PR #72's
+    ``tenant_database_names``). A registry that cannot be read fails the start: startup
+    must not pretend it covered databases it could not list."""
+    names = [op_db.name]
+    records = await system_db["tenant_registry"].find(
+        {}, {"_id": 0, "id": 1, "database_name": 1}).to_list(None)
+    for r in records:
+        name = r.get("database_name")
+        if name and name not in names:
+            names.append(name)
+    for name in names:
+        await ensure_overhead_indexes(op_db if name == op_db.name else op_db.client[name])
+    return names
+
+
 #: D6: the org-wide lock name for computing ANY snapshot (overlap checks need it).
 COMPUTE_LOCK = "compute"
 

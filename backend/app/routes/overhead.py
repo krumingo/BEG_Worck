@@ -609,11 +609,13 @@ async def compute_overhead_snapshot(
                     raise HTTPException(status_code=409, detail={
                         "error_code": "SNAPSHOT_VERSION_CONFLICT",
                         "message": "Друга заявка току-що смени snapshot-а за периода"})
-                # its allocations stop counting with it (P&L reads the current version only)
+                # R38 (Krum, 07.11.2026, FG-97): its allocations KEEP counting, labelled
+                # "преизчислява се", until the new snapshot is allocated — that allocation
+                # supersedes them (period-wide) at the moment it is written. Never 0.
                 await tenant.project_overhead_allocations.update_many(
                     {"overhead_snapshot_id": p["id"], "superseded_by": None},
-                    {"$set": {"superseded_by": sid, "superseded_at": now,
-                              "superseded_by_user_id": user["id"]}})
+                    {"$set": {"recalculating": True, "recalculating_since": now,
+                              "recalculating_snapshot_id": sid}})
             return max([0] + [p.get("snapshot_version") or 1 for p in prev]) + 1
         snapshot["snapshot_version"] = int(await kw.wf.step("supersede", _supersede_previous,
                                                             reference=str))
