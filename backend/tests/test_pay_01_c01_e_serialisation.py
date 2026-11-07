@@ -246,3 +246,84 @@ def test_f70_02_interrupted_allocation_cancel_records_its_audit_exactly_once(mon
         assert await op.finance_payments.count_documents({"reverses_payment_id": pid}) == 1
         await _invariant(op, pid)
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════ F-70-03: transfer legs on recovery
+def _fail_on_call(monkeypatch, module, name, nth, after):
+    """Interrupt the ``nth`` call of module.name — before it runs, or right after it ran."""
+    original = getattr(module, name)
+    state = {"n": 0}
+
+    async def flaky(*args, **kwargs):
+        state["n"] += 1
+        if state["n"] == nth and not after:
+            raise RuntimeError("synthetic interruption before call %d of %s" % (nth, name))
+        result = await original(*args, **kwargs)
+        if state["n"] == nth and after:
+            raise RuntimeError("synthetic interruption after call %d of %s" % (nth, name))
+        return result
+    monkeypatch.setattr(module, name, flaky)
+
+
+LEG2_INTERRUPTIONS = {
+    "leg2_before_row": ("_ensure_reversal_row", False),
+    "leg2_after_row": ("_ensure_reversal_row", True),
+    "leg2_before_audit": ("_reversal_audit", False),
+    "leg2_after_audit": ("_reversal_audit", True),
+}
+
+
+@pytest.mark.parametrize("point", sorted(LEG2_INTERRUPTIONS))
+def test_f70_03_interrupted_transfer_reversal_recovers_both_legs(monkeypatch, backend, mode, point):
+    """Codex F-70-03: a transfer reversal interrupted on its SECOND leg (leg 2 already marked
+    reversed) — the same-key retry must finish BOTH legs (2 reversal rows, 2 canonical events)
+    before it completes the key, and return both legs."""
+    async def scenario(c, op):
+        from app.routes import finance
+        r = await c.post("/api/finance/transfers", headers=hdr("acct-a"),
+                         json={"from_account_id": BANK_A, "to_account_id": CASH_A, "amount": 50})
+        assert r.status_code == 201, r.text
+        legs = await op.finance_payments.find({"transfer_id": r.json()["transfer_id"]}, {"_id": 0}).to_list(None)
+        leg_ids = sorted(l["id"] for l in legs)
+        url_leg = legs[0]["id"]
+        name, after = LEG2_INTERRUPTIONS[point]
+        _fail_on_call(monkeypatch, finance, name, 2, after)
+        with pytest.raises(RuntimeError):
+            await reverse(c, url_leg, key="k-f703")
+        r = await reverse(c, url_leg, key="k-f703")              # the same request, retried
+        assert r.status_code == 200, r.text
+        assert sorted(x["payment_id"] for x in r.json()["reversals"]) == leg_ids
+        for leg_id in leg_ids:
+            row = await op.finance_payments.find_one({"id": leg_id}, {"_id": 0})
+            assert row["status"] == "reversed" and "allocation_lock" not in row
+            assert await op.finance_payments.count_documents({"reverses_payment_id": leg_id}) == 1, leg_id
+            assert await op.audit_events.count_documents(
+                {"action": "finance.payment.reversed", "entity_id": leg_id}) == 1, (point, leg_id)
+        assert (await c.get("/api/finance/accounts", headers=hdr("acct-a"))).status_code == 200
+        # the completed key replays the FULL result; nothing more is written
+        before = await snap(op)
+        r2 = await reverse(c, url_leg, key="k-f703")
+        assert r2.status_code == 200 and r2.json() == r.json()
+        assert await snap(op) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_f70_03_new_key_on_a_half_repaired_transfer_completes_rows_and_events(monkeypatch, backend, mode):
+    """A DIFFERENT key on a transfer whose reversal was interrupted after both legs were marked
+    reversed: still 409 (already reversed), but the missing rows/events of BOTH legs are
+    completed first — the ledger is never left with a reversed leg lacking its pair."""
+    async def scenario(c, op):
+        from app.routes import finance
+        r = await c.post("/api/finance/transfers", headers=hdr("acct-a"),
+                         json={"from_account_id": BANK_A, "to_account_id": CASH_A, "amount": 50})
+        legs = await op.finance_payments.find({"transfer_id": r.json()["transfer_id"]}, {"_id": 0}).to_list(None)
+        _fail_on_call(monkeypatch, finance, "_ensure_reversal_row", 2, False)
+        with pytest.raises(RuntimeError):
+            await reverse(c, legs[0]["id"], key="k-f703-a")
+        r = await reverse(c, legs[0]["id"], key="k-f703-b")
+        assert r.status_code == 409, r.text
+        for leg in legs:
+            assert await op.finance_payments.count_documents({"reverses_payment_id": leg["id"]}) == 1
+            assert await op.audit_events.count_documents(
+                {"action": "finance.payment.reversed", "entity_id": leg["id"]}) == 1
+    run(monkeypatch, backend, mode, scenario)

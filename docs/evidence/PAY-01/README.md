@@ -497,3 +497,29 @@ After a merge with #72, they would therefore have run the write a second time.
 | **Trial merge** of this branch with `origin/claude/w0-04-c01-audit-indexes` @ 13dd8d7, done locally and not pushed | no conflicts |
 | On the trial merge: all `test_pay_01*` + A1 collision matrix + `test_w0_04*` | 652 passed |
 | On the trial merge: A1 / A2C guards | 432 units / 214 modules, 0 violations |
+
+## PAY-01-C01-F: Codex F-70-03, an interrupted transfer reversal recovers both legs (review 6705298706 @ f71dce2)
+
+Codex closed F-70-01 and F-70-02 and confirmed the STARTED guard.
+
+**Finding F-70-03 [P1].** The scenario is a transfer of 50, `DELETE` of leg 1 with key K, interrupted on the **second** `_ensure_reversal_row`, after leg 2 was already marked `reversed`. The retry with K returned 200 and completed the key with **1 reversal row and 1 event**. If the interruption came on the second `_reversal_audit`, the retry left 2 rows but 1 event. The recovery repaired only the URL payment, and `active_payments(transfer_id)` no longer saw leg 2.
+
+**Fix**
+- **Which legs:** under the sorted leg locks, `delete_payment` takes **all original legs** of the transfer: active and already reversed, but not reversal rows. The URL leg comes first, then by id.
+- **Per leg:** an active leg is reversed with `_reverse_one`. A leg that an interrupted attempt already marked reversed goes through `_repair_pair`, which restores its deterministic reversal row (upsert) and its canonical event (`_audit_once`), each exactly once.
+- **The key:** it is completed only after every leg has its row and its event. The response always lists **both** legs with their deterministic reversal ids.
+- **A different key on an interrupted transfer:** still 409 (already reversed), but it first completes the missing rows and events of both legs.
+
+**Tests.** These are in `test_pay_01_c01_e_serialisation.py`; mongomock and real Mongo, three modes: **30 cases**.
+- **Leg-2 interruptions:** one test per point, before or after the row and before or after the audit.
+- **What the retry must leave:** 200, both legs reversed, **exactly one** reversal row and **one** `finance.payment.reversed` event per leg, a response with both legs, no lock left, and a replay that is identical and writes nothing.
+- **A new key on an interrupted transfer:** 409, with both legs' rows and events completed.
+
+| Run | Result |
+|---|---|
+| Codex's own transfer probes from 6705298706, unchanged, on real Mongo | **f71dce2: 6 failed**, this head: **6 passed** |
+| The 30 new cases on f71dce2 | **30 failed** |
+| All `test_pay_01*` + A1 collision matrix + `test_w0_04*` | 655 passed |
+| A1 / A2C guards | 418 units / 206 modules, 0 violations |
+
+**A1 inventory:** regenerated. The read of a transfer's legs now selects every original leg, and there is one per-leg re-read; both are tenant-scoped. Totals: 374 accesses (FIXED 131, SAFE 243).

@@ -1891,17 +1891,24 @@ async def delete_payment(payment_id: str,
     
         if payment.get("status") == PAYMENT_REVERSAL:
             raise await _refuse(user, req, action, "Това е сторно запис — не се сторнира")
-        if payment.get("status") == PAYMENT_REVERSED:
-            await _repair_pair(tenant, user, payment, req.key)
-            if not retry:
-                raise await _refuse(user, req, action, "Плащането вече е сторнирано")
-    
-        # Check for allocations (cancel them on the invoice first — unchanged rule)
+        # F-70-03: the legs are ALL original rows of the transfer — active AND already reversed
+        # (an interrupted request may have reversed leg 2 without its reversal row or event);
+        # reversal rows themselves are not legs. The URL payment first, then by id.
         legs = [payment]
         if payment.get("transfer_id"):
             legs = await tenant.finance_payments.find(
-                active_payments({"transfer_id": payment["transfer_id"]}), {"_id": 0}).to_list(10) or legs
+                {"transfer_id": payment["transfer_id"], "status": {"$ne": PAYMENT_REVERSAL}},
+                {"_id": 0}).to_list(10) or legs
+            legs.sort(key=lambda leg: (leg["id"] != payment_id, leg["id"]))
+        if payment.get("status") == PAYMENT_REVERSED and not retry:
+            for leg in legs:                       # complete what an interrupted request left
+                await _repair_pair(tenant, user, leg, req.key)
+            raise await _refuse(user, req, action, "Плащането вече е сторнирано")
+
+        # Check for allocations (cancel them on the invoice first — unchanged rule)
         for leg in legs:
+            if not payment_counts(leg):
+                continue
             alloc_count = await tenant.payment_allocations.count(active_allocations({"payment_id": leg["id"]}))
             if alloc_count > 0:
                 if req.key:
@@ -1909,18 +1916,21 @@ async def delete_payment(payment_id: str,
                     await fail_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
                                           error_code="HAS_ALLOCATIONS")
                 raise HTTPException(status_code=400, detail="Cannot delete payment with allocations")
-    
-        reversals = []
+
+        # Every leg ends reversed WITH its reversal row and its canonical event, each exactly
+        # once, before the key is completed: an active leg is reversed; a leg an interrupted
+        # attempt already reversed gets its missing row / event (_repair_pair).
         for leg in legs:
-            r = await _reverse_one(tenant, user, leg["id"], req.reason, req.key)
-            if r is not None:
-                reversals.append(r)
-        if not reversals and not retry:
-            raise await _refuse(user, req, action, "Плащането вече е сторнирано")
-        if not reversals:
-            # retry of the same key whose first attempt reversed but did not complete the key
-            reversals = [{"payment_id": payment_id, "reversal_payment_id": _reversal_id(payment_id)}]
-    
+            done_now = None
+            if payment_counts(leg):
+                done_now = await _reverse_one(tenant, user, leg["id"], req.reason, req.key)
+            if done_now is None:
+                current = await tenant.finance_payments.get(leg["id"], {"_id": 0})
+                await _repair_pair(tenant, user, current, req.key)
+        reversals = [{"payment_id": leg["id"],
+                      "reversal_payment_id": leg.get("reversed_by_payment_id") or _reversal_id(leg["id"])}
+                     for leg in legs]
+
         await log_audit(user["org_id"], user["id"], user["email"], "payment_reversed", "payment", payment_id,
                         {"reason": req.reason, "reversals": reversals})
         result = {"ok": True, "payment_id": payment_id, "status": PAYMENT_REVERSED, "reversals": reversals}
