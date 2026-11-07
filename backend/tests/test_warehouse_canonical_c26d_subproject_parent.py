@@ -101,18 +101,21 @@ async def test_member_of_p1_cannot_write_off_a_p2_subproject(
     user = {"id": USER, "org_id": T, "role": "SiteManager", "email": "s@x"}
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
     before = await _ledger_count(db)
+    # 5C-C26h (FG-55): the rights check (Р27 against the REAL project P2)
+    # runs first — this caller has none there, so 403, not the 422 that
+    # would confirm the subproject's parent.
     with pytest.raises(HTTPException) as exc:
         await route.post_project_writeoff(_body(route, PROJECT, S2, "mismatch-" + mode),
                                           request=None, user=user, ctx=_ctx(mode, user))
-    assert exc.value.status_code == 422
-    # 5C-C26f FG-55: the parent id is not disclosed before the rights check.
+    assert exc.value.status_code == 403
     assert "parent_project_id" not in exc.value.detail["context"]
-    assert P2 not in str(exc.value.detail)
     with pytest.raises(HTTPException) as exc:
         await route.post_project_writeoff(_body(route, P2, S2, "real-" + mode),
                                           request=None, user=user, ctx=_ctx(mode, user))
     assert exc.value.status_code == 403
-    assert exc.value.detail["context"]["scope_id"] == P2
+    # 5C-C26h (FG-55): the denial names the subproject the caller sent.
+    assert exc.value.detail["context"]["scope_id"] == S2
+    assert P2 not in str(exc.value.detail)
     assert await _ledger_count(db) == before
 
 
@@ -162,11 +165,12 @@ async def test_generic_write_off_from_a_subproject_binds_the_parent(
         await svc.execute(_UserCtx(), db, run.coll, _inp(
             CanonicalAction.WRITE_OFF, T, source=src, quantity=Decimal("1"),
             project_id=PROJECT, reason="брак", file_ids=["f"]))
-    assert gate.seen == [] and await _ledger_count(db) == before
+    # 5C-C26h (FG-55): rights first (against the real parent P2), then 422.
+    assert gate.seen == [("r27", P2)] and await _ledger_count(db) == before
     res = await svc.execute(_UserCtx(), db, run.coll, _inp(  # no project_id → bound
         CanonicalAction.WRITE_OFF, T, source=src, quantity=Decimal("1"),
         reason="брак", file_ids=["f"]))
-    assert gate.seen == [("r27", P2)]
+    assert gate.seen == [("r27", P2), ("r27", P2)]
     assert res.envelope["project_id"] == P2 and res.envelope["subproject_id"] == S2
 
 

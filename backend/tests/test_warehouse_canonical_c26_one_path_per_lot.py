@@ -281,6 +281,15 @@ async def test_unprovable_legacy_overlap_warns_and_keeps_the_sum(
         tenant_id = org_id = T
         user_id = "u-c26"
 
+    # 5C-C26h: the warnings route resolves the reader's roles (FG-60) — an
+    # owner here (the registry is not part of this test).
+    from app.permissions import service as perm
+
+    async def _owner(user_id, tenant_id):
+        return [{"id": "ra-o", "status": "active", "role_id": "owner",
+                 "scope_type": "company", "scope_id": None, "permissions": []}]
+    monkeypatch.setattr(perm, "_load_assignments", _owner)
+
     async def _all_scope(ctx, user):
         return None
     monkeypatch.setattr(q, "_authorized_scope_locations", _all_scope)

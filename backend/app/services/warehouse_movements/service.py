@@ -693,34 +693,35 @@ class CommandService:
         # 5C-C21 F-12 (Р10) — a write-off from a project is project cost;
         # the project scope is server-derived from the source bucket.
         # 5C-C26d (C26B-1 / FG-38) — a subproject's project is its parent.
-        await self._bind_subproject_parent(tenant_db, inp)
-        self._bind_write_off_project(inp)
+        # 5C-C26h (FG-59 / FG-61) — the project is bound from the locations.
+        # FG-55: a binding refusal (422) is held back until the rights check
+        # has passed, so a caller without rights always gets 403 and learns
+        # nothing about the project / subproject relations.
+        binding_error = None
+        try:
+            await self._bind_subproject_parent(tenant_db, inp)
+            self._bind_write_off_project(inp)
+            await self._bind_project_from_locations(tenant_db, inp)
+        except InvariantViolationError as exc:
+            binding_error = exc
+            inp.project_id = await self._location_project(tenant_db, inp)
 
         # Permission (C06 — both source + destination + project scopes).
         # A transfer's physical destination is the TARGET warehouse even
         # though the row goes to in_transit, so its scope is checked now.
-        if mode == "enforce":
-            await self._enforce_gate(ctx, tenant_db, inp)
-        else:
-            from app.services.warehouse_movements.legacy_gate import ensure_legacy
-            legacy_exc = None
-            try:
-                await ensure_legacy(ctx, tenant_db, inp)
-            except PermissionDeniedError as exc:
-                legacy_exc = exc
-            if mode == "shadow":
-                try:
-                    await self._enforce_gate(ctx, tenant_db, inp)
-                    new_allow = True
-                except Exception:                  # unverified counts as deny
-                    new_allow = False
-                if new_allow != (legacy_exc is None):
-                    logger.warning(
-                        "PERMISSION_SHADOW_MISMATCH action=%s legacy_allow=%s "
-                        "new_allow=%s project=%s", action.value,
-                        legacy_exc is None, new_allow, inp.project_id)
-            if legacy_exc is not None:
-                raise legacy_exc
+        try:
+            await self._decide_rights(ctx, tenant_db, inp, mode)
+        except PermissionDeniedError as exc:
+            if binding_error is not None:
+                # FG-55: a refused binding never leaks the DB-resolved
+                # project through the denial's scope.
+                raise PermissionDeniedError(
+                    "permission denied", context={
+                        "action": action.value,
+                        "reason_code": exc.context.get("reason_code", "DENY")}) from None
+            raise
+        if binding_error is not None:
+            raise binding_error
 
         # Shape rules evaluated outside the tx so a malformed envelope
         # cannot reach Mongo.
@@ -1642,6 +1643,33 @@ class CommandService:
                 "project_id": row.get("project_id"),
                 "dispatch_movement_id": dispatch_movement_id}
 
+    async def _decide_rights(self, ctx, tenant_db, inp: CommandInput, mode: str) -> None:
+        """Р28 — the rights of one command: enforce → RoleAssignments;
+        off / shadow → the legacy role (legacy_gate), shadow also computes the
+        enforce decision and only logs a mismatch."""
+        if mode == "enforce":
+            await self._enforce_gate(ctx, tenant_db, inp)
+            return
+        from app.services.warehouse_movements.legacy_gate import ensure_legacy
+        legacy_exc = None
+        try:
+            await ensure_legacy(ctx, tenant_db, inp)
+        except PermissionDeniedError as exc:
+            legacy_exc = exc
+        if mode == "shadow":
+            try:
+                await self._enforce_gate(ctx, tenant_db, inp)
+                new_allow = True
+            except Exception:                  # unverified counts as deny
+                new_allow = False
+            if new_allow != (legacy_exc is None):
+                logger.warning(
+                    "PERMISSION_SHADOW_MISMATCH action=%s legacy_allow=%s "
+                    "new_allow=%s project=%s", inp.action.value,
+                    legacy_exc is None, new_allow, inp.project_id)
+        if legacy_exc is not None:
+            raise legacy_exc
+
     async def _enforce_gate(self, ctx, tenant_db, inp: CommandInput) -> None:
         """The RoleAssignment decision (enforce; observed in shadow)."""
         r27 = getattr(self._gate, "ensure_project_write_off", None)
@@ -1667,6 +1695,62 @@ class CommandService:
                 await ensure_enforce_project_relation(
                     ctx, tenant_db, inp,
                     load_assignments=getattr(self._gate, "_assignments_loader", None))
+
+    @staticmethod
+    async def _location_project(tenant_db, inp: CommandInput) -> Optional[str]:
+        """The project the command's locations name (source first), DB-
+        resolved; None when it touches no project. Used for the rights check
+        when a binding was refused (FG-55)."""
+        from app.services.warehouse_movements.legacy_gate import PROJECT_BY_INTENT
+        for key in (inp.source, inp.destination, inp.transfer_target):
+            if key is None:
+                continue
+            if key.location_type == LocationType.PROJECT:
+                return key.location_id
+            if key.location_type == LocationType.SUBPROJECT:
+                try:
+                    return await resolve_subproject_parent(
+                        tenant_db, inp.tenant_id, key.location_id)
+                except WarehouseMovementError:
+                    return key.location_id
+        return inp.project_id if inp.action in PROJECT_BY_INTENT else None
+
+    @staticmethod
+    async def _bind_project_from_locations(tenant_db, inp: CommandInput) -> None:
+        """5C-C26h — FG-59 / FG-61: a body project_id must name a project the
+        command's locations touch; it is never a source of scope by itself.
+          * a receive-to-project / an acceptance into a PROJECT bucket is
+            bound to that destination project;
+          * a project_id that none of the locations names → 422 — except for
+            the PROJECT_BY_INTENT actions (dispatch / reserve / release),
+            whose target project has no location in the command.
+        """
+        from app.services.warehouse_movements.legacy_gate import PROJECT_BY_INTENT
+        dst = inp.destination
+        if inp.action in (CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT,
+                          CanonicalAction.ACCEPT_PROJECT_DELIVERY) \
+                and dst is not None and dst.location_type == LocationType.PROJECT:
+            if inp.project_id and inp.project_id != dst.location_id:
+                raise InvariantViolationError(
+                    "project_id must be the destination project",
+                    context={"destination": dst.to_dict(), "project_id": inp.project_id})
+            inp.project_id = dst.location_id
+            return
+        if not inp.project_id or inp.action in PROJECT_BY_INTENT:
+            return
+        named = set()
+        for key in (inp.source, inp.destination, inp.transfer_target):
+            if key is None:
+                continue
+            if key.location_type == LocationType.PROJECT:
+                named.add(key.location_id)
+            elif key.location_type == LocationType.SUBPROJECT:
+                named.add(await resolve_subproject_parent(
+                    tenant_db, inp.tenant_id, key.location_id))
+        if inp.project_id not in named:
+            raise InvariantViolationError(
+                "project_id does not match the locations of the movement",
+                context={"project_id": inp.project_id})
 
     @staticmethod
     async def _bind_subproject_parent(tenant_db, inp: CommandInput) -> None:

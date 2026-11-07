@@ -45,10 +45,26 @@ def legacy_role_id(user: Optional[dict]) -> Optional[str]:
     return LEGACY_ROLE_MAP.get((user or {}).get("role") or "")
 
 
+# Actions whose project is a TARGET with no project location in the command
+# itself (the lot is in transit / reserved): their project_id is the only
+# project reference. Every other action's projects come from its locations.
+PROJECT_BY_INTENT = frozenset({
+    CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT,
+    CanonicalAction.RESERVE,
+    CanonicalAction.RELEASE_RESERVATION,
+})
+
+
 async def _projects_touched(tenant_db, org_id: str, inp) -> Set[str]:
+    """5C-C26h (FG-59) — the projects a command TOUCHES, from its locations
+    (DB-resolved: a subproject → its parent), never from a body id. An
+    unresolvable subproject counts as itself (a project nobody belongs to),
+    so the rights check fails closed instead of answering 422 first (FG-55).
+    Only for PROJECT_BY_INTENT actions does project_id name the project."""
+    from app.services.warehouse_movements.errors import WarehouseMovementError
     from app.services.warehouse_movements.service import resolve_subproject_parent
     out: Set[str] = set()
-    if inp.project_id:
+    if inp.action in PROJECT_BY_INTENT and inp.project_id:
         out.add(inp.project_id)
     for key in (inp.source, inp.destination, inp.transfer_target):
         if key is None:
@@ -56,7 +72,10 @@ async def _projects_touched(tenant_db, org_id: str, inp) -> Set[str]:
         if key.location_type == LocationType.PROJECT:
             out.add(key.location_id)
         elif key.location_type == LocationType.SUBPROJECT:
-            out.add(await resolve_subproject_parent(tenant_db, org_id, key.location_id))
+            try:
+                out.add(await resolve_subproject_parent(tenant_db, org_id, key.location_id))
+            except WarehouseMovementError:
+                out.add(key.location_id)
     return out
 
 
@@ -203,3 +222,28 @@ async def enforce_read_roles(ctx, *, permission: str, now: Optional[datetime] = 
     return {a.get("role_id") for a in active
             if permission in (set(a.get("permissions") or [])
                               or role_actions(a.get("role_id") or ""))}
+
+
+async def member_projects(tenant_db, org_id: str, user_id: str, roles, *,
+                          now: Optional[datetime] = None) -> Set[str]:
+    """5C-C26h (FG-60) — the projects a project-bound caller may see: its
+    in-date project_team rows (a PM: only the manager rows, Р30)."""
+    from app.services.warehouse_movements.write_off_policy import (
+        PROJECT_MANAGER_TEAM_ROLE, member_in_date,
+    )
+    from app.tenancy import project_team
+    from app.tenancy.data_access import TenantData
+    tenant = TenantData.for_resolved_org(tenant_db, org_id)
+    out: Set[str] = set()
+    roles = set(roles)
+    if roles & PROJECT_BOUND_ROLES:
+        for pid in await project_team.assigned_project_ids(tenant, user_id):
+            if await member_in_date(tenant, user_id, pid, now=now):
+                out.add(pid)
+    if roles & PM_ROLES:
+        for pid in await project_team.assigned_project_ids(
+                tenant, user_id, role_in_project=PROJECT_MANAGER_TEAM_ROLE):
+            if await member_in_date(tenant, user_id, pid, now=now,
+                                    role_in_project=PROJECT_MANAGER_TEAM_ROLE):
+                out.add(pid)
+    return out

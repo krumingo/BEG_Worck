@@ -41,9 +41,13 @@ ROLES = {
     "Admin": ("Admin", _real("admin"), False, EVERYTHING),
     "Accountant": ("Accountant", _real("accountant"), False, EVERYTHING),
     "Warehousekeeper": ("Warehousekeeper", _real("warehouse"), False, EVERYTHING),
-    "SiteManager-member": ("SiteManager", _real("site_manager"), True, EVERYTHING),
+    # 5C-C26h (FG-60): a project-bound reader sees only its member projects —
+    # a warehouse bucket is outside its scope; balance / warnings are
+    # returned but filtered (test_warehouse_canonical_c26h_*).
+    "SiteManager-member": ("SiteManager", _real("site_manager"), True,
+                           EVERYTHING - {"stock_warehouse"}),
     "SiteManager-non-member": ("SiteManager", _real("site_manager"), False,
-                               EVERYTHING - PROJECT_READS),
+                               {"balance", "warnings"}),
     "Technician": ("Technician", _real("LEGACY_TECHNICIAN"), True, set()),
     "Viewer": ("Viewer", _real("LEGACY_VIEWER"), True, set()),
     "Driver": ("Driver", _real("driver"), True, set()),
@@ -163,12 +167,13 @@ async def test_fg53_a_move_from_a_project_belongs_to_the_source_project(
     with pytest.raises(InvariantViolationError):
         await svc.execute(_UserCtx(), db, run.coll, _inp(
             kw[0], T, quantity=Decimal("1"), project_id=OTHER_PROJECT, **kw[1]))
-    assert gate.seen == []
+    # 5C-C26h (FG-55): rights are decided first, on the SOURCE project.
+    assert gate.seen == [(kw[0].value, PROJECT)]
     assert await db["warehouse_transactions"].count_documents({"tenant_id": T}) == count
     res = await svc.execute(_UserCtx(), db, run.coll, _inp(
         kw[0], T, quantity=Decimal("1"), **kw[1]))
     assert res.envelope["project_id"] == PROJECT
-    assert gate.seen == [(kw[0].value, PROJECT)]
+    assert gate.seen == [(kw[0].value, PROJECT)] * 2
 
 
 async def test_fg55_subproject_mismatch_does_not_disclose_the_parent(

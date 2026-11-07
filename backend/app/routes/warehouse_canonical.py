@@ -341,25 +341,27 @@ async def post_project_writeoff(
     from app.permissions.deps import MODE_ENFORCE
     tenant = _tenant_for(user)
     # 5C-C26d (C26B-1 / FG-38): with a subproject source the project is the
-    # subproject's parent FROM THE DATABASE; a body project_id naming another
-    # project is refused (422) before Р27 and before any write. Р27 is then
-    # decided against the real project.
+    # subproject's parent FROM THE DATABASE; Р27 is decided against that real
+    # project. 5C-C26h (FG-55): the rights check runs FIRST — a parent
+    # mismatch / unknown subproject (422) is answered only to a caller Р27
+    # allows on the real project; everyone else gets the same 403.
+    real_project = body.project_id
+    binding_error = None
     if body.subproject_id:
+        from app.services.warehouse_movements.errors import InvariantViolationError
         from app.services.warehouse_movements.service import resolve_subproject_parent
         try:
-            parent = await resolve_subproject_parent(
+            real_project = await resolve_subproject_parent(
                 tenant._db, tenant.org_id, body.subproject_id)  # pylint: disable=protected-access
-            if parent != body.project_id:
-                from app.services.warehouse_movements.errors import InvariantViolationError
-                raise InvariantViolationError(
-                    "project_id must be the parent project of the subproject",
-                    # FG-55: no parent id before the rights check.
-                    context={"subproject_id": body.subproject_id,
-                             "project_id": body.project_id})
         except WarehouseMovementError as exc:
-            raise _render_error(exc) from exc
+            real_project, binding_error = body.subproject_id, exc
+        if binding_error is None and real_project != body.project_id:
+            binding_error = InvariantViolationError(
+                "project_id must be the parent project of the subproject",
+                context={"subproject_id": body.subproject_id,
+                         "project_id": body.project_id})
     try:
-        await _r27_decide(ctx, user, tenant, body.project_id, request)
+        await _r27_decide(ctx, user, tenant, real_project, request)
     except PermissionDeniedError as exc:
         class _Decision:
             allowed = False
@@ -369,10 +371,17 @@ async def post_project_writeoff(
             # database is resolved there); off / shadow just refuse.
             await audit_permission_denied(
                 ctx, PROJECT_WRITEOFF_ACTION, module="warehouse",
-                resource_type="project", resource_id=body.project_id,
-                scope_type="project", scope_id=body.project_id,
+                resource_type="project", resource_id=real_project,
+                scope_type="project", scope_id=real_project,
                 decision=_Decision(), request=request)
+        if body.subproject_id:
+            # FG-55: the denial names only what the caller sent — never the
+            # DB-resolved parent project.
+            exc.context = dict(exc.context, scope_type="subproject",
+                               scope_id=body.subproject_id)
         raise _render_error(exc) from exc
+    if binding_error is not None:
+        raise _render_error(binding_error)
 
     source_type = LocationType.SUBPROJECT if body.subproject_id else LocationType.PROJECT
     source_id = body.subproject_id or body.project_id

@@ -145,36 +145,75 @@ async def _legacy_read(ctx, permission: str):
             "reason": exc.context.get("reason_code"), "decided_by": "legacy_role"})
 
 
-async def _read_project_relation(ctx, roles, *, location_type, location_id,
-                                 project_id) -> None:
-    """5C-C26f (C26E-1, F-16) — a project-filtered read by a caller whose
-    granting roles are all project-bound needs the in-date project relation,
-    in every mode (the same rule as the writes)."""
-    from app.services.warehouse_movements.errors import (
-        PermissionDeniedError, WarehouseMovementError,
+async def _member_scope(ctx, permission: str):
+    """5C-C26h (FG-60, FLOW-002 scope, Р20) — what a caller may see of the
+    canonical stock. None = company-wide (a company / warehouse role grants
+    the read). Otherwise (the read is granted ONLY by project-bound roles:
+    SiteManager, Technician, PM) the set of in-date member projects — every
+    read is narrowed to them, in every mode."""
+    from app.services.warehouse_movements.legacy_gate import (
+        PM_ROLES, PROJECT_BOUND_ROLES, enforce_read_roles, member_projects,
     )
-    from app.services.warehouse_movements.legacy_gate import ensure_project_relation
-    from app.services.warehouse_movements.service import resolve_subproject_parent
+    roles = await _legacy_read(ctx, permission)
+    if roles is _ENFORCE:
+        try:
+            roles = await enforce_read_roles(ctx, permission=permission)
+        except Exception:                       # registry unreachable → deny
+            raise HTTPException(status_code=403, detail={
+                "error_code": "PERMISSION_DENIED", "reason": "UNVERIFIED"})
+    if not roles:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "PERMISSION_DENIED", "action": permission})
+    if set(roles) - (PROJECT_BOUND_ROLES | PM_ROLES):
+        return None
     tenant = _tenant_from_ctx(ctx)
-    projects = set()
-    if project_id:
-        projects.add(project_id)
-    try:
-        if location_id and location_type == LocationType.PROJECT.value:
-            projects.add(location_id)
-        elif location_id and location_type == LocationType.SUBPROJECT.value:
-            projects.add(await resolve_subproject_parent(
-                tenant._db, ctx.org_id, location_id))  # pylint: disable=protected-access
-        if projects:
-            await ensure_project_relation(
-                tenant._db, ctx.org_id, ctx.user_id, roles, projects)  # pylint: disable=protected-access
-    except PermissionDeniedError as exc:
-        raise HTTPException(status_code=403, detail={
-            "error_code": "PERMISSION_DENIED", "reason": exc.context.get("reason_code"),
-            "scope_type": "project", "scope_id": exc.context.get("scope_id")})
-    except WarehouseMovementError:
-        raise HTTPException(status_code=403, detail={
-            "error_code": "PERMISSION_DENIED", "reason": "UNKNOWN_SCOPE"})
+    return await member_projects(tenant._db, ctx.org_id, ctx.user_id, roles)  # pylint: disable=protected-access
+
+
+async def _bucket_project(ctx, location_type, location_id) -> Optional[str]:
+    """The project of a project / subproject bucket (DB-resolved), else None."""
+    from app.services.warehouse_movements.errors import WarehouseMovementError
+    from app.services.warehouse_movements.service import resolve_subproject_parent
+    if location_type == LocationType.PROJECT.value:
+        return location_id
+    if location_type == LocationType.SUBPROJECT.value and location_id:
+        tenant = _tenant_from_ctx(ctx)
+        try:
+            return await resolve_subproject_parent(tenant._db, ctx.org_id, location_id)  # pylint: disable=protected-access
+        except WarehouseMovementError:
+            return location_id
+    return None
+
+
+def _loc_fields(loc) -> tuple:
+    if not isinstance(loc, dict):
+        return (None, None)
+    return (loc.get("location_type") or loc.get("type"),
+            loc.get("location_id") or loc.get("id"))
+
+
+async def _row_projects(ctx, row: dict, cache: dict) -> set:
+    """Projects a ledger / balance row belongs to (project_id + buckets)."""
+    out = set()
+    if row.get("project_id"):
+        out.add(row["project_id"])
+    locs = [row] if "location_type" in row and "location_id" in row else []
+    locs += [row.get("source"), row.get("destination")]
+    for loc in locs:
+        lt, lid = _loc_fields(loc)
+        if lt in (LocationType.PROJECT.value, LocationType.SUBPROJECT.value):
+            key = (lt, lid)
+            if key not in cache:
+                cache[key] = await _bucket_project(ctx, lt, lid)
+            if cache[key]:
+                out.add(cache[key])
+    return out
+
+
+def _forbidden(action: str, **ctx_detail):
+    return HTTPException(status_code=403, detail={
+        "error_code": "PERMISSION_DENIED", "action": action,
+        "reason": "OUTSIDE_MEMBER_SCOPE", **ctx_detail})
 
 
 async def _authorize_resource_scope(
@@ -201,8 +240,8 @@ async def _authorize_resource_scope(
     # with the same rules as enforce (catalog action + project relation).
     legacy = await _legacy_read(ctx, action)
     if legacy is not _ENFORCE:
-        await _read_project_relation(ctx, legacy, location_type=location_type,
-                                     location_id=location_id, project_id=project_id)
+        await _within_member_scope(ctx, action, location_type=location_type,
+                                   location_id=location_id, project_id=project_id)
         return
     for scope_type, scope_id in scopes:
         decision = await evaluate_permission(
@@ -216,18 +255,28 @@ async def _authorize_resource_scope(
                 "scope_type": scope_type,
                 "scope_id": scope_id,
             })
-    # 5C-C26f (C26E-1) — enforce: the same project relation for a caller
-    # whose granting roles are all project-bound (the real grant is
-    # company-scope, which the scope check alone does not narrow).
-    if scopes:
-        from app.services.warehouse_movements.legacy_gate import enforce_read_roles
-        try:
-            roles = await enforce_read_roles(ctx, permission=action)
-        except Exception:                       # registry unreachable → deny
-            raise HTTPException(status_code=403, detail={
-                "error_code": "PERMISSION_DENIED", "reason": "UNVERIFIED"})
-        await _read_project_relation(ctx, roles, location_type=location_type,
-                                     location_id=location_id, project_id=project_id)
+    # 5C-C26f/h (C26E-1, FG-60) — enforce: the same member scope as
+    # off / shadow for a caller whose read is granted only by project-bound
+    # roles (the real grant is company-scope, which the scope check alone
+    # does not narrow).
+    await _within_member_scope(ctx, action, location_type=location_type,
+                               location_id=location_id, project_id=project_id)
+
+
+async def _within_member_scope(ctx, action, *, location_type, location_id, project_id):
+    """FG-60: a project-bound reader asks only about its member projects —
+    a warehouse / person / vehicle bucket or a foreign project → 403."""
+    scope = await _member_scope(ctx, action)
+    if scope is None:
+        return
+    if project_id and project_id not in scope:
+        raise _forbidden(action, scope_type="project")
+    if location_id and location_type not in {
+            None, LocationType.IN_TRANSIT.value, LocationType.UNRESOLVED.value,
+            LocationType.SUPPLIER.value}:
+        bucket = await _bucket_project(ctx, location_type, location_id)
+        if bucket is None or bucket not in scope:
+            raise _forbidden(action, scope_type="location")
 
 
 def _tenant_from_ctx(ctx: TenantContext) -> TenantData:
@@ -375,6 +424,11 @@ async def read_balance_by_location(
         tenant_id=ctx.tenant_id, item_id=item_id,
         allowed_locations=allowed,
     )
+    # 5C-C26h (FG-60): a project-bound reader sees only its member projects.
+    scope = await _member_scope(ctx, "warehouse.read_stock")
+    if scope is not None:
+        cache: dict = {}
+        rows = [r for r in rows if (await _row_projects(ctx, r, cache)) & scope]
     from app.services.warehouse_movements.queries import ledger_checkpoint
     checkpoint = await ledger_checkpoint(
         tenant.warehouse_transactions, tenant_id=ctx.tenant_id,
@@ -406,13 +460,22 @@ async def read_history(
         project_id=project_id,
     )
     tenant = _tenant_from_ctx(ctx)
-    return await _values_for(ctx, await movement_history(
+    data = await movement_history(
         tenant.warehouse_transactions,
         tenant_id=ctx.tenant_id, item_id=item_id,
         location_type=location_type, location_id=location_id,
         project_id=project_id, since_iso=since, until_iso=until,
         limit=limit, cursor_after=cursor_after,
-    ))
+    )
+    # 5C-C26h (FG-60): an unfiltered history of a project-bound reader is
+    # narrowed to the rows of its member projects.
+    scope = await _member_scope(ctx, "warehouse.read_history")
+    if scope is not None:
+        cache: dict = {}
+        data["rows"] = [r for r in data.get("rows", [])
+                        if (await _row_projects(ctx, r, cache)) & scope]
+        data["scope"] = "member_projects"
+    return await _values_for(ctx, data)
 
 
 PROJECT_SCOPED_WARNING_CODES = frozenset({
@@ -447,6 +510,13 @@ async def read_integrity_warnings(
     # FG-23 (Р20) / audit C26A-2 — the Path B warnings carry money.
     # Р32: the Path B warnings are project finance — not for the keeper.
     data = await _values_for(ctx, data, warehouse_values=False)
+    # 5C-C26h (FG-60): a project-bound reader sees only its member projects'
+    # warnings (a warehouse-only warning is outside its scope).
+    scope = await _member_scope(ctx, "warehouse.read_stock")
+    if scope is not None:
+        data["warnings"] = [w for w in data.get("warnings", [])
+                            if w.get("project_id") in scope]
+        data["scope"] = "member_projects"
     allowed = await _authorized_scope_locations(ctx, user=None)
     if allowed is not None:
         allowed_set = {tuple(x) for x in allowed}

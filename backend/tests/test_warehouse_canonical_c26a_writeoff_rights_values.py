@@ -223,24 +223,48 @@ def _has_value_key(obj) -> bool:
     return False
 
 
-# Р32 (5C-C26f): the warehousekeeper sees warehouse values — moved to the
-# list below; the other non-finance roles stay quantities-only (Р20).
-@pytest.mark.parametrize("role", ["site_manager", "LEGACY_TECHNICIAN",
-                                  "LEGACY_VIEWER", "driver"])
-async def test_fg23_non_finance_roles_see_quantities_only(
-        canonical_mongo_db, allow_always_gate, monkeypatch, role):
+# Р32 (5C-C26f): the warehousekeeper sees warehouse values (list below).
+# 5C-C26h (F-16 / FG-60): Technician / Viewer / Driver may not read canonical
+# stock at all (403), and a SiteManager reads only its member projects' buckets
+# — there, quantities only (Р20).
+async def test_fg23_site_manager_reads_its_project_as_quantities_only(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    from app.permissions import service as perm
+    from app.routes import warehouse_canonical_queries as q
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
     await _seed(db)
     run = _Run(client, allow_always_gate, db)
     await run.receive("4", "1")
     await run.receive("6", "3")
-    stock, hist = await _reads(db, monkeypatch, [_assignment(role)])
+    disp = await run.dispatch("10")
+    await run.accept(disp, "10")
+    await _member(db)
+    monkeypatch.setattr(q, "db", db)
+    monkeypatch.setattr(perm, "_load_assignments", _loader([_assignment("site_manager")]))
+    stock = await q.read_stock("item_c22", location_type="project", location_id=PROJECT,
+                               state="free", ctx=_UserCtx())
+    hist = await q.read_history(item_id="item_c22", location_type=None, location_id=None,
+                                project_id=PROJECT, since=None, until=None, limit=100,
+                                cursor_after=None, ctx=_UserCtx())
     assert stock["values_hidden"] is True and hist["values_hidden"] is True
     assert not _has_value_key(stock) and not _has_value_key(hist)
     assert stock["quantity"] == "10"
     assert [l["quantity"] for l in stock["layers"]] == ["4", "6"]
-    assert sorted(r["quantity"] for r in hist["rows"]) == ["4", "6"]
+
+
+@pytest.mark.parametrize("role", ["LEGACY_TECHNICIAN", "LEGACY_VIEWER", "driver"])
+async def test_fg23_roles_without_read_rights_get_403(
+        canonical_mongo_db, allow_always_gate, monkeypatch, role):
+    from fastapi import HTTPException
+    client, db = canonical_mongo_db
+    _patch_dbs(monkeypatch, db)
+    await _seed(db)
+    run = _Run(client, allow_always_gate, db)
+    await run.receive("4", "1")
+    with pytest.raises(HTTPException) as exc:
+        await _reads(db, monkeypatch, [_assignment(role)])
+    assert exc.value.status_code == 403
 
 
 # procurement: not in Р20 — unchanged (package 5C-C26 A), still sees values.
@@ -267,6 +291,10 @@ async def test_fg23_expired_finance_assignment_hides_values(
     await _seed(db)
     run = _Run(client, allow_always_gate, db)
     await run.receive("4", "1")
-    stock, _ = await _reads(db, monkeypatch,
-                            [_assignment("accountant", valid_to="2021-01-01T00:00:00Z")])
-    assert stock["values_hidden"] is True and "total_value" not in stock
+    # 5C-C26h: an expired assignment grants no read at all → 403 (no data,
+    # so no values either).
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as exc:
+        await _reads(db, monkeypatch,
+                     [_assignment("accountant", valid_to="2021-01-01T00:00:00Z")])
+    assert exc.value.status_code == 403
