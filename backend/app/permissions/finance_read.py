@@ -279,6 +279,16 @@ FINANCE_READS: List[FinanceRead] = [
        CANON_B + "; non-finance: current member projects only"),
     _E("GET", "/api/material-warnings/{project_id}", MONEY_VALUES_READ, R20_5M,
        CANON_B + "; SEC-02-G (SEC71-03): money in the warning text"),
+    # SEC-02-G (FLOW Guard FG-111): alarm events carry "бюджет 900.0% изхарчен" + metric_value
+    _E("GET", "/api/alarms", MONEY_VALUES_READ, R20_5M, CANON_B + "; FG-111"),
+    _E("GET", "/api/alarms/dashboard", MONEY_VALUES_READ, R20_5M, CANON_B + "; FG-111"),
+    _E("GET", "/api/alarms/{event_id}", MONEY_VALUES_READ, R20_5M, CANON_B + "; FG-111"),
+    _E("PUT", "/api/alarms/{event_id}/acknowledge", MONEY_VALUES_READ, R20_5M,
+       CANON_B + "; FG-111 (answer is the event)"),
+    _E("PUT", "/api/alarms/{event_id}/resolve", MONEY_VALUES_READ, R20_5M,
+       CANON_B + "; FG-111 (answer is the event)"),
+    _E("POST", "/api/alarms/evaluate", MONEY_VALUES_READ, R20_5M,
+       CANON_B + "; FG-111 (answer lists the new events)"),
     _E("GET", "/api/projects/{project_id}/activities-overview", MONEY_VALUES_READ, R20_5B, CANON_B43),
     _E("GET", "/api/projects/{project_id}/activity-budget-summary", MONEY_VALUES_READ, R20_5B,
        CANON_B43 + "; Accountant on every project"),
@@ -433,10 +443,40 @@ MONEY_TEXT = _re.compile(r"\d\s*(%|eur\b|€|лв|bgn\b|usd\b|\$)", _re.I)
 _TEXT_KEYS = ("message", "text", "title", "detail", "description", "label")
 
 
+# SEC-02-G (FLOW Guard FG-111, addendum E): an alarm event (app.services.alarm_engine) —
+# "<обект>: бюджет 900.0% изхарчен" + context.metric_value / threshold. Without the finance
+# right: no metric_value / threshold / details for ANY alarm; a money alarm type gets the
+# generic text, a generic rule name (an admin's name may hold the threshold) and one
+# severity (two rules at 80 % / 100 % would tell the band).
+MONEY_ALARM_TYPES: FrozenSet[str] = frozenset(
+    {"budget", "overhead", "pricing", "procurement", "custom"})
+GENERIC_ALARM_RULE_NAME = "Бюджетна аларма"
+_ALARM_CONTEXT_HIDDEN = ("metric_value", "threshold", "details")
+
+
+def _is_alarm_event(d: dict) -> bool:
+    return "rule_id" in d and "triggered_at" in d
+
+
+def money_free_alarm(d: dict) -> dict:
+    out = dict(d)
+    if isinstance(out.get("context"), dict):
+        out["context"] = {k: v for k, v in out["context"].items()
+                          if k not in _ALARM_CONTEXT_HIDDEN}
+    if out.get("type") in MONEY_ALARM_TYPES:
+        out.update({"message": GENERIC_BUDGET_ALERT["message"], "severity": "warning",
+                    "rule_name": GENERIC_ALARM_RULE_NAME})
+    elif isinstance(out.get("message"), str) and MONEY_TEXT.search(out["message"]):
+        out["message"] = "Има предупреждение — подробности при финансите"
+    return out
+
+
 def money_free_alert(d: dict) -> dict:
     """``d`` itself when it is no alert with money; else the money-free alert."""
     if not isinstance(d, dict):
         return d
+    if _is_alarm_event(d):
+        return money_free_alarm(d)
     texts = [k for k in _TEXT_KEYS if isinstance(d.get(k), str)]
     if not texts:
         return d

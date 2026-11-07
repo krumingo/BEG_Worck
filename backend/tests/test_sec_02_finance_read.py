@@ -226,6 +226,23 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "smr_type_id": "Мазилка", "started_at": "2026-11-02T07:00:00",
             "ended_at": "2026-11-02T15:00:00", "duration_hours": 8, "labor_cost": 0,
             "created_at": now})
+        # SEC-02-G (FLOW Guard FG-111): a stored budget alarm of P1 ("900.0%" + metric_value)
+        # and an active budget rule (> 80 %) — POST /alarms/evaluate raises a new one (124 %).
+        await op_db.alarm_rules.insert_one({
+            "id": sid(tkey, "rule1"), "org_id": org, "name": "Бюджет над 80%",
+            "type": "budget", "severity": "critical", "is_active": True,
+            "condition": {"metric": "burn_pct", "operator": ">", "threshold": 80},
+            "notify_roles": [], "cooldown_hours": 24, "auto_resolve": False,
+            "created_at": now, "updated_at": now})
+        await op_db.alarm_events.insert_one({
+            "id": sid(tkey, "alarm1"), "org_id": org, "rule_id": sid(tkey, "rule1"),
+            "rule_name": "Бюджет над 80%", "severity": "critical", "type": "budget",
+            "site_id": p1, "site_name": "P1", "triggered_at": "2026-11-03T08:00:00+00:00",
+            "message": "P1: бюджет 900.0% изхарчен",
+            "context": {"metric_value": 900.0, "threshold": 80, "entity_id": p1,
+                        "entity_type": "project", "details": {}},
+            "status": "active", "acknowledged_by": None, "acknowledged_at": None,
+            "resolved_by": None, "resolved_at": None, "resolve_notes": None})
         # SEC-02-G (SEC71-03): the SAME paid technician on 2026-11-04 — P1 stays a one-paid-
         # worker site, and its cumulative burn is 6200 / 5000 = 124 % -> a generated pulse
         # carries the ">100 %" budget alert.
@@ -593,6 +610,48 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                         "legacy_role": fx["A"]["users"][role]["role"],
                         "alerts": body.get("alerts"),
                         "budget_snapshot": body.get("budget_snapshot")})
+        # SEC-02-G (FLOW Guard FG-111): /alarms readers — the stored "900.0%" alarm and a
+        # freshly evaluated one (124 %), one paid worker on P1, visible budget.
+        from app.permissions.finance_read import MONEY_TEXT, _TEXT_KEYS
+
+        def alarm_events_in(v, out):
+            if isinstance(v, dict):
+                if "rule_id" in v and "triggered_at" in v:
+                    out.append(v)
+                for x in v.values():
+                    alarm_events_in(x, out)
+            elif isinstance(v, list):
+                for x in v:
+                    alarm_events_in(x, out)
+            return out
+        alarm_rows = []
+        stored = sid("A", "alarm1")
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            for role in ("requester", "technician", "viewer", "accountant"):
+                hdr = {"Authorization": "Bearer " + tokens[("A", role)]}
+                for case, method, path in (("list", "GET", "/api/alarms"),
+                                           ("one", "GET", "/api/alarms/" + stored),
+                                           ("dashboard", "GET", "/api/alarms/dashboard"),
+                                           ("evaluate", "POST", "/api/alarms/evaluate")):
+                    r = tc.request(method, path, headers=hdr)
+                    if case == "evaluate":               # next caller evaluates afresh
+                        tc.portal.call(lambda: op_db.alarm_events.delete_many(
+                            {"org_id": fx["A"]["tenant_id"], "id": {"$ne": stored}}))
+                    body = r.json() if r.status_code == 200 else None
+                    evs = alarm_events_in(body, [])
+                    alarm_rows.append({
+                        "mode": mode, "role": role, "case": case, "status": r.status_code,
+                        "legacy_role": fx["A"]["users"][role]["role"],
+                        "events": [{"type": e.get("type"), "message": e.get("message"),
+                                    "rule_name": e.get("rule_name"),
+                                    "severity": e.get("severity"),
+                                    "context_keys": sorted((e.get("context") or {}).keys())}
+                                   for e in evs],
+                        "money_text": sorted({x for e in evs for k in _TEXT_KEYS + ("rule_name",)
+                                              for x in [e.get(k)] if isinstance(x, str)
+                                              and MONEY_TEXT.search(x)}),
+                        "leaks_900": "900" in r.text, "leaks_124": "124.0" in r.text})
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -607,6 +666,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "price_modifier_audit": pm_audit,
         "pulse_one_paid_worker": pulse_paid,
         "pulse_budget_alerts": alert_rows,
+        "alarms": alarm_rows,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False) + "\n",
@@ -817,6 +877,30 @@ def check_pulse_budget_alerts(rows: List[Dict[str, Any]]) -> None:
         seen.setdefault(r["mode"], []).append(json.dumps(budget, sort_keys=True))
     for mode, texts in seen.items():
         assert len(set(texts)) == 1 and len(texts) == 4, (mode, texts)   # no threshold told
+
+
+def check_alarms(rows: List[Dict[str, Any]]) -> None:
+    """SEC-02-G (FLOW Guard FG-111): /alarms, /alarms/{id}, /alarms/dashboard and
+    POST /alarms/evaluate — a budget alarm with "бюджет 900.0% изхарчен" + metric_value
+    (and a fresh 124 % one) on a one-paid-worker site. Technician, Viewer and SiteManager
+    get the generic alarm: no amount / percent in any text or rule name, no metric_value /
+    threshold / details, severity warning; finance roles get the full alarm."""
+    from app.permissions.finance_read import GENERIC_BUDGET_ALERT, GENERIC_ALARM_RULE_NAME
+    assert len(rows) == len(MODES) * 4 * 4
+    for r in rows:
+        assert r["status"] == 200, r
+        budget = [e for e in r["events"] if e["type"] == "budget"]
+        assert budget, r                                  # the alarm is there for everyone
+        if r["legacy_role"] in FINANCE:
+            assert any(MONEY_TEXT_OK in e["message"] for e in budget
+                       for MONEY_TEXT_OK in ("900.0%", "124.0%")), r
+            assert all("metric_value" in e["context_keys"] for e in budget), r
+            continue
+        assert r["money_text"] == [] and not r["leaks_900"] and not r["leaks_124"], r
+        for e in budget:
+            assert e["message"] == GENERIC_BUDGET_ALERT["message"], r
+            assert e["rule_name"] == GENERIC_ALARM_RULE_NAME and e["severity"] == "warning", r
+            assert not {"metric_value", "threshold", "details"} & set(e["context_keys"]), r
 
 
 def check_mirrors(mirrors: List[Dict[str, Any]]) -> None:
@@ -1352,6 +1436,53 @@ def test_sec71_03_budget_alert_text_gives_no_amount(monkeypatch):
         assert "amount" not in v["warnings"][6]
 
 
+def test_fg111_alarms_give_no_amount_metric_or_threshold():
+    """SEC-02-G (FLOW Guard FG-111): every /alarms reader strips money for a caller
+    without the finance right (R20-5M, registered); an alarm event loses metric_value /
+    threshold / details, and a money alarm gets the generic text, rule name and severity
+    — the same for an 80 % and a 100 % rule, stored or just evaluated."""
+    from app.routes import alarms
+    from app.permissions.finance_read import (strip_money, by_route, R20_5M, MONEY_TEXT,
+                                              GENERIC_BUDGET_ALERT, GENERIC_ALARM_RULE_NAME)
+    readers = {("GET", "/api/alarms"): alarms.list_alarms,
+               ("GET", "/api/alarms/dashboard"): alarms.alarm_dashboard,
+               ("GET", "/api/alarms/{event_id}"): alarms.get_alarm,
+               ("PUT", "/api/alarms/{event_id}/acknowledge"): alarms.acknowledge_alarm,
+               ("PUT", "/api/alarms/{event_id}/resolve"): alarms.resolve_alarm,
+               ("POST", "/api/alarms/evaluate"): alarms.evaluate_alarms}
+    reg = by_route()
+    for key, fn in readers.items():
+        assert reg[key].rule == R20_5M and getattr(fn, "sec02_strips_money", False), key
+
+    def ev(name, sev, pct, threshold):
+        return {"id": "e", "rule_id": "r", "rule_name": name, "severity": sev,
+                "type": "budget", "site_id": "P1", "site_name": "P1",
+                "triggered_at": "2026-11-03T08:00:00", "status": "active",
+                "message": "P1: бюджет %s%% изхарчен" % pct,
+                "context": {"metric_value": pct, "threshold": threshold, "entity_id": "P1",
+                            "entity_type": "project", "details": {"spent": 90}}}
+    a = strip_money({"items": [ev("Бюджет над 80%", "warning", 85.0, 80)], "total": 1,
+                     "page": 1, "page_size": 50})
+    b = strip_money({"items": [ev("Бюджет над 100%", "critical", 900.0, 100)], "total": 1,
+                     "page": 1, "page_size": 50})
+    assert a == b, (a, b)                                 # no band, no amount
+    e = a["items"][0]
+    assert e["message"] == GENERIC_BUDGET_ALERT["message"] and e["severity"] == "warning"
+    assert e["rule_name"] == GENERIC_ALARM_RULE_NAME
+    assert e["context"] == {"entity_id": "P1", "entity_type": "project"}
+    assert a["total"] == 1 and e["id"] == "e" and e["status"] == "active"
+    # a non-money alarm keeps its text (hours), not its metric / threshold
+    ot = strip_money({"rule_id": "r2", "triggered_at": "t", "type": "overtime",
+                      "message": "Иван: 12.5ч извънреден труд/седмица", "severity": "info",
+                      "context": {"metric_value": 12.5, "threshold": 10, "entity_id": "w"}})
+    assert ot["message"].startswith("Иван: 12.5ч") and ot["context"] == {"entity_id": "w"}
+    # evaluate answer and dashboard: the events inside are projected too
+    evald = strip_money({"new_events": 1, "resolved_events": 0,
+                         "events": [ev("x", "critical", 124.0, 80)]})
+    assert not MONEY_TEXT.search(evald["events"][0]["message"]) and \
+        "124" not in json.dumps(evald, ensure_ascii=False)
+
+
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
     import asyncio
     from app.permissions.money_write import money_values_visible
@@ -1411,6 +1542,7 @@ def test_the_committed_evidence_satisfies_the_package():
     check_price_modifier_audit(data["price_modifier_audit"])
     check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
     check_pulse_budget_alerts(data["pulse_budget_alerts"])
+    check_alarms(data["alarms"])
 
 
 def test_the_audit_scan_finds_no_money_for_non_finance_roles():
@@ -1539,6 +1671,7 @@ def test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode(t
     check_price_modifier_audit(data["price_modifier_audit"])
     check_pulse_one_paid_worker(data["pulse_one_paid_worker"])
     check_pulse_budget_alerts(data["pulse_budget_alerts"])
+    check_alarms(data["alarms"])
     committed = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))["rows"]
     key = lambda r: (r["mode"], r["tenant"], r["role"], r["probe"], r["target"])
     assert {key(r): (r["status"], r.get("money_keys")) for r in data["rows"]} == \

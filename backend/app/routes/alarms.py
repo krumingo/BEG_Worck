@@ -10,6 +10,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.alarm_engine import evaluate_all_rules
+from app.permissions.money_write import strip_money_for_non_finance  # SEC-02-G (FG-111)
 from app.tenancy.data_access import TenantData
 
 
@@ -49,6 +50,7 @@ class AcknowledgeRequest(BaseModel):
 # ── Alarm Events ───────────────────────────────────────────────────
 
 @router.get("/alarms")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def list_alarms(
     severity: Optional[str] = None,
     type: Optional[str] = None,
@@ -83,6 +85,7 @@ async def alarm_count(user: dict = Depends(get_current_user)):
 
 
 @router.get("/alarms/dashboard")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def alarm_dashboard(user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -125,6 +128,7 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
 
 
 @router.get("/alarms/{event_id}")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def get_alarm(event_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]}, {"_id": 0})
@@ -134,6 +138,7 @@ async def get_alarm(event_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.put("/alarms/{event_id}/acknowledge")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def acknowledge_alarm(event_id: str, data: AcknowledgeRequest, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
@@ -147,6 +152,7 @@ async def acknowledge_alarm(event_id: str, data: AcknowledgeRequest, user: dict 
 
 
 @router.put("/alarms/{event_id}/resolve")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def resolve_alarm(event_id: str, data: AcknowledgeRequest, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
@@ -160,6 +166,7 @@ async def resolve_alarm(event_id: str, data: AcknowledgeRequest, user: dict = De
 
 
 @router.post("/alarms/evaluate")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def evaluate_alarms(user: dict = Depends(get_current_user)):
     result = await evaluate_all_rules(user["org_id"])
     return result

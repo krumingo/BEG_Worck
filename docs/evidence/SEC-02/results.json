@@ -783,6 +783,36 @@
    "finance.money_values.read"
   ],
   [
+   "GET /api/alarms",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
+   "GET /api/alarms/dashboard",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
+   "GET /api/alarms/{event_id}",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
+   "PUT /api/alarms/{event_id}/acknowledge",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
+   "PUT /api/alarms/{event_id}/resolve",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
+   "POST /api/alarms/evaluate",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
    "GET /api/projects/{project_id}/activities-overview",
    "R20-5B",
    "finance.money_values.read"
@@ -850,7 +880,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 174.6,
+ "seconds": 176.4,
  "rows": [
   {
    "mode": "off",
@@ -21858,6 +21888,667 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/projects/{project_id}/activities-overview",
    "rule": "R20-5B",
    "target": "P1",
@@ -45522,6 +46213,667 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/projects/{project_id}/activities-overview",
    "rule": "R20-5B",
    "target": "P1",
@@ -72512,6 +73864,667 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/projects/{project_id}/activities-overview",
    "rule": "R20-5B",
    "target": "P1",
@@ -96176,6 +98189,667 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/projects/{project_id}/activities-overview",
    "rule": "R20-5B",
    "target": "P1",
@@ -123352,6 +126026,667 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/projects/{project_id}/activities-overview",
    "rule": "R20-5B",
    "target": "P1",
@@ -147213,6 +150548,667 @@
    "target": "P2",
    "status": 200,
    "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [
+    "budget",
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/dashboard",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/alarms/{event_id}",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/acknowledge",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "PUT /api/alarms/{event_id}/resolve",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 422,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [
+    "metric_value"
+   ],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "POST /api/alarms/evaluate",
+   "rule": "R20-5M",
+   "target": null,
+   "status": 200,
+   "written": [
+    "op.alarm_events"
+   ],
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
@@ -153409,7 +157405,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -153418,13 +157414,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "scope_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -153440,7 +157436,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "24798a332f621dada8fe3fde9859b88ed3cc09b00cdfbc62b6a2d04ae897bf38"
+     "integrity_hash": "4e8c3b6408dea7c7fbc9c916b02ee5a24f2931f784d7051b1c9fa9d4d1bcbae5"
     }
    ]
   },
@@ -153451,7 +157447,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -153460,7 +157456,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -153485,7 +157481,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "573c02fb5a58b5a5d53c285bbd1c49f5e1efbc875bdd807e27a3a1c97277a880"
+     "integrity_hash": "e42dac2a1ee4c137db86ce1f7146af53a2d65656772121602a2af1a2a3dd6a65"
     }
    ]
   },
@@ -153496,7 +157492,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -153508,7 +157504,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -153517,7 +157513,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -153543,7 +157539,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "cc86d706646661e0e4989cbbf3641c6560df1140000e4d97f8fd0f32979e468f"
+     "integrity_hash": "212ad758fe4c23e7832e8c02ab1422c577178985ada91682d5b6fc95e8316c0b"
     }
    ]
   },
@@ -153554,7 +157550,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -153566,7 +157562,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -153578,7 +157574,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -153587,13 +157583,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "scope_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -153611,7 +157607,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "0ed84ea825661de67ab42a6395794739c54fdb1d58394cbac85a5b9dd6454657"
+     "integrity_hash": "b784d960f1018deddf9608e61dd15c6c71f0fad8daceda34026866346a2ba350"
     }
    ]
   },
@@ -153622,7 +157618,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -153631,7 +157627,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -153657,7 +157653,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "0565b2ebead6ad8c0ecad6256e79dca05b1882105d0279bcc3e6e7bfe474182c"
+     "integrity_hash": "e5230e3a87ecb76b2504e1f0f7d43591c99537eafe4b43886d0e4dc9331480b8"
     }
    ]
   },
@@ -153668,7 +157664,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -153680,7 +157676,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -153689,7 +157685,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -153715,7 +157711,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "badff6d131a48ec2df45a9bf34750117e7ac02eeed5c9049630cdba255b6618a"
+     "integrity_hash": "3b76f83cfb961fe7ca4dfcb5cac9cb853a63c8bbd1155649094944fa33ed6d0f"
     }
    ]
   },
@@ -153726,7 +157722,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -153738,7 +157734,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -153750,7 +157746,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -153759,13 +157755,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "scope_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -153783,7 +157779,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "3c97ed6edccaf2eda7b10d4235031ec2c6f624d5ba86c42f985cc01c800d280a"
+     "integrity_hash": "3ad8755a89133b58a8ea055d683faa0961431d413732f957fce6e4a6d33f4923"
     }
    ]
   },
@@ -153794,7 +157790,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -153803,7 +157799,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -153829,7 +157825,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "af077bceb3ef7824480143808424bf4057b8fd8cba2e995fa8993f7c6b3862e7"
+     "integrity_hash": "39b907aa7da4abe899becbc39bff530e27c681f919bba4b4275c24ffdd134415"
     }
    ]
   },
@@ -153840,7 +157836,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -153852,7 +157848,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -153861,7 +157857,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+     "tenant_id": "105db9a0-1310-4c35-830a-f1ba5633de0f",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -153887,7 +157883,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "7423c04dcb4c8084e630e4cbfaa0d8a5fb07cc3f0060407565a1f7a3b68925f5"
+     "integrity_hash": "cb48e9652ac646f445ae26579195aa14fa0d235f2026e9be495ad3f01d8bb8bf"
     }
    ]
   },
@@ -153898,7 +157894,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -153910,7 +157906,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "3861d019-8f6e-457f-b2d5-ef9cd7d61ff5",
+   "expected_tenant": "105db9a0-1310-4c35-830a-f1ba5633de0f",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
@@ -154638,6 +158634,1136 @@
     "burn_pct": 124.0,
     "status": "over_budget"
    }
+  }
+ ],
+ "alarms": [
+  {
+   "mode": "off",
+   "role": "requester",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "requester",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "requester",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "requester",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "technician",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "technician",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "technician",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "technician",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": false,
+   "leaks_124": true
+  },
+  {
+   "mode": "shadow",
+   "role": "requester",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "requester",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "requester",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "requester",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "technician",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "technician",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "technician",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "technician",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": false,
+   "leaks_124": true
+  },
+  {
+   "mode": "enforce",
+   "role": "requester",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "requester",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "requester",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "requester",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "SiteManager",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "technician",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "technician",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "technician",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "technician",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Technician",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Viewer",
+   "events": [
+    {
+     "type": "budget",
+     "message": "Бюджетът изисква внимание — подробности при финансите",
+     "rule_name": "Бюджетна аларма",
+     "severity": "warning",
+     "context_keys": [
+      "entity_id",
+      "entity_type"
+     ]
+    }
+   ],
+   "money_text": [],
+   "leaks_900": false,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "case": "list",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "case": "one",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "case": "dashboard",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "P1: бюджет 900.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "P1: бюджет 900.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": true,
+   "leaks_124": false
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "case": "evaluate",
+   "status": 200,
+   "legacy_role": "Accountant",
+   "events": [
+    {
+     "type": "budget",
+     "message": "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
+     "rule_name": "Бюджет над 80%",
+     "severity": "critical",
+     "context_keys": [
+      "details",
+      "entity_id",
+      "entity_type",
+      "metric_value",
+      "threshold"
+     ]
+    }
+   ],
+   "money_text": [
+    "ST01 A — синтетичен обект: бюджет 124.0% изхарчен",
+    "Бюджет над 80%"
+   ],
+   "leaks_900": false,
+   "leaks_124": true
   }
  ]
 }

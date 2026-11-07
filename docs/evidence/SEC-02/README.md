@@ -482,8 +482,25 @@ Route-ът е R20-2B (SiteManager член на проекта може да з�
 * скенерите: текст с число + %/валута вече е **hit** (`=text`), включително в allowed бюджетния изглед. GET 5640 / 0 hits, POST/PUT 4575 / 0 hits;
 * контрапроба `sec02g_sec71_03_counter_check.txt`.
 
+### FG-111 (Допълнение E, ДОКАЗАНО) — `/alarms` показваше „бюджет 900.0% изхарчен“ и `metric_value`
+Алармите (`alarm_engine`) пишат `message` „<обект>: бюджет 900.0% изхарчен“ и `context.metric_value` / `threshold`. Нито един reader не беше в FINANCE_READS, затова Technician, Viewer и SiteManager получаваха всичко. Класът е същият като при SEC71-03.
+
+Поправка:
+* регистрирани като R20-5M и минават през `@strip_money_for_non_finance`: `GET /alarms`, `GET /alarms/dashboard`, `GET /alarms/{event_id}`, `PUT /alarms/{event_id}/acknowledge`, `PUT /alarms/{event_id}/resolve` (отговорът е събитието) и `POST /alarms/evaluate` (отговорът изброява новите събития);
+* `finance_read.money_free_alarm` (част от `money_free_alert`, т.е. от `strip_money`): за роля без финансово право **всяка** аларма губи `context.metric_value`, `threshold` и `details`;
+* паричните типове аларми (budget, overhead, pricing, procurement, custom) получават генеричния текст, генерично име на правило („Бюджетна аларма“; името от администратора може да носи прага, напр. „Бюджет над 80%“) и severity warning. Така правило на 80 % и правило на 100 % изглеждат еднакво;
+* останалите аларми (overtime, attendance, deadline) запазват текста си (часове / дни), но минават през предпазната мрежа за %/валута;
+* финансовите роли виждат всичко; записът в базата не се променя;
+* `/alarms/count` дава само бройки и не е променен.
+
+Доказателство:
+* unit `test_fg111_alarms_give_no_amount_metric_or_threshold`: регистър + декоратор на 6-те reader-а; правило 80 % и 100 % дават еднакъв отговор; overtime запазва часовете си без metric/threshold; evaluate и dashboard се проектират;
+* реален Mongo, harness `alarms`, 3 режима × SiteManager / Technician / Viewer / Accountant × list / one / dashboard / evaluate. Seed: записана аларма „900.0%“ с `metric_value` и активно правило > 80 %; evaluate вдига нова аларма от 124 % при един платен работник. Не-финансовите роли получават генеричната аларма без metric/threshold/details и без „900“ / „124.0“ никъде в отговора. Accountant вижда пълния текст и metric_value;
+* скенерите обхождат `/alarms*` (GET) и `POST /alarms/evaluate` / `PUT …` (POST/PUT) със seed-натата аларма; текст с %/валута е hit. GET 5640 / 0 hits, POST/PUT 4575 / 0 hits;
+* контрапроба `sec02g_fg111_counter_check.txt`: при `5af530e` нито един reader не е в регистъра и отговорът е суров.
+
 ### Дълг / решение за Крум
-* **SEC-02-G-D1:** техническият ръководител запазва `budget_snapshot.status` (ok / warning / over_budget) — решение от SEC-02-E. Статусът казва в коя лента е обектът (>80 % / >100 %). Това е граница, не сума, но при един работник и видим бюджет дава долна граница на заплащането му. Същото важи за самото наличие на генеричния алерт. Дали TM да вижда лентата, е бизнес решение.
+* **SEC-02-G-D1:** техническият ръководител запазва `budget_snapshot.status` (ok / warning / over_budget) — решение от SEC-02-E. Статусът казва в коя лента е обектът (>80 % / >100 %). Това е граница, не сума, но при един работник и видим бюджет дава долна граница на заплащането му. Същото важи за самото наличие на генеричния алерт / аларма, за филтъра `GET /alarms?severity=critical` (severity в базата е тази на правилото) и за бройките в `/alarms/count`. Дали не-финансовите роли да виждат лентата, е бизнес решение.
 
 ## Rollback
 
