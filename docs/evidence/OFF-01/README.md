@@ -130,3 +130,18 @@ Package: the same file, section „Допълнение A“ @ `1a15df3`. Audit 
 After the fix: `test_off_01` + probe → **108 passed, 0 skipped**.
 
 Changed rules, noted: new-version of a **Draft** is now allowed (Addendum A §2 lists Draft); before it was 400. Accepted was allowed, now 409.
+
+## Round 3 (07.11) — OFF79-03 and legacy pairs (non-blocking audit items, before Codex)
+
+Requested by the orchestrator after the audit closed OFF79-01 at `449c1f4`. The package has no Addendum B. Both items stay inside the package: OFF79-03 is a race in the Addendum A §1 fix itself. The second item enforces Addendum A §2 („никога няма две приети версии“) on data written before OFF-01.
+
+**Reproduced first** (`ac8d320` = tests only, on `449c1f4` code): `test_16` and `test_17` fail in all three modes (6 failed).
+
+| Item | Fix | Test |
+|---|---|---|
+| OFF79-03: restore checked "unsent draft" by a read and then wrote unconditionally. Racing `/send`, it left the offer Sent at 12 while the send snapshot said 1200. | `/send` is now a CAS on the draft as read (status Draft, `sent_at` empty, not superseded, same `updated_at`). The loser gets **409 `OFFER_CHANGED`**, and the snapshot is written only after the CAS, so it equals what was sent. `restore` is a CAS on the same condition, written BEFORE its backup; the loser gets **409 `OFFER_IN_USE`**. `PUT /offers/{id}` and `PUT /offers/{id}/lines` carry Draft / never sent / not superseded in their write filter; the loser gets **409 `OFFER_IN_USE`**. | `test_16`: ×10 restore ∥ send and ×10 lines PUT ∥ send, × 3 modes. Exactly one wins every round. A Sent offer always has total 1200 and exactly one Sent snapshot with 1200. |
+| Legacy pairs: v1/v2 linked before OFF-01 (v1 never marked superseded) could both end Accepted. | `/accept` and the public approve walk the `parent_offer_id` family (up to the root, down to every version), inside the acceptance transaction. Another Accepted version → **409 `OFFER_FAMILY_ALREADY_ACCEPTED`** (public: neutral text, no ids). A `$inc family_accept_guard` on the family root makes two concurrent acceptances of one family write-conflict, so the check cannot be skewed. | `test_17`: a pair, a 3-version chain, and ×10 accept(v1) ∥ public approve(v2) × 3 modes → exactly one Accepted. |
+
+New field: `family_accept_guard` (a counter on a family's root offer; a concurrency stamp only, no business meaning).
+
+**Debt D-OFF01-13:** legacy pairs are now guarded at accept time, but the older version is still not marked `Superseded` (no backfill). A migration that marks every parent with a child as superseded is a data change → Krum.
