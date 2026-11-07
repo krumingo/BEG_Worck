@@ -184,6 +184,15 @@ def _draft_lost() -> HTTPException:
     return _conflict(OFFER_IN_USE, "Офертата вече е изпратена или променена — презаредете")
 
 
+async def _has_newer_version(tenant: TenantData, offer: dict, session=None) -> bool:
+    """FG-135: a version that has a newer version (a child) in its family is replaced, even
+    when a legacy row (linked before OFF-01) was never marked superseded. Read only — the
+    legacy rows are not migrated."""
+    kw = {} if session is None else {"session": session}
+    return bool(await tenant.offers.find_one({"parent_offer_id": offer["id"]},
+                                             {"_id": 0, "id": 1}, **kw))
+
+
 async def _family_guard(tenant: TenantData, offer: dict, session) -> None:
     """Legacy pairs (linked before OFF-01, the older one never marked superseded): no version
     is accepted while another version of the same family is Accepted → 409
@@ -209,6 +218,8 @@ async def _family_guard(tenant: TenantData, offer: dict, session) -> None:
         family.update({k["id"]: k for k in kids})
     await tenant.offers.update_one({"id": root["id"]}, {"$inc": {"family_accept_guard": 1}},
                                    session=session)
+    if any(k.get("parent_offer_id") == offer["id"] for k in family.values()):
+        raise _superseded_error()                   # FG-135: it has a newer version
     if any(v.get("status") == "Accepted" for k, v in family.items() if k != offer["id"]):
         raise _conflict("OFFER_FAMILY_ALREADY_ACCEPTED",
                         "Друга версия на тази оферта вече е одобрена. Моля, свържете се с изпълнителя.")
@@ -517,6 +528,8 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
                     {"offer_no": offer["offer_no"]})
     
     result = await _tenant(user).offers.get(offer_id, {"_id": 0})
+    if not result:                       # FG-136: never a 500 — only a delete could do this
+        raise _conflict("OFFER_CHANGED", "Офертата беше изтрита междувременно")
     result["review_url"] = f"/offers/review/{review_token}"
     return result
 
@@ -536,10 +549,21 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
     key = _require_key(idempotency_key)
     data = data or OfferAccept()
     version = offer.get("version", 1)
+    # FG-137 (FLOW-003 Interim Approval Receipt): a carrier named is a carrier proven
+    if data.approval_method == "signed_pdf" and not data.evidence_file_id:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "EVIDENCE_FILE_REQUIRED",
+            "message": "Подписаният PDF трябва да е приложен като файл"})
+    if data.approval_method == "verified_email":
+        # needs a verified client address and an e-mail that cites offer id + version; the
+        # model for either does not exist yet (debt D-OFF01-14) → never accepted unproven
+        raise HTTPException(status_code=422, detail={
+            "error_code": "VERIFIED_EMAIL_NOT_SUPPORTED",
+            "message": "Одобрение с верифициран имейл още не се поддържа — приложете подписан PDF"})
 
     async def work():
         # inside the key: a replay of a completed key returns its first result instead
-        if _is_superseded(offer):
+        if _is_superseded(offer) or await _has_newer_version(tenant, offer):
             raise _superseded_error()
         if offer["status"] != "Sent":
             raise HTTPException(status_code=400, detail="Only Sent offers can be accepted")
@@ -621,7 +645,7 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
     new_version = offer.get("version", 1) + 1
 
     async def work():
-        if _is_superseded(offer):
+        if _is_superseded(offer) or await _has_newer_version(tenant, offer):
             raise _superseded_error()
         if seen_status == "Accepted":
             raise _conflict("OFFER_ACCEPTED_USE_ANNEX",
@@ -651,6 +675,8 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
                     raise _superseded_error()
                 raise _conflict("OFFER_STATE_CHANGED",
                                 "Офертата беше променена от друга заявка — презаредете и опитайте отново")
+            if await _has_newer_version(tenant, offer, session):
+                raise _superseded_error()            # a legacy child: one head per chain
             new_lines = []
             for line in offer.get("lines", []):
                 l = {k: v for k, v in line.items() if k != "_id"}
@@ -766,7 +792,13 @@ async def delete_offer(offer_id: str, user: dict = Depends(require_m2)):
     if offer["status"] != "Draft" or await _draft_was_used(tenant, offer):
         raise _conflict(OFFER_IN_USE, "Изпратена или използвана оферта не се изтрива — анулирайте я")
     
-    await tenant.offers.delete_one({"id": offer_id})
+    # FG-136: the delete is itself conditional on "an unsent, unlinked draft, as read" — one
+    # atomic single-document operation, so a /send that won in between makes it match nothing
+    gone = await tenant.offers.delete_one({
+        "id": offer_id, **DRAFT_FILTER, "review_token": None, "parent_offer_id": None,
+        "updated_at": offer.get("updated_at")})
+    if gone.deleted_count != 1:
+        raise _conflict(OFFER_IN_USE, "Изпратена или използвана оферта не се изтрива — анулирайте я")
     await log_audit(user["org_id"], user["id"], user["email"], "offer_deleted", "offer", offer_id,
                     {"offer_no": offer["offer_no"]})
     return {"ok": True}
@@ -1401,6 +1433,13 @@ async def get_offer_review(review_token: str):
     tenant, offer = await resolve_review_token(db, review_token, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Офертата не е намерена")
+    # FG-138: a replaced version or a closed link shows nothing of the offer — a neutral text
+    if _is_superseded(offer) or await _has_newer_version(tenant, offer):
+        raise HTTPException(status_code=410, detail={
+            "error_code": OFFER_VERSION_SUPERSEDED, "message": PUBLIC_SUPERSEDED_TEXT})
+    if _link_closed(offer):
+        raise HTTPException(status_code=410, detail={
+            "error_code": "OFFER_NOT_OPEN", "message": PUBLIC_NOT_OPEN_TEXT})
     
     # Record view event (only first time)
     if offer["status"] == "Sent":
@@ -1474,7 +1513,7 @@ async def respond_to_offer(review_token: str, data: dict,
     version = offer.get("version", 1)
 
     async def work():
-        if _is_superseded(offer):
+        if _is_superseded(offer) or await _has_newer_version(tenant, offer):
             raise _superseded_error()
         if _link_closed(offer):
             raise _conflict("OFFER_NOT_OPEN", PUBLIC_NOT_OPEN_TEXT)
@@ -1488,6 +1527,8 @@ async def respond_to_offer(review_token: str, data: dict,
             now = datetime.now(timezone.utc).isoformat()
             if action == "approve":
                 await _family_guard(tenant, offer, session)
+            elif await _has_newer_version(tenant, offer, session):
+                raise _superseded_error()
             update_fields = {"status": new_status, "client_comment": comment,
                              "client_name": client_name, "updated_at": now}
             if action == "approve":

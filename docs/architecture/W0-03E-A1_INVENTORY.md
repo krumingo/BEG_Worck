@@ -133,6 +133,7 @@
 | app/routes/offers.py:get_next_offer_no | (helper) | offers | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:_draft_was_used | (helper) | offer_events | find_one(offer_id, event_type) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:_check_evidence_file | (helper) | media_files | get(id = file_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_has_newer_version | (helper) | offers | find_one(parent_offer_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:_family_guard | (helper) | offers | update_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:_family_guard | (helper) | offers | get(id = pid) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:_family_guard | (helper) | offers | find(parent_offer_id) | TenantData org_id (session) | new read | SAFE |
@@ -162,7 +163,7 @@
 | app/routes/offers.py:cancel_offer | POST /offers/{offer_id}/cancel | offers | get(id = offer_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:cancel_offer | POST /offers/{offer_id}/cancel | offers | find_one_and_update(id, status, superseded_by) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | delete_one(id, review_token, parent_offer_id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:list_activity_catalog | GET /activity-catalog | activity_catalog | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:create_activity | POST /activity-catalog | projects | get(id = data.project_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_activity | POST /activity-catalog | activity_catalog | insert_one(item) | TenantData org_id (session) | new read | SAFE |
@@ -399,4 +400,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 384 accesses — FIXED 132, SAFE 252
+Totals: 385 accesses — FIXED 132, SAFE 253

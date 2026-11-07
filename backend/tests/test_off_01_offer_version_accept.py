@@ -301,10 +301,9 @@ def test_02_superseded_version_cannot_be_approved_by_the_old_link(monkeypatch, b
         after = await snap(op)
         for coll in ("offers", "audit_events", "offer_events"):
             assert after[coll] == before[coll], coll
-        # the review page itself still opens and says the version is replaced
+        # the review page says the version is replaced and shows nothing of it (FG-138)
         g = await c.get("/api/offers/review/" + TOKEN)
-        assert g.status_code == 200, g.text
-        assert g.json()["status"] == "Superseded"
+        assert g.status_code == 410 and code(g) == "OFFER_VERSION_SUPERSEDED", g.text
         assert (await get(op, "o1"))["status"] == "Superseded"
     run(monkeypatch, backend, mode, scenario)
 
@@ -382,7 +381,8 @@ def test_04_current_version_is_accepted_with_exact_version_evidence(monkeypatch,
         for coll in ("offers", "audit_events", "audit_logs"):
             assert after[coll] == before[coll], coll
         # same key, other request → 409; new key on an accepted offer → 400 (not Sent)
-        r3 = await accept(c, v2_id, key="acc-1", body={"approval_method": "verified_email"})
+        r3 = await accept(c, v2_id, key="acc-1",
+                          body={"approval_method": "signed_pdf", "evidence_file_id": "file-prj"})
         assert r3.status_code == 409 and code(r3) == "IDEMPOTENCY_KEY_REUSED", r3.text
         r4 = await accept(c, v2_id)
         assert r4.status_code == 400, r4.text
@@ -754,10 +754,11 @@ def test_17_a_legacy_pair_never_ends_with_two_accepted_versions(monkeypatch, bac
         await op.offers.insert_one(offer_doc("ov1", token=TOKEN))
         await op.offers.insert_one(offer_doc("ov2", version=2, parent="ov1", status="Accepted"))
         before = await snap(op)
+        # FG-135 (Addendum B): ov1 has a newer version → it is superseded, whatever ov2 is
         r = await accept(c, "ov1")
-        assert r.status_code == 409 and code(r) == "OFFER_FAMILY_ALREADY_ACCEPTED", r.text
+        assert r.status_code == 409 and code(r) == "OFFER_VERSION_SUPERSEDED", r.text
         r = await respond(c, TOKEN)
-        assert r.status_code == 409 and code(r) == "OFFER_FAMILY_ALREADY_ACCEPTED", r.text
+        assert r.status_code == 409 and code(r) == "OFFER_VERSION_SUPERSEDED", r.text
         assert "ov2" not in r.text and ORG_A not in r.text
         after = await snap(op)
         for coll in ("offers", "offer_events", "audit_events", "audit_logs"):
@@ -778,7 +779,8 @@ def test_17_a_legacy_pair_never_ends_with_two_accepted_versions(monkeypatch, bac
             x, y = await asyncio.gather(accept(c, a1), respond(c, t2))
             assert sorted((x.status_code, y.status_code)) == [200, 409], (i, x.text, y.text)
             loser = x if x.status_code == 409 else y
-            assert code(loser) == "OFFER_FAMILY_ALREADY_ACCEPTED", loser.text
+            assert code(loser) in ("OFFER_FAMILY_ALREADY_ACCEPTED", "OFFER_VERSION_SUPERSEDED"), loser.text
+            assert y.status_code == 200          # FG-135: only the newest version can win
             assert await op.offers.count_documents({"id": {"$in": [a1, a2]},
                                                     "status": "Accepted"}) == 1
     run(monkeypatch, backend, mode, scenario)

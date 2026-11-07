@@ -40,7 +40,8 @@ export default function OfferReviewPage() {
         const res = await API.get(`/offers/review/${reviewToken}`);
         setOffer(res.data);
       } catch (err) {
-        setError(err.response?.data?.detail || "Офертата не е намерена");
+        // OFF-01 FG-138: a replaced / closed link answers 410 with a neutral message only
+        setError(apiErrorText(err, "Офертата не е намерена"));
       } finally { setLoading(false); }
     })();
   }, [reviewToken]);
