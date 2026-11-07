@@ -887,7 +887,7 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     the run created the first time (no second run); the same key with another body → 409;
     a key still in progress → 409. A failed attempt may be retried under the same key."""
     from app.audit.idempotency import (
-        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IdempotencyConflict,
+        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_STARTED, IdempotencyConflict,
         begin_idempotent, complete_idempotent, fail_idempotent, request_fingerprint)
     if user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Only Admin/Owner")
@@ -910,12 +910,15 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
             # fail closed: without the unique reservation index no money write is made
             raise HTTPException(status_code=503, detail="Idempotency registry is not protected; nothing written")
         raise
-    if state["status"] == IDEMPOTENCY_DUPLICATE:
+    if state.get("status") == IDEMPOTENCY_DUPLICATE:
         if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
             run = await _tenant(user).pay_runs.find_one(
                 {"org_id": org_id, "id": state["result_reference"]}, {"_id": 0})
             if run:
                 return dict(run, idempotent_replay=True)
+        raise HTTPException(status_code=409, detail="A Pay Run with this Idempotency-Key is in progress")
+    if state.get("status") != IDEMPOTENCY_STARTED:
+        # audit RETAKE-1 (defence in depth): only an explicit STARTED reservation writes
         raise HTTPException(status_code=409, detail="A Pay Run with this Idempotency-Key is in progress")
     try:
         result = await _create_pay_run(data, user)
