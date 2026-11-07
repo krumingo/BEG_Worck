@@ -98,3 +98,21 @@ W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
 ## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
 ## negative control: 34ac9f4 idempotency.py, key interrupted to FAILED, 6 concurrent retries: ['started' x6], assert 6 == 1
 ## with the fix: exactly 1 STARTED per round (10 rounds/run), 10/10 runs
+
+# RETAKE-1 (2026-11-07), commit a444095 — vs main 0f870c3 baseline above
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+182 passed, 6 warnings in 146.08s (0:02:26)
+## R0 (real mongo)
+814 passed, 6 warnings in 145.17s (0:02:25)
+## W0 DB-free
+15 failed, 1093 passed, 70 skipped, 6 warnings in 62.47s (0:01:02)
+## W0 real mongo
+15 failed, 1163 passed, 6 warnings in 112.18s (0:01:52)
+## stability: C01 -k 'parallel or fg57 or no_index or retries or retake' x10
+     10 9 passed, 19 deselected
+## W0 failures identical to main 0f870c3 in both runs (15, test_w0_03e_legacy_routes)
+## retake: 6 concurrent retries of a FAILED key x10 rounds -> exactly 1 STARTED, every loser DUPLICATE/prior_status STARTED; no top-level in_progress
