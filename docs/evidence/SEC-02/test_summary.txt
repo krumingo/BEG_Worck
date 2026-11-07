@@ -1,6 +1,6 @@
-# SEC-02 + SEC-02-A + SEC-02-B + SEC-02-C test summaries (branch claude/sec-02-finance-read; #69 @ 07faab5 merged in 3562913; local real MongoDB 7.0 replica set)
+# SEC-02 + A + B + C + D test summaries (branch claude/sec-02-finance-read; #69 @ 07faab5 merged in 3562913, @ 6d43284 in 0d30eae; local real MongoDB 7.0 replica set)
 ## real Mongo (W0_03_REAL_MONGO_URL set), file by file
-tests/test_sec_02_finance_read.py: 15 passed (harness + labor_replay + pulse sites_with_money; audit scan 5640 calls, 0 money hits)
+tests/test_sec_02_finance_read.py: 17 passed (harness + labor_replay + pulse sites_with_money + R31 single-worker; audit scan 5640 calls, 0 money hits; audit probe probe_sec02_c_pulse_derive: FAILS none in off and enforce)
 tests/test_sec_01_money_write_permissions.py: 8 passed
 tests/test_sec_01_c01_all_money_writes.py: 7 passed
 tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed
@@ -15,5 +15,5 @@ W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
 W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
 ## Frontend
 yarn test: 102 passed; yarn build: compiled
-## PM-01 matrix re-run (harness, not by hand): 6 cells vs SEC-02-B @ ba29dac (Accountant 403 -> 200 on activity-budgets/budget-health); 1389 vs #69 @ 07faab5 (docs/evidence/SEC-02/pm01_cells_changed.csv)
+## PM-01 matrix re-run (harness, not by hand): 9 cells vs SEC-02-C @ f17f7e5 (material-waste x finance roles 201 -> 428, R29 from #69); 1389 vs #69 @ 6d43284 (docs/evidence/SEC-02/pm01_cells_changed.csv)
 ## Environment note: run Mongo-backed files one by one (host nofile limit 20000 -> EMFILE in mongod otherwise)
