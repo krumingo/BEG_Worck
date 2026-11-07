@@ -452,8 +452,11 @@ def _c02_routes():
 
 
 def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
-    """C01's routes; the only other marked routes are SEC-01-C02's (R14, FG-27/FG-30)."""
-    c02 = _c02_routes()
+    """C01's routes; the only other marked routes are SEC-01-C02's (R14, FG-27/FG-30) and
+    SUB-ADV-01's (R39; checked in tests/test_sub_adv_01_subcontractor_advance.py)."""
+    c02 = set(_c02_routes()) | {
+        ("POST", "/api/subcontractor-packages/{pkg_id}/advances"),
+        ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction")}
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]

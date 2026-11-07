@@ -1,0 +1,705 @@
+{
+ "schema": "beg.sub-adv-01-subcontractor-advance/v1",
+ "fixture": "ST-01 synthetic tenant A + PM-01/C02 records + package certified 3200 (acts 3000 and 200, confirmed)",
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "mongo": "local replica set (oplog)",
+ "seconds": 6.0,
+ "roles": [
+  {
+   "mode": "off",
+   "role": "owner",
+   "status": 201,
+   "error_code": null,
+   "business_written": [
+    "op.finance_payments",
+    "op.subcontractor_packages",
+    "op.subcontractor_payments"
+   ]
+  },
+  {
+   "mode": "off",
+   "role": "accountant",
+   "status": 201,
+   "error_code": null,
+   "business_written": [
+    "op.finance_payments",
+    "op.subcontractor_packages",
+    "op.subcontractor_payments"
+   ]
+  },
+  {
+   "mode": "off",
+   "role": "admin",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "role": "requester",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "role": "technician",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "role": "viewer",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "role": "driver",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "role": "owner",
+   "status": 201,
+   "error_code": null,
+   "business_written": [
+    "op.finance_payments",
+    "op.subcontractor_packages",
+    "op.subcontractor_payments"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "role": "accountant",
+   "status": 201,
+   "error_code": null,
+   "business_written": [
+    "op.finance_payments",
+    "op.subcontractor_packages",
+    "op.subcontractor_payments"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "role": "admin",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "role": "requester",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "role": "technician",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "role": "viewer",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "role": "driver",
+   "status": 403,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "role": "owner",
+   "status": 201,
+   "error_code": null,
+   "business_written": [
+    "op.finance_payments",
+    "op.subcontractor_packages",
+    "op.subcontractor_payments"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "role": "accountant",
+   "status": 201,
+   "error_code": null,
+   "business_written": [
+    "op.finance_payments",
+    "op.subcontractor_packages",
+    "op.subcontractor_payments"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "role": "admin",
+   "status": 403,
+   "error_code": "PERMISSION_DENIED",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "role": "requester",
+   "status": 403,
+   "error_code": "PERMISSION_DENIED",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "role": "technician",
+   "status": 403,
+   "error_code": "PERMISSION_DENIED",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "role": "viewer",
+   "status": 403,
+   "error_code": "PERMISSION_DENIED",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "role": "driver",
+   "status": 403,
+   "error_code": "PERMISSION_DENIED",
+   "business_written": []
+  }
+ ],
+ "flows": [
+  {
+   "mode": "off",
+   "advance": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_advance": {
+    "certified_total": 3200,
+    "paid_total": 0,
+    "advance_total": 1000.0,
+    "advance_deducted_total": 0,
+    "advance_outstanding": 1000.0,
+    "committed_paid_total": null,
+    "payable_total": 3200,
+    "cash_out_total": 1000.0
+   },
+   "pay_with_deduction": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_acts",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_payment": {
+    "certified_total": 3200,
+    "paid_total": 2000.0,
+    "advance_total": 1000.0,
+    "advance_deducted_total": 1000.0,
+    "advance_outstanding": 0.0,
+    "committed_paid_total": 3000.0,
+    "payable_total": 200.0,
+    "cash_out_total": 3000.0
+   },
+   "act1_advance_deducted": 1000.0,
+   "act1_deduction_entries": 1,
+   "ledger_added": [
+    1000.0,
+    2000.0
+   ],
+   "ledger_rows_added": 2,
+   "ordinary_over_cap": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "deduct_over_outstanding": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "advance_2": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "deduct_over_act": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_ACT",
+    "business_written": []
+   },
+   "deduct_requester": {
+    "status": 403,
+    "error_code": null,
+    "business_written": []
+   },
+   "deduct_act2": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_act2": {
+    "certified_total": 3200,
+    "paid_total": 2000.0,
+    "advance_total": 1500.0,
+    "advance_deducted_total": 1200.0,
+    "advance_outstanding": 300.0,
+    "committed_paid_total": 3200.0,
+    "payable_total": 0,
+    "cash_out_total": 3500.0
+   },
+   "ordinary_0_01_at_cap": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "c02_pay_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "advance": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_advance": {
+    "certified_total": 3200,
+    "paid_total": 0,
+    "advance_total": 1000.0,
+    "advance_deducted_total": 0,
+    "advance_outstanding": 1000.0,
+    "committed_paid_total": null,
+    "payable_total": 3200,
+    "cash_out_total": 1000.0
+   },
+   "pay_with_deduction": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_acts",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_payment": {
+    "certified_total": 3200,
+    "paid_total": 2000.0,
+    "advance_total": 1000.0,
+    "advance_deducted_total": 1000.0,
+    "advance_outstanding": 0.0,
+    "committed_paid_total": 3000.0,
+    "payable_total": 200.0,
+    "cash_out_total": 3000.0
+   },
+   "act1_advance_deducted": 1000.0,
+   "act1_deduction_entries": 1,
+   "ledger_added": [
+    1000.0,
+    2000.0
+   ],
+   "ledger_rows_added": 2,
+   "ordinary_over_cap": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "deduct_over_outstanding": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "advance_2": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "deduct_over_act": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_ACT",
+    "business_written": []
+   },
+   "deduct_requester": {
+    "status": 403,
+    "error_code": null,
+    "business_written": []
+   },
+   "deduct_act2": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_act2": {
+    "certified_total": 3200,
+    "paid_total": 2000.0,
+    "advance_total": 1500.0,
+    "advance_deducted_total": 1200.0,
+    "advance_outstanding": 300.0,
+    "committed_paid_total": 3200.0,
+    "payable_total": 0,
+    "cash_out_total": 3500.0
+   },
+   "ordinary_0_01_at_cap": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "c02_pay_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   }
+  },
+  {
+   "mode": "enforce",
+   "advance": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_advance": {
+    "certified_total": 3200,
+    "paid_total": 0,
+    "advance_total": 1000.0,
+    "advance_deducted_total": 0,
+    "advance_outstanding": 1000.0,
+    "committed_paid_total": null,
+    "payable_total": 3200,
+    "cash_out_total": 1000.0
+   },
+   "pay_with_deduction": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_acts",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "after_payment": {
+    "certified_total": 3200,
+    "paid_total": 2000.0,
+    "advance_total": 1000.0,
+    "advance_deducted_total": 1000.0,
+    "advance_outstanding": 0.0,
+    "committed_paid_total": 3000.0,
+    "payable_total": 200.0,
+    "cash_out_total": 3000.0
+   },
+   "act1_advance_deducted": 1000.0,
+   "act1_deduction_entries": 1,
+   "ledger_added": [
+    1000.0,
+    2000.0
+   ],
+   "ledger_rows_added": 2,
+   "ordinary_over_cap": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "deduct_over_outstanding": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING",
+    "business_written": []
+   },
+   "advance_2": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "deduct_over_act": {
+    "status": 409,
+    "error_code": "ADVANCE_DEDUCTION_EXCEEDS_ACT",
+    "business_written": []
+   },
+   "deduct_requester": {
+    "status": 403,
+    "error_code": "PERMISSION_DENIED",
+    "business_written": []
+   },
+   "deduct_act2": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.subcontractor_acts",
+     "op.subcontractor_packages"
+    ]
+   },
+   "after_act2": {
+    "certified_total": 3200,
+    "paid_total": 2000.0,
+    "advance_total": 1500.0,
+    "advance_deducted_total": 1200.0,
+    "advance_outstanding": 300.0,
+    "committed_paid_total": 3200.0,
+    "payable_total": 0,
+    "cash_out_total": 3500.0
+   },
+   "ordinary_0_01_at_cap": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "c02_pay_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   }
+  }
+ ],
+ "refusals": [
+  {
+   "mode": "off",
+   "probe": "no_key",
+   "status": 428,
+   "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "no_reason",
+   "status": 422,
+   "error_code": "REASON_INVALID",
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "nan",
+   "status": 422,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "deduction_without_act",
+   "status": 422,
+   "error_code": "ADVANCE_DEDUCTION_NEEDS_ACT",
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "payment_type_advance",
+   "status": 422,
+   "error_code": "ADVANCE_NOT_A_PAYMENT",
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "unknown_package",
+   "status": 404,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "no_key",
+   "status": 428,
+   "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "no_reason",
+   "status": 422,
+   "error_code": "REASON_INVALID",
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "nan",
+   "status": 422,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "deduction_without_act",
+   "status": 422,
+   "error_code": "ADVANCE_DEDUCTION_NEEDS_ACT",
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "payment_type_advance",
+   "status": 422,
+   "error_code": "ADVANCE_NOT_A_PAYMENT",
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "unknown_package",
+   "status": 404,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "no_key",
+   "status": 428,
+   "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "no_reason",
+   "status": 422,
+   "error_code": "REASON_INVALID",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "nan",
+   "status": 422,
+   "error_code": null,
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "deduction_without_act",
+   "status": 422,
+   "error_code": "ADVANCE_DEDUCTION_NEEDS_ACT",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "payment_type_advance",
+   "status": 422,
+   "error_code": "ADVANCE_NOT_A_PAYMENT",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "unknown_package",
+   "status": 404,
+   "error_code": null,
+   "business_written": []
+  }
+ ],
+ "same_key_race": [
+  {
+   "mode": "off",
+   "statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "ids_201": [
+    "ad8be986-63ff-5074-a383-92f6847834bc"
+   ],
+   "advance_rows": 1,
+   "ledger_rows_added": 1,
+   "advance_total": 1000.0
+  },
+  {
+   "mode": "shadow",
+   "statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "ids_201": [
+    "7ba10ee5-51c0-5ecb-9a1b-3476e57e73b5"
+   ],
+   "advance_rows": 1,
+   "ledger_rows_added": 1,
+   "advance_total": 1000.0
+  },
+  {
+   "mode": "enforce",
+   "statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "ids_201": [
+    "97d1c4de-da65-584d-b65e-40eeacd8d6b5"
+   ],
+   "advance_rows": 1,
+   "ledger_rows_added": 1,
+   "advance_total": 1000.0
+  }
+ ],
+ "reversal": [
+  {
+   "mode": "off",
+   "status": 409,
+   "error_code": "SOURCE_MODULE_REVERSAL_REQUIRED",
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "status": 409,
+   "error_code": "SOURCE_MODULE_REVERSAL_REQUIRED",
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "status": 409,
+   "error_code": "SOURCE_MODULE_REVERSAL_REQUIRED",
+   "business_written": []
+  }
+ ]
+}

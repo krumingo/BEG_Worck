@@ -1426,6 +1426,14 @@ async def delete_payment(payment_id: str, user: dict = Depends(require_m5)):
     payment = await tenant.finance_payments.get(payment_id)
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
+    # SUB-ADV-01 (FG-45, as PR #70): the ledger row of a subcontractor ADVANCE belongs to the
+    # package's advance record; deleting it here would leave the advance (and what was
+    # deducted from it) in the package with no cash behind it. Refused, nothing written,
+    # until the module has its own reversal (PAY-01 Part 2).
+    if payment.get("subcontractor_advance"):
+        raise HTTPException(status_code=409, detail={
+            "error_code": "SOURCE_MODULE_REVERSAL_REQUIRED", "source_module": "subcontractor",
+            "message": "Авансът към подизпълнител се сторнира в модула Подизпълнители"})
     
     # Check for allocations
     alloc_count = await tenant.payment_allocations.count({"payment_id": payment_id})
