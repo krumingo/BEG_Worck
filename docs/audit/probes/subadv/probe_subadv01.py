@@ -160,5 +160,79 @@ with TestClient(app, raise_server_exceptions=False) as tc:
             if (c1.status_code, c2.status_code) != (201, 409):
                 F.append("%s S9 %s %s" % (mode, c1.status_code, c2.status_code))
             restore()
+        if os.environ.get("PROBE_F76") == "1":
+            # S10 (#76 c4de7c9, Codex F-76-01): contract 5000, certified 3200 (act1 3000 / act2 200).
+            PAY = "/api/subcontractor-payments"
+            a0 = tc.post(ADV, json={**adv, "amount": 2000}, headers=H())
+            p1 = tc.post(PAY, json={"package_id": PKG, "act_id": A1, "amount": 2999.99}, headers=H())
+            p2 = tc.post(PAY, json={"package_id": PKG, "act_id": A2, "amount": 0.01}, headers=H())
+            p3 = tc.post(PAY, json={"package_id": PKG, "act_id": A2, "amount": 0.01}, headers=H())
+            pk = pkg()
+            taken = round((pk.get("advance_total") or 0) - (pk.get("advance_deducted_total") or 0) + (pk.get("committed_paid_total") or 0), 2)
+            e3 = (p3.json().get("detail") or {}).get("error_code") if p3.status_code != 201 else ""
+            print(mode, "S10a adv 2000 | pay 2999.99 %s | +0.01 %s (taken 5000) | +0.01 %s %s | taken %s" % (
+                p1.status_code, p2.status_code, p3.status_code, e3, taken))
+            if (a0.status_code, p1.status_code, p2.status_code, p3.status_code) != (201, 201, 201, 409) or taken > 5000.005:
+                F.append("%s S10a %s %s" % (mode, (a0.status_code, p1.status_code, p2.status_code, p3.status_code), taken))
+            restore()
+            # S10b: advance 2000, then 6 CONCURRENT ordinary payments of 600 on act1 -> exactly 5 (3000)
+            tc.post(ADV, json={**adv, "amount": 2000}, headers=H())
+            rs = q(lambda: gather([(PAY, {"package_id": PKG, "act_id": A1, "amount": 600}, H()) for _ in range(6)]))
+            pk = pkg(); n = cnt("subcontractor_payments", {"package_id": PKG, "kind": "payment"})
+            taken = round((pk.get("advance_total") or 0) - (pk.get("advance_deducted_total") or 0) + (pk.get("committed_paid_total") or 0), 2)
+            print(mode, "S10b", sorted(r.status_code for r in rs), "payments", n, "taken", taken)
+            if n != 5 or taken > 5000.005:
+                F.append("%s S10b %s n=%s taken=%s" % (mode, sorted(r.status_code for r in rs), n, taken))
+            restore()
+            # S10c: 3 advances of 1000 || 3 payments of 1000 on act1 (one batch) -> taken <= 5000, exactly 5 pass
+            rs = q(lambda: gather([(ADV, {**adv, "amount": 1000}, H()) for _ in range(3)] +
+                                  [(PAY, {"package_id": PKG, "act_id": A1, "amount": 1000}, H()) for _ in range(3)]))
+            pk = pkg()
+            taken = round((pk.get("advance_total") or 0) - (pk.get("advance_deducted_total") or 0) + (pk.get("committed_paid_total") or 0), 2)
+            ok_n = sum(r.status_code == 201 for r in rs)
+            print(mode, "S10c adv||pay", [r.status_code for r in rs], "taken", taken)
+            if ok_n != 5 or taken > 5000.005:
+                F.append("%s S10c ok=%s taken=%s" % (mode, ok_n, taken))
+            restore()
+            # S11 (Codex F-76-02): crash at each step, then 2 same-key retries -> 1 audit_logs row and
+            # the same number of canonical audit_events as a clean run, per action
+            import app.routes.subcontractors as scm
+            real = {n_: getattr(scm, n_) for n_ in ("log_audit", "_confirm_advance", "_confirm_deduction", "_refresh_package_totals")}
+            def crash_after(name):
+                fn = real[name]; state = [True]
+                async def w(*a, **k):
+                    r = await fn(*a, **k)
+                    if state[0]:
+                        state[0] = False
+                        raise RuntimeError("synthetic crash after " + name)
+                    return r
+                return w
+            def ev():
+                return cnt("audit_events", {})
+            cases = [("advance", ADV, {**adv, "amount": 1000}, "subcontractor_advance_created", None),
+                     ("deduction", "/api/subcontractor-acts/%s/advance-deduction" % A1, {"amount": 300}, "subcontractor_advance_deducted", True),
+                     ("payment", PAY, {"package_id": PKG, "act_id": A1, "amount": 100}, "subcontractor_payment_created", None)]
+            for cname, url, body, act_name, need_adv in cases:
+                # clean baseline
+                if need_adv: tc.post(ADV, json=adv, headers=H())
+                e0, l0 = ev(), cnt("audit_logs", {"action": act_name})
+                tc.post(url, json=body, headers=H())
+                d_ev, d_log = ev() - e0, cnt("audit_logs", {"action": act_name}) - l0
+                restore()
+                for point in ("log_audit", "_confirm_advance", "_confirm_deduction", "_refresh_package_totals"):
+                    if need_adv: tc.post(ADV, json=adv, headers=H())
+                    e0, l0 = ev(), cnt("audit_logs", {"action": act_name})
+                    setattr(scm, point, crash_after(point))
+                    k = "f76-%s-%s-%s" % (cname, point, uuid.uuid4().hex[:6])
+                    r1 = tc.post(url, json=body, headers=H(k=k))
+                    setattr(scm, point, real[point])
+                    r2 = tc.post(url, json=body, headers=H(k=k)); r3 = tc.post(url, json=body, headers=H(k=k))
+                    de, dl = ev() - e0, cnt("audit_logs", {"action": act_name}) - l0
+                    tag = "%s crash after %s: %s %s %s | audit_logs +%d (clean +%d) audit_events +%d (clean +%d)" % (
+                        cname, point, r1.status_code, r2.status_code, r3.status_code, dl, d_log, de, d_ev)
+                    print(mode, "S11", tag)
+                    if (dl, de) != (d_log, d_ev) or r3.status_code >= 500:
+                        F.append("%s S11 %s" % (mode, tag))
+                    restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

@@ -4623,3 +4623,34 @@ The PM-01 diff vs main is only `+cancel`. The merge with main d226c49 is clean, 
 
 - **Traceability verified:** Р19 (line 57), Р24 (line 67) and Р41 (line 101) are in `docs/architecture/RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md`, and D-16 / D-17 reproduce them faithfully. This meets CLAUDE.md §18: a locked FLOW changes only with Krum's explicit decision recorded in the canon.
 - No other PR head changed since the last audit: 55 ed48595, 69 da47777, 71 b1ab349, 74 31a9478, 76 542fa2c, 77 2cc1147, 79 acc472f. Main is `2ec61f3`.
+
+### #76 @ `c4de7c9` (merge 9ba9ec7 main d226c49 + Codex F-76-01 / F-76-02) — static review
+
+**Merge byte check (`9ba9ec7`):** = `git merge-tree` (542fa2c × d226c49, 5 conflicts) + resolutions.
+
+| File | Resolution |
+|---|---|
+| `finance.py` | #76's own `subcontractor_advance` refusal in `delete_payment` removed in favour of #70's generic `_source_module_refusal`, which classifies a row with `subcontractor_payment_id` as the subcontractor module's (FG-45 kept). The test was updated to check exactly that, plus no `finance_payments.delete_one` anywhere. |
+| `idempotency.js` + its test | the union of #69 / #70 (`createIdempotencyHolder` + `createKeyHolder` + `apiErrorText`). Compared with #69 `da47777`'s union: **only function order and comments differ; the code is identical.** Merging #69 and #76 will conflict textually, not semantically. |
+| A1 inventory, `run_meta` | regenerated |
+
+**F-76-01.** A single `_TAKEN` expression (advance incl. pending − deducted − deduction pending + `committed_paid_total`) now gates both:
+- the ordinary payment reservation (`_within_contract(amount)` in the same atomic update as the certified cap → 409 `PAYMENT_EXCEEDS_PACKAGE_VALUE`);
+- the advance reservation.
+
+A package without `contract_total` keeps the certified cap only (FG-114 already refuses advances there).
+
+**F-76-02.** `log_audit(entry_id=…)`: the key-derived id is also `_id`, and a duplicate `_id` means "already written". `MoneyWrite.new_id` = uuid5(org_id, action, user:key, name), so it is tenant-unique and two tenants reusing a key string cannot collide in the shared `audit_logs`.
+
+- **To verify at runtime:** the advance and deduction audits use `entry_id`, but the **ordinary payment's** `subcontractor_payment_created` audit (step `"audit"`) does **not**. A crash right after that insert may still duplicate it. The probe S11 covers it.
+
+**Probe additions** (`probes/subadv/probe_subadv01.py`, `PROBE_F76=1`):
+
+| Case | What it checks |
+|---|---|
+| S10a | advance 2000 → pay 2999.99 (201) → +0.01 (201, taken = 5000) → +0.01 (**409 `PAYMENT_EXCEEDS_PACKAGE_VALUE`**) |
+| S10b | advance 2000 + 6 concurrent payments of 600 → exactly 5 |
+| S10c | 3 advances of 1000 ∥ 3 payments of 1000 → exactly 5, taken ≤ 5000 |
+| S11 | advance / deduction / payment × crash after `log_audit` / `_confirm_advance` / `_confirm_deduction` / `_refresh_package_totals`, then 2 same-key retries → `audit_logs` and `audit_events` deltas equal a clean run |
+
+Runtime `b76c` (rs0; the machine restarted again ~22:34) is running.
