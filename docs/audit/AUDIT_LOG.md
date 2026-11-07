@@ -1664,7 +1664,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
-| #73 LAB-01 | `21d4ed1` | **PASS** (FG-72 approval binding, FG-73 owner-only PUT, FG-66 correction records); low latent: correction update can reset a non-pending record | 2026-11-07 |
+| #73 LAB-01 | `00324ab` | **PASS** (D-C01 closes both latent notes: decided corrections never rewritten; void before content write); low notes E2/E3/E4 | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2381,3 +2381,41 @@ Gates:
 | A2C | 0/208 |
 | A1 | 0/422 |
 | R0 | 814 |
+
+
+## #73 LAB-01-D-C01 @ `00324ab` — 2026-11-07 ~05:10 UTC — PASS
+
+Delta `21d4ed1..00324ab` (fast-forward, 1 commit) addresses both latent notes from the `21d4ed1` round:
+- **(a) closed:** `sync_run_corrections` (`payroll_corrections.py:120-136`) re-prices only `pending_approval` or `superseded` records that are not `applied`. A decided record is left untouched; a different amount upserts a `PAYROLL_CORRECTION_CHANGED_AFTER_DECISION` DQ alert. Both the update and the supersede now filter on status/`applied` and skip when `matched_count == 0`.
+- **(b) closed:** `void_labor_approvals` (version bump + void) now runs **before** the content/status write at all six call sites: `daily_reports.py` (PUT, reject, reset, batch-save), `attendance.py:670`, `technician.py:1399`. A failure after the void leaves the approvals void, the safe side; the PR's test covers this.
+- Residual (theoretical): an approval written between the void and the content write would bind the new version to the old content. Today the app has no route that creates `labor_quantity_approvals` (FG-65 runtime not built), so this is unreachable.
+
+New probe `docs/audit/probes/lab01/probe_lab01e_decided_corrections.py` (production service, real Mongo RS):
+
+| Case | Result |
+|---|---|
+| E1 rejected record + new amount | untouched, LOCKED DQ raised. **PROVED** |
+| E2 approved record, overpayment vanished | stays approved; **no DQ raised** (note) |
+| E3 approved, amount 70 then back to the decided 50 | the LOCKED DQ stays `open` with `new_amount` 70 (stale; note) |
+| E4 8 concurrent syncs with different amounts on a pending record | 1 doc, pending, but `version` 2 (lost version increments; note) |
+| FAILS | none |
+
+Gates on `00324ab`:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*`, real Mongo RS | **40 passed** |
+| W0 DB-free | 1085/15/50, same 15 as `fail_56.txt` |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0, real Mongo | 814 |
+| merge-tree vs main | clean |
+| merge-tree vs #69 `7300864` | conflict in `labor_smr.py` only (known LAB01-M1) |
+
+Notes, not blocking; all latent until FG-65 approvals exist:
+- **E2:** when the overpayment behind a decided correction disappears, nothing flags it. Suggest raising the same LOCKED DQ with `new_amount` 0.
+- **E3:** the LOCKED alert is never resolved when the amount returns to the decided value.
+- **E4:** concurrent run edits each read version N and write N+1, so the audit trail shows several "updated" events with the same version. Low; pay-run PATCH concurrency.
+- **Supersede alert:** the supersede path resolves `dq_alerts` by `(entity_type, entity_id)` with no `code` filter, so it could resolve a LOCKED alert instead of the PENDING one. Unlikely in the current flow.
+
+Environment note: the audit Mongo container was recreated; `mongo_up.sh` now uses host networking on 27019, so that RS discovery works with `replicaSet=rs0`.
