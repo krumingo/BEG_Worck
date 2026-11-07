@@ -28,7 +28,8 @@ from fastapi import HTTPException
 from app.services.canonical_material_cost import path_b_integrity_warnings
 from app.services.warehouse_movements import CanonicalAction, LocationKey, LocationType
 from app.services.warehouse_movements.errors import (
-    InvoiceLineProjectMismatchError, InvoiceLineQuantityExceededError,
+    InvoiceLineFullyLinkedError, InvoiceLineProjectMismatchError,
+    InvoiceLineQuantityExceededError, InvoiceLineUnitMismatchError,
 )
 from app.services.warehouse_movements.projections import rebuild_from_ledger
 from app.services.warehouse_movements.service import CommandService
@@ -151,6 +152,53 @@ async def test_fg108_concurrent_mix_of_both_paths(
     again = await svc.execute(_ctx(mode, "Owner"), db, run.coll,
                               _receipt(inp.destination, "5", inp.idempotency_key))
     assert again.replay is True and again.movement_id == first.movement_id
+
+
+# ═══════════════════ audit WH55-L-1 — another unit after a full line ═══════════════════
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_wh55_l1_fully_linked_line_refuses_any_unit_409(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """L 10 bag fully received (warehouse, linked) and accepted on P; a
+    linked direct delivery of 10 „pcs" was accepted at e4d131e (P = 200,
+    only PATH_B_LINK_QTY_UNVERIFIED). Now 409 INVOICE_LINE_FULLY_LINKED in
+    any unit, nothing written; P = 100 live + rebuild ×2."""
+    from app.routes.warehouse_canonical import _render_error
+    _, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    await svc.execute(_ctx(mode, "Owner"), db, run.coll, _receipt(WH, "10"))
+    await _to_p(run, mode, "10")
+    before = await db["warehouse_transactions"].count_documents({"tenant_id": T})
+    for unit in ("pcs", "bag"):
+        inp = _receipt(PRJ, "10")
+        inp.unit = unit
+        with pytest.raises(InvoiceLineFullyLinkedError) as exc:
+            await svc.execute(_ctx(mode, "Owner"), db, run.coll, inp)
+        assert _render_error(exc.value).status_code == 409
+    assert await db["warehouse_transactions"].count_documents({"tenant_id": T}) == before
+    await _p_cost(db, run, 100.0)
+    assert (await run.cost(PROJECT))["path_b_warnings"] == []
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_wh55_l1_partial_in_another_unit_is_refused_up_front(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """L 10 bag, 4 bag linked through the warehouse: a linked receipt of 2
+    „pcs" (warehouse or direct) cannot be checked against the line — no unit
+    conversion is defined → 422 INVOICE_LINE_UNIT_MISMATCH, nothing written.
+    The rest in „bag" is still accepted; P = 100."""
+    from app.routes.warehouse_canonical import _render_error
+    _, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    await svc.execute(_ctx(mode, "Owner"), db, run.coll, _receipt(WH, "4"))
+    await _to_p(run, mode, "4")
+    for dest in (WH, PRJ):
+        inp = _receipt(dest, "2")
+        inp.unit = "pcs"
+        with pytest.raises(InvoiceLineUnitMismatchError) as exc:
+            await svc.execute(_ctx(mode, "Owner"), db, run.coll, inp)
+        assert _render_error(exc.value).status_code == 422
+    assert await _linked(db) == 1
+    await svc.execute(_ctx(mode, "Owner"), db, run.coll, _receipt(PRJ, "6"))
+    await _p_cost(db, run, 100.0)
 
 
 # ═══════════════════════════ FG-108 — legacy excess ═══════════════════════════

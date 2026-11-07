@@ -57,6 +57,19 @@ class InvoiceLineQuantityExceededError(InvariantViolationError):
     error_code = "INVOICE_LINE_QTY_EXCEEDED"
 
 
+class InvoiceLineFullyLinkedError(InvoiceLineQuantityExceededError):
+    """5C-C26l (audit WH55-L-1): the line is already fully received through
+    linked receipts — any further linked receipt, in any unit, is refused."""
+    error_code = "INVOICE_LINE_FULLY_LINKED"
+
+
+class InvoiceLineUnitMismatchError(InvariantViolationError):
+    """5C-C26l (audit WH55-L-1): a linked receipt in a unit other than the
+    invoice line's — no unit conversion is defined, so the quantity cannot
+    be checked: refused up front."""
+    error_code = "INVOICE_LINE_UNIT_MISMATCH"
+
+
 class NegativeStockError(InvariantViolationError):
     """Normal stock cannot silently become negative (FLOW-009)."""
     error_code = "NEGATIVE_STOCK"

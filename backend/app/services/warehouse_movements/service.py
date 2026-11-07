@@ -1834,15 +1834,27 @@ class CommandService:
         """5C-C26l Addendum L — FG-108 (D-04): the quantity of an invoice
         line covered through the canon is ALL its linked receipts — the
         warehouse receipts (later dispatched / accepted on a project) AND
-        the direct deliveries. A linked receipt beyond the line's quantity
-        is the same lot a second time → 422 INVOICE_LINE_QTY_EXCEEDED,
-        nothing written. In the transaction, under the line lock. Only when
-        the quantities are comparable (line qty known, same unit); an
-        unknown line is the FG-53 debt for a warehouse receipt (a direct
-        delivery of an unknown line is already refused)."""
+        the direct deliveries. In the transaction, under the line lock:
+
+          * the comparable linked quantity (receipts in the line's unit)
+            already reaches the line's quantity → ANY further linked
+            receipt, in any unit, is the same lot again → 409
+            INVOICE_LINE_FULLY_LINKED (audit WH55-L-1);
+          * a receipt in a unit other than the line's (no unit conversion
+            is defined) → 422 INVOICE_LINE_UNIT_MISMATCH, refused up front
+            instead of only flagged (PATH_B_LINK_QTY_UNVERIFIED stays for
+            legacy data);
+          * the linked receipts would exceed the line's quantity → 422
+            INVOICE_LINE_QTY_EXCEEDED.
+        Nothing is written on a refusal. An unknown line is the FG-53 debt
+        for a warehouse receipt (a direct delivery of an unknown line is
+        already refused)."""
         from app.services.canonical_material_cost import _norm_unit
         from app.services.invoice_line_lock import LINKED_RECEIPT_ACTIONS
-        from app.services.warehouse_movements.errors import InvoiceLineQuantityExceededError
+        from app.services.warehouse_movements.errors import (
+            InvoiceLineFullyLinkedError, InvoiceLineQuantityExceededError,
+            InvoiceLineUnitMismatchError,
+        )
         tenant = tenant_collection.tenant
         line = await tenant.invoice_lines.find_one(
             {"id": inp.invoice_line_id}, {"_id": 0, "qty": 1, "unit": 1}, session=session)
@@ -1852,9 +1864,9 @@ class CommandService:
             line_qty = Decimal(str(line.get("qty"))) if line.get("qty") is not None else None
         except Exception:
             line_qty = None
+        if line_qty is not None and line_qty <= 0:
+            line_qty = None
         unit = _norm_unit(line.get("unit"))
-        if line_qty is None or line_qty <= 0 or unit not in ("", _norm_unit(inp.unit)):
-            return
         linked = Decimal("0")
         async for row in tenant_collection.find(
                 {"action": {"$in": list(LINKED_RECEIPT_ACTIONS)},
@@ -1863,15 +1875,24 @@ class CommandService:
                 session=session):
             if inp.idempotency_key and row.get("idempotency_key") == inp.idempotency_key:
                 return        # a replay of this very receipt — idempotency answers
-            if _norm_unit(row.get("unit")) not in ("", unit, _norm_unit(inp.unit)):
-                return        # a linked receipt in another unit: not comparable
-            linked += Decimal(str(row.get("quantity") or "0"))
-        if linked + Decimal(str(inp.quantity)) > line_qty:
+            if unit == "" or _norm_unit(row.get("unit")) in ("", unit):
+                linked += Decimal(str(row.get("quantity") or "0"))
+        context = {"invoice_line_id": inp.invoice_line_id,
+                   "line_qty": None if line_qty is None else str(line_qty),
+                   "line_unit": line.get("unit"), "linked": str(linked),
+                   "quantity": str(inp.quantity), "unit": inp.unit}
+        if line_qty is not None and linked >= line_qty:
+            raise InvoiceLineFullyLinkedError(
+                "the invoice line is already fully received through linked receipts",
+                context=context)
+        if unit and _norm_unit(inp.unit) != unit:
+            raise InvoiceLineUnitMismatchError(
+                "the receipt's unit differs from the invoice line's unit "
+                "(no unit conversion is defined)", context=context)
+        if line_qty is not None and linked + Decimal(str(inp.quantity)) > line_qty:
             raise InvoiceLineQuantityExceededError(
                 "the linked receipts would exceed the invoice line's quantity",
-                context={"invoice_line_id": inp.invoice_line_id,
-                         "line_qty": str(line_qty), "linked": str(linked),
-                         "quantity": str(inp.quantity)})
+                context=context)
 
     @staticmethod
     async def _location_project(tenant_db, inp: CommandInput) -> Optional[str]:

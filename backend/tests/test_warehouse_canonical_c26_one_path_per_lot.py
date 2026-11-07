@@ -314,7 +314,16 @@ async def test_link_with_incomparable_unit_goes_to_the_canon_and_warns(
     """The line is in „бр", the receipt in the master unit „bag": the link is
     proven but the quantities cannot be compared → the canon wins the whole
     project part (no double count) and PATH_B_LINK_QTY_UNVERIFIED says a
-    remainder may be missing."""
+    remainder may be missing.
+
+    5C-C26l (audit WH55-L-1): a NEW linked receipt in another unit is refused
+    (422 INVOICE_LINE_UNIT_MISMATCH, test_warehouse_canonical_c26l_l_*);
+    this is legacy data, written with that check bypassed."""
+    from app.services.warehouse_movements.service import CommandService
+
+    async def _legacy(*a, **k):
+        return None
+    monkeypatch.setattr(CommandService, "_check_invoice_line_total", staticmethod(_legacy))
     client, db = canonical_mongo_db
     _patch_dbs(monkeypatch, db)
     await _seed(db)

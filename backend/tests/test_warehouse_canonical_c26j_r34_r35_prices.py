@@ -160,7 +160,8 @@ async def test_r35_technician_reads_prices_but_cannot_move_in_the_warehouse(
 
 # ═══════════════════════════════ Р35 — price history ═══════════════════════════════
 
-async def _invoice(db, *, line_id, desc, qty, price, supplier, issue_date, linked=None):
+async def _invoice(db, *, line_id, desc, qty, price, supplier, issue_date, linked=None,
+                   unit="бр"):
     await db["invoices"].update_one(
         {"id": "inv-" + line_id},
         {"$set": {"id": "inv-" + line_id, "org_id": T, "direction": "Expense",
@@ -168,7 +169,7 @@ async def _invoice(db, *, line_id, desc, qty, price, supplier, issue_date, linke
         upsert=True)
     await db["invoice_lines"].insert_one({
         "id": line_id, "org_id": T, "invoice_id": "inv-" + line_id, "description": desc,
-        "unit": "бр", "qty": qty, "unit_price": price, "line_total_ex_vat": qty * price,
+        "unit": unit, "qty": qty, "unit_price": price, "line_total_ex_vat": qty * price,
         "allocations": [{"type": "project", "ref_id": PROJECT, "qty": qty}],
         "created_at": issue_date})
 
@@ -208,8 +209,11 @@ async def test_r35_price_history_counts_a_linked_invoice_line_once(
     from app.routes import warehouse_canonical_queries as q
     client, db = canonical_mongo_db
     run = await _setup(client, allow_always_gate, db, monkeypatch, "owner", mode, member=False)
+    # 5C-C26l (audit WH55-L-1): a linked receipt must be in the line's unit
+    # (no unit conversion is defined; another unit is refused 422) — the
+    # line is in the receipt's master unit „bag".
     await _invoice(db, line_id="il-x", desc="Цимент", qty=3, price=9.0,
-                   supplier="sup_b", issue_date="2026-11-04")
+                   supplier="sup_b", issue_date="2026-11-04", unit="bag")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "enforce")
     await run(CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT, source=SUP_B,
               destination=PRJ, quantity=Decimal("3"), unit_value=Decimal("9"),
