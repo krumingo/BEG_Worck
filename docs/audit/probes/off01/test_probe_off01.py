@@ -352,3 +352,47 @@ def test_o16_r43_client_sees_only_the_combined_price(monkeypatch, backend, mode)
         assert g.status_code == 200 and not bad_keys and not nums and not pdf_bad
         assert lines and lines[0]["unit_price"] == 100.0
     run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(100))
+def test_o17_client_approve_races_internal_reject(monkeypatch, backend, mode, rep):
+    """acc472f FG-144: public approve ∥ internal reject → exactly one winner; never Rejected with
+    accepted_at, never Accepted with rejected_at; exactly one canonical decision event."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        ra, rr = await asyncio.gather(respond(c, TOKEN),
+                                      c.post("/api/offers/o1/reject", headers=hdr("admin-a"), json={"reason": "x"}))
+        o = await get(op, "o1")
+        evs = await op.audit_events.count_documents({"entity_id": "o1", "action": {"$in": [
+            "offers.offer.client_approved", "offers.offer.rejected"]}})
+        won = [n for n, r in (("approve", ra), ("reject", rr)) if r.status_code == 200]
+        if rep < 3 or len(won) != 1:
+            print("O17 %s/%d: approve %s reject %s | %s accepted_at %s rejected_at %s | events %d" % (
+                mode, rep, ra.status_code, rr.status_code, o["status"], bool(o.get("accepted_at")),
+                bool(o.get("rejected_at")), evs))
+        assert len(won) == 1 and evs == 1 and max(ra.status_code, rr.status_code) < 500
+        assert (o["status"], bool(o.get("accepted_at")), bool(o.get("rejected_at"))) == (
+            ("Accepted", True, False) if won == ["approve"] else ("Rejected", False, True))
+    run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(20))
+def test_o18_double_send(monkeypatch, backend, mode, rep):
+    """D-OFF01-18 (send has no key): send ∥ send on one Draft → one 200, one 409; one sent event,
+    one snapshot, one offer_events 'sent'."""
+    _with_versions(monkeypatch)
+
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", status="Draft"))
+        r1, r2 = await asyncio.gather(c.post("/api/offers/o1/send", headers=hdr("admin-a")),
+                                      c.post("/api/offers/o1/send", headers=hdr("admin-a")))
+        ev = await op.audit_events.count_documents({"entity_id": "o1", "action": "offers.offer.sent"})
+        snaps = await op.offer_versions.count_documents({"offer_id": "o1"})
+        legacy = await op.offer_events.count_documents({"offer_id": "o1", "event_type": "sent"})
+        nk = await c.post("/api/offers/o1/reject", headers=hdr("admin-a", key=False), json={"reason": "x"})
+        if rep < 2:
+            print("O18 %s/%d: send %s %s | sent events %d snapshots %d offer_events %d | reject without key %s" % (
+                mode, rep, r1.status_code, r2.status_code, ev, snaps, legacy, nk.status_code))
+        assert sorted([r1.status_code, r2.status_code]) == [200, 409] and (ev, snaps, legacy) == (1, 1, 1)
+        assert nk.status_code == 428
+    run(monkeypatch, backend, mode, scenario)
