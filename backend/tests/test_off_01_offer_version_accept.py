@@ -1003,3 +1003,58 @@ def test_24_a_fresh_tenant_takes_concurrent_first_offer_writes(monkeypatch, back
             assert await op.offers.count_documents({"parent_offer_id": oid}) <= 1
         assert bad == [], bad
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════ FLOW Guard FG-144 (high): the internal reject is a CAS in a transaction
+async def reject(c, oid, who="admin-a", key=None, reason="скъпо"):
+    return await c.post("/api/offers/%s/reject" % oid, headers=hdr(who, key), json={"reason": reason})
+
+
+def test_25_internal_reject_is_one_cas_with_key_and_audit_event(monkeypatch, backend, mode):
+    """FG-144: reject wrote status=Rejected with no status condition, no transaction, no key and
+    no AuditEvent — client approve ∥ internal reject → both 200, final Rejected with
+    accepted_at set (1 in 120)."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        before = await snap(op)
+        r = await reject(c, "o1", key=False)
+        assert r.status_code == 428 and code(r) == "IDEMPOTENCY_KEY_REQUIRED", r.text
+        for who in ("site-a", "viewer-a", "acct-a"):
+            assert (await reject(c, "o1", who=who)).status_code == 403, who
+        assert await snap(op) == before
+        r = await reject(c, "o1", key="rj-1")
+        assert r.status_code == 200 and r.json()["status"] == "Rejected", r.text
+        doc = await get(op, "o1")
+        assert doc["reject_reason"] == "скъпо" and doc["rejected_by"] == "admin-a"
+        ev = await events(op, "offers.offer.rejected")
+        assert len(ev) == 1 and ev[0]["reason"] == "скъпо" and ev[0]["entity_version"] == "1"
+        assert ev[0]["idempotency_key"] == "rj-1"
+        before = await snap(op)
+        r2 = await reject(c, "o1", key="rj-1")                      # replay
+        assert r2.status_code == 200 and r2.json() == r.json()
+        assert await snap(op) == before
+        # a superseded version (also a legacy parent with a child) is not rejected
+        await op.offers.insert_one(offer_doc("lp", token="tlp" + "r" * 21))
+        await op.offers.insert_one(offer_doc("lc", version=2, parent="lp"))
+        r = await reject(c, "lp")
+        assert r.status_code == 409 and code(r) == "OFFER_VERSION_SUPERSEDED", r.text
+
+        # ×100: client approve ∥ internal reject → exactly one wins, the state is the winner's
+        for i in range(100):
+            oid, tok = "ar-%d" % i, "tar%03d" % i + "r" * 18
+            await op.offers.insert_one(offer_doc(oid, token=tok))
+            a, b = await asyncio.gather(respond(c, tok, "approve"), reject(c, oid))
+            assert sorted((a.status_code, b.status_code))[0] == 200, (i, a.text, b.text)
+            assert [a.status_code, b.status_code].count(200) == 1, (i, a.text, b.text)
+            assert all(x.status_code in (200, 400, 409) for x in (a, b)), (i, a.text, b.text)
+            doc = await get(op, oid)
+            if a.status_code == 200:
+                assert doc["status"] == "Accepted" and not doc.get("reject_reason")
+                assert doc.get("rejected_by") is None
+            else:
+                assert doc["status"] == "Rejected" and doc.get("accepted_at") is None
+                assert "approval" not in doc
+            n_acc = await op.audit_events.count_documents({"entity_id": oid, "action": "offers.offer.client_approved"})
+            n_rej = await op.audit_events.count_documents({"entity_id": oid, "action": "offers.offer.rejected"})
+            assert n_acc + n_rej == 1, (i, n_acc, n_rej)
+    run(monkeypatch, backend, mode, scenario)
