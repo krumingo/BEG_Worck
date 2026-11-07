@@ -225,6 +225,18 @@ async def _family_guard(tenant: TenantData, offer: dict, session) -> None:
                         "Друга версия на тази оферта вече е одобрена. Моля, свържете се с изпълнителя.")
 
 
+def client_line(line: dict) -> dict:
+    """R43 (Krum, 07.11.2026; FLOW-003, FLOW-010): what a CLIENT sees of an offer line — the
+    combined unit price, quantity and value. The material/labour split is internal."""
+    qty = line.get("qty", 0) or 0
+    unit_price = round((line.get("material_unit_cost", 0) or 0) + (line.get("labor_unit_cost", 0) or 0), 2)
+    total = line.get("line_total")
+    return {"id": line.get("id"), "activity_name": line.get("activity_name"),
+            "unit": line.get("unit"), "qty": qty, "unit_price": unit_price,
+            "line_total": round(qty * unit_price, 2) if total is None else total,
+            "note": line.get("note"), "sort_order": line.get("sort_order")}
+
+
 def _require_key(header: Optional[str]) -> str:
     """R29: the PAY-01 rule, reused — no key → 428 before anything is written."""
     from app.routes.finance import _require_key as require_key
@@ -961,18 +973,16 @@ async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
         elements.extend([Paragraph(f"<b>{offer['title']}</b>", sB), Spacer(1, 3*mm)])
     
     # Lines table
-    cw = [22, 180, 35, 40, 55, 55, 55, 55]
-    line_data = [["№", "Описание", "Ед.", "К-во", "Мат./ед", "Труд/ед", "Мат. общо", "Общо"]]
+    # R43: the offer PDF is the document the client gets — combined unit price only
+    cw = [22, 235, 40, 50, 75, 75]
+    line_data = [["№", "Описание", "Ед.", "К-во", "Ед. цена", "Общо"]]
     for i, l in enumerate(offer.get("lines", [])):
-        qty = l.get("qty", 0)
-        mu = l.get("material_unit_cost", 0)
-        lu = l.get("labor_unit_cost", 0)
-        lmc = l.get("line_material_cost", round(qty * mu, 2))
-        lt = l.get("line_total", round(qty * (mu + lu), 2))
+        cl = client_line(l)
+        qty, up, lt = cl["qty"], cl["unit_price"], cl["line_total"]
         note = ""
         if l.get("note"):
             note = f"\n{l['note']}"
-        line_data.append([str(i+1), Paragraph(f"{l.get('activity_name', '')}{note}", sN), UNIT_LABELS_BG.get(l.get("unit", ""), l.get("unit", "")), f"{qty:.1f}", f"{mu:.2f}", f"{lu:.2f}", f"{lmc:.2f}", f"{lt:.2f}"])
+        line_data.append([str(i+1), Paragraph(f"{l.get('activity_name', '')}{note}", sN), UNIT_LABELS_BG.get(l.get("unit", ""), l.get("unit", "")), f"{qty:.1f}", f"{up:.2f}", f"{lt:.2f}"])
     
     lt = RLTable(line_data, colWidths=cw, repeatRows=1)
     lt.setStyle(TableStyle([
@@ -990,13 +1000,13 @@ async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
     vp = offer.get("vat_percent", 0)
     va = offer.get("vat_amount", 0)
     tot = offer.get("total", 0)
-    td = [["", "", "", "", "", "", "Междинна сума:", f"{sub:.2f} {curr}"],
-          ["", "", "", "", "", "", f"ДДС ({vp}%):", f"{va:.2f} {curr}"],
-          ["", "", "", "", "", "", "ОБЩО:", f"{tot:.2f} {curr}"]]
+    td = [["", "", "", "", "Междинна сума:", f"{sub:.2f} {curr}"],
+          ["", "", "", "", f"ДДС ({vp}%):", f"{va:.2f} {curr}"],
+          ["", "", "", "", "ОБЩО:", f"{tot:.2f} {curr}"]]
     tt = RLTable(td, colWidths=cw)
-    tt.setStyle(TableStyle([('FONTNAME', (0,0), (-1,-1), fn), ('FONTNAME', (6,2), (6,2), fb),
-        ('FONTSIZE', (0,0), (-1,-1), 9), ('FONTSIZE', (6,2), (7,2), 11),
-        ('ALIGN', (6,0), (-1,-1), 'RIGHT'), ('LINEABOVE', (6,2), (-1,2), 1, colors.black),
+    tt.setStyle(TableStyle([('FONTNAME', (0,0), (-1,-1), fn), ('FONTNAME', (4,2), (4,2), fb),
+        ('FONTSIZE', (0,0), (-1,-1), 9), ('FONTSIZE', (4,2), (5,2), 11),
+        ('ALIGN', (4,0), (-1,-1), 'RIGHT'), ('LINEABOVE', (4,2), (-1,2), 1, colors.black),
         ('TOPPADDING', (0,0), (-1,-1), 2), ('BOTTOMPADDING', (0,0), (-1,-1), 2)]))
     elements.append(tt)
     
@@ -1473,7 +1483,7 @@ async def get_offer_review(review_token: str):
         "offer_type": offer.get("offer_type"),
         "currency": offer.get("currency"),
         "vat_percent": offer.get("vat_percent"),
-        "lines": offer.get("lines", []),
+        "lines": [client_line(l) for l in offer.get("lines", [])],     # R43
         "subtotal": offer.get("subtotal"),
         "vat_amount": offer.get("vat_amount"),
         "total": offer.get("total"),
