@@ -294,7 +294,8 @@ def remaining_and_correction(gross_payable: float, previously_paid: float, paid_
 def _frozen_labor_fields(row: dict) -> dict:
     """LAB-01 fields frozen on a created/updated Pay Run row (never recomputed on read)."""
     return {k: row.get(k) for k in ("labor_amount", "akord_amount", "downtime_amount",
-                                    "labor_dq_warnings", "labor_calc", "correction_item") if k in row}
+                                    "labor_dq_warnings", "labor_calc", "correction_item",
+                                    "previously_paid_sources", "considered_pay_run_ids") if k in row}
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -491,6 +492,8 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
 
     prev_paid = row.get("previously_paid", 0)
     sel_remaining, sel_correction = remaining_and_correction(e["earned"], prev_paid, 0, eid)
+    if sel_correction:
+        sel_correction["sources"] = row.get("previously_paid_sources") or []
     out = dict(row)
     out.update({
         "hourly_rate": e["hourly_rate"],
@@ -580,11 +583,14 @@ async def generate_pay_run(
     existing_runs = await tenant.pay_runs.find(
         {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
          "period_start": {"$lte": period_end}, "period_end": {"$gte": period_start}},
-        {"_id": 0, "employee_rows": 1, "week_number": 1, "number": 1},
+        {"_id": 0, "id": 1, "employee_rows": 1, "week_number": 1, "number": 1,
+         "period_start": 1, "period_end": 1},
     ).sort("number", -1).to_list(100)
     # Dedup: keep only latest pay_run per week_number
     seen_weeks = set()
     already_paid = {}
+    paid_sources = {}  # LAB-01-F (FG-84): the paid pay-run lines behind "previously paid"
+    considered_runs = {}  # every counted run with a line of the employee (paid or not)
     for run in existing_runs:
         wn = run.get("week_number", 0)
         if wn in seen_weeks:
@@ -593,6 +599,13 @@ async def generate_pay_run(
         for row in run.get("employee_rows", []):
             eid = row.get("employee_id", "")
             already_paid[eid] = already_paid.get(eid, 0) + row.get("paid_now_amount", 0)
+            if run.get("id"):
+                considered_runs.setdefault(eid, set()).add(run["id"])
+            if _money_float(row.get("paid_now_amount")) > 0 and run.get("id"):
+                paid_sources.setdefault(eid, []).append({
+                    "pay_run_id": run["id"], "pay_run_number": run.get("number"),
+                    "period_start": run.get("period_start"), "period_end": run.get("period_end"),
+                    "paid": round(_money_float(row.get("paid_now_amount")), 2)})
     # Count overlapping runs for warning
     overlap_count = await tenant.pay_runs.count_documents(
         {"org_id": org_id, "status": {"$in": ["confirmed", "paid"]},
@@ -634,6 +647,9 @@ async def generate_pay_run(
         amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
         prev_paid = round(already_paid.get(wid, 0), 2)
         remaining, correction = remaining_and_correction(e["earned"], prev_paid, 0, wid)
+        sources = sorted(paid_sources.get(wid, []), key=lambda x: x["pay_run_id"])
+        if correction:
+            correction["sources"] = sources
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
 
         # Per-day breakdown
@@ -759,6 +775,8 @@ async def generate_pay_run(
             "paid_now_amount": 0,
             "remaining_after_payment": remaining,
             "correction_item": correction,
+            "previously_paid_sources": sources,
+            "considered_pay_run_ids": sorted(considered_runs.get(wid, set())),
             "open_advances": adv_by_user.get(wid, []),
             "sites": sites,
             "day_cells": day_cells,
@@ -818,11 +836,18 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
     if len(key) > 200:
         raise HTTPException(status_code=400, detail="Idempotency-Key is too long (max 200)")
     fp = request_fingerprint(data.model_dump())
+    from app.audit import idempotency as _idem
+    unprotected = getattr(_idem, "IdempotencyUnprotected", None)  # W0-04-C01 (#72)
     try:
         state = await begin_idempotent(db, tenant_id=org_id, key=key, action=PAY_RUN_CREATE_ACTION,
                                        request_fingerprint=fp)
     except IdempotencyConflict:
         raise HTTPException(status_code=409, detail="Idempotency-Key was already used for another Pay Run request")
+    except Exception as exc:
+        if unprotected is not None and isinstance(exc, unprotected):
+            # fail closed: without the unique reservation index no money write is made
+            raise HTTPException(status_code=503, detail="Idempotency registry is not protected; nothing written")
+        raise
     if state["status"] == IDEMPOTENCY_DUPLICATE:
         if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
             run = await _tenant(user).pay_runs.find_one(
@@ -901,7 +926,8 @@ async def _create_pay_run(data: PayRunCreateInput, user: dict):
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
         if correction:  # LAB-01-D (FG-66): the item names its correction record
-            correction["correction_id"] = correction_id(org_id, eid, data.period_start, data.period_end)
+            correction["sources"] = row.get("previously_paid_sources") or []
+            correction["correction_id"] = correction_id(org_id, eid, correction["sources"])
         row = dict(row, correction_item=correction)
 
         frozen_row = {
@@ -1541,7 +1567,8 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
         if correction:  # LAB-01-D (FG-66): the item names its correction record
-            correction["correction_id"] = correction_id(org_id, eid, data.period_start, data.period_end)
+            correction["sources"] = row.get("previously_paid_sources") or []
+            correction["correction_id"] = correction_id(org_id, eid, correction["sources"])
         row = dict(row, correction_item=correction)
         existing_row = existing_row_map.get(eid, {}) or {}
         day_cells = row.get("day_cells") or existing_row.get("day_cells") or []

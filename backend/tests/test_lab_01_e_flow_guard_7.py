@@ -130,8 +130,9 @@ def test_fg80_one_correction_per_overpayment_across_runs(monkeypatch, backend):
         assert len(recs) == 1                                         # ONE overpayment of 60, not 3 × 60
         rec = recs[0]
         assert rec["amount"] == 60.0 and sorted(rec["pay_run_ids"]) == sorted(ids)
-        assert rec["idempotency_key"] == (f"overpayment:employee:w-akord:period:{P_START}..{P_END}"
-                                          ":source:paid_pay_runs_of_period")
+        # LAB-01-F (FG-84): keyed by the paid source line(s), not by the run's period
+        assert rec["idempotency_key"] == "overpayment:employee:w-akord:source:paid_pay_run_lines:run-old"
+        assert rec["source_pay_run_ids"] == ["run-old"]
         assert await op.audit_events.count_documents({"entity_id": rec["id"]}) == 1
         assert await op.dq_alerts.count_documents({}) == 1
         for rid in ids:                                               # every run names the same record
@@ -183,3 +184,69 @@ def test_fg80_no_header_at_all_is_refused(monkeypatch):
                 assert r.status_code == 428
                 assert await op.pay_runs.count_documents({}) == 0
     asyncio.run(body())
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-01-F (FG-84)
+def test_fg84_wider_overlapping_period_maps_to_the_same_correction(monkeypatch, backend):
+    async def scenario(c, op):
+        await _old_run(op)                                   # paid 660 for week 41 (earned now 600)
+        week = await c.post("/api/pay-runs", json=_body(), headers=dict(_token(), **{"Idempotency-Key": "w"}))
+        assert week.status_code == 200, week.text
+        wide_body = {"run_type": "weekly", "period_start": P_START, "period_end": "2026-10-25",
+                     "rows": [{"employee_id": "w-akord"}], "status": "draft"}
+        wide = await c.post("/api/pay-runs", json=wide_body, headers=dict(_token(), **{"Idempotency-Key": "x"}))
+        assert wide.status_code == 200, wide.text
+        month_body = dict(wide_body, period_start="2026-10-01", period_end="2026-10-31")
+        month = await c.post("/api/pay-runs", json=month_body, headers=dict(_token(), **{"Idempotency-Key": "m"}))
+        assert month.status_code == 200, month.text
+        recs = await op.payroll_corrections.find({}, {"_id": 0}).to_list(10)
+        assert len(recs) == 1, recs                          # ONE 60 overpayment, not 3 × 60
+        rec = recs[0]
+        assert rec["amount"] == 60.0 and rec["source_pay_run_ids"] == ["run-old"]
+        assert sorted(rec["pay_run_ids"]) == sorted([week.json()["id"], wide.json()["id"], month.json()["id"]])
+        assert await op.audit_events.count_documents({"entity_id": rec["id"]}) == 1
+        for r in (week, wide, month):
+            assert r.json()["employee_rows"][0]["correction_item"]["correction_id"] == rec["id"]
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg84_another_paid_source_is_another_correction(monkeypatch, backend):
+    async def scenario(c, op):
+        await _old_run(op)
+        # a second, separately paid run of the same week → "previously paid" rests on other lines
+        await op.pay_runs.insert_one({
+            "id": "run-old-2", "org_id": ORG, "number": "PR-0002", "status": "confirmed", "version": 1,
+            "period_start": P_START, "period_end": P_END, "week_number": 42, "paid_at": None,
+            "employee_rows": [{"employee_id": "w-akord", "earned_amount": 0, "paid_now_amount": 40.0}],
+            "totals": {"earned": 0}, "history": []})
+        r = await c.post("/api/pay-runs", json=_body(), headers=dict(_token(), **{"Idempotency-Key": "a"}))
+        assert r.status_code == 200, r.text
+        rec = await op.payroll_corrections.find_one({}, {"_id": 0})
+        assert rec["source_pay_run_ids"] == ["run-old", "run-old-2"] and rec["amount"] == 100.0
+    run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-01-F (FG-85)
+def _has_unique_idempotency_index():
+    from app.audit import idempotency
+    return hasattr(idempotency, "ensure_idempotency_index")
+
+
+@pytest.mark.skipif(not _has_unique_idempotency_index(),
+                    reason="needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); "
+                           "run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt")
+def test_fg85_concurrent_creates_with_one_key_give_one_run(monkeypatch):
+    """6 concurrent POST /pay-runs with ONE key → exactly one run (real Mongo only)."""
+    from tests.test_w0_03c_real_mongo import _refusal
+    if _refusal():
+        pytest.skip(_refusal())
+
+    async def scenario(c, op):
+        h = dict(_token(), **{"Idempotency-Key": "concurrent-key"})
+        rs = await asyncio.gather(*[c.post("/api/pay-runs", json=_body(), headers=h) for _ in range(6)])
+        codes = sorted(r.status_code for r in rs)
+        assert set(codes) <= {200, 409}, [r.text for r in rs]
+        assert await op.pay_runs.count_documents({}) == 1, codes
+        ids = {r.json()["id"] for r in rs if r.status_code == 200}
+        assert len(ids) == 1
+    run(monkeypatch, scenario, "real")

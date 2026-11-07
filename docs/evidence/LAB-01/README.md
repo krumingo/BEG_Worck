@@ -71,3 +71,13 @@ Per-line amounts of one person add up to the cent to that person's total.
   - A refused attempt (4xx) can be retried under the same key.
   - Frontend `PayRunsPage.js` sends one key per request body; a double click or retry reuses it. The frontend build was not run here (no node_modules).
   - The R0-05 / R0-06 / LAB-01 test clients add a fresh key per `POST /pay-runs` (`tests/pay_run_idempotency.py`); their assertions are unchanged.
+
+## LAB-01-F (FLOW Guard pass 8: FG-84, FG-85) — `tests-LAB-01-F.txt`
+- **FG-84:** a correction is keyed by its **paid source**: the employee + the paid pay-run lines that make up "previously paid" (`overpayment:employee:<id>:source:paid_pay_run_lines:<run ids>`).
+  - It is no longer keyed by the period of the run that noticed it.
+  - A weekly, wider or monthly run that rests on the same paid lines finds the same record (`source_pay_run_ids`, `source_lines`, `pay_run_ids`). A different amount re-prices that record; it never creates a second one.
+  - A pending correction is superseded only when a run covers all of its source runs and no longer shows that overpayment.
+- **FG-85:** the concurrency test `test_fg85_concurrent_creates_with_one_key_give_one_run` (6 concurrent creates with one key give exactly 1 run) needs #72's unique `audit_idempotency` index.
+  - It is skipped on this branch alone.
+  - On a local trial merge with #72 @ 8ac194a it passed 5/5 on real Mongo; that run is section B of the evidence.
+  - `IdempotencyUnprotected` from #72 maps to 503 (fail closed, nothing written).

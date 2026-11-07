@@ -5,10 +5,12 @@ When what was already paid to a person exceeds the (re-priced) payable amount of
 Run row, the row shows remaining 0 and a ``correction_item``; this service turns that
 item into a real record:
 
-* ``payroll_corrections`` — one record per underlying overpayment: (employee, period,
-  source "paid pay runs of the period") — LAB-01-E (FG-80). Every Pay Run of the same
-  person and period sees the same overpayment and finds the same record (idempotent
-  across runs; the runs are listed in ``pay_run_ids``); status ``pending_approval``. It is NEVER applied automatically:
+* ``payroll_corrections`` — one record per underlying overpayment, keyed by the PAID
+  SOURCE: the employee + the paid pay-run lines that make up "previously paid"
+  (LAB-01-F, FG-84; before: employee + exact period, FG-80). Any run — weekly, wider,
+  overlapping — whose "previously paid" rests on the same paid lines finds the same
+  record (``pay_run_ids`` lists the runs); a different amount re-prices that record
+  (version + 1), never a second one. Status ``pending_approval``. It is NEVER applied automatically:
   no deduction, no reversal, no payment is created from it (CLAUDE.md §7/§8).
 * Approval: the canonical DQ/Approval runtime (W0-07) is NOT STARTED
   (IMPLEMENTATION_GATE_MATRIX). The record is therefore routed to Approval as
@@ -37,18 +39,23 @@ APPROVAL_AWAITING_RUNTIME = "awaiting_approval_runtime"  # W0-07 not started
 DQ_CODE = "PAYROLL_CORRECTION_PENDING_APPROVAL"
 
 
-SOURCE = "paid_pay_runs_of_period"
+SOURCE = "paid_pay_run_lines"
 
 
-def _key(employee_id: str, period_start: str, period_end: str) -> str:
-    """LAB-01-E (FG-80): the overpayment itself — employee + period + source — not a run."""
-    return f"overpayment:employee:{employee_id}:period:{period_start}..{period_end}:source:{SOURCE}"
+def _source_ids(sources) -> list:
+    return sorted({s.get("pay_run_id") for s in (sources or []) if isinstance(s, dict) and s.get("pay_run_id")})
 
 
-def correction_id(org_id: str, employee_id: str, period_start: str, period_end: str) -> str:
-    """Deterministic id of the one correction of (tenant, employee, period, source)."""
+def _key(employee_id: str, sources) -> str:
+    """LAB-01-F (FG-84): the overpayment's paid source — the employee's paid pay-run lines —
+    not the period of the run that noticed it."""
+    return f"overpayment:employee:{employee_id}:source:{SOURCE}:" + ",".join(_source_ids(sources))
+
+
+def correction_id(org_id: str, employee_id: str, sources) -> str:
+    """Deterministic id of the one correction of (tenant, employee, paid source lines)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL,
-                          f"beg-work:payroll-correction:{org_id}:{_key(employee_id, period_start, period_end)}"))
+                          f"beg-work:payroll-correction:{org_id}:{_key(employee_id, sources)}"))
 
 
 async def _audit(raw_db, *, org_id: str, actor_id: str, action: str, record: dict,
@@ -89,17 +96,21 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
     Returns the records touched. Never changes a payment."""
     now = datetime.now(timezone.utc).isoformat()
     run_id = run["id"]
-    p_start, p_end = run.get("period_start"), run.get("period_end")
     touched = []
-    without = []  # employees of this run whose overpayment (for this period) is gone
+    # (employee, key that is current now or None, runs this window counted) — a pending
+    # correction whose source runs are all covered by this window and which is NOT the
+    # overpayment found now is superseded (its overpayment is gone or re-based).
+    covered = []
     for row in run.get("employee_rows") or []:
         eid = row.get("employee_id")
         item = row.get("correction_item")
-        if eid and not item:
-            without.append(eid)
+        sources = (item or {}).get("sources") or row.get("previously_paid_sources") or []
+        considered = set(row.get("considered_pay_run_ids") or []) | set(_source_ids(sources))
+        if eid:
+            covered.append((eid, _key(eid, sources) if item else None, considered))
         if not eid or not item:
             continue
-        key = _key(eid, p_start, p_end)
+        key = _key(eid, sources)
         existing = await tenant.payroll_corrections.find_one(
             {"org_id": org_id, "idempotency_key": key}, {"_id": 0})
         fields = {
@@ -111,9 +122,10 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
         }
         if existing is None:
             record = {
-                "id": item.get("correction_id") or correction_id(org_id, eid, p_start, p_end),
+                "id": item.get("correction_id") or correction_id(org_id, eid, sources),
                 "org_id": org_id, "idempotency_key": key, "type": "FLOW028_CORRECTION",
-                "source": SOURCE, "employee_id": eid,
+                "source": SOURCE, "source_pay_run_ids": _source_ids(sources),
+                "source_lines": sources, "employee_id": eid,
                 "pay_run_id": run_id, "pay_run_ids": [run_id], "pay_run_number": run.get("number"),
                 "period_start": run.get("period_start"), "period_end": run.get("period_end"),
                 **fields,
@@ -168,11 +180,13 @@ async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dic
 
     # a pending correction whose overpayment (same employee + period) is gone → superseded
     stale = []
-    for eid in without:
-        rec = await tenant.payroll_corrections.find_one(
-            {"org_id": org_id, "idempotency_key": _key(eid, p_start, p_end), "status": STATUS_PENDING},
-            {"_id": 0})
-        if rec:
+    for eid, current_key, considered in covered:
+        pending = await tenant.payroll_corrections.find(
+            {"org_id": org_id, "employee_id": eid, "status": STATUS_PENDING}, {"_id": 0}).to_list(200)
+        for rec in pending:
+            src = set(rec.get("source_pay_run_ids") or [])
+            if rec.get("idempotency_key") == current_key or not src or not src <= considered:
+                continue
             stale.append(rec)
     for rec in stale:
         rec = dict(rec, status=STATUS_SUPERSEDED, version=int(rec.get("version") or 1) + 1, updated_at=now)

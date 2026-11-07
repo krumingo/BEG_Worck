@@ -1,0 +1,54 @@
+# LAB-01-F checks (2026-11-07), run from backend/ with PYTHONPATH=.
+# A) branch claude/lab-01-labor-cost: parent c4ddd33 + LAB-01-F working tree
+## A2C guard
+W0-03E-A2C tenant boundary guard: 206 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 418 unit(s) checked, 0 violation(s)
+## audit probe probe_lab01b_package_pointer.py
+FAILS: none
+## LAB-01 tests (labor_cost + d + e) --noconftest (mongomock + real mongo:7.0 rs0)
+SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:235: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
+51 passed, 1 skipped, 1 warning in 4.32s
+## tests/test_r0_0*.py --noconftest (real mongo:7.0 rs0)
+814 passed, 6 warnings in 161.18s (0:02:41)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings in 73.57s (0:01:13)
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+
+# B) TRIAL MERGE (local only, not pushed): LAB-01-F tree + #72 W0-04-C01 @ 8ac194a  → 89bc97e
+## A2C guard
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches
+## FG-85: test_fg85_concurrent_creates_with_one_key_give_one_run (real mongo:7.0 rs0), 5 repetitions
+1 passed, 1 warning in 0.97s
+1 passed, 1 warning in 0.73s
+1 passed, 1 warning in 0.73s
+1 passed, 1 warning in 0.77s
+1 passed, 1 warning in 0.74s
+## LAB-01 tests (labor_cost + d + e) --noconftest (mongomock + real)
+52 passed, 1 warning in 4.73s
+## #72's own test_w0_04_c01_audit_indexes_and_chain.py (real)
+24 passed, 1 warning in 10.63s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 162.99s (0:02:42)
+## W0 DB-free
+15 failed, 1092 passed, 67 skipped, 6 warnings in 72.96s (0:01:12)
+  non-legacy_routes failures: 0
+  (W0 on the trial merge: 1092 passed / 15 failed / 50+17 skipped — +7 passed / +17 skipped are #72's new W0 tests; the 15 failures are the same test_w0_03e_legacy_routes ones)
