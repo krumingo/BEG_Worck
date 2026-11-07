@@ -105,15 +105,20 @@ def test_fg73_put_only_by_the_report_owner(monkeypatch):
     async def body():
         op, dr = await _put_harness(monkeypatch)
         before = await op.employee_daily_reports.find_one({"id": "REP"}, {"_id": 0})
-        for other in ({"id": "tech", "org_id": ORG, "role": "Technician"},
-                      {"id": "admin", "org_id": ORG, "role": "Admin"}):
-            with pytest.raises(HTTPException) as ex:
-                await dr.update_daily_report("REP", {"day_entries": [
-                    {"id": "e1", "project_id": "prj", "hours_worked": 0.5}]}, other)
-            assert ex.value.status_code == 403
+        # FG-73: a technician who is neither the author nor an approver → 403
+        with pytest.raises(HTTPException) as ex:
+            await dr.update_daily_report("REP", {"day_entries": [
+                {"id": "e1", "project_id": "prj", "hours_worked": 0.5}]},
+                {"id": "tech", "org_id": ORG, "role": "Technician"})
+        assert ex.value.status_code == 403
         assert await op.employee_daily_reports.find_one({"id": "REP"}, {"_id": 0}) == before
         out = await dr.update_daily_report("REP", {"notes": "own"}, {"id": "w", "org_id": ORG, "role": "Worker"})
         assert out["notes"] == "own"
+        # R36 (LAB-01-H): Admin is an approver and may correct it — audited
+        out = await dr.update_daily_report("REP", {"notes": "admin fix"},
+                                           {"id": "admin", "org_id": ORG, "role": "Admin"})
+        assert out["notes"] == "admin fix" and out["corrected_by"] == "admin"
+        assert await op.audit_events.count_documents({"entity_id": "REP", "action": "daily_report.corrected"}) == 1
     asyncio.run(body())
 
 

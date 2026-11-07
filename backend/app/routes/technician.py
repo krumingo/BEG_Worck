@@ -1384,13 +1384,14 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Draft not found")
-    # LAB-01-E (FG-78): only the draft's owner (who entered it, or the worker it is for)
-    # edits it, and only while it is a Draft — a submitted report is changed only through
-    # the approval path (approve / reject / reset).
-    if user.get("id") not in (doc.get("submitted_by"), doc.get("worker_id")):
-        raise HTTPException(status_code=403, detail="Only the draft's owner can edit it")
-    if doc.get("status") not in ["Draft"]:
-        raise HTTPException(status_code=400, detail="Only Draft reports can be edited")
+    # LAB-01-H (R36): the author (who entered it, or the worker it is for) corrects their own
+    # Draft / returned report; Admin, Owner or the project's SiteManager corrects ANY report,
+    # an approved one included — with an AuditEvent (before / after).
+    from app.services.report_corrections import CORRECTOR, audit_report_correction, authorize_report_edit
+    mode = await authorize_report_edit(
+        user, doc, projects=[doc.get("project_id")],
+        author_ids=(doc.get("submitted_by"), doc.get("worker_id")),
+        author_statuses=("Draft", "Rejected"))
 
     now = datetime.now(timezone.utc).isoformat()
     update = {"updated_at": now}
@@ -1400,11 +1401,17 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
         update["hours"] = round(data.hours, 2)
     if data.notes is not None:
         update["notes"] = data.notes
+    if mode == CORRECTOR:
+        update.update({"corrected_by": user["id"], "corrected_at": now})
+    before = {k: doc.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at")}
 
     # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
     from app.services.labor_cost import void_labor_approvals
-    await void_labor_approvals(tenant, user["org_id"], draft_id, user["id"], "draft_edited")
+    await void_labor_approvals(tenant, user["org_id"], draft_id, user["id"],
+                               "report_corrected" if mode == CORRECTOR else "draft_edited")
     await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    await audit_report_correction(db, user=user, mode=mode, report=doc, before=before,
+                                  after={k: update[k] for k in before}, endpoint="PUT /technician/draft/{id}")
     return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
 
 

@@ -15,6 +15,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.tenancy.data_access import TenantData
 from app.services.labor_cost import void_labor_approvals
+from app.services.report_corrections import CORRECTOR, audit_report_correction, authorize_report_edit
 
 
 def _tenant(user: dict) -> TenantData:
@@ -291,13 +292,6 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": org_id})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    # LAB-01-D (FG-73): only the report's owner edits their own draft; approvers act
-    # through the approval path (approve / reject / reset), never by editing the content.
-    if report.get("employee_id") != user.get("id"):
-        raise HTTPException(status_code=403, detail="Only the report owner can edit this report")
-    if report.get("approval_status") not in ["DRAFT", "REJECTED"]:
-        raise HTTPException(status_code=400, detail="Only DRAFT or REJECTED reports can be edited")
-
     allowed = ["day_status", "leave_from", "leave_to", "notes", "day_entries"]
     update = {k: v for k, v in data.items() if k in allowed}
 
@@ -305,10 +299,28 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
         update["day_entries"] = _clean_day_entries(update["day_entries"])
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
 
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    # LAB-01-H (R36): the author corrects their own DRAFT / returned report; Admin, Owner or
+    # the project's SiteManager corrects ANY report (approved included) — with an AuditEvent.
+    projects = [e.get("project_id") for e in (report.get("day_entries") or [])]
+    projects += [e.get("project_id") for e in (update.get("day_entries") or [])]
+    if report.get("project_id"):
+        projects.append(report["project_id"])
+    mode = await authorize_report_edit(
+        user, report, projects=projects,
+        author_ids=(report.get("employee_id"), report.get("created_by")),
+        author_statuses=("DRAFT", "REJECTED"))
+
+    now = datetime.now(timezone.utc).isoformat()
+    update["updated_at"] = now
+    if mode == CORRECTOR:
+        update.update({"corrected_by": user["id"], "corrected_at": now})
+    before = {k: report.get(k) for k in update if k not in ("updated_at", "corrected_by", "corrected_at")}
     # LAB-01-D (FG-72): bump the version and void the approvals BEFORE the content write
-    await void_labor_approvals(tenant, org_id, report_id, user["id"], "report_edited")
+    await void_labor_approvals(tenant, org_id, report_id, user["id"],
+                               "report_corrected" if mode == CORRECTOR else "report_edited")
     await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
+    await audit_report_correction(db, user=user, mode=mode, report=report, before=before,
+                                  after={k: update[k] for k in before}, endpoint="PUT /daily-reports/{id}")
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -1007,24 +1019,28 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
     now = datetime.now(timezone.utc).isoformat()
     saved = 0
 
-    # LAB-01-E (FG-79): every existing report this batch would change is checked BEFORE any
-    # write — only its owner (the worker, or whoever created it) may change it, and only
-    # while it is DRAFT or REJECTED. One refusal → 409/403, nothing written.
-    existing_by_emp, refused = {}, []
+    # LAB-01-E (FG-79) + LAB-01-H (R36): every existing report this batch would change is
+    # checked BEFORE any write — the author (the worker, or who created it) only on their own
+    # DRAFT / returned report; Admin, Owner or the SiteManager of the batch's project on ANY
+    # report (approved included), audited. One refusal → nothing written.
+    existing_by_emp, modes, refused = {}, {}, []
     for emp_id in by_emp:
         existing = await tenant.employee_daily_reports.find_one({
             "org_id": org_id, "employee_id": emp_id, "report_date": report_date
         })
         if not existing:
             continue
-        status = existing.get("approval_status") or existing.get("status") or ""
-        if user.get("id") not in (existing.get("employee_id"), existing.get("created_by")):
-            refused.append({"employee_id": emp_id, "report_id": existing["id"], "reason": "not_owner"})
-        elif status.upper() not in ("DRAFT", "REJECTED"):
-            refused.append({"employee_id": emp_id, "report_id": existing["id"], "reason": f"status_{status}"})
+        try:
+            modes[emp_id] = await authorize_report_edit(
+                user, existing, projects=[project_id],
+                author_ids=(existing.get("employee_id"), existing.get("created_by")),
+                author_statuses=("DRAFT", "REJECTED"))
+        except HTTPException as exc:
+            refused.append({"employee_id": emp_id, "report_id": existing["id"],
+                            "status_code": exc.status_code, "reason": exc.detail})
         existing_by_emp[emp_id] = existing
     if refused:
-        code = 403 if any(r["reason"] == "not_owner" for r in refused) else 409
+        code = max(r["status_code"] for r in refused)  # 409 (payroll) > 403 > 400
         raise HTTPException(status_code=code, detail={"message": "batch-save refused; nothing written",
                                                       "refused": refused})
 
@@ -1040,11 +1056,19 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             kept = [e for e in old_entries if e.get("project_id") != project_id]
             merged = kept + emp_entries
             merged_total = round(sum(e["hours_worked"] for e in merged), 2)
+            mode = modes[emp_id]
+            change = {"day_entries": merged, "total_hours": merged_total, "updated_at": now}
+            if mode == CORRECTOR:
+                change.update({"corrected_by": user["id"], "corrected_at": now})
             # LAB-01-D (FG-72): bump + void BEFORE the content write
-            await void_labor_approvals(tenant, org_id, existing["id"], user["id"], "batch_saved")
-            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
-                "day_entries": merged, "total_hours": merged_total, "updated_at": now,
-            }})
+            await void_labor_approvals(tenant, org_id, existing["id"], user["id"],
+                                       "report_corrected" if mode == CORRECTOR else "batch_saved")
+            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": change})
+            await audit_report_correction(
+                db, user=user, mode=mode, report=existing,
+                before={"day_entries": old_entries, "total_hours": existing.get("total_hours")},
+                after={"day_entries": merged, "total_hours": merged_total},
+                endpoint="POST /daily-reports/batch-save")
         else:
             report = {
                 "id": str(uuid.uuid4()),

@@ -83,10 +83,10 @@ def test_fg79_batch_save_owner_and_status_checked_before_any_write(monkeypatch):
         with pytest.raises(HTTPException) as ex:
             await daily_reports.batch_save_daily_entries(batch(["tech3", "tech2"]), tech1)
         assert ex.value.status_code == 403
-        # the owner, but the report is APPROVED → 409
+        # the author, but the report is APPROVED → 400 (R36: only an approver corrects it)
         with pytest.raises(HTTPException) as ex:
             await daily_reports.batch_save_daily_entries(batch(["tech2"]), tech2)
-        assert ex.value.status_code == 409
+        assert ex.value.status_code == 400
         assert await op.employee_daily_reports.find({}, {"_id": 0}).to_list(10) == before
         assert (await op.labor_quantity_approvals.find_one({"id": "qa-d"}))["status"] == "approved"
         # the creator of tech3's DRAFT may change it → version bump + approvals void

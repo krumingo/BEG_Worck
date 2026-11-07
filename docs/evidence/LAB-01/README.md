@@ -93,3 +93,14 @@ Per-line amounts of one person add up to the cent to that person's total.
   - No pay run, draft or confirmed, supersedes, re-prices, absorbs or applies it.
   - A recomputation with another amount only opens a DQ alert: `PAYROLL_CORRECTION_RECOMPUTED`, or `…CHANGED_AFTER_DECISION` for a decided record.
 - **Test:** a draft monthly run with 600 of later earnings shows remaining **600** (not 540). The 60 correction stays pending and unchanged; paying 600 is allowed, 601 is refused.
+
+## LAB-01-H (R36, LAB-01 Addendum A, Krum 07.11.2026) — `tests-LAB-01-H.txt`
+- **One rule** (`app/services/report_corrections.py`) for `PUT /daily-reports/{id}`, `PUT /technician/draft/{id}` and `POST /daily-reports/batch-save`:
+  - the **author** (the worker, or whoever entered the report) corrects only their own DRAFT or returned report; any other status gives 400;
+  - **Admin, Owner and the SiteManager of the report's project(s)** (`can_manage_project`; every project the report has or would get) correct ANY report, approved included;
+  - anyone else gets 403.
+- **Every edit is audited:** one canonical AuditEvent with actor, `occurred_at` and `structured_diff` before/after. The action is `daily_report.corrected` for an approver and `daily_report.edited` for the author. An approver's correction also sets `corrected_by` / `corrected_at`.
+- **Approved reports:** correcting one bumps `report_version` and voids its quantity approvals before the write (FG-72). The report stays APPROVED with the corrected values.
+- **Interpretation:** a report already in payroll (`payroll_status` batched/paid) gets 409 for everyone. FLOW-028 says "Корекции след плащане: няма тихо редактиране", so these go through the correction / reversal path, not an in-place edit.
+- **Batch-save:** all existing reports are checked first; one refusal means nothing is written, including new reports in the same batch.
+- **Tests:** `tests/test_lab_01_h_r36.py`, 25 cases across Admin / Owner / SiteManager of the project / SiteManager of another project / Technician / Accountant / author × draft / returned / submitted / approved / payroll. FG-73 and FG-79 tests were updated to R36.
