@@ -63,6 +63,7 @@ FG-122 (Р20): `GET /client-acts` и `/client-acts/{id}` показват на �
 | **FG-121** цена 12.345 × 100 | (цената от body) | 12.345 точно, ред 1 234.50 (не 12.35 → 1 235.00) |
 | **FG-122** Viewer чете `GET /client-acts[/{id}]` | **цени и суми** | само количества (`money_hidden: true`) |
 | **FG-123** v2 приета, докато трае транзакцията на акт по v1 | (няма проверка) | 409 `OFFER_VERSION_SUPERSEDED`, актът не е записан |
+| **ACT77-01** нова фирма (без колекции), 10 конкурентни първи акта по 3 оферти | (на 0a5f894) **2–4 × 500** „namespace already in use“ | 10 × 201, 10 различни номера |
 
 ## Тестове (реален MongoDB 7.0 replica set rs0, локален docker)
 
@@ -70,7 +71,7 @@ FG-122 (Р20): `GET /client-acts` и `/client-acts/{id}` показват на �
 
 | Проверка | Резултат |
 |---|---|
-| `tests/test_act_01_client_act_from_offer.py` (off / shadow / enforce, oplog, транзакции) | 98 passed (на main: 93 failed / 5 passed) |
+| `tests/test_act_01_client_act_from_offer.py` (off / shadow / enforce, oplog, транзакции) | 101 passed (на main: виж `main-0f870c3-results.json`) |
 | `tests/test_pm_01_permission_matrix.py` (реален Mongo, `-rs`: 0 skipped) | 6 passed (на main: 2 failed — виж D10) |
 | `tests/test_r0_0*.py` | 814 passed |
 | `tests/test_w0_*.py` | 1135 passed / 15 failed — същите 15 `test_w0_03e_legacy_routes` като на main |
@@ -103,3 +104,10 @@ PM-01 е регенериран само с harness-а (`python tests/test_pm_01
 | D11 | Фактуриране от акт (FLOW-006), ретенции, прихващане на аванс. | Извън обхвата по пакета. |
 | ~~D12~~ | **Решено от канона:** FLOW-003 — одобрението е свързано с „цена, ДДС/валута“ на конкретната версия → ДДС се смята по ред със `vat_percent` на офертата му (по подразбиране 20 % като модела), net/VAT/gross отделно (FLOW-006); актът е в една валута, смесени валути → 422 `ACT_MIXED_CURRENCY`. | — |
 | D13 | UI: само ключ + български текст на грешките в „Нов акт“. Екран за остатъка (endpoint-ът го има) не е правен. `percent` във from-offer е % от офертното количество (както на main), не от остатъка. | Пакетът иска минимален UI. |
+
+## Сливане с #69 и #71 (пробен merge, локално)
+
+Конфликти само в `revenue_expense.py`, `test_pm_01_permission_matrix.py` и `PM-01/matrix.csv`/`run_meta.json`; `catalog.py` се слива чисто (същите action имена). Разрешаване:
+
+* `revenue_expense.py` — тялото на handler-ите от ACT-01 (услугата); **една** зависимост за права на route: `require_money_write("revenue.client_act_confirm.execute", …)` от #69 на confirm и `require_finance_read(...)` от #71 на PUT/from-offer дават **същите отговори** като `require_client_act_right` (Owner/Admin/Accountant, company scope, M2, същият data-path guard) — запазва се една от двете, не двете (иначе в enforce отказът се одитира два пъти). `GET /client-acts[/{id}]`: #71 (Р20-1) прави 403 за не-финансови роли — по-строго; изрязването на пари от ACT-01 остава за финансовите (no-op).
+* `test_pm_01` — обединение на `ENFORCE_EXTRA_WRITES`; матрицата се регенерира с harness-а след merge.

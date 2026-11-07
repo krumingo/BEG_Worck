@@ -69,3 +69,27 @@ SAME_15
   fails in all three modes (3 failed / 95 passed) — the guard write is what closes the race.
   PM-01 matrix: only POST /api/client-acts/{act_id}/confirm changed (non-finance 404 -> 403, audited in enforce;
   finance 404 -> 428 without a key; nothing written anywhere).
+
+# ── ACT77-01 (audit, MEDIUM): fresh tenant, concurrent first acts ──
+before the fix, on 0a5f894 + the new fresh-tenant scenario (10 concurrent first acts on lines of 3 offers,
+client_acts / client_act_line_totals / org_counters / audit_events dropped first):
+  enforce [201, 500, 500, 201, 201, 201, 201, 500, 500, 201]; off [500, 201, 500, 201, 201, 201, 201, 201, 201, 201]; shadow [201, 201, 201, 201, 500, 201, 500, 201, 201, 201]
+  server log: 16x "namespace '...client_act_line_totals' is already in use. :: Please retry" (implicit
+  collection creation inside the transaction)
+after the fix (collections created outside the transaction + bounded TransientTransactionError retry):
+  all modes: 10x201, 10 unique act numbers; 10 concurrent x10 on a fresh 10 m2 line: 1x201 + 9x409; 0 "already in use"
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 (committed results regenerated) + fresh ACT-01 + PM-01 (real Mongo, -rs)
+harness_rc=0
+107 passed, 6 warnings in 191.46s (0:03:11)
+## R0
+814 passed, 6 warnings in 146.93s (0:02:26)
+## W0
+15 failed, 1135 passed, 6 warnings in 113.62s (0:01:53)
+SAME_15
+## Trial merge (local, not pushed) of this head with #69 @ 3fb55f2 and with #71 @ e90aa5f
+conflicts only in backend/app/routes/revenue_expense.py, backend/tests/test_pm_01_permission_matrix.py,
+docs/evidence/PM-01/matrix.csv, docs/evidence/PM-01/run_meta.json; catalog.py merges cleanly.

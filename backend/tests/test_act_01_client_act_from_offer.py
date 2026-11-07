@@ -198,9 +198,19 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
             fx[t["key"]] = {"tenant_id": t["tenant_id"], "project_id": t["project_id"],
                             "users": {u["key"]: u for u in t["users"]}}
         i = tc.portal.call(lambda: seed_act01(op_db, fx))
-        for name in ACT_COLLECTIONS + ("audit_idempotency", "audit_events"):
+        # ACT77-01: the ACT-01 collections are NOT pre-created — a fresh tenant has none.
+        for name in ("audit_idempotency", "audit_events"):
             if name not in tc.portal.call(lambda: op_db.list_collection_names()):
                 tc.portal.call(lambda: op_db.create_collection(name))
+        def reindex():
+            tc.portal.call(lambda: op_db.audit_events.create_index(
+                [("tenant_id", 1), ("sequence", 1)], unique=True))
+            tc.portal.call(lambda: op_db.audit_events.create_index([("event_id", 1)], unique=True))
+            try:
+                from app.services import client_acts as svc
+                tc.portal.call(lambda: svc.ensure_indexes(op_db))
+            except ImportError:
+                pass
         # The W0-04 unique indexes of the key registry, as in a bootstrapped tenant.
         tc.portal.call(lambda: op_db.audit_idempotency.create_index([("id", 1)], unique=True))
         tc.portal.call(lambda: op_db.audit_idempotency.create_index(
@@ -572,6 +582,29 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                     svc.guard_offer_family = original
                 return {"act": res, "fired": not state["armed"], "acted_LV1": acts_on("LV1")}
             scenario("version_race", version_race)
+            # 30. ACT77-01: a FRESH tenant (no client_act_line_totals, no org_counters yet):
+            #     10 concurrent first acts — no 500 from the implicit collection creation
+            def fresh_tenant():
+                def drop():
+                    # every collection the act transaction writes; none exists in a new tenant
+                    for name in ("client_act_line_totals", "org_counters", "client_acts",
+                                 "audit_events"):
+                        tc.portal.call(lambda: op_db.drop_collection(name))
+                drop()
+                # lines of three different offers: the offer-family guard (FG-123) does not
+                # serialise them, so they meet at the implicit collection creation
+                mix = [("L1", 1), ("LX", 1), ("LD", 1)]
+                small = concurrent([act_body(line(*mix[n % 3])) for n in range(10)])
+                small_acted = acts_on("L1") + acts_on("LX") + acts_on("LD")
+                restore()
+                drop()
+                big = concurrent([act_body(line("L1", 10)) for _ in range(10)])
+                out = {"small": small, "small_acted": small_acted, "big": big,
+                       "big_acted": acts_on("L1")}
+                restore()
+                reindex()               # the dropped collections lost their indexes
+                return out
+            scenario("fresh_tenant", fresh_tenant)
             # 24. the answer shows contracted / acted / remaining per line
             scenario("line_view", lambda: post_act(act_body(line("L1", 3))))
             results["modes"][mode] = res
@@ -945,6 +978,17 @@ def test_a_version_accepted_during_the_act_transaction_blocks_the_act(r):
     assert vr["act"]["status"] == 409, vr["act"]
     assert vr["act"]["error_code"] == "OFFER_VERSION_SUPERSEDED"
     assert vr["acted_LV1"] == 0.0
+
+
+def test_a_fresh_tenant_takes_concurrent_first_acts_without_errors(r):
+    """ACT77-01: the collections are created outside the act transaction."""
+    f = r["fresh_tenant"]
+    assert [x["status"] for x in f["small"]] == [201] * 10, f["small"]
+    assert len({x["act_number"] for x in f["small"]}) == 10, f["small"]
+    assert f["small_acted"] == 10.0
+    statuses = sorted(x["status"] for x in f["big"])
+    assert statuses == [201] + [409] * 9, f["big"]
+    assert f["big_acted"] == 10.0
 
 
 # ── correction ─────────────────────────────────────────────────────────────────────

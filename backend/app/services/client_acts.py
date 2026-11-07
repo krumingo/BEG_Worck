@@ -60,7 +60,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from pymongo import ReturnDocument
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import CollectionInvalid, DuplicateKeyError, OperationFailure, PyMongoError
 
 from app.audit.idempotency import IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_STARTED, request_fingerprint
 from app.permissions.workflow import RecoverableWrite
@@ -496,7 +496,38 @@ async def next_act_number(tenant: TenantData, session) -> str:
     return "ACT-%04d" % int(doc["value"])
 
 
+#: Every collection the act transaction writes. MongoDB creates a missing collection
+#: implicitly inside a transaction, and concurrent first writes then fail with
+#: "namespace … is already in use" (ACT77-01). So they are created OUTSIDE it.
+TXN_COLLECTIONS = ("client_acts", TOTALS, "org_counters", "audit_events")
+
+
+async def ensure_collections(database) -> None:
+    """Create the missing transaction collections (and the act indexes) outside any
+    transaction. Idempotent; one ``listCollections`` round trip when all exist. Called at
+    startup (``ensure_indexes``) and before every act write — a new tenant database
+    (database-per-tenant) gets them on its first act."""
+    present = set(await database.list_collection_names(
+        filter={"name": {"$in": list(TXN_COLLECTIONS)}}))
+    missing = [name for name in TXN_COLLECTIONS if name not in present]
+    for name in missing:
+        try:
+            await database.create_collection(name)
+        except CollectionInvalid:
+            pass                                    # created concurrently — fine
+        except OperationFailure as exc:
+            if exc.code != 48:                      # NamespaceExists
+                raise
+    if "client_acts" in missing:
+        await _act_indexes(database)
+
+
 async def ensure_indexes(database) -> None:
+    await ensure_collections(database)
+    await _act_indexes(database)
+
+
+async def _act_indexes(database) -> None:
     """Unique act number per tenant for counter-numbered acts (pre-ACT-01 duplicates, if
     any, stay as they are and are reported, never rewritten)."""
     await database.client_acts.create_index(
@@ -664,8 +695,12 @@ def _totals(lines: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 # ═══════════════════════════════════════════════════════════════════ transactions
 async def _run(database, body):
-    """One transaction; a duplicate on the audit chain sequence (a concurrent append) is
-    retried like a write conflict. A deployment without transactions is refused (503)."""
+    """One transaction, at most MAX_TXN_ATTEMPTS times. Retried: a duplicate on the audit
+    chain sequence (a concurrent append) and any error the server labels
+    TransientTransactionError that escaped the driver's own retry (ACT77-01). The
+    transaction collections are created before, outside it. A deployment without
+    transactions is refused (503)."""
+    await ensure_collections(database)
     last: Optional[BaseException] = None
     for _attempt in range(MAX_TXN_ATTEMPTS):
         try:
@@ -676,6 +711,11 @@ async def _run(database, body):
         except DuplicateKeyError as exc:
             pattern = (getattr(exc, "details", None) or {}).get("keyPattern") or {}
             if set(pattern) == {"tenant_id", "sequence"}:
+                last = exc
+                continue
+            raise
+        except PyMongoError as exc:
+            if exc.has_error_label("TransientTransactionError"):
                 last = exc
                 continue
             raise
