@@ -1664,8 +1664,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
-| #73 LAB-01 | `d0aa09a` | **PASS** (LAB-01-G: no automatic netting, receivable per paid source line, never superseded; F2 closed) | 2026-11-07 |
-| #74 OH-01 | `240cbcf` | **PASS** (FG-86/87/88); notes: OH01-3 #69-merge guidance wrong for the SEC-01 real-Mongo test (createIndex $cmd, not 428); D6 overlap doubles (Krum) | 2026-11-07 |
+| #73 LAB-01 | `6763970` | **FINDINGS**: LAB01H-1 HIGH/BLOCKING (R36 self-correction: SM/Admin raise own APPROVED hours, stays APPROVED) | 2026-11-07 |
+| #74 OH-01 | `6c5c5cf` | **PASS** (D6 overlap refused, OH01-3 closed: indexes at startup/onboarding; #69 merge + results diff → SEC-01 30/30) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2723,3 +2723,111 @@ Gates:
 | merge-tree #69 / #70 / #71 | known conflicts |
 
 Note, low: a receivable is recorded only when a later run's preview sees the paid line; nothing records it at the moment the source run is paid. G3 shows a run cannot itself pay above its remaining, so the only way to get one is later re-pricing. That is acceptable.
+
+
+## main @ `0f870c3` — 2026-11-07 ~08:30 UTC — #56 merged (Codex PASS, Krum approved)
+
+- The merge commit `0f870c3` has parents `35ae10b` (old main) and `3234446` (the #56 head I audited, PASS).
+- `git merge-tree --write-tree 35ae10b 3234446` gives tree `0d011de9…`, **identical** to `0f870c3^{tree}`. Main is exactly the clean merge of the audited head, with nothing added.
+
+Gates on main `0f870c3`:
+
+| Gate | Result |
+|---|---|
+| W0 | 1085/15/50, the same 15 as `fail_56.txt` |
+| A2C | 0/211 |
+| A1 | 0/426 |
+| R0, real Mongo | **814** |
+| `tests/test_auth_0*.py`, real Mongo | **122 passed** |
+
+The idempotency-race, w004 and #73/#74 probes target trees with #72/#73/#74 and will be re-run when those merge main.
+
+merge-tree of the open PR heads against main `0f870c3`:
+
+| PR | Result |
+|---|---|
+| #69, #70, #71 | clean |
+| #55 `f0d86ab` | `tenancy/data_access.py`, A2B inventory |
+| #72 `8ac194a` | `audit/store.py` (the known #56 recipe), A2B inventory |
+| #73 `6763970` | `tenancy/ownership.py` |
+| #74 `6c5c5cf` | `server.py` (startup index blocks: keep both, trivial) |
+
+
+## #74 OH-01 @ `6c5c5cf` — 2026-11-07 ~08:35 UTC — PASS (D6 and OH01-3 closed)
+
+Delta `240cbcf..6c5c5cf` (2 commits):
+- **D6:** `_refuse_overlap` refuses a compute whose period overlaps an ACTIVE snapshot of a **different** period (409 `PERIOD_OVERLAP`). It runs before the key reservation and again under a new org-wide `overhead_lock(COMPUTE_LOCK)`, taken before the period lock. Allocate takes only the period lock, so there is no ordering conflict, and both locks are non-blocking (409).
+- **OH01-3:** `ensure_overhead_indexes` (allocation `version_key` unique sparse, `active_period_key` unique sparse, and the `overhead_period_locks` collection) runs at **startup** (`server.py`) and at **tenant onboarding**, never on a request path. `overhead_period_locks` is classified ORG_KEYED.
+
+Probes (O7 updated; new **O11**), real Mongo RS:
+
+| Probe | Result |
+|---|---|
+| O1/O2/O5/O6/O8/O9 | unchanged, all pass |
+| **O7** month then half-month | **409 `PERIOD_OVERLAP`**, 1 snapshot in the database. **D6 closed (PROVED)** |
+| **O11**: Oct 1–31, Oct 1–15 and Oct 10–Nov 10 computed in parallel × 5 rounds | each round 1×200 + 2×409 `ALLOCATION_BUSY`; **exactly 1 active snapshot** every round |
+| O10 FG-87 | move-in/used/archived PUT → 409; accepted edit audited. The race was [200, 200, 200, 200] this run: all PUTs landed before the archive (a PUT after archive is conditional → 409); final archived. Consistent |
+
+Trial merge with #69 `7300864`:
+- `overhead.py` resolved as the HANDOFF says (`_sec01` + `idempotency_key`); matrix from one side.
+- OH-01: 102 passed.
+- SEC-01 without the results diff: 29 + 1 failed (expected: committed `results.json` predates OH-01).
+- After applying `docs/evidence/OH-01/merge69_sec01_c01_results.diff`: **30/30 passed**.
+- Fresh run: compute (off, Owner, A) writes `op.audit_events, op.audit_logs, op.overhead_period_locks, op.overhead_snapshots` with written_orgs **`['A']`**. There is no `$cmd` any more. **OH01-3 closed (PROVED).**
+
+Gates on `6c5c5cf`:
+
+| Gate | Result |
+|---|---|
+| OH-01 tests | **102 passed** |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | 814 |
+| PM-01, real Mongo | 6 passed |
+
+Notes, low:
+- Startup creates the indexes on the legacy operational `db`, the same pattern as `project_team.ensure_indexes(db)`. New tenants get them at onboarding. Dedicated tenant databases onboarded **before** this change need a one-off bootstrap run, or have no OH-01 unique indexes; the locks and CAS still protect them.
+- D6 refuses only; existing overlapping legacy data is not migrated. Switching from monthly to quarterly needs a supersede/retire path (Krum).
+
+
+## #73 LAB-01-H @ `6763970` — 2026-11-07 ~08:40 UTC — FINDINGS (1 blocking)
+
+Delta `d0aa09a..6763970` (1 commit): R36 (Krum, LAB-01 Addendum A).
+- `report_corrections.authorize_report_edit` returns:
+  - **CORRECTOR** for Admin/Owner, or for a SiteManager who `can_manage_project` on every project of the report (old and new entries);
+  - **AUTHOR** for the worker/creator, only on DRAFT/REJECTED;
+  - otherwise 400 or 403.
+  - A report with `payroll_status` paid/batched → 409 for everyone.
+- Every correction voids the quantity approvals first (FG-72) and writes a FLOW-014 AuditEvent with before/after.
+- Applies to PUT `/daily-reports`, PUT `/technician/draft`, POST batch-save.
+- Test edits: FG-73 (Admin now allowed, audited) and FG-79 (author on APPROVED: 409 → 400). Consistent with R36.
+
+### LAB01H-1 — HIGH, BLOCKING, PROVED: a corrector can raise the hours of their **own** approved report
+
+Probe `docs/audit/probes/lab01/test_probe_lab01h_r36.py` (the PR's own R36 harness). Report of worker X on project P, APPROVED by `admin`, 8 h. X edits it to 12 h:
+
+| X | Result |
+|---|---|
+| `sm-p` (SiteManager of P) | **200**, total_hours **12**, status **APPROVED**, `approved_by` still `admin`, `corrected_by` `sm-p` |
+| `admin` | 200, the same |
+
+- The report stays APPROVED, so payroll counts the 12 h. Hourly/daily pay is computed from APPROVED lines (LAB-01); only akord quantity approvals are voided.
+- Nobody but X approved the 4 extra hours, and `approved_by` names someone who approved 8.
+- This is a self-approval path (CLAUDE.md §8/§16: no bypass of Approval; LAB-01 already forbids self-approval of quantities, `labor_cost.py`).
+- Fix options, Krum to choose:
+  - (a) a corrector may not correct a report where they are the worker/author (`employee_id`/`created_by`/`worker_id`): 403;
+  - (b) correcting an APPROVED report returns it to SUBMITTED (or keeps APPROVED only when another approver confirms);
+  - (c) at least clear or replace `approved_by` and raise a DQ alert for self-corrections.
+- Add a test for each endpoint.
+
+Gates on `6763970`:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*` | 78 passed, 1 skipped (fg85, needs #72) |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/207 |
+| A1 | 0/420 |
+
+R0 was not re-run on `6763970` (last run 814 on `d0aa09a`); re-run at the fix round. merge-tree vs main: conflict in `tenancy/ownership.py`.

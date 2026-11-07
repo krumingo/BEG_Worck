@@ -187,7 +187,13 @@ def test_o7_overlapping_periods(monkeypatch):
         cat = await _category(c)
         await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
         a = (await _compute(c, "2026-10-01", "2026-10-31")).json()
-        b = (await _compute(c, "2026-10-01", "2026-10-15")).json()
+        rb = await _compute(c, "2026-10-01", "2026-10-15")
+        if rb.status_code != 200:   # >= 6c5c5cf: D6 refused
+            n = await op.overhead_snapshots.count_documents({})
+            print("O7 overlapping compute:", rb.status_code, (rb.json().get("detail") or {}).get("error_code"), "snapshots in db", n)
+            assert rb.status_code == 409 and n == 1
+            return
+        b = rb.json()
         for s_ in (a, b):
             r = await c.post(f"/api/overhead/snapshots/{s_['id']}/allocate", json={"method": "PersonDays"},
                              headers=_h(key=_key()))
@@ -257,4 +263,26 @@ def test_o10_put_rules(monkeypatch):
         assert r_move.status_code == 409 and r_used.status_code == 409 and r_ok.status_code == 200
         assert ev and ev["structured_diff"]["amount"] == {"before": 50.0, "after": 55.0}
         assert r_arch.status_code == 409
+    _run(monkeypatch, "enforce", scenario)
+
+
+
+def test_o11_concurrent_overlapping_computes(monkeypatch):
+    """O11 D6 race: Oct 1-31 and Oct 1-15 computed in parallel (x5 rounds, fresh periods
+    per round) -> never two active overlapping snapshots."""
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], date="2026-10-10", amount=400.0)
+        bad = 0
+        for rnd in range(5):
+            y = 2030 + rnd
+            rs = await asyncio.gather(_compute(c, f"{y}-10-01", f"{y}-10-31"), _compute(c, f"{y}-10-01", f"{y}-10-15"),
+                                      _compute(c, f"{y}-10-10", f"{y}-11-10"))
+            act = await op.overhead_snapshots.find({"period_start": {"$regex": f"^{y}"}, "superseded_by": None},
+                                                   {"_id": 0, "period_start": 1, "period_end": 1}).to_list(None)
+            print("O11 round", rnd, "codes", [r.status_code for r in rs],
+                  [(r.json().get("detail") or {}).get("error_code") if r.status_code != 200 else "ok" for r in rs],
+                  "active", [(a["period_start"], a["period_end"]) for a in act])
+            bad += len(act) > 1
+        assert bad == 0
     _run(monkeypatch, "enforce", scenario)
