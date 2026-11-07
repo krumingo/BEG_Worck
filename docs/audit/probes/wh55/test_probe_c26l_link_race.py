@@ -81,9 +81,12 @@ async def test_crash_after_lock_leaves_nothing(canonical_mongo_db, allow_always_
         return await orig(tenant_db, tenant_collection, inp, session=session)
     monkeypatch.setattr(CommandService, "_check_invoice_line_delivery", staticmethod(crash))
     r1 = await _one(run, P_LOC, 100)
-    locks = await db["warehouse_ledger_counters"].count_documents({"name": "invoice_line_lock"})
+    # since Addendum L the lock document is pre-created OUTSIDE the transaction (value 0):
+    # what must roll back is the in-transaction bump
+    locks = sum(int(d.get("value") or 0) for d in await db["warehouse_ledger_counters"].find(
+        {"name": "invoice_line_lock"}, {"_id": 0, "value": 1}).to_list(None))
     rows = await db["warehouse_transactions"].count_documents({"invoice_line_id": IL})
-    print("CRASH →", r1, "lock docs", locks, "linked rows", rows)
+    print("CRASH →", r1, "lock bumps kept", locks, "linked rows", rows)
     assert r1 != "ok" and locks == 0 and rows == 0
     r2 = await _one(run, P_LOC, 101)
     rows = await db["warehouse_transactions"].count_documents({"invoice_line_id": IL})

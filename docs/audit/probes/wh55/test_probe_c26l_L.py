@@ -66,5 +66,5 @@ async def test_u1_other_unit_direct_after_warehouse_path(canonical_mongo_db, all
         costs.append((c["total_cost"], sorted(w["code"] for w in c["path_b_warnings"])))
     print("U1: before %s | direct 10 'pcs' linked to a 10 'bag' line → %s | linked rows %d | P %s" % (
         before, res, linked, costs))
-    assert res != "accepted" or all(t == pytest.approx(100.0) for t, _ in costs), \
+    assert res != "accepted" and all(t == pytest.approx(100.0) for t, _ in costs), \
         "U1: the same lot counted again through another unit: %s" % costs
