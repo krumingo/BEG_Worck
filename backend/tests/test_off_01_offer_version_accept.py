@@ -843,3 +843,97 @@ def test_18_every_write_with_derived_totals_is_one_cas(monkeypatch, backend, mod
         r = await c.put("/api/offers/t-sent", headers=hdr("admin-a"), json={"vat_percent": 9})
         assert r.status_code == 403, r.text
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════ Addendum B (07.11) — FLOW Guard pass 14
+def test_19_a_version_with_a_newer_one_in_its_family_is_never_accepted(monkeypatch, backend, mode):
+    """FG-135: a legacy pair (v1 Sent 1200, v2 Sent 1500, v1 never marked superseded) — the
+    client accepted v1 by its old link. Any version that has a newer version (a child) in its
+    family → 409 OFFER_VERSION_SUPERSEDED, whatever the child's status. No data migration."""
+    async def scenario(c, op):
+        for child_status in ("Sent", "Draft", "Rejected", "Cancelled"):
+            p, k = "lp-" + child_status, "lc-" + child_status
+            tok = ("tp" + child_status + "q" * 24)[:24]
+            await op.offers.insert_one(offer_doc(p, token=tok))
+            await op.offers.insert_one(offer_doc(k, version=2, parent=p, status=child_status,
+                                                 total=1500.0))
+            before = await snap(op)
+            r = await accept(c, p)
+            assert r.status_code == 409 and code(r) == "OFFER_VERSION_SUPERSEDED", (child_status, r.text)
+            for action in ("approve", "reject", "revision"):
+                r = await respond(c, tok, action)
+                assert r.status_code == 409 and code(r) == "OFFER_VERSION_SUPERSEDED", (action, r.text)
+                assert k not in r.text and ORG_A not in r.text
+            r = await new_version(c, p)                 # one head per chain
+            assert r.status_code == 409 and code(r) == "OFFER_VERSION_SUPERSEDED", r.text
+            after = await snap(op)
+            for coll in ("offers", "offer_events", "audit_events", "audit_logs"):
+                assert after[coll] == before[coll], (child_status, coll)
+            assert (await get(op, p))["status"] == "Sent"          # legacy row untouched
+        # the newest version itself is accepted normally
+        r = await accept(c, "lc-Sent")
+        assert r.status_code == 200, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_20_delete_racing_send_never_deletes_a_sent_offer(monkeypatch, any_backend, mode):
+    """FG-136: DELETE ∥ send hard-deleted a just-sent offer and send answered 500."""
+    async def scenario(c, op):
+        for i in range(ROUNDS):
+            oid = "ds-%d" % i
+            await op.offers.insert_one(offer_doc(oid, status="Draft"))
+            s, d = await asyncio.gather(c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")),
+                                        c.delete("/api/offers/" + oid, headers=hdr("admin-a")))
+            assert s.status_code in (200, 404, 409) and d.status_code in (200, 409), (
+                i, s.status_code, s.text, d.status_code, d.text)
+            doc = await get(op, oid)
+            if s.status_code == 200:
+                assert doc is not None and doc["status"] == "Sent", i
+                assert d.status_code == 409 and code(d) == "OFFER_IN_USE"
+            else:
+                assert d.status_code == 200 and doc is None
+                assert not await op.offer_versions.count_documents({"offer_id": oid})
+                assert not await op.offer_events.count_documents({"offer_id": oid})
+    run(monkeypatch, any_backend, mode, scenario)
+
+
+def test_21_signed_pdf_needs_its_file_and_verified_email_its_proof(monkeypatch, backend, mode):
+    """FG-137: signed_pdf without evidence_file_id was accepted (200)."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        before = await snap(op)
+        r = await accept(c, "o1", body={"approval_method": "signed_pdf"})
+        assert r.status_code == 422 and code(r) == "EVIDENCE_FILE_REQUIRED", r.text
+        r = await accept(c, "o1", body={"approval_method": "verified_email",
+                                        "evidence_file_id": "file-prj"})
+        assert r.status_code == 422 and code(r) == "VERIFIED_EMAIL_NOT_SUPPORTED", r.text
+        after = await snap(op)
+        for coll in ("offers", "audit_events", "audit_logs"):
+            assert after[coll] == before[coll], coll
+        r = await accept(c, "o1", body={"approval_method": "signed_pdf", "evidence_file_id": "file-prj"})
+        assert r.status_code == 200, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_22_a_closed_link_shows_no_offer_content(monkeypatch, backend, mode):
+    """FG-138 (first part): a revoked / superseded link returned the whole old offer with prices.
+    Now: a neutral answer, no title, lines, prices or totals."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o-sup", token=TOKEN))
+        await new_version(c, "o-sup")
+        await op.offers.insert_one(offer_doc("o-can", token="tcan" + "k" * 20))
+        await cancel(c, "o-can")
+        await op.offers.insert_one(offer_doc("o-leg", token="tleg" + "k" * 20))
+        await op.offers.insert_one(offer_doc("o-leg2", version=2, parent="o-leg"))
+        for tok, want in ((TOKEN, "OFFER_VERSION_SUPERSEDED"), ("tcan" + "k" * 20, "OFFER_NOT_OPEN"),
+                          ("tleg" + "k" * 20, "OFFER_VERSION_SUPERSEDED")):
+            g = await c.get("/api/offers/review/" + tok)
+            assert g.status_code == 410, g.text
+            assert code(g) == want
+            for leak in ("Плочки", "1200", "1000", "Баня", "lines", "total", "OFF-0001", ORG_A):
+                assert leak not in g.text, (tok, leak)
+        # an open link still shows the offer
+        await op.offers.insert_one(offer_doc("o-open", token="topn" + "k" * 20))
+        g = await c.get("/api/offers/review/" + "topn" + "k" * 20)
+        assert g.status_code == 200 and g.json()["total"] == 1200.0
+    run(monkeypatch, backend, mode, scenario)
