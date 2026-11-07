@@ -1664,7 +1664,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
-| #73 LAB-01 | `c4ddd33` | **PASS** (LAB-01-E FG-78/79/80 + R29 on POST /pay-runs); **merge order: #72 before #73** (R29 race-safe only with #72 indexes) | 2026-11-07 |
+| #73 LAB-01 | `25f1d6c` | **PASS** (LAB-01-F FG-84 source-keyed corrections; FG-85 verified on #72 merge; fail-closed 503 without the index); note F2 (draft netting supersedes) for Krum | 2026-11-07 |
 | #74 OH-01 | `09409f0` | **PASS**: OH01-1 and OH01-2 closed (snapshot lock + CAS + unique partial index; single-winner archive); #69 harness fixed | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -2587,3 +2587,36 @@ Residual notes, low:
 - The 30 s stale-lock takeover means an allocation running longer than 30 s could be overlapped. The CAS on the version still prevents a duplicate version.
 - Legacy rows without `allocation_version` are outside the unique index (as documented).
 - #70 still conflicts on `idempotency.js`.
+
+
+## #73 LAB-01-F @ `25f1d6c` — 2026-11-07 ~07:30 UTC — PASS
+
+Delta `c4ddd33..25f1d6c` (fast-forward, 1 commit), audited at the orchestrator's request:
+- **FG-84:** a correction's key is now `overpayment:employee:<id>:source:paid_pay_run_lines:<sorted paid run ids>` (`payroll_corrections.py:_key`). `generate_pay_run` records `previously_paid_sources` (each paid line: run id, number, period, amount) and `considered_pay_run_ids` on the row; both are frozen on create and update.
+  - Supersede: a pending correction of the employee whose source runs are all inside this run's considered runs, and which is not the current key, is superseded.
+  - This closes the c4ddd33 suspicion about overlapping periods.
+- **FG-85:** `create_pay_run` catches #72's `IdempotencyUnprotected` and answers **503** with nothing written (fail closed). The concurrency test is skipped on #73 alone and runs on the merge with #72.
+
+New probe `docs/audit/probes/lab01/test_probe_lab01f_sources.py`, plus P4 added to `test_probe_lab01e_payrun_r29.py`:
+
+| Case | Tree | Result |
+|---|---|---|
+| F1: week, 3-week and month runs over one 60 overpayment (mongomock + real) | `25f1d6c` | **1 record**, 60, sources `[run-old]`, 3 `pay_run_ids`. PROVED |
+| F2: a DRAFT monthly run where later unpaid earnings (120) absorb the 60 (earned 720, paid 660, remaining 60, no item) | `25f1d6c` | the pending correction is **superseded** by the draft; the next weekly run reopens it (pending, v3, still 1 record) |
+| P1: 8 concurrent same-key POSTs | merge with #72 `8ac194a` | 1 run, 1×200 + 7×409 |
+| P4: `audit_idempotency` with duplicate ids (unique index cannot be built) | merge with #72 | **503** "Idempotency registry is not protected; nothing written", 0 runs. PROVED |
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_lab_01*` on `25f1d6c` | 51 passed, 1 skipped (`test_fg85`, needs #72) |
+| `tests/test_lab_01*` on the merge with #72 | **52 passed** (`test_fg85` green) |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0 | 814 |
+| merge-tree main / #72 / #74 | clean |
+| merge-tree #69 / #70 / #71 | known conflicts (`labor_smr.py`; `project_pnl.py`; `all_reports.py` + `labor_smr.py` + A2B inventory) |
+
+Note for Krum (business, not blocking), F2: a **draft** run that nets a salary overpayment against later unpaid earnings of the same person supersedes the pending correction. It is recoverable: the next run that sees the overpayment reopens it. But while only the draft exists, the overpayment is not visible as a pending correction. Krum decides whether superseding should happen only on confirm, or whether netting against later salary is acceptable at all (CLAUDE.md §7: no automatic netting of receivables and payables).

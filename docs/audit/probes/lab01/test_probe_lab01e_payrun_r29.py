@@ -36,3 +36,16 @@ def test_p3_period_edit_orphan(monkeypatch):
         recs = await op.payroll_corrections.find({}, {"_id": 0}).to_list(10)
         print("P3 patch", p.status_code, [(x["period_start"], x["status"], x.get("pay_run_ids")) for x in recs])
     run(monkeypatch, scenario, "real")
+
+
+def test_p4_unprotected_registry_fails_closed(monkeypatch):
+    """P4 (LAB-01-F, needs #72): duplicate ids in audit_idempotency so the unique index cannot be
+    built -> POST /pay-runs must answer 503 and write no run."""
+    async def scenario(c, op):
+        await _old_run(op)
+        await op.audit_idempotency.insert_many([{"id": "dup", "x": 1}, {"id": "dup", "x": 2}])
+        r = await c.post("/api/pay-runs", json=_body(), headers=dict(_token(), **{"Idempotency-Key": "p4"}))
+        n = await op.pay_runs.count_documents({"id": {"$ne": "run-old"}})
+        print("P4", r.status_code, r.text[:120], "runs", n)
+        assert n == 0
+    run(monkeypatch, scenario, "real")
