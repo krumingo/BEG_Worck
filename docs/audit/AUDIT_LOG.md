@@ -4682,3 +4682,26 @@ Runtime `b76c` (rs0; the machine restarted again ~22:34) is running.
 
 - The merge with main `2ec61f3` is clean. The merge with #69 `da47777` touches `run_meta` and the `idempotency.js` pair (text only).
 - Clean runs write only legacy `audit_logs` (no canonical AuditEvent). This is declared debt in SUB-ADV-01 README:88, same as #69.
+
+### #76 @ `b313933` (F-76-02 follow-up: payment audit `entry_id`) — **full PASS, SUBADV76-01 resolved**
+
+Probe with `PROBE_FG114=1 PROBE_F76=1` × 3 modes: **FAILS none**.
+
+| Case | Result |
+|---|---|
+| **S11** advance / deduction / **payment** × crash after `log_audit` / `_confirm_advance` / `_confirm_deduction` / `_refresh_package_totals` + 2 same-key retries | `audit_logs` **+1** every time (= clean) |
+| S10a–c (F-76-01) | still exact: 5000.00 boundary → 409; concurrent → exactly 5 |
+| S1–S9 | pass |
+
+| Gate | Result |
+|---|---|
+| subadv + sec01 | 38 |
+| PAY | 630 |
+| W0 (incl. the A2B writer guard on `audit.py`) | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main `2ec61f3` is clean. I updated PR comment 6714054560 to "resolved".
+
+- **Pending:** the same fix on #69 (its programmer is applying it). Re-run the S11 payment case on the new #69 head.
