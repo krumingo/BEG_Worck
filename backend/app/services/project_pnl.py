@@ -110,7 +110,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     # ── f. OVERHEAD ────────────────────────────────────────────────
     allocs = await tenant.project_overhead_allocations.find(
-        {"org_id": org_id, "project_id": project_id}, {"_id": 0, "allocated_amount": 1}
+        {"org_id": org_id, "project_id": project_id, "superseded_by": None},  # OH-01: current version
+        {"_id": 0, "allocated_amount": 1}
     ).to_list(50)
     overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
 

@@ -1,7 +1,7 @@
 """
 Routes - Dashboard Stats + Overhead (M9) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone, date as date_type
 import uuid
@@ -18,6 +18,9 @@ from ..models.overhead import (
     OverheadSnapshotCompute, OverheadAllocateRequest
 )
 from app.tenancy.data_access import TenantData
+from app.services.overhead_lifecycle import (  # OH-01
+    KeyedWrite, NOT_ARCHIVED, STATUS_ARCHIVED, audit_overhead_event, require_key,
+)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -40,6 +43,89 @@ def check_overhead_access(user: dict, write: bool = False) -> bool:
     if user["role"] == "SiteManager" and not write:
         return True
     return False
+
+
+# ── OH-01: archive instead of delete (CLAUDE.md §2.9, FLOW-024) ────
+
+def _not_archived(query: dict, include_archived: bool) -> dict:
+    """A list hides archived records unless asked; a legacy record without status is active."""
+    if not include_archived:
+        query["status"] = NOT_ARCHIVED
+    return query
+
+
+async def _category_usage(tenant: TenantData, cat_id: str) -> dict:
+    """A category is used when any overhead cost (archived ones too) names it."""
+    n = await tenant.overhead_costs.count_documents({"category_id": cat_id})
+    return {"overhead_costs": n} if n else {}
+
+
+async def _cost_usage(tenant: TenantData, cost: dict) -> dict:
+    """A cost is used when a computed snapshot's period covers its date: the snapshot's
+    total was summed from it (snapshots keep totals, not cost ids)."""
+    d = cost.get("date_incurred")
+    if not d:
+        return {}
+    snaps = await tenant.overhead_snapshots.find(
+        {"period_start": {"$lte": d}, "period_end": {"$gte": d}}, {"_id": 0, "id": 1}
+    ).to_list(None)
+    return {"overhead_snapshots": sorted(s["id"] for s in snaps)} if snaps else {}
+
+
+async def _asset_usage(tenant: TenantData, asset: dict) -> dict:
+    """An asset is used when any snapshot was computed after it existed: its
+    amortization may be inside that total (conservative — an inactive asset counts too)."""
+    snaps = await tenant.overhead_snapshots.find(
+        {"period_start": {"$exists": True},
+         "computed_at": {"$gte": asset.get("created_at") or ""}}, {"_id": 0, "id": 1}
+    ).to_list(None)
+    return {"overhead_snapshots": sorted(s["id"] for s in snaps)} if snaps else {}
+
+
+async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str,
+                          existing: dict, usage: dict, reason: Optional[str],
+                          idempotency_key: Optional[str]) -> dict:
+    """409 when used or already archived; otherwise status=archived (who/when/why).
+    Nothing is ever deleted. Idempotent under the request's Idempotency-Key (R29)."""
+    record_id = existing["id"]
+    kw = await KeyedWrite.begin(db, user, "overhead.%s.archive" % entity_type, idempotency_key,
+                                {"id": record_id, "reason": reason})
+    if kw.replay_id:
+        doc = await coll.find_one({"id": kw.replay_id}, {"_id": 0})
+        return {"archived": True, "deleted": False, "id": kw.replay_id, "record": doc}
+    if existing.get("status") == STATUS_ARCHIVED:
+        raise await kw.refuse(HTTPException(status_code=409, detail={
+            "error_code": "ALREADY_ARCHIVED", "message": "Записът вече е архивиран"}))
+    if usage:
+        raise await kw.refuse(HTTPException(status_code=409, detail={
+            "error_code": "OVERHEAD_RECORD_IN_USE",
+            "message": "Записът е използван и не може да бъде изтрит или архивиран",
+            "used_by": usage}))
+    async with kw:
+        now = datetime.now(timezone.utc).isoformat()
+        archive = {
+            "status": STATUS_ARCHIVED,
+            "archived_at": now,
+            "archived_by_user_id": user["id"],
+            "archived_by_name": user.get("name", user.get("email", "")),
+            "archive_reason": reason,
+            "updated_at": now,
+        }
+        await coll.update_one({"id": record_id, "status": NOT_ARCHIVED}, {"$set": archive})
+
+        async def _audit():
+            await audit_overhead_event(
+                db, user, action="overhead.%s.archived" % entity_type, entity_type=entity_type,
+                entity_id=record_id, reason=reason or "archived instead of delete (OH-01)",
+                structured_diff={"status": {"before": existing.get("status"),
+                                            "after": STATUS_ARCHIVED}},
+                idempotency_key=kw.key)
+            await log_audit(user["org_id"], user["id"], user["email"], "archived", entity_type,
+                            record_id, {"reason": reason})
+        await kw.wf.step("audit", _audit)
+        kw.result_id = record_id
+    doc = await coll.find_one({"id": record_id}, {"_id": 0})
+    return {"archived": True, "deleted": False, "id": record_id, "record": doc}
 
 
 # ── Dashboard Stats ────────────────────────────────────────────────
@@ -81,11 +167,12 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
 # ── Overhead Categories ────────────────────────────────────────────
 
 @router.get("/overhead/categories")
-async def list_overhead_categories(user: dict = Depends(require_m9)):
+async def list_overhead_categories(include_archived: bool = False, user: dict = Depends(require_m9)):
     tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
-    cursor = tenant.overhead_categories.find({"org_id": user["org_id"]}, {"_id": 0})
+    query = _not_archived({"org_id": user["org_id"]}, include_archived)
+    cursor = tenant.overhead_categories.find(query, {"_id": 0})
     return await cursor.to_list(None)
 
 
@@ -125,15 +212,23 @@ async def update_overhead_category(cat_id: str, data: OverheadCategoryUpdate, us
 
 
 @router.delete("/overhead/categories/{cat_id}")
-async def delete_overhead_category(cat_id: str, user: dict = Depends(require_m9)):
+async def delete_overhead_category(
+    cat_id: str,
+    reason: Optional[str] = None,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_m9),
+):
+    """OH-01: never deleted — 409 when used, otherwise archived."""
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    result = await tenant.overhead_categories.delete_one({"id": cat_id, "org_id": user["org_id"]})
-    if result.deleted_count == 0:
+    require_key(idempotency_key)
+    existing = await tenant.overhead_categories.find_one({"id": cat_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
-    await log_audit(user["org_id"], user["id"], user["email"], "deleted", "overhead_category", cat_id, {})
-    return {"deleted": True}
+    usage = await _category_usage(tenant, cat_id)
+    return await _archive_record(tenant, tenant.overhead_categories, user, "overhead_category",
+                                 existing, usage, reason, idempotency_key)
 
 
 # ── Overhead Costs ─────────────────────────────────────────────────
@@ -143,12 +238,13 @@ async def list_overhead_costs(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
     category_id: Optional[str] = None,
+    include_archived: bool = False,
     user: dict = Depends(require_m9)
 ):
     tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
-    query = {"org_id": user["org_id"]}
+    query = _not_archived({"org_id": user["org_id"]}, include_archived)
     if date_from and date_to:
         query["date_incurred"] = {"$gte": date_from, "$lte": date_to}
     elif date_from:
@@ -222,25 +318,34 @@ async def update_overhead_cost(cost_id: str, data: OverheadCostUpdate, user: dic
 
 
 @router.delete("/overhead/costs/{cost_id}")
-async def delete_overhead_cost(cost_id: str, user: dict = Depends(require_m9)):
+async def delete_overhead_cost(
+    cost_id: str,
+    reason: Optional[str] = None,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_m9),
+):
+    """OH-01: never deleted — 409 when a snapshot used it, otherwise archived."""
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    result = await tenant.overhead_costs.delete_one({"id": cost_id, "org_id": user["org_id"]})
-    if result.deleted_count == 0:
+    require_key(idempotency_key)
+    existing = await tenant.overhead_costs.find_one({"id": cost_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not existing:
         raise HTTPException(status_code=404, detail="Cost not found")
-    await log_audit(user["org_id"], user["id"], user["email"], "deleted", "overhead_cost", cost_id, {})
-    return {"deleted": True}
+    usage = await _cost_usage(tenant, existing)
+    return await _archive_record(tenant, tenant.overhead_costs, user, "overhead_cost",
+                                 existing, usage, reason, idempotency_key)
 
 
 # ── Overhead Assets ────────────────────────────────────────────────
 
 @router.get("/overhead/assets")
-async def list_overhead_assets(active_only: bool = True, user: dict = Depends(require_m9)):
+async def list_overhead_assets(active_only: bool = True, include_archived: bool = False,
+                               user: dict = Depends(require_m9)):
     tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
-    query = {"org_id": user["org_id"]}
+    query = _not_archived({"org_id": user["org_id"]}, include_archived)
     if active_only:
         query["active"] = True
     cursor = tenant.overhead_assets.find(query, {"_id": 0}).sort("purchase_date", -1)
@@ -299,15 +404,23 @@ async def update_overhead_asset(asset_id: str, data: OverheadAssetUpdate, user: 
 
 
 @router.delete("/overhead/assets/{asset_id}")
-async def delete_overhead_asset(asset_id: str, user: dict = Depends(require_m9)):
+async def delete_overhead_asset(
+    asset_id: str,
+    reason: Optional[str] = None,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_m9),
+):
+    """OH-01: never deleted — 409 when a snapshot may hold its amortization, otherwise archived."""
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    result = await tenant.overhead_assets.delete_one({"id": asset_id, "org_id": user["org_id"]})
-    if result.deleted_count == 0:
+    require_key(idempotency_key)
+    existing = await tenant.overhead_assets.find_one({"id": asset_id, "org_id": user["org_id"]}, {"_id": 0})
+    if not existing:
         raise HTTPException(status_code=404, detail="Asset not found")
-    await log_audit(user["org_id"], user["id"], user["email"], "deleted", "overhead_asset", asset_id, {})
-    return {"deleted": True}
+    usage = await _asset_usage(tenant, existing)
+    return await _archive_record(tenant, tenant.overhead_assets, user, "overhead_asset",
+                                 existing, usage, reason, idempotency_key)
 
 
 # ── Overhead Snapshots ─────────────────────────────────────────────
@@ -332,13 +445,14 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
     # 1. Sum overhead costs in period
     costs_cursor = tenant.overhead_costs.find({
         "org_id": org_id,
-        "date_incurred": {"$gte": period_start, "$lte": period_end}
+        "date_incurred": {"$gte": period_start, "$lte": period_end},
+        "status": NOT_ARCHIVED,  # OH-01
     }, {"_id": 0})
     costs = await costs_cursor.to_list(None)
     total_costs = sum(c.get("amount", 0) for c in costs)
     
     # 2. Calculate asset amortization for all active assets
-    assets_cursor = tenant.overhead_assets.find({"org_id": org_id, "active": True}, {"_id": 0})
+    assets_cursor = tenant.overhead_assets.find({"org_id": org_id, "active": True, "status": NOT_ARCHIVED}, {"_id": 0})
     assets = await assets_cursor.to_list(None)
     total_amortization = 0
     for asset in assets:
@@ -434,17 +548,25 @@ async def get_overhead_snapshot(snapshot_id: str, user: dict = Depends(require_m
         raise HTTPException(status_code=404, detail="Snapshot not found")
     # Get allocations
     allocs = await tenant.project_overhead_allocations.find(
-        {"overhead_snapshot_id": snapshot_id}, {"_id": 0}
+        {"overhead_snapshot_id": snapshot_id, "superseded_by": None}, {"_id": 0}  # OH-01: current version
     ).to_list(None)
     snapshot["allocations"] = allocs
     return snapshot
 
 
 @router.post("/overhead/snapshots/{snapshot_id}/allocate")
-async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocateRequest, user: dict = Depends(require_m9)):
+async def allocate_overhead_to_projects(
+    snapshot_id: str,
+    data: OverheadAllocateRequest,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_m9),
+):
+    """OH-01 / FLOW-024: every allocation is a NEW version; the previous one stays with
+    ``superseded_by`` and no report reads it."""
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
+    require_key(idempotency_key)
     
     snapshot = await tenant.overhead_snapshots.find_one({"id": snapshot_id, "org_id": user["org_id"]}, {"_id": 0})
     if not snapshot:
@@ -456,9 +578,7 @@ async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocate
     total_overhead = snapshot["total_overhead"]
     method = data.method
     
-    # Delete existing allocations for this snapshot
-    await tenant.project_overhead_allocations.delete_many({"overhead_snapshot_id": snapshot_id})
-    
+    # OH-01: nothing is deleted here — the previous version is superseded below.
     allocations = []
     now = datetime.now(timezone.utc).isoformat()
     
@@ -553,28 +673,98 @@ async def allocate_overhead_to_projects(snapshot_id: str, data: OverheadAllocate
             }
             allocations.append(alloc)
     
-    if allocations:
-        await tenant.project_overhead_allocations.insert_many(allocations)
-    
-    await log_audit(user["org_id"], user["id"], user["email"], "allocated", "overhead_snapshot", snapshot_id, {
-        "method": method,
-        "project_count": len(allocations),
-        "total_allocated": sum(a["allocated_amount"] for a in allocations)
-    })
-    
-    return {"allocations": [{k: v for k, v in a.items() if k != "_id"} for a in allocations]}
+    return await _write_allocation_version(tenant, user, snapshot_id, method, allocations,
+                                           idempotency_key)
+
+
+async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id: str,
+                                    method: str, allocations: list,
+                                    idempotency_key: Optional[str]) -> dict:
+    """OH-01: version N+1 of the snapshot's allocation. Order: the previous version is
+    marked ``superseded_by`` FIRST, then the new rows are inserted — a report never sees two
+    versions at once (the sum is never doubled). Each step runs once per Idempotency-Key."""
+    coll = tenant.project_overhead_allocations
+    kw = await KeyedWrite.begin(db, user, "overhead.allocation.version", idempotency_key,
+                                {"snapshot_id": snapshot_id, "method": method})
+    if kw.replay_id:
+        rows = await coll.find({"overhead_snapshot_id": snapshot_id,
+                                "allocation_batch_id": kw.replay_id}, {"_id": 0}).to_list(None)
+        version = rows[0]["allocation_version"] if rows else None
+        return {"allocations": rows, "allocation_batch_id": kw.replay_id,
+                "allocation_version": version, "replayed": True}
+    async with kw:
+        batch_id = kw.new_id("batch")
+        now = datetime.now(timezone.utc).isoformat()
+
+        async def _next_version():
+            rows = await coll.find({"overhead_snapshot_id": snapshot_id},
+                                   {"_id": 0, "allocation_version": 1}).to_list(None)
+            # a legacy row without a version is version 1 (no migration, OH-01)
+            return max((r.get("allocation_version") or 1 for r in rows), default=0) + 1
+        version = int(await kw.wf.step("version", _next_version, reference=str))
+
+        for a in allocations:
+            a.update({
+                "id": kw.new_id("alloc:%s" % a["project_id"]),
+                "allocation_batch_id": batch_id,
+                "allocation_version": version,
+                "allocation_method": method,
+                "allocated_by_user_id": user["id"],
+                "superseded_by": None,
+            })
+
+        async def _supersede():
+            await coll.update_many(
+                {"overhead_snapshot_id": snapshot_id, "superseded_by": None,
+                 "allocation_batch_id": {"$ne": batch_id}},
+                {"$set": {"superseded_by": batch_id, "superseded_at": now,
+                          "superseded_by_user_id": user["id"]}})
+        await kw.wf.step("supersede", _supersede)
+
+        have = {r["id"] for r in await coll.find(
+            {"allocation_batch_id": batch_id}, {"_id": 0, "id": 1}).to_list(None)}
+        missing = [a for a in allocations if a["id"] not in have]
+        if missing:
+            await coll.insert_many(missing)
+
+        total = round(sum(a["allocated_amount"] for a in allocations), 2)
+
+        async def _audit():
+            await audit_overhead_event(
+                db, user, action="overhead.allocation.version_created",
+                entity_type="overhead_allocation", entity_id=batch_id,
+                reason="overhead allocation version %d of snapshot %s" % (version, snapshot_id),
+                structured_diff={"overhead_snapshot_id": snapshot_id, "version": version,
+                                 "method": method, "project_count": len(allocations),
+                                 "total_allocated": total},
+                idempotency_key=kw.key)
+            await log_audit(user["org_id"], user["id"], user["email"], "allocated", "overhead_snapshot", snapshot_id, {
+                "method": method,
+                "project_count": len(allocations),
+                "total_allocated": total,
+                "allocation_version": version,
+                "allocation_batch_id": batch_id,
+            })
+        await kw.wf.step("audit", _audit)
+        kw.result_id = batch_id
+
+    return {"allocations": [{k: v for k, v in a.items() if k != "_id"} for a in allocations],
+            "allocation_batch_id": batch_id, "allocation_version": version}
 
 
 @router.get("/overhead/allocations")
 async def list_overhead_allocations(
     snapshot_id: Optional[str] = None,
     project_id: Optional[str] = None,
+    include_superseded: bool = False,
     user: dict = Depends(require_m9)
 ):
     tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
+    if not include_superseded:
+        query["superseded_by"] = None  # OH-01: only the current version
     if snapshot_id:
         query["overhead_snapshot_id"] = snapshot_id
     if project_id:
