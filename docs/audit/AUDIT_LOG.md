@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #71 SEC-02 | `e6ea838` | **FINDINGS: SEC02D-1** POST /sites/{id}/pulse/generate returns per-worker labor_cost to any role (pre-existing on main, outside the GET scan); SEC02C-1 CLOSED | 2026-11-07 |
+| #71 SEC-02 | `b37909f` | **PASS** (SEC02D-1 closed; POST/PUT sweep clean); FG-63 + #69 re-merge pending | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
@@ -1943,7 +1943,7 @@ Gates:
 
 | Against | Result |
 |---|---|
-| #71 SEC-02 | `e6ea838` | **FINDINGS: SEC02D-1** POST /sites/{id}/pulse/generate returns per-worker labor_cost to any role (pre-existing on main, outside the GET scan); SEC02C-1 CLOSED | 2026-11-07 |
+| #71 SEC-02 | `b37909f` | **PASS** (SEC02D-1 closed; POST/PUT sweep clean); FG-63 + #69 re-merge pending | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 `31ed258` | conflict: `project_pnl.py` |
 | #55 5C | `81e412c` | **PASS** (C26F-1 closed; C26E-1 closed; full probe set green); R32 project-bucket question with Krum | 2026-11-07 |
@@ -2075,3 +2075,29 @@ Gates:
 | W0 | 1085/15/50 |
 | A1 | 0/420 |
 | A2C | 0/207 |
+
+
+## #71 SEC-02-E @ `b37909f` — 2026-11-07 ~01:35 UTC — PASS
+
+Delta:
+- `pulse/generate` is guarded and stripped; `generate-all` is finance-only; stored pulses keep budget and status only.
+- 18 POST/PUT routes added to the registry, plus the PR's own POST/PUT scan.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo | **55 passed** |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/207 |
+| A1 | 0/420 |
+| R0 | **814** |
+
+**SEC02D-1 CLOSED (PROVED).** `probe_sec02_d_pulse_generate.py`, off and enforce:
+- the non-member Warehousekeeper and the Viewer get **403** on `POST /sites/{id}/pulse/generate`, with no `labor_cost`;
+- the SiteManager's range shows no cumulative `total_spent`.
+
+My own sweep: `probe_sec02_unregistered_money_gets.py` with `PROBE_METHOD=POST` and `PUT` (a new switch). Every unregistered POST/PUT route was called with an empty body as a non-member Warehousekeeper and as a member Viewer, off and enforce → **0 money hits**.
+- Limitation: an empty body is refused with 422 by most routes, so this corroborates the PR's own scan but does not prove the absence of a leak.
+
+Note: E-D1 (the keeper enters a unit price) is intended under R32, per @parent.

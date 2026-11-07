@@ -71,21 +71,23 @@ def child(mongo_url):
         vals = T.url_values(fx, "A")
         vals.update({"project_id": fx["A"]["project_id"], "site_id": fx["A"]["project_id"],
                      "employee_id": fx["A"]["users"]["technician"]["id"], "id": fx["A"]["project_id"]})
-        routes = sorted({(r.path) for r in app.routes if isinstance(r, APIRoute) and "GET" in r.methods})
+        METHOD = os.environ.get("PROBE_METHOD", "GET")   # GET (default) or POST / PUT sweep (empty body, scratch DB)
+        routes = sorted({(r.path) for r in app.routes if isinstance(r, APIRoute) and METHOD in r.methods})
         results = {}
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for role in ROLES:
                 for path in routes:
-                    if not path.startswith("/api/") or ("GET", path) in reg:
+                    if not path.startswith("/api/") or (METHOD, path) in reg or any(x in path for x in ("/auth/", "/logout", "/signup")):
                         continue
                     url = path
                     for k, v in vals.items():
                         url = url.replace("{%s}" % k, str(v))
                     if "{" in url:
                         url = re.sub(r"\{[^}]+\}", fx["A"]["project_id"], url)
-                    r = tc.get(url, headers={"Authorization": "Bearer " + tok[role]})
-                    if r.status_code != 200:
+                    hdr = {"Authorization": "Bearer " + tok[role], "Idempotency-Key": "scan-" + uuid.uuid4().hex}
+                    r = tc.get(url, headers=hdr) if METHOD == "GET" else tc.request(METHOD, url, json={}, headers=hdr)
+                    if r.status_code not in (200, 201):
                         continue
                     try:
                         hits = money_hits(r.json())
@@ -98,13 +100,15 @@ def child(mongo_url):
 
 if __name__ == "__main__":
     if "--child" in sys.argv:
+        if len(sys.argv) > sys.argv.index("--child") + 2:
+            os.environ["PROBE_METHOD"] = sys.argv[sys.argv.index("--child") + 2]
         child(sys.argv[sys.argv.index("--child") + 1]); sys.exit(0)
     mongo_url = os.environ.get("W0_03_REAL_MONGO_URL")
     pm = T._pm01(); sfx = uuid.uuid4().hex[:12]
     op, sy = T.DB_PREFIX_OP + sfx, T.DB_PREFIX_SYS + sfx
     env = pm.child_env(mongo_url, op, sy); env["JWT_SECRET"] = "probe-" + uuid.uuid4().hex
     try:
-        subprocess.run([sys.executable, __file__, "--child", mongo_url], cwd=str(BACKEND), env=env, timeout=3000, check=True)
+        subprocess.run([sys.executable, __file__, "--child", mongo_url, os.environ.get("PROBE_METHOD", "GET")], cwd=str(BACKEND), env=env, timeout=3000, check=True)
     finally:
         import pymongo
         c = pymongo.MongoClient(mongo_url); [c.drop_database(n) for n in (op, sy)]
