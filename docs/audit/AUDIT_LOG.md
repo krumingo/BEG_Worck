@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #71 SEC-02 | `b37909f` | **PASS** (SEC02D-1 closed; POST/PUT sweep clean); FG-63 + #69 re-merge pending | 2026-11-07 |
+| #71 SEC-02 | `71f9bbe` | **PASS** (FG-63; #69 7300864 merged, behaviour kept; scan clean) | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
@@ -1663,8 +1663,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `009ac1d` | **PASS** (FG-57: lazy unique chain index or AuditChainUnprotected); notes: no equivalent guard for the idempotency index; create_index inside a #56 transaction | 2026-11-07 |
-| #73 LAB-01 | `fa3e23a` | **FINDINGS: LAB01B-1** worker-editable line package pointer picks pay type / piece rate (latent until packages carry terms); FG-64/66 otherwise OK | 2026-11-07 |
+| #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
+| #73 LAB-01 | `c422cbd` | **PASS** (LAB01B-1 closed: package only from approver record; PUT validates day_entries); declared debt: akord 0 until FG-65 | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -1943,7 +1943,7 @@ Gates:
 
 | Against | Result |
 |---|---|
-| #71 SEC-02 | `b37909f` | **PASS** (SEC02D-1 closed; POST/PUT sweep clean); FG-63 + #69 re-merge pending | 2026-11-07 |
+| #71 SEC-02 | `71f9bbe` | **PASS** (FG-63; #69 7300864 merged, behaviour kept; scan clean) | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 `31ed258` | conflict: `project_pnl.py` |
 | #55 5C | `518aab4` | **PASS** (FG-59/60/61/55; C26E-1/C26F-1 stay closed; member-scoped reads proved) | 2026-11-07 |
@@ -2199,3 +2199,69 @@ Results:
   - take the pricing package only from the approver-written approval record (require `execution_package_id` there);
   - for time work, ignore package pay types not set by the approver, or validate `day_entries` against the SMR assignment;
   - never price from a worker-editable pointer.
+
+
+## Round @ 2026-11-07 ~02:30 UTC — #71 `71f9bbe`, #72 `8ac194a`, #73 `c422cbd`
+
+### #72 W0-04-C01 @ `8ac194a` — PASS
+
+Delta:
+- `begin_idempotent` → `ensure_idempotency_index` (the shared `indexes.require_unique_index`): the lazy unique `id` index, otherwise `IdempotencyUnprotected`.
+- Check-only mode inside transactions. This addresses my notes (a) and (b).
+
+Probes:
+- `probe_w004_fg57.py`: G1, G2 and G3 unchanged (ok). **G4 (no index, no startup) → STARTED 1 of 6** (it was 6 of 6). Note (a) is CLOSED.
+- `probe_w004_c01.py`: FAILS none.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| `tests/test_w0_04*` | 56 passed |
+| W0 | 1092/15/67 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0 | 814 |
+
+### #73 LAB-01-C @ `c422cbd` — PASS
+
+Delta:
+- `_package()` takes the package only from the approver's quantity-approval record.
+- `PUT /daily-reports` rebuilds `day_entries` from an allow-list. Pricing fields (`execution_package_id`, `pay_type`, `piece_rate`, `approved_quantity`, `labor_*`, `cost_type`, `activity_type`) → 400.
+
+**LAB01B-1 CLOSED (PROVED).** `probe_lab01b_package_pointer.py`, the same report:
+
+| Case | Result |
+|---|---|
+| P1 time work | no package / package A Hourly / package B Daily → **50 / 50 / 50** |
+| P2 akord, approval with no package | C / D → **50 / 50** (the approval names no package, so no piece rate applies; profile time pay) |
+
+Other probes and gates:
+- `probe_lab01.py` (L1 with package + approval terms): FAILS none.
+- `tests/test_lab_01*`: 25 passed.
+- W0: 1085/15/50; A2C 0; A1 0; R0 **814**.
+
+Still declared debt: akord pays 0 until the FG-65 quantity-approval flow writes `labor_quantity_approvals`.
+
+### #71 SEC-02-E @ `71f9bbe` — PASS
+
+Delta: FG-63 (the workers behind a "spent" figure are counted from the same source, filter and window) and the merge of #69 `7300864`.
+
+Probes:
+- `probe_sec02_c_pulse_derive.py`: DERIVED {} (also with `PROBE_SINGLE`).
+- `probe_sec02_d_pulse_generate.py`: Warehousekeeper and Viewer → 403.
+- `probe_sec02_fg15_replay.py`: the Technician's first response and replay have no money keys; the stored row keeps them.
+- GET scan: noise only.
+- sec01 probes on the merged tree:
+  - `c02_payments`: P1b ok, P1c +1 with the index; "P1 duplicate rows=0" is the stale label for keyless 428.
+  - siblings, r16: FAILS none.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo | **56 passed** |
+| W0 | 1085/15/50 |
+| A2C | 0/208 |
+| A1 | 0/422 |
+| R0 | **814** |
