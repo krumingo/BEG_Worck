@@ -4286,3 +4286,30 @@ The metric is free admin text, and `alarm_engine` dispatches on the rule type, n
 | PM-01 | 6 |
 
 The PM-01 diff vs main is only `+cancel`. The merge with main is clean.
+
+### Environment incident (audit side, not a PR finding)
+
+The extra audit replica sets crashed with mongod **fassert 50853** (`wiredtiger_util.cpp:772`, file-handle exhaustion from many test databases). They had been started without the main RS's WiredTiger handle-close settings.
+
+| RS | Crashed at | Impact |
+|---|---|---|
+| `auditmongo2` (27029) | 17:21 UTC | #55 `cba5306`'s 43-file warehouse loop (`b55c`) ran against a dead mongod until it hit its time limit: **those warehouse results are void** |
+| `auditmongo3` (27039) | 19:20 | interrupted the #79 probe re-runs ("connection closed" / "connection refused" are environment errors) |
+
+The `b55c` lines written before 17:21 are valid: c26l_l 153, A2C static guard 32, old probes 13 ×3. Both RSs were recreated with the handle-close settings. Re-runs: `b55e` (#55, all 43 files + W0 + R0 + merge), `b71e` (#71 `30a8c22`), #79 `b03b806` probes on rs0.
+
+This is likely the same class as the programmer's "75 W0 failures from a local mongod crash".
+
+### #79 @ `b03b806` (Addendum B FG-135..138) — probes O13–O15 pass
+
+| Case | Result × 3 modes |
+|---|---|
+| **O13** legacy pair (v1 Sent + child v2 Sent, v1 never superseded) | GET v1 link **410** (no prices or ids); approve / reject → 409; `/accept` → 409; new-version → 409; v1 unchanged |
+| **O14** DELETE ∥ send ×10 | never 5xx; never both 200; a sent offer is never deleted |
+| **O15** `signed_pdf` without a file | 422 `EVIDENCE_FILE_REQUIRED` |
+| **O15** `verified_email` | 422 `VERIFIED_EMAIL_NOT_SUPPORTED` |
+| **O15** cancelled link | GET 410, no leak |
+
+- **Open check:** one O12 run (reject ∥ new-version, fresh database) raised `OperationFailure: Collection namespace '…audit_logs' is already in use` from the new-version transaction. That is the fresh-tenant implicit-collection-creation class, like ACT77-01. It ran shortly before the 19:20 crash, so it is being re-run on rs0 (×3) to confirm or discard.
+- FG-138 part 2 (unit costs in the client view) is held for Krum.
+- FG-139 (plaintext token) is debt D-OFF01-15. Sensible: it needs a re-issue flow.

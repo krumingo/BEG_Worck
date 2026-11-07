@@ -268,3 +268,54 @@ def test_o12_reject_races_new_version(monkeypatch, backend, mode, rep):
         print("O12 %s/%d: reject %s new-version %s | status %s superseded_by %s" % (
             mode, rep, rr.status_code, rn.status_code, o["status"], bool(o.get("superseded_by"))))
     run(monkeypatch, backend, mode, scenario)
+
+
+def test_o13_legacy_pair_parent_is_replaced(monkeypatch, backend, mode):
+    """b03b806 FG-135: v1 Sent (token T1, 1200) + v2 Sent child (1500), v1 never marked superseded."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("v1", token=TOKEN))
+        await op.offers.insert_one(offer_doc("v2", version=2, parent="v1", token="tok" + "f" * 21, total=1500.0))
+        g = await c.get("/api/offers/review/%s" % TOKEN)
+        r = await respond(c, TOKEN)
+        rj = await respond(c, TOKEN, action="reject")
+        a = await accept(c, "v1")
+        nv = await new_version(c, "v1")
+        o = await get(op, "v1")
+        leak = [m for m in ("1200", "Плочки", "v1", "ORG-OFF01") if m in g.text]
+        print("O13 %s: GET %s leak %s | approve %s reject %s | accept %s | new-version %s | v1 %s" % (
+            mode, g.status_code, leak or "none", r.status_code, rj.status_code, a.status_code, nv.status_code, o["status"]))
+        assert g.status_code == 410 and not leak and (r.status_code, rj.status_code, a.status_code, nv.status_code) == (409,) * 4
+        assert o["status"] == "Sent"
+    run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(10))
+def test_o14_delete_races_send(monkeypatch, backend, mode, rep):
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", status="Draft"))
+        rd, rs = await asyncio.gather(c.delete("/api/offers/o1", headers=hdr("admin-a")),
+                                      c.post("/api/offers/o1/send", headers=hdr("admin-a")))
+        o = await get(op, "o1")
+        print("O14 %s/%d: delete %s send %s | offer %s" % (mode, rep, rd.status_code, rs.status_code,
+                                                         (o or {}).get("status", "GONE")))
+        assert rd.status_code < 500 and rs.status_code < 500
+        assert not (rs.status_code == 200 and o is None), "a sent offer was deleted"
+        assert not (rd.status_code == 200 and rs.status_code == 200)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_o15_carriers_and_closed_links(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        out = {}
+        for m in ("signed_pdf", "verified_email"):
+            await op.offers.delete_many({"id": "oc"})
+            await op.offers.insert_one(offer_doc("oc", token=TOKEN))
+            r = await accept(c, "oc", body={"approval_method": m})
+            out[m] = (r.status_code, code(r), (await get(op, "oc"))["status"])
+        await op.offers.insert_one(offer_doc("ok", token="tok" + "g" * 21))
+        await cancel(c, "ok")
+        g = await c.get("/api/offers/review/%s" % ("tok" + "g" * 21))
+        leak = [m for m in ("1200", "Плочки", "lines", "total") if m in g.text]
+        print("O15 %s: %s | GET cancelled link %s leak %s" % (mode, out, g.status_code, leak or "none"))
+        assert all(v[0] == 422 and v[2] == "Sent" for v in out.values()) and g.status_code == 410 and not leak
+    run(monkeypatch, backend, mode, scenario)
