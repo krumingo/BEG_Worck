@@ -523,6 +523,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     from app.services.overhead_lifecycle import project_overhead_current
     _oh = await project_overhead_current(tenant, project_id)
     overhead_cost, overhead_allocs = _oh["amount"], _oh["rows"]
+    from app.services.overhead_lifecycle import recalculating_fields
 
     # ── PROFIT ──
     total_cost = round(net_material_cost + labor_cost + subcontract_cost + overhead_cost, 2)
@@ -591,6 +592,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
             "subcontract": round(subcontract_cost, 2),
             "subcontract_detail": sub_metrics if sub_metrics.get("available") else None,
             "overhead": round(overhead_cost, 2),
+            **recalculating_fields(_oh["recalculating"]),  # FG-116 (R38)
             "total": total_cost,
         },
 

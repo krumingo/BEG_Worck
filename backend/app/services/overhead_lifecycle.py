@@ -220,6 +220,16 @@ async def ensure_overhead_indexes_for_installation(op_db, system_db) -> list:
     return names
 
 
+#: R38 (Krum 07.11.2026): the label of an overhead figure whose period is being recomputed.
+RECALCULATING_LABEL = "преизчислява се"
+
+
+def recalculating_fields(recalculating: bool) -> Dict[str, Any]:
+    """FG-116: the SAME two fields on every overhead reader (as project_pnl)."""
+    return {"overhead_recalculating": bool(recalculating),
+            "overhead_label": RECALCULATING_LABEL if recalculating else None}
+
+
 #: D6: the org-wide lock name for computing ANY snapshot (overlap checks need it).
 COMPUTE_LOCK = "compute"
 

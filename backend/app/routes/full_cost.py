@@ -193,10 +193,11 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
     # stores its own allocation. Overhead is allocated ONLY by FLOW-024 / OH-01
     # (/overhead/snapshots/{id}/allocate: versioned, keyed, audited); this answer is a
     # read-only projection of the project's current (published) OH-01 allocation.
-    from app.services.overhead_lifecycle import project_overhead_current
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
     cur = await project_overhead_current(tenant, project_id)
     return {"ok": True, "allocated": cur["amount"], "period": period_key,
             "source": "overhead_allocation_oh01", "recalculating": cur["recalculating"],
+            **recalculating_fields(cur["recalculating"]),  # FG-116 (R38)
             "read_only": True,
             "message": "Режийните се разпределят от модул Режийни (snapshot → разпределение)"}
 
@@ -220,9 +221,10 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
     lab = pkg.get("actual_labor_cost", 0)
     # FG-89: the package's share of the project's CURRENT OH-01 allocation, by used hours,
     # computed on read (no stored second figure)
-    from app.services.overhead_lifecycle import project_overhead_current
-    project_oh = (await project_overhead_current(tenant, pkg.get("project_id")))["amount"] \
-        if pkg.get("project_id") else 0
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    _cur = (await project_overhead_current(tenant, pkg.get("project_id"))) \
+        if pkg.get("project_id") else {"amount": 0, "recalculating": False}
+    project_oh = _cur["amount"]
     siblings = await tenant.execution_packages.find(
         {"org_id": org_id, "project_id": pkg.get("project_id")}, {"_id": 0, "used_hours": 1}
     ).to_list(200) if pkg.get("project_id") else []
@@ -253,6 +255,7 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         "costs": {
             "material": mat, "labor": lab, "subcontract": round(sub, 2),
             "gross_cost": gross_cost, "overhead": overhead, "total_cost": total_cost,
+            **recalculating_fields(_cur["recalculating"]),  # FG-116 (R38)
         },
         "margin": {
             "gross_margin": gross_margin, "gross_margin_percent": gross_pct,
@@ -308,6 +311,7 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
     from app.services.overhead_lifecycle import project_overhead_current
     _oh = await project_overhead_current(tenant, project_id)
     overhead, allocs = _oh["amount"], _oh["rows"]
+    from app.services.overhead_lifecycle import recalculating_fields
 
     # Budget from execution packages
     pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "budget_total": 1}).to_list(200)
@@ -332,7 +336,8 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
         "project_code": project.get("code", ""), "project_name": project.get("name", ""),
         "currency": "EUR",
         "revenue": {"contracted": round(contracted, 2), "earned": round(earned, 2), "billed": round(billed, 2), "collected": round(collected, 2), "receivables": round(billed - collected, 2), "basis": basis_label},
-        "costs": {"material": mat_cost, "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost},
+        "costs": {"material": mat_cost, "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost,
+                  **recalculating_fields(_oh["recalculating"])},  # FG-116 (R38)
         "profit": {
             "gross_profit": gross_profit, "gross_margin_percent": gross_pct,
             "net_profit": net_profit, "net_margin_percent": net_pct,

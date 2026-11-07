@@ -1226,3 +1226,46 @@ def test_29_a_reader_paused_between_its_reads_never_sees_zero(monkeypatch, backe
         after = (await compute_project_pnl(ORG, PROJ_A))["expense"]["overhead"]
         assert after == 450.0                              # the new one, alone (not 675)
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 30. FG-116
+async def _labels(c, op):
+    """(overhead_recalculating, overhead_label) of every overhead view for project A."""
+    from app.services.project_pnl import compute_project_pnl
+    e = (await compute_project_pnl(ORG, PROJ_A))["expense"]
+    net = (await c.get(f"/api/project-net-profit/{PROJ_A}", headers=_h())).json()["costs"]
+    prof = (await c.get(f"/api/project-profit/{PROJ_A}", headers=_h())).json()["expenses"]
+    pkg = (await c.get("/api/execution-packages/PKG-A/net-financial", headers=_h())).json()["costs"]
+    byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()["periods"]
+    oct_ = next(p for p in byp if p["period"] == "2026-10")
+    proj = (await c.post(f"/api/overhead-allocation/compute/{PROJ_A}", json={}, headers=_h())).json()
+    return {name: (v["overhead_recalculating"], v["overhead_label"]) for name, v in (
+        ("pnl", e), ("net_profit", net), ("profit_summary", prof), ("package", pkg),
+        ("by_period", oct_), ("legacy_projection", proj))}
+
+
+def test_30_every_fg89_reader_carries_the_r38_label(monkeypatch, backend, mode):
+    """FG-116 (R38): while a period is recomputed, EVERY overhead reader added in FG-89 shows
+    the old figure with the same fields as project P&L — overhead_recalculating=true and
+    overhead_label="преизчислява се"; once the new allocation is published the label is gone."""
+    async def scenario(c, op):
+        await op.execution_packages.insert_one({"id": "PKG-A", "org_id": ORG, "project_id": PROJ_A,
+                                                "used_hours": 30, "sale_total": 1000})
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s1 = await _snapshot(c)
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert set((await _labels(c, op)).values()) == {(False, None)}
+        await _cost(c, cat["id"], date="2026-10-20", amount=400.0)
+        s2 = await _snapshot(c)                                       # recompute
+        labels = await _labels(c, op)
+        assert set(labels.values()) == {(True, "преизчислява се")}, labels
+        assert set((await _views(c, op)).values()) == {300.0}        # the old figure
+        r = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert set((await _labels(c, op)).values()) == {(False, None)}
+        assert set((await _views(c, op)).values()) == {600.0}
+    run_views(monkeypatch, backend, mode, scenario)
