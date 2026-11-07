@@ -398,3 +398,32 @@ def test_d_other_expense_without_project_is_still_400(monkeypatch, backend, mode
         assert r.status_code == 400, r.text
         assert await op.finance_payments.count_documents({}) == 0
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════ #72: IDEMPOTENCY_IN_PROGRESS
+IN_PROGRESS_WRITES = {
+    "transfer (POST via _once)": lambda c, pid: c.post(
+        "/api/finance/transfers", headers=hdr("acct-a", "k-ip"),
+        json={"from_account_id": BANK_A, "to_account_id": CASH_A, "amount": 10}),
+    "reversal (DELETE via _begin)": lambda c, pid: reverse(c, pid, key="k-ip"),
+}
+
+
+@pytest.mark.parametrize("write", sorted(IN_PROGRESS_WRITES))
+def test_72_in_progress_from_begin_idempotent_is_409(monkeypatch, backend, mode, write):
+    """#72 (W0-04-C01) adds a third answer of begin_idempotent: ``in_progress`` — this request
+    lost the compare-and-set retake of a FAILED key. Only an explicit ``started`` may run the
+    write; every other status is refused with 409 and nothing is written."""
+    async def scenario(c, op):
+        import app.audit.idempotency as idem
+        pid = await pay(c, 50.0)
+        before = await snap(op)
+
+        async def lost_retake(*args, **kwargs):
+            return {"status": "in_progress", "record": {}}
+        monkeypatch.setattr(idem, "begin_idempotent", lost_retake)
+        r = await IN_PROGRESS_WRITES[write](c, pid)
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"]["error_code"] == "IDEMPOTENCY_IN_PROGRESS"
+        assert await snap(op) == before
+    run(monkeypatch, backend, mode, scenario)

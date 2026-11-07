@@ -42,6 +42,12 @@ def _tenant(user: dict) -> TenantData:
 IDEMPOTENCY_KEY_REQUIRED = "IDEMPOTENCY_KEY_REQUIRED"
 
 
+def _key_in_progress() -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "error_code": "IDEMPOTENCY_IN_PROGRESS",
+        "message": "Заявка с този Idempotency-Key още се обработва"})
+
+
 def _require_key(header: Optional[str]) -> str:
     """R29 (Krum, 06.11.2026; PAY-01-C01 Addendum B): a money write without an
     Idempotency-Key is refused — 428, before anything is read or written."""
@@ -63,7 +69,7 @@ async def _once(user: dict, key: str, action: str, fingerprint: dict, work):
     * ``work()`` raised → the key is marked failed, so a clean retry may run it again."""
     import json
     from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
-                                       IdempotencyConflict, begin_idempotent,
+                                       IDEMPOTENCY_STARTED, IdempotencyConflict, begin_idempotent,
                                        complete_idempotent, fail_idempotent, request_fingerprint)
     tenant_id = user["org_id"]
     try:
@@ -76,9 +82,11 @@ async def _once(user: dict, key: str, action: str, fingerprint: dict, work):
     if state["status"] == IDEMPOTENCY_DUPLICATE:
         if state.get("prior_status") == IDEMPOTENCY_COMPLETED:
             return json.loads(state["result_reference"])
-        raise HTTPException(status_code=409, detail={
-            "error_code": "IDEMPOTENCY_IN_PROGRESS",
-            "message": "Заявка с този Idempotency-Key още се обработва"})
+        raise _key_in_progress()
+    if state["status"] != IDEMPOTENCY_STARTED:
+        # #72 / W0-04-C01: IDEMPOTENCY_IN_PROGRESS — another request won the retake of a
+        # FAILED key. Only an explicit STARTED may run the write; anything else → 409.
+        raise _key_in_progress()
     try:
         result = await work()
     except HTTPException as exc:
@@ -1482,7 +1490,8 @@ async def _begin(user: dict, req: "_Request", action: str, fingerprint: dict):
     if not req.key:
         return False, None
     from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
-                                       IdempotencyConflict, begin_idempotent, request_fingerprint)
+                                       IDEMPOTENCY_STARTED, IdempotencyConflict, begin_idempotent,
+                                       request_fingerprint)
     try:
         state = await begin_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
                                        request_fingerprint=request_fingerprint(fingerprint))
@@ -1495,6 +1504,9 @@ async def _begin(user: dict, req: "_Request", action: str, fingerprint: dict):
             import json
             return True, json.loads(state["result_reference"])
         return True, None
+    if state["status"] != IDEMPOTENCY_STARTED:
+        # #72 / W0-04-C01: IDEMPOTENCY_IN_PROGRESS (lost the retake of a FAILED key) → 409
+        raise _key_in_progress()
     return False, None
 
 
