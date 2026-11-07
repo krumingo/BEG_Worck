@@ -689,7 +689,6 @@ class CommandService:
         # 5C-C25 (FG-19, Р18) — an acceptance always drains the in-transit
         # bucket of its own dispatch; for a transfer it lands exactly in the
         # transfer's target (a returned lot in quarantine).
-        await self._bind_acceptance_to_transit(tenant_collection, inp)
         # 5C-C21 F-12 (Р10) — a write-off from a project is project cost;
         # the project scope is server-derived from the source bucket.
         # 5C-C26d (C26B-1 / FG-38) — a subproject's project is its parent.
@@ -699,6 +698,11 @@ class CommandService:
         # nothing about the project / subproject relations.
         binding_error = None
         try:
+            # 5C-C25 (FG-19, Р18) / 5C-C26i (FG-70): an acceptance drains its
+            # own dispatch's transit bucket and lands where that dispatch was
+            # addressed — transfers AND warehouse → project dispatches.
+            dispatch = await self._bind_acceptance_to_transit(tenant_collection, inp)
+            await self._check_dispatch_acceptance(tenant_db, inp, dispatch)
             await self._bind_subproject_parent(tenant_db, inp)
             self._bind_write_off_project(inp)
             await self._bind_project_from_locations(tenant_db, inp)
@@ -712,13 +716,17 @@ class CommandService:
         try:
             await self._decide_rights(ctx, tenant_db, inp, mode)
         except PermissionDeniedError as exc:
-            if binding_error is not None:
-                # FG-55: a refused binding never leaks the DB-resolved
-                # project through the denial's scope.
-                raise PermissionDeniedError(
-                    "permission denied", context={
-                        "action": action.value,
-                        "reason_code": exc.context.get("reason_code", "DENY")}) from None
+            subs = [k for k in (inp.source, inp.destination, inp.transfer_target)
+                    if k is not None and k.location_type == LocationType.SUBPROJECT]
+            if binding_error is not None or subs:
+                # FG-55 / FG-69: a denial never names a DB-resolved project —
+                # with a subproject it names only the subproject the caller
+                # sent, the same shape whether or not the binding held.
+                context = {"action": action.value,
+                           "reason_code": exc.context.get("reason_code", "DENY")}
+                if subs:
+                    context.update(scope_type="subproject", scope_id=subs[0].location_id)
+                raise PermissionDeniedError("permission denied", context=context) from None
             raise
         if binding_error is not None:
             raise binding_error
@@ -1584,11 +1592,40 @@ class CommandService:
             {"action": 1, "transfer_target": 1, "project_id": 1, "_id": 0},
         )
         if not dispatch:
-            return  # refused in the transaction (unknown dispatch)
+            return None  # refused in the transaction (unknown dispatch)
         rule = self.TRANSFER_RULES.get(_action_or_none(dispatch.get("action")))
         if rule is None:
-            return
+            return dispatch
         self._check_transfer_acceptance(inp, dispatch)
+        return dispatch
+
+    @staticmethod
+    async def _check_dispatch_acceptance(tenant_db, inp: CommandInput,
+                                         dispatch: Optional[Dict[str, Any]]) -> None:
+        """5C-C26i — FG-70 (HIGH): an acceptance of a warehouse → project
+        DISPATCH must land on the project the dispatch was addressed to (its
+        project_id; a subproject counts by its DB parent). Before, only a
+        TRANSFER's target was enforced, so a member of P1 could accept into
+        P1 a lot dispatched to P2. Mismatch → 422, nothing written (held back
+        until the rights check — FG-55)."""
+        if not dispatch or dispatch.get("action") != \
+                CanonicalAction.DISPATCH_WAREHOUSE_TO_PROJECT.value:
+            return
+        target = dispatch.get("project_id")
+        dest = inp.destination
+        landed = None
+        if dest is not None and dest.location_type == LocationType.PROJECT:
+            landed = dest.location_id
+        elif dest is not None and dest.location_type == LocationType.SUBPROJECT:
+            try:
+                landed = await resolve_subproject_parent(
+                    tenant_db, inp.tenant_id, dest.location_id)
+            except WarehouseMovementError:
+                landed = None
+        if not target or landed != target:
+            raise InvariantViolationError(
+                "an acceptance lands on the project the dispatch was addressed to",
+                context={"dispatch_movement_id": inp.dispatch_movement_id})
 
     @staticmethod
     def _check_transfer_acceptance(inp: CommandInput, dispatch: Dict[str, Any]) -> None:
