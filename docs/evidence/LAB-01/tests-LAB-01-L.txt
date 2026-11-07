@@ -1,0 +1,16 @@
+# LAB-01-L checks (2026-11-07) — FG-99: reset uses the Pay-Run-line payroll lock, the R36 role rule and an AuditEvent; parent 3107ba0
+## A2C guard
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+## new tests without the fix (stash of daily_reports.py + report_corrections.py): 5 failed, 4 passed — lock (OLD paid / NEW confirmed), audit, SiteManager of the project
+## LAB-01 tests (incl. tests/test_lab_01_l_reset.py)
+99 passed, 1 skipped, 1 warning in 5.25s
+## PM-01
+5 passed, 1 skipped, 6 warnings in 2.47s
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 159.94s (0:02:39)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 76.59s (0:01:16)
+  non-legacy_routes failures: 0
+## note: a first run of this file was lost when the Docker daemon (real mongo:7.0 rs0) stopped mid-run; the results above are the full re-run after restarting it

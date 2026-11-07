@@ -106,7 +106,8 @@ async def authorize_report_edit(user: dict, report: dict, *, projects: Iterable[
 
 
 async def audit_report_correction(raw_db, *, user: dict, mode: str, report: dict, before: dict,
-                                  after: dict, endpoint: str, collection: str = "employee_daily_reports"):
+                                  after: dict, endpoint: str, collection: str = "employee_daily_reports",
+                                  action: str = None):
     """One canonical AuditEvent per correction: who, when (occurred_at), before / after."""
     from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
     from app.audit.store import record_event
@@ -114,12 +115,13 @@ async def audit_report_correction(raw_db, *, user: dict, mode: str, report: dict
     event = build_event(
         tenant_id=report.get("org_id") or user.get("org_id"), actor_type="human",
         actor_id=user.get("id") or "unknown",
-        action="daily_report.corrected" if mode == CORRECTOR else "daily_report.edited",
+        action=action or ("daily_report.corrected" if mode == CORRECTOR else "daily_report.edited"),
         source_flow="FLOW-014", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
         entity_type=collection, entity_id=report.get("id"),
         entity_version=str(int(report.get("report_version") or 0) + 1),
         structured_diff={"before": before, "after": after},
-        reason=f"R36 {mode} correction of a {status or 'UNKNOWN'} report (role {user.get('role')})",
+        reason=(f"R36 reset of a {status or 'UNKNOWN'} report (role {user.get('role')})" if action == "daily_report.reset"
+                else f"R36 {mode} correction of a {status or 'UNKNOWN'} report (role {user.get('role')})"),
         tool_or_endpoint=endpoint)
     return await record_event(raw_db, event)
 

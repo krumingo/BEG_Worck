@@ -612,17 +612,23 @@ async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depe
 async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     """Reset an APPROVED report back to SUBMITTED. Voids created work_sessions."""
     tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can reset")
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
         raise HTTPException(status_code=404, detail="Report not found")
-    current_status = report.get("approval_status") or report.get("status", "")
+    # LAB-01-L (FG-99): the R36 role rule (Admin / Owner / the SiteManager of every project of
+    # the report; the author may not reset) and the LAB-01-J payroll lock decided from the
+    # Pay Run lines (both formats, confirmed runs included) — 409 when the report is in payroll.
+    projects = [e.get("project_id") for e in (report.get("day_entries") or []) if isinstance(e, dict)]
+    if report.get("project_id"):
+        projects.append(report["project_id"])
+    await authorize_report_edit(user, report, projects=projects, author_ids=(),
+                                author_statuses=(), tenant=tenant)
+    current_status = (report.get("approval_status") or report.get("status") or "").upper()
     if current_status != "APPROVED":
         raise HTTPException(status_code=400, detail="Only APPROVED reports can be reset")
 
-    # Check payroll not finalized for this period
-    report_date = report.get("date", "")
+    # Check payroll not finalized for this period (both formats: date / report_date)
+    report_date = report.get("date") or report.get("report_date") or ""
     if report_date:
         # R0-06-C01: a payment in progress or failed may already have moved money — locked too.
         finalized = await tenant.pay_runs.find_one({
@@ -667,12 +673,17 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
 
     # Reset report — LAB-01-D (FG-72): bump + void BEFORE the status write
     await void_labor_approvals(tenant, user["org_id"], report_id, user["id"], "report_reset")
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+    reset_fields = {
         "approval_status": "SUBMITTED", "status": "SUBMITTED",
         "approved_by": None, "approved_at": None,
         "payroll_ready": False, "sessions_created": 0,
-        "updated_at": now,
-    }})
+    }
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": dict(reset_fields, updated_at=now)})
+    # LAB-01-L (FG-99): every reset leaves a canonical AuditEvent — who, when, before / after
+    before = {k: report.get(k) for k in reset_fields}
+    await audit_report_correction(db, user=user, mode=CORRECTOR, report=report, before=before,
+                                  after=reset_fields, endpoint="POST /daily-reports/{id}/reset",
+                                  action="daily_report.reset")
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
