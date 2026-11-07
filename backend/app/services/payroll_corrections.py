@@ -1,26 +1,28 @@
 """
-Service — LAB-01-D (FG-66): FLOW-028 payroll corrections as records, not a row field.
+Service — FLOW-028 payroll corrections as records (LAB-01-D FG-66 … LAB-01-G F2).
 
-When what was already paid to a person exceeds the (re-priced) payable amount of a Pay
-Run row, the row shows remaining 0 and a ``correction_item``; this service turns that
-item into a real record:
+A correction is a RECEIVABLE from a person: an earlier paid Pay Run line paid more than
+the LAB-01 earned amount of the days it covered (``allocate_paid_sources`` in
+``routes/pay_runs.py``). CLAUDE.md §7: receivables and payables are never netted
+automatically — so:
 
-* ``payroll_corrections`` — one record per underlying overpayment, keyed by the PAID
-  SOURCE: the employee + the paid pay-run lines that make up "previously paid"
-  (LAB-01-F, FG-84; before: employee + exact period, FG-80). Any run — weekly, wider,
-  overlapping — whose "previously paid" rests on the same paid lines finds the same
-  record (``pay_run_ids`` lists the runs); a different amount re-prices that record
-  (version + 1), never a second one. Status ``pending_approval``. It is NEVER applied automatically:
-  no deduction, no reversal, no payment is created from it (CLAUDE.md §7/§8).
-* Approval: the canonical DQ/Approval runtime (W0-07) is NOT STARTED
-  (IMPLEMENTATION_GATE_MATRIX). The record is therefore routed to Approval as
-  ``approval_status = awaiting_approval_runtime`` and a DQ alert is raised in
-  ``dq_alerts`` (code PAYROLL_CORRECTION_PENDING_APPROVAL). When W0-07 exists, its
-  Approval points at the record's exact ``version``.
-* AuditEvent: every create / change / supersede writes one canonical W0-04 AuditEvent
-  (FLOW-040, retention R1 critical business, source FLOW-028).
-* A later edit of the run that changes the amount bumps the record's ``version``; an
-  edit that removes the overpayment marks it ``superseded`` (never deleted).
+* ``payroll_corrections`` — one record per (employee, paid source line = source pay run),
+  key ``overpayment:employee:<id>:source:pay_run:<run id>``, created ONCE with the
+  receivable amount, status ``pending_approval``. Any later run (weekly, wider, monthly,
+  draft or confirmed) that looks at the same paid line finds the same record
+  (``pay_run_ids`` lists those runs) and never changes, supersedes or absorbs it.
+  Later earnings are paid in full ("previously paid" counts the line only up to its
+  earned).
+* Decision: only an explicit, approved decision changes the record. The canonical
+  DQ/Approval runtime (W0-07) is NOT STARTED, so the record stays
+  ``approval_status = awaiting_approval_runtime`` with an open DQ alert
+  (PAYROLL_CORRECTION_PENDING_APPROVAL). Nothing is ever applied automatically: no
+  deduction, no reversal, no payment is created from it.
+* A recomputation that shows another amount (re-approved reports, …) changes NOTHING on
+  the record; it opens a DQ alert (PAYROLL_CORRECTION_RECOMPUTED, or …CHANGED_AFTER_DECISION
+  for a decided record) with the old and new amounts for a person to decide.
+* AuditEvent: the creation writes one canonical W0-04 AuditEvent (FLOW-040, retention R1,
+  source FLOW-028).
 """
 import uuid
 from datetime import datetime, timezone
@@ -30,32 +32,22 @@ from app.tenancy.data_access import TenantData
 
 SOURCE_FLOW = "FLOW-028"
 STATUS_PENDING = "pending_approval"
-STATUS_SUPERSEDED = "superseded"
-# LAB-01-D-C01: only these may be re-priced by a later run edit; an approved / applied /
-# rejected correction is never touched (a new difference raises a DQ alert instead).
-REOPENABLE = (STATUS_PENDING, STATUS_SUPERSEDED)
-DQ_CODE_LOCKED = "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"
 APPROVAL_AWAITING_RUNTIME = "awaiting_approval_runtime"  # W0-07 not started
 DQ_CODE = "PAYROLL_CORRECTION_PENDING_APPROVAL"
+DQ_CODE_RECOMPUTED = "PAYROLL_CORRECTION_RECOMPUTED"
+DQ_CODE_LOCKED = "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"
+SOURCE = "paid_pay_run_line"
 
 
-SOURCE = "paid_pay_run_lines"
+def _key(employee_id: str, source_pay_run_id: str) -> str:
+    """The receivable's paid source: the employee's paid line on one Pay Run."""
+    return f"overpayment:employee:{employee_id}:source:pay_run:{source_pay_run_id}"
 
 
-def _source_ids(sources) -> list:
-    return sorted({s.get("pay_run_id") for s in (sources or []) if isinstance(s, dict) and s.get("pay_run_id")})
-
-
-def _key(employee_id: str, sources) -> str:
-    """LAB-01-F (FG-84): the overpayment's paid source — the employee's paid pay-run lines —
-    not the period of the run that noticed it."""
-    return f"overpayment:employee:{employee_id}:source:{SOURCE}:" + ",".join(_source_ids(sources))
-
-
-def correction_id(org_id: str, employee_id: str, sources) -> str:
-    """Deterministic id of the one correction of (tenant, employee, paid source lines)."""
+def correction_id(org_id: str, employee_id: str, source_pay_run_id: str) -> str:
+    """Deterministic id of the one correction of (tenant, employee, paid source line)."""
     return str(uuid.uuid5(uuid.NAMESPACE_URL,
-                          f"beg-work:payroll-correction:{org_id}:{_key(employee_id, sources)}"))
+                          f"beg-work:payroll-correction:{org_id}:{_key(employee_id, source_pay_run_id)}"))
 
 
 async def _audit(raw_db, *, org_id: str, actor_id: str, action: str, record: dict,
@@ -67,139 +59,79 @@ async def _audit(raw_db, *, org_id: str, actor_id: str, action: str, record: dic
         action=action, source_flow=SOURCE_FLOW, retention_class=RETENTION_R1_CRITICAL_BUSINESS,
         entity_type="payroll_correction", entity_id=record["id"],
         entity_version=str(record.get("version", 1)),
-        scope_type="pay_run", scope_id=record.get("pay_run_id"),
+        scope_type="pay_run", scope_id=record.get("source_pay_run_id"),
         structured_diff=diff, reason=reason, idempotency_key=record.get("idempotency_key"),
         tool_or_endpoint="pay_runs")
     return await record_event(raw_db, event)
 
 
-async def _raise_dq(tenant: TenantData, org_id: str, record: dict, now: str):
-    """One open DQ alert per correction (idempotent); refreshed on a new version."""
+async def _alert(tenant: TenantData, org_id: str, code: str, record: dict, now: str, **fields):
+    """One open DQ alert per (correction, code); refreshed in place."""
     await tenant.dq_alerts.update_one(
-        {"org_id": org_id, "entity_type": "payroll_correction", "entity_id": record["id"]},
-        {"$set": {
-            "org_id": org_id, "code": DQ_CODE, "severity": "high", "status": "open",
-            "entity_type": "payroll_correction", "entity_id": record["id"],
-            "entity_version": record["version"], "employee_id": record["employee_id"],
-            "pay_run_id": record["pay_run_id"], "amount": record["amount"],
-            "message": ("Корекция по FLOW-028 чака одобрение: платено с "
-                        f"{record['amount']} EUR повече от заработеното. Не се прилага автоматично "
-                        "(Approval runtime W0-07 не е стартиран)."),
-            "updated_at": now,
-        }, "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
+        {"org_id": org_id, "entity_type": "payroll_correction", "entity_id": record["id"], "code": code},
+        {"$set": {"org_id": org_id, "code": code, "severity": "high", "status": "open",
+                  "entity_type": "payroll_correction", "entity_id": record["id"],
+                  "entity_version": record.get("version"), "employee_id": record.get("employee_id"),
+                  "source_pay_run_id": record.get("source_pay_run_id"), "amount": record.get("amount"),
+                  **fields, "updated_at": now},
+         "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
         upsert=True)
 
 
 async def sync_run_corrections(tenant: TenantData, raw_db, org_id: str, run: dict,
                                actor_id: str) -> list:
-    """Create / update / supersede the correction records of ``run`` (after it is written).
-    Returns the records touched. Never changes a payment."""
+    """Make sure every receivable the rows of ``run`` show has its record (after the run
+    is written). Creates missing records; NEVER changes, supersedes or applies one."""
     now = datetime.now(timezone.utc).isoformat()
     run_id = run["id"]
-    touched = []
-    # (employee, key that is current now or None, runs this window counted) — a pending
-    # correction whose source runs are all covered by this window and which is NOT the
-    # overpayment found now is superseded (its overpayment is gone or re-based).
-    covered = []
+    created = []
     for row in run.get("employee_rows") or []:
         eid = row.get("employee_id")
-        item = row.get("correction_item")
-        sources = (item or {}).get("sources") or row.get("previously_paid_sources") or []
-        considered = set(row.get("considered_pay_run_ids") or []) | set(_source_ids(sources))
-        if eid:
-            covered.append((eid, _key(eid, sources) if item else None, considered))
-        if not eid or not item:
+        if not eid:
             continue
-        key = _key(eid, sources)
-        existing = await tenant.payroll_corrections.find_one(
-            {"org_id": org_id, "idempotency_key": key}, {"_id": 0})
-        fields = {
-            "amount": round(float(item.get("amount") or 0), 2),
-            "gross_payable": item.get("gross_payable"),
-            "previously_paid": item.get("previously_paid"),
-            "paid_now": item.get("paid_now"),
-            "reason": item.get("reason"),
-        }
-        if existing is None:
-            record = {
-                "id": item.get("correction_id") or correction_id(org_id, eid, sources),
-                "org_id": org_id, "idempotency_key": key, "type": "FLOW028_CORRECTION",
-                "source": SOURCE, "source_pay_run_ids": _source_ids(sources),
-                "source_lines": sources, "employee_id": eid,
-                "pay_run_id": run_id, "pay_run_ids": [run_id], "pay_run_number": run.get("number"),
-                "period_start": run.get("period_start"), "period_end": run.get("period_end"),
-                **fields,
-                "status": STATUS_PENDING, "approval_status": APPROVAL_AWAITING_RUNTIME,
-                "approval_id": None, "applied": False, "version": 1,
-                "created_by": actor_id, "created_at": now, "updated_at": now,
-            }
-            await tenant.payroll_corrections.insert_one(dict(record))
-            await _audit(raw_db, org_id=org_id, actor_id=actor_id, action="payroll.correction.created",
-                         record=record, diff={"after": fields},
-                         reason="previously paid exceeds the re-priced earned amount (LAB-01)")
-        elif existing.get("status") == STATUS_PENDING and existing.get("amount") == fields["amount"]:
-            record = existing  # idempotent: the same overpayment seen again (any run)
+        item = row.get("correction_item") or {}
+        sources = item.get("sources") or row.get("previously_paid_sources") or []
+        for src in sources:
+            spr = src.get("pay_run_id")
+            if not spr:
+                continue
+            amount = round(float(src.get("overpaid") or 0), 2)
+            key = _key(eid, spr)
+            existing = await tenant.payroll_corrections.find_one(
+                {"org_id": org_id, "idempotency_key": key}, {"_id": 0})
+            if existing is None:
+                if amount <= 0:
+                    continue
+                record = {
+                    "id": correction_id(org_id, eid, spr), "org_id": org_id, "idempotency_key": key,
+                    "type": "FLOW028_CORRECTION", "kind": "receivable", "source": SOURCE,
+                    "employee_id": eid, "source_pay_run_id": spr,
+                    "source_pay_run_number": src.get("pay_run_number"),
+                    "source_period_start": src.get("period_start"), "source_period_end": src.get("period_end"),
+                    "source_paid": src.get("paid"), "source_earned": src.get("earned_available"),
+                    "amount": amount, "pay_run_ids": [run_id],
+                    "status": STATUS_PENDING, "approval_status": APPROVAL_AWAITING_RUNTIME,
+                    "approval_id": None, "applied": False, "version": 1,
+                    "reason": item.get("reason"), "created_by": actor_id, "created_at": now,
+                    "updated_at": now,
+                }
+                await tenant.payroll_corrections.insert_one(dict(record))
+                await _audit(raw_db, org_id=org_id, actor_id=actor_id, action="payroll.correction.created",
+                             record=record, diff={"after": {"amount": amount, "source_pay_run_id": spr}},
+                             reason="paid line exceeds the LAB-01 earned of its days (receivable)")
+                await _alert(tenant, org_id, DQ_CODE, record, now, message=(
+                    f"Вземане по FLOW-028: платено с {amount} EUR повече от заработеното ({spr}). "
+                    "Чака изрично одобрено решение; не се нетира и не се прилага автоматично."))
+                created.append(record)
+                continue
+            # an existing record is never rewritten here — only the runs that saw it are noted
             if run_id not in (existing.get("pay_run_ids") or []):
                 await tenant.payroll_corrections.update_one(
                     {"org_id": org_id, "idempotency_key": key}, {"$addToSet": {"pay_run_ids": run_id}})
-        elif existing.get("status") not in REOPENABLE or existing.get("applied"):
-            # decided (approved / applied / rejected …): never rewritten. A new difference is
-            # surfaced for a human, not merged into the decided record.
-            if existing.get("amount") != fields["amount"]:
-                await tenant.dq_alerts.update_one(
-                    {"org_id": org_id, "entity_type": "payroll_correction", "entity_id": existing["id"],
-                     "code": DQ_CODE_LOCKED},
-                    {"$set": {"org_id": org_id, "code": DQ_CODE_LOCKED, "severity": "high",
-                              "status": "open", "entity_type": "payroll_correction",
-                              "entity_id": existing["id"], "entity_version": existing.get("version"),
-                              "employee_id": eid, "pay_run_id": run_id,
-                              "decided_amount": existing.get("amount"), "new_amount": fields["amount"],
-                              "message": "Корекцията вече е решена; новата разлика чака човек.",
-                              "updated_at": now},
-                     "$setOnInsert": {"id": str(uuid.uuid4()), "created_at": now}},
-                    upsert=True)
-            continue
-        else:
-            before = {k: existing.get(k) for k in fields}
-            record = dict(existing, **fields, status=STATUS_PENDING,
-                          approval_status=APPROVAL_AWAITING_RUNTIME, approval_id=None,
-                          version=int(existing.get("version") or 1) + 1, updated_at=now)
-            res = await tenant.payroll_corrections.update_one(
-                {"org_id": org_id, "idempotency_key": key, "status": {"$in": list(REOPENABLE)},
-                 "applied": {"$ne": True}},
-                {"$set": {k: record[k] for k in (*fields, "status", "approval_status", "approval_id",
-                                                 "version", "updated_at")},
-                 "$addToSet": {"pay_run_ids": run_id}})
-            if getattr(res, "matched_count", 1) == 0:
-                continue  # decided between the read and the write — left untouched
-            await _audit(raw_db, org_id=org_id, actor_id=actor_id, action="payroll.correction.updated",
-                         record=record, diff={"before": before, "after": fields},
-                         reason="pay run edited; correction amount changed")
-        await _raise_dq(tenant, org_id, record, now)
-        touched.append(record)
-
-    # a pending correction whose overpayment (same employee + period) is gone → superseded
-    stale = []
-    for eid, current_key, considered in covered:
-        pending = await tenant.payroll_corrections.find(
-            {"org_id": org_id, "employee_id": eid, "status": STATUS_PENDING}, {"_id": 0}).to_list(200)
-        for rec in pending:
-            src = set(rec.get("source_pay_run_ids") or [])
-            if rec.get("idempotency_key") == current_key or not src or not src <= considered:
-                continue
-            stale.append(rec)
-    for rec in stale:
-        rec = dict(rec, status=STATUS_SUPERSEDED, version=int(rec.get("version") or 1) + 1, updated_at=now)
-        res = await tenant.payroll_corrections.update_one(
-            {"org_id": org_id, "id": rec["id"], "status": STATUS_PENDING, "applied": {"$ne": True}},
-            {"$set": {"status": STATUS_SUPERSEDED, "version": rec["version"], "updated_at": now}})
-        if getattr(res, "matched_count", 1) == 0:
-            continue
-        await tenant.dq_alerts.update_one(
-            {"org_id": org_id, "entity_type": "payroll_correction", "entity_id": rec["id"]},
-            {"$set": {"status": "resolved", "resolution": "superseded", "updated_at": now}})
-        await _audit(raw_db, org_id=org_id, actor_id=actor_id, action="payroll.correction.superseded",
-                     record=rec, diff={"before": {"status": STATUS_PENDING}, "after": {"status": STATUS_SUPERSEDED}},
-                     reason="pay run edited; the overpayment is no longer there")
-        touched.append(rec)
-    return touched
+            if round(float(existing.get("amount") or 0), 2) != amount:
+                decided = existing.get("status") != STATUS_PENDING or existing.get("applied")
+                await _alert(tenant, org_id, DQ_CODE_LOCKED if decided else DQ_CODE_RECOMPUTED, existing, now,
+                             recorded_amount=existing.get("amount"), new_amount=amount, pay_run_id=run_id,
+                             message=("Преизчислението дава друга сума за това вземане; записът не е "
+                                      "променен — решава човек."))
+    return created

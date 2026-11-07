@@ -189,7 +189,8 @@ def test_fg66_correction_is_a_pending_record_with_audit_and_dq_never_applied(mon
         assert rec["id"] == item["correction_id"]
         assert (rec["status"], rec["approval_status"], rec["applied"]) == (
             "pending_approval", "awaiting_approval_runtime", False)
-        assert (rec["amount"], rec["employee_id"], rec["pay_run_id"]) == (60.0, "w-akord", run_["id"])
+        assert (rec["amount"], rec["employee_id"], rec["source_pay_run_id"]) == (60.0, "w-akord", "run-old")
+        assert rec["pay_run_ids"] == [run_["id"]]
         audits = await op.audit_events.find({"entity_id": rec["id"]}, {"_id": 0}).to_list(10)
         assert [a["action"] for a in audits] == ["payroll.correction.created"]
         assert audits[0]["source_flow"] == "FLOW-028" and audits[0]["retention_class"] == "R1"
@@ -204,15 +205,18 @@ def test_fg66_correction_is_a_pending_record_with_audit_and_dq_never_applied(mon
         assert await op.payroll_corrections.count_documents({}) == 1
         assert await op.audit_events.count_documents({"entity_id": rec["id"]}) == 1
         assert await op.dq_alerts.count_documents({}) == 1
-        # when the overpayment disappears, the record is superseded (kept) and the alert resolved
-        await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 0}})
+        # LAB-01-G (F2): a recomputation that shows no overpayment does NOT supersede it —
+        # only an explicit approved decision does; a DQ alert asks a person
+        before = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
+        await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 600}})
         r = await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
         assert r.status_code == 200, r.text
-        rec = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
-        assert rec["status"] == "superseded" and rec["version"] == 2
-        assert (await op.dq_alerts.find_one({}, {"_id": 0}))["status"] == "resolved"
-        actions = [a["action"] async for a in op.audit_events.find({"entity_id": rec["id"]}).sort("sequence", 1)]
-        assert actions == ["payroll.correction.created", "payroll.correction.superseded"]
+        after = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
+        assert {k: v for k, v in after.items() if k != "pay_run_ids"} == \
+               {k: v for k, v in before.items() if k != "pay_run_ids"}
+        recomputed = await op.dq_alerts.find_one({"code": "PAYROLL_CORRECTION_RECOMPUTED"}, {"_id": 0})
+        assert recomputed["recorded_amount"] == 60.0 and recomputed["new_amount"] == 0.0
+        assert await op.audit_events.count_documents({"entity_id": rec["id"]}) == 1
     run(monkeypatch, scenario, backend)
 
 
@@ -278,7 +282,7 @@ def test_c01_void_runs_before_the_content_write(monkeypatch):
 
 
 def test_c01_decided_corrections_are_never_rewritten(monkeypatch, backend):
-    """(a) a later run edit re-prices only pending / superseded corrections."""
+    """(a) a run edit never rewrites a correction — decided or pending (LAB-01-G)."""
     async def scenario(c, op):
         await op.pay_runs.insert_one({
             "id": "run-old", "org_id": ORG, "number": "PR-0001", "status": "confirmed", "version": 1,
@@ -291,32 +295,22 @@ def test_c01_decided_corrections_are_never_rewritten(monkeypatch, backend):
         rec = await op.payroll_corrections.find_one({}, {"_id": 0})
         assert rec["amount"] == 60.0
 
-        for decided in ({"status": "approved", "approval_id": "APR-1"},
-                        {"status": "pending_approval", "applied": True}):
-            await op.payroll_corrections.update_one({"id": rec["id"]}, {"$set": decided})
+        def strip(d):
+            return {k: v for k, v in d.items() if k != "pay_run_ids"}
+        for state, code in (({"status": "approved", "approval_id": "APR-1"}, "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"),
+                            ({"status": "pending_approval", "applied": True}, "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"),
+                            ({"status": "pending_approval", "applied": False, "approval_id": None},
+                             "PAYROLL_CORRECTION_RECOMPUTED")):
+            await op.payroll_corrections.update_one({"id": rec["id"]}, {"$set": state})
             before = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
-            # the overpayment changes (paid 700 now) → a different amount
-            await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 700.0}})
-            r = await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
-            assert r.status_code == 200, r.text
-            assert await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0}) == before, decided
-            locked = await op.dq_alerts.find_one({"code": "PAYROLL_CORRECTION_CHANGED_AFTER_DECISION"}, {"_id": 0})
-            assert locked and locked["new_amount"] == 100.0 and locked["decided_amount"] == 60.0
-            # the overpayment disappears → a decided record is not superseded either
-            await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 0}})
-            assert (await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())).status_code == 200
-            assert await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0}) == before, decided
+            for paid in (700.0, 600.0):          # another overpayment, then none
+                await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": paid}})
+                r = await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
+                assert r.status_code == 200, r.text
+                assert strip(await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})) == strip(before), state
+            alert = await op.dq_alerts.find_one({"code": code}, {"_id": 0})
+            assert alert and alert["recorded_amount"] == 60.0, state
             await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 660.0}})
-            await op.payroll_corrections.update_one({"id": rec["id"]}, {"$set": {
-                "status": "pending_approval", "applied": False, "approval_id": None, "amount": 60.0}})
+        assert await op.payroll_corrections.count_documents({}) == 1
         assert await op.audit_events.count_documents({"entity_id": rec["id"]}) == 1  # only "created"
-
-        # a superseded one may come back: overpayment gone → superseded, back → pending again
-        await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 0}})
-        await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
-        assert (await op.payroll_corrections.find_one({"id": rec["id"]}))["status"] == "superseded"
-        await op.pay_runs.update_one({"id": "run-old"}, {"$set": {"employee_rows.0.paid_now_amount": 700.0}})
-        await c.patch("/api/pay-runs/" + run_["id"], json=body, headers=_token())
-        back = await op.payroll_corrections.find_one({"id": rec["id"]}, {"_id": 0})
-        assert (back["status"], back["amount"]) == ("pending_approval", 100.0)
     run(monkeypatch, scenario, backend)

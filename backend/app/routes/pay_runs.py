@@ -291,11 +291,69 @@ def remaining_and_correction(gross_payable: float, previously_paid: float, paid_
     }
 
 
+async def allocate_paid_sources(tenant: TenantData, org_id: str, employee_id: str, profile: dict,
+                                sources: list) -> dict:
+    """LAB-01-G (F2, CLAUDE.md §7 — no automatic netting of receivables and payables).
+
+    What an earlier paid Pay Run line paid counts as "previously paid" only up to the
+    LAB-01 earned amount of the days it covered; anything above that is a RECEIVABLE
+    from the person (a FLOW-028 correction), never absorbed by later earnings.
+
+    The paid lines are taken in run order (number, id) and consume the earned amount of
+    their own days; two runs that paid the same days share it. The result per line —
+    ``earned_available``, ``counted``, ``overpaid`` — depends only on the paid lines and the
+    approved reports, not on the window of the run looking at them.
+    """
+    srcs = sorted([dict(s) for s in sources or []],
+                  key=lambda s: (str(s.get("pay_run_number") or ""), str(s.get("pay_run_id") or "")))
+    if not srcs:
+        return {"sources": [], "counted": 0.0, "overpaid": 0.0}
+    d_from = min(s.get("period_start") or "" for s in srcs)
+    d_to = max(s.get("period_end") or "" for s in srcs)
+    lines = await fetch_normalized_report_lines(
+        org_id=org_id, date_from=d_from, date_to=d_to, worker_id=employee_id, status_filter="APPROVED")
+    terms = await load_smr_terms(tenant, org_id, lines)
+    lc = compute_person_labor(profile or {}, lines, terms)
+    earned_by_day = {}
+    for rec in lc["lines"]:
+        earned_by_day[rec["date"]] = round(earned_by_day.get(rec["date"], 0.0) + rec["amount"], 2)
+    consumed = {}
+    for s in srcs:
+        days = sorted(d for d in earned_by_day if (s.get("period_start") or "") <= d <= (s.get("period_end") or ""))
+        avail = round(sum(max(0.0, earned_by_day[d] - consumed.get(d, 0.0)) for d in days), 2)
+        paid = round(_money_float(s.get("paid")), 2)
+        counted = round(min(paid, avail), 2)
+        left = counted
+        for d in days:
+            take = min(left, max(0.0, earned_by_day[d] - consumed.get(d, 0.0)))
+            consumed[d] = round(consumed.get(d, 0.0) + take, 2)
+            left = round(left - take, 2)
+        s.update({"earned_available": avail, "counted": counted, "overpaid": round(paid - counted, 2)})
+    return {"sources": srcs, "counted": round(sum(s["counted"] for s in srcs), 2),
+            "overpaid": round(sum(s["overpaid"] for s in srcs), 2)}
+
+
+def overpayment_item(org_id: str, employee_id: str, alloc: dict):
+    """The row's FLOW-028 correction item: the receivable per paid source line (or None)."""
+    over = [s for s in alloc.get("sources") or [] if s.get("overpaid", 0) > 0]
+    if not over:
+        return None
+    ids = [correction_id(org_id, employee_id, s["pay_run_id"]) for s in over]
+    return {
+        "type": "FLOW028_CORRECTION", "status": "pending_approval", "employee_id": employee_id,
+        "amount": round(sum(s["overpaid"] for s in over), 2),
+        "sources": alloc["sources"], "correction_ids": ids, "correction_id": ids[0],
+        "reason": ("Платено преди надвишава заработеното за същите дни — вземане по FLOW-028; "
+                   "не се нетира автоматично с по-късна заработка (CLAUDE.md §7)"),
+    }
+
+
 def _frozen_labor_fields(row: dict) -> dict:
     """LAB-01 fields frozen on a created/updated Pay Run row (never recomputed on read)."""
     return {k: row.get(k) for k in ("labor_amount", "akord_amount", "downtime_amount",
                                     "labor_dq_warnings", "labor_calc", "correction_item",
-                                    "previously_paid_sources", "considered_pay_run_ids") if k in row}
+                                    "previously_paid_sources", "considered_pay_run_ids",
+                                    "previously_paid_total", "receivable_from_overpayment") if k in row}
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -491,9 +549,8 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         day_cells.append(cell)
 
     prev_paid = row.get("previously_paid", 0)
-    sel_remaining, sel_correction = remaining_and_correction(e["earned"], prev_paid, 0, eid)
-    if sel_correction:
-        sel_correction["sources"] = row.get("previously_paid_sources") or []
+    sel_remaining, _shortfall = remaining_and_correction(e["earned"], prev_paid, 0, eid)
+    sel_correction = row.get("correction_item")  # LAB-01-G: the receivable per paid source
     out = dict(row)
     out.update({
         "hourly_rate": e["hourly_rate"],
@@ -645,11 +702,14 @@ async def generate_pay_run(
         lc = compute_person_labor(prof, emp_lines, smr_terms)
         e = earned_from_labor(lc)
         amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
-        prev_paid = round(already_paid.get(wid, 0), 2)
-        remaining, correction = remaining_and_correction(e["earned"], prev_paid, 0, wid)
-        sources = sorted(paid_sources.get(wid, []), key=lambda x: x["pay_run_id"])
-        if correction:
-            correction["sources"] = sources
+        # LAB-01-G (F2): "previously paid" counts each paid line only up to the earned of its
+        # days; the excess is a receivable (correction), not netted with later earnings.
+        alloc = await allocate_paid_sources(tenant, org_id, wid, prof, paid_sources.get(wid, []))
+        sources = alloc["sources"]
+        prev_paid_total = round(already_paid.get(wid, 0), 2)
+        prev_paid = alloc["counted"] if sources else prev_paid_total
+        remaining, _shortfall = remaining_and_correction(e["earned"], prev_paid, 0, wid)
+        correction = overpayment_item(org_id, wid, alloc)
         sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
 
         # Per-day breakdown
@@ -772,6 +832,8 @@ async def generate_pay_run(
             "bonuses_amount": 0,
             "deductions_amount": 0,
             "previously_paid": prev_paid,
+            "previously_paid_total": prev_paid_total,
+            "receivable_from_overpayment": alloc["overpaid"],
             "paid_now_amount": 0,
             "remaining_after_payment": remaining,
             "correction_item": correction,
@@ -925,10 +987,9 @@ async def _create_pay_run(data: PayRunCreateInput, user: dict):
 
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
-        if correction:  # LAB-01-D (FG-66): the item names its correction record
-            correction["sources"] = row.get("previously_paid_sources") or []
-            correction["correction_id"] = correction_id(org_id, eid, correction["sources"])
-        row = dict(row, correction_item=correction)
+        # LAB-01-G (F2): the correction item is the receivable per paid source line from the
+        # preview — not a shortfall of this run's own window / adjustments.
+        row = dict(row, correction_item=row.get("correction_item"))
 
         frozen_row = {
             "employee_id": eid,
@@ -1566,10 +1627,9 @@ async def update_pay_run(run_id: str, data: PayRunCreateInput, user: dict = Depe
         paid_now = round(_money_float(ovr.paid_now_amount), 2)
         remaining, correction = remaining_and_correction(
             row["earned_amount"] + total_bonuses - total_deductions, row["previously_paid"], paid_now, eid)
-        if correction:  # LAB-01-D (FG-66): the item names its correction record
-            correction["sources"] = row.get("previously_paid_sources") or []
-            correction["correction_id"] = correction_id(org_id, eid, correction["sources"])
-        row = dict(row, correction_item=correction)
+        # LAB-01-G (F2): the correction item is the receivable per paid source line from the
+        # preview — not a shortfall of this run's own window / adjustments.
+        row = dict(row, correction_item=row.get("correction_item"))
         existing_row = existing_row_map.get(eid, {}) or {}
         day_cells = row.get("day_cells") or existing_row.get("day_cells") or []
 

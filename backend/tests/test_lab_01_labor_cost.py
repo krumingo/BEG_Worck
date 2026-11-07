@@ -542,7 +542,8 @@ def test_fg66_paid_above_repriced_earned_is_a_correction_not_a_negative_remainin
         before = await op.pay_runs.find_one({"id": "run-old"}, {"_id": 0})
         rows = await _preview(c)
         ak = rows["w-akord"]
-        assert ak["earned_amount"] == 600.0 and ak["previously_paid"] == 660.0
+        assert ak["earned_amount"] == 600.0 and ak["previously_paid"] == 600.0   # counted up to earned (LAB-01-G)
+        assert ak["previously_paid_total"] == 660.0
         assert ak["remaining_after_payment"] == 0.0                      # never -60
         assert ak["correction_item"]["type"] == "FLOW028_CORRECTION"
         assert ak["correction_item"]["amount"] == 60.0

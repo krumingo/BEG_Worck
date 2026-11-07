@@ -81,3 +81,15 @@ Per-line amounts of one person add up to the cent to that person's total.
   - It is skipped on this branch alone.
   - On a local trial merge with #72 @ 8ac194a it passed 5/5 on real Mongo; that run is section B of the evidence.
   - `IdempotencyUnprotected` from #72 maps to 503 (fail closed, nothing written).
+
+## LAB-01-G (F2 — CLAUDE.md §7: no automatic netting of receivables and payables) — `tests-LAB-01-G.txt`
+- **"Paid before" is capped:** an earlier paid line counts only up to the LAB-01 earned amount of the days it covered (`allocate_paid_sources` in `pay_runs.py`).
+  - Paid lines are taken in run order and share the earned of overlapping days.
+  - The excess is a **receivable** from the person.
+  - Later earnings are paid in full; they are never reduced by an earlier overpayment.
+  - Rows show `previously_paid` (counted), `previously_paid_total` (what was paid) and `receivable_from_overpayment`.
+- **One record per receivable:** one `payroll_corrections` record per (employee, paid source line), key `overpayment:employee:<id>:source:pay_run:<run>`.
+  - It is created once and stays `pending_approval` until an explicit approved decision (W0-07 not started → `awaiting_approval_runtime` + DQ alert).
+  - No pay run, draft or confirmed, supersedes, re-prices, absorbs or applies it.
+  - A recomputation with another amount only opens a DQ alert: `PAYROLL_CORRECTION_RECOMPUTED`, or `…CHANGED_AFTER_DECISION` for a decided record.
+- **Test:** a draft monthly run with 600 of later earnings shows remaining **600** (not 540). The 60 correction stays pending and unchanged; paying 600 is allowed, 601 is refused.
