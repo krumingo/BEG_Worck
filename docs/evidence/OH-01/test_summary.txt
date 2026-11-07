@@ -1,6 +1,9 @@
 # OH-01 test summaries (branch claude/oh-01-overhead from main 35ae10b, local real MongoDB 7.0.34 replica set rs0)
 ## OH-01, real Mongo + mongomock (W0_03_REAL_MONGO_URL set), PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider
-tests/test_oh_01_overhead_no_hard_delete.py: 43 passed (6 tests; 5 x 2 backends x 3 modes off/shadow/enforce, test_04 x 3 non-finance roles, + 1 static)
+tests/test_oh_01_overhead_no_hard_delete.py: 57 passed (9 tests x 2 backends x 3 modes off/shadow/enforce, test_04 x 3 non-finance roles, + static/index)
+## Audit of a3e0b91 (OH01-1, OH01-2, harness) — fix commit
+test_07 (4 parallel re-allocations x 3 rounds) + test_08 (6 parallel DELETEs of one cost): on a3e0b91 9 of 12 cases FAIL; after the fix 12/12 pass, 5 of 5 repeated runs on real Mongo
+merge check: OH-01 tests on (origin/claude/sec-01-money-write-permissions + this branch): 57 passed (registered tenant in the harness)
 ## tests/test_r0_0*.py (real Mongo)
 main 35ae10b: 814 passed | OH-01: 814 passed
 ## W0 DB-free (tests/test_w0_*.py --noconftest, no W0_03_REAL_MONGO_URL)

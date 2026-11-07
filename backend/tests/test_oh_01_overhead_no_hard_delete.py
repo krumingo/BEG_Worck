@@ -54,12 +54,24 @@ USERS = {
 }
 
 
-async def _seed(op):
+async def _seed(op, sysdb):
+    """The tenant is REGISTERED (registry + memberships + role assignments in a separate
+    system database), so enforce-mode routes — also #69's require_money_write on compute —
+    resolve it like a real installation."""
+    from app.permissions.catalog import LEGACY_ROLE_MAP
     await op.organizations.insert_one({"id": ORG, "name": "OH-01 Org"})
     await op.subscriptions.insert_one({"org_id": ORG, "plan_id": "pro", "status": "active"})
+    await sysdb.tenant_registry.insert_one({"id": ORG, "legacy_org_id": ORG, "status": "active",
+                                            "database_name": op.name})
     for uid, role in USERS.items():
         await op.users.insert_one({"id": uid, "org_id": ORG, "role": role, "is_active": True,
                                    "email": uid + "@oh01.test", "first_name": uid})
+        await sysdb.tenant_memberships.insert_one({"id": "tm_%s" % uid, "user_id": uid,
+                                                   "tenant_id": ORG, "status": "active"})
+        await sysdb.tenant_role_assignments.insert_one({
+            "id": "ra_%s" % uid, "user_id": uid, "tenant_id": ORG,
+            "role_id": LEGACY_ROLE_MAP[role], "scope_type": "company", "scope_id": None,
+            "module": None, "permissions": [], "status": "active", "sync_source": "users.role"})
     await op.projects.insert_many([
         {"id": PROJ_A, "org_id": ORG, "code": "A", "name": "Project A", "status": "Active"},
         {"id": PROJ_B, "org_id": ORG, "code": "B", "name": "Project B", "status": "Active"},
@@ -93,19 +105,38 @@ def _key():
     return "k-" + uuid.uuid4().hex
 
 
-def _app(monkeypatch, op, mode):
+def _app(monkeypatch, op, sysdb, mode):
     from fastapi import FastAPI
     import app.db as appdb
     from app.deps import auth as deps_auth, modules as deps_modules
     from app.master_data.deps import ENV_MODE
     from app.routes import overhead
     from app.services import project_pnl
+    from app.tenancy import guard, registry, resolver
     from app.utils import audit as utils_audit
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
     for module in (appdb, deps_auth, deps_modules, utils_audit, overhead, project_pnl):
         monkeypatch.setattr(module, "db", op)
+    try:    # PR #69 (SEC-01): compute is guarded by require_money_write, which compares
+        # the resolved tenant database with ITS legacy handle — absent on main.
+        from app.permissions import money_write
+        monkeypatch.setattr(money_write, "db", op)
+    except ImportError:
+        pass
+    monkeypatch.setattr(registry, "system_db", sysdb)
+    for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
+        monkeypatch.setattr(registry, coll, sysdb[coll])
+
+    async def _get_db(tenant_id, require_operational=False):
+        t = await registry.get_tenant(tenant_id)
+        if not t:
+            raise resolver.TenantNotFound(tenant_id)
+        assert registry.resolve_database_name(t) == op.name
+        return op
+    monkeypatch.setattr(resolver, "get_tenant_db", _get_db)
+    monkeypatch.setattr(guard, "get_tenant_db", _get_db)
     app = FastAPI()
     app.include_router(overhead.router, prefix="/api")
     return app
@@ -113,7 +144,9 @@ def _app(monkeypatch, op, mode):
 
 class _Db:
     def __init__(self, backend):
-        self.backend, self.client, self.name = backend, None, "oh_01_" + uuid.uuid4().hex[:10]
+        self.backend, self.client = backend, None
+        suffix = uuid.uuid4().hex[:10]
+        self.names = ("oh_01_" + suffix, "oh_01_sys_" + suffix)
 
     async def __aenter__(self):
         if self.backend == "real":
@@ -123,12 +156,13 @@ class _Db:
         else:
             from mongomock_motor import AsyncMongoMockClient
             self.client = AsyncMongoMockClient()
-        return self.client[self.name]
+        return self.client[self.names[0]], self.client[self.names[1]]
 
     async def __aexit__(self, *exc):
         if self.backend == "real":
-            await self.client.drop_database(self.name)
-            assert self.name not in await self.client.list_database_names()
+            for name in self.names:
+                await self.client.drop_database(name)
+            assert not set(self.names) & set(await self.client.list_database_names())
             self.client.close()
 
 
@@ -136,9 +170,9 @@ def run(monkeypatch, backend, mode, scenario):
     import httpx
 
     async def body():
-        async with _Db(backend) as op:
-            await _seed(op)
-            app = _app(monkeypatch, op, mode)
+        async with _Db(backend) as (op, sysdb):
+            await _seed(op, sysdb)
+            app = _app(monkeypatch, op, sysdb, mode)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
                                          base_url="http://oh01") as c:
                 return await scenario(c, op)
@@ -146,11 +180,14 @@ def run(monkeypatch, backend, mode, scenario):
 
 
 async def _dump(op):
-    """Every business row (bytes) — proves a refused request wrote nothing."""
+    """Every business row (bytes) — proves a refused request wrote nothing. AuditEvents:
+    the overhead ones (an enforce-mode permission DENIAL event is a refusal record, not a
+    business write — PM-01 counts it the same way)."""
     import bson
     out = {}
     for name in BUSINESS + ("audit_events", "audit_logs"):
-        docs = await op[name].find({}).sort("id", 1).to_list(None)
+        flt = {"action": {"$regex": "^overhead\\."}} if name == "audit_events" else {}
+        docs = await op[name].find(flt).sort("id", 1).to_list(None)
         out[name] = [bson.BSON.encode({k: d[k] for k in sorted(d) if k != "_id"}) for d in docs]
     return out
 
@@ -352,3 +389,86 @@ def test_06_overhead_routes_have_no_hard_delete():
     from app.routes import overhead
     src = inspect.getsource(overhead)
     assert "delete_one(" not in src and "delete_many(" not in src
+
+
+# ═══════════════════════════════════════════════════════════════════ 7. concurrency (audit of a3e0b91)
+def test_07_concurrent_reallocations_never_leave_two_current_versions(monkeypatch, backend, mode):
+    """OH01-1: 4 parallel re-allocations with different keys -> ONE current batch, distinct
+    versions, the P&L sum equals the snapshot (was 4 current batches = 4x the overhead)."""
+    async def scenario(c, op):
+        from app.services.project_pnl import compute_project_pnl
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        snap = await _snapshot(c)
+        sid, total = snap["id"], snap["total_overhead"]
+        url = f"/api/overhead/snapshots/{sid}/allocate"
+        r = await c.post(url, json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        for _round in range(3):
+            rs = await asyncio.gather(*[
+                c.post(url, json={"method": "PersonDays"}, headers=_h(key=_key()))
+                for _ in range(4)])
+            codes = sorted(x.status_code for x in rs)
+            assert set(codes) <= {200, 409}, [x.text for x in rs]
+            assert 200 in codes, [x.text for x in rs]
+            for x in rs:
+                if x.status_code == 409:
+                    assert x.json()["detail"]["error_code"] in (
+                        "ALLOCATION_BUSY", "ALLOCATION_VERSION_CONFLICT"), x.text
+            rows = await op.project_overhead_allocations.find(
+                {"overhead_snapshot_id": sid}, {"_id": 0}).to_list(None)
+            current = [x for x in rows if x.get("superseded_by") is None]
+            assert len({x["allocation_batch_id"] for x in current}) == 1, current
+            versions = sorted({x["allocation_version"] for x in rows})
+            assert versions == list(range(1, len(versions) + 1))
+            per_version = {}
+            for x in rows:
+                per_version.setdefault(x["allocation_version"], set()).add(x["allocation_batch_id"])
+            assert all(len(b) == 1 for b in per_version.values()), per_version
+            pnl_sum = 0
+            for p in (PROJ_A, PROJ_B):
+                pnl_sum += (await compute_project_pnl(ORG, p))["expense"]["overhead"]
+            assert round(pnl_sum, 2) == pytest.approx(total, abs=0.02)
+            assert await op.audit_events.count_documents(
+                {"action": "overhead.allocation.version_created"}) == len(versions)
+            s = await op.overhead_snapshots.find_one({"id": sid})
+            assert s["allocation_version"] == versions[-1] and "allocation_lock" not in s
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_08_concurrent_archive_of_one_cost_archives_and_audits_once(monkeypatch, backend, mode):
+    """OH01-2: 6 parallel DELETEs (different keys) of one unused cost -> one 200, the
+    rest 409 ALREADY_ARCHIVED, exactly ONE archive AuditEvent and one legacy audit row."""
+    async def scenario(c, op):
+        cat = await _category(c)
+        cost = await _cost(c, cat["id"], date="2026-12-01")
+        rs = await asyncio.gather(*[
+            c.delete(f"/api/overhead/costs/{cost['id']}", headers=_h(key=_key()))
+            for _ in range(6)])
+        codes = sorted(x.status_code for x in rs)
+        assert codes.count(200) == 1 and codes.count(409) == 5, [x.text for x in rs]
+        for x in rs:
+            if x.status_code == 409:
+                assert x.json()["detail"]["error_code"] == "ALREADY_ARCHIVED"
+        assert await op.audit_events.count_documents(
+            {"action": "overhead.overhead_cost.archived", "entity_id": cost["id"]}) == 1
+        assert await op.audit_logs.count_documents(
+            {"action": "archived", "entity_id": cost["id"]}) == 1
+        assert await op.overhead_costs.count_documents({"id": cost["id"], "status": "archived"}) == 1
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_09_allocation_version_index_is_unique_and_idempotent(monkeypatch, backend):
+    async def scenario(c, op):
+        from app.services.overhead_lifecycle import ensure_allocation_indexes, ALLOCATION_VERSION_INDEX
+        await ensure_allocation_indexes(op)
+        await ensure_allocation_indexes(op)          # idempotent
+        info = await op.project_overhead_allocations.index_information()
+        assert info[ALLOCATION_VERSION_INDEX]["unique"] is True
+        row = {"org_id": ORG, "overhead_snapshot_id": "S", "allocation_version": 2,
+               "project_id": PROJ_A}
+        await op.project_overhead_allocations.insert_one({**row, "id": "r1"})
+        with pytest.raises(Exception) as exc:
+            await op.project_overhead_allocations.insert_one({**row, "id": "r2"})
+        assert "duplicate" in str(exc.value).lower() or "E11000" in str(exc.value)
+    run(monkeypatch, backend, "off", scenario)

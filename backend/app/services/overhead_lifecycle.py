@@ -25,6 +25,8 @@ What lives here (the route ``app/routes/overhead.py`` keeps its own tenant reads
   SAME database handle the overhead collections use.
 """
 import uuid
+from contextlib import asynccontextmanager
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
@@ -46,6 +48,14 @@ NOT_ARCHIVED = {"$ne": STATUS_ARCHIVED}
 CURRENT_VERSION = None
 
 _NS = uuid.UUID("0b1c0a7e-0d01-4c24-9f1a-0e0000000001")
+
+#: OH01-1: one allocation of a snapshot at a time (the lock pattern of PR #70 ``_row_lock``).
+ALLOCATION_LOCK_FIELD = "allocation_lock"
+ALLOCATION_LOCK_STALE_SECONDS = 30
+ALLOCATIONS_COLLECTION = "project_overhead_allocations"
+#: OH01-1: no two rows of the same snapshot, version and project — two concurrent writers
+#: can never both produce "version N" (legacy rows without a version are not covered).
+ALLOCATION_VERSION_INDEX = "oh01_snapshot_version_project_unique"
 
 
 def require_key(raw_key: Optional[str]) -> str:
@@ -149,3 +159,37 @@ async def audit_overhead_event(db, user: Dict[str, Any], *, action: str, entity_
         idempotency_key=idempotency_key,
     )
     return await record_event(db, event)
+
+
+async def ensure_allocation_indexes(db) -> None:
+    """OH01-1: the unique (org, snapshot, version, project) index on allocation rows.
+    ``create_index`` with the same name and spec is a no-op, so this is idempotent."""
+    await db[ALLOCATIONS_COLLECTION].create_index(
+        [("org_id", 1), ("overhead_snapshot_id", 1), ("allocation_version", 1), ("project_id", 1)],
+        name=ALLOCATION_VERSION_INDEX, unique=True,
+        partialFilterExpression={"allocation_version": {"$exists": True}})
+
+
+@asynccontextmanager
+async def snapshot_allocation_lock(snapshots, snapshot_id: str):
+    """OH01-1: a short exclusive lock on ONE snapshot row, taken with one atomic conditional
+    write (``snapshots`` is the request's tenant-scoped collection). A concurrent holder ->
+    409 ``ALLOCATION_BUSY``, nothing written; a lock older than
+    ALLOCATION_LOCK_STALE_SECONDS (crashed holder) can be taken over. Always released by
+    its own token."""
+    token = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    stale = (now - timedelta(seconds=ALLOCATION_LOCK_STALE_SECONDS)).isoformat()
+    won = await snapshots.update_one(
+        {"id": snapshot_id, "$or": [{ALLOCATION_LOCK_FIELD: {"$exists": False}},
+                                    {ALLOCATION_LOCK_FIELD + ".at": {"$lt": stale}}]},
+        {"$set": {ALLOCATION_LOCK_FIELD: {"token": token, "at": now.isoformat()}}})
+    if won.modified_count != 1:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "ALLOCATION_BUSY",
+            "message": "Разпределението на този snapshot се изпълнява от друга заявка — опитайте отново"})
+    try:
+        yield
+    finally:
+        await snapshots.update_one({"id": snapshot_id, ALLOCATION_LOCK_FIELD + ".token": token},
+                                   {"$unset": {ALLOCATION_LOCK_FIELD: ""}})

@@ -20,6 +20,7 @@ from ..models.overhead import (
 from app.tenancy.data_access import TenantData
 from app.services.overhead_lifecycle import (  # OH-01
     KeyedWrite, NOT_ARCHIVED, STATUS_ARCHIVED, audit_overhead_event, require_key,
+    ensure_allocation_indexes, snapshot_allocation_lock,
 )
 
 
@@ -111,7 +112,12 @@ async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str
             "archive_reason": reason,
             "updated_at": now,
         }
-        await coll.update_one({"id": record_id, "status": NOT_ARCHIVED}, {"$set": archive})
+        won = await coll.update_one({"id": record_id, "status": NOT_ARCHIVED}, {"$set": archive})
+        if won.modified_count != 1:
+            # OH01-2: a concurrent request archived it first — this one wrote nothing
+            # and must not claim (or audit) the archive.
+            raise HTTPException(status_code=409, detail={
+                "error_code": "ALREADY_ARCHIVED", "message": "Записът вече е архивиран"})
 
         async def _audit():
             await audit_overhead_event(
@@ -692,15 +698,30 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
         version = rows[0]["allocation_version"] if rows else None
         return {"allocations": rows, "allocation_batch_id": kw.replay_id,
                 "allocation_version": version, "replayed": True}
-    async with kw:
+    await ensure_allocation_indexes(db)
+    async with kw, snapshot_allocation_lock(tenant.overhead_snapshots, snapshot_id):
         batch_id = kw.new_id("batch")
         now = datetime.now(timezone.utc).isoformat()
 
         async def _next_version():
+            # OH01-1: under the snapshot lock, and a CAS on snapshot.allocation_version —
+            # two writers can never both take the same version.
+            snap = await tenant.overhead_snapshots.find_one(
+                {"id": snapshot_id}, {"_id": 0, "allocation_version": 1})
+            prev = (snap or {}).get("allocation_version")
             rows = await coll.find({"overhead_snapshot_id": snapshot_id},
                                    {"_id": 0, "allocation_version": 1}).to_list(None)
             # a legacy row without a version is version 1 (no migration, OH-01)
-            return max((r.get("allocation_version") or 1 for r in rows), default=0) + 1
+            nxt = max([prev or 0] + [r.get("allocation_version") or 1 for r in rows]) + 1
+            cas = {"id": snapshot_id, "allocation_version": prev} if prev is not None \
+                else {"id": snapshot_id, "allocation_version": {"$exists": False}}
+            won = await tenant.overhead_snapshots.update_one(
+                cas, {"$set": {"allocation_version": nxt, "current_allocation_batch_id": batch_id}})
+            if won.modified_count != 1:
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "ALLOCATION_VERSION_CONFLICT",
+                    "message": "Друга заявка току-що създаде нова версия — опитайте отново"})
+            return nxt
         version = int(await kw.wf.step("version", _next_version, reference=str))
 
         for a in allocations:
