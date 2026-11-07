@@ -24,6 +24,7 @@ The rules, in order:
   they are, for a human to decide; the manual script's dry run lists every
   duplicate group (read only).
 """
+import hashlib
 import uuid
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
@@ -48,8 +49,9 @@ PLANNED_INDEXES: List[Tuple[str, List[Tuple[str, int]], Dict[str, Any]]] = [
 class AuditIndexError(RuntimeError):
     """The audit indexes cannot be guaranteed for a database. Never ignored.
 
-    F-72-01: the message names only the database, the collection and the index
-    (field names), a safe ``code`` and a diagnostic ``ref``. It never carries a
+    F-72-01 / FG-117: the message names only an opaque database ref
+    (database_ref()), the collection and the index (field names), a safe
+    ``code`` and a diagnostic ``ref``. It never carries a
     key value, a reservation id, tenant content or MongoDB's errmsg/keyValue,
     and it is raised ``from None`` so the original driver error is not chained
     into a logged traceback. The rows themselves are listed only by the
@@ -73,8 +75,8 @@ class AuditIndexConflict(AuditIndexError):
 class AuditIndexDuplicates(AuditIndexError):
     """Existing records would violate a planned unique index. Nothing is deleted.
 
-    ``report`` holds only safe fields (database, collection, index, keys as
-    field names, code, ref) — never the duplicate values.
+    ``report`` holds only safe fields (database_ref, collection, index, keys as
+    field names, code, ref) — never the database name or the duplicate values.
     """
 
     code = "AUDIT_INDEX_DUPLICATES"
@@ -82,6 +84,20 @@ class AuditIndexDuplicates(AuditIndexError):
     def __init__(self, message: str, report: Dict[str, Any], **kw):
         super().__init__(message, **kw)
         self.report = dict(report, code=self.code, ref=self.ref)
+
+
+def database_ref(name: Optional[str]) -> str:
+    """FG-117: an opaque, stable reference to a tenant database for errors and logs.
+
+    The database name can identify the company, so it never appears in a refusal
+    or a log line; the dry-run operator report prints the name next to this ref.
+    """
+    return "db-" + hashlib.sha256(str(name).encode("utf-8")).hexdigest()[:12]
+
+
+def describe_report(report: Dict[str, Any]) -> str:
+    """A loggable one-line summary of an ensure_audit_indexes() report (no name)."""
+    return "%s: created %s" % (database_ref(report.get("database")), report.get("created"))
 
 
 def new_diagnostic_ref() -> str:
@@ -120,8 +136,12 @@ def _norm_keys(keys: Iterable) -> List[Tuple[str, int]]:
     return [(str(f), int(d)) for f, d in keys]
 
 
-def _classify(existing: Dict[str, Dict[str, Any]], keys, unique: bool) -> Tuple[str, Optional[str]]:
-    """``("present", name)`` / ``("missing", None)``; raises on a conflict."""
+def _classify(existing: Dict[str, Dict[str, Any]], keys, unique: bool,
+              where: str = "") -> Tuple[str, Optional[str]]:
+    """``("present", name)`` / ``("missing", None)``; raises on a conflict.
+
+    ``where`` is an opaque location prefix (database ref + collection), never a name.
+    """
     want = _norm_keys(keys)
     planned_name = index_name(want)
     for name, info in existing.items():
@@ -133,12 +153,12 @@ def _classify(existing: Dict[str, Dict[str, Any]], keys, unique: bool) -> Tuple[
         if has_unique == unique and not (unique and restricted):
             return "present", name
         raise AuditIndexConflict(
-            "index %r on %s has unique=%s%s, planned unique=%s — not dropped; "
+            where + "index %r on %s has unique=%s%s, planned unique=%s — not dropped; "
             "resolve by hand" % (name, want, has_unique,
                                  " (partial/sparse)" if restricted else "", unique))
     if planned_name in existing:
         raise AuditIndexConflict(
-            "index name %r is taken by keys %s, planned %s — not dropped; resolve by hand"
+            where + "index name %r is taken by keys %s, planned %s — not dropped; resolve by hand"
             % (planned_name, _norm_keys(existing[planned_name].get("key", [])), want))
     return "missing", None
 
@@ -146,7 +166,8 @@ def _classify(existing: Dict[str, Dict[str, Any]], keys, unique: bool) -> Tuple[
 async def ensure_audit_indexes(db) -> Dict[str, Any]:
     """Make sure every planned index exists in ``db``. Idempotent; drops and deletes nothing.
 
-    Returns ``{"database", "present": [...], "created": [...]}``. Raises
+    Returns ``{"database", "present": [...], "created": [...]}`` — for the
+    caller, not for a log (log it with describe_report(), FG-117). Raises
     :class:`AuditIndexConflict` or :class:`AuditIndexDuplicates` instead of
     skipping an index silently.
     """
@@ -156,7 +177,8 @@ async def ensure_audit_indexes(db) -> Dict[str, Any]:
         unique = bool(opts.get("unique", False))
         if coll not in info_cache:
             info_cache[coll] = await db[coll].index_information()
-        state, name = _classify(info_cache[coll], keys, unique)
+        state, name = _classify(info_cache[coll], keys, unique,
+                                where="%s.%s: " % (database_ref(db.name), coll))
         label = "%s.%s" % (coll, name or index_name(keys))
         if state == "present":
             report["present"].append(label)
@@ -170,13 +192,13 @@ async def ensure_audit_indexes(db) -> Dict[str, Any]:
                 raise
             # F-72-01: no keyValue / errmsg here and no exception chaining.
             index = index_name(keys)
-            dup = {"database": report["database"], "collection": coll, "index": index,
+            dup = {"database_ref": database_ref(db.name), "collection": coll, "index": index,
                    "keys": _norm_keys(keys)}
             raise AuditIndexDuplicates(
                 "%s: existing records violate the planned unique index %s on %s — nothing "
                 "deleted; list the duplicate groups with "
                 "scripts/w0_04_bootstrap_audit_indexes.py (dry run)" % (
-                    report["database"], index, coll), dup) from None
+                    database_ref(db.name), index, coll), dup) from None
         info_cache[coll] = await db[coll].index_information()
         report["created"].append("%s.%s" % (coll, created))
     return report
@@ -193,7 +215,8 @@ async def tenant_database_names(op_db, system_db) -> List[str]:
         records = await system_db["tenant_registry"].find(
             {}, {"_id": 0, "id": 1, "database_name": 1}).to_list(None)
     except Exception as exc:  # noqa: BLE001
-        raise AuditIndexError("the tenant registry cannot be read: %s" % exc) from exc
+        raise AuditIndexError("the tenant registry cannot be read (%s)"
+                              % safe_reason(exc)) from None
     for r in records:
         name = r.get("database_name")
         if name and name not in names:
@@ -279,5 +302,5 @@ async def require_unique_index(db, coll: str, keys, error_cls, *, create: bool =
             "[AUDIT_INDEX_UNPROTECTED ref=%s] %s.%s: no unique index %s and it cannot be "
             "created (%s); refusing to write (concurrent writes could duplicate). Operator: "
             "scripts/w0_04_bootstrap_audit_indexes.py (dry run)"
-            % (ref, db.name, coll, index_name(keys), reason))
+            % (ref, database_ref(db.name), coll, index_name(keys), reason))
     _unique_index_verified.add(cache_key)

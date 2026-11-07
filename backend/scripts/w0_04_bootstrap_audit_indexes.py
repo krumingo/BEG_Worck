@@ -48,7 +48,7 @@ db = client[OPERATIONAL_DB]
 # W0-04-C01: one list, shared with the application startup
 # (app.audit.indexes.ensure_audit_indexes), so the script and the app can
 # never plan different indexes.
-from app.audit.indexes import PLANNED_INDEXES  # noqa: E402,F401
+from app.audit.indexes import PLANNED_INDEXES, database_ref  # noqa: E402,F401
 
 
 async def run(apply: bool, verify_only: bool) -> int:
@@ -56,6 +56,8 @@ async def run(apply: bool, verify_only: bool) -> int:
     n_keys = await db[IDEMPOTENCY_COLLECTION].count_documents({})
 
     print(f"Database            : {OPERATIONAL_DB}")
+    # FG-117: the only place the name is shown next to the ref used in errors/logs.
+    print(f"Database ref         : {database_ref(OPERATIONAL_DB)}")
     print(f"Existing audit events: {n_events}")
     print(f"Existing idem keys   : {n_keys}")
     print()

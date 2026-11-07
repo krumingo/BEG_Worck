@@ -757,3 +757,127 @@ def test_f72_master_data_conflict_refusals_name_no_key(monkeypatch):
         assert e2.value.__cause__ is None and e2.value.__suppress_context__
         _assert_clean(_everything_logged(e2.value))
     scratch(go)
+
+
+# ─────────────────────────────────────────────── FG-117 (Addendum B): no tenant DB name in errors/logs
+
+SENTINEL_DB = "SNTLDBacme"            # stands for a company name inside a database name
+
+
+def scratch_named(test, n_dbs=1):
+    """Like scratch(), but every database name carries SENTINEL_DB."""
+    async def body():
+        from motor.motor_asyncio import AsyncIOMotorClient
+        client = AsyncIOMotorClient(REAL_URL, serverSelectionTimeoutMS=5000)
+        names = [DB_PREFIX + SENTINEL_DB + uuid.uuid4().hex[:8] for _ in range(n_dbs)]
+        try:
+            return await test(client, [client[n] for n in names])
+        finally:
+            for n in names:
+                assert n.startswith(DB_PREFIX)
+                await client.drop_database(n)
+            client.close()
+    return asyncio.run(body())
+
+
+def _assert_no_db_name(text, db):
+    assert SENTINEL_DB not in text and db.name not in text, text
+
+
+@real_mongo
+def test_fg117_startup_errors_and_log_name_no_database(caplog):
+    import logging
+
+    async def go(client, dbs):
+        op, sysdb = dbs
+        await _poison_chain(op)
+        with pytest.raises(ix.AuditIndexDuplicates) as exc:
+            await ix.ensure_audit_indexes_for_installation(op, sysdb)
+        e = exc.value
+        assert ix.database_ref(op.name) in str(e) and e.report["database_ref"] == ix.database_ref(op.name)
+        assert "database" not in e.report
+        logging.getLogger("w004c01.fg117").exception("startup refused", exc_info=e)
+        _assert_no_db_name(_everything_logged(e) + caplog.text, op)
+        # a conflicting index names the database by ref too
+        await sysdb[IDEMPOTENCY_COLLECTION].create_index([("id", 1)])
+        with pytest.raises(ix.AuditIndexConflict) as conflict:
+            await ix.ensure_audit_indexes(sysdb)
+        assert ix.database_ref(sysdb.name) in str(conflict.value)
+        _assert_no_db_name(_everything_logged(conflict.value), sysdb)
+        # the success summary the startup logs
+        fresh = await ix.ensure_audit_indexes(client[op.name + "x"])
+        try:
+            line = ix.describe_report(fresh)
+            assert line.startswith(ix.database_ref(op.name + "x")) and SENTINEL_DB not in line
+        finally:
+            await client.drop_database(op.name + "x")
+    with caplog.at_level(logging.DEBUG):
+        scratch_named(go, n_dbs=2)
+
+
+def test_fg117_an_unreadable_registry_names_no_database_or_host():
+    class _Broken:
+        def __getitem__(self, name):
+            raise RuntimeError("connection to mongodb://%s.internal refused" % SENTINEL_DB)
+
+    class _Op:
+        name = DB_PREFIX + SENTINEL_DB
+
+    with pytest.raises(ix.AuditIndexError) as exc:
+        asyncio.run(ix.tenant_database_names(_Op(), _Broken()))
+    assert "tenant registry cannot be read (RuntimeError)" in str(exc.value)
+    assert SENTINEL_DB not in _everything_logged(exc.value)
+
+
+@real_mongo
+def test_fg117_lazy_guards_and_middleware_name_no_database(caplog):
+    import logging
+    import httpx
+    from fastapi import FastAPI
+    from app.middleware.error_handler import ErrorHandlerMiddleware
+    from app.audit.idempotency import IdempotencyUnprotected
+
+    async def go(client, dbs):
+        idem_db, chain_db = dbs
+        await _poison_idempotency(idem_db)
+        await _poison_chain(chain_db)
+        with pytest.raises(IdempotencyUnprotected) as e1:
+            await begin_idempotent(idem_db, tenant_id="t", key="k", action="pay")
+        with pytest.raises(store.AuditChainUnprotected) as e2:
+            await record_event(chain_db, make_event())
+        assert ix.database_ref(idem_db.name) in str(e1.value)
+        assert ix.database_ref(chain_db.name) in str(e2.value)
+        _assert_no_db_name(_everything_logged(e1.value), idem_db)
+        _assert_no_db_name(_everything_logged(e2.value), chain_db)
+
+        app = FastAPI()
+        app.add_middleware(ErrorHandlerMiddleware)
+
+        @app.post("/pay")
+        async def pay():
+            await begin_idempotent(idem_db, tenant_id="t", key="k2", action="pay")
+
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                     base_url="http://t") as c:
+            r = await c.post("/pay")
+        assert r.status_code == 500 and "AUDIT_INDEX_UNPROTECTED" in caplog.text
+        _assert_no_db_name(caplog.text + r.text, idem_db)
+    with caplog.at_level(logging.DEBUG):
+        scratch_named(go, n_dbs=2)
+
+
+@real_mongo
+def test_fg117_only_the_dry_run_operator_report_shows_the_name_next_to_its_ref():
+    import os
+    import subprocess
+    import sys
+
+    async def go(client, dbs):
+        db = dbs[0]
+        env = dict(os.environ, MONGO_URL=REAL_URL, DB_NAME=db.name, PYTHONPATH=str(BACKEND))
+        out = subprocess.run([sys.executable, "scripts/w0_04_bootstrap_audit_indexes.py"],
+                             cwd=BACKEND, env=env, capture_output=True, text=True, timeout=60)
+        assert out.returncode == 0, out.stdout + out.stderr
+        assert "Database            : %s" % db.name in out.stdout
+        assert "Database ref         : %s" % ix.database_ref(db.name) in out.stdout
+    scratch_named(go)
