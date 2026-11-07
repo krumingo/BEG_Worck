@@ -388,7 +388,25 @@ async def current_allocations(tenant, flt: Dict[str, Any],
 
 async def project_overhead_current(tenant, project_id: str) -> Dict[str, Any]:
     """FG-89: THE project overhead — the sum of its current (published) allocations. The
-    one figure P&L, net profit, alerts, risk and revenue/profit views read."""
+    one figure net profit, alerts, risk, package margin and revenue/profit views read.
+
+    OH-01 addendum 2 (R38: nothing disappears silently): a legacy ``project_overhead_alloc``
+    row (the pre-OH-01 full_cost figure, month ``period``) still counts — labelled
+    "преизчислява се" — for every month the project has NO current OH-01 allocation
+    covering; once an OH-01 allocation covers that month, the legacy figure is out. Read
+    only: nothing is written, nothing deleted (no backfill needed)."""
     rows = await current_allocations(tenant, {"org_id": tenant.org_id, "project_id": project_id})
+    covered = [((r.get("period_start") or "")[:7], (r.get("period_end") or "")[:7])
+               for r in rows if r.get("period_start")]
+    legacy = await tenant.project_overhead_alloc.find(
+        {"org_id": tenant.org_id, "project_id": project_id},
+        {"_id": 0, "period": 1, "allocated_amount": 1}).to_list(None)
+    for lg in legacy:
+        month = (lg.get("period") or "")[:7]
+        if not month or any(a <= month <= b for a, b in covered):
+            continue
+        rows.append({"project_id": project_id, "allocated_amount": lg.get("allocated_amount", 0),
+                     "period_start": month + "-01", "period_end": month + "-31",
+                     "recalculating": True, "source": "legacy_project_overhead_alloc"})
     return {"amount": round(sum(r.get("allocated_amount", 0) for r in rows), 2),
             "rows": rows, "recalculating": any(r.get("recalculating") for r in rows)}

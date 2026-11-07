@@ -1145,7 +1145,10 @@ def test_27_every_view_reads_the_one_oh01_allocation(monkeypatch, backend, mode)
         cat = await _category(c)
         await _cost(c, cat["id"], amount=400.0)
         s1 = await _snapshot(c)
-        assert set((await _views(c, op)).values()) == {0}      # nothing allocated yet
+        # nothing allocated in OH-01 yet: the legacy full_cost figure stays visible in the
+        # views that showed it on main (addendum 2, R38), project P&L never read it
+        v0 = await _views(c, op)
+        assert v0.pop("pnl") == 0 and set(v0.values()) == {9999.0}, v0
         r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
                          headers=_h(key=_key()))
         assert r.status_code == 200, r.text
@@ -1168,10 +1171,11 @@ def test_27_every_view_reads_the_one_oh01_allocation(monkeypatch, backend, mode)
         assert await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None) == alloc_rows
         assert await op.execution_packages.find_one({"id": "PKG-A"}, {"_id": 0}) == pkg_before
         assert await op.project_overhead_alloc.count_documents({}) == 1   # kept, never deleted
+        # Oct is covered by OH-01 now, so the legacy 9999 for Oct is out of every view
     run_views(monkeypatch, backend, mode, scenario)
 
 
-def test_28_no_code_path_reads_or_writes_project_overhead_alloc():
+def test_28_project_overhead_alloc_is_read_only_and_read_in_one_place():
     import re
     from pathlib import Path
     root = Path(__file__).resolve().parent.parent / "app"
@@ -1180,7 +1184,18 @@ def test_28_no_code_path_reads_or_writes_project_overhead_alloc():
         for i, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
             if re.search(r"\.project_overhead_alloc\b|\[\s*[\"']project_overhead_alloc[\"']\s*\]", line):
                 hits.append("%s:%d" % (f.relative_to(root), i))
-    assert hits == [], hits
+    # addendum 2: the ONE read-only legacy fallback; no write anywhere
+    assert hits == ["services/overhead_lifecycle.py:%d" % i for i in _legacy_read_lines()], hits
+
+
+def _legacy_read_lines():
+    from pathlib import Path
+    src = (Path(__file__).resolve().parent.parent / "app" / "services" /
+           "overhead_lifecycle.py").read_text(encoding="utf-8").splitlines()
+    import re
+    lines = [i for i, l in enumerate(src, 1) if re.search(r"\.project_overhead_alloc\b", l)]
+    assert len(lines) == 1 and ".find(" in src[lines[0] - 1]
+    return lines
 
 
 # ═══════════════════════════════════════════════════════════════════ 29. OH74-05
@@ -1268,4 +1283,45 @@ def test_30_every_fg89_reader_carries_the_r38_label(monkeypatch, backend, mode):
         assert r.status_code == 200, r.text
         assert set((await _labels(c, op)).values()) == {(False, None)}
         assert set((await _views(c, op)).values()) == {600.0}
+    run_views(monkeypatch, backend, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════════════════════════ 31. addendum 2
+def test_31_legacy_only_project_keeps_its_value_labelled(monkeypatch, backend, mode):
+    """OH-01 addendum 2 (R38: nothing disappears silently): a project with ONLY legacy
+    project_overhead_alloc rows keeps its value in every FG-89 view, labelled
+    "преизчислява се", until an OH-01 allocation covers that month; a month OH-01 never
+    covers keeps its legacy value. Nothing is written, nothing deleted."""
+    async def scenario(c, op):
+        await op.execution_packages.insert_one({"id": "PKG-A", "org_id": ORG, "project_id": PROJ_A,
+                                                "used_hours": 30, "sale_total": 1000})
+        await op.project_overhead_alloc.insert_many([
+            {"org_id": ORG, "project_id": PROJ_A, "period": "2026-09", "allocated_amount": 120.0},
+            {"org_id": ORG, "project_id": PROJ_A, "period": "2026-10", "allocated_amount": 80.0}])
+        before = await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None)
+        v = await _views(c, op)
+        assert v.pop("pnl") == 0                                   # P&L never read it (main)
+        assert set(v.values()) == {200.0}, v                       # still visible, not 0
+        labels = await _labels(c, op)
+        labels.pop("pnl")
+        assert set(labels.values()) == {(True, "преизчислява се")}, labels
+        byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()["periods"]
+        assert {p["period"]: p["overhead"] for p in byp} == {"2026-09": 120.0, "2026-10": 80.0}
+        # an OH-01 allocation covers October: its legacy 80 is replaced, September stays
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s1 = await _snapshot(c)
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
+                         headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        v = await _views(c, op)
+        assert v.pop("pnl") == 300.0
+        assert set(v.values()) == {420.0}, v                       # 300 (Oct OH-01) + 120 (Sep)
+        byp = (await c.get(f"/api/profit-by-period/{PROJ_A}", headers=_h())).json()["periods"]
+        by = {p["period"]: p for p in byp}
+        assert by["2026-10"]["overhead"] == 300.0 and by["2026-10"]["overhead_label"] is None
+        assert by["2026-09"]["overhead"] == 120.0
+        assert by["2026-09"]["overhead_label"] == "преизчислява се"
+        assert await op.project_overhead_alloc.find({}, {"_id": 0}).to_list(None) == before
     run_views(monkeypatch, backend, mode, scenario)
