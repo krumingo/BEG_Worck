@@ -1069,3 +1069,30 @@ def test_25_internal_reject_is_one_cas_with_key_and_audit_event(monkeypatch, bac
             n_rej = await op.audit_events.count_documents({"entity_id": oid, "action": "offers.offer.rejected"})
             assert n_acc + n_rej == 1, (i, n_acc, n_rej)
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════ FLOW Guard FG-149 (low): opening the link is not an edit of the offer
+def test_26_a_client_view_never_makes_a_concurrent_write_lose(monkeypatch, backend, mode):
+    """FG-149: the public review view bumped updated_at with no condition, so a client merely
+    opening the link made a concurrent new-version lose its CAS (409 OFFER_STATE_CHANGED).
+    The view writes only last_viewed_at ($max) and view_count ($inc), which no CAS filter uses."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o0", token="tv0" + "v" * 21))
+        before = await get(op, "o0")
+        g = await c.get("/api/offers/review/" + "tv0" + "v" * 21)
+        assert g.status_code == 200, g.text
+        after = await get(op, "o0")
+        assert after["updated_at"] == before["updated_at"]               # not an edit
+        assert after["view_count"] == 1 and after["last_viewed_at"]
+        await c.get("/api/offers/review/" + "tv0" + "v" * 21)
+        assert (await get(op, "o0"))["view_count"] == 2
+        for i in range(20):
+            oid, tok = "vw-%d" % i, "tvw%02d" % i + "v" * 19
+            await op.offers.insert_one(offer_doc(oid, token=tok))
+            rs = await asyncio.gather(c.get("/api/offers/review/" + tok), new_version(c, oid),
+                                      c.get("/api/offers/review/" + tok))
+            nv = rs[1]
+            assert nv.status_code == 200, (i, nv.text)          # never a 409 because of a view
+            for g in (rs[0], rs[2]):
+                assert g.status_code in (200, 410), (i, g.text)  # 410 once it is superseded
+    run(monkeypatch, backend, mode, scenario)
