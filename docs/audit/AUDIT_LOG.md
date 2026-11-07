@@ -4194,4 +4194,4 @@ I updated PR comment 6710829710 to "resolved". Gates: `b79a` (#79) and `bx` (mer
 
 The PM-01 diff vs main is only `+POST /api/offers/{offer_id}/cancel`. The merge with main is clean.
 
-Merged tree #77 × #79 so far: act01 110, off01 108, R0 814, PM-01 6. W0 is running.
+Merged tree #77 × #79: act01 110, off01 108, R0 814, PM-01 6, W0 same 15 — **PASS**.
