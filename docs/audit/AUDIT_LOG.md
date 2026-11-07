@@ -4129,3 +4129,17 @@ The merge commits were already byte-checked CLEAN.
 | PM-01 | 6 |
 
 The PM-01 matrix diff vs main is **only** `+offers,POST,/api/offers/{offer_id}/cancel`. Merge with main: clean. OFF79-01 remains blocking; Addendum A is pending.
+
+### #77 @ `dd11e8e` (ACT77-02 fix: re-tile drafts, freeze confirmed) — **ACT77-02 resolved**
+
+`probe_act01.py` with `PROBE_ACT_B=1`, `PROBE_ACT_C=1` and `PROBE_ACT_C2=1` × 3 modes: **FAILS none**.
+
+| Case | Result |
+|---|---|
+| **C2** 0.3 + 0.3, then move the first act off LD | LD 3.70 (exact), then 1234.50 when full |
+| **C2** 33 + 33, then move the first act off LD | LD 407.39 (exact), then 1234.50 when full |
+| **C** randomized (25 steps × 3 rounds) | invariant holds at every step; `acted_value` exact (no float noise); **confirmed acts never change** (3–5 tracked per round); full = 1234.50, +0.0001 → 409 |
+| **C3** confirm ∥ 2 draft edits on the same line × 10 | 200 / 200 / 200; confirmed act unchanged; full = 1234.50 |
+| A1–A10 | still pass |
+
+I updated PR comment 6710704911 to "resolved". Gates: `b77d` (running).
