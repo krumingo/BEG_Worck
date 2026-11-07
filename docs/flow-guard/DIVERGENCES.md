@@ -145,7 +145,7 @@
 | FG-123 | low | ACT-01 `c6c7f1c` | акт по v1 може да се запише в момента на приемане на v2 (приемането е извън транзакцията) | SUSPECTED | resolved (ACT-01 `8188689`, PROVEN: 30 надпревари × 2 дървета, нито един акт след приемането на v2) |
 | FG-124 | medium | #55 `d98cead` | заключването от FG-109 се заобикаля чрез старото единично разпределение (`allocation_ref_id`) | PROVEN | resolved (#55 `94c0571`, PROVEN: 409 ALLOCATION_LOCKED, P/Q 100/0) |
 | FG-125 | medium | #71 `e90aa5f` | `/alarm-rules` показва прага на бюджета (80%) на всички роли | PROVEN | resolved по Р20 (SEC-02 добавка G: прагът е настройка, не сума) — свободното поле `condition` → FG-133 |
-| FG-126 | low | #72 `04e0a1b` | недублирана грешка при създаване на индекс още носи името на tenant базата | PROVEN | open |
+| FG-126 | low | #72 `04e0a1b` | недублирана грешка при създаване на индекс още носи името на tenant базата | PROVEN | resolved (main `2ec61f3`, #78 W0-04-C02: `AuditIndexError` + `safe_reason`, `from None`) |
 | FG-127 | medium | OH-01 `997abdc` | P&L и financial-results показват 323.25, а нетната печалба/печалбата на обекта 823.25 (legacy режийни) | PROVEN | resolved (OH-01 `31a9478`, PROVEN: 823.25 навсякъде, един четец) |
 | FG-128 | low | SUB-ADV-01 `17aa55d` | P&L не показва неприспаднатия аванс като отделен ред | SUSPECTED | partial (SUB-ADV-01 `542fa2c`, PROVEN: даден/приспаднат/остатък на /project-profit само за финансови роли) — `/pnl` и financial-results без аванс. Решение на Крум коя страница |
 | FG-129 | high | main `d226c49` | стара версия на оферта остава приемаема (вътрешно и по клиентския линк) след нова версия | SUSPECTED | resolved (OFF-01 `2379d07`, вкл. legacy двойки — FG-135) |
@@ -1367,7 +1367,7 @@
 
 ## FG-126 — един път за грешка в индексите още носи името на базата
 
-- **Тежест:** low. **Статус:** open. **PROVEN.**
+- **Тежест:** low. **Статус:** resolved (main `2ec61f3`, проход 16). **PROVEN.**
 - **Канон:** FLOW-040 §9; FG-117.
 - **Код (#72 `04e0a1b`):** `audit/indexes.py:192` — недублирана грешка на `create_index` се хвърля сурова. Пример: „too many indexes for fg72_acmebuild_xxx.audit_events“ в съобщението и traceback-а; спира старта.
 - **Решение:** промяна в кода — обвиване в `AuditIndexError` със `safe_reason`, `raise … from None`.

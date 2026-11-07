@@ -330,4 +330,23 @@
 | Tenant проверка при сервиране на файл | ✅ | `projects.py:937` (`org_id`), `media.py` — проверка на пътя (path traversal) |
 | Забавяния/липса на фронт с причина | ⏳ | не е прегледано |
 
-Следващ FLOW в бавния преглед: **FLOW-016** (File Registry).
+
+## Проход 16 — FLOW-016 (Единен File Registry / файлове и документи)
+
+- main @ `2ec61f3` (= `d226c49` + W0-04-C02 #78), 07.11.2026.
+- Търсене в `backend/app` за File Registry / `file_id` / storage provider.
+- Без проба.
+
+| Правило в FLOW-016 | Състояние | Къде / бележка |
+|---|---|---|
+| Един File Registry (`file_id`, `tenant_id`, checksum, provider/object ID, availability, relations) | ❌ / ⏳ | Няма модул File Registry на main. `file_id` се среща само в `audit/envelope.py` и отделни места (`procurement.py`, `technician.py`). Файловете — на локален диск с URL (FG-143). Стекът W0-06 (#44 → #46 → #49 → #51) е отворен и не е сливан |
+| Клиентът държи оригиналите в своя Primary Storage Provider | ❌ | оригиналите са в `/app/backend/uploads` на BEG_Work (FG-143) |
+| Onboarding gate (provider, credentials, read/write test, checksum round-trip) | ⏳ | няма на main (W0-06B) |
+| Периодична проверка на наличността и целостта | ⏳ | няма на main (W0-06C) |
+| Модулите сочат `file_id`, не URL/path | ❌ | `project_photos.url`, `media_files`, отчетите със списъци от URL (FG-143) |
+| Без hard delete на оригинал | ❌ SUSPECTED | `scan_docs` трие с `os.remove` (FG-145) |
+| AuditEvent за файлови операции | ⚠️ | само legacy `log_audit` при качване на снимка (`projects.py:919`) |
+
+Извод: FLOW-016 на практика не е започнат в main. Това е Wave 0 (W0-06) — дълг, не нова находка. Покрито от FG-143 и FG-145.
+
+Следващ FLOW в бавния преглед: **FLOW-009** (склад) — на main, независимо от #55.
