@@ -209,3 +209,28 @@ def test_o9_addendum_a_paths(monkeypatch, backend, mode):
         assert all(v[:2] == (409, 409) and v[2] == 1200.0 and v[3] == 1 for v in out.values())
         assert nv.status_code == 409 and all(v[0] == 422 and v[2] == "Sent" for v in ev.values())
     run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(15))
+def test_o10_vat_put_races_send(monkeypatch, backend, mode, rep):
+    """e0dce63 (OFF79-03 CAS): PUT /offers/{id} {"vat_percent": 9} writes twice (the field,
+    then the recomputed totals). send ∥ that PUT: a Sent offer must be self-consistent
+    (total = subtotal × (1 + vat)) and equal to the send snapshot."""
+    _with_versions(monkeypatch)
+
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", status="Draft"))
+        rp, rs = await asyncio.gather(
+            c.put("/api/offers/o1", headers=hdr("admin-a"), json={"vat_percent": 9}),
+            c.post("/api/offers/o1/send", headers=hdr("admin-a")))
+        o = await get(op, "o1")
+        sent = await op.offer_versions.find_one({"offer_id": "o1"}, {"_id": 0})
+        snap = (sent or {}).get("snapshot_json", {})
+        want_total = round(o["subtotal"] * (1 + (o.get("vat_percent") or 0) / 100), 2)
+        print("O10 %s/%d: PUT %s send %s | status %s vat %s total %s (consistent %s) | snapshot vat %s total %s" % (
+            mode, rep, rp.status_code, rs.status_code, o["status"], o.get("vat_percent"), o["total"],
+            o["total"] == want_total, snap.get("vat_percent"), snap.get("total")))
+        if o["status"] == "Sent":
+            assert o["total"] == want_total and (snap.get("vat_percent"), snap.get("total")) == (
+                o.get("vat_percent"), o["total"])
+    run(monkeypatch, backend, mode, scenario)
