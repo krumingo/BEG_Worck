@@ -38,6 +38,8 @@ function ApprovalCard({ item, packages, showPrice, onDone }) {
       await API.post("/labor-quantities/approve", {
         report_id: item.report_id, entry_id: item.entry_id, report_version: item.report_version,
         approved_quantity: q, execution_package_id: pkg, note,
+        // LAB-02-C (FG-101): a correction names the approval it replaces
+        replaces_approval_id: item.approval?.id || null,
       }, { headers: { "Idempotency-Key": newIdempotencyKey() } });
       toast.success("Количеството е одобрено");
       onDone();

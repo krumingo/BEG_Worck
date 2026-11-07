@@ -354,7 +354,7 @@ async def pending_quantities(project_id: str, user: dict = Depends(get_current_u
             "smr_type": ln.get("smr_type"), "hours": ln.get("hours"), "quantity": ln.get("quantity"),
             "suggested_package_id": ln.get("execution_package_id"),
             "approval": None if not appr else {
-                "approved_quantity": appr.get("approved_quantity"), "unit": appr.get("unit"),
+                "id": appr.get("id"), "approved_quantity": appr.get("approved_quantity"), "unit": appr.get("unit"),
                 "execution_package_id": appr.get("execution_package_id"),
                 "approved_by": appr.get("approved_by"), "approved_at": appr.get("approved_at"),
                 **({"piece_rate": appr.get("piece_rate")} if finance else {})},
@@ -373,6 +373,9 @@ class QuantityApprovalInput(BaseModel):
     approved_quantity: float
     execution_package_id: str
     note: str = ""
+    # LAB-02-C (FG-101): a correction names the active approval it replaces (compare-and-set);
+    # without it a line that is already approved is 409 ALREADY_APPROVED.
+    replaces_approval_id: Optional[str] = None
 
 
 @router.post("/labor-quantities/approve")
@@ -400,10 +403,23 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
         prev = await tenant.labor_quantity_approvals.find(
             {"org_id": org_id, "report_id": data.report_id, "status": "approved"}, {"_id": 0}).to_list(100)
         prev = [p for p in prev if approval_key(p.get("report_id"), p.get("entry_id"), p.get("report_version")) == k]
+        # LAB-02-C (FG-101): a second approver of the same version does not silently replace
+        # the first; a correction must name the active record it replaces.
+        if prev and data.replaces_approval_id not in {p["id"] for p in prev}:
+            raise HTTPException(status_code=409, detail={
+                "code": "ALREADY_APPROVED", "approval_id": prev[-1]["id"],
+                "message": ("Количеството по този ред вече е одобрено — презаредете; "
+                            "за промяна използвайте „Коригирай одобрението“")})
+        if not prev and data.replaces_approval_id:
+            raise HTTPException(status_code=409, detail=(
+                "Одобрението, което коригирате, вече не е активно — презаредете"))
         for p in prev:  # a correction of the decision: the old record is kept, marked void
-            await tenant.labor_quantity_approvals.update_one(
+            res = await tenant.labor_quantity_approvals.update_one(
                 {"org_id": org_id, "id": p["id"], "status": "approved"},
                 {"$set": {"status": "void", "voided_at": now, "voided_by": user["id"], "void_reason": "re-approved"}})
+            if not res.modified_count:  # another correction won the race
+                raise HTTPException(status_code=409, detail=(
+                    "Одобрението току-що беше променено от друг човек — презаредете"))
         rec = {
             "id": str(uuid.uuid4()), "org_id": org_id, "report_id": data.report_id,
             "entry_id": data.entry_id or None, "report_version": line["report_version"],

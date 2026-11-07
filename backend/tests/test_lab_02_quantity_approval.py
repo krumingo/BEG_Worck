@@ -226,7 +226,8 @@ def test_reapproval_corrects_and_keeps_the_old_record(monkeypatch, backend):
         first = await _approve_flow(c, op)
         r = await c.post("/api/labor-quantities/approve", json={
             "report_id": "R-AK", "report_version": first["report_version"], "approved_quantity": 100,
-            "execution_package_id": "pkg-sh", "note": "премерено"}, headers=H("admin"))
+            "execution_package_id": "pkg-sh", "note": "премерено", "replaces_approval_id": first["id"]},
+            headers=H("admin"))
         assert r.status_code == 200, r.text
         recs = {x["id"]: x for x in await op.labor_quantity_approvals.find({}, {"_id": 0}).to_list(10)}
         assert recs[first["id"]]["status"] == "void" and recs[r.json()["id"]]["replaces"] == [first["id"]]
@@ -295,9 +296,12 @@ def test_roles_times_three_modes(monkeypatch, mode):
                 items = {i["report_id"]: i for i in pend.json()["items"]}
                 assert items["R-AK"]["state"] in ("waiting", "approved")
             ver = (await op.employee_daily_reports.find_one({"id": "R-AK"})).get("report_version", 0)
+            # LAB-02-C (FG-101): after the first approver the next ones correct it explicitly
+            active = await op.labor_quantity_approvals.find_one({"status": "approved"}, {"_id": 0, "id": 1})
             a = await c.post("/api/labor-quantities/approve", json={
                 "report_id": "R-AK", "report_version": ver, "approved_quantity": 120,
-                "execution_package_id": "pkg-sh"}, headers=H(who))
+                "execution_package_id": "pkg-sh", "replaces_approval_id": (active or {}).get("id")},
+                headers=H(who))
             got[who] = (g.status_code, p.status_code, pend.status_code, a.status_code)
         assert got == EXPECT, got
     run(monkeypatch, scenario, "mongomock", mode)
@@ -481,6 +485,53 @@ def test_retake1_writes_only_on_an_explicit_started(monkeypatch, state):
         r = await c.post("/api/labor-quantities/approve", json={
             "report_id": "R-AK", "report_version": 0, "approved_quantity": 5,
             "execution_package_id": "pkg-sh"}, headers=H("sm"))
+        assert r.status_code == 409, r.text
+        assert await op.labor_quantity_approvals.count_documents({}) == 0
+    run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-02-C (FG-101)
+def test_fg101_a_second_approver_of_the_same_version_gets_409_already_approved(monkeypatch, backend):
+    """The second approval of the same line and version does not silently void the first:
+    409 ALREADY_APPROVED; the first stays active and paid. A correction must name it."""
+    async def scenario(c, op):
+        first = await _approve_flow(c, op)
+        body = {"report_id": "R-AK", "report_version": first["report_version"], "approved_quantity": 90,
+                "execution_package_id": "pkg-sh"}
+        r = await c.post("/api/labor-quantities/approve", json=body, headers=H("admin"))
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"]["code"] == "ALREADY_APPROVED"
+        assert r.json()["detail"]["approval_id"] == first["id"]
+        # a wrong id is not a correction either
+        r = await c.post("/api/labor-quantities/approve", json=dict(body, replaces_approval_id="nope"),
+                         headers=H("admin"))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "ALREADY_APPROVED"
+        active = await op.labor_quantity_approvals.find({"status": "approved"}, {"_id": 0}).to_list(10)
+        assert [a["id"] for a in active] == [first["id"]]
+        assert await op.labor_quantity_approvals.count_documents({}) == 1
+        assert (await _preview(c))["w-ak"]["earned_amount"] == 600.0
+        # the pending list gives the id the UI sends back as replaces_approval_id
+        pend = await c.get("/api/labor-quantities/pending", params={"project_id": "P"}, headers=_token("sm"))
+        assert {i["report_id"]: i for i in pend.json()["items"]}["R-AK"]["approval"]["id"] == first["id"]
+        # the explicit correction works once; replaying its stale id afterwards is 409
+        r = await c.post("/api/labor-quantities/approve", json=dict(body, replaces_approval_id=first["id"]),
+                         headers=H("admin"))
+        assert r.status_code == 200, r.text
+        r2 = await c.post("/api/labor-quantities/approve", json=dict(body, approved_quantity=80,
+                                                                     replaces_approval_id=first["id"]),
+                          headers=H("owner"))
+        assert r2.status_code == 409 and r2.json()["detail"]["code"] == "ALREADY_APPROVED"
+        assert (await _preview(c))["w-ak"]["earned_amount"] == 450.0
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg101_a_correction_of_a_line_without_an_active_approval_is_409(monkeypatch):
+    async def scenario(c, op):
+        assert (await _set_rate(c)).status_code == 200
+        await op.employee_daily_reports.update_one({"id": "R-AK"}, {"$set": {"status": "APPROVED", "quantity": 120}})
+        r = await c.post("/api/labor-quantities/approve", json={
+            "report_id": "R-AK", "report_version": 0, "approved_quantity": 120,
+            "execution_package_id": "pkg-sh", "replaces_approval_id": "gone"}, headers=H("sm"))
         assert r.status_code == 409, r.text
         assert await op.labor_quantity_approvals.count_documents({}) == 0
     run(monkeypatch, scenario)
