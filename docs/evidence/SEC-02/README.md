@@ -547,6 +547,14 @@ Route-ът е R20-2B (SiteManager член на проекта може да з�
 * PM-01: **15 клетки** спрямо `e90aa5f`. Всички са `POST /alarms/evaluate` × 5 не-финансови роли × 3 режима, 200 → 403; в enforce + `op.audit_events`.
 * frontend: yarn test 102 passed, build compiled.
 
+### FG-133 (Допълнение G, нисък приоритет) — `condition` на правилата за аларми
+`GET /alarm-rules` е единственият route за правила, отворен за всички роли (create / update / toggle / delete са само Owner/Admin). Той връщаше свободния `condition` както е записан. За роля без финансово право сега се връщат само ключовете, които `alarm_engine` чете (`finance_read.ALARM_CONDITION_KEYS`):
+* `metric`, `operator`;
+* `threshold` — % за budget / overhead, часове за overtime, дни за attendance / deadline;
+* `secondary_metric`, `secondary_operator`, `secondary_threshold` (% прогрес).
+
+Всеки друг ключ (напр. бъдеща сума в EUR) се маха. Финансовите роли получават записания `condition`. Тест: `test_fg133_alarm_rules_give_only_known_condition_keys`.
+
 ### Дълг / решение за Крум
 * **SEC-02-G-D2 — ЗАТВОРЕН от Р42** (решение на Крум, 07.11.2026, `docs/architecture/RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md` @ `940bd49`): known-pay вариантът. При 2 платени работника, единият от които е самият технически ръководител, той може да изведе заплатата на другия (6196.63 / 6200 в пробата на одита). Прагът остава **2 платени работника**, Крум приема това извеждане; кодът не се променя. Тестът на пробата допуска само тази находка.
 * **SEC-02-G-D1 — ЗАТВОРЕН от SEC71-04 (Допълнение F):** лентата (status / severity / count / филтър / наличие на аларма или алерт) не се показва на роля без финансово право при < 2 платени работника; при ≥ 2 остава, както позволява Р31.

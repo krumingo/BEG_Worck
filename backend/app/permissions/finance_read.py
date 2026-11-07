@@ -455,6 +455,24 @@ GENERIC_ALARM_RULE_NAME = "Бюджетна аларма"
 _ALARM_CONTEXT_HIDDEN = ("metric_value", "threshold", "details")
 
 
+# SEC-02-G (FLOW Guard FG-133; R20, addendum G): an alarm rule's ``condition`` is free admin
+# input. A caller without the finance right sees only the keys alarm_engine reads — a
+# metric, an operator and a threshold that is a % (budget, overhead), hours (overtime) or
+# days (attendance, deadline), and the secondary % progress condition. Any other key (a
+# future EUR amount, a value copied from real costs) is dropped.
+ALARM_CONDITION_KEYS: FrozenSet[str] = frozenset(
+    {"metric", "operator", "threshold", "secondary_metric", "secondary_operator",
+     "secondary_threshold"})
+
+
+def safe_alarm_rule(rule: dict) -> dict:
+    out = dict(rule)
+    if isinstance(out.get("condition"), dict):
+        out["condition"] = {k: v for k, v in out["condition"].items()
+                            if k in ALARM_CONDITION_KEYS}
+    return out
+
+
 def _is_alarm_event(d: dict) -> bool:
     return "rule_id" in d and "triggered_at" in d
 

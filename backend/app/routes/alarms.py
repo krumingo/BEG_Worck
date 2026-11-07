@@ -209,9 +209,13 @@ async def evaluate_alarms(
 # ── Alarm Rules ────────────────────────────────────────────────────
 
 @router.get("/alarm-rules")
-async def list_rules(user: dict = Depends(get_current_user)):
+async def list_rules(request: Request, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     items = await tenant.alarm_rules.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
+    if not await money_values_visible(request, user):
+        # SEC-02-G (FG-133): only the known non-money keys of a rule's condition
+        from app.permissions.finance_read import safe_alarm_rule
+        items = [safe_alarm_rule(r) for r in items]
     return {"items": items, "total": len(items)}
 
 

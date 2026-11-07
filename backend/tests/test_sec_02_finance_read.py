@@ -1691,6 +1691,45 @@ def test_sec71_04_no_band_with_fewer_than_two_paid_workers(monkeypatch):
     assert two["summary"]["overall_status"] == "over" and two["activities"][0]["status"] == "over"
 
 
+def test_fg133_alarm_rules_give_only_known_condition_keys(monkeypatch):
+    """SEC-02-G (FLOW Guard FG-133, addendum G): GET /alarm-rules — the only rule route
+    open to every role — gives a caller without the finance right only metric / operator /
+    threshold (%, hours, days) / secondary_* of a rule's free-form condition; any other key
+    (e.g. a future EUR amount) is dropped. Finance roles get the stored condition."""
+    import asyncio
+    from app.routes import alarms
+    rule = {"id": "r", "org_id": "T", "name": "Бюджет над 80%", "type": "budget",
+            "severity": "critical", "is_active": True,
+            "condition": {"metric": "burn_pct", "operator": ">", "threshold": 80,
+                          "secondary_metric": "progress_pct", "secondary_operator": "<",
+                          "secondary_threshold": 50, "threshold_eur": 6200.0,
+                          "spent_at_creation": 6200.0}}
+
+    class Coll:
+        def find(self, *_a, **_k):
+            class C:
+                async def to_list(self, _n):
+                    return [dict(rule, condition=dict(rule["condition"]))]
+            return C()
+
+    class Tenant:
+        alarm_rules = Coll()
+    monkeypatch.setattr(alarms, "_tenant", lambda _u: Tenant())
+    for fin in (False, True):
+        async def mv(*_a, _fin=fin, **_k):
+            return _fin
+        monkeypatch.setattr(alarms, "money_values_visible", mv)
+        out = asyncio.run(alarms.list_rules(None, {"org_id": "T", "id": "u"}))
+        cond = out["items"][0]["condition"]
+        if fin:
+            assert cond == rule["condition"]
+        else:
+            assert cond == {"metric": "burn_pct", "operator": ">", "threshold": 80,
+                            "secondary_metric": "progress_pct", "secondary_operator": "<",
+                            "secondary_threshold": 50}, cond
+            assert "6200" not in json.dumps(out), out
+
+
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
     import asyncio
     from app.permissions.money_write import money_values_visible
