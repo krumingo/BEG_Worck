@@ -462,3 +462,25 @@ def test_lab02_1_a_second_active_record_is_refused_with_409(monkeypatch, backend
         await _insert_decision(op.labor_quantity_approvals, dict(rec, id="a3"))
         assert await op.labor_quantity_approvals.count_documents({}) == 2
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════════════════════ audit RETAKE-1
+@pytest.mark.parametrize("state", [{"status": "failed"}, {"status": "weird"}, {}])
+def test_retake1_writes_only_on_an_explicit_started(monkeypatch, state):
+    """Defence in depth: any begin_idempotent state other than STARTED / DUPLICATE is 409,
+    nothing written — for the piece rate and for the quantity approval."""
+    async def scenario(c, op):
+        from app.audit import idempotency as idem
+
+        async def fake_begin(*a, **k):
+            return dict(state)
+        monkeypatch.setattr(idem, "begin_idempotent", fake_begin)
+        r = await _set_rate(c)
+        assert r.status_code == 409, r.text
+        assert await op.labor_terms_history.count_documents({}) == 0
+        r = await c.post("/api/labor-quantities/approve", json={
+            "report_id": "R-AK", "report_version": 0, "approved_quantity": 5,
+            "execution_package_id": "pkg-sh"}, headers=H("sm"))
+        assert r.status_code == 409, r.text
+        assert await op.labor_quantity_approvals.count_documents({}) == 0
+    run(monkeypatch, scenario)

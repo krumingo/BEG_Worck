@@ -117,7 +117,7 @@ async def _audit(user: dict, *, action: str, entity_type: str, entity_id: str, v
 async def _idempotent(user: dict, key: Optional[str], action: str, payload: dict, perform, replay):
     """R29: a money/approval write runs once per Idempotency-Key (W0-04 registry)."""
     from app.audit.idempotency import (
-        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IdempotencyConflict,
+        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_STARTED, IdempotencyConflict,
         begin_idempotent, complete_idempotent, fail_idempotent, request_fingerprint)
     from app.audit import idempotency as _idem
     k = (key or "").strip()
@@ -135,11 +135,14 @@ async def _idempotent(user: dict, key: Optional[str], action: str, payload: dict
         if unprotected is not None and isinstance(exc, unprotected):
             raise HTTPException(status_code=503, detail="Регистърът за еднократност не е защитен — нищо не е записано")
         raise
-    if state["status"] == IDEMPOTENCY_DUPLICATE:
+    if state.get("status") == IDEMPOTENCY_DUPLICATE:
         if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
             found = await replay(state["result_reference"])
             if found is not None:
                 return dict(found, idempotent_replay=True)
+        raise HTTPException(status_code=409, detail="Същата заявка още се обработва — изчакайте")
+    if state.get("status") != IDEMPOTENCY_STARTED:
+        # audit RETAKE-1 (defence in depth): only an explicit STARTED reservation writes
         raise HTTPException(status_code=409, detail="Същата заявка още се обработва — изчакайте")
     try:
         result, ref = await perform(k)
