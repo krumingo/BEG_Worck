@@ -8,10 +8,10 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `1b3f182` | **PASS** (C26j; R37 test: c26j 58 passed) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `4ed6077` | **PASS** (C26k, Codex F-55-C26-01 subproject direct delivery counted once) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `f71dce2` | **PASS** (C01-E F-70-01/02 serialised reversal + audit-once; IN_PROGRESS→409; merge with #72@13dd8d7 clean, 588 passed) | 2026-11-07 |
+| #70 PAY-01 | `0713a81` | **FINDINGS: PAY70-04 BLOCKING** (transfer left half-reversed when leg 2 was never marked and a new key retries leg 1 → 409) | 2026-11-07 |
 | #69 SEC-01 | `ccab244` | **PASS** (FG-90 atomic certified-total reservation); note FG90-N1 (reservation never released on reversal) | 2026-11-07 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -3287,3 +3287,62 @@ Gates on `6a4ac5b`:
 | A2C | 0/205 |
 | A1 | 0/416 |
 | R0 | **814** |
+
+
+## main moved: `0f870c3` (Merge PR #56 AUTH-01/02, approved by Krum 07.11.2026)
+
+Every open head is now behind main. merge-tree against `0f870c3`:
+
+| PR | Conflicts |
+|---|---|
+| #69, #70, #71 | clean |
+| #72 | clean, already based on main |
+| #55 | `tenancy/data_access.py` + A2B inventory |
+| #73 | `tenancy/ownership.py` |
+| #74 | `server.py` |
+| #75 | `ownership.py` + `server.py` |
+
+
+## #55 5C-C26k @ `4ed6077` — 2026-11-07 ~12:30 UTC — PASS
+
+- **Fix:** `ledger_invoice_line_links` also projects the server-bound `project_id`. In `path_b_split._is_to`, a `subproject` destination matches through that `project_id` (FG-38 `_bind_subproject_parent`), a `project` destination through `location_id`, and nothing else.
+- **Test** `c26k`: Codex's reproduction (L 10@10 → P; 10@10 into S with `invoice_line_id`=L), plus partial (4 of 10) and unlinked, × subproject/project, on 10 reports, live and after rebuild ×2.
+
+| Gate | Result |
+|---|---|
+| Warehouse suite per file, enforce, real Mongo RS | **40 files, 822 passed**, 0 failed; c26k **6 passed** |
+| W0 | same 15 |
+| A2C | 0/222 |
+| A1 | 0/450 |
+| R0 | **814** |
+
+Low note: a legacy canonical subproject row without `project_id` would not match and could still count twice. There are none, because #55 is unmerged and FG-38 binds `project_id` on every subproject movement.
+
+
+## #70 PAY-01-C01-F @ `0713a81` — 2026-11-07 ~12:40 UTC — FINDINGS (1 blocking)
+
+The F-70-03 code was reviewed: `delete_payment` takes all original legs (status ≠ reversal) under sorted locks, puts the URL leg first, runs `_reverse_one` or `_repair_pair` per leg, and completes the key after both legs. Codex's leg-2 interruption points (before and after the row, before and after the audit) are covered by the 30 new tests.
+
+**PAY70-04, BLOCKING, PROVED** by `probes/pay01/test_probe_f703_leg2_unmarked.py` (mongomock + real, off/shadow/enforce):
+
+| Case | Result |
+|---|---|
+| **N1**: interrupt before the 2nd `_reverse_one` (L1 reversed with row and event; L2 never marked), then a **new key** on L1 | **409 "already reversed"**; L1 (`reversed`, 1 row); **L2 (active, 0 rows)**. FAIL 6/6 |
+| N2: the same key retried | 200, both legs reversed. pass |
+| N3: a new key on L2's URL | 200, both legs reversed. pass |
+
+- **Cause:** the `status == REVERSED and not retry` branch only runs `_repair_pair`, which is a no-op for an unmarked leg, and then refuses.
+- **Reachable from the UI:** `PaymentsPage.js:254` creates a fresh key on every click, so the user's second click after a 500 is N1.
+- PR comment 6696777161 updated (blocking).
+
+Gates on `0713a81`:
+
+| Gate | Result |
+|---|---|
+| `test_pay_01_*`, real Mongo | **618 passed** |
+| probes `e_alloc_vs_reverse` (12/12 alloc 409 + rev 200), `d5_race`, `c01a_source_module`, `fg50` | FAILS none |
+| W0 | same 15 |
+| A2C | 0/206 |
+| A1 | 0/418 |
+| R0 | **814** |
+| merge-tree #72 `3606766` / main | clean |
