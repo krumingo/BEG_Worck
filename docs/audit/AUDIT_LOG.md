@@ -4456,3 +4456,46 @@ The PM-01 diff is only `+cancel`; the merge with main is clean.
 | PM-01 | 6 |
 
 The merge with main is clean.
+
+### Environment: machine restart at ~20:21 UTC
+
+All containers stopped. Scratchpad, worktrees and repo are intact. The RSs were restarted (`mongo_up.sh` + `docker start auditmongo2/3`), and the probe run that was in flight was redone.
+
+### #79 @ `2379d07` (OFF79-05 + OFF79-06 fixes) — probes PASS
+
+| Check | Result |
+|---|---|
+| O11 / O12 fresh-tenant race (idle rs0) | **60/60 ×3, 0 failures** → **OFF79-05 resolved** |
+| full probe O1–O16 | 246 passed |
+| clean venv from `backend/requirements.txt` (`pip install -r`) | `pip check`: no broken requirements |
+| pins | `pdfplumber` 0.11.7 (requires `pdfminer.six`, Pillow, `pypdfium2`), Pillow 12.1.0 unchanged, `pdfminer.six` 20250506, `pypdfium2` 4.30.0 |
+
+- Observation on the OFF79-05 fix: `ensure_offer_collections(db)` runs on the default `db`. That is where `audit_logs` and `audit_events` are written (the raced collection). `offers` / `offer_events` live in the tenant DB and are ensured at onboarding; the new bounded `TransientTransactionError` retry covers anything left over. Not a gap.
+- The OFF-01 suite and R43 `test_23` run in the clean venv (`b79e`, running), then W0 / R0 / PM-01 / merge.
+
+### #55 @ `ed48595` (merge of f1c3394 FG-140 + main d226c49) — static review
+
+**Byte check.** The merge commit equals `git merge-tree` (4 conflicts) plus resolutions, plus extra changes made inside the merge commit:
+
+| Extra change | What it is |
+|---|---|
+| warehouse routes (`warehouse_canonical`, queries, migration) | `catalog_legacy_check` on the route-level `require_permission` |
+| `_finite_decimal_str` validators | non-numeric or non-finite quantity / value → **422** (was 500) |
+| `invoice_state`, `legacy_gate`, PM-01 report and test, c26l_n test | as above |
+
+**`finance.py` vs main d226c49.** #70's payment and reversal code is unchanged apart from:
+- `update_invoice_status(…, *, session=None)`, plus a `status ≠ Cancelled` filter on its write;
+- `PAYMENT_LOCK_STALE_SECONDS` / `ROW_LOCK_FIELD` imported from `invoice_state` (same values: 30 s, `allocation_lock`);
+- two imports.
+
+FG-140 claim / CAS is present in `update_invoice`, `update_invoice_lines`, send, cancel and delete.
+
+**`claim_invoice` honours #70's row lock.** Its filter is `allocation_lock` absent OR `.at` older than 30 s, otherwise 409 `INVOICE_BUSY`. #70 releases its lock with `$unset`, so the states match.
+
+**Invoice-line writers.** The metadata PUT, derived PUT, create, bulk create and delete all `claim_invoice(allowed=Draft)` in their transaction. `/allocate` does not claim; it only moves cost allocations, not invoice money (observation).
+
+**`catalog_legacy_check` does not widen enforce.** `require_permission` reads `legacy_check` only in the off / shadow branches. In the committed PM-01 matrix (767 routes, 18 408 cells), **0** (route, role) keys differ between off / shadow / enforce, including all 256 warehouse keys.
+
+**`TenantData.transaction_client`** is the motor client of the tenant's own DB. `run_transaction` only opens a session with it; every read and write stays `TenantData`-scoped. It adds no cross-tenant capability (the same client is already `app.db.client`).
+
+Runtime `b55n` (rs1) is running: c26l_n FG-140 races, wh55 probes ×3, PAY, 43 warehouse files, W0, R0, PM-01.
