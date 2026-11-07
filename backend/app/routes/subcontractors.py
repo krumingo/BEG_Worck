@@ -611,6 +611,7 @@ async def create_subcontractor_payment(
 
 
 _COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
+_RESERVED_IDS = {"$ifNull": ["$cap_reservations", []]}   # F-69-03 (#69)
 _ADV_TOTAL = {"$ifNull": ["$advance_total", 0]}
 _ADV_DEDUCTED = {"$ifNull": ["$advance_deducted_total", 0]}
 _CENT = 0.005
@@ -643,7 +644,7 @@ async def _confirmed_act(tenant, act_id: str, pkg_id: str) -> dict:
     return act
 
 
-async def _reserve_within_certified(tenant, pkg_id: str, amount: float,
+async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservation_id: str,
                                     deducted: float = 0.0, act: Optional[dict] = None) -> None:
     """One atomic, conditional update of the package (R40: the cap is per package).
 
@@ -657,20 +658,33 @@ async def _reserve_within_certified(tenant, pkg_id: str, amount: float,
                                                          (ADVANCE_DEDUCTION_EXCEEDS_ACT)
 
     The advance itself never enters ``committed_paid_total``: it is not a payment for a
-    measured quantity (R39) and is not an overpayment under FG-90."""
+    measured quantity (R39) and is not an overpayment under FG-90.
+
+    SEC-01-C03 addendum C (Codex F-69-03, #69): the reservation carries ``reservation_id``
+    (``cap_reservations``); a retry of the same key that finds its id changes nothing."""
+    already = {"$in": [reservation_id, _RESERVED_IDS]}
+
+    def once(field_expr, new_value):        # unchanged when this id is already reserved
+        return {"$cond": [already, field_expr, new_value]}
     conds = [{"$lte": [{"$add": [_COMMITTED, amount + deducted]},
                        {"$add": [{"$ifNull": ["$certified_total", 0]}, _CENT]}]}]
-    sets = {"committed_paid_total": {"$round": [{"$add": [_COMMITTED, amount + deducted]}, 2]}}
+    sets = {"committed_paid_total": once(_COMMITTED, {"$round": [
+                {"$add": [_COMMITTED, amount + deducted]}, 2]}),
+            "cap_reservations": once(_RESERVED_IDS, {"$concatArrays": [_RESERVED_IDS,
+                                                                       [reservation_id]]})}
     if deducted > 0:
-        by_act = {"$ifNull": ["$advance_deducted_by_act.%s" % act["id"], 0]}
+        path = "advance_deducted_by_act.%s" % act["id"]
+        by_act = {"$ifNull": ["$" + path, 0]}
         conds.append({"$lte": [deducted, {"$add": [{"$subtract": [_ADV_TOTAL, _ADV_DEDUCTED]},
                                                     _CENT]}]})
         conds.append({"$lte": [{"$add": [by_act, deducted]},
                                float(act.get("certified_total") or 0) + _CENT]})
-        sets["advance_deducted_total"] = {"$round": [{"$add": [_ADV_DEDUCTED, deducted]}, 2]}
-        sets["advance_deducted_by_act.%s" % act["id"]] = {"$round": [{"$add": [by_act, deducted]}, 2]}
+        sets["advance_deducted_total"] = once(_ADV_DEDUCTED, {"$round": [
+            {"$add": [_ADV_DEDUCTED, deducted]}, 2]})
+        sets[path] = once(by_act, {"$round": [{"$add": [by_act, deducted]}, 2]})
     res = await tenant.subcontractor_packages.update_one(
-        {"id": pkg_id, "$expr": {"$and": conds}}, [{"$set": sets}])
+        {"id": pkg_id, "$or": [{"cap_reservations": reservation_id},
+                               {"$expr": {"$and": conds}}]}, [{"$set": sets}])
     if res.matched_count:
         return
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0}) or {}
@@ -702,10 +716,12 @@ async def _refresh_package_totals(tenant, pkg_id: str, now: str) -> None:
     payable_total     certified - paid - advance deducted (>= 0);
     cash_out_total    the whole cash flow to the package: advances + ordinary payments
                       (= аванс + плащания по актове бруто − приспаднато)."""
-    pays = await tenant.subcontractor_payments.find(
-        {"package_id": pkg_id, "status": "completed", **NOT_ADVANCE},
-        {"_id": 0, "amount": 1}).to_list(1000)
-    paid = round(sum(float(p.get("amount") or 0) for p in pays), 2)
+    # FG-105 (#69): summed in the database — every payment of the package is counted.
+    agg = await tenant.subcontractor_payments.aggregate([
+        {"$match": {"package_id": pkg_id, "status": "completed", **NOT_ADVANCE}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+    ]).to_list(1)
+    paid = round(float(agg[0]["total"]) if agg else 0.0, 2)
     await tenant.subcontractor_packages.update_one({"id": pkg_id}, [{"$set": {
         "paid_total": paid,
         "advance_total": {"$round": [_ADV_TOTAL, 2]},
@@ -746,9 +762,10 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
     # certified total, atomically (one conditional update: two payments under different keys
     # cannot both pass). Over the cap -> 409, nothing written. FLOW-021 allows more only with
     # an Approval (W0-07), which does not exist yet -> refused. Done once per key.
-    # SUB-ADV-01: the advance deducted on the act is reserved in the SAME update.
+    # SUB-ADV-01: the advance deducted on the act is reserved in the SAME update; F-69-03: the
+    # reservation carries the payment's key-derived id (a retry never reserves twice).
     await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, amount,
-                                                               deducted, act))
+                                                               payment["id"], deducted, act))
     async with mw.insert_once():   # SEC-01-C03-C (F-69-01): atomic, _id = key-derived id
         await tenant.finance_payments.insert_one(mw.unique({
             "id": ledger_id, "org_id": org_id,
@@ -958,8 +975,8 @@ async def deduct_advance_on_act(
         return await tenant.subcontractor_acts.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     async with mw:
-        await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, 0.0,
-                                                                   amount, act))
+        await mw.step("reserve", lambda: _reserve_within_certified(
+            tenant, pkg_id, 0.0, mw.new_id("advance_deduction"), amount, act))
         await _record_act_deduction(mw, tenant, user, act, amount, None, now, reason)
         await _refresh_package_totals(tenant, pkg_id, now)
         mw.result_id = act_id

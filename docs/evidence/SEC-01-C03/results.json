@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 25.3,
+ "seconds": 29.6,
  "amount_rows": [
   {
    "mode": "off",
@@ -4490,11 +4490,11 @@
     201,
     201,
     201,
-    201,
+    409,
     409
    ],
    "retry_payment_ids": [
-    "b7a5430f-4157-58bf-bdcb-21bdcd5c031e"
+    "cabd04a6-a51a-5bec-954f-f73b089b71b2"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4511,14 +4511,14 @@
    },
    "retry_statuses": [
     201,
-    201,
-    201,
+    409,
+    409,
     409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "57175e53-4e0b-57aa-9de2-a63eb2542be9"
+    "eb81cb4c-c8fe-5592-9247-a9d776f3f1db"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4536,13 +4536,13 @@
    "retry_statuses": [
     201,
     201,
-    201,
+    409,
     409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "f5a78541-4a03-5e13-8b87-a4cccf8db9bf"
+    "c113ebca-f45d-518b-ac8f-b753bfbf322b"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4721,6 +4721,262 @@
      409
     ],
     "allocations_sum": 60.0
+   }
+  }
+ ],
+ "fg105_many_payments": [
+  {
+   "mode": "off",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "shadow",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "enforce",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  }
+ ],
+ "f69_03_reserve_crash": [
+  {
+   "mode": "off",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  },
+  {
+   "mode": "shadow",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     201,
+     201,
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  },
+  {
+   "mode": "enforce",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
    }
   }
  ]
