@@ -44,7 +44,8 @@ USERS = {
 MODES = ["off", "shadow", "enforce"]
 PRJ_A, PRJ_B = "prj-off01-a", "prj-off01-b"
 TOKEN = "tok" + "a" * 21
-COLLS = ("offers", "offer_events", "offer_versions", "audit_events", "audit_logs", "audit_idempotency")
+COLLS = ("offers", "offer_events", "offer_versions", "audit_events", "audit_logs", "audit_idempotency",
+         "media_files")
 
 REAL = pytest.param("real", marks=pytest.mark.skipif(bool(_real_refusal()),
                                                      reason=_real_refusal() or "ok"))
@@ -143,6 +144,13 @@ async def _seed(op, sysdb):
             "id": "ra_" + uid, "user_id": uid, "tenant_id": org, "role_id": LEGACY_ROLE_MAP[role],
             "scope_type": "company", "scope_id": None, "module": None, "permissions": [],
             "status": "active", "sync_source": "users.role"})
+    # Addendum A §3: the tenant's file store (media_files — the File Registry W0-06 is not built)
+    for fid, org, ctype, cid in (("file-123", ORG_A, None, None), ("file-prj", ORG_A, "project", PRJ_A),
+                                 ("file-other-prj", ORG_A, "project", "prj-elsewhere"),
+                                 ("file-of-b", ORG_B, None, None)):
+        await op.media_files.insert_one({"id": fid, "org_id": org, "owner_user_id": "admin-a",
+                                         "filename": fid + ".pdf", "stored_filename": fid + ".pdf",
+                                         "context_type": ctype, "context_id": cid})
     for prj, org in ((PRJ_A, ORG_A), (PRJ_B, ORG_B)):
         await op.projects.insert_one({"id": prj, "org_id": org, "code": prj, "name": prj,
                                       "status": "Active"})
@@ -156,13 +164,13 @@ def _app(monkeypatch, op, sysdb, mode):
     import app.db as appdb
     from app.deps import auth as deps_auth, modules as deps_modules
     from app.master_data.deps import ENV_MODE
-    from app.routes import finance as r_finance, offers as r_offers
+    from app.routes import finance as r_finance, offer_versions as r_versions, offers as r_offers
     from app.tenancy import guard, registry, resolver
     from app.utils import audit as u_audit
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    for module in (appdb, deps_auth, deps_modules, r_finance, r_offers, u_audit):
+    for module in (appdb, deps_auth, deps_modules, r_finance, r_offers, r_versions, u_audit):
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
     for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
@@ -174,6 +182,7 @@ def _app(monkeypatch, op, sysdb, mode):
     monkeypatch.setattr(guard, "get_tenant_db", _get_db)
     app = FastAPI()
     app.include_router(r_offers.router, prefix="/api")
+    app.include_router(r_versions.router, prefix="/api")
     return app
 
 
@@ -586,4 +595,102 @@ def test_12_forbidden_roles_and_other_tenant(monkeypatch, backend, mode):
         # the project manager may still version (unchanged rule)
         r = await new_version(c, "o1", who="site-a")
         assert r.status_code == 200, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═════════════════════════════════════════════ Addendum A (07.11) — audit OFF79-01/02
+def _snapshot(oid, n=1, total=12.0):
+    return {"id": "ver-%s-%d" % (oid, n), "org_id": ORG_A, "project_id": PRJ_A, "offer_id": oid,
+            "version_number": n, "created_at": "2026-11-01T09:00:00+00:00", "created_by": "admin-a",
+            "note": "old", "is_auto_backup": False,
+            "snapshot_json": {"title": "Баня", "currency": "EUR", "vat_percent": 20, "notes": "",
+                              "lines": [{"id": "ln-x", "activity_name": "Плочки", "unit": "m2",
+                                         "qty": 1, "material_unit_cost": 5, "labor_unit_cost": 5,
+                                         "line_total": 10.0}],
+                              "subtotal": 10.0, "vat_amount": 2.0, "total": total}}
+
+
+def test_13_restore_and_snapshot_delete_only_on_an_unsent_draft(monkeypatch, any_backend, mode):
+    """OFF79-01 = D-OFF01-7: restore rewrote a Sent offer 1200 → 12 and the client accepted 12."""
+    async def scenario(c, op):
+        used = {"o-sent": dict(status="Sent", token=TOKEN),
+                "o-acc": dict(status="Accepted"),
+                "o-sup": dict(status="Superseded", superseded_by="o-v2"),
+                "o-can": dict(status="Cancelled"),
+                "o-rej": dict(status="Rejected"),
+                "o-v2": dict(status="Draft", version=2, parent="o-sup"),
+                "o-was-sent": dict(status="Draft", sent_at="2026-11-02T10:00:00+00:00")}
+        for oid, kw in used.items():
+            await op.offers.insert_one(offer_doc(oid, **kw))
+            await op.offer_versions.insert_one(_snapshot(oid, 1))
+            await op.offer_versions.insert_one(_snapshot(oid, 2))
+        before = await snap(op)
+        for oid in used:
+            r = await c.post("/api/offers/%s/versions/1/restore" % oid, headers=hdr("admin-a"))
+            assert r.status_code == 409 and code(r) == "OFFER_IN_USE", (oid, r.text)
+            r = await c.delete("/api/offers/%s/versions/1" % oid, headers=hdr("admin-a"))
+            assert r.status_code == 409 and code(r) == "OFFER_IN_USE", (oid, r.text)
+        assert await snap(op) == before                    # 1200 stays 1200, no snapshot gone
+        assert (await get(op, "o-sent"))["total"] == 1200.0
+
+        # a never-sent draft: restore and snapshot delete still work (unchanged rule)
+        await op.offers.insert_one(offer_doc("o-d", status="Draft"))
+        await op.offer_versions.insert_one(_snapshot("o-d", 1))
+        await op.offer_versions.insert_one(_snapshot("o-d", 2))
+        r = await c.post("/api/offers/o-d/versions/1/restore", headers=hdr("admin-a"))
+        assert r.status_code == 200, r.text
+        assert (await get(op, "o-d"))["total"] == 12.0
+        r = await c.delete("/api/offers/o-d/versions/2", headers=hdr("admin-a"))
+        assert r.status_code == 200, r.text
+    run(monkeypatch, any_backend, mode, scenario)
+
+
+def test_14_accepted_offer_gets_no_new_version(monkeypatch, backend, mode):
+    """D-OFF01-2 (FLOW-003 „След приемане … само при ново възлагане/анекс“; FLOW-005)."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o-acc", status="Accepted"))
+        before = await snap(op)
+        r = await new_version(c, "o-acc")
+        assert r.status_code == 409 and code(r) == "OFFER_ACCEPTED_USE_ANNEX", r.text
+        assert await snap(op) == before
+
+        # Sent v1 → v2 → v1 Superseded; v2 sent and accepted → exactly one accepted version
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        v2 = (await new_version(c, "o1")).json()["id"]
+        assert (await get(op, "o1"))["status"] == "Superseded"
+        assert (await c.post("/api/offers/%s/send" % v2, headers=hdr("admin-a"))).status_code == 200
+        assert (await accept(c, v2)).status_code == 200
+        assert (await accept(c, "o1")).status_code == 409
+        assert (await new_version(c, v2)).status_code == 409
+        chain = await op.offers.count_documents({"id": {"$in": ["o1", v2]}, "status": "Accepted"})
+        assert chain == 1
+
+        # Draft and Rejected may be versioned; the old one is superseded
+        for oid, st in (("o-dr", "Draft"), ("o-rj", "Rejected")):
+            await op.offers.insert_one(offer_doc(oid, status=st))
+            r = await new_version(c, oid)
+            assert r.status_code == 200, (oid, r.text)
+            old = await get(op, oid)
+            assert old["status"] == "Superseded" and old["status_before_supersede"] == st
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_15_accept_evidence_must_be_a_file_of_this_tenant(monkeypatch, backend, mode):
+    """D-OFF01-5 / OFF79-02 (CLAUDE.md §2.6): the evidence file must exist in this tenant's
+    file store and be linked (or linkable) to the offer's project."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", token=TOKEN))
+        before = await snap(op)
+        for fid, want in (("file-of-nobody", "EVIDENCE_FILE_NOT_FOUND"),
+                          ("file-of-b", "EVIDENCE_FILE_NOT_FOUND"),
+                          ("file-other-prj", "EVIDENCE_FILE_NOT_LINKABLE")):
+            r = await accept(c, "o1", body={"approval_method": "signed_pdf", "evidence_file_id": fid})
+            assert r.status_code == 422 and code(r) == want, (fid, r.text)
+            assert ORG_B not in r.text
+        after = await snap(op)
+        for coll in ("offers", "audit_events", "audit_logs", "media_files"):
+            assert after[coll] == before[coll], coll
+        r = await accept(c, "o1", body={"approval_method": "signed_pdf", "evidence_file_id": "file-prj"})
+        assert r.status_code == 200, r.text
+        assert (await get(op, "o1"))["approval"]["evidence_file_id"] == "file-prj"
     run(monkeypatch, backend, mode, scenario)
