@@ -259,3 +259,38 @@ async def test_r35_price_history_is_tenant_scoped(canonical_mongo_db, allow_alwa
     monkeypatch.setattr(perm, "_load_assignments", _owner)
     data = await q.read_price_history(project_id=PROJECT, ctx=_Other())
     assert data["articles"] == [] and data["purchases_considered"] == 0
+
+
+# ═══════════════ Р37 (FG-96) — warehouse „фира" shows its value to the keeper ═══════════════
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_r37_warehouse_write_off_value_is_visible_to_the_keeper(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """Р37 (Крум 07.11.2026): a write-off straight from the central warehouse
+    (no project) is warehouse „фира" — the keeper sees its value (row and
+    FIFO layers). A write-off from a project keeps Р34: quantities only."""
+    from app.routes import warehouse_canonical_queries as q
+    client, db = canonical_mongo_db
+    monkeypatch.setenv("FILE_REGISTRY_ENABLED", "1")
+    run = await _setup(client, allow_always_gate, db, monkeypatch, "warehouse", mode,
+                       member=False)
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "enforce")      # setup by the harness
+    await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP_A, destination=WH,
+              quantity=Decimal("4"), unit_value=Decimal("7"))
+    await run(CanonicalAction.WRITE_OFF, source=WH, quantity=Decimal("1"),
+              reason="брак", file_ids=["f-r37"])
+    await run.write_off("1")                                       # from the project
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
+    hist = await q.read_history(item_id=ITEM, location_type=None, location_id=None,
+                                project_id=None, since=None, until=None, limit=1000,
+                                cursor_after=None, ctx=_rctx(mode, "warehouse"))
+    write_offs = [r for r in hist["rows"] if r["action"] == "write_off"]
+    from_wh = [r for r in write_offs if (r.get("source") or {}).get("location_type")
+               == "central_warehouse"]
+    from_prj = [r for r in write_offs if (r.get("source") or {}).get("location_type")
+                == "project"]
+    assert len(from_wh) == 1 and len(from_prj) == 1
+    assert [la["unit_value"] for la in from_wh[0]["layer_allocations"]] == ["7"]
+    assert "unit_value" in from_wh[0]
+    assert "unit_value" not in from_prj[0]
+    assert all("unit_value" not in la for la in from_prj[0]["layer_allocations"])
