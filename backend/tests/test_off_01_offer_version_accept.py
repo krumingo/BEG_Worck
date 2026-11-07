@@ -696,3 +696,80 @@ def test_15_accept_evidence_must_be_a_file_of_this_tenant(monkeypatch, backend, 
         assert r.status_code == 200, r.text
         assert (await get(op, "o1"))["approval"]["evidence_file_id"] == "file-prj"
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════ audit OFF79-03 / legacy pairs (orchestrator, 07.11, after 449c1f4)
+def test_16_restore_or_edit_racing_send_never_leaves_a_sent_offer_unlike_its_snapshot(
+        monkeypatch, backend, mode):
+    """OFF79-03: restore read „Draft“, then wrote unconditionally — racing /send it left the
+    offer Sent at 12 while the send snapshot said 1200. Every draft write is now a CAS."""
+    async def scenario(c, op):
+        stats = {"restore": 0, "send": 0, "lines": 0}
+        for i in range(ROUNDS):
+            for rival in ("restore", "lines"):
+                oid = "rr-%s-%d" % (rival, i)
+                await op.offers.insert_one(offer_doc(oid, status="Draft"))
+                await op.offer_versions.insert_one(_snapshot(oid, 1, total=12.0))
+                if rival == "restore":
+                    other = c.post("/api/offers/%s/versions/1/restore" % oid, headers=hdr("admin-a"))
+                else:
+                    other = c.put("/api/offers/%s/lines" % oid, headers=hdr("admin-a"), json={
+                        "lines": [{"activity_name": "Плочки", "unit": "m2", "qty": 1,
+                                   "material_unit_cost": 5, "labor_unit_cost": 5}]})
+                s, o = await asyncio.gather(
+                    c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")), other)
+                assert sorted((s.status_code, o.status_code)) in ([200, 409],), (
+                    i, rival, s.status_code, s.text, o.status_code, o.text)
+                doc = await get(op, oid)
+                sent_snaps = await op.offer_versions.find(
+                    {"offer_id": oid, "is_auto_backup": True, "snapshot_json.status": "Sent"},
+                    {"_id": 0}).to_list(None)
+                if s.status_code == 200:
+                    stats["send"] += 1
+                    assert doc["status"] == "Sent" and doc["total"] == 1200.0, (rival, doc["total"])
+                    assert len(sent_snaps) == 1 and sent_snaps[0]["snapshot_json"]["total"] == 1200.0
+                    assert o.status_code == 409 and code(o) == "OFFER_IN_USE", o.text
+                else:
+                    stats[rival] += 1
+                    assert doc["status"] == "Draft" and doc["total"] != 1200.0
+                    assert sent_snaps == []
+                    assert s.status_code == 409 and code(s) == "OFFER_CHANGED", s.text
+        assert stats["send"] > 0
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_17_a_legacy_pair_never_ends_with_two_accepted_versions(monkeypatch, backend, mode):
+    """A v1/v2 pair linked before OFF-01 (v1 not marked superseded): once one version of the
+    family is accepted, the other → 409 OFFER_FAMILY_ALREADY_ACCEPTED (internal + public)."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("ov1", token=TOKEN))
+        await op.offers.insert_one(offer_doc("ov2", version=2, parent="ov1", status="Accepted"))
+        before = await snap(op)
+        r = await accept(c, "ov1")
+        assert r.status_code == 409 and code(r) == "OFFER_FAMILY_ALREADY_ACCEPTED", r.text
+        r = await respond(c, TOKEN)
+        assert r.status_code == 409 and code(r) == "OFFER_FAMILY_ALREADY_ACCEPTED", r.text
+        assert "ov2" not in r.text and ORG_A not in r.text
+        after = await snap(op)
+        for coll in ("offers", "offer_events", "audit_events", "audit_logs"):
+            assert after[coll] == before[coll], coll
+        # a three-version chain: the accepted one is the root, the caller the grandchild
+        await op.offers.insert_one(offer_doc("ow1", status="Accepted", offer_no="OFF-0009"))
+        await op.offers.insert_one(offer_doc("ow2", version=2, parent="ow1", status="Rejected"))
+        await op.offers.insert_one(offer_doc("ow3", version=3, parent="ow2", token="tw3" + "z" * 21))
+        r = await accept(c, "ow3")
+        assert r.status_code == 409 and code(r) == "OFFER_FAMILY_ALREADY_ACCEPTED", r.text
+
+        # races: two Sent versions of one legacy family, accepted at once → exactly one
+        for i in range(ROUNDS):
+            a1, a2 = "lg1-%d" % i, "lg2-%d" % i
+            t1, t2 = "tl1%02d" % i + "y" * 19, "tl2%02d" % i + "y" * 19
+            await op.offers.insert_one(offer_doc(a1, token=t1))
+            await op.offers.insert_one(offer_doc(a2, version=2, parent=a1, token=t2))
+            x, y = await asyncio.gather(accept(c, a1), respond(c, t2))
+            assert sorted((x.status_code, y.status_code)) == [200, 409], (i, x.text, y.text)
+            loser = x if x.status_code == 409 else y
+            assert code(loser) == "OFFER_FAMILY_ALREADY_ACCEPTED", loser.text
+            assert await op.offers.count_documents({"id": {"$in": [a1, a2]},
+                                                    "status": "Accepted"}) == 1
+    run(monkeypatch, backend, mode, scenario)
