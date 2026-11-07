@@ -1507,9 +1507,10 @@ async def get_offer_review(review_token: str):
     # Record view event (only first time)
     if offer["status"] == "Sent":
         now = datetime.now(timezone.utc).isoformat()
-        await tenant.offers.update_one({"id": offer["id"], "review_token": review_token}, {"$set": {
-            "viewed_at": now, "updated_at": now,
-        }})
+        # FG-149: a view is not an edit — it never touches updated_at (which every draft /
+        # transition CAS compares); it only raises last_viewed_at and counts the view
+        await tenant.offers.update_one({"id": offer["id"], "review_token": review_token}, {
+            "$max": {"viewed_at": now, "last_viewed_at": now}, "$inc": {"view_count": 1}})
         existing_view = await db.offer_events.find_one({
             "offer_id": offer["id"], "org_id": offer["org_id"], "event_type": "viewed",
         })
