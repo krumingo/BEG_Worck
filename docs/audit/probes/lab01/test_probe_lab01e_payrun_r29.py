@@ -49,3 +49,24 @@ def test_p4_unprotected_registry_fails_closed(monkeypatch):
         print("P4", r.status_code, r.text[:120], "runs", n)
         assert n == 0
     run(monkeypatch, scenario, "real")
+
+
+def test_p5_retake_of_failed_key(monkeypatch):
+    """P5 (#72 @ 13dd8d7 F-69-01 interplay): the key of a FAILED first attempt is retried by 6
+    concurrent identical requests. begin_idempotent gives 1 STARTED + 5 IN_PROGRESS — does
+    create_pay_run refuse the IN_PROGRESS ones, or does each create a pay run?"""
+    async def scenario(c, op):
+        from app.audit.idempotency import begin_idempotent, fail_idempotent, request_fingerprint
+        from app.routes.pay_runs import PayRunCreateInput, PAY_RUN_CREATE_ACTION
+        await _old_run(op)
+        body = _body()
+        fp = request_fingerprint(PayRunCreateInput(**body).model_dump())
+        import app.routes.pay_runs as pr
+        await begin_idempotent(pr.db, tenant_id=ORG, key="retake", action=PAY_RUN_CREATE_ACTION, request_fingerprint=fp)
+        await fail_idempotent(pr.db, tenant_id=ORG, key="retake", action=PAY_RUN_CREATE_ACTION, error_code="http_500")
+        h = dict(_token(), **{"Idempotency-Key": "retake"})
+        rs = await asyncio.gather(*[c.post("/api/pay-runs", json=body, headers=h) for _ in range(6)])
+        n = await op.pay_runs.count_documents({"id": {"$ne": "run-old"}})
+        print("P5 codes", sorted(r.status_code for r in rs), "runs created", n)
+        assert n == 1, f"P5 FAIL: {n} pay runs from one failed-key retake"
+    run(monkeypatch, scenario, "real")

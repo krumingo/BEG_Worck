@@ -8,10 +8,10 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
+| #55 LIVE-OPS-01 | `8025871` | **PASS** (C26j R34/R35; warehouse suite per file 813/0 on real Mongo); `1b3f182` adds an R37 test only | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
-| #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
+| #70 PAY-01 | `f71dce2` | **PASS** (C01-E F-70-01/02 serialised reversal + audit-once; IN_PROGRESS→409; merge with #72@13dd8d7 clean, 588 passed) | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
@@ -1663,9 +1663,9 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 |---|---|---|---|
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #72 W0-04-C01 | `34ac9f4` | **PASS** (merge of main 0f870c3; store.py per recipe, check-only in tx, ensure_chain_index before session) | 2026-11-07 |
-| #73 LAB-01 | `ca81286` | **PASS** (LAB-01-I closes LAB01H-1: corrected APPROVED → SUBMITTED, four-eyes re-approval); R0/lab real-Mongo rerun pending (env) | 2026-11-07 |
-| #75 LAB-02 | `789bbd9` | **PASS (review + probes)**, note LAB02-1 (concurrent approvals → several active records; pay not doubled); real-Mongo gates pending (env) | 2026-11-07 |
+| #72 W0-04-C01 | `13dd8d7` | **PASS** (F-69-01: FAILED→STARTED retake is a CAS, losers IN_PROGRESS); breaks unaware callers in #73/#75 (see RETAKE-1) | 2026-11-07 |
+| #73 LAB-01 | `ca81286` | LAB01H-1 closed; **RETAKE-1 BLOCKING on merge with #72@13dd8d7** (pay_runs treats IN_PROGRESS as STARTED → 3 runs from one key) | 2026-11-07 |
+| #75 LAB-02 | `70cb594` | **RETAKE-1 BLOCKING on merge with #72** (labor_quantities._idempotent → 4 approvals from one key); LAB02-1 medium; 2 commits text-only | 2026-11-07 |
 | #74 OH-01 | `6c5c5cf` | **PASS** (D6 overlap refused, OH01-3 closed: indexes at startup/onboarding; #69 merge + results diff → SEC-01 30/30) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -2954,3 +2954,98 @@ Gates on `789bbd9`:
 - `mongod` crashed a second time at 09:09 UTC with "Too many open files", at about 70% of the #55 warehouse suite in one process. That suite alone exhausts the handles.
 - The #55 suite is now run **per file** with a cleanup between files.
 - Lesson logged: never run another real-Mongo suite while the cleanup loop runs.
+
+
+## #55 5C-C26j @ `8025871` — 2026-11-07 ~10:00 UTC — PASS
+
+Delta `f0d86ab..8025871` against package addendum J (tasks branch; R34/R35 in `RECOVERY_EXECUTION_PROPOSAL`):
+- **R34:** `_value_scope`/`_value_visible`. The keeper sees money only on rows touching nothing but warehouse buckets; never on a row with a project/subproject.
+- **R35:** SiteManager/Technician see the **central** warehouse with prices. New `GET /central-stock/{item}` (`CENTRAL_STOCK_READ_ROLES`, every mode); `_within_member_scope` lets central locations through. It is called only from the read-scope helper (`warehouse_canonical_queries.py:259/278`), so **no write path is widened**.
+- **Price history:** `GET /price-history?project_id` (finance everywhere; SM/Tech in-date member projects; keeper 403). Purchases come from canonical receipts plus unlinked Path B invoice lines (FG-17 once); flag `SAME_SUPPLIER_DIFFERENT_PRICE`; best price. Tenant-scoped through `TenantData`.
+- **Test expectation edits** (c26b, c26d, c26f, c26h): each widens only to central-warehouse prices for SM/Tech, or hides the keeper's project-row money. **Nothing weakened beyond R34/R35.**
+
+Gates on `8025871`:
+
+| Gate | Result |
+|---|---|
+| warehouse canonical suites, real Mongo RS, run **per file** with a database cleanup between files | **813 passed, 0 failed** (c20 needs c19's index setup in the same session: 36/36 together; a lone-file failure is a chunking artifact) |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/222 |
+| A1 | 0/450 |
+| frontend tests (c26j, c19, lib, components) | 10 suites / 111 passed |
+
+`1b3f182` (after) adds only a test for R37 (warehouse "фира" value visible to the keeper) in `c26j`; it will be run with the next #55 round.
+
+Environment, resolved: `mongod` now runs with `wiredTigerFileHandleCloseIdleTime=15`, `CloseMinimum=200`, `ScanInterval=5`. The per-file run then took c26e 78 s instead of 828 s, and no crash followed. Three earlier crashes ("Too many open files") were caused by the 600 s default idle-handle time under thousands of test databases.
+
+
+## #72 W0-04-C01 @ `13dd8d7` — 2026-11-07 ~10:05 UTC — PASS (root)
+
+`23d0bc9` (F-69-01): `begin_idempotent` retakes a FAILED key with `update_one({id, status: FAILED}, {$set: STARTED, attempt_token})`; only the caller whose token is in the record afterwards gets STARTED. The others get the new **`IDEMPOTENCY_IN_PROGRESS`** (or a replay if the winner already completed). Callers updated in #72: `RecoverableWrite` → 409, `legacy_migration._begin` and `merge._run` → `MasterDataRefused`.
+
+| Probe / gate | Result |
+|---|---|
+| new `w004/probe_w004_retake_cas.py`: FAILED key, 6 concurrent retakes × 10 rounds | **exactly 1 started + 5 in_progress every round**, FAILS none |
+| x56 tx race | 120 stored, `verify_chain` True |
+| w004_c01 | FAILS none |
+| fg57 | FAILS none (G4: 1 of 6 STARTED) |
+| `test_w0_04_c01` + `test_auth_0*`, real Mongo | **149 passed** |
+| W0 | 1093/15/69, same 15 |
+| A2C | 0/212 |
+| A1 | 0/428 |
+| R0 | **814** |
+
+### RETAKE-1 — BLOCKING for the merge of #72@13dd8d7 with #73 and #75 (PROVED)
+
+The new return value breaks callers that only test for DUPLICATE:
+- `pay_runs.create_pay_run` (#73/#75, `pay_runs.py:~904-916`)
+- `labor_quantities._idempotent` (#75, `:~93-105`)
+
+Both treat any non-DUPLICATE state as "go", so an IN_PROGRESS loser performs the write.
+
+| Probe | Tree | Result |
+|---|---|---|
+| `lab01/test_probe_lab01e_payrun_r29.py::test_p5_retake_of_failed_key` (key FAILED, then 6 concurrent identical POST /pay-runs) | merge #73 `ca81286` + #72 `13dd8d7` (`ownership.py` resolved: both lists) | codes [200, 200, 200, 409, 409, 409], **3 pay runs** |
+| `lab01/test_probe_lab02_retake.py::test_r1` (FAILED approve key, then 6 concurrent identical approves) | merge #75 `70cb594` + #72 `13dd8d7` | codes [200 ×4, 409 ×2], **4 approval records** |
+
+Other callers are safe:
+- #70 `finance.py` (both callers proceed only on STARTED, `f71dce2`);
+- #69 `MoneyWrite` and #74 `KeyedWrite` (through `RecoverableWrite`, 409);
+- `permissions/sync.py` (records a failure only).
+
+Fix options:
+- (a) #73/#75 proceed **only on explicit `STARTED`**, the #70 pattern.
+- (b) More robust for every future caller: #72 returns the losers as `DUPLICATE` with `prior_status=STARTED`, which every existing caller already maps to 409.
+
+
+## #70 PAY-01-C01-E @ `f71dce2` — 2026-11-07 ~10:10 UTC — PASS
+
+`cfb9d74` (F-70-01/F-70-02):
+- `delete_payment` locks every leg's payment row (sorted), **re-reads under the lock**, then begins the key and reverses.
+- Cancel takes the payment lock, then the invoice lock (the order allocate uses).
+- `_audit_once` with `store.has_event(action, entity_id)` under the payment lock records the reversal/cancel event exactly once, on the normal path and on recovery (`_repair_pair` now completes the audit).
+
+`8cf0f4a`: both `begin_idempotent` callers in `finance.py` proceed only on explicit STARTED; anything else → 409.
+
+| Probe / gate | Tree | Result |
+|---|---|---|
+| new `pay01/probe_pay01_e_alloc_vs_reverse.py` (allocate 60 ∥ reverse, 12 rounds, both orders) | merge `f71dce2` + #72 `13dd8d7` | 12× (alloc 409, rev 200); **never a reversed payment with an active allocation; exactly 1 reversal AuditEvent each**; FAILS none |
+| `probe_pay01_c01a_source_module` (M1–M7) | same | FAILS none |
+| `probe_pay01_d5_race` | same | FAILS none |
+| `probe_pay01_fg50` | same | FAILS none |
+| `tests/test_pay_01_*.py`, real Mongo | same | **588 passed** |
+
+merge-tree:
+- with #72 `13dd8d7`: clean (`store.py` auto-merges; `has_event` sits after #72's functions);
+- with main: clean;
+- with #69: A1 inventory only.
+
+Interrupt-before/after-audit recovery is covered by the PR's `test_pay_01_c01_e_serialisation` (part of the 588); not separately probed.
+
+
+## #75 LAB-02 @ `70cb594` (after `789bbd9`) — 2026-11-07 ~10:10 UTC
+
+- `a0d1ca9`/`70cb594` are frontend toasts and Bulgarian texts. The backend diff (5 files) only translates `detail=` messages and drops internal FLOW codes from user texts; there is **no logic change**.
+- RETAKE-1 applies (above).
+- LAB02-1 stands.
+- The real-Mongo LAB-02 suite, R0 and PM-01 for #73/#75 will be run in isolation at the fix round.
