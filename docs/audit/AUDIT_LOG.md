@@ -8,11 +8,11 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
-| #55 LIVE-OPS-01 | `8025871` | **PASS** (C26j R34/R35; warehouse suite per file 813/0 on real Mongo); `1b3f182` adds an R37 test only | 2026-11-07 |
+| #55 LIVE-OPS-01 | `1b3f182` | **PASS** (C26j; R37 test: c26j 58 passed) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
 | #68 PM-01 | `4e20084` | PASS (report accurate; main-level permission debt surfaced) | 2026-11-06 |
 | #70 PAY-01 | `f71dce2` | **PASS** (C01-E F-70-01/02 serialised reversal + audit-once; IN_PROGRESS→409; merge with #72@13dd8d7 clean, 588 passed) | 2026-11-07 |
-| #69 SEC-01 | `6af0e98` | **PASS** (F-69-01 keyed inserts on `_id`; F-69-02 R29 on sync/recompute/compute) | 2026-11-07 |
+| #69 SEC-01 | `ccab244` | **PASS** (FG-90 atomic certified-total reservation); note FG90-N1 (reservation never released on reversal) | 2026-11-07 |
 | #65 RC-01 | `93965b0` | PASS (P1 fixed) | 2026-11-06 |
 | #66 ST-01 | `ef69601` | PASS (PST-1 fixed) | 2026-11-06 |
 
@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #71 SEC-02 | `dee0610` | **PASS** (FG-74 only paid workers count for R31; FG-75 price-modifier PUT audited) | 2026-11-07 |
+| #71 SEC-02 | `c0247e8` | **PASS** (SEC71-01 budget-freeze via R20 view + pattern; SEC71-02 pulse paid workers) | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
@@ -1666,7 +1666,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #72 W0-04-C01 | `3606766` | **PASS** (RETAKE-1 option (b): loser = DUPLICATE/STARTED + detail IN_PROGRESS) | 2026-11-07 |
 | #73 LAB-01 | `3107ba0` | **PASS** (RETAKE-1 closed: explicit STARTED; P5 on merge with #72 → 1 run) | 2026-11-07 |
 | #75 LAB-02 | `ba08ab5` | **PASS** (RETAKE-1 + LAB02-1 closed) | 2026-11-07 |
-| #74 OH-01 | `39eafdf` | **PASS** (OH74-01 frozen basis + largest remainder; OH74-02 resumable archive; R38; FG-98) | 2026-11-07 |
+| #74 OH-01 | `26a135a` | evidence-only after 39eafdf (PASS); 6-step #69 merge procedure VERIFIED on ccab244; Codex OH74-03/04 open (not duplicated) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -3188,3 +3188,63 @@ Trial merges with #72 `3606766` (the `ownership.py`/`server.py` conflicts resolv
 | PM-01 | 6 passed |
 
 **RETAKE-1 closed (PROVED). LAB02-1 closed (PROVED).** PR comments on #73 and #75 are updated to "resolved".
+
+
+## #71 SEC-02-G @ `c0247e8` — 2026-11-07 ~11:30 UTC — PASS
+
+- **SEC71-01:** `POST /budget-freezes/{project_id}` is now `@strip_for_budget_view`. `finance_read.budget_view_forbidden` drops `BUDGET_VIEW_HIDDEN_FIELDS` (+ `planned_margin`, `total_sale`) **and** any key matching `sale|price|margin|profit|revenue|markup|commission|final_total` at any depth, on every R20-5B answer and the pulse view. The scanners gained `sale|markup|commission`, and the seed has a non-zero sale/margin package.
+- **SEC71-02:** `pulse_paid_workers` counts only workers with a non-zero `labor_cost`, and a worker counts toward an SMR only when it is his only SMR that day. `r31_view` hides at **≤ 1** counted worker (was == 1).
+
+| Probe / gate | Result |
+|---|---|
+| `tests/test_sec_02_finance_read.py`, enforce, real Mongo (includes Codex's freeze and pulse 160+0 scenarios from comment 6704759986, as tests) | **24 passed** |
+| `probe_sec02_c_pulse_derive` | FAILS none |
+| `probe_sec02_d_pulse_generate` | FAILS none |
+| `probe_sec02_fg15_replay` | FAILS none |
+| `probe_sec02_e_narrow_window` (`PROBE_ZERO`) | only the known false positive (planned budget, allowed) |
+| W0 | same 15 |
+| A2C | 0/208 |
+| A1 | 0/422 |
+| R0 | **814** |
+| PM-01 | 6 |
+
+merge-tree:
+- main and #69: clean;
+- #72: A2B inventory;
+- #70: A1 inventory + `idempotency.js`;
+- #73: `all_reports`/`labor_smr` + inventory;
+- #74: `overhead.py` + matrix.
+
+
+## #74 @ `26a135a` — 2026-11-07 ~11:40 UTC
+
+- `73a5601`/`26a135a` are evidence only (merge with #69); the code is `39eafdf` (audited PASS).
+- Codex reviewed `26a135a` (comment 6705531681, CHANGES_REQUESTED): **OH74-03** (R38 window: the old batch is superseded before the new insert, so readers see 0, no label) and **OH74-04** (archive recovery duplicates the canonical event when the crash lands after the event but before the step is recorded). Codex is the independent reviewer; I do not duplicate them here. OH74-03 is the old D2 gap now in conflict with R38. They will be re-checked at the next head.
+
+**HANDOFF OH-01-C 6-step #69 merge procedure — VERIFIED** on a fresh trial merge `26a135a` + #69 **`ccab244`** (newer than the `6af0e98` the HANDOFF used):
+1. `overhead.py`: 3 conflicts, signature `data, _sec01, idempotency_key (one Header), user`; body (b)(c) from #74.
+2. The unused `MoneyWrite` import removed; compute has one key reservation.
+3. Matrix: theirs, then `--harness` regeneration (`run_meta.json` restored).
+4. `merge69_sec01_c03_test.diff` applied.
+5. `merge69_sec01_c01_results.diff` applied cleanly. **`merge69_sec01_c03_results.diff` does NOT apply on `ccab244`** (addendum D changed that file), so regenerate with `--harness`, as step 5 says. The regenerated diff matches the committed expectation: the compute rows gain `op.overhead_period_locks`; the 201/409 mix of the `f69_01_interrupted_payment_race` retries is timing-dependent, and the committed expected diff has the same kind of swap.
+6. On the merged tree: SEC-01 **30 passed**, OH-01 **140 passed**, PM-01 6 passed, A2C 0/208, A1 0/422.
+
+
+## #69 SEC-01-C03-D @ `ccab244` — 2026-11-07 ~11:45 UTC — PASS
+
+FG-90: a payment naming an act requires a **confirmed** act of the package (404/409). `_reserve_within_certified` is a single conditional `update_one` with `$expr` (committed + amount ≤ certified + 0.005), done as the **first** `mw.step("reserve")` per key; over the cap → 409 `PAYMENT_EXCEEDS_CERTIFIED`. Two different-key payments cannot both pass.
+
+| Gate | Result |
+|---|---|
+| `tests/test_sec_01_*.py` (incl. the FG-90 tests) | **30 passed** |
+| W0 | same 15 |
+| A2C | 0/207 |
+| A1 | 0/420 |
+| R0 | **814** |
+
+**FG90-N1, LOW/MEDIUM (code reading):** `committed_paid_total` is only ever incremented; nothing decrements it. If a subcontractor payment is reversed or cancelled, its reservation is never released, so later legitimate payments up to the certified total get 409. This fails closed, with no money loss. A reservation whose payment never completes (crash, never retried) also stays.
+
+
+## #55 @ `1b3f182` — PASS
+
+R37 test only: the keeper sees the value on a warehouse "фира" and not on a project one. `c26j` file: **58 passed** (real Mongo).
