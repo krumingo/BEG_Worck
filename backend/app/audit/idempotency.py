@@ -26,6 +26,7 @@ concurrent requests with the same key cannot both win.
 """
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
@@ -35,6 +36,10 @@ IDEMPOTENCY_STARTED = "started"
 IDEMPOTENCY_COMPLETED = "completed"
 IDEMPOTENCY_FAILED = "failed"
 IDEMPOTENCY_DUPLICATE = "duplicate"
+# W0-04-C01 F-69-01: a concurrent retry lost the FAILED -> STARTED retake to
+# another caller that is performing the write right now. Not a replay, not a
+# resume: the caller must refuse (HTTP 409) and must not perform the write.
+IDEMPOTENCY_IN_PROGRESS = "in_progress"
 
 
 class IdempotencyConflict(RuntimeError):
@@ -95,7 +100,9 @@ async def begin_idempotent(
       - IDEMPOTENCY_STARTED   — key is new, caller must perform the write;
       - IDEMPOTENCY_DUPLICATE — key was seen before; "prior_status" tells
         whether the original completed, failed or is still running, and
-        "result_reference" carries the original result when completed.
+        "result_reference" carries the original result when completed;
+      - IDEMPOTENCY_IN_PROGRESS — the key had FAILED and a concurrent retry
+        won the retake; this caller must refuse (409) and not write.
 
     Raises IdempotencyConflict when the key exists with a different
     request fingerprint.
@@ -142,18 +149,36 @@ async def begin_idempotent(
 
     # A FAILED attempt may be retried under the same key: the reservation
     # returns to STARTED and the caller performs the write again.
+    # F-69-01: the retake is a compare-and-set on status == FAILED that also
+    # writes this attempt's token. Of N concurrent retries exactly one update
+    # matches; the caller whose token is in the record afterwards is the single
+    # winner. Every other caller gets IDEMPOTENCY_IN_PROGRESS and must refuse.
     if existing.get("status") == IDEMPOTENCY_FAILED:
+        attempt_token = uuid.uuid4().hex
         await db[IDEMPOTENCY_COLLECTION].update_one(
             {"id": record["id"], "status": IDEMPOTENCY_FAILED},
             {"$set": {
                 "status": IDEMPOTENCY_STARTED,
+                "attempt_token": attempt_token,
                 "reserved_at": _now_iso(),
                 "completed_at": None,
                 "error_code": None,
             }},
         )
         refreshed = await db[IDEMPOTENCY_COLLECTION].find_one({"id": record["id"]}, {"_id": 0})
-        return {"status": IDEMPOTENCY_STARTED, "record": refreshed, "retry_of_failed": True}
+        if refreshed is not None and refreshed.get("attempt_token") == attempt_token:
+            return {"status": IDEMPOTENCY_STARTED, "record": refreshed, "retry_of_failed": True}
+        existing = refreshed or existing
+        if existing.get("status") in (IDEMPOTENCY_STARTED, IDEMPOTENCY_FAILED):
+            # Lost the retake: another retry owns the write (or already failed
+            # it again) — never a second writer.
+            return {
+                "status": IDEMPOTENCY_IN_PROGRESS,
+                "prior_status": existing.get("status"),
+                "result_reference": None,
+                "record": existing,
+            }
+        # The winner already completed: fall through to an ordinary replay.
 
     return {
         "status": IDEMPOTENCY_DUPLICATE,

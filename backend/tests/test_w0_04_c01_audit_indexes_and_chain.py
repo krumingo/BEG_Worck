@@ -439,3 +439,82 @@ def test_check_only_mode_never_builds_an_index_and_ensure_chain_index_does():
         await store._require_chain_index(db, create=False)                 # now passes
         assert await ix.unique_index_present(db, AUDIT_COLLECTION, store.CHAIN_INDEX_KEYS)
     scratch(go)
+
+
+# ─────────────────────────────────────────────── F-69-01: FAILED -> STARTED retake has one winner
+
+@real_mongo
+def test_six_concurrent_retries_of_a_failed_key_have_exactly_one_winner():
+    """F-69-01: a request is interrupted (its key ends FAILED); 6 concurrent
+    retries must give exactly 1 STARTED — never a second writer. Repeated over
+    10 rounds."""
+    from app.audit.idempotency import IDEMPOTENCY_IN_PROGRESS, fail_idempotent
+
+    async def go(client, dbs):
+        db = dbs[0]
+        await ix.ensure_audit_indexes(db)
+        for round_ in range(10):
+            key = "pay-retry-%d" % round_
+            first = await begin_idempotent(db, tenant_id="tenant-a", key=key, action="payment.create",
+                                           request_fingerprint="fp")
+            assert first["status"] == IDEMPOTENCY_STARTED
+            await fail_idempotent(db, tenant_id="tenant-a", key=key, action="payment.create",
+                                  error_code="INTERRUPTED")
+            states = await asyncio.gather(*[
+                begin_idempotent(db, tenant_id="tenant-a", key=key, action="payment.create",
+                                 request_fingerprint="fp") for _ in range(6)])
+            statuses = [s["status"] for s in states]
+            assert statuses.count(IDEMPOTENCY_STARTED) == 1, statuses
+            # Every other retry is told the write is running: IN_PROGRESS when it
+            # read FAILED and lost the retake, or the ordinary DUPLICATE/STARTED
+            # ("still running") when it read the record after the winner's update.
+            losers = [s for s in states if s["status"] != IDEMPOTENCY_STARTED]
+            assert all(s["status"] == IDEMPOTENCY_IN_PROGRESS
+                       or (s["status"] == IDEMPOTENCY_DUPLICATE
+                           and s["prior_status"] == IDEMPOTENCY_STARTED) for s in losers), statuses
+            assert not any(s.get("retry_of_failed") for s in losers)
+            winner = next(s for s in states if s["status"] == IDEMPOTENCY_STARTED)
+            assert winner["retry_of_failed"] is True
+            rec = await db[IDEMPOTENCY_COLLECTION].find_one({"key": key}, {"_id": 0})
+            assert rec["status"] == IDEMPOTENCY_STARTED
+            assert rec["attempt_token"] == winner["record"]["attempt_token"]
+            assert await db[IDEMPOTENCY_COLLECTION].count_documents({"key": key}) == 1
+    scratch(go)
+
+
+@real_mongo
+def test_a_retry_after_the_winner_completed_is_a_replay():
+    from app.audit.idempotency import (
+        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_IN_PROGRESS, complete_idempotent, fail_idempotent)
+
+    async def go(client, dbs):
+        db = dbs[0]
+        kw = dict(tenant_id="tenant-a", key="k", action="payment.create")
+        await begin_idempotent(db, request_fingerprint="fp", **kw)
+        await fail_idempotent(db, error_code="INTERRUPTED", **kw)
+        won = await begin_idempotent(db, request_fingerprint="fp", **kw)
+        assert won["status"] == IDEMPOTENCY_STARTED and won["retry_of_failed"]
+        lost = await begin_idempotent(db, request_fingerprint="fp", **kw)
+        # an ordinary STARTED duplicate (not a lost retake) keeps its W0-02 meaning
+        assert lost["status"] == IDEMPOTENCY_DUPLICATE and lost["prior_status"] == IDEMPOTENCY_STARTED
+        await complete_idempotent(db, result_reference="pay-1", **kw)
+        replay = await begin_idempotent(db, request_fingerprint="fp", **kw)
+        assert replay["status"] == IDEMPOTENCY_DUPLICATE
+        assert replay["prior_status"] == IDEMPOTENCY_COMPLETED and replay["result_reference"] == "pay-1"
+        assert IDEMPOTENCY_IN_PROGRESS not in (won["status"], replay["status"])
+    scratch(go)
+
+
+def test_recoverable_write_refuses_with_409_when_a_retry_is_in_progress(monkeypatch):
+    from fastapi import HTTPException
+    from app.audit.idempotency import IDEMPOTENCY_IN_PROGRESS
+    from app.permissions import workflow
+
+    async def lost_retake(*a, **kw):
+        return {"status": IDEMPOTENCY_IN_PROGRESS, "prior_status": IDEMPOTENCY_STARTED, "record": {}}
+    monkeypatch.setattr(workflow, "begin_idempotent", lost_retake)
+    rw = workflow.RecoverableWrite(object(), tenant_id="t", action="a", key="k", fingerprint="fp")
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(rw.begin())
+    assert exc.value.status_code == 409
+    assert exc.value.detail["error_code"] == "IDEMPOTENCY_IN_PROGRESS"

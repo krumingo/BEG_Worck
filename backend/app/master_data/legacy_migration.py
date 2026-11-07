@@ -670,8 +670,8 @@ def _shadow_or_off(effective: str, kind: str, ctx, payload, checks) -> Optional[
 async def _begin(db, tenant_id: str, action: str, key: str, fingerprint: str):
     """Reserve the idempotency key. Returns (state, replay_reference)."""
     from app.audit.idempotency import (
-        IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IdempotencyConflict,
-        _record_id, begin_idempotent)
+        IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
+        IDEMPOTENCY_IN_PROGRESS, IdempotencyConflict, _record_id, begin_idempotent)
     prior = await db[IDEMPOTENCY_COLLECTION].find_one({"id": _record_id(tenant_id, action, key),
                                                        "tenant_id": tenant_id},
                                                       {"_id": 0})
@@ -685,6 +685,10 @@ async def _begin(db, tenant_id: str, action: str, key: str, fingerprint: str):
                                        request_fingerprint=fingerprint)
     except IdempotencyConflict as exc:
         raise MasterDataRefused(str(exc)) from exc
+    if state.get("status") == IDEMPOTENCY_IN_PROGRESS:
+        # W0-04-C01 F-69-01: a concurrent retry won the retake of this failed key.
+        raise MasterDataRefused("idempotency key %r for %s is being retried right now"
+                                % (key, action))
     if state.get("status") == IDEMPOTENCY_DUPLICATE and state.get("prior_status") == IDEMPOTENCY_COMPLETED:
         return None, state.get("result_reference")
     return state, None
