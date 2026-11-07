@@ -17,3 +17,20 @@ old store.py (35ae10b) + unique indexes, test_parallel_record_event_*: FAILED â€
 begin_idempotent, 6 parallel, same key, database WITHOUT indexes, 10 rounds: winners per round [6, 6, 6, 6, 6, 6, 6, 5, 6, 6]
 with ensure_audit_indexes: 1 winner per round (test_six_parallel_begin_with_one_key_have_exactly_one_winner, 5 rounds)
 ## stability: -k parallel repeated 10x: 10/10 runs 3 passed
+
+# FG-57 follow-up (2026-11-07), parent e733c66 + FG-57 working tree
+## A2C guard
+W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
+## R0 real mongo
+814 passed, 6 warnings in 147.16s (0:02:27)
+## W0 DB-free
+15 failed, 1092 passed, 63 skipped, 6 warnings in 66.43s (0:01:06)
+## W0 with real mongo (MONGO_URL + W0_03_REAL_MONGO_URL)
+15 failed, 1155 passed, 6 warnings in 109.11s (0:01:49)
+## stability: C01 -k 'parallel or fg57' x10
+     10 6 passed, 14 deselected
+## W0 deltas vs 35ae10b baseline 1085/15/50: DB-free +7 passed (pure C01) +13 skipped (C01 real-Mongo); the same 15 test_w0_03e_legacy_routes failures in both runs
+## negative control FG-57: e733c66 store.py, DB without indexes, 20 parallel record_event: 3/3 runs FAILED, sequences [1, 1, 1, 1, 1, 1, ...] (forked)
+## with FG-57: test_fg57_no_index_parallel_appends_do_not_fork (10 fresh DBs per run) 10/10 runs passed

@@ -301,3 +301,75 @@ def test_the_manual_script_lists_every_duplicate_group_and_creates_nothing():
         assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 4
         assert list((await db[IDEMPOTENCY_COLLECTION].index_information()).keys()) == ["_id_"]
     scratch(go)
+
+
+# ─────────────────────────────────────────────── FG-57: fail closed without the chain index
+
+def test_production_handles_are_checked():
+    """Every production path hands record_event a Motor database; the guard
+    must apply to it (only plain in-memory doubles are exempt)."""
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from app.db import db as legacy_db
+    from app.tenancy import resolver
+    assert store._is_mongo_handle(legacy_db)
+    assert store._is_mongo_handle(resolver._get_db_by_name("w004c01_never_opened"))
+    assert store._is_mongo_handle(AsyncIOMotorClient("mongodb://127.0.0.1:1")["x"])
+    assert not store._is_mongo_handle({AUDIT_COLLECTION: object()})
+
+
+def test_mongomock_handle_gets_the_chain_index_before_its_first_append():
+    from mongomock_motor import AsyncMongoMockClient
+
+    async def go():
+        db = AsyncMongoMockClient()["w004c01_mock_%s" % uuid.uuid4().hex[:8]]
+        await record_event(db, make_event())
+        info = await db[AUDIT_COLLECTION].index_information()
+        assert any(store._protects_chain(i) for i in info.values()), info
+    asyncio.run(go())
+
+
+@real_mongo
+def test_fg57_no_index_parallel_appends_do_not_fork():
+    """FG-57: a database that missed startup/onboarding (no indexes at all) —
+    20 parallel appends still give one linear chain, every round."""
+    async def go(client, dbs):
+        for db in dbs:
+            assert AUDIT_COLLECTION not in await db.list_collection_names()
+            stored = await asyncio.gather(*[
+                record_event(db, make_event(entity="pay-%d" % i)) for i in range(20)])
+            assert sorted(e["sequence"] for e in stored) == list(range(1, 21))
+            assert await db[AUDIT_COLLECTION].count_documents({}) == 20
+            ok, reason = await verify_tenant_chain(db, "tenant-a")
+            assert ok is True, reason
+            info = await db[AUDIT_COLLECTION].index_information()
+            assert any(store._protects_chain(i) for i in info.values())
+    scratch(go, n_dbs=10)
+
+
+@real_mongo
+def test_fg57_conflicting_chain_index_refuses_to_append():
+    async def go(client, dbs):
+        db = dbs[0]
+        await db[AUDIT_COLLECTION].create_index([("tenant_id", 1), ("sequence", 1)])  # non-unique
+        for _ in range(2):                                   # no positive result is cached
+            with pytest.raises(store.AuditChainUnprotected) as exc:
+                await record_event(db, make_event())
+            assert "refusing to append" in str(exc.value)
+        assert await db[AUDIT_COLLECTION].count_documents({}) == 0
+        info = await db[AUDIT_COLLECTION].index_information()
+        assert not info["tenant_id_1_sequence_1"].get("unique")      # not dropped
+    scratch(go)
+
+
+@real_mongo
+def test_fg57_existing_fork_refuses_to_append_and_deletes_nothing():
+    async def go(client, dbs):
+        db = dbs[0]
+        await db[AUDIT_COLLECTION].insert_many([
+            {"event_id": "ae_1", "tenant_id": "tenant-a", "sequence": 1},
+            {"event_id": "ae_2", "tenant_id": "tenant-a", "sequence": 1}])
+        with pytest.raises(store.AuditChainUnprotected):
+            await record_event(db, make_event())
+        assert await db[AUDIT_COLLECTION].count_documents({}) == 2
+        assert "tenant_id_1_sequence_1" not in await db[AUDIT_COLLECTION].index_information()
+    scratch(go)

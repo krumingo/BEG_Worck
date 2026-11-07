@@ -51,6 +51,74 @@ class AuditChainContention(RuntimeError):
     """The chain head kept moving for CHAIN_APPEND_MAX_ATTEMPTS tries; nothing was written."""
 
 
+class AuditChainUnprotected(RuntimeError):
+    """The unique (tenant_id, sequence) index on audit_events is missing and
+    cannot be created (a conflicting index, existing duplicates, an error).
+
+    Without it two concurrent appends can take the same sequence and fork the
+    chain silently (FG-57), so record_event refuses to append. Nothing is
+    dropped or deleted; see scripts/w0_04_bootstrap_audit_indexes.py.
+    """
+
+
+CHAIN_INDEX_KEYS = [("tenant_id", 1), ("sequence", 1)]
+
+# Databases already proven to carry the chain index in this process:
+# (id(client), database name). Only a positive result is cached.
+_chain_index_verified = set()
+
+
+def _protects_chain(info: Dict[str, Any]) -> bool:
+    keys = [(str(f), int(d)) for f, d in info.get("key", [])]
+    return (keys == CHAIN_INDEX_KEYS and bool(info.get("unique"))
+            and "partialFilterExpression" not in info and not info.get("sparse"))
+
+
+async def _chain_index_present(db) -> bool:
+    indexes = await db[AUDIT_COLLECTION].index_information()
+    return any(_protects_chain(i) for i in indexes.values())
+
+
+def _is_mongo_handle(handle) -> bool:
+    """A real MongoDB database handle (Motor in production, mongomock-motor in
+    tests). Every production path passes one: the tenant resolver and the
+    legacy handle are both AsyncIOMotorDatabase. Pure in-memory test doubles
+    (no client, no indexes) cannot fork a server-side chain and are not checked.
+    """
+    try:
+        from motor.motor_asyncio import AsyncIOMotorDatabase
+        if isinstance(handle, AsyncIOMotorDatabase):
+            return True
+    except ImportError:  # pragma: no cover
+        pass
+    return hasattr(handle, "client") and hasattr(handle, "name")
+
+
+async def _require_chain_index(db) -> None:
+    """FG-57: never append to a chain the database cannot keep linear.
+
+    The index normally exists (startup / onboarding, W0-04-C01). A database
+    that missed both gets exactly the planned unique index here, before its
+    first append; if MongoDB refuses it, the append is refused.
+    """
+    if not _is_mongo_handle(db):
+        return
+    cache_key = (id(db.client), db.name)
+    if cache_key in _chain_index_verified:
+        return
+    try:
+        if not await _chain_index_present(db):
+            await db[AUDIT_COLLECTION].create_index(CHAIN_INDEX_KEYS, unique=True)
+            if not await _chain_index_present(db):
+                raise RuntimeError("the index is still absent after create_index")
+    except Exception as exc:  # noqa: BLE001
+        raise AuditChainUnprotected(
+            "%s.%s: no unique (tenant_id, sequence) index and it cannot be created; "
+            "refusing to append (a concurrent append could fork the chain): %s"
+            % (db.name, AUDIT_COLLECTION, exc)) from exc
+    _chain_index_verified.add(cache_key)
+
+
 def _is_sequence_collision(exc) -> bool:
     """True when a DuplicateKeyError is the (tenant_id, sequence) race, not a
     duplicate event_id (which is a real error and is never retried)."""
@@ -140,6 +208,7 @@ async def record_event(db, event: Dict[str, Any]) -> Dict[str, Any]:
     chain stays linear.
     """
     validate_event(event)
+    await _require_chain_index(db)
     from pymongo.errors import DuplicateKeyError
     for attempt in range(1, CHAIN_APPEND_MAX_ATTEMPTS + 1):
         previous = await _last_event(db, event["tenant_id"])
