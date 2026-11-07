@@ -1,0 +1,15 @@
+# LAB-01-J checks (2026-11-07), parent ca81286 + LAB-01-J working tree, run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+## A2B inventory vs code
+inventory matches
+## LAB-01 tests (labor_cost + d + e + h_r36 + i_four_eyes + j_payroll_lock)
+87 passed, 1 skipped, 1 warning in 5.03s
+## real-Mongo probe of report_in_payroll (old format via day_cells.reports, new via selected_report_ids, draft run free): PR-1 (paid) / PR-2 (confirmed) / None — matches mongomock
+## tests/test_r0_0*.py (real)
+814 passed, 6 warnings in 157.33s (0:02:37)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 69.16s (0:01:09)
+  non-legacy_routes failures: 0

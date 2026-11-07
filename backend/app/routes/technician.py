@@ -1392,7 +1392,7 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     mode = await authorize_report_edit(
         user, doc, projects=[doc.get("project_id")],
         author_ids=(doc.get("submitted_by"), doc.get("worker_id")),
-        author_statuses=("Draft", "Rejected"))
+        author_statuses=("Draft", "Rejected"), tenant=tenant)
 
     now = datetime.now(timezone.utc).isoformat()
     update = {"updated_at": now}

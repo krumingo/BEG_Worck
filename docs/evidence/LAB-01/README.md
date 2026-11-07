@@ -115,3 +115,10 @@ Per-line amounts of one person add up to the cent to that person's total.
 - **Four-eyes on approval:** `approve_report_one` (single and bulk) refuses anyone who authored the report (worker / submitted_by / created_by) or corrected it (`correctors`). The single route returns 403.
 - **Payroll** counts the corrected hours only after a different person re-approves the report.
 - A report that is already in payroll stays 409.
+
+## LAB-01-J (FG-91) — `tests-LAB-01-J.txt`
+- **"In payroll" is decided from the Pay Run lines** (`report_in_payroll` in `report_corrections.py`). A report is locked when any confirmed / paid / paying / payment_failed / reopened run (or a run with `paid_at`) references it or one of its entries, by `selected_report_ids`, `day_cells.reports.report_id` or `day_cells.report_ids`.
+  - This works for the new format (report id) and the old format (`<report id>_<entry id>`).
+  - `payroll_status` is still honoured. The payroll sync never stamps it on the old format, nor on a line with `paid_now` 0, so it is not relied on.
+- **Every edit path** (PUT, technician draft, batch-save; on #75 also quantity entry, approve and classify) gets 409, with the run number in the message.
+- A draft run does not lock.
