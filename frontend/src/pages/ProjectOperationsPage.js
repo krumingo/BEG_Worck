@@ -111,8 +111,20 @@ export default function ProjectOperationsPage() {
   const createClientActFromOffer = (offerId, payload) =>
     postClientActWrite(`/client-acts/from-offer/${offerId}`, payload);
   // FG-119: confirming an act is a money write too (finance roles, key, Bulgarian reason).
-  const confirmClientAct = (actId) => postClientActWrite(`/client-acts/${actId}/confirm`, {});
-  const postClientActWrite = async (endpoint, payload) => {
+  // FG-142: the confirmation names the values shown; if the server recomputes a different
+  // value (409 ACT_VALUE_CHANGED) the new total is shown and confirmed again (new key).
+  const confirmClientAct = async (act) => {
+    const shown = {
+      expected_total: act.total,
+      expected_line_values: Object.fromEntries((act.lines || []).map(l => [l.id, l.line_total])),
+    };
+    const changed = await postClientActWrite(`/client-acts/${act.id}/confirm`, shown, true);
+    if (changed && window.confirm(`${changed.message}\nНова сума: ${Number(changed.total).toFixed(2)} € с ДДС. Потвърждавате ли тази сума?`)) {
+      await postClientActWrite(`/client-acts/${act.id}/confirm`,
+        { expected_total: changed.total, expected_line_values: changed.line_values });
+    }
+  };
+  const postClientActWrite = async (endpoint, payload, returnValueChanged = false) => {
     setSaving(true);
     if (!clientActKey.current) {
       clientActKey.current = window.crypto?.randomUUID ? window.crypto.randomUUID()
@@ -128,6 +140,10 @@ export default function ProjectOperationsPage() {
     } catch (err) {
       if (err.response) clientActKey.current = null;
       const detail = err.response?.data?.detail;
+      if (returnValueChanged && detail?.error_code === "ACT_VALUE_CHANGED") {
+        setSaving(false);
+        return detail;
+      }
       alert((detail && typeof detail === "object" ? detail.message : detail) || "Грешка");
     } finally { setSaving(false); }
   };
@@ -231,7 +247,7 @@ export default function ProjectOperationsPage() {
                     <TableCell className="text-right font-mono text-sm">{act.subtotal != null ? `${act.subtotal.toFixed(2)} €` : "—"}</TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${act.status === "Accepted" ? "bg-emerald-500/15 text-emerald-400" : ""}`}>{act.status === "Draft" ? "Чернова" : act.status === "Accepted" ? "Приет" : act.status}</Badge></TableCell>
                     <TableCell>
-                      {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => confirmClientAct(act.id))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
+                      {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => confirmClientAct(act))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
                     </TableCell>
                   </TableRow>
                 ))}

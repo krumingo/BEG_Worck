@@ -263,6 +263,19 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                     "message": (detail.get("message") if isinstance(detail, dict) else detail),
                     "body": payload}
 
+        def seen(act_id):
+            """FG-142: what the confirmer sees — the act's gross total and line values."""
+            async def q():
+                return await op_db.client_acts.find_one({"id": act_id}, {"_id": 0}) or {}
+            act = tc.portal.call(q)
+            return {"expected_total": act.get("total", 0),
+                    "expected_line_values": {str(ln.get("id")): ln.get("line_total")
+                                             for ln in act.get("lines") or []} or {"-": 0}}
+
+        def confirm_call(act_id, role="admin", key: Optional[str] = "auto", body=None):
+            return call("POST", "/api/client-acts/%s/confirm" % act_id, role,
+                        body if body is not None else seen(act_id), key)
+
         def line(lkey, qty, **extra):
             return {"offer_line_id": i[lkey], "activity_name": "ACT-01 " + lkey, "unit": "m2",
                     "executed_qty": qty, **extra}
@@ -488,7 +501,7 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
             def accepted():
                 created = post_act(act_body(line("L1", 1)))
                 act_id = created["body"].get("id") if isinstance(created["body"], dict) else None
-                conf = call("POST", "/api/client-acts/%s/confirm" % act_id)
+                conf = confirm_call(act_id)
                 put = call("PUT", "/api/client-acts/%s" % act_id, body={"lines": [line("L1", 2)]})
                 return {"confirm": conf, "put": put}
             scenario("accepted_not_edited", accepted)
@@ -556,19 +569,17 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 created_ = post_act(act_body(line("L1", 2)))
                 act_id = created_["body"].get("id") if isinstance(created_["body"], dict) else None
                 for role in NON_FINANCE:
-                    out["role_" + role] = call("POST", "/api/client-acts/%s/confirm" % act_id,
-                                               role=role)
-                out["no_key"] = call("POST", "/api/client-acts/%s/confirm" % act_id, key=None)
+                    out["role_" + role] = confirm_call(act_id, role=role)
+                out["no_key"] = confirm_call(act_id, key=None)
                 k = uuid.uuid4().hex
-                out["ok"] = call("POST", "/api/client-acts/%s/confirm" % act_id, role="accountant",
-                                 key=k)
-                out["replay"] = call("POST", "/api/client-acts/%s/confirm" % act_id,
-                                     role="accountant", key=k)
-                out["again"] = call("POST", "/api/client-acts/%s/confirm" % act_id)
+                shown = seen(act_id)
+                out["ok"] = confirm_call(act_id, role="accountant", key=k, body=shown)
+                out["replay"] = confirm_call(act_id, role="accountant", key=k, body=shown)
+                out["again"] = confirm_call(act_id)
                 out["audit"] = audit_actions(act_id)
-                out["legacy_free_line"] = call("POST", "/api/client-acts/%s/confirm" % i["LEGACY2"])
-                out["legacy_linked"] = call("POST", "/api/client-acts/%s/confirm" % i["LEGACY"])
-                out["foreign"] = call("POST", "/api/client-acts/%s/confirm" % act_id, role="admin_b")
+                out["legacy_free_line"] = confirm_call(i["LEGACY2"])
+                out["legacy_linked"] = confirm_call(i["LEGACY"])
+                out["foreign"] = confirm_call(act_id, role="admin_b")
                 return out
             scenario("confirm", confirm)
             # 26. FG-119 + addendum A: a draft on v1 is not confirmed after v2 is accepted
@@ -578,7 +589,7 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 tc.portal.call(lambda: op_db.offers.update_one(
                     {"id": i["OV2"]}, {"$set": {"status": "Accepted"}}))
                 return {"draft": draft,
-                        "confirm": call("POST", "/api/client-acts/%s/confirm" % act_id),
+                        "confirm": confirm_call(act_id),
                         "remaining": call("GET", "/api/client-acts/remaining/%s" % project, key=None)}
             scenario("confirm_superseded", confirm_superseded)
             # 27. FG-121: the exact offer price 12.345 x 100
@@ -700,13 +711,20 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                 b3 = post_act(act_body(line("LD", 0.3)))
                 ids_ = [b["body"].get("id") if isinstance(b["body"], dict) else None
                         for b in (b1, b2, b3)]
-                c2 = call("POST", "/api/client-acts/%s/confirm" % ids_[1])
+                # FG-142: b2's draft value is 3.71 (positions 0.3-0.6), but as the FIRST
+                # confirmed act it is worth round(0.3 x p) = 3.70 -> ACT_VALUE_CHANGED, then
+                # the confirmer accepts the new value
+                c2_stale = confirm_call(ids_[1])
+                d2 = (c2_stale["body"].get("detail") or {}) if isinstance(c2_stale["body"], dict) else {}
+                c2 = confirm_call(ids_[1], body={"expected_total": d2.get("total"),
+                                                 "expected_line_values": d2.get("line_values")})
                 after_confirm = invariant()
                 rm1 = call("PUT", "/api/client-acts/%s" % ids_[0], body={"lines": [line("L1", 2)]})
                 after_move = invariant()
                 fill = post_act(act_body(line("LD", 99.4)))      # 0.3 (b2) + 0.3 (b3) left
-                c3 = call("POST", "/api/client-acts/%s/confirm" % ids_[2])
+                c3 = confirm_call(ids_[2])
                 out["confirm_interleaved"] = {
+                    "c2_stale": [c2_stale["status"], c2_stale["error_code"]],
                     "statuses": [b1["status"], b2["status"], b3["status"], c2["status"],
                                  rm1["status"], fill["status"], c3["status"]],
                     "confirmed_value": c2["body"]["lines"][0]["line_total"]
@@ -715,6 +733,24 @@ def run_harness(mongo_url: str, out_json: Path, modes=MODES) -> Dict[str, Any]:
                     "sum": value_on("LD"), "acted": acts_on("LD"), "invariant": invariant()}
                 return out
             scenario("moved_lines", moved_lines)
+            # 33. FG-142 (addendum D): confirm a2 (draft 407.38) while a1 (407.39) is still a
+            #     draft — the accepted value continues the CONFIRMED sequence: 407.39
+            def value_changed():
+                a1 = post_act(act_body(line("LD", 33)))
+                a2 = post_act(act_body(line("LD", 33)))
+                a2_id = a2["body"].get("id") if isinstance(a2["body"], dict) else None
+                shown = seen(a2_id)                          # 407.38 + 20 % = 488.86
+                stale = confirm_call(a2_id, body=shown)
+                missing = confirm_call(a2_id, body={})
+                fresh_body = {"expected_total": (stale["body"].get("detail") or {}).get("total"),
+                              "expected_line_values": (stale["body"].get("detail") or {}).get(
+                                  "line_values")} if isinstance(stale["body"], dict) else {}
+                again = confirm_call(a2_id, body=fresh_body)   # the UI asked again: new key
+                shown_view = {"total": shown["expected_total"],
+                              "lines": list(shown["expected_line_values"].values())}
+                return {"a1": a1, "shown": shown_view, "stale": stale, "missing": missing,
+                        "again": again, "sum": value_on("LD"), "invariant": invariant()}
+            scenario("value_changed", value_changed)
             # 24. the answer shows contracted / acted / remaining per line
             scenario("line_view", lambda: post_act(act_body(line("L1", 3))))
             results["modes"][mode] = res
@@ -1131,6 +1167,7 @@ def test_moving_removing_or_confirming_a_line_leaves_no_cent_behind(r):
     assert c["statuses"] == [201, 201, 201, 200, 201], c
     assert c["invariant"] == [] and c["sum"] == 1234.5 and c["acted"] == 100.0, c
     c = m["confirm_interleaved"]
+    assert c["c2_stale"] == [409, "ACT_VALUE_CHANGED"], c         # FG-142: 3.71 seen, 3.70 now
     assert c["statuses"] == [201, 201, 201, 200, 200, 201, 200], c
     assert c["confirmed_value"] == 3.70, c          # the FIRST confirmed 0.3: round(0.3 x p)
     assert c["after_confirm"] == [] and c["after_move"] == [], c
@@ -1139,6 +1176,23 @@ def test_moving_removing_or_confirming_a_line_leaves_no_cent_behind(r):
 
 def test_the_value_invariant_holds_after_the_rounding_scenarios(r):
     assert r["cumulative_rounding"]["edits"]["sum"] == 1234.5
+
+
+def test_confirm_refuses_a_value_other_than_the_one_seen(r):
+    """FG-142 (addendum D, CLAUDE.md §8): the approval points to exactly what was seen."""
+    v = r["value_changed"]
+    assert v["shown"] == {"total": 488.86, "lines": [407.38]}, v["shown"]
+    st = v["stale"]
+    assert st["status"] == 409 and st["error_code"] == "ACT_VALUE_CHANGED", st
+    nothing(st)
+    detail = st["body"]["detail"]
+    assert detail["total"] == 488.87 and list(detail["line_values"].values()) == [407.39], detail
+    assert v["missing"]["status"] == 422 and v["missing"]["error_code"] == "EXPECTED_VALUES_REQUIRED"
+    nothing(v["missing"])
+    ag = v["again"]
+    assert ag["status"] == 200 and ag["body"]["status"] == "Accepted", ag
+    assert ag["body"]["total"] == 488.87 and ag["body"]["lines"][0]["line_total"] == 407.39
+    assert v["sum"] == 814.77 and v["invariant"] == [], v           # round(66 x 12.345)
 
 
 # ── correction ─────────────────────────────────────────────────────────────────────

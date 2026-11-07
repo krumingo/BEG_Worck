@@ -148,20 +148,25 @@ async def update_client_act(
 @router.post("/client-acts/{act_id}/confirm")
 async def confirm_client_act(
     act_id: str,
+    data: Dict[str, Any] = Body(default_factory=dict),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     _act01: dict = Depends(require_client_act_right(ca.ACTION_CONFIRM)),  # FG-119: before any read
     user: dict = Depends(require_m2),
 ):
     """Confirm act → status=Accepted → earned revenue (FG-119: finance roles, Idempotency-Key,
-    one transaction with the offer/version/cap re-check and the canonical AuditEvent)."""
+    one transaction with the offer/version/cap re-check and the canonical AuditEvent;
+    FG-142: body ``expected_total`` + ``expected_line_values`` — the values the confirmer
+    saw; a recomputed difference -> 409 ACT_VALUE_CHANGED, nothing written)."""
     key = ca.KeyedWrite(db, user, ca.ACTION_CONFIRM, idempotency_key)       # 428 without
     tenant = _tenant(user)
     if not await tenant.client_acts.find_one({"id": act_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Act not found")
+    expected = ca.validate_expected(data)       # FG-142: the values the confirmer saw (422)
     return await key.run(
-        {"route": "POST /client-acts/{act_id}/confirm", "act_id": act_id},
+        {"route": "POST /client-acts/{act_id}/confirm", "act_id": act_id, "body": data},
         lambda: ca.confirm_act(db, user=user, act_id=act_id, key=key,
-                               endpoint="POST /api/client-acts/{act_id}/confirm"))
+                               endpoint="POST /api/client-acts/{act_id}/confirm",
+                               expected=expected))
 
 
 @router.post("/client-acts/from-offer/{offer_id}", status_code=201)

@@ -50,6 +50,7 @@ writing a second one.
 from __future__ import annotations
 
 import hashlib
+import math
 from decimal import ROUND_HALF_UP, Decimal
 import json
 import math
@@ -933,8 +934,27 @@ async def update_act(database, *, user: Dict[str, Any], act_id: str, update: Dic
     return await _run(database, body)
 
 
+def validate_expected(body: Any) -> Tuple[Decimal, Dict[str, Decimal]]:
+    """FG-142 (addendum D, CLAUDE.md §8 "Approval винаги сочи към exact version"): the
+    confirmer states the values they saw — ``expected_total`` (the act's gross ``total``)
+    and ``expected_line_values`` ({act line id: line_total}). Shape errors -> 422."""
+    if not isinstance(body, dict):
+        body = {}
+    total = body.get("expected_total")
+    lines = body.get("expected_line_values")
+    if (isinstance(total, bool) or not isinstance(total, (int, float)) or not math.isfinite(total)
+            or not isinstance(lines, dict) or not lines
+            or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                   for v in lines.values())):
+        raise _err(422, "EXPECTED_VALUES_REQUIRED",
+                   "Потвърждението трябва да посочи сумата (expected_total) и стойностите по "
+                   "редове (expected_line_values), които потвърждаващият е видял")
+    return _dec(total), {str(k): _dec(v) for k, v in lines.items()}
+
+
 async def confirm_act(database, *, user: Dict[str, Any], act_id: str, key: KeyedWrite,
-                      endpoint: str) -> Dict[str, Any]:
+                      endpoint: str, expected: Tuple[Decimal, Dict[str, Decimal]]
+                      ) -> Dict[str, Any]:
     """FG-119: Draft -> Accepted in ONE transaction: the act is checked again against the
     offer (basis, exact price, active version, cap — FLOW-004), the reservation is verified
     under the cap, the status changes and one canonical AuditEvent is appended."""
@@ -987,6 +1007,22 @@ async def confirm_act(database, *, user: Dict[str, Any], act_id: str, key: Keyed
                     ln["line_total"] = float(value_at(nxt, price) - value_at(acc, price))
                     acc = nxt
         sums = _totals(fixed)
+        # FG-142: the approval points to exactly what was seen — a recomputed value that
+        # differs refuses the confirmation (nothing is written; the transaction aborts).
+        exp_total, exp_lines = expected
+        changed = (_dec(sums["total"]) != exp_total
+                   or set(exp_lines) != {str(ln.get("id")) for ln in fixed}
+                   or any(_dec(ln.get("line_total")) != exp_lines.get(str(ln.get("id")))
+                          for ln in fixed))
+        if changed:
+            raise _err(409, "ACT_VALUE_CHANGED",
+                       "Стойността на акта при потвърждаване е %.2f (с ДДС), а потвърдената е "
+                       "%.2f. Прегледайте новите стойности и потвърдете отново."
+                       % (sums["total"], float(exp_total)),
+                       total=sums["total"], subtotal=sums["subtotal"],
+                       vat_amount=sums["vat_amount"],
+                       line_values={str(ln.get("id")): ln.get("line_total") for ln in fixed},
+                       expected_total=float(exp_total))
         now = _now()
         res = await tenant.client_acts.find_one_and_update(
             {"id": act_id, "status": DRAFT},
@@ -1002,6 +1038,7 @@ async def confirm_act(database, *, user: Dict[str, Any], act_id: str, key: Keyed
         await _audit(database, user=user, action="client_act.confirmed", act=res, key=key,
                      endpoint=endpoint, session=session,
                      diff={"status": [DRAFT, ACCEPTED], "act_number": res.get("act_number"),
+                           "confirmed_total_seen": float(expected[0]),
                            "subtotal_draft": act.get("subtotal"), "subtotal": res.get("subtotal"),
                            "total": res.get("total"), "revalued_drafts": moved})
         return await act_view(tenant, res, session=session)
