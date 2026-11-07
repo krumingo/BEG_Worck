@@ -45,3 +45,9 @@ R38: compute marks the old allocation "recalculating" (P&L keeps it, overhead_la
 FG-98: startup indexes the operational DB and every Tenant Registry database (unreadable registry fails the start)
 R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0; yarn test 96, build ok
 merge with #69 @ 6af0e98 (F-69-02 adds MoneyWrite on compute): one key path kept (OH-01 KeyedWrite; #69's own comment: "#74's version of this block wins"); SEC-01 30/30, OH-01 140, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0 — after the 6-step procedure in HANDOFF OH-01-C (diffs: merge69_sec01_c01_results.diff, merge69_sec01_c03_results.diff, merge69_sec01_c03_test.diff)
+
+## Codex CHANGES_REQUESTED on 26a135a (OH74-03, OH74-04) — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 194 passed (new test_25 x3 phases, test_26 x3 ops x2 steps; on 26a135a these 54 cases FAIL)
+OH74-03: new batch inserted STAGED, published by ONE pointer write (overhead_period_locks.current_allocation_batch_id); every reader (P&L, financial results, snapshot detail, /overhead/allocations) follows it via current_allocations(); during the switch and after a crash before publish the old batch is read (labelled, never 0/[]); after a crash past publish only the new one (never both); same-key retry completes
+OH74-04: canonical event and legacy audit row are written once per operation (looked up by the operation key) — a crash after the write but before the step is recorded never produces a second event; archive, compute, allocate
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0

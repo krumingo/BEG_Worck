@@ -109,10 +109,9 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     contract_cost = round(contract_cost, 2)
 
     # ── f. OVERHEAD ────────────────────────────────────────────────
-    allocs = await tenant.project_overhead_allocations.find(
-        {"org_id": org_id, "project_id": project_id, "superseded_by": None},  # OH-01: current version
-        {"_id": 0, "allocated_amount": 1, "recalculating": 1}
-    ).to_list(50)
+    # OH74-03: the published (current) version of each period — never 0, never both
+    from app.services.overhead_lifecycle import current_allocations
+    allocs = await current_allocations(tenant, {"org_id": org_id, "project_id": project_id})
     overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
     # R38: the old allocation still counts while its period is recomputed — say so
     overhead_recalculating = any(a.get("recalculating") for a in allocs)

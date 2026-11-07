@@ -213,10 +213,9 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     insurance_burden = direct_labor_insurance
 
     # Overhead allocation from pools
-    allocs = await tenant.project_overhead_allocations.find(
-        {"org_id": org_id, "project_id": project_id, "superseded_by": None},  # OH-01: current version
-        {"_id": 0, "allocated_amount": 1, "pool": 1, "recalculating": 1},
-    ).to_list(50)
+    # OH74-03: the published (current) version of each period — never 0, never both
+    from app.services.overhead_lifecycle import current_allocations
+    allocs = await current_allocations(tenant, {"org_id": org_id, "project_id": project_id})
     overhead_by_pool = {"administration": 0, "base_warehouse": 0, "transport": 0, "general": 0}
     for a in allocs:
         pool = a.get("pool", "general")

@@ -263,3 +263,98 @@ async def overhead_lock(tenant, name: str):
     finally:
         await locks.update_one({"_id": lock_id, ALLOCATION_LOCK_FIELD + ".token": token},
                                {"$unset": {ALLOCATION_LOCK_FIELD: ""}})
+
+
+# ---------------------------------------------------------------------------
+# OH74-04: an operation's audit is written ONCE, whatever step bookkeeping says.
+# RecoverableWrite.step runs the callback BEFORE it records the step as done; a crash in
+# between re-runs the callback on the same-key retry. Only one attempt of a key runs at a
+# time (a concurrent one gets IDEMPOTENCY_IN_PROGRESS), so "is there already an event of
+# THIS operation?" before the write is the dedup (the rule of PAY-01 ``_audit_once``).
+# ---------------------------------------------------------------------------
+
+async def audit_overhead_event_once(db, user: Dict[str, Any], *, action: str,
+                                    entity_id: str, idempotency_key: str, **kw) -> None:
+    from app.audit.store import AUDIT_COLLECTION
+    # ``is not None``: a projected event may legitimately come back as ``{}``
+    if await db[AUDIT_COLLECTION].find_one(
+            {"tenant_id": user["org_id"], "action": action, "entity_id": entity_id,
+             "idempotency_key": idempotency_key, "result": "success"},
+            {"_id": 1}) is not None:
+        return
+    await audit_overhead_event(db, user, action=action, entity_id=entity_id,
+                               idempotency_key=idempotency_key, **kw)
+
+
+async def legacy_audit_once(db, user: Dict[str, Any], action: str, entity_type: str,
+                            entity_id: str, changes: Dict[str, Any], operation_key: str) -> None:
+    """The legacy ``audit_logs`` row of one operation, once (it carries the operation key)."""
+    from app.utils.audit import log_audit
+    if await db["audit_logs"].find_one(
+            {"org_id": user["org_id"], "action": action, "entity_id": entity_id,
+             "changes.operation_key": operation_key}, {"_id": 1}) is not None:
+        return
+    await log_audit(user["org_id"], user["id"], user["email"], action, entity_type, entity_id,
+                    {**changes, "operation_key": operation_key})
+
+
+# ---------------------------------------------------------------------------
+# OH74-03: ONE authoritative "current allocation" pointer per period. A new batch is
+# inserted STAGED (not current), then published by a single atomic write of the pointer;
+# every reader follows the pointer. Until that write the previous batch stays current
+# (and, R38, labelled) — there is no moment with 0 or with both.
+# ---------------------------------------------------------------------------
+
+def _pointer_id(org_id: str, pkey: str) -> str:
+    return "%s|%s" % (org_id, pkey)
+
+
+async def publish_allocation_batch(tenant, period_start: str, period_end: str,
+                                   batch_id: str, version: int) -> None:
+    """The single publish write: the period's pointer now names ``batch_id``. It lives on
+    the period's lock row (``overhead_period_locks``, written under that lock)."""
+    pkey = period_key(period_start, period_end)
+    await tenant.collection(PERIOD_LOCKS_COLLECTION).update_one(
+        {"_id": _pointer_id(tenant.org_id, pkey)},
+        {"$set": {"name": pkey, "current_allocation_batch_id": batch_id,
+                  "current_allocation_version": version,
+                  "published_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True)
+
+
+async def current_allocations(tenant, flt: Dict[str, Any],
+                              projection: Optional[Dict[str, Any]] = None) -> list:
+    """OH74-03: the CURRENT allocation rows matching ``flt`` — the one rule every reader
+    (project P&L, financial results, snapshot detail, /overhead/allocations) follows.
+
+    A row is current when its period has a published pointer and the row is in the
+    pointed batch; for a period without a pointer (legacy data), a row without a batch id
+    and without ``superseded_by``. A staged row (batch id, not yet published) is never
+    current."""
+    proj = None
+    if projection is not None:
+        proj = {**projection, "_id": 0, "overhead_snapshot_id": 1, "allocation_batch_id": 1,
+                "superseded_by": 1}
+    rows = await tenant.project_overhead_allocations.find(flt, proj or {"_id": 0}).to_list(None)
+    sids = sorted({r.get("overhead_snapshot_id") for r in rows if r.get("overhead_snapshot_id")})
+    snaps = await tenant.overhead_snapshots.find(
+        {"id": {"$in": sids}}, {"_id": 0, "id": 1, "period_start": 1, "period_end": 1}
+    ).to_list(None) if sids else []
+    pkey_of = {s["id"]: period_key(s["period_start"], s["period_end"])
+               for s in snaps if s.get("period_start") and s.get("period_end")}
+    names = sorted(set(pkey_of.values()))
+    ptrs = await tenant.collection(PERIOD_LOCKS_COLLECTION).find(
+        {"name": {"$in": names}, "current_allocation_batch_id": {"$exists": True}},
+        {"_id": 0, "name": 1, "current_allocation_batch_id": 1}).to_list(None) if names else []
+    current = {p["name"]: p["current_allocation_batch_id"] for p in ptrs}
+    out = []
+    for r in rows:
+        pk = pkey_of.get(r.get("overhead_snapshot_id"))
+        if pk in current:
+            keep = r.get("allocation_batch_id") == current[pk]
+        else:
+            keep = r.get("superseded_by") is None and not r.get("allocation_batch_id")
+        if keep:
+            out.append(r if projection is None else
+                       {k: v for k, v in r.items() if k in projection or k == "recalculating"})
+    return out

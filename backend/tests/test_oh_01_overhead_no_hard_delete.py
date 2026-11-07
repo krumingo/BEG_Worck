@@ -841,7 +841,7 @@ def test_22_interrupted_archive_is_completed_by_the_same_key(monkeypatch, backen
     async def scenario(c, op):
         from app.routes import overhead
         cat = await _category(c, "Lone")
-        real = overhead.audit_overhead_event
+        real = overhead.audit_overhead_event_once
         calls = {"n": 0}
 
         async def flaky(*a, **k):
@@ -849,7 +849,7 @@ def test_22_interrupted_archive_is_completed_by_the_same_key(monkeypatch, backen
             if calls["n"] == 1:
                 raise RuntimeError("audit store down")
             return await real(*a, **k)
-        monkeypatch.setattr(overhead, "audit_overhead_event", flaky)
+        monkeypatch.setattr(overhead, "audit_overhead_event_once", flaky)
         key = _key()
         url = f"/api/overhead/categories/{cat['id']}?reason=dup"
         try:
@@ -951,3 +951,137 @@ def test_24_startup_indexes_every_registered_tenant_database(monkeypatch, backen
                 for n in extra + [sysdb.name]:
                     await client.drop_database(n)
     run(monkeypatch, backend, "off", scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 25. OH74-03
+async def _pnl_a(op):
+    from app.services.project_pnl import compute_project_pnl
+    e = (await compute_project_pnl(ORG, PROJ_A))["expense"]
+    return e["overhead"], e["overhead_label"]
+
+
+async def _period_recomputed(c, op):
+    """s1 (300) allocated, then the period changes and s2 (600) is computed (R38: s1 kept)."""
+    cat = await _category(c)
+    await _cost(c, cat["id"], amount=300.0)
+    s1 = await _snapshot(c)
+    r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate", json={"method": "Hours"},
+                     headers=_h(key=_key()))
+    assert r.status_code == 200, r.text
+    await _cost(c, cat["id"], date="2026-10-20", amount=300.0)
+    s2 = await _snapshot(c)
+    assert await _pnl_a(op) == (225.0, "преизчислява се")          # 30h of 40h of 300
+    return s1, s2
+
+
+@pytest.mark.parametrize("phase", ["read_during_switch", "crash_before_publish",
+                                   "crash_after_publish"])
+def test_25_publish_is_one_atomic_switch(monkeypatch, backend, mode, phase):
+    """OH74-03 (Codex): a pause between retiring the old batch and inserting the new one
+    showed P&L 300 -> 0 (unlabelled) -> 600 and GET allocations []. Now the new batch is
+    staged and published by ONE pointer write that every reader follows."""
+    async def scenario(c, op):
+        from app.routes import overhead
+        s1, s2 = await _period_recomputed(c, op)
+        real = overhead.publish_allocation_batch
+        seen = {}
+
+        async def hooked(*a, **k):
+            seen["pnl_before"] = await _pnl_a(op)
+            seen["list_before"] = (await c.get("/api/overhead/allocations", headers=_h())).json()
+            if phase == "crash_before_publish":
+                raise RuntimeError("crash between staging and publish")
+            await real(*a, **k)
+            seen["pnl_after"] = await _pnl_a(op)
+            if phase == "crash_after_publish":
+                raise RuntimeError("crash after publish, before history")
+        monkeypatch.setattr(overhead, "publish_allocation_batch", hooked)
+        key = _key()
+        url = f"/api/overhead/snapshots/{s2['id']}/allocate"
+        try:
+            r = await c.post(url, json={"method": "Hours"}, headers=_h(key=key))
+            crashed = r.status_code >= 500
+        except RuntimeError:
+            crashed = True
+        # during the switch the OLD batch is what everybody reads — labelled, never 0
+        assert seen["pnl_before"] == (225.0, "преизчислява се")
+        assert [a["overhead_snapshot_id"] for a in seen["list_before"]] == [s1["id"]] * 2
+        staged = await op.project_overhead_allocations.count_documents(
+            {"overhead_snapshot_id": s2["id"]})
+        assert staged == 2                                            # inserted, staged
+        if phase == "read_during_switch":
+            assert not crashed and seen["pnl_after"] == (450.0, None)
+        elif phase == "crash_before_publish":
+            assert crashed
+            assert await _pnl_a(op) == (225.0, "преизчислява се")     # not 0
+            lst = (await c.get("/api/overhead/allocations", headers=_h())).json()
+            assert {a["overhead_snapshot_id"] for a in lst} == {s1["id"]}   # not []
+        else:
+            assert crashed and seen["pnl_after"] == (450.0, None)
+            assert await _pnl_a(op) == (450.0, None)                  # not 675 (both)
+        monkeypatch.setattr(overhead, "publish_allocation_batch", real)
+        r = await c.post(url, json={"method": "Hours"}, headers=_h(key=key))   # same key
+        assert r.status_code == 200, r.text
+        assert await _pnl_a(op) == (450.0, None)
+        assert await _pnl_overhead(op) == 600.0
+        lst = (await c.get("/api/overhead/allocations", headers=_h())).json()
+        assert {a["overhead_snapshot_id"] for a in lst} == {s2["id"]} and len(lst) == 2
+        old = await op.project_overhead_allocations.find(
+            {"overhead_snapshot_id": s1["id"]}).to_list(None)
+        assert all(x["superseded_by"] for x in old)                   # history completed
+        assert await op.audit_events.count_documents(
+            {"action": "overhead.allocation.version_created"}) == 2
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 26. OH74-04
+@pytest.mark.parametrize("op_kind", ["archive", "compute", "allocate"])
+@pytest.mark.parametrize("step", ["audit", "legacy_audit"])
+def test_26_crash_after_the_event_write_never_audits_twice(monkeypatch, backend, mode,
+                                                           op_kind, step):
+    """OH74-04 (Codex): the step callback ran (event written), the crash came before the
+    step was recorded done, the same-key retry wrote a SECOND event. Now each operation's
+    event is written once (looked up by its operation key) — archive, compute, allocate."""
+    async def scenario(c, op):
+        from app.permissions import workflow
+        cat = await _category(c, "Lone")
+        await _cost(c, (await _category(c, "Other"))["id"], amount=100.0)
+        if op_kind == "allocate":
+            snap = await _snapshot(c)
+            verb, url, body = "POST", f"/api/overhead/snapshots/{snap['id']}/allocate", {"method": "Hours"}
+            action, legacy = "overhead.allocation.version_created", "allocated"
+        elif op_kind == "compute":
+            verb, url, body = "POST", "/api/overhead/snapshots/compute", {
+                "period_start": "2026-10-01", "period_end": "2026-10-31", "method": "Hours"}
+            action, legacy = "overhead.snapshot.computed", "computed"
+        else:
+            verb, url, body = "DELETE", f"/api/overhead/categories/{cat['id']}", None
+            action, legacy = "overhead.overhead_category.archived", "archived"
+        real = workflow.mark_idempotent_step
+        hit = {"n": 0}
+
+        async def crash_once(db_, *, step: str, **kw):
+            if step == step_to_crash and hit["n"] == 0:
+                hit["n"] += 1
+                raise RuntimeError("crash after the %s write" % step)
+            return await real(db_, step=step, **kw)
+        step_to_crash = step
+        monkeypatch.setattr(workflow, "mark_idempotent_step", crash_once)
+        key = _key()
+        try:
+            r = await c.request(verb, url, json=body, headers=_h(key=key))
+            assert r.status_code >= 500, r.text
+        except RuntimeError:
+            pass
+        assert hit["n"] == 1
+        r = await c.request(verb, url, json=body, headers=_h(key=key))     # same key
+        assert r.status_code == 200, r.text
+        assert await op.audit_events.count_documents({"action": action}) == 1, [
+            {k: e.get(k) for k in ("entity_id", "idempotency_key", "tenant_id", "result")}
+            for e in await op.audit_events.find({"action": action}).to_list(None)]
+        assert await op.audit_logs.count_documents({"action": legacy}) == 1
+        r = await c.request(verb, url, json=body, headers=_h(key=key))     # replay
+        assert r.status_code == 200
+        assert await op.audit_events.count_documents({"action": action}) == 1
+        assert await op.audit_logs.count_documents({"action": legacy}) == 1
+    run(monkeypatch, backend, mode, scenario)

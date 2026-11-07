@@ -21,6 +21,7 @@ from app.tenancy.data_access import TenantData
 from app.services.overhead_lifecycle import (  # OH-01
     KeyedWrite, NOT_ARCHIVED, STATUS_ARCHIVED, audit_overhead_event, require_key,
     COMPUTE_LOCK, allocation_version_key, overhead_lock, period_key, period_lock,
+    audit_overhead_event_once, current_allocations, legacy_audit_once, publish_allocation_batch,
 )
 
 
@@ -126,7 +127,7 @@ async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str
                 "error_code": "ALREADY_ARCHIVED", "message": "Записът вече е архивиран"})
 
         async def _audit():
-            await audit_overhead_event(
+            await audit_overhead_event_once(
                 db, user, action="overhead.%s.archived" % entity_type, entity_type=entity_type,
                 entity_id=record_id, reason=reason or "archived instead of delete (OH-01)",
                 structured_diff={"status": {"before": existing.get("status"),
@@ -134,8 +135,8 @@ async def _archive_record(tenant: TenantData, coll, user: dict, entity_type: str
                 idempotency_key=kw.key)
 
         async def _legacy_audit():
-            await log_audit(user["org_id"], user["id"], user["email"], "archived", entity_type,
-                            record_id, {"reason": reason})
+            await legacy_audit_once(db, user, "archived", entity_type, record_id,
+                                    {"reason": reason}, kw.key)
         await kw.wf.step("audit", _audit)
         await kw.wf.step("legacy_audit", _legacy_audit)
         kw.result_id = record_id
@@ -623,7 +624,7 @@ async def compute_overhead_snapshot(
             await tenant.overhead_snapshots.insert_one(snapshot)
 
         async def _audit():
-            await audit_overhead_event(
+            await audit_overhead_event_once(
                 db, user, action="overhead.snapshot.computed", entity_type="overhead_snapshot",
                 entity_id=sid, reason="overhead snapshot version %d of %s - %s" % (
                     snapshot["snapshot_version"], period_start, period_end),
@@ -633,12 +634,12 @@ async def compute_overhead_snapshot(
                 idempotency_key=kw.key)
 
         async def _legacy_audit():
-            await log_audit(user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot", sid, {
+            await legacy_audit_once(db, user, "computed", "overhead_snapshot", sid, {
                 "period": f"{period_start} - {period_end}",
                 "total_overhead": total_overhead,
                 "method": data.method,
                 "snapshot_version": snapshot["snapshot_version"],
-            })
+            }, kw.key)
         await kw.wf.step("audit", _audit)
         await kw.wf.step("legacy_audit", _legacy_audit)
         kw.result_id = sid
@@ -674,9 +675,8 @@ async def get_overhead_snapshot(snapshot_id: str, user: dict = Depends(require_m
     if not snapshot:
         raise HTTPException(status_code=404, detail="Snapshot not found")
     # Get allocations
-    allocs = await tenant.project_overhead_allocations.find(
-        {"overhead_snapshot_id": snapshot_id, "superseded_by": None}, {"_id": 0}  # OH-01: current version
-    ).to_list(None)
+    # OH74-03: the current version is the one the period's pointer names
+    allocs = await current_allocations(tenant, {"overhead_snapshot_id": snapshot_id})
     snapshot["allocations"] = allocs
     return snapshot
 
@@ -885,9 +885,21 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
                 "superseded_by": None,
             })
 
-        async def _supersede():
-            # FG-86: every current allocation of the PERIOD (any snapshot of it), not only
-            # this snapshot's — two snapshots of one period are never both counted
+        # OH74-03: (1) the new batch is inserted STAGED — not current, no reader follows it
+        have = {r["id"] for r in await coll.find(
+            {"allocation_batch_id": batch_id}, {"_id": 0, "id": 1}).to_list(None)}
+        missing = [a for a in allocations if a["id"] not in have]
+        if missing:
+            await coll.insert_many(missing)
+
+        # (2) ONE atomic write publishes it: the period's pointer names this batch. Until
+        # here the previous batch was current (R38: labelled); from here only this one.
+        await kw.wf.step("publish", lambda: publish_allocation_batch(
+            tenant, snap_doc["period_start"], snap_doc["period_end"], batch_id, version))
+
+        async def _mark_history():
+            # (3) history only — readers already follow the pointer: every earlier row of
+            # the PERIOD (any snapshot of it, FG-86) records who replaced it
             same_period = await tenant.overhead_snapshots.distinct("id", {
                 "period_start": snap_doc["period_start"], "period_end": snap_doc["period_end"]})
             await coll.update_many(
@@ -895,18 +907,12 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
                  "allocation_batch_id": {"$ne": batch_id}},
                 {"$set": {"superseded_by": batch_id, "superseded_at": now,
                           "superseded_by_user_id": user["id"]}})
-        await kw.wf.step("supersede", _supersede)
-
-        have = {r["id"] for r in await coll.find(
-            {"allocation_batch_id": batch_id}, {"_id": 0, "id": 1}).to_list(None)}
-        missing = [a for a in allocations if a["id"] not in have]
-        if missing:
-            await coll.insert_many(missing)
+        await kw.wf.step("supersede", _mark_history)
 
         total = round(sum(a["allocated_amount"] for a in allocations), 2)
 
         async def _audit():
-            await audit_overhead_event(
+            await audit_overhead_event_once(
                 db, user, action="overhead.allocation.version_created",
                 entity_type="overhead_allocation", entity_id=batch_id,
                 reason="overhead allocation version %d of snapshot %s" % (version, snapshot_id),
@@ -916,13 +922,13 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
                 idempotency_key=kw.key)
 
         async def _legacy_audit():
-            await log_audit(user["org_id"], user["id"], user["email"], "allocated", "overhead_snapshot", snapshot_id, {
+            await legacy_audit_once(db, user, "allocated", "overhead_snapshot", snapshot_id, {
                 "method": method,
                 "project_count": len(allocations),
                 "total_allocated": total,
                 "allocation_version": version,
                 "allocation_batch_id": batch_id,
-            })
+            }, kw.key)
         await kw.wf.step("audit", _audit)
         await kw.wf.step("legacy_audit", _legacy_audit)
         kw.result_id = batch_id
@@ -943,12 +949,12 @@ async def list_overhead_allocations(
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
-    if not include_superseded:
-        query["superseded_by"] = None  # OH-01: only the current version
     if snapshot_id:
         query["overhead_snapshot_id"] = snapshot_id
     if project_id:
         query["project_id"] = project_id
+    if not include_superseded:
+        return await current_allocations(tenant, query)  # OH74-03: the published version only
     cursor = tenant.project_overhead_allocations.find(query, {"_id": 0})
     return await cursor.to_list(None)
 
