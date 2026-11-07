@@ -22,6 +22,7 @@ import {
 // OH-01: an overhead delete is an archive (409 when the record is used) and needs an
 // Idempotency-Key (R29) — one key per click target, reused on a retry.
 const archiveKeys = createIdempotencyHolder();
+const computeKeys = createIdempotencyHolder();
 const errorText = (err, fallback) => {
   const detail = err.response?.data?.detail;
   return detail?.message || detail || fallback;
@@ -149,7 +150,7 @@ export default function OverheadPage() {
       setCategoryDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(errorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -216,7 +217,7 @@ export default function OverheadPage() {
       setCostDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(errorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -280,7 +281,7 @@ export default function OverheadPage() {
       setAssetDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(errorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -308,16 +309,20 @@ export default function OverheadPage() {
   const handleComputeSnapshot = async () => {
     setComputing(true);
     try {
-      await API.post("/overhead/snapshots/compute", {
+      const endpoint = "/overhead/snapshots/compute";
+      const payload = {
         period_start: dateFrom,
         period_end: dateTo,
         method: formSnapMethod,
         notes: formSnapNotes || null,
-      });
+      };
+      // FG-88 / R29: a new snapshot (it supersedes the period's active one) needs a key
+      await API.post(endpoint, payload, idempotencyHeaders(computeKeys.keyFor(endpoint, payload)));
+      computeKeys.done();
       setSnapshotDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      alert(errorText(err, t("toast.errorOccurred")));
     } finally {
       setComputing(false);
     }

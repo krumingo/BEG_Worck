@@ -215,9 +215,9 @@ async def _asset(c):
         "purchase_date": "2026-01-01", "useful_life_months": 60, "active": True})
 
 
-async def _snapshot(c):
-    r = await c.post("/api/overhead/snapshots/compute", headers=_h(), json={
-        "period_start": "2026-10-01", "period_end": "2026-10-31", "method": "PersonDays"})
+async def _snapshot(c, start="2026-10-01", end="2026-10-31", key=None):
+    r = await c.post("/api/overhead/snapshots/compute", headers=_h(key=key or _key()), json={
+        "period_start": start, "period_end": end, "method": "PersonDays"})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -353,8 +353,11 @@ def test_04_non_finance_role_403_and_missing_key_428_write_nothing(monkeypatch, 
         targets = [("DELETE", f"/api/overhead/categories/{cat['id']}", None),
                    ("DELETE", f"/api/overhead/costs/{cost['id']}", None),
                    ("DELETE", f"/api/overhead/assets/{asset['id']}", None),
-                   ("POST", f"/api/overhead/snapshots/{snap['id']}/allocate", {"method": "PersonDays"})]
+                   ("POST", f"/api/overhead/snapshots/{snap['id']}/allocate", {"method": "PersonDays"}),
+                   ("POST", "/api/overhead/snapshots/compute",                       # FG-88
+                    {"period_start": "2026-11-01", "period_end": "2026-11-30", "method": "PersonDays"})]
         before = await _dump(op)
+        n_keys = await op.audit_idempotency.count_documents({})
         for verb, path, body in targets:
             r = await c.request(verb, path, json=body, headers=_h(who, _key()))
             assert r.status_code == 403, (who, path, r.text)
@@ -364,7 +367,7 @@ def test_04_non_finance_role_403_and_missing_key_428_write_nothing(monkeypatch, 
             r = await c.request(verb, path, json=body, headers=_h("owner", "   "))  # blank key
             assert r.status_code == 428, (path, r.text)
         assert await _dump(op) == before
-        assert await op.audit_idempotency.count_documents({}) == 0
+        assert await op.audit_idempotency.count_documents({}) == n_keys
     run(monkeypatch, backend, mode, scenario)
 
 
@@ -432,7 +435,9 @@ def test_07_concurrent_reallocations_never_leave_two_current_versions(monkeypatc
             assert await op.audit_events.count_documents(
                 {"action": "overhead.allocation.version_created"}) == len(versions)
             s = await op.overhead_snapshots.find_one({"id": sid})
-            assert s["allocation_version"] == versions[-1] and "allocation_lock" not in s
+            assert s["allocation_version"] == versions[-1]
+            assert await op.overhead_period_locks.count_documents(
+                {"allocation_lock": {"$exists": True}}) == 0          # every lock released
     run(monkeypatch, backend, mode, scenario)
 
 
@@ -472,3 +477,166 @@ def test_09_allocation_version_index_is_unique_and_idempotent(monkeypatch, backe
             await op.project_overhead_allocations.insert_one({**row, "id": "r2"})
         assert "duplicate" in str(exc.value).lower() or "E11000" in str(exc.value)
     run(monkeypatch, backend, "off", scenario)
+
+
+
+async def _pnl_overhead(op):
+    from app.services.project_pnl import compute_project_pnl
+    total = 0
+    for p in (PROJ_A, PROJ_B):
+        total += (await compute_project_pnl(ORG, p))["expense"]["overhead"]
+    return round(total, 2)
+
+
+# ═══════════════════════════════════════════════════════════════════ 10. FG-86
+def test_10_one_active_snapshot_per_period_never_double_counted(monkeypatch, backend, mode):
+    """FG-86: two snapshots of one period, both allocated, counted 2x in P&L. Now a new
+    snapshot supersedes the period's active one AND its allocations; a superseded snapshot
+    cannot be allocated; P&L == one snapshot."""
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        s1 = await _snapshot(c)
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert await _pnl_overhead(op) == pytest.approx(s1["total_overhead"], abs=0.02)
+        s2 = await _snapshot(c)
+        assert s2["snapshot_version"] == 2 and s1["snapshot_version"] == 1
+        old = await op.overhead_snapshots.find_one({"id": s1["id"]}, {"_id": 0})
+        assert old["superseded_by"] == s2["id"] and "active_period_key" not in old
+        assert await _pnl_overhead(op) == 0          # s1's allocations went with it
+        r = await c.post(f"/api/overhead/snapshots/{s1['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SNAPSHOT_SUPERSEDED"
+        r = await c.post(f"/api/overhead/snapshots/{s2['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert await _pnl_overhead(op) == pytest.approx(s2["total_overhead"], abs=0.02)
+        lst = (await c.get("/api/overhead/snapshots", headers=_h())).json()
+        assert [x["id"] for x in lst] == [s2["id"]]
+        hist = (await c.get("/api/overhead/snapshots?include_superseded=true", headers=_h())).json()
+        assert {x["id"] for x in hist} == {s1["id"], s2["id"]}
+        assert await op.overhead_snapshots.count_documents({}) == 2      # nothing deleted
+        # another period is independent
+        s3 = await _snapshot(c, "2026-11-01", "2026-11-30")
+        assert s3["snapshot_version"] == 1
+        assert (await op.overhead_snapshots.find_one({"id": s2["id"]}))["superseded_by"] is None
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_11_legacy_snapshot_of_the_period_is_superseded_too(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        # a pre-OH-01 snapshot (no key, no version) with a pre-OH-01 allocation row
+        await op.overhead_snapshots.insert_one({
+            "id": "legacy-snap", "org_id": ORG, "period_start": "2026-10-01",
+            "period_end": "2026-10-31", "method": "PersonDays", "total_overhead": 431.0,
+            "total_person_days": 4, "total_hours": 40, "computed_at": "2026-10-31T00:00:00"})
+        await op.project_overhead_allocations.insert_one({
+            "id": "legacy-alloc", "org_id": ORG, "overhead_snapshot_id": "legacy-snap",
+            "project_id": PROJ_A, "allocated_amount": 431.0})
+        assert await _pnl_overhead(op) == 431.0
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=431.0)
+        s = await _snapshot(c)
+        assert s["snapshot_version"] == 2
+        assert (await op.overhead_snapshots.find_one({"id": "legacy-snap"}))["superseded_by"] == s["id"]
+        r = await c.post(f"/api/overhead/snapshots/{s['id']}/allocate",
+                         json={"method": "PersonDays"}, headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        assert await _pnl_overhead(op) == pytest.approx(s["total_overhead"], abs=0.02)   # not 862
+        assert await op.project_overhead_allocations.count_documents({"id": "legacy-alloc"}) == 1
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_12_concurrent_computes_of_one_period_leave_one_active_snapshot(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        cat = await _category(c)
+        await _cost(c, cat["id"], amount=400.0)
+        await _snapshot(c)
+        for _round in range(3):
+            rs = await asyncio.gather(*[
+                c.post("/api/overhead/snapshots/compute", headers=_h(key=_key()), json={
+                    "period_start": "2026-10-01", "period_end": "2026-10-31",
+                    "method": "PersonDays"}) for _ in range(4)])
+            assert 200 in [x.status_code for x in rs], [x.text for x in rs]
+            for x in rs:
+                assert x.status_code in (200, 409), x.text
+                if x.status_code == 409:
+                    assert x.json()["detail"]["error_code"] in (
+                        "ALLOCATION_BUSY", "SNAPSHOT_VERSION_CONFLICT"), x.text
+            active = await op.overhead_snapshots.find(
+                {"period_start": "2026-10-01", "superseded_by": None}).to_list(None)
+            assert len(active) == 1, active
+            versions = sorted(x["snapshot_version"] for x in
+                              await op.overhead_snapshots.find({}).to_list(None))
+            assert versions == list(range(1, len(versions) + 1))
+        from app.services.overhead_lifecycle import ensure_snapshot_indexes, SNAPSHOT_PERIOD_INDEX
+        await ensure_snapshot_indexes(op)                     # idempotent
+        info = await op.overhead_snapshots.index_information()
+        assert info[SNAPSHOT_PERIOD_INDEX]["unique"] is True
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 13. FG-87
+def test_13_used_or_archived_records_are_read_only_edits_are_audited(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        cat = await _category(c)
+        used = await _cost(c, cat["id"], amount=400.0)                  # 2026-10-10
+        free = await _cost(c, cat["id"], date="2026-12-01", amount=50.0)
+        asset = await _asset(c)
+        await _snapshot(c)
+        before = await _dump(op)
+        refusals = [
+            (f"costs/{used['id']}", {"amount": 99999}, "OVERHEAD_RECORD_IN_USE"),
+            (f"costs/{free['id']}", {"date_incurred": "2026-10-15"}, "OVERHEAD_RECORD_IN_USE"),
+            (f"categories/{cat['id']}", {"name": "Renamed"}, "OVERHEAD_RECORD_IN_USE"),
+            (f"assets/{asset['id']}", {"purchase_cost": 1.0}, "OVERHEAD_RECORD_IN_USE"),
+        ]
+        for path, body, code in refusals:
+            r = await c.put("/api/overhead/" + path, json=body, headers=_h())
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == code, (path, r.text)
+        assert await _dump(op) == before                                  # nothing written
+        # the bypass of the audit: move the date, then delete -> both refused
+        r = await c.delete(f"/api/overhead/costs/{used['id']}", headers=_h(key=_key()))
+        assert r.status_code == 409
+        # an unused cost: edited, with a canonical before/after AuditEvent
+        r = await c.put(f"/api/overhead/costs/{free['id']}", json={"amount": 75.0}, headers=_h())
+        assert r.status_code == 200 and r.json()["amount"] == 75.0, r.text
+        ev = await op.audit_events.find_one({"action": "overhead.overhead_cost.updated",
+                                             "entity_id": free["id"]})
+        assert ev and ev["structured_diff"]["amount"] == {"before": 50.0, "after": 75.0}
+        # archived -> read-only
+        lone = await _category(c, "Lone")
+        r = await c.delete(f"/api/overhead/categories/{lone['id']}", headers=_h(key=_key()))
+        assert r.status_code == 200, r.text
+        snap_before = await _dump(op)
+        r = await c.put(f"/api/overhead/categories/{lone['id']}", json={"name": "X"}, headers=_h())
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "RECORD_ARCHIVED"
+        r = await c.put(f"/api/overhead/costs/{free['id']}", json={"amount": 1.0},
+                        headers=_h("sitemanager"))
+        assert r.status_code == 403
+        assert await _dump(op) == snap_before
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════════ 14. FG-88
+def test_14_compute_requires_a_key_and_replays(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        body = {"period_start": "2026-10-01", "period_end": "2026-10-31", "method": "PersonDays"}
+        before = await _dump(op)
+        r = await c.post("/api/overhead/snapshots/compute", json=body, headers=_h())
+        assert r.status_code == 428 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REQUIRED"
+        assert await _dump(op) == before
+        key = _key()
+        s = await _snapshot(c, key=key)
+        after = await _dump(op)
+        r = await c.post("/api/overhead/snapshots/compute", json=body, headers=_h(key=key))
+        assert r.status_code == 200 and r.json()["id"] == s["id"], r.text
+        assert await _dump(op) == after                                  # replay wrote nothing
+        r = await c.post("/api/overhead/snapshots/compute", json={**body, "method": "Hours"},
+                         headers=_h(key=key))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_CONFLICT"
+        assert await _dump(op) == after
+        assert await op.audit_events.count_documents({"action": "overhead.snapshot.computed"}) == 1
+    run(monkeypatch, backend, mode, scenario)

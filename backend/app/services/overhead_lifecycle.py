@@ -170,26 +170,55 @@ async def ensure_allocation_indexes(db) -> None:
         partialFilterExpression={"allocation_version": {"$exists": True}})
 
 
+#: FG-86: one ACTIVE overhead snapshot per period — the active one carries this key,
+#: a superseded one does not (unique partial index; legacy snapshots are matched by period).
+SNAPSHOT_PERIOD_INDEX = "oh01_one_active_snapshot_per_period"
+PERIOD_LOCKS_COLLECTION = "overhead_period_locks"
+
+
+def period_key(period_start: str, period_end: str) -> str:
+    return "%s..%s" % (period_start, period_end)
+
+
+async def ensure_snapshot_indexes(db) -> None:
+    """FG-86: unique ``active_period_key`` (it carries the org) for active snapshots — a
+    SPARSE single-field index, so superseded, legacy and full_cost.py snapshots (no such
+    field) are not indexed. Idempotent."""
+    await db["overhead_snapshots"].create_index(
+        [("active_period_key", 1)], name=SNAPSHOT_PERIOD_INDEX, unique=True, sparse=True)
+
+
 @asynccontextmanager
-async def snapshot_allocation_lock(snapshots, snapshot_id: str):
-    """OH01-1: a short exclusive lock on ONE snapshot row, taken with one atomic conditional
-    write (``snapshots`` is the request's tenant-scoped collection). A concurrent holder ->
-    409 ``ALLOCATION_BUSY``, nothing written; a lock older than
-    ALLOCATION_LOCK_STALE_SECONDS (crashed holder) can be taken over. Always released by
-    its own token."""
+async def period_lock(tenant, period_start: str, period_end: str):
+    """OH01-1 / FG-86: ONE writer per overhead period at a time — computing a snapshot and
+    allocating any snapshot of that period are serialized. One atomic conditional upsert on
+    ``_id`` (unique by definition) of the tenant's ``overhead_period_locks`` row: a held
+    lock -> 409 ``ALLOCATION_BUSY``, nothing written; a lock older than
+    ALLOCATION_LOCK_STALE_SECONDS (crashed holder) can be taken over (the pattern of PR #70
+    ``_row_lock``). Always released by its own token."""
+    locks = tenant.collection(PERIOD_LOCKS_COLLECTION)
+    lock_id = "%s|%s" % (tenant.org_id, period_key(period_start, period_end))
     token = str(uuid.uuid4())
     now = datetime.now(timezone.utc)
     stale = (now - timedelta(seconds=ALLOCATION_LOCK_STALE_SECONDS)).isoformat()
-    won = await snapshots.update_one(
-        {"id": snapshot_id, "$or": [{ALLOCATION_LOCK_FIELD: {"$exists": False}},
-                                    {ALLOCATION_LOCK_FIELD + ".at": {"$lt": stale}}]},
-        {"$set": {ALLOCATION_LOCK_FIELD: {"token": token, "at": now.isoformat()}}})
-    if won.modified_count != 1:
-        raise HTTPException(status_code=409, detail={
-            "error_code": "ALLOCATION_BUSY",
-            "message": "Разпределението на този snapshot се изпълнява от друга заявка — опитайте отново"})
+    busy = HTTPException(status_code=409, detail={
+        "error_code": "ALLOCATION_BUSY",
+        "message": "Режийните за този период се обработват от друга заявка — опитайте отново"})
+    try:
+        won = await locks.update_one(
+            {"_id": lock_id, "$or": [{ALLOCATION_LOCK_FIELD: {"$exists": False}},
+                                     {ALLOCATION_LOCK_FIELD + ".at": {"$lt": stale}}]},
+            {"$set": {ALLOCATION_LOCK_FIELD: {"token": token, "at": now.isoformat()},
+                      "period_start": period_start, "period_end": period_end}},
+            upsert=True)
+    except Exception as exc:     # the row exists and is held: the upsert collided on _id
+        if "duplicate" in str(exc).lower() or type(exc).__name__ == "DuplicateKeyError":
+            raise busy
+        raise
+    if won.modified_count != 1 and won.upserted_id is None:
+        raise busy
     try:
         yield
     finally:
-        await snapshots.update_one({"id": snapshot_id, ALLOCATION_LOCK_FIELD + ".token": token},
-                                   {"$unset": {ALLOCATION_LOCK_FIELD: ""}})
+        await locks.update_one({"_id": lock_id, ALLOCATION_LOCK_FIELD + ".token": token},
+                               {"$unset": {ALLOCATION_LOCK_FIELD: ""}})

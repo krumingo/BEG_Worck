@@ -18,3 +18,12 @@ W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
 ## Frontend
 yarn test: 6 suites, 96 tests passed (src/lib/__tests__/idempotency.test.js is byte-identical to PR #69)
 yarn build: Compiled with warnings (no warning in the changed files)
+
+## FLOW Guard pass 8 on 09409f0 (FG-86, FG-87, FG-88) — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 87 passed (14 tests x 2 backends x 3 modes; new test_10..test_14)
+FG-86: two snapshots of one period -> the new one supersedes the old one and its allocations; P&L = one snapshot (not 2x); legacy snapshot of the period superseded too; 4 parallel computes x 3 rounds -> one active snapshot
+FG-87: PUT on a used cost/category/asset -> 409, nothing written; date move into a computed period -> 409; PUT on archived -> 409 RECORD_ARCHIVED; accepted PUT -> AuditEvent with before/after
+FG-88: compute without key -> 428, nothing written; replay -> same snapshot; other body -> 409
+R0 814 passed; W0 1085/15/50 same 15; A1/A2C 0/0; PM-01 6 passed after regeneration
+PM-01: 9 cells changed (pm01_cells_changed_fg86_88.csv): POST /overhead/snapshots/compute x Owner/Admin/Accountant x 3 modes, 200 wrote -> 428 nothing written
+yarn test 96 passed; yarn build compiles

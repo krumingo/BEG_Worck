@@ -20,7 +20,7 @@ from ..models.overhead import (
 from app.tenancy.data_access import TenantData
 from app.services.overhead_lifecycle import (  # OH-01
     KeyedWrite, NOT_ARCHIVED, STATUS_ARCHIVED, audit_overhead_event, require_key,
-    ensure_allocation_indexes, snapshot_allocation_lock,
+    ensure_allocation_indexes, ensure_snapshot_indexes, period_key, period_lock,
 )
 
 
@@ -170,6 +170,36 @@ async def get_dashboard_stats(user: dict = Depends(get_current_user)):
     }
 
 
+async def _guarded_update(tenant: TenantData, coll, user: dict, entity_type: str,
+                          existing: dict, usage: dict, updates: dict) -> dict:
+    """FG-87 (CLAUDE.md §7): an archived record is read-only; a USED record is not edited
+    in place — the correction is a new record (and a new snapshot version), never an
+    overwrite of what a snapshot already summed. Every accepted edit writes the canonical
+    AuditEvent with before/after of the changed fields."""
+    record_id = existing["id"]
+    if existing.get("status") == STATUS_ARCHIVED:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "RECORD_ARCHIVED", "message": "Архивиран запис не може да се редактира"})
+    if usage:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "OVERHEAD_RECORD_IN_USE",
+            "message": "Записът е използван в snapshot/разход и не се редактира; направете "
+                       "корекция с нов запис и преизчислете snapshot-а",
+            "used_by": usage})
+    won = await coll.update_one({"id": record_id, "status": NOT_ARCHIVED}, {"$set": updates})
+    if won.matched_count != 1:      # archived by a concurrent request after the read
+        raise HTTPException(status_code=409, detail={
+            "error_code": "RECORD_ARCHIVED", "message": "Архивиран запис не може да се редактира"})
+    changed = {k: {"before": existing.get(k), "after": v} for k, v in updates.items()
+               if k != "updated_at" and existing.get(k) != v}
+    await audit_overhead_event(db, user, action="overhead.%s.updated" % entity_type,
+                               entity_type=entity_type, entity_id=record_id,
+                               reason="overhead record edited (not used by any snapshot)",
+                               structured_diff=changed)
+    await log_audit(user["org_id"], user["id"], user["email"], "updated", entity_type, record_id, updates)
+    return await coll.find_one({"id": record_id}, {"_id": 0})
+
+
 # ── Overhead Categories ────────────────────────────────────────────
 
 @router.get("/overhead/categories")
@@ -206,15 +236,13 @@ async def update_overhead_category(cat_id: str, data: OverheadCategoryUpdate, us
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    existing = await tenant.overhead_categories.find_one({"id": cat_id, "org_id": user["org_id"]})
+    existing = await tenant.overhead_categories.find_one({"id": cat_id, "org_id": user["org_id"]}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Category not found")
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.overhead_categories.update_one({"id": cat_id}, {"$set": updates})
-    await log_audit(user["org_id"], user["id"], user["email"], "updated", "overhead_category", cat_id, updates)
-    doc = await tenant.overhead_categories.find_one({"id": cat_id}, {"_id": 0})
-    return doc
+    return await _guarded_update(tenant, tenant.overhead_categories, user, "overhead_category",
+                                 existing, await _category_usage(tenant, cat_id), updates)
 
 
 @router.delete("/overhead/categories/{cat_id}")
@@ -308,7 +336,7 @@ async def update_overhead_cost(cost_id: str, data: OverheadCostUpdate, user: dic
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    existing = await tenant.overhead_costs.find_one({"id": cost_id, "org_id": user["org_id"]})
+    existing = await tenant.overhead_costs.find_one({"id": cost_id, "org_id": user["org_id"]}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Cost not found")
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
@@ -317,10 +345,10 @@ async def update_overhead_cost(cost_id: str, data: OverheadCostUpdate, user: dic
     if "allocation_type" in updates and updates["allocation_type"] not in OVERHEAD_ALLOCATION_TYPES:
         raise HTTPException(status_code=400, detail="Invalid allocation type")
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.overhead_costs.update_one({"id": cost_id}, {"$set": updates})
-    await log_audit(user["org_id"], user["id"], user["email"], "updated", "overhead_cost", cost_id, updates)
-    doc = await tenant.overhead_costs.find_one({"id": cost_id}, {"_id": 0})
-    return doc
+    # FG-87: the NEW date too — moving a cost into a computed period is an edit of a used cost
+    usage = await _cost_usage(tenant, existing) or await _cost_usage(tenant, {**existing, **updates})
+    return await _guarded_update(tenant, tenant.overhead_costs, user, "overhead_cost",
+                                 existing, usage, updates)
 
 
 @router.delete("/overhead/costs/{cost_id}")
@@ -398,15 +426,13 @@ async def update_overhead_asset(asset_id: str, data: OverheadAssetUpdate, user: 
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
-    existing = await tenant.overhead_assets.find_one({"id": asset_id, "org_id": user["org_id"]})
+    existing = await tenant.overhead_assets.find_one({"id": asset_id, "org_id": user["org_id"]}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Asset not found")
     updates = {k: v for k, v in data.model_dump().items() if v is not None}
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.overhead_assets.update_one({"id": asset_id}, {"$set": updates})
-    await log_audit(user["org_id"], user["id"], user["email"], "updated", "overhead_asset", asset_id, updates)
-    doc = await tenant.overhead_assets.find_one({"id": asset_id}, {"_id": 0})
-    return doc
+    return await _guarded_update(tenant, tenant.overhead_assets, user, "overhead_asset",
+                                 existing, await _asset_usage(tenant, existing), updates)
 
 
 @router.delete("/overhead/assets/{asset_id}")
@@ -432,10 +458,17 @@ async def delete_overhead_asset(
 # ── Overhead Snapshots ─────────────────────────────────────────────
 
 @router.post("/overhead/snapshots/compute")
-async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = Depends(require_m9)):
+async def compute_overhead_snapshot(
+    data: OverheadSnapshotCompute,
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    user: dict = Depends(require_m9),
+):
+    """FG-86/FG-88: R29 key required; a new snapshot of a period SUPERSEDES the active one
+    (and its allocations) — one active snapshot per period, versioned, never two."""
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
+    require_key(idempotency_key)
     if data.method not in OVERHEAD_METHODS:
         raise HTTPException(status_code=400, detail="Invalid method")
     
@@ -498,10 +531,15 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
     rate_per_person_day = round(total_overhead / total_person_days, 2) if total_person_days > 0 else 0
     rate_per_hour = round(total_overhead / total_hours, 2) if total_hours > 0 else 0
     
-    # 6. Create immutable snapshot
+    # 6. Create immutable snapshot — FG-86: as the new version of the period's snapshot
+    kw = await KeyedWrite.begin(db, user, "overhead.snapshot.compute", idempotency_key,
+                                data.model_dump())
+    if kw.replay_id:
+        return await tenant.overhead_snapshots.find_one({"id": kw.replay_id}, {"_id": 0})
+    await ensure_snapshot_indexes(db)
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
-        "id": str(uuid.uuid4()),
+        "id": kw.new_id("snapshot"),
         "org_id": org_id,
         "period_start": period_start,
         "period_end": period_end,
@@ -517,13 +555,55 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
         "computed_by_user_id": user["id"],
         "computed_by_name": user.get("name", user.get("email", "")),
         "notes": data.notes,
+        "active_period_key": "%s|%s" % (org_id, period_key(period_start, period_end)),
+        "superseded_by": None,
     }
-    await tenant.overhead_snapshots.insert_one(snapshot)
-    await log_audit(user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot", snapshot["id"], {
-        "period": f"{period_start} - {period_end}",
-        "total_overhead": total_overhead,
-        "method": data.method
-    })
+    async with kw, period_lock(tenant, period_start, period_end):
+        sid = snapshot["id"]
+
+        async def _supersede_previous():
+            # the period's active snapshot(s): keyed ones and legacy ones (no key, same period)
+            prev = await tenant.overhead_snapshots.find(
+                {"period_start": period_start, "period_end": period_end,
+                 "superseded_by": None, "id": {"$ne": sid}}, {"_id": 0}).to_list(None)
+            for p in prev:
+                won = await tenant.overhead_snapshots.update_one(
+                    {"id": p["id"], "superseded_by": None},
+                    {"$set": {"superseded_by": sid, "superseded_at": now,
+                              "superseded_by_user_id": user["id"]},
+                     "$unset": {"active_period_key": ""}})
+                if won.modified_count != 1:
+                    raise HTTPException(status_code=409, detail={
+                        "error_code": "SNAPSHOT_VERSION_CONFLICT",
+                        "message": "Друга заявка току-що смени snapshot-а за периода"})
+                # its allocations stop counting with it (P&L reads the current version only)
+                await tenant.project_overhead_allocations.update_many(
+                    {"overhead_snapshot_id": p["id"], "superseded_by": None},
+                    {"$set": {"superseded_by": sid, "superseded_at": now,
+                              "superseded_by_user_id": user["id"]}})
+            return max([0] + [p.get("snapshot_version") or 1 for p in prev]) + 1
+        snapshot["snapshot_version"] = int(await kw.wf.step("supersede", _supersede_previous,
+                                                            reference=str))
+        if not await tenant.overhead_snapshots.find_one({"id": sid}, {"_id": 0, "id": 1}):
+            await tenant.overhead_snapshots.insert_one(snapshot)
+
+        async def _audit():
+            await audit_overhead_event(
+                db, user, action="overhead.snapshot.computed", entity_type="overhead_snapshot",
+                entity_id=sid, reason="overhead snapshot version %d of %s - %s" % (
+                    snapshot["snapshot_version"], period_start, period_end),
+                structured_diff={"period": [period_start, period_end],
+                                 "version": snapshot["snapshot_version"],
+                                 "total_overhead": total_overhead, "method": data.method},
+                idempotency_key=kw.key)
+            await log_audit(user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot", sid, {
+                "period": f"{period_start} - {period_end}",
+                "total_overhead": total_overhead,
+                "method": data.method,
+                "snapshot_version": snapshot["snapshot_version"],
+            })
+        await kw.wf.step("audit", _audit)
+        kw.result_id = sid
     return {k: v for k, v in snapshot.items() if k != "_id"}
 
 
@@ -531,12 +611,15 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
 async def list_overhead_snapshots(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
+    include_superseded: bool = False,
     user: dict = Depends(require_m9)
 ):
     tenant = _tenant(user)
     if not check_overhead_access(user):
         raise HTTPException(status_code=403, detail="Access denied")
     query = {"org_id": user["org_id"]}
+    if not include_superseded:
+        query["superseded_by"] = None  # FG-86: the active snapshot of each period
     if date_from and date_to:
         query["period_start"] = {"$gte": date_from}
         query["period_end"] = {"$lte": date_to}
@@ -699,9 +782,19 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
         return {"allocations": rows, "allocation_batch_id": kw.replay_id,
                 "allocation_version": version, "replayed": True}
     await ensure_allocation_indexes(db)
-    async with kw, snapshot_allocation_lock(tenant.overhead_snapshots, snapshot_id):
+    snap_doc = await tenant.overhead_snapshots.find_one(
+        {"id": snapshot_id}, {"_id": 0, "period_start": 1, "period_end": 1})
+    async with kw, period_lock(tenant, snap_doc["period_start"], snap_doc["period_end"]):
         batch_id = kw.new_id("batch")
         now = datetime.now(timezone.utc).isoformat()
+        current = await tenant.overhead_snapshots.find_one(
+            {"id": snapshot_id}, {"_id": 0, "superseded_by": 1})
+        if current.get("superseded_by"):
+            # FG-86: only the period's ACTIVE snapshot is allocated
+            raise HTTPException(status_code=409, detail={
+                "error_code": "SNAPSHOT_SUPERSEDED",
+                "message": "Snapshot-ът е заменен от нова версия; разпределете активния",
+                "superseded_by": current["superseded_by"]})
 
         async def _next_version():
             # OH01-1: under the snapshot lock, and a CAS on snapshot.allocation_version —
@@ -735,8 +828,12 @@ async def _write_allocation_version(tenant: TenantData, user: dict, snapshot_id:
             })
 
         async def _supersede():
+            # FG-86: every current allocation of the PERIOD (any snapshot of it), not only
+            # this snapshot's — two snapshots of one period are never both counted
+            same_period = await tenant.overhead_snapshots.distinct("id", {
+                "period_start": snap_doc["period_start"], "period_end": snap_doc["period_end"]})
             await coll.update_many(
-                {"overhead_snapshot_id": snapshot_id, "superseded_by": None,
+                {"overhead_snapshot_id": {"$in": same_period}, "superseded_by": None,
                  "allocation_batch_id": {"$ne": batch_id}},
                 {"$set": {"superseded_by": batch_id, "superseded_at": now,
                           "superseded_by_user_id": user["id"]}})
