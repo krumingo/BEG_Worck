@@ -260,5 +260,51 @@ with TestClient(app, raise_server_exceptions=False) as tc:
                 if round(ld(), 2) != 1234.5:
                     F.append("%s C2 first %s: full line sums to %s, not 1234.50" % (mode, first, round(ld(), 2)))
             restore()
+        if os.environ.get("PROBE_X") == "1":              # cross-PR: #77 ACT-01 x #79 OFF-01 trial merge
+            st = lambda r: (r.status_code, (r.json().get("detail") or {}).get("error_code") if isinstance(r.json().get("detail"), dict) else None)
+            # X1: an accepted offer with acts gets no new version; acting continues
+            a1 = tc.post("/api/client-acts", json=body("L1", 3), headers=H())
+            nv = tc.post("/api/offers/%s/new-version" % i["O1"], headers=H())
+            a2 = tc.post("/api/client-acts", json=body("L1", 2), headers=H())
+            print(mode, "X1 act %s | new-version of accepted O1 %s | act again %s" % (a1.status_code, st(nv), a2.status_code))
+            if a1.status_code != 201 or nv.status_code != 409 or a2.status_code != 201:
+                F.append("%s X1 %s %s %s" % (mode, a1.status_code, st(nv), a2.status_code))
+            # X2: v1 Sent -> acts refused; new version -> send v2 -> accept v2 -> acts on v2 only
+            o1 = q(lambda: op.offers.find_one({"id": i["O1"]}, {"_id": 0}))
+            xv1 = dict(o1, id="xv1-" + sfx, offer_no="OFF-X99", status="Sent", version=1, review_token="tokx" + sfx,
+                       parent_offer_id=None, lines=[dict(o1["lines"][0], id="xl1-" + sfx)], sent_at="2026-11-07T09:00:00+00:00")
+            xv1.pop("act_version_guard", None)
+            q(lambda: op.offers.insert_one(dict(xv1)))
+            xb = lambda lid, qty: {"project_id": P, "lines": [{"offer_line_id": lid, "executed_qty": qty}]}
+            r_v1 = tc.post("/api/client-acts", json=xb("xl1-" + sfx, 1), headers=H())
+            v2r = tc.post("/api/offers/%s/new-version" % xv1["id"], headers=H())
+            v2 = v2r.json() if v2r.status_code == 200 else {}
+            sd = tc.post("/api/offers/%s/send" % v2.get("id"), headers=H())
+            ac = tc.post("/api/offers/%s/accept" % v2.get("id"), headers=H(), json={})
+            l2 = (v2.get("lines") or [{}])[0].get("id")
+            cap = float((v2.get("lines") or [{}])[0].get("qty") or 0)
+            r_v2 = tc.post("/api/client-acts", json=xb(l2, cap), headers=H())
+            r_v1b = tc.post("/api/client-acts", json=xb("xl1-" + sfx, 1), headers=H())
+            old = tc.post("/api/offers/review/%s/respond" % xv1["review_token"], json={"action": "approve"}, headers={"Idempotency-Key": uuid.uuid4().hex})
+            acted_v1 = acts_on_id = sum(float(l.get("executed_qty") or 0) for a in q(lambda: op.client_acts.find({}, {"_id": 0, "lines": 1}).to_list(None)) for l in a.get("lines") or [] if l.get("offer_line_id") == "xl1-" + sfx)
+            print(mode, "X2 act on Sent v1 %s | new-version %s | send v2 %s accept v2 %s | act v2 full %s %s | act v1 after %s | old link approve %s | acted on v1 %s" % (
+                st(r_v1), v2r.status_code, sd.status_code, ac.status_code, cap, r_v2.status_code, st(r_v1b), st(old), acted_v1))
+            if r_v1.status_code < 400 or r_v1b.status_code < 400 or r_v2.status_code != 201 or old.status_code != 409 or acted_v1:
+                F.append("%s X2 %s %s %s %s" % (mode, st(r_v1), r_v2.status_code, st(r_v1b), st(old)))
+            # X3: act on accepted O1 || new-version of O1, x10
+            h3 = collections.Counter()
+            for _ in range(10):
+                rs = q(lambda: gather([("POST", "/api/client-acts", body("L1", 0.1), H()), ("POST", "/api/offers/%s/new-version" % i["O1"], None, H())]))
+                h3[(rs[0].status_code, rs[1].status_code)] += 1
+            print(mode, "X3 act || new-version x10:", dict(h3))
+            if set(h3) != {(201, 409)}:
+                F.append("%s X3 %s" % (mode, dict(h3)))
+            # X4: legacy chain OV1 Accepted + OV2 Sent (made before OFF-01): accept OV2 now?
+            acc = tc.post("/api/offers/%s/accept" % i["OV2"], headers=H(), json={})
+            ov = {k: q(lambda k=k: op.offers.find_one({"id": i[k]}, {"_id": 0, "status": 1}))["status"] for k in ("OV1", "OV2")}
+            lv1 = tc.post("/api/client-acts", json=body("LV1", 1), headers=H())
+            lv2 = tc.post("/api/client-acts", json=body("LV2", 1), headers=H())
+            print(mode, "X4 legacy: accept OV2 %s -> %s | act on OV1 %s | act on OV2 %s" % (acc.status_code, ov, st(lv1), st(lv2)))
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

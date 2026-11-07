@@ -154,3 +154,58 @@ def test_o7_accept_evidence_file_unchecked(monkeypatch, backend, mode):
         print("O7 %s: accept with a non-existent evidence_file_id -> %s %s" % (
             mode, r.status_code, (await get(op, "o1")).get("approval", {}).get("evidence_file_id")))
     run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("rep", range(15))
+def test_o8_restore_races_send(monkeypatch, backend, mode, rep):
+    """Addendum A (449c1f4): restore is refused unless the offer is an unsent Draft — but the
+    check is a read before an unconditional write. restore ∥ send on a Draft: can the offer
+    end up Sent with the RESTORED price while the send snapshot (what was sent) says another?"""
+    _with_versions(monkeypatch)
+
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("o1", status="Draft"))
+        await op.offer_versions.insert_one(_snapshot("o1", 12.0))
+        rs, rr = await asyncio.gather(
+            c.post("/api/offers/o1/send", headers=hdr("admin-a")),
+            c.post("/api/offers/o1/versions/1/restore", headers=hdr("admin-a")))
+        o = await get(op, "o1")
+        sent = await op.offer_versions.find_one({"offer_id": "o1", "note": {"$regex": "изпращане"}}, {"_id": 0})
+        sent_total = (sent or {}).get("snapshot_json", {}).get("total")
+        print("O8 %s/%d: send %s restore %s | status %s total %s | sent snapshot total %s" % (
+            mode, rep, rs.status_code, rr.status_code, o["status"], o["total"], sent_total))
+        if o["status"] == "Sent":
+            assert o["total"] == sent_total, "Sent offer differs from what was sent: %s vs %s" % (
+                o["total"], sent_total)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_o9_addendum_a_paths(monkeypatch, backend, mode):
+    _with_versions(monkeypatch)
+
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("os", status="Sent", token=TOKEN))
+        await op.offers.insert_one(offer_doc("oa", status="Accepted", token="tok" + "d" * 21))
+        for oid in ("os", "oa"):
+            await op.offer_versions.insert_one(dict(_snapshot(oid, 12.0), id="ver-" + oid))
+        out = {}
+        for oid in ("os", "oa"):
+            r1 = await c.post("/api/offers/%s/versions/1/restore" % oid, headers=hdr("admin-a"))
+            r2 = await c.delete("/api/offers/%s/versions/1" % oid, headers=hdr("admin-a"))
+            out[oid] = (r1.status_code, r2.status_code, (await get(op, oid))["total"],
+                        await op.offer_versions.count_documents({"offer_id": oid}))
+        nv = await new_version(c, "oa")
+        await op.media_files.insert_one({"id": "mf-b", "org_id": ORG_B, "context_type": None})
+        await op.media_files.insert_one({"id": "mf-other", "org_id": ORG_A, "context_type": "project",
+                                         "context_id": "prj-elsewhere"})
+        ev = {}
+        for fid in ("mf-b", "mf-other", "file-of-nobody"):
+            await op.offers.delete_many({"id": "ox"})
+            await op.offers.insert_one(offer_doc("ox", token="tok" + "e" * 21))
+            r = await accept(c, "ox", body={"approval_method": "signed_pdf", "evidence_file_id": fid})
+            ev[fid] = (r.status_code, code(r), (await get(op, "ox"))["status"])
+        print("O9 %s: restore/delete-version %s | new-version of Accepted %s %s | evidence %s" % (
+            mode, out, nv.status_code, code(nv), ev))
+        assert all(v[:2] == (409, 409) and v[2] == 1200.0 and v[3] == 1 for v in out.values())
+        assert nv.status_code == 409 and all(v[0] == 422 and v[2] == "Sent" for v in ev.values())
+    run(monkeypatch, backend, mode, scenario)

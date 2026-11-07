@@ -4143,3 +4143,41 @@ The PM-01 matrix diff vs main is **only** `+offers,POST,/api/offers/{offer_id}/c
 | A1–A10 | still pass |
 
 I updated PR comment 6710704911 to "resolved". Gates: `b77d` (running).
+
+### #77 @ `dd11e8e` gates — **full PASS**
+
+| Gate | Result |
+|---|---|
+| act01 | 110 |
+| PAY + W0-04 | 700 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The merge with main is clean.
+
+### #79 @ `449c1f4` (Addendum A) — **OFF79-01 resolved**
+
+`probes/off01/test_probe_off01.py` (O1–O9) × 3 modes.
+
+| Case | Result |
+|---|---|
+| O9 restore and version-delete on Sent / Accepted | 409 / 409; total stays 1200; snapshot kept |
+| O9 new-version of an Accepted offer | 409 `OFFER_ACCEPTED_USE_ANNEX` |
+| O9 evidence file of tenant B / linked to another project / missing | 422 ×3; the offer stays Sent |
+| O2–O6 | unchanged pass |
+| **O8** restore ∥ send on a Draft ×15 | **45/45 end Sent at 12 while the send snapshot says 1200** |
+
+- **OFF79-03 (medium, non-blocking):** O8 is a check-then-unconditional-write race. The same pattern already exists on main in `PUT /offers/{id}/lines` ∥ send. Fix: put the Draft / `sent_at` condition in the write filters.
+
+**Cross-PR trial merge** of #77 `dd11e8e` × #79 `449c1f4` (only the `run_meta` conflict). `probe_act01.py` with `PROBE_X=1` × 3 modes: **FAILS none**.
+
+| Case | Result |
+|---|---|
+| X1 accepted offer with acts | new-version → 409 ANNEX; acting continues |
+| X2 v1 Sent | act → 422; new-version → send v2 → accept v2 → full act on v2 201; act on v1 → 422; old link → 409; acted on v1 = 0 |
+| X3 act ∥ new-version × 10 | (201, 409) every time |
+| X4 legacy chain (OV1 Accepted + OV2 Sent from before OFF-01) | accept OV2 → **200**, so two versions are Accepted; ACT-01 then refuses both (SUPERSEDED / LINEAGE_UNKNOWN), so no double billing. Observation: `/accept` should refuse when another version of the family is already Accepted |
+
+I updated PR comment 6710829710 to "resolved". Gates: `b79a` (#79) and `bx` (merged tree) are running.
