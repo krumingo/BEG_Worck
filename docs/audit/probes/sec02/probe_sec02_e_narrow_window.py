@@ -44,6 +44,8 @@ with TestClient(app, raise_server_exceptions=False) as tc:
     seed = ((w1, "2026-11-02", 200.0), (w2, "2026-11-03", 210.0))
     if os.environ.get("PROBE_SINGLE") == "1":
         seed = seed[:1]
+    if os.environ.get("PROBE_ZERO") == "1":     # FG-74: a second worker with ZERO pay must not unlock the 2+ rule
+        seed = (seed[0], (w2, "2026-11-03", 0.0))
     for wid, day, cost in seed:
         q(lambda: op.work_sessions.insert_one({"id": str(uuid.uuid4()), "org_id": org, "worker_id": wid, "site_id": p1, "smr_type_id": "Мазилка",
             "started_at": day + "T07:00:00", "ended_at": day + "T15:00:00", "duration_hours": 8, "labor_cost": cost, "created_at": day}))

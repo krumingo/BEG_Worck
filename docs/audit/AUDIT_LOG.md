@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #71 SEC-02 | `71f9bbe` | **PASS** (FG-63; #69 7300864 merged, behaviour kept; scan clean) | 2026-11-07 |
+| #71 SEC-02 | `dee0610` | **PASS** (FG-74 only paid workers count for R31; FG-75 price-modifier PUT audited) | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
@@ -1943,7 +1943,7 @@ Gates:
 
 | Against | Result |
 |---|---|
-| #71 SEC-02 | `71f9bbe` | **PASS** (FG-63; #69 7300864 merged, behaviour kept; scan clean) | 2026-11-07 |
+| #71 SEC-02 | `dee0610` | **PASS** (FG-74 only paid workers count for R31; FG-75 price-modifier PUT audited) | 2026-11-07 |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 | #70 `31ed258` | conflict: `project_pnl.py` |
 | #55 5C | `f0d86ab` | **PASS** (FG-70 accept lands on the addressed project; FG-69 subproject denial shape) | 2026-11-07 |
@@ -2355,3 +2355,29 @@ Gates:
 Notes, not blocking:
 - **(a) Latent, low:** in `sync_run_corrections` (`payroll_corrections.py:116-128`) the `else` branch rewrites **any** existing record whose status is not pending-with-the-same-amount back to `pending_approval`, clearing `approval_id`. That includes a record already approved or applied. Today only pending and superseded exist, because there is no approval runtime. Once FG-65 approvals exist, an edited run could silently reopen an approved or applied correction. Guard it: only update pending or superseded; otherwise create a new correction version.
 - **(b)** `void_labor_approvals` runs after the content write as a separate operation. A crash between the two leaves the edited content with the old version, so the old approval would still match. This is narrow; a transaction or "bump version first" would close it.
+
+
+## #71 SEC-02-F @ `dee0610` — 2026-11-07 ~04:30 UTC — PASS
+
+Delta:
+- FG-74: `project_labor_workers` counts only workers with **non-zero pay** in the window (per SMR as well) toward the R31 2+ rule.
+- FG-75: `audit_money_write` writes a canonical R1 AuditEvent for the price-modifier PUTs, in the same database as the write, with the Idempotency-Key and the endpoint.
+
+Probes (`probe_sec02_e_narrow_window.py` gains `PROBE_ZERO=1`: the second worker has labor cost 0):
+
+| Probe | Result |
+|---|---|
+| zero-pay second worker, off and enforce | expected-actual shows only the planned budget; actual and labor are hidden; centralized-reports/activities shows no money. **FG-74 holds (PROVED)** |
+| `probe_sec02_c_pulse_derive.py` | FAILS none |
+| `probe_sec02_d_pulse_generate.py` | FAILS none |
+| `probe_sec02_fg15_replay.py` | FAILS none |
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| SEC-02 + SEC-01 + PM-01, real Mongo | **57 passed** (the FG-75 audit event is covered by the PR's tests; not separately probed) |
+| W0 | 1085/15/50, same 15 failures |
+| A2C | 0/208 |
+| A1 | 0/422 |
+| R0 | 814 |
