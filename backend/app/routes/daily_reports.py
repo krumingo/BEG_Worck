@@ -619,12 +619,24 @@ async def reject_daily_report(report_id: str, data: dict = {}, user: dict = Depe
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
+# R36 correctors: Admin, Owner, SiteManager (the project's — checked after the lookup)
+RESET_ROLES = ("Admin", "Owner", "SiteManager")
+
+
 @router.post("/daily-reports/{report_id}/reset")
 async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
     """Reset an APPROVED report back to SUBMITTED. Voids created work_sessions."""
     tenant = _tenant(user)
+    # PM73-01: deny by default BEFORE the lookup — a role that may never reset gets 403 and
+    # learns nothing about whether the report exists. The project check follows below.
+    if user.get("role") not in RESET_ROLES:
+        raise HTTPException(status_code=403, detail="Only Admin/Owner/SiteManager can reset")
     report = await tenant.employee_daily_reports.find_one({"id": report_id, "org_id": user["org_id"]})
     if not report:
+        if user.get("role") not in ("Admin", "Owner"):
+            # a SiteManager is a corrector only of his projects: a missing report answers
+            # like a report of another project (403), so existence is not revealed
+            raise HTTPException(status_code=403, detail="Only the SiteManager of the report's project can reset")
         raise HTTPException(status_code=404, detail="Report not found")
     # LAB-01-L (FG-99): the R36 role rule (Admin / Owner / the SiteManager of every project of
     # the report; the author may not reset) and the LAB-01-J payroll lock decided from the
