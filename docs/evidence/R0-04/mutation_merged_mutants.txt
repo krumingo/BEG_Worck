@@ -1,0 +1,42 @@
+### mongomock
+== M1_no_canonical_audit_on_reset KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_reset_writes_one_canonical_audit_event_and_keeps_the_legacy_row
+FAILED tests/test_auth_01_r0_04_merge.py::test_a_failing_audit_event_rolls_the_whole_reset_back
+2 failed, 5 passed in 17.22s
+== M2_no_canonical_audit_in_cli KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_recovery_cli_writes_one_canonical_audit_event
+1 failed, 6 passed in 16.83s
+== M3_audit_outside_transaction SURVIVED
+7 passed in 16.98s
+== M4_no_login_security_event KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_duplicate_identity_login_contract_is_unchanged_and_recorded
+1 failed, 6 passed in 17.13s
+== M5_forgot_duplicate_takes_first KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_forgot_for_a_duplicate_email_is_generic_without_token_with_event
+1 failed, 6 passed in 16.85s
+== M6_no_av_check KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_old_jwt_is_refused_after_a_reset_new_login_works
+1 failed, 6 passed in 16.55s
+### real MongoDB replica set
+== M1_no_canonical_audit_on_reset KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_reset_writes_one_canonical_audit_event_and_keeps_the_legacy_row
+FAILED tests/test_auth_01_r0_04_merge.py::test_a_failing_audit_event_rolls_the_whole_reset_back
+2 failed, 5 passed in 17.96s
+== M2_no_canonical_audit_in_cli KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_recovery_cli_writes_one_canonical_audit_event
+1 failed, 6 passed in 18.32s
+== M3_audit_outside_transaction SURVIVED
+7 passed in 18.44s
+== M4_no_login_security_event KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_duplicate_identity_login_contract_is_unchanged_and_recorded
+1 failed, 6 passed in 18.30s
+== M5_forgot_duplicate_takes_first KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_forgot_for_a_duplicate_email_is_generic_without_token_with_event
+1 failed, 6 passed in 18.63s
+== M6_no_av_check KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_old_jwt_is_refused_after_a_reset_new_login_works
+1 failed, 6 passed in 17.76s
+### real MongoDB replica set — after adding test_the_audit_event_is_inside_the_transaction
+== M3_audit_outside_transaction KILLED
+FAILED tests/test_auth_01_r0_04_merge.py::test_the_audit_event_is_inside_the_transaction
+1 failed, 7 passed in 20.67s
