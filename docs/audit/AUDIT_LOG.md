@@ -1325,7 +1325,7 @@ Merge-tree, `64418eb` against each:
 | main | clean |
 | #67 | clean |
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
-| #71 SEC-02 | `5af530e` | **FINDINGS: SEC71-04 BLOCKING** (TM bisects budget + status band → one worker's cumulative pay 6196.90 / 6200) | 2026-11-07 |
+| #71 SEC-02 | `e90aa5f` | **FINDINGS: SEC71-05 BLOCKING** (`evaluate.resolved_events` + an auto_resolve rule → pay 6196.90 / 6200); SEC71-04 closed | 2026-11-07 |
 | #56 | conflict: data_access.py, A2B inventory |
 | #69 SEC-01 | `7300864` | **PASS** (addendum B: FG-15 replay strip, FG-47 strict numbers, FG-29 project in tenant) | 2026-11-07 |
 
@@ -3778,3 +3778,35 @@ merge-tree:
 All three guard the client-act routes, so a merge order is needed.
 
 No blocking finding, so no PR comment.
+
+
+### #71 @ `e90aa5f` (SEC71-04 fix, on `02a1441` FG-111) — FINDINGS (1 blocking)
+
+Addendum F:
+- For sites whose cumulative labor cost comes from fewer than 2 paid workers (`single_paid_sites`), the TM pulse view drops `budget_snapshot.status` and the budget alerts.
+- `money_alarm_exclusion` hides those sites' money alarms from list, `?severity=`, count, dashboard (and trend), one event, ack and resolve.
+- `evaluate` filters `events` / `new_events`.
+- `_drop_actual` also drops band keys.
+
+`probes/sec02/probe_sec71_d1_band_bisect.py`, real RS, PR fixture (P1 with one paid technician), requester = SiteManager team member:
+
+| Case | Result |
+|---|---|
+| pulse bisection | status absent; derives 0.02 vs 6200, off/shadow/enforce. **SEC71-04 closed** |
+| `/alarms` list bisection | derives 0.02. Closed |
+| 404 oracle: hidden alarm id vs nonexistent id, on GET / acknowledge / resolve | identical 404, same status and body |
+| **SEC71-05, BLOCKING, PROVED**: Admin rule `budget > 100 %`, `auto_resolve: true`; TM loops set budget B → `evaluate` → budget 10⁹ → `evaluate`, reading `resolved_events` | **6196.90 vs 6200.00 in 21 steps**. `resolved_events` counts the hidden sites' auto-resolved events |
+| known-pay variant (MEDIUM, Krum): 2 paid workers (the TM's own session 500 + the technician) | band shown, as R31 2+ designs; other worker's pay **6196.63 vs 6200**. Inherent to R31: the 2+ totals already allow subtracting one's own known pay |
+
+**SEC71-05 fix:** filter `resolved_events` the same way (or drop it) for non-finance callers. Consider restricting `evaluate`.
+
+| Gate | Result |
+|---|---|
+| `test_sec_02`, real | **28 passed** (finance roles keep everything) |
+| W0 | same 15 |
+| A2C | 0/208 |
+| A1 | 0/422 |
+| R0 | 814 |
+| PM-01 | 6, real |
+
+PR comment 6695992847 updated (blocking).
