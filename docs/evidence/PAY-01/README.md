@@ -478,3 +478,22 @@ The payment ended up **reversed while an allocation of 80 stayed active**, and t
 | A1 / A2C guards | 0 violations |
 
 **A1 inventory:** regenerated, adding the tenant-scoped read of a transfer's legs. Totals: 373 accesses (FIXED 130, SAFE 243).
+
+## #72 compatibility: `IDEMPOTENCY_IN_PROGRESS` is mapped to 409
+
+W0-04-C01 (#72 @ 13dd8d7) adds a third answer of `begin_idempotent`: `in_progress`. It goes to a request that lost the compare-and-set retake of a **failed** key.
+
+**Problem.** Both callers in `finance.py` treated any answer other than `duplicate` as a fresh start:
+- `_once()`, used by the seven money POSTs;
+- `_begin()`, used by the reversal and the allocation cancel.
+
+After a merge with #72, they would therefore have run the write a second time.
+
+**Fix (8cf0f4a).** Only an explicit `started` runs the write. Any other status → **409 `IDEMPOTENCY_IN_PROGRESS`**, nothing written. This works with and without #72.
+
+| Run | Result |
+|---|---|
+| `test_72_in_progress_from_begin_idempotent_is_409`: transfer (via `_once`) and reversal (via `_begin`) on mongomock + real Mongo, three modes, 12 cases | 12 passed; **12 failed on cfb9d74** |
+| **Trial merge** of this branch with `origin/claude/w0-04-c01-audit-indexes` @ 13dd8d7, done locally and not pushed | no conflicts |
+| On the trial merge: all `test_pay_01*` + A1 collision matrix + `test_w0_04*` | 652 passed |
+| On the trial merge: A1 / A2C guards | 432 units / 214 modules, 0 violations |
