@@ -187,3 +187,14 @@ async def verify_tenant_chain(db, tenant_id: str) -> Tuple[bool, Optional[str]]:
     if not events:
         return True, None
     return verify_chain(events)
+
+
+async def has_event(db, *, tenant_id: str, action: str, entity_id: str) -> bool:
+    """True when the tenant's chain already holds an event of ``action`` for ``entity_id``.
+
+    For actions that happen at most once per entity (a payment is reversed once, an
+    allocation is cancelled once) this is the event's stable identity: a recovering write
+    checks it before recording, so a retry never leaves the event missing nor duplicated."""
+    found = await db[AUDIT_COLLECTION].find_one(
+        {"tenant_id": tenant_id, "action": action, "entity_id": entity_id}, {"_id": 0, "event_id": 1})
+    return found is not None

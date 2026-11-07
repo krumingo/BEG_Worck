@@ -1339,6 +1339,29 @@ async def _audit(user: dict, action: str, entity_type: str, entity_id: str, reas
     await record_event(db, event)
 
 
+async def _audit_once(user: dict, action: str, entity_type: str, entity_id: str, reason: str,
+                      diff: dict, idem_key: Optional[str]) -> None:
+    """F-70-02: the canonical AuditEvent of a once-per-entity action (payment reversed,
+    allocation cancelled), recorded exactly once. Called on the normal path AND on the
+    recovery of an interrupted request — always under the payment lock, so the
+    check-then-write cannot race."""
+    from app.audit.store import has_event
+    if await has_event(db, tenant_id=user["org_id"], action=action, entity_id=entity_id):
+        return
+    await _audit(user, action, entity_type, entity_id, reason, diff, idem_key)
+
+
+async def _reversal_audit(user: dict, original: dict, idem_key: Optional[str]) -> None:
+    await _audit_once(user, "finance.payment.reversed", "finance.payment", original["id"],
+                      original.get("reversal_reason") or "", {
+                          "status": {"before": "active", "after": PAYMENT_REVERSED},
+                          "amount": original.get("amount"), "direction": original.get("direction"),
+                          "account_id": original.get("account_id"),
+                          "reversal_payment_id": original.get("reversed_by_payment_id")
+                          or _reversal_id(original["id"]),
+                      }, idem_key)
+
+
 async def _ensure_reversal_row(tenant: TenantData, user: dict, original: dict, now: str) -> str:
     """Write the reversal row of an already-reversed original. Upsert on the deterministic
     id, so a retry after a crash completes the pair and never writes a second one."""
@@ -1447,11 +1470,7 @@ async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: 
         return None
     original.pop("_id", None)
     await _ensure_reversal_row(tenant, user, original, now)
-    await _audit(user, "finance.payment.reversed", "finance.payment", payment_id, reason, {
-        "status": {"before": "active", "after": PAYMENT_REVERSED},
-        "amount": original.get("amount"), "direction": original.get("direction"),
-        "account_id": original.get("account_id"), "reversal_payment_id": rev_id,
-    }, idem_key)
+    await _reversal_audit(user, original, idem_key)
     return {"payment_id": payment_id, "reversal_payment_id": rev_id}
 
 
@@ -1496,11 +1515,14 @@ async def _complete(user: dict, req: "_Request", action: str, result: dict) -> N
                                   result_reference=json.dumps(result, sort_keys=True))
 
 
-async def _repair_pair(tenant: TenantData, user: dict, payment: dict) -> None:
-    """A reversed original whose reversal row is missing (crash between the two writes)
-    gets it now — the retry of the same request completes the pair."""
+async def _repair_pair(tenant: TenantData, user: dict, payment: dict,
+                       idem_key: Optional[str] = None) -> None:
+    """A reversed original whose reversal row and/or canonical AuditEvent is missing (an
+    interrupted request) gets them now — the retry completes the pair AND its audit, each
+    exactly once (deterministic row id + upsert; event identity = action + payment id)."""
     if payment.get("status") == PAYMENT_REVERSED:
         await _ensure_reversal_row(tenant, user, payment, datetime.now(timezone.utc).isoformat())
+        await _reversal_audit(user, payment, idem_key)
 
 
 @router.delete("/finance/invoices/{invoice_id}/payments/{allocation_id}")
@@ -1534,16 +1556,18 @@ async def remove_invoice_payment(invoice_id: str, allocation_id: str,
     # payment another module owns (nothing written: checked before the idempotency key).
     owner_payment = await tenant.finance_payments.get(alloc["payment_id"], {"_id": 0})
     refusal = _source_module_refusal(owner_payment)
-    if refusal is None:
-        return await _cancel_allocation(tenant, user, invoice_id, allocation_id, alloc, req)
-    # C01A-1: for a module-owned payment the "is this the last active allocation?" decision
-    # and the cancel run under a lock on the payment row, so two concurrent cancels cannot
-    # both see "another allocation remains" and together leave none.
-    async with _payment_lock(tenant, alloc["payment_id"]):
-        others = await tenant.payment_allocations.count(active_allocations(
-            {"payment_id": alloc["payment_id"], "id": {"$ne": allocation_id}}))
-        if others == 0:
-            raise refusal
+    # C01A-1 / F-70-01: every cancel runs under the payment lock, then the invoice lock (the
+    # order allocate uses), so cancel, allocate and reversal of one payment are serialised:
+    # two concurrent cancels of a module-owned payment cannot both see "another allocation
+    # remains", and a cancel that reverses a payment cannot race with a new allocation.
+    async with AsyncExitStack() as locks:
+        await locks.enter_async_context(_payment_lock(tenant, alloc["payment_id"]))
+        await locks.enter_async_context(_invoice_lock(tenant, invoice_id))
+        if refusal is not None:
+            others = await tenant.payment_allocations.count(active_allocations(
+                {"payment_id": alloc["payment_id"], "id": {"$ne": allocation_id}}))
+            if others == 0:
+                raise refusal
         return await _cancel_allocation(tenant, user, invoice_id, allocation_id, alloc, req)
 
 
@@ -1562,15 +1586,14 @@ async def _cancel_allocation(tenant: TenantData, user: dict, invoice_id: str, al
         active_allocations({"id": allocation_id, "invoice_id": invoice_id}),
         {"$set": {"status": ALLOCATION_CANCELLED, "cancelled_at": now, "cancelled_by": user["id"],
                   "cancel_reason": req.reason}})
-    if won.modified_count != 1:
-        if not retry:
-            raise await _refuse(user, req, action, "Разпределението вече е отменено")
-        # a retry of the same request whose first attempt did not finish: complete it below
-    else:
-        await _audit(user, "finance.allocation.cancelled", "finance.payment_allocation", allocation_id,
-                     req.reason, {"status": {"before": "active", "after": ALLOCATION_CANCELLED},
-                                  "invoice_id": invoice_id, "payment_id": alloc["payment_id"],
-                                  "amount_allocated": alloc.get("amount_allocated")}, req.key)
+    if won.modified_count != 1 and not retry:
+        raise await _refuse(user, req, action, "Разпределението вече е отменено")
+    # F-70-02: on the first run AND on a retry whose first attempt was interrupted, the
+    # canonical cancel event is recorded exactly once (identity: action + allocation id)
+    await _audit_once(user, "finance.allocation.cancelled", "finance.payment_allocation", allocation_id,
+                      req.reason, {"status": {"before": "active", "after": ALLOCATION_CANCELLED},
+                                   "invoice_id": invoice_id, "payment_id": alloc["payment_id"],
+                                   "amount_allocated": alloc.get("amount_allocated")}, req.key)
     
     # The payment has no active allocation left → it is reversed (never deleted).
     reversed_ = None
@@ -1580,7 +1603,7 @@ async def _cancel_allocation(tenant: TenantData, user: dict, invoice_id: str, al
         if reversed_ is None:
             payment = await tenant.finance_payments.get(alloc["payment_id"], {"_id": 0})
             if payment:
-                await _repair_pair(tenant, user, payment)
+                await _repair_pair(tenant, user, payment, req.key)
     
     # Update invoice status
     await update_invoice_status(tenant, invoice_id)
@@ -1836,48 +1859,61 @@ async def delete_payment(payment_id: str,
     refusal = _source_module_refusal(payment)   # FG-45: nothing written (before the key)
     if refusal is not None:
         raise refusal
-    action = "finance.payment.reverse"
-    retry, done = await _begin(user, req, action, {"payment_id": payment_id, "reason": req.reason})
-    if done is not None:
-        return done
-    
-    if payment.get("status") == PAYMENT_REVERSAL:
-        raise await _refuse(user, req, action, "Това е сторно запис — не се сторнира")
-    if payment.get("status") == PAYMENT_REVERSED:
-        await _repair_pair(tenant, user, payment)
-        if not retry:
-            raise await _refuse(user, req, action, "Плащането вече е сторнирано")
-    
-    # Check for allocations (cancel them on the invoice first — unchanged rule)
-    legs = [payment]
+    # F-70-01: the reversal is serialised with allocate / cancel on the SAME payment lock;
+    # for an own-account transfer both legs are locked, in a stable (sorted) order. The
+    # payment is re-read under the locks — the allocation check and the reversal decide on
+    # committed state, so a concurrent allocate can no longer slip in between.
+    leg_ids = {payment_id}
     if payment.get("transfer_id"):
-        legs = await tenant.finance_payments.find(
-            active_payments({"transfer_id": payment["transfer_id"]}), {"_id": 0}).to_list(10) or legs
-    for leg in legs:
-        alloc_count = await tenant.payment_allocations.count(active_allocations({"payment_id": leg["id"]}))
-        if alloc_count > 0:
-            if req.key:
-                from app.audit.idempotency import fail_idempotent
-                await fail_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
-                                      error_code="HAS_ALLOCATIONS")
-            raise HTTPException(status_code=400, detail="Cannot delete payment with allocations")
+        rows = await tenant.finance_payments.find(
+            {"transfer_id": payment["transfer_id"]}, {"_id": 0, "id": 1, "status": 1}).to_list(10)
+        leg_ids |= {r["id"] for r in rows if r.get("status") != PAYMENT_REVERSAL}
+    async with AsyncExitStack() as locks:
+        for leg_id in sorted(leg_ids):
+            await locks.enter_async_context(_payment_lock(tenant, leg_id))
+        payment = await tenant.finance_payments.get(payment_id, {"_id": 0})
+        action = "finance.payment.reverse"
+        retry, done = await _begin(user, req, action, {"payment_id": payment_id, "reason": req.reason})
+        if done is not None:
+            return done
     
-    reversals = []
-    for leg in legs:
-        r = await _reverse_one(tenant, user, leg["id"], req.reason, req.key)
-        if r is not None:
-            reversals.append(r)
-    if not reversals and not retry:
-        raise await _refuse(user, req, action, "Плащането вече е сторнирано")
-    if not reversals:
-        # retry of the same key whose first attempt reversed but did not complete the key
-        reversals = [{"payment_id": payment_id, "reversal_payment_id": _reversal_id(payment_id)}]
+        if payment.get("status") == PAYMENT_REVERSAL:
+            raise await _refuse(user, req, action, "Това е сторно запис — не се сторнира")
+        if payment.get("status") == PAYMENT_REVERSED:
+            await _repair_pair(tenant, user, payment, req.key)
+            if not retry:
+                raise await _refuse(user, req, action, "Плащането вече е сторнирано")
     
-    await log_audit(user["org_id"], user["id"], user["email"], "payment_reversed", "payment", payment_id,
-                    {"reason": req.reason, "reversals": reversals})
-    result = {"ok": True, "payment_id": payment_id, "status": PAYMENT_REVERSED, "reversals": reversals}
-    await _complete(user, req, action, result)
-    return result
+        # Check for allocations (cancel them on the invoice first — unchanged rule)
+        legs = [payment]
+        if payment.get("transfer_id"):
+            legs = await tenant.finance_payments.find(
+                active_payments({"transfer_id": payment["transfer_id"]}), {"_id": 0}).to_list(10) or legs
+        for leg in legs:
+            alloc_count = await tenant.payment_allocations.count(active_allocations({"payment_id": leg["id"]}))
+            if alloc_count > 0:
+                if req.key:
+                    from app.audit.idempotency import fail_idempotent
+                    await fail_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
+                                          error_code="HAS_ALLOCATIONS")
+                raise HTTPException(status_code=400, detail="Cannot delete payment with allocations")
+    
+        reversals = []
+        for leg in legs:
+            r = await _reverse_one(tenant, user, leg["id"], req.reason, req.key)
+            if r is not None:
+                reversals.append(r)
+        if not reversals and not retry:
+            raise await _refuse(user, req, action, "Плащането вече е сторнирано")
+        if not reversals:
+            # retry of the same key whose first attempt reversed but did not complete the key
+            reversals = [{"payment_id": payment_id, "reversal_payment_id": _reversal_id(payment_id)}]
+    
+        await log_audit(user["org_id"], user["id"], user["email"], "payment_reversed", "payment", payment_id,
+                        {"reason": req.reason, "reversals": reversals})
+        result = {"ok": True, "payment_id": payment_id, "status": PAYMENT_REVERSED, "reversals": reversals}
+        await _complete(user, req, action, result)
+        return result
 
 
 # ── Finance Stats ──────────────────────────────────────────────────

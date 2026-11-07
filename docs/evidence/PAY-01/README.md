@@ -424,3 +424,57 @@ Among the money POSTs in `finance.py`, **`/finance/other-expense`** and **`/fina
 | A1 / A2C guards | 0 violations |
 
 **A1 inventory:** regenerated, adding one tenant-scoped project read. Totals: 372 accesses (FIXED 129, SAFE 243).
+
+## PAY-01-C01-E: Codex review of 31ed258 (CHANGES_REQUESTED, PR comment 6704681914)
+
+### F-70-01 [P1]: reversal and allocate were not serialised
+
+**Finding.** The scenario is a payment of 100 and an invoice of 100.
+1. `DELETE /finance/payments/{id}` checked "no active allocations" and was paused just before `_reverse_one`.
+2. Meanwhile `allocate 80` completed (200).
+3. The reversal then completed too (200).
+
+The payment ended up **reversed while an allocation of 80 stayed active**, and the invoice showed `paid_amount = 80`. Only allocate took the payment lock, and a lock helps only if every writer takes it.
+
+**Fix**
+- **Reversal:** `DELETE /finance/payments/{id}` takes the **same payment lock** as allocate, cancel and the C01A-1 path. For an own-account transfer it locks **both legs, in sorted id order**.
+  - The payment is **re-read under the locks**, so the allocation check and the reversal decide on committed state.
+  - A concurrent request → 409 `PAYMENT_BUSY`, nothing written (the lock is taken before the idempotency key).
+- **Allocation cancel:** it can reverse a payment when it cancels the last allocation. It now **always** takes the payment lock (before, only module-owned payments did), then the invoice lock, in the same order allocate uses.
+- **Result:** reversal, cancel, allocate and quick-pay are serialised on the rows they read and change.
+
+### F-70-02 [P1]: an interrupted reversal was recovered without its AuditEvent
+
+**Finding.** `_ensure_reversal_row` failed after the original had been marked `reversed`. The retry with the same key returned **200** and repaired the reversal row (one row), but recorded **0** `finance.payment.reversed` events. `_repair_pair` restored only the row, and `_reverse_one` no longer found an active original, so it never reached its audit step.
+
+**Fix**
+- **`_audit_once()`** records a once-per-entity canonical event exactly once. A payment is reversed once and an allocation is cancelled once, so the **event identity is (tenant, action, entity id)**.
+  - It checks `app.audit.store.has_event()`, a new read-only helper, and records only when the event is missing.
+  - It always runs under the payment lock, so the check and the write cannot race.
+- **Reversal:** `_repair_pair()` now restores the reversal row **and** its audit. Both the normal path and the recovery path go through `_reversal_audit()` → `_audit_once()`.
+- **Allocation cancel:** it had the same gap. A retry whose first attempt had cancelled the allocation skipped the audit. Now the first run and the recovery both go through `_audit_once()`.
+
+### Tests
+
+`backend/tests/test_pay_01_c01_e_serialisation.py`: **66 cases**, on mongomock and real Mongo, in off, shadow and enforce. The interleavings are real HTTP requests; one request is paused at a precise point with an `asyncio.Event`. No financial logic is replaced.
+
+**F-70-01 races**
+- **Reversal paused before `_reverse_one`, then allocate** (the Codex probe) → allocate 409 `PAYMENT_BUSY`, reversal 200, no active allocation left on the reversed payment.
+- **Allocate paused under its lock, then reversal** → reversal 409; allocate 200. A later reversal → 400 (the payment has allocations).
+- **Cancel of the last allocation paused before it reverses the payment, then allocate to another invoice** → allocate 409; the cancel reverses the payment, with no active allocation left.
+- **Transfer reversal paused** → both legs hold the lock, and reversing the other leg → 409. After the release, both legs are reversed: two reversal rows, no lock left.
+- **Every case** checks the invariant: a reversed payment has no active allocation, and each invoice's `paid_amount` equals the sum of its active allocations.
+
+**F-70-02 interruptions**
+- **Reversal, one test per point:** before / after the reversal row, before / after the audit, before the key completes.
+- **Retry with the same key:** 200, **exactly one** reversal row and **exactly one** `finance.payment.reversed` event. A replay of the completed key changes nothing.
+- **Allocation cancel interrupted before / after its audit:** exactly one `finance.allocation.cancelled` event and one `finance.payment.reversed` event, plus one reversal row.
+
+| Run | Result |
+|---|---|
+| Codex's own probes (from the review), unchanged, on real Mongo | **31ed258: 6 failed**, this head: **6 passed** |
+| The new file on 31ed258 | **60 failed**, 6 passed (only the "before the key completes" interruption already recovered correctly) |
+| All `test_pay_01*` + A1 collision matrix + `test_w0_04*` (the audit store changed) | 613 passed |
+| A1 / A2C guards | 0 violations |
+
+**A1 inventory:** regenerated, adding the tenant-scoped read of a transfer's legs. Totals: 373 accesses (FIXED 130, SAFE 243).
