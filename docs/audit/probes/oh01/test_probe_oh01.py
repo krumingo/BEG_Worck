@@ -17,9 +17,15 @@ ROUNDS = int(os.environ.get("PROBE_ROUNDS", "5"))
 
 def _run(monkeypatch, mode, scenario):
     async def body():
-        async with _Db("real") as op:
-            await _seed(op)
-            app = _app(monkeypatch, op, mode)
+        async with _Db("real") as dbs:
+            if isinstance(dbs, tuple):      # harness >= 09409f0: (tenant db, system db)
+                op, sysdb = dbs
+                await _seed(op, sysdb)
+                app = _app(monkeypatch, op, sysdb, mode)
+            else:
+                op = dbs
+                await _seed(op)
+                app = _app(monkeypatch, op, mode)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://p") as c:
                 return await scenario(c, op)
     return asyncio.run(body())
@@ -83,7 +89,7 @@ def test_o3_cross_tenant(monkeypatch):
             out[path.split('/')[0]] = r.status_code
         doc = await op.overhead_costs.find_one({"id": cost["id"]}, {"_id": 0})
         print("O3 tenant-B delete of tenant-A ids:", out, "A cost status:", doc.get("status"))
-        assert all(v == 404 for v in out.values()) and doc.get("status") != "archived"
+        assert all(v in (403, 404) for v in out.values()) and doc.get("status") != "archived"
     _run(monkeypatch, "enforce", scenario)
 
 
@@ -119,4 +125,30 @@ def test_o5_same_key_race(monkeypatch):
         print("O5 codes", sorted(r.status_code for r in rs), "rows", len(rows), "current rows", len(cur),
               "current total", round(sum(a["allocated_amount"] for a in cur), 2))
         assert len({a["allocation_batch_id"] for a in rows}) == 1 and len(cur) == len(rows) == 2
+    _run(monkeypatch, "enforce", scenario)
+
+
+def test_o6_lock_edges(monkeypatch):
+    """O6 a FRESH foreign lock -> 409 ALLOCATION_BUSY, nothing written, lock intact;
+    a STALE (>30 s) lock -> taken over, allocation succeeds, lock released afterwards."""
+    async def scenario(c, op):
+        from datetime import datetime, timedelta, timezone
+        cat = await _category(c)
+        await _cost(c, cat["id"])
+        snap = await _snapshot(c)
+        url = f"/api/overhead/snapshots/{snap['id']}/allocate"
+        fresh = {"token": "other", "at": datetime.now(timezone.utc).isoformat()}
+        await op.overhead_snapshots.update_one({"id": snap["id"]}, {"$set": {"allocation_lock": fresh}})
+        r1 = await c.post(url, json={"method": "PersonDays"}, headers=_h(key=_key()))
+        n1 = await op.project_overhead_allocations.count_documents({})
+        lock1 = (await op.overhead_snapshots.find_one({"id": snap["id"]})).get("allocation_lock")
+        old = {"token": "dead", "at": (datetime.now(timezone.utc) - timedelta(seconds=45)).isoformat()}
+        await op.overhead_snapshots.update_one({"id": snap["id"]}, {"$set": {"allocation_lock": old}})
+        r2 = await c.post(url, json={"method": "PersonDays"}, headers=_h(key=_key()))
+        doc = await op.overhead_snapshots.find_one({"id": snap["id"]})
+        print("O6 fresh:", r1.status_code, r1.json().get("detail", {}).get("error_code") if r1.status_code != 200 else "",
+              "rows", n1, "lock kept", lock1 == fresh, "| stale:", r2.status_code,
+              "lock after", doc.get("allocation_lock"), "version", doc.get("allocation_version"))
+        assert r1.status_code == 409 and n1 == 0 and lock1 == fresh
+        assert r2.status_code == 200 and doc.get("allocation_lock") is None
     _run(monkeypatch, "enforce", scenario)

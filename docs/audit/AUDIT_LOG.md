@@ -1665,7 +1665,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
 | #73 LAB-01 | `c4ddd33` | **PASS** (LAB-01-E FG-78/79/80 + R29 on POST /pay-runs); **merge order: #72 before #73** (R29 race-safe only with #72 indexes) | 2026-11-07 |
-| #74 OH-01 | `a3e0b91` | **FINDINGS**: OH01-1 BLOCKING (concurrent re-allocations leave N current versions, P&L overhead ×N); OH01-2 medium; needs #72; harness breaks after #69 | 2026-11-07 |
+| #74 OH-01 | `09409f0` | **PASS**: OH01-1 and OH01-2 closed (snapshot lock + CAS + unique partial index; single-winner archive); #69 harness fixed | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2539,3 +2539,51 @@ Gates on `a3e0b91`:
 | merge-tree #70 | `idempotency.js` (+ test) conflict |
 
 R0 and `yarn build` were not re-run by me this round: the delta is backend overhead plus 2 pages, and the PR evidence states R0 814 and the build compiles. Re-run them at the fix round.
+
+
+## #74 OH-01 @ `09409f0` — 2026-11-07 ~06:50 UTC — PASS (OH01-1 and OH01-2 closed)
+
+Delta `a3e0b91..09409f0` (fast-forward, 1 commit):
+- **OH01-1:** `_write_allocation_version` now runs under `snapshot_allocation_lock` (`overhead_lifecycle.py`).
+  - One conditional atomic `update_one` on the snapshot row; a busy lock → 409 `ALLOCATION_BUSY`; a lock older than 30 s may be taken over; release goes by the owner's token in `finally`.
+  - Plus a CAS on `snapshot.allocation_version` (409 `ALLOCATION_VERSION_CONFLICT`).
+  - Plus a unique partial index `(org_id, overhead_snapshot_id, allocation_version, project_id)` where `allocation_version` exists, created idempotently per request.
+  - Lock order: `async with kw, lock`, so a lock refusal marks the key FAILED and a retry is allowed.
+- **OH01-2:** `_archive_record` checks `modified_count != 1` → 409 `ALREADY_ARCHIVED`, raised before the audit step.
+- **Harness:** the OH-01 tests now seed a registered tenant (system db: registry, memberships, role assignments) and patch `money_write.db` when #69's module exists.
+
+Probes `docs/audit/probes/oh01/test_probe_oh01.py` (updated for the new `_Db`/`_seed` signature; new **O6**), real Mongo RS:
+
+| Probe | `09409f0` | + #69 | + #72 |
+|---|---|---|---|
+| O1: 4 parallel re-allocations, different keys, 5 rounds | **0/5 rounds with >1 current version**; each round 1×200 + 3×409; current total 400 = snapshot; versions 1..5 distinct | 0/5 | 0/5 |
+| O2: 6 parallel archives of one cost | **1×200 + 5×409, 1 AuditEvent** | | |
+| O3 cross-tenant DELETE | 404/404, untouched | | |
+| O4 roles × off/shadow/enforce | accountant 200; sitemanager, technician, viewer 403 | | |
+| O5: 4 parallel same-key allocates | 1×200 + 3×409, 2 rows, 400 (now safe **even without #72**: the snapshot lock serializes) | | pass |
+| O6: fresh foreign lock | 409 `ALLOCATION_BUSY`, 0 rows, lock intact | | |
+| O6: stale (45 s) lock | taken over, 200, lock released, version 1 | | pass |
+
+**OH01-1 closed (PROVED). OH01-2 closed (PROVED).**
+
+Gates on `09409f0`:
+
+| Gate | Result |
+|---|---|
+| OH-01 tests | **57 passed** (incl. `test_07` concurrency) |
+| OH-01 tests on trial merge with #69 | **57 passed** (enforce now green; was 12 failed) |
+| SEC-01 tests on trial merge with #69 | 30 passed |
+| OH-01 tests on trial merge with #72 | 57 passed |
+| W0 DB-free | 1085/15/50, same 15 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| R0, real Mongo | **814** |
+| PM-01, real Mongo | 6 passed |
+| `yarn build` | compiled (with warnings, none in changed files per the PR) |
+| `idempotency.test.js` | 4 passed |
+
+Residual notes, low:
+- `ensure_allocation_indexes` calls `create_index` on every allocate. It is idempotent but costs a round trip; startup would be better.
+- The 30 s stale-lock takeover means an allocation running longer than 30 s could be overlapped. The CAS on the version still prevents a duplicate version.
+- Legacy rows without `allocation_version` are outside the unique index (as documented).
+- #70 still conflicts on `idempotency.js`.
