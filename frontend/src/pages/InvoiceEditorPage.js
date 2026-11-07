@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,7 @@ const METHOD_LABELS = {
 };
 
 export default function InvoiceEditorPage() {
+  const payKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
   const { t } = useTranslation();
   const { invoiceId } = useParams();
   const [searchParams] = useSearchParams();
@@ -383,21 +385,28 @@ export default function InvoiceEditorPage() {
         method: payForm.method,
         account_id: payForm.account_id,
         note: payForm.note,
-      });
+      }, idempotencyHeaders(payKey.get()));
+      payKey.settle();
       setPayDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка при записване на плащане");
+      payKey.settle(err);
+      alert(apiErrorText(err, "Грешка при записване на плащане"));
     } finally { setPaySaving(false); }
   };
 
   const handleRemovePayment = async (allocationId) => {
     if (!window.confirm(t("finance.confirmRemovePayment"))) return;
+    // PAY-01: the allocation is cancelled and its payment reversed (сторно) — a reason is required.
+    const reason = (window.prompt("Причина за отмяна на плащането:") || "").trim();
+    if (!reason) return;
+    const key = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
     try {
-      await API.delete(`/finance/invoices/${invoiceId}/payments/${allocationId}`);
+      await API.delete(`/finance/invoices/${invoiceId}/payments/${allocationId}`, { data: { reason }, headers: { "Idempotency-Key": key } });
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка при премахване на плащане");
+      const d = err.response?.data?.detail;
+      alert((d && d.message) || d || "Грешка при премахване на плащане");
     }
   };
 
