@@ -1,0 +1,21 @@
+# ST-02-C03 checks (2026-11-06), parent 98b18ec + ST-02-C03 working tree, run from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 204 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 414 unit(s) checked, 0 violation(s)
+## tests/test_r0_0*.py --noconftest (no Mongo)
+423 passed, 391 skipped, 6 warnings in 33.22s
+## tests/test_r0_0*.py --noconftest (MONGO_URL + W0_03_REAL_MONGO_URL = disposable local mongo:7.0 rs0, removed afterwards)
+814 passed, 6 warnings in 158.45s (0:02:38)
+## W0 DB-free: tests/test_w0_*.py --noconftest
+15 failed, 1085 passed, 50 skipped, 6 warnings in 74.64s (0:01:14)
+  the same 15 failures as on 98b18ec/e987892/cbb8bdb (tests-cbb8bdb.txt):
+  test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[{users,persons,companies,asset_items,asset_units}-{off,shadow}] (10)
+  test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[{users,persons,companies,asset_items,asset_units}] (5)
+## ST-02: tests/test_st_02_staging_stack.py --noconftest (real docker compose config + real staging bundles of HEAD; no daemon needed)
+162 passed in 3.68s
+## ops/release tests (pytest ops/release/tests)
+81 passed, 1 skipped, 58 subtests passed in 75.05s (0:01:15)
+## Docker rehearsal (local Docker in the cloud container only; shadow; deployer claude-st02-c03, approver krum)
+[2026-11-06T20:41:53Z] rehearsal PASS: 45/45 checks passed
+  evidence: rehearsal-2026-11-06-c03/ (summary.json, rehearse.log)

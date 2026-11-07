@@ -379,6 +379,16 @@ app.add_middleware(ErrorHandlerMiddleware)
 
 @app.on_event("startup")
 async def startup():
+    # W0-04-C01: every tenant database gets the unique audit / idempotency
+    # indexes before anything is written; a conflict or duplicate stops the
+    # start with a clear error instead of running unprotected.
+    from app.audit.indexes import describe_report, ensure_audit_indexes_for_installation
+    from app.tenancy import registry as _tenant_registry
+    for _rep in await ensure_audit_indexes_for_installation(db, _tenant_registry.system_db):
+        if _rep["created"]:
+            # FG-117: an opaque database ref, never the tenant database name.
+            logger.info("W0-04-C01 audit indexes %s", describe_report(_rep))
+
     await seed_data()
 
     # FIFO indexes (warehouse_batches)
@@ -396,6 +406,12 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
+    # shared rate-limit counters and durable auth security events (both TTL).
+    from app.services import auth_events, password_reset, rate_limit
+    await password_reset.ensure_indexes(db)
+    await rate_limit.ensure_indexes(db)
+    await auth_events.ensure_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

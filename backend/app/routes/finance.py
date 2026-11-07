@@ -1,10 +1,11 @@
 """
 Routes - Finance (M5) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from contextlib import AsyncExitStack, asynccontextmanager
 import uuid
 import io
 import logging
@@ -16,6 +17,11 @@ from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData, assigned_project_ids
 from app.deps.modules import require_m5, enforce_limit
 from app.utils.audit import log_audit
+from app.services.money_amount import check_reason, positive_amount
+from app.services.payment_state import (
+    ALLOCATION_CANCELLED, PAYMENT_REVERSAL, PAYMENT_REVERSED, SOURCE_MODULE_REVERSAL_REQUIRED,
+    active_allocations, active_payments, opposite_direction, payment_counts, source_module,
+)
 from ..models.finance import (
     ACCOUNT_TYPES, INVOICE_DIRECTIONS, INVOICE_STATUSES,
     PAYMENT_DIRECTIONS, COST_CATEGORIES,
@@ -31,6 +37,79 @@ router = APIRouter(tags=["Finance"])
 def _tenant(user: dict) -> TenantData:
     """W0-03E-A1: the session user's tenant view — every record below is read through it."""
     return TenantData.for_user(db, user)
+
+
+IDEMPOTENCY_KEY_REQUIRED = "IDEMPOTENCY_KEY_REQUIRED"
+
+
+def _key_in_progress() -> HTTPException:
+    return HTTPException(status_code=409, detail={
+        "error_code": "IDEMPOTENCY_IN_PROGRESS",
+        "message": "Заявка с този Idempotency-Key още се обработва"})
+
+
+def _require_key(header: Optional[str]) -> str:
+    """R29 (Krum, 06.11.2026; PAY-01-C01 Addendum B): a money write without an
+    Idempotency-Key is refused — 428, before anything is read or written."""
+    key = header.strip() if isinstance(header, str) else ""
+    if not key:
+        raise HTTPException(status_code=428, detail={
+            "error_code": IDEMPOTENCY_KEY_REQUIRED,
+            "message": "Липсва Idempotency-Key — заявката не е записана"})
+    return key
+
+
+async def _once(user: dict, key: str, action: str, fingerprint: dict, work):
+    """Run the money write ``work()`` at most once per (tenant, action, key) — W0-04 registry.
+
+    * a new key → ``work()`` runs; its result is stored with the key;
+    * the same key and the same request again → the stored result, nothing written;
+    * the same key with a different request → 409 IDEMPOTENCY_KEY_REUSED;
+    * the same key while the first attempt has not finished → 409 IDEMPOTENCY_IN_PROGRESS;
+    * ``work()`` raised → the key is marked failed, so a clean retry may run it again."""
+    import json
+    from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
+                                       IDEMPOTENCY_STARTED, IdempotencyConflict, begin_idempotent,
+                                       complete_idempotent, fail_idempotent, request_fingerprint)
+    tenant_id = user["org_id"]
+    try:
+        state = await begin_idempotent(db, tenant_id=tenant_id, key=key, action=action,
+                                       request_fingerprint=request_fingerprint(fingerprint))
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "IDEMPOTENCY_KEY_REUSED",
+            "message": "Този Idempotency-Key вече е използван за друга заявка"})
+    if state["status"] == IDEMPOTENCY_DUPLICATE:
+        if state.get("prior_status") == IDEMPOTENCY_COMPLETED:
+            return json.loads(state["result_reference"])
+        raise _key_in_progress()
+    if state["status"] != IDEMPOTENCY_STARTED:
+        # #72 / W0-04-C01: IDEMPOTENCY_IN_PROGRESS — another request won the retake of a
+        # FAILED key. Only an explicit STARTED may run the write; anything else → 409.
+        raise _key_in_progress()
+    try:
+        result = await work()
+    except HTTPException as exc:
+        await fail_idempotent(db, tenant_id=tenant_id, key=key, action=action,
+                              error_code="HTTP_%d" % exc.status_code)
+        raise
+    except Exception:
+        await fail_idempotent(db, tenant_id=tenant_id, key=key, action=action, error_code="ERROR")
+        raise
+    stored = json.dumps(result, sort_keys=True, default=str)
+    await complete_idempotent(db, tenant_id=tenant_id, key=key, action=action, result_reference=stored)
+    return json.loads(stored)          # the first response is byte-for-byte what a replay returns
+
+
+async def _require_tenant_project(user: dict, project_id) -> None:
+    """FG-50 (PAY-01-C01 Addendum D): a money write that names a project must name a project
+    of THIS tenant — otherwise 422 before anything is written (no row, no key record)."""
+    if project_id is None or project_id == "":
+        return
+    if not isinstance(project_id, str) or not await _tenant(user).projects.get(project_id, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PROJECT_NOT_FOUND",
+            "message": "Обектът не съществува в тази фирма"})
 
 
 def finance_permission(user: dict) -> bool:
@@ -120,7 +199,7 @@ async def update_invoice_status(tenant: TenantData, invoice_id: str):
         return
     
     # Calculate paid amount from allocations
-    allocations = await tenant.payment_allocations.find({"invoice_id": invoice_id}).to_list(100)
+    allocations = await tenant.payment_allocations.find(active_allocations({"invoice_id": invoice_id})).to_list(100)
     paid_amount = sum(a.get("amount_allocated", 0) for a in allocations)
     remaining = round(invoice["total"] - paid_amount, 2)
     
@@ -375,11 +454,11 @@ async def list_accounts(user: dict = Depends(require_m5)):
     # Calculate current balance for each account
     for acc in accounts:
         inflows = await tenant.finance_payments.aggregate([
-            {"$match": {"account_id": acc["id"], "direction": "Inflow"}},
+            {"$match": active_payments({"account_id": acc["id"], "direction": "Inflow"})},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
         outflows = await tenant.finance_payments.aggregate([
-            {"$match": {"account_id": acc["id"], "direction": "Outflow"}},
+            {"$match": active_payments({"account_id": acc["id"], "direction": "Outflow"})},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
         inflow_total = inflows[0]["total"] if inflows else 0
@@ -393,161 +472,167 @@ async def list_accounts(user: dict = Depends(require_m5)):
 
 
 @router.post("/finance/transfers", status_code=201)
-async def create_transfer(data: dict, user: dict = Depends(require_m5)):
+async def create_transfer(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Move money between two own accounts (e.g. Bank → Cash withdrawal).
     Creates two linked finance_payments: an Outflow from the source and an Inflow to the
     destination. Net effect on total cash is zero; each account balance adjusts. No P&L impact."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    from_id = data.get("from_account_id")
-    to_id = data.get("to_account_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
-    if not from_id or not to_id or from_id == to_id:
-        raise HTTPException(status_code=400, detail="Изберете две различни сметки")
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    tenant = _tenant(user)
-    src = await tenant.financial_accounts.get(from_id)
-    dst = await tenant.financial_accounts.get(to_id)
-    if not src or not dst:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    note = data.get("note", "")
-    transfer_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
-    out_entry = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
-        "currency": src.get("currency", "EUR"), "date": date, "method": "Transfer",
-        "account_id": from_id, "counterparty_name": f"Прехвърляне към {dst.get('name', '')}",
-        "reference": transfer_id, "note": note, "transfer_id": transfer_id,
-        "created_at": now, "updated_at": now,
-    }
-    in_entry = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
-        "currency": dst.get("currency", "EUR"), "date": date, "method": "Transfer",
-        "account_id": to_id, "counterparty_name": f"Прехвърляне от {src.get('name', '')}",
-        "reference": transfer_id, "note": note, "transfer_id": transfer_id,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_many([out_entry, in_entry])
-    await log_audit(org, user["id"], user["email"], "transfer_created", "transfer", transfer_id,
-                    {"amount": amount, "from": from_id, "to": to_id})
-    return {"transfer_id": transfer_id, "amount": amount, "from_account_id": from_id, "to_account_id": to_id}
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
+
+    async def work():
+        org = user["org_id"]
+        from_id = data.get("from_account_id")
+        to_id = data.get("to_account_id")
+        if not from_id or not to_id or from_id == to_id:
+            raise HTTPException(status_code=400, detail="Изберете две различни сметки")
+        tenant = _tenant(user)
+        src = await tenant.financial_accounts.get(from_id)
+        dst = await tenant.financial_accounts.get(to_id)
+        if not src or not dst:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        note = data.get("note", "")
+        transfer_id = str(uuid.uuid4())
+        now = datetime.now(timezone.utc).isoformat()
+        out_entry = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
+            "currency": src.get("currency", "EUR"), "date": date, "method": "Transfer",
+            "account_id": from_id, "counterparty_name": f"Прехвърляне към {dst.get('name', '')}",
+            "reference": transfer_id, "note": note, "transfer_id": transfer_id,
+            "created_at": now, "updated_at": now,
+        }
+        in_entry = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+            "currency": dst.get("currency", "EUR"), "date": date, "method": "Transfer",
+            "account_id": to_id, "counterparty_name": f"Прехвърляне от {src.get('name', '')}",
+            "reference": transfer_id, "note": note, "transfer_id": transfer_id,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_many([out_entry, in_entry])
+        await log_audit(org, user["id"], user["email"], "transfer_created", "transfer", transfer_id,
+                        {"amount": amount, "from": from_id, "to": to_id})
+        return {"transfer_id": transfer_id, "amount": amount, "from_account_id": from_id, "to_account_id": to_id}
+
+    return await _once(user, key, "finance.transfer.create", {"body": data}, work)
 
 
 @router.post("/finance/account-funding", status_code=201)
-async def fund_account(data: dict, user: dict = Depends(require_m5)):
+async def fund_account(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Top up an account with outside cash (capital injection). Inflow only.
     This is NOT revenue — it does not feed P&L; it only raises the account balance."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    to_id = data.get("account_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
-    if not to_id:
-        raise HTTPException(status_code=400, detail="Изберете сметка")
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    tenant = _tenant(user)
-    dst = await tenant.financial_accounts.get(to_id)
-    if not dst:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
-        "currency": dst.get("currency", "EUR"), "date": date, "method": "Funding",
-        "account_id": to_id, "counterparty_name": "Захранване на сметка",
-        "reference": "", "note": data.get("note", ""), "is_funding": True,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
-    await log_audit(org, user["id"], user["email"], "account_funded", "payment", payment["id"],
-                    {"amount": amount, "account_id": to_id})
-    return {"id": payment["id"], "amount": amount, "account_id": to_id}
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
+
+    async def work():
+        org = user["org_id"]
+        to_id = data.get("account_id")
+        if not to_id:
+            raise HTTPException(status_code=400, detail="Изберете сметка")
+        tenant = _tenant(user)
+        dst = await tenant.financial_accounts.get(to_id)
+        if not dst:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+            "currency": dst.get("currency", "EUR"), "date": date, "method": "Funding",
+            "account_id": to_id, "counterparty_name": "Захранване на сметка",
+            "reference": "", "note": data.get("note", ""), "is_funding": True,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
+        await log_audit(org, user["id"], user["email"], "account_funded", "payment", payment["id"],
+                        {"amount": amount, "account_id": to_id})
+        return {"id": payment["id"], "amount": amount, "account_id": to_id}
+
+    return await _once(user, key, "finance.account_funding.create", {"body": data}, work)
 
 
 @router.post("/finance/other-expense", status_code=201)
-async def create_other_expense(data: dict, user: dict = Depends(require_m5)):
+async def create_other_expense(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Documentless cash expense (food, small/second-hand purchases) booked to a project.
     Creates a finance_payments Outflow (cash out of Каса/Банка) tagged category='Други' and a
     project_id, so it is counted as that project's expense in P&L (additive 'other_cost' line)."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    project_id = data.get("project_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    if not project_id:
-        raise HTTPException(status_code=400, detail="Изберете обект")
-    method = data.get("method") or "Cash"
-    tenant = _tenant(user)
-    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
-        "currency": account.get("currency", "EUR"), "date": date, "method": method,
-        "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
-        "reference": "", "note": data.get("note", ""),
-        "project_id": project_id, "category": "Други", "is_expense": True,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
-    await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
-                    {"amount": amount, "project_id": project_id})
-    return {"id": payment["id"], "amount": amount, "project_id": project_id}
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
+    await _require_tenant_project(user, data.get("project_id"))  # FG-50: unknown project → 422
+
+    async def work():
+        org = user["org_id"]
+        project_id = data.get("project_id")
+        if not project_id:
+            raise HTTPException(status_code=400, detail="Изберете обект")
+        method = data.get("method") or "Cash"
+        tenant = _tenant(user)
+        account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Outflow", "amount": amount,
+            "currency": account.get("currency", "EUR"), "date": date, "method": method,
+            "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
+            "reference": "", "note": data.get("note", ""),
+            "project_id": project_id, "category": "Други", "is_expense": True,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
+        await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
+                        {"amount": amount, "project_id": project_id})
+        return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+    return await _once(user, key, "finance.other_expense.create", {"body": data}, work)
 
 
 @router.post("/finance/other-income", status_code=201)
-async def create_other_income(data: dict, user: dict = Depends(require_m5)):
+async def create_other_income(data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Documentless cash income (proforma / deposit / cash receipt without a regular invoice).
     Creates a finance_payments Inflow into Каса/Банка tagged category='Други приход'. It is NOT
     P&L revenue (revenue comes from invoices) — it only affects cash."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    org = user["org_id"]
-    project_id = data.get("project_id")
-    try:
-        amount = round(float(data.get("amount") or 0), 2)
-    except (TypeError, ValueError):
-        amount = 0
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    method = data.get("method") or "Cash"
-    tenant = _tenant(user)
-    account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
-        "currency": account.get("currency", "EUR"), "date": date, "method": method,
-        "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
-        "reference": "", "note": data.get("note", ""),
-        "project_id": project_id, "category": "Други приход", "is_revenue": False,
-        "created_at": now, "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
-    await log_audit(org, user["id"], user["email"], "other_income_created", "payment", payment["id"],
-                    {"amount": amount, "project_id": project_id})
-    return {"id": payment["id"], "amount": amount, "project_id": project_id}
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    amount = positive_amount(data.get("amount"), places=2)  # PAY-01-C01: finite > 0, else 422
+    await _require_tenant_project(user, data.get("project_id"))  # FG-50: unknown project → 422
+
+    async def work():
+        org = user["org_id"]
+        project_id = data.get("project_id")
+        method = data.get("method") or "Cash"
+        tenant = _tenant(user)
+        account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Сметката не е намерена")
+        date = data.get("date") or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()), "org_id": org, "direction": "Inflow", "amount": amount,
+            "currency": account.get("currency", "EUR"), "date": date, "method": method,
+            "account_id": account_id, "counterparty_name": data.get("counterparty_name", ""),
+            "reference": "", "note": data.get("note", ""),
+            "project_id": project_id, "category": "Други приход", "is_revenue": False,
+            "created_at": now, "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
+        await log_audit(org, user["id"], user["email"], "other_income_created", "payment", payment["id"],
+                        {"amount": amount, "project_id": project_id})
+        return {"id": payment["id"], "amount": amount, "project_id": project_id}
+
+    return await _once(user, key, "finance.other_income.create", {"body": data}, work)
 
 
 @router.post("/finance/accounts", status_code=201)
@@ -597,9 +682,11 @@ async def delete_account(account_id: str, user: dict = Depends(require_m5)):
     
     # Check if any payments use this account
     tenant = _tenant(user)
+    # PAY-01: an account is "used" by ANY payment row — reversed ones included (they are
+    # history of real money). Only a never-used account may be removed.
     payment_count = await tenant.finance_payments.count({"account_id": account_id})
     if payment_count > 0:
-        raise HTTPException(status_code=400, detail="Cannot delete account with existing payments")
+        raise HTTPException(status_code=409, detail="Cannot delete account with existing payments")
     
     await tenant.financial_accounts.delete_one({"id": account_id})
     return {"ok": True}
@@ -850,7 +937,7 @@ async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     
     # Get allocations
     allocations = await tenant.payment_allocations.find(
-        {"invoice_id": invoice_id},
+        active_allocations({"invoice_id": invoice_id}),
         {"_id": 0}
     ).to_list(100)
     for alloc in allocations:
@@ -1041,7 +1128,7 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=400, detail="Cannot cancel paid invoices")
     
     # Check for allocations
-    alloc_count = await tenant.payment_allocations.count({"invoice_id": invoice_id})
+    alloc_count = await tenant.payment_allocations.count(active_allocations({"invoice_id": invoice_id}))
     if alloc_count > 0:
         raise HTTPException(status_code=400, detail="Cannot cancel invoice with payment allocations")
     
@@ -1066,8 +1153,12 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    # PAY-01: only an unused Draft may be removed. An official invoice, or a draft that
+    # ever had a payment allocation (cancelled ones included), is used → 409.
     if invoice["status"] != "Draft":
-        raise HTTPException(status_code=400, detail="Can only delete Draft invoices")
+        raise HTTPException(status_code=409, detail="Can only delete Draft invoices")
+    if await tenant.payment_allocations.count({"invoice_id": invoice_id}) > 0:
+        raise HTTPException(status_code=409, detail="Invoice has payment allocations — cancel it instead")
     
     await tenant.invoices.delete_one({"id": invoice_id})
     return {"ok": True}
@@ -1087,7 +1178,7 @@ async def list_invoice_payments(invoice_id: str, user: dict = Depends(require_m5
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     allocations = await tenant.payment_allocations.find(
-        {"invoice_id": invoice_id},
+        active_allocations({"invoice_id": invoice_id}),
         {"_id": 0}
     ).sort("allocated_at", -1).to_list(100)
     
@@ -1113,45 +1204,64 @@ async def list_invoice_payments(invoice_id: str, user: dict = Depends(require_m5
 
 
 @router.post("/finance/invoices/{invoice_id}/payments", status_code=201)
-async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(require_m5)):
+async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Quick-pay: create a payment and allocate it to this invoice in one step"""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    amount = positive_amount(data.get("amount"))  # PAY-01-C01: finite > 0, else 422
+
+    async def work():
+        org_id = user["org_id"]
+        tenant = _tenant(user)
+        # Addendum C: the remaining check and the writes run under the invoice lock, so two
+        # concurrent payments (quick-pay or allocate) can never pay more than the invoice.
+        async with _invoice_lock(tenant, invoice_id):
+            ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key)
+        updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})   # read after the unlock
+        return {
+            "ok": True,
+            "payment_id": ids["payment_id"],
+            "allocation_id": ids["allocation_id"],
+            "amount": amount,
+            "invoice": updated_invoice,
+        }
+
+    return await _once(user, key, "finance.invoice_payment.create", {"invoice_id": invoice_id, "body": data}, work)
+
+
+async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, data: dict,
+                            amount: float, key: str) -> dict:
+    """The quick-pay write, run while the invoice row is locked. The payment and allocation ids
+    are derived from the idempotency key and written as upserts (D5 rule): a retry of the same
+    key after a failure between the two writes never adds a second payment."""
     org_id = user["org_id"]
-    tenant = _tenant(user)
     invoice = await tenant.invoices.get(invoice_id)
-    if not invoice:
-        raise HTTPException(status_code=404, detail="Invoice not found")
-    
     if invoice["status"] in ["Draft", "Cancelled"]:
         raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
-    
-    amount = float(data.get("amount", 0))
-    if amount <= 0:
-        raise HTTPException(status_code=400, detail="Сумата трябва да е положителна")
-    
-    remaining = invoice.get("remaining_amount", invoice["total"])
+
+    payment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-quick-pay:%s:%s:%s" % (org_id, invoice_id, key)))
+    allocation_id = _allocation_id(org_id, payment_id, key, 0)
+    remaining = await _invoice_remaining(tenant, invoice, [allocation_id])
     if amount > remaining + 0.01:  # small tolerance for rounding
         raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
-    
+
     method = data.get("method") or data.get("payment_method", "BankTransfer")
     # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
     account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
     account = await tenant.financial_accounts.get(account_id)
     if not account:
         raise HTTPException(status_code=404, detail="Сметката не е намерена")
-    
+
     payment_direction = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
     payment_date = data.get("date") or data.get("payment_date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
     reference = data.get("reference") or data.get("payment_reference", "")
     note = data.get("note") or data.get("notes", "")
-    
     now = datetime.now(timezone.utc).isoformat()
-    
-    # Create payment
+
     payment = {
-        "id": str(uuid.uuid4()),
+        "id": payment_id,
         "org_id": org_id,
         "direction": payment_direction,
         "amount": amount,
@@ -1165,39 +1275,279 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         "created_at": now,
         "updated_at": now,
     }
-    await tenant.finance_payments.insert_one(payment)
-    
-    # Create allocation
+    await tenant.finance_payments.update_one({"id": payment_id}, {"$setOnInsert": payment}, upsert=True)
     allocation = {
-        "id": str(uuid.uuid4()),
+        "id": allocation_id,
         "org_id": org_id,
-        "payment_id": payment["id"],
+        "payment_id": payment_id,
         "invoice_id": invoice_id,
         "amount_allocated": amount,
         "allocated_at": now,
     }
-    await tenant.payment_allocations.insert_one(allocation)
-    
-    # Update invoice status
+    await tenant.payment_allocations.update_one({"id": allocation_id}, {"$setOnInsert": allocation}, upsert=True)
     await update_invoice_status(tenant, invoice_id)
-    
     await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
-                    {"amount": amount, "payment_id": payment["id"]})
-    
-    # Return updated invoice
-    updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
-    return {
-        "ok": True,
-        "payment_id": payment["id"],
-        "allocation_id": allocation["id"],
-        "amount": amount,
-        "invoice": updated_invoice,
+                    {"amount": amount, "payment_id": payment_id})
+    return {"payment_id": payment_id, "allocation_id": allocation_id}
+
+
+# ── PAY-01: reversal instead of delete (FLOW-006 §Корекции, FG-34) ──────────────
+
+class _Request:
+    """Reason + idempotency key of a reversal/cancellation request (body, query or header)."""
+
+    def __init__(self, body: Optional[dict], reason_q: Optional[str], idem_header: Optional[str]):
+        body = body if isinstance(body, dict) else {}
+        reason = body.get("reason") if body.get("reason") is not None else reason_q
+        self.reason = (reason or "").strip() if isinstance(reason, str) else ""
+        key = idem_header or body.get("idempotency_key")
+        self.key = key.strip() if isinstance(key, str) and key.strip() else None
+        if not self.reason:
+            raise HTTPException(status_code=400, detail={
+                "error_code": "REASON_REQUIRED", "message": "Посочете причина за сторното"})
+        check_reason(self.reason)  # PAY-01-C01: ≤ 500 chars, no control/invisible chars → 400
+        self.key = _require_key(self.key)  # R29: a reversal/cancel without a key → 428
+
+
+def _source_module_refusal(payment: Optional[dict]) -> Optional[HTTPException]:
+    """PAY-01-C01 Addendum A (FG-45): a payment owned by another module (pay run, hr
+    advance/loan/repayment, subcontractor) is reversed in that module, not here → 409."""
+    module = source_module(payment)
+    if module is None:
+        return None
+    return HTTPException(status_code=409, detail={
+        "error_code": SOURCE_MODULE_REVERSAL_REQUIRED, "source_module": module,
+        "message": "Плащането е създадено от друг модул (%s) — сторнирайте го там" % module})
+
+
+def _allocation_id(org_id: str, payment_id: str, idem_key: str, index: int) -> str:
+    """D5: deterministic id of the index-th allocation of an allocate request — one per key."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL,
+                          "beg-payment-allocation:%s:%s:%s:%d" % (org_id, payment_id, idem_key, index)))
+
+
+def _reversal_id(payment_id: str) -> str:
+    """Deterministic id of THE reversal row of a payment — at most one per original."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-payment-reversal:%s" % payment_id))
+
+
+async def _audit(user: dict, action: str, entity_type: str, entity_id: str, reason: str,
+                 diff: dict, idem_key: Optional[str]) -> None:
+    """Canonical W0-04 AuditEvent in the same database as the business write (D-08).
+    Written after the write (an event must never claim a write that did not happen)."""
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    event = build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action=action, source_flow="FLOW-006", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        entity_type=entity_type, entity_id=entity_id, reason=reason, structured_diff=diff,
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=idem_key,
+        source_channel="api",
+    )
+    await record_event(db, event)
+
+
+async def _audit_once(user: dict, action: str, entity_type: str, entity_id: str, reason: str,
+                      diff: dict, idem_key: Optional[str]) -> None:
+    """F-70-02: the canonical AuditEvent of a once-per-entity action (payment reversed,
+    allocation cancelled), recorded exactly once. Called on the normal path AND on the
+    recovery of an interrupted request — always under the payment lock, so the
+    check-then-write cannot race."""
+    from app.audit.store import has_event
+    if await has_event(db, tenant_id=user["org_id"], action=action, entity_id=entity_id):
+        return
+    await _audit(user, action, entity_type, entity_id, reason, diff, idem_key)
+
+
+async def _reversal_audit(user: dict, original: dict, idem_key: Optional[str]) -> None:
+    await _audit_once(user, "finance.payment.reversed", "finance.payment", original["id"],
+                      original.get("reversal_reason") or "", {
+                          "status": {"before": "active", "after": PAYMENT_REVERSED},
+                          "amount": original.get("amount"), "direction": original.get("direction"),
+                          "account_id": original.get("account_id"),
+                          "reversal_payment_id": original.get("reversed_by_payment_id")
+                          or _reversal_id(original["id"]),
+                      }, idem_key)
+
+
+async def _ensure_reversal_row(tenant: TenantData, user: dict, original: dict, now: str) -> str:
+    """Write the reversal row of an already-reversed original. Upsert on the deterministic
+    id, so a retry after a crash completes the pair and never writes a second one."""
+    rev_id = original.get("reversed_by_payment_id") or _reversal_id(original["id"])
+    entry = {
+        "org_id": original["org_id"],
+        "direction": opposite_direction(original.get("direction")),
+        "amount": original.get("amount", 0),
+        "currency": original.get("currency", "EUR"),
+        "date": now[:10],
+        "method": original.get("method"),
+        "account_id": original.get("account_id"),
+        "counterparty_name": original.get("counterparty_name", ""),
+        "reference": original.get("reference", ""),
+        "note": "Сторно: %s" % (original.get("reversal_reason") or ""),
+        "status": PAYMENT_REVERSAL,
+        "reverses_payment_id": original["id"],
+        "reversal_reason": original.get("reversal_reason"),
+        "created_by": user["id"],
+        "created_at": now,
+        "updated_at": now,
     }
+    for k in ("project_id", "category", "transfer_id", "user_id"):
+        if original.get(k) is not None:
+            entry[k] = original[k]
+    await tenant.finance_payments.update_one(
+        {"id": rev_id, "org_id": original["org_id"]}, {"$setOnInsert": entry}, upsert=True)
+    return rev_id
+
+
+PAYMENT_LOCK_STALE_SECONDS = 30
+ROW_LOCK_FIELD = "allocation_lock"
+
+
+@asynccontextmanager
+async def _row_lock(update, exists, row_id: str, busy_code: str, busy_message: str, not_found: str):
+    """C01A-1 / Addendum C: a short exclusive lock on ONE row (payment or invoice), taken with
+    one atomic conditional write. A concurrent holder → 409 ``busy_code``, nothing written;
+    a missing row → 404; a lock older than PAYMENT_LOCK_STALE_SECONDS (crashed holder) can
+    be taken over. Always released (by its own token). ``update(filter, change)`` and
+    ``exists()`` are the caller's TenantData calls (so every access stays tenant-scoped)."""
+    token = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    stale = (now - timedelta(seconds=PAYMENT_LOCK_STALE_SECONDS)).isoformat()
+    won = await update(
+        {"id": row_id, "$or": [{ROW_LOCK_FIELD: {"$exists": False}},
+                               {ROW_LOCK_FIELD + ".at": {"$lt": stale}}]},
+        {"$set": {ROW_LOCK_FIELD: {"token": token, "at": now.isoformat()}}})
+    if won.modified_count != 1:
+        if not await exists():
+            raise HTTPException(status_code=404, detail=not_found)
+        raise HTTPException(status_code=409, detail={"error_code": busy_code, "message": busy_message})
+    try:
+        yield
+    finally:
+        await update({"id": row_id, ROW_LOCK_FIELD + ".token": token},
+                     {"$unset": {ROW_LOCK_FIELD: ""}})
+
+
+def _payment_lock(tenant: TenantData, payment_id: str):
+    return _row_lock(lambda flt, change: tenant.finance_payments.update_one(flt, change),
+                     lambda: tenant.finance_payments.get(payment_id, {"_id": 0, "id": 1}),
+                     payment_id, "PAYMENT_BUSY",
+                     "Плащането се обработва от друга заявка — опитайте отново", "Payment not found")
+
+
+def _invoice_lock(tenant: TenantData, invoice_id: str):
+    return _row_lock(lambda flt, change: tenant.invoices.update_one(flt, change),
+                     lambda: tenant.invoices.get(invoice_id, {"_id": 0, "id": 1}),
+                     invoice_id, "INVOICE_BUSY",
+                     "Фактурата се обработва от друга заявка — опитайте отново",
+                     "Invoice %s not found" % invoice_id)
+
+
+async def _invoice_remaining(tenant: TenantData, invoice: dict, exclude_ids=()) -> float:
+    """Open amount of an invoice from its ACTIVE allocations (the rule of update_invoice_status),
+    read under the invoice lock — never from the stored, possibly stale remaining_amount."""
+    flt = {"invoice_id": invoice["id"]}
+    if exclude_ids:
+        flt["id"] = {"$nin": list(exclude_ids)}
+    paid = await tenant.payment_allocations.find(active_allocations(flt)).to_list(1000)
+    return round(invoice["total"] - sum(a.get("amount_allocated", 0) for a in paid), 2)
+
+
+async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: str,
+                       idem_key: Optional[str]) -> Optional[dict]:
+    """Reverse ONE active payment. One atomic conditional write decides the winner;
+    a payment already reversed (or a reversal row) matches nothing → None.
+
+    C01A-1: a payment owned by another module is NEVER reversed here, whoever the caller is
+    (409 SOURCE_MODULE_REVERSAL_REQUIRED). The origin fields are written once, at creation,
+    so this read cannot race with the write below."""
+    from pymongo import ReturnDocument
+    refusal = _source_module_refusal(await tenant.finance_payments.get(payment_id, {"_id": 0}))
+    if refusal is not None:
+        raise refusal
+    now = datetime.now(timezone.utc).isoformat()
+    rev_id = _reversal_id(payment_id)
+    original = await tenant.finance_payments.find_one_and_update(
+        active_payments({"id": payment_id}),
+        {"$set": {"status": PAYMENT_REVERSED, "reversed_by_payment_id": rev_id,
+                  "reversed_at": now, "reversed_by": user["id"],
+                  "reversal_reason": reason, "updated_at": now}},
+        return_document=ReturnDocument.AFTER)
+    if not original:
+        return None
+    original.pop("_id", None)
+    await _ensure_reversal_row(tenant, user, original, now)
+    await _reversal_audit(user, original, idem_key)
+    return {"payment_id": payment_id, "reversal_payment_id": rev_id}
+
+
+async def _begin(user: dict, req: "_Request", action: str, fingerprint: dict):
+    """Idempotency (W0-04): replay of a completed key → its stored result; a key reused for
+    another request → 409. Returns (retry, done_result): ``retry`` is True only for the SAME
+    key whose first attempt started and never completed (crash/in flight) — that request
+    may finish the work. A new key on an already reversed record is a second reversal → 409."""
+    if not req.key:
+        return False, None
+    from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
+                                       IDEMPOTENCY_STARTED, IdempotencyConflict, begin_idempotent,
+                                       request_fingerprint)
+    try:
+        state = await begin_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
+                                       request_fingerprint=request_fingerprint(fingerprint))
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "IDEMPOTENCY_KEY_REUSED",
+            "message": "Този Idempotency-Key вече е използван за друга заявка"})
+    if state["status"] == IDEMPOTENCY_DUPLICATE:
+        if state.get("prior_status") == IDEMPOTENCY_COMPLETED:
+            import json
+            return True, json.loads(state["result_reference"])
+        return True, None
+    if state["status"] != IDEMPOTENCY_STARTED:
+        # #72 / W0-04-C01: IDEMPOTENCY_IN_PROGRESS (lost the retake of a FAILED key) → 409
+        raise _key_in_progress()
+    return False, None
+
+
+async def _refuse(user: dict, req: "_Request", action: str, detail) -> HTTPException:
+    """409 after the key was reserved: mark the key failed, so it never replays a success."""
+    if req.key:
+        from app.audit.idempotency import fail_idempotent
+        await fail_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
+                              error_code="CONFLICT")
+    return HTTPException(status_code=409, detail=detail)
+
+
+async def _complete(user: dict, req: "_Request", action: str, result: dict) -> None:
+    if req.key:
+        import json
+        from app.audit.idempotency import complete_idempotent
+        await complete_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
+                                  result_reference=json.dumps(result, sort_keys=True))
+
+
+async def _repair_pair(tenant: TenantData, user: dict, payment: dict,
+                       idem_key: Optional[str] = None) -> None:
+    """A reversed original whose reversal row and/or canonical AuditEvent is missing (an
+    interrupted request) gets them now — the retry completes the pair AND its audit, each
+    exactly once (deterministic row id + upsert; event identity = action + payment id)."""
+    if payment.get("status") == PAYMENT_REVERSED:
+        await _ensure_reversal_row(tenant, user, payment, datetime.now(timezone.utc).isoformat())
+        await _reversal_audit(user, payment, idem_key)
 
 
 @router.delete("/finance/invoices/{invoice_id}/payments/{allocation_id}")
-async def remove_invoice_payment(invoice_id: str, allocation_id: str, user: dict = Depends(require_m5)):
-    """Remove a payment allocation from an invoice"""
+async def remove_invoice_payment(invoice_id: str, allocation_id: str,
+                                 body: Optional[dict] = Body(None),
+                                 reason: Optional[str] = Query(None),
+                                 idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                                 user: dict = Depends(require_m5)):
+    """Cancel a payment allocation of an invoice (PAY-01: nothing is deleted).
+
+    The allocation gets status "cancelled". When the payment has no active allocation
+    left, it is reversed (the same visible effect the old delete had: the payment no
+    longer counts anywhere). Invoice paid/remaining are recomputed from active rows."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -1213,22 +1563,71 @@ async def remove_invoice_payment(invoice_id: str, allocation_id: str, user: dict
     alloc = await tenant.payment_allocations.find_one({"id": allocation_id, "invoice_id": invoice_id})
     if not alloc:
         raise HTTPException(status_code=404, detail="Разпределението не е намерено")
+    req = _Request(body, reason, idempotency_key)
+    # FG-45: cancelling the LAST active allocation reverses the payment → refuse that for a
+    # payment another module owns (nothing written: checked before the idempotency key).
+    owner_payment = await tenant.finance_payments.get(alloc["payment_id"], {"_id": 0})
+    refusal = _source_module_refusal(owner_payment)
+    # C01A-1 / F-70-01: every cancel runs under the payment lock, then the invoice lock (the
+    # order allocate uses), so cancel, allocate and reversal of one payment are serialised:
+    # two concurrent cancels of a module-owned payment cannot both see "another allocation
+    # remains", and a cancel that reverses a payment cannot race with a new allocation.
+    async with AsyncExitStack() as locks:
+        await locks.enter_async_context(_payment_lock(tenant, alloc["payment_id"]))
+        await locks.enter_async_context(_invoice_lock(tenant, invoice_id))
+        if refusal is not None:
+            others = await tenant.payment_allocations.count(active_allocations(
+                {"payment_id": alloc["payment_id"], "id": {"$ne": allocation_id}}))
+            if others == 0:
+                raise refusal
+        return await _cancel_allocation(tenant, user, invoice_id, allocation_id, alloc, req)
+
+
+async def _cancel_allocation(tenant: TenantData, user: dict, invoice_id: str, allocation_id: str,
+                             alloc: dict, req: "_Request") -> dict:
+    """The write part of an allocation cancel (idempotency key, conditional cancel, AuditEvent,
+    reversal of a payment left with no active allocation, invoice recompute)."""
+    org_id = user["org_id"]
+    action = "finance.allocation.cancel"
+    retry, done = await _begin(user, req, action, {"allocation_id": allocation_id, "reason": req.reason})
+    if done is not None:
+        return done
     
-    # Delete the allocation
-    await tenant.payment_allocations.delete_one({"id": allocation_id})
+    now = datetime.now(timezone.utc).isoformat()
+    won = await tenant.payment_allocations.update_one(
+        active_allocations({"id": allocation_id, "invoice_id": invoice_id}),
+        {"$set": {"status": ALLOCATION_CANCELLED, "cancelled_at": now, "cancelled_by": user["id"],
+                  "cancel_reason": req.reason}})
+    if won.modified_count != 1 and not retry:
+        raise await _refuse(user, req, action, "Разпределението вече е отменено")
+    # F-70-02: on the first run AND on a retry whose first attempt was interrupted, the
+    # canonical cancel event is recorded exactly once (identity: action + allocation id)
+    await _audit_once(user, "finance.allocation.cancelled", "finance.payment_allocation", allocation_id,
+                      req.reason, {"status": {"before": "active", "after": ALLOCATION_CANCELLED},
+                                   "invoice_id": invoice_id, "payment_id": alloc["payment_id"],
+                                   "amount_allocated": alloc.get("amount_allocated")}, req.key)
     
-    # Check if the payment has any remaining allocations, if not delete it too
-    remaining_allocs = await tenant.payment_allocations.count({"payment_id": alloc["payment_id"]})
+    # The payment has no active allocation left → it is reversed (never deleted).
+    reversed_ = None
+    remaining_allocs = await tenant.payment_allocations.count(active_allocations({"payment_id": alloc["payment_id"]}))
     if remaining_allocs == 0:
-        await tenant.finance_payments.delete_one({"id": alloc["payment_id"]})
+        reversed_ = await _reverse_one(tenant, user, alloc["payment_id"], req.reason, req.key)
+        if reversed_ is None:
+            payment = await tenant.finance_payments.get(alloc["payment_id"], {"_id": 0})
+            if payment:
+                await _repair_pair(tenant, user, payment, req.key)
     
     # Update invoice status
     await update_invoice_status(tenant, invoice_id)
     
     await log_audit(org_id, user["id"], user["email"], "invoice_payment_removed", "invoice", invoice_id,
-                    {"allocation_id": allocation_id})
+                    {"allocation_id": allocation_id, "reason": req.reason,
+                     "reversed_payment_id": (reversed_ or {}).get("payment_id")})
     
-    return {"ok": True}
+    result = {"ok": True, "allocation_id": allocation_id, "status": ALLOCATION_CANCELLED,
+              "reversal": reversed_}
+    await _complete(user, req, action, result)
+    return result
 
 
 # ── Payments ───────────────────────────────────────────────────────
@@ -1240,6 +1639,7 @@ async def list_payments(
     direction: Optional[str] = None,
     from_date: Optional[str] = None,
     to_date: Optional[str] = None,
+    include_reversed: bool = False,
 ):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -1255,6 +1655,9 @@ async def list_payments(
     if to_date:
         query.setdefault("date", {})["$lte"] = to_date
     
+    # PAY-01: a reversed payment and its reversal row are history, not money — hidden by default.
+    if not include_reversed:
+        query = active_payments(query)
     payments = await tenant.finance_payments.find(query, {"_id": 0}).sort("date", -1).to_list(500)
     
     # Enrich with account name and allocation info
@@ -1264,7 +1667,7 @@ async def list_payments(
         pay["account_type"] = acc["type"] if acc else ""
         
         # Get allocations
-        allocations = await tenant.payment_allocations.find({"payment_id": pay["id"]}, {"_id": 0}).to_list(100)
+        allocations = await tenant.payment_allocations.find(active_allocations({"payment_id": pay["id"]}), {"_id": 0}).to_list(100)
         allocated = sum(a.get("amount_allocated", 0) for a in allocations)
         pay["allocated_amount"] = round(allocated, 2)
         pay["unallocated_amount"] = round(pay["amount"] - allocated, 2)
@@ -1286,39 +1689,45 @@ async def list_payments(
 
 
 @router.post("/finance/payments", status_code=201)
-async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5)):
+async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    amount = positive_amount(data.amount)  # PAY-01-C01: finite > 0, else 422, nothing written
+
+    async def work():
+        # Route to the correct account: cash → Каса, otherwise the chosen account.
+        tenant = _tenant(user)
+        account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
+        account = await tenant.financial_accounts.get(account_id)
+        if not account:
+            raise HTTPException(status_code=404, detail="Account not found")
     
-    # Route to the correct account: cash → Каса, otherwise the chosen account.
-    tenant = _tenant(user)
-    account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
-    account = await tenant.financial_accounts.get(account_id)
-    if not account:
-        raise HTTPException(status_code=404, detail="Account not found")
+        now = datetime.now(timezone.utc).isoformat()
+        payment = {
+            "id": str(uuid.uuid4()),
+            "org_id": user["org_id"],
+            "direction": data.direction,
+            "amount": amount,
+            "currency": data.currency,
+            "date": data.date,
+            "method": data.method,
+            "account_id": account_id,
+            "counterparty_name": data.counterparty_name,
+            "reference": data.reference,
+            "note": data.note,
+            "created_at": now,
+            "updated_at": now,
+        }
+        await tenant.finance_payments.insert_one(payment)
     
-    now = datetime.now(timezone.utc).isoformat()
-    payment = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "direction": data.direction,
-        "amount": data.amount,
-        "currency": data.currency,
-        "date": data.date,
-        "method": data.method,
-        "account_id": account_id,
-        "counterparty_name": data.counterparty_name,
-        "reference": data.reference,
-        "note": data.note,
-        "created_at": now,
-        "updated_at": now,
-    }
-    await tenant.finance_payments.insert_one(payment)
+        await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
+                        {"amount": amount, "direction": data.direction, "account_id": account_id})
     
-    await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
-                    {"amount": data.amount, "direction": data.direction, "account_id": account_id})
-    
-    return {k: v for k, v in payment.items() if k != "_id"}
+        return {k: v for k, v in payment.items() if k != "_id"}
+
+    return await _once(user, key, "finance.payment.create", {"body": data.model_dump()}, work)
 
 
 @router.get("/finance/payments/{payment_id}")
@@ -1336,7 +1745,7 @@ async def get_payment(payment_id: str, user: dict = Depends(require_m5)):
     payment["account_name"] = acc["name"] if acc else "Unknown"
     
     # Get allocations
-    allocations = await tenant.payment_allocations.find({"payment_id": payment_id}, {"_id": 0}).to_list(100)
+    allocations = await tenant.payment_allocations.find(active_allocations({"payment_id": payment_id}), {"_id": 0}).to_list(100)
     for alloc in allocations:
         inv = await tenant.invoices.get(alloc.get("invoice_id"), {"_id": 0, "invoice_no": 1, "direction": 1, "total": 1})
         if inv:
@@ -1353,95 +1762,202 @@ async def get_payment(payment_id: str, user: dict = Depends(require_m5)):
 
 
 @router.post("/finance/payments/{payment_id}/allocate")
-async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: dict = Depends(require_m5)):
+async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: dict = Depends(require_m5),
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
-    tenant = _tenant(user)
-    payment = await tenant.finance_payments.get(payment_id)
-    if not payment:
-        raise HTTPException(status_code=404, detail="Payment not found")
-    
-    # Get current allocations
-    existing_allocs = await tenant.payment_allocations.find({"payment_id": payment_id}).to_list(100)
-    current_allocated = sum(a.get("amount_allocated", 0) for a in existing_allocs)
-    available = payment["amount"] - current_allocated
-    
-    now = datetime.now(timezone.utc).isoformat()
-    results = []
-    
-    for alloc in data.allocations:
-        if alloc.amount <= 0:
-            continue
-        
-        # Check payment has enough available
-        if alloc.amount > available:
-            raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({available})")
-        
-        # Check invoice exists and has remaining
-        invoice = await tenant.invoices.get(alloc.invoice_id)
-        if not invoice:
-            raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
-        if invoice["status"] == "Cancelled":
-            raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
-        
-        remaining = invoice.get("remaining_amount", invoice["total"])
-        if alloc.amount > remaining:
-            raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({remaining})")
-        
-        # Check direction match
-        expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
-        if payment["direction"] != expected_dir:
-            raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
-        
-        # Create allocation
-        allocation = {
-            "id": str(uuid.uuid4()),
-            "org_id": user["org_id"],
-            "payment_id": payment_id,
-            "invoice_id": alloc.invoice_id,
-            "amount_allocated": alloc.amount,
-            "allocated_at": now,
-        }
-        await tenant.payment_allocations.insert_one(allocation)
-        results.append({k: v for k, v in allocation.items() if k != "_id"})
-        
-        available -= alloc.amount
-        
-        # Update invoice status
-        await update_invoice_status(tenant, alloc.invoice_id)
-    
-    await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
-                    {"allocations": len(results)})
-    
-    return {"ok": True, "allocations": results}
+    key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
+    # PAY-01-C01: every amount is checked BEFORE the first allocation is written (422, 0 rows)
+    amounts = [positive_amount(a.amount, field="allocations[%d].amount" % i)
+               for i, a in enumerate(data.allocations)]
+
+    async def work():
+        """D5 (CLAUDE.md §14, FLOW-006): an allocate request is all-or-nothing and can never
+        count a payment twice.
+          1. every item is validated (payment available, invoice remaining — cumulative
+             within the request) BEFORE the first write: a refusal leaves no allocation;
+          2. each allocation id is derived from (tenant, payment, idempotency key, item
+             index) and written with an upsert: a retry of the same key (after a failure
+             between the writes) finds the rows it already wrote and never adds a second."""
+        tenant = _tenant(user)
+        # Addendum C (D5-R1/R2): the "available" checks and the writes are atomic against the
+        # payment AND every invoice — both rows are locked (sorted order, try-lock: a
+        # concurrent request gets 409 PAYMENT_BUSY / INVOICE_BUSY and writes nothing).
+        async with AsyncExitStack() as locks:
+            await locks.enter_async_context(_payment_lock(tenant, payment_id))
+            for inv_id in sorted({a.invoice_id for a in data.allocations}):
+                await locks.enter_async_context(_invoice_lock(tenant, inv_id))
+            payment = await tenant.finance_payments.get(payment_id)
+            if not payment:
+                raise HTTPException(status_code=404, detail="Payment not found")
+            if not payment_counts(payment):
+                raise HTTPException(status_code=409, detail="Сторнирано плащане (или сторно запис) не се разпределя")
+
+            own_ids = [_allocation_id(user["org_id"], payment_id, key, i) for i in range(len(amounts))]
+            # rows this same key already wrote (a failed earlier attempt) do not count against it
+            existing_allocs = await tenant.payment_allocations.find(
+                active_allocations({"payment_id": payment_id, "id": {"$nin": own_ids}})).to_list(1000)
+            available = payment["amount"] - sum(a.get("amount_allocated", 0) for a in existing_allocs)
+
+            # 1. validate everything first
+            planned_by_invoice = {}
+            invoices = {}
+            for alloc, amount in zip(data.allocations, amounts):
+                if amount > available + 1e-9:
+                    raise HTTPException(status_code=400, detail=f"Allocation exceeds available payment amount ({round(available, 2)})")
+                invoice = invoices.get(alloc.invoice_id) or await tenant.invoices.get(alloc.invoice_id)
+                if not invoice:
+                    raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
+                if invoice["status"] == "Cancelled":
+                    raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
+                expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
+                if payment["direction"] != expected_dir:
+                    raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
+                if alloc.invoice_id not in invoices:
+                    invoices[alloc.invoice_id] = invoice
+                    invoice["_remaining"] = await _invoice_remaining(tenant, invoice, own_ids)
+                remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
+                if amount > remaining + 1e-9:
+                    raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
+                planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount
+                available -= amount
+
+            # 2. write: deterministic ids, upsert (a retry of the same key never duplicates)
+            now = datetime.now(timezone.utc).isoformat()
+            results = []
+            for i, (alloc, amount) in enumerate(zip(data.allocations, amounts)):
+                allocation = {
+                    "id": own_ids[i],
+                    "org_id": user["org_id"],
+                    "payment_id": payment_id,
+                    "invoice_id": alloc.invoice_id,
+                    "amount_allocated": amount,
+                    "allocated_at": now,
+                }
+                await tenant.payment_allocations.update_one(
+                    {"id": own_ids[i]}, {"$setOnInsert": dict(allocation)}, upsert=True)
+                results.append(allocation)
+            for invoice_id in planned_by_invoice:
+                await update_invoice_status(tenant, invoice_id)
+
+        await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
+                        {"allocations": len(results)})
+
+        return {"ok": True, "allocations": results}
+
+    return await _once(user, key, "finance.payment.allocate", {"payment_id": payment_id, "body": data.model_dump()}, work)
 
 
 @router.delete("/finance/payments/{payment_id}")
-async def delete_payment(payment_id: str, user: dict = Depends(require_m5)):
+async def delete_payment(payment_id: str,
+                         body: Optional[dict] = Body(None),
+                         reason: Optional[str] = Query(None),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                         user: dict = Depends(require_m5)):
+    """PAY-01: a payment is never deleted — it is REVERSED (FLOW-006 §Корекции).
+
+    The original stays (status "reversed", link to its reversal); a reversal row with the
+    opposite direction is added; every report excludes the pair (net 0). A reason is
+    required. A second reversal → 409; a retry with the same Idempotency-Key returns the
+    first result. Both legs of an own-account transfer are reversed together."""
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     tenant = _tenant(user)
-    payment = await tenant.finance_payments.get(payment_id)
+    payment = await tenant.finance_payments.get(payment_id, {"_id": 0})
     if not payment:
         raise HTTPException(status_code=404, detail="Payment not found")
-    # SUB-ADV-01 (FG-45, as PR #70): the ledger row of a subcontractor ADVANCE belongs to the
-    # package's advance record; deleting it here would leave the advance (and what was
-    # deducted from it) in the package with no cash behind it. Refused, nothing written,
-    # until the module has its own reversal (PAY-01 Part 2).
-    if payment.get("subcontractor_advance"):
-        raise HTTPException(status_code=409, detail={
-            "error_code": "SOURCE_MODULE_REVERSAL_REQUIRED", "source_module": "subcontractor",
-            "message": "Авансът към подизпълнител се сторнира в модула Подизпълнители"})
+    req = _Request(body, reason, idempotency_key)
+    refusal = _source_module_refusal(payment)   # FG-45: nothing written (before the key)
+    if refusal is not None:
+        raise refusal
+    # F-70-01: the reversal is serialised with allocate / cancel on the SAME payment lock;
+    # for an own-account transfer both legs are locked, in a stable (sorted) order. The
+    # payment is re-read under the locks — the allocation check and the reversal decide on
+    # committed state, so a concurrent allocate can no longer slip in between.
+    leg_ids = {payment_id}
+    if payment.get("transfer_id"):
+        rows = await tenant.finance_payments.find(
+            {"transfer_id": payment["transfer_id"]}, {"_id": 0, "id": 1, "status": 1}).to_list(10)
+        leg_ids |= {r["id"] for r in rows if r.get("status") != PAYMENT_REVERSAL}
+    async with AsyncExitStack() as locks:
+        for leg_id in sorted(leg_ids):
+            await locks.enter_async_context(_payment_lock(tenant, leg_id))
+        payment = await tenant.finance_payments.get(payment_id, {"_id": 0})
+        action = "finance.payment.reverse"
+        retry, done = await _begin(user, req, action, {"payment_id": payment_id, "reason": req.reason})
+        if done is not None:
+            return done
     
-    # Check for allocations
-    alloc_count = await tenant.payment_allocations.count({"payment_id": payment_id})
-    if alloc_count > 0:
-        raise HTTPException(status_code=400, detail="Cannot delete payment with allocations")
-    
-    await tenant.finance_payments.delete_one({"id": payment_id})
-    return {"ok": True}
+        if payment.get("status") == PAYMENT_REVERSAL:
+            raise await _refuse(user, req, action, "Това е сторно запис — не се сторнира")
+        # F-70-03: the legs are ALL original rows of the transfer — active AND already reversed
+        # (an interrupted request may have reversed leg 2 without its reversal row or event);
+        # reversal rows themselves are not legs. The URL payment first, then by id.
+        legs = [payment]
+        if payment.get("transfer_id"):
+            legs = await tenant.finance_payments.find(
+                {"transfer_id": payment["transfer_id"], "status": {"$ne": PAYMENT_REVERSAL}},
+                {"_id": 0}).to_list(10) or legs
+            legs.sort(key=lambda leg: (leg["id"] != payment_id, leg["id"]))
+        if payment.get("status") == PAYMENT_REVERSED and not retry:
+            # PAY70-04: a NEW key on a payment that is already reversed (the UI makes a fresh
+            # key per click, e.g. after a 500). Still 409 — it is not a second reversal — but an
+            # interrupted transfer reversal is completed first: a leg that still counts is
+            # reversed (with the original reason), every reversed leg gets its missing row /
+            # event, each exactly once. The answer shows the repaired state of every leg.
+            completed = []
+            for leg in legs:
+                if not payment_counts(leg):
+                    continue
+                if await tenant.payment_allocations.count(active_allocations({"payment_id": leg["id"]})):
+                    raise await _refuse(user, req, action, {
+                        "error_code": "TRANSFER_LEG_ALLOCATED",
+                        "message": "Другият крак на прехвърлянето има разпределения — отменете ги първо"})
+                if await _reverse_one(tenant, user, leg["id"], payment.get("reversal_reason") or req.reason,
+                                      req.key) is not None:
+                    completed.append(leg["id"])
+            state = []
+            for leg in legs:
+                current = await tenant.finance_payments.get(leg["id"], {"_id": 0})
+                await _repair_pair(tenant, user, current, req.key)
+                state.append({"payment_id": leg["id"], "status": current.get("status"),
+                              "reversal_payment_id": current.get("reversed_by_payment_id") or _reversal_id(leg["id"])})
+            raise await _refuse(user, req, action, {
+                "error_code": "PAYMENT_ALREADY_REVERSED", "message": "Плащането вече е сторнирано",
+                "reversals": state, "completed_legs": completed})
+
+        # Check for allocations (cancel them on the invoice first — unchanged rule)
+        for leg in legs:
+            if not payment_counts(leg):
+                continue
+            alloc_count = await tenant.payment_allocations.count(active_allocations({"payment_id": leg["id"]}))
+            if alloc_count > 0:
+                if req.key:
+                    from app.audit.idempotency import fail_idempotent
+                    await fail_idempotent(db, tenant_id=user["org_id"], key=req.key, action=action,
+                                          error_code="HAS_ALLOCATIONS")
+                raise HTTPException(status_code=400, detail="Cannot delete payment with allocations")
+
+        # Every leg ends reversed WITH its reversal row and its canonical event, each exactly
+        # once, before the key is completed: an active leg is reversed; a leg an interrupted
+        # attempt already reversed gets its missing row / event (_repair_pair).
+        for leg in legs:
+            done_now = None
+            if payment_counts(leg):
+                done_now = await _reverse_one(tenant, user, leg["id"], req.reason, req.key)
+            if done_now is None:
+                current = await tenant.finance_payments.get(leg["id"], {"_id": 0})
+                await _repair_pair(tenant, user, current, req.key)
+        reversals = [{"payment_id": leg["id"],
+                      "reversal_payment_id": leg.get("reversed_by_payment_id") or _reversal_id(leg["id"])}
+                     for leg in legs]
+
+        await log_audit(user["org_id"], user["id"], user["email"], "payment_reversed", "payment", payment_id,
+                        {"reason": req.reason, "reversals": reversals})
+        result = {"ok": True, "payment_id": payment_id, "status": PAYMENT_REVERSED, "reversals": reversals}
+        await _complete(user, req, action, result)
+        return result
 
 
 # ── Finance Stats ──────────────────────────────────────────────────
@@ -1506,11 +2022,11 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
     bank_balance = 0
     for acc in accounts:
         inflows = await tenant.finance_payments.aggregate([
-            {"$match": {"account_id": acc["id"], "direction": "Inflow"}},
+            {"$match": active_payments({"account_id": acc["id"], "direction": "Inflow"})},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
         outflows = await tenant.finance_payments.aggregate([
-            {"$match": {"account_id": acc["id"], "direction": "Outflow"}},
+            {"$match": active_payments({"account_id": acc["id"], "direction": "Outflow"})},
             {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
         ]).to_list(1)
         opening = acc.get("opening_balance", acc.get("balance", 0)) or 0

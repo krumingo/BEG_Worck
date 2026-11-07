@@ -17,6 +17,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.tenancy import project_team
 from app.services.paid_labor import paid_labor_for_projects_v3
+from app.services.payment_state import active_allocations
 from app.deps.auth import (
     get_current_user, require_admin,
     can_access_project, can_manage_project, get_user_project_ids,
@@ -1283,8 +1284,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_ids = [inv.get("id") for inv in invoices if inv.get("id")]
     all_allocations = []
     if invoice_ids:
-        all_allocations = await tenant.payment_allocations.find(
-            {"invoice_id": {"$in": invoice_ids}},
+        all_allocations = await tenant.payment_allocations.find(  # PAY-01: cancelled ones are history
+            active_allocations({"invoice_id": {"$in": invoice_ids}}),
             {"_id": 0}
         ).sort("allocated_at", -1).to_list(2000)
     

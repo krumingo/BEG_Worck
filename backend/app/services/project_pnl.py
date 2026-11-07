@@ -4,6 +4,7 @@ Aggregates data from ALL sources into a unified financial view.
 """
 from app.db import db
 from app.tenancy.data_access import TenantData
+from app.services.payment_state import active_payments
 
 
 async def compute_project_pnl(org_id: str, project_id: str) -> dict:
@@ -114,8 +115,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
 
     # ── f2. OTHER — documentless cash expenses booked straight to the project ──
-    other_docs = await tenant.finance_payments.find(
-        {"org_id": org_id, "project_id": project_id, "direction": "Outflow", "category": "Други"},
+    other_docs = await tenant.finance_payments.find(  # PAY-01: a reversed pair counts 0
+        active_payments({"org_id": org_id, "project_id": project_id, "direction": "Outflow", "category": "Други"}),
         {"_id": 0, "amount": 1},
     ).to_list(500)
     other_cost = round(sum(p.get("amount", 0) for p in other_docs), 2)

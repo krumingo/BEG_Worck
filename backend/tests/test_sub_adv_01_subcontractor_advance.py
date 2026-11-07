@@ -378,7 +378,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             adv_row = tc.portal.call(lambda: op_db.finance_payments.find_one(
                 {"subcontractor_advance": True}, {"_id": 0, "id": 1}))
             reversal.append({"mode": mode, **slim(call(
-                "DELETE", "accountant", "/api/finance/payments/%s" % adv_row["id"], None))})
+                "DELETE", "accountant", "/api/finance/payments/%s" % adv_row["id"],
+                {"reason": "Опит за сторно на аванс от финанси"}))})   # PAY-01 (#70): reason required
             flows.append(f)
             restore_all()
             # ── refusals: nothing written
@@ -743,10 +744,15 @@ def test_the_routes_check_the_role_before_any_read_and_take_the_key():
 
 
 def test_the_advance_ledger_row_is_not_hard_deleted():
+    """After the merge of #70 (PAY-01): a payment is reversed, never deleted, and a row owned
+    by another module is refused (FG-45). The advance's ledger row carries
+    ``subcontractor_payment_id`` -> classified as the subcontractor module's row."""
+    from app.services.payment_state import source_module
     from app.routes import finance
-    src = inspect.getsource(finance.delete_payment)
-    assert src.index('subcontractor_advance') < src.index("delete_one")
-    assert "SOURCE_MODULE_REVERSAL_REQUIRED" in src
+    assert source_module({"subcontractor_payment_id": "adv-1",
+                          "subcontractor_advance": True}) == "subcontractor"
+    assert finance._source_module_refusal({"subcontractor_payment_id": "adv-1"}) is not None
+    assert "finance_payments.delete_one" not in inspect.getsource(finance)
 
 
 def test_reason_rule():

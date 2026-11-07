@@ -1,0 +1,22 @@
+[2026-11-06T20:40:22Z] W0-09A deploy: base=/tmp/claude-0/-home-user-BEG-Worck/aa21524c-c5e4-5ce0-984f-6c1cec35b2fb/scratchpad/st02c03/run bundle=/tmp/claude-0/-home-user-BEG-Worck/aa21524c-c5e4-5ce0-984f-6c1cec35b2fb/scratchpad/st02c03/run/releases/rel-20261106T204021Z-8e3b1901938d actor=claude-st02-c03 evidence=/tmp/claude-0/-home-user-BEG-Worck/aa21524c-c5e4-5ce0-984f-6c1cec35b2fb/scratchpad/st02c03/run/release-state/history/20261106T204022Z-deploy-8952
+[2026-11-06T20:40:22Z] verifier: sha256:65bd3d9f1d7fa268dd1909973ba7eb4bdf41f6dcf2cfbe76ba9528b170f3fd79
+[2026-11-06T20:40:22Z] ST-02 staging deploy: project=begwork-staging port=18080 PERMISSION_SERVICE_MODE=shadow (explicit staging parameter) force_smoke_fail=0
+[2026-11-06T20:40:22Z]   deployed_by=claude-st02-c03 approved_by=krum
+[2026-11-06T20:40:22Z] === A) PRECHECK (read-only) ===
+    [PASS] sha256sums.match - 19 files
+    [PASS] manifest.valid
+    [PASS] tools.match_manifest - 16 tool files from 8e3b1901938d
+    [PASS] artifact.sha256 - 37c5a64574032c3e87ec03c546d30def8cfb8e697d6650c0c33e2c4f23f8a91c
+    [PASS] artifact.tree_identity - archive hashes to 560f7ad48b3dbef87898cdfb97a3dd91c78de973, manifest tree 560f7ad48b3dbef87898cdfb97a3dd91c78de973, 1286 files
+    [PASS] artifact.no_env_files
+    [PASS] migrations.not_declared - W0-09A never runs migrations; declared migrations need a separate approved step
+    [PASS] layout.Dockerfile.backend - matches the versioned layout file
+    [PASS] layout.Dockerfile.frontend - matches the versioned layout file
+    [PASS] layout.docker-compose.yml - matches the versioned layout file
+    [PASS] env.present
+    [PASS] env.required_keys - 6 required key names present (values not read into output)
+    [PASS] flag.PERMISSION_SERVICE_MODE - absent (app default) or equal to expected
+    RESULT PASS
+[2026-11-06T20:40:22Z] STAGING PRECHECK FAILED: Release Manifest records PERMISSION_SERVICE_MODE=enforce, staging parameter is shadow (R26: build the staging bundle with the staging mode)
+[2026-11-06T20:40:22Z] NOTHING WAS CHANGED (no source swap, no container action).
+[2026-11-06T20:40:22Z] record: PRECHECK_FAILED (/tmp/claude-0/-home-user-BEG-Worck/aa21524c-c5e4-5ce0-984f-6c1cec35b2fb/scratchpad/st02c03/run/release-state/history/20261106T204022Z-deploy-8952/record.json)

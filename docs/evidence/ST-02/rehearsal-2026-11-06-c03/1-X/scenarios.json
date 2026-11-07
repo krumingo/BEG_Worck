@@ -1,0 +1,554 @@
+{
+  "schema": "beg.st-01-scenario-result/v1",
+  "generated_at": "2026-11-06T20:37:21.059281+00:00",
+  "base_url": "http://frontend",
+  "scope": "api",
+  "scenario_source": "PR #64 docs/evidence/INTEGRATED-RC-2026-10-25/02-release-gates.md — table \"Krum's acceptance scenarios\"",
+  "summary": {
+    "scenarios": {
+      "pass": 0,
+      "fail": 0,
+      "blocked": 12
+    },
+    "steps": {
+      "pass": 10,
+      "fail": 0,
+      "blocked": 30
+    },
+    "total_scenarios": 12
+  },
+  "outcome": {
+    "exit_code": 0,
+    "status": "ok",
+    "reasons": []
+  },
+  "note": "blocked is not pass: the function/screen is missing or not run here",
+  "scenarios": [
+    {
+      "id": "S01-build-identity",
+      "title": "Build identity",
+      "flows": [
+        "FLOW-042",
+        "FLOW-050"
+      ],
+      "roles": [
+        "owner"
+      ],
+      "expected": "Same full SHA in UI and API; environment clearly staging",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "api-health",
+          "action": "GET /api/health answers 200",
+          "ui": false,
+          "api_check": "health.api_up",
+          "status": "pass",
+          "evidence": "health 200"
+        },
+        {
+          "id": "api-build-sha",
+          "action": "API returns the full build SHA and environment label",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "main exposes no build SHA / environment label endpoint (release gate step 4 not on main)"
+        },
+        {
+          "id": "ui-build-sha",
+          "action": "UI shows the same full SHA and 'staging'",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "NO_SCREEN",
+          "reason": "no build identity in the UI on main"
+        }
+      ]
+    },
+    {
+      "id": "S02-owner-login-recovery",
+      "title": "Owner login/recovery",
+      "flows": [
+        "FLOW-002"
+      ],
+      "roles": [
+        "owner"
+      ],
+      "expected": "Correct account, successful reset, old session rejected, reused link rejected, overlapping emails leave a usable link",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "owner-login",
+          "action": "Owner of A and owner of B log into their own tenant",
+          "ui": false,
+          "api_check": "auth.owner_login",
+          "status": "pass",
+          "evidence": "both owners log into their own tenant; wrong password 401"
+        },
+        {
+          "id": "password-reset",
+          "action": "Reset link: successful reset, old session rejected, reused link rejected",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "password recovery (RC-AUTH-01/02, #56) is not on main"
+        },
+        {
+          "id": "overlapping-emails",
+          "action": "Overlapping emails leave a usable link",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "depends on the recovery link (#56)"
+        },
+        {
+          "id": "ui-login",
+          "action": "Login screen, wrong password message, relogin",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S03-roles-isolation",
+      "title": "Roles and isolation",
+      "flows": [
+        "FLOW-002",
+        "FLOW-050",
+        "FLOW-043"
+      ],
+      "roles": [
+        "owner",
+        "admin",
+        "requester",
+        "approver",
+        "denied",
+        "warehousekeeper",
+        "technician",
+        "accountant",
+        "viewer",
+        "driver"
+      ],
+      "expected": "Every role logs in with its scope; direct URL/API and tenant B identifiers cannot widen rights; zero write after denial",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "login-all-roles",
+          "action": "Every role of A and B logs in; /auth/me shows its role and tenant",
+          "ui": false,
+          "api_check": "auth.login_all_roles",
+          "status": "pass",
+          "evidence": "20 users logged in with the expected role and tenant"
+        },
+        {
+          "id": "cross-tenant-project",
+          "action": "A reads B's project by id (and B reads A's): 404, lists hold no foreign code",
+          "ui": false,
+          "api_check": "isolation.cross_tenant_project",
+          "status": "pass",
+          "evidence": "foreign project id answers 404 for owner/admin/requester in both directions"
+        },
+        {
+          "id": "cross-tenant-warehouse",
+          "action": "Warehouse lists hold only the caller's tenant",
+          "ui": false,
+          "api_check": "isolation.cross_tenant_warehouse",
+          "status": "pass",
+          "evidence": "each tenant sees only its own warehouse"
+        },
+        {
+          "id": "cross-tenant-request",
+          "action": "B cannot read/submit/delete A's material request by id; A's record is unchanged",
+          "ui": false,
+          "api_check": "isolation.cross_tenant_request",
+          "status": "pass",
+          "evidence": "B's GET/PUT/submit/DELETE on A's request: 404, A's record unchanged"
+        },
+        {
+          "id": "denied-zero-write",
+          "action": "denied/viewer/technician/driver/accountant/warehousekeeper create a material request: 403 and zero records written",
+          "ui": false,
+          "api_check": "roles.denied_zero_write",
+          "status": "pass",
+          "evidence": "6 roles refused with 403 + message; zero records written"
+        },
+        {
+          "id": "driver-scope",
+          "action": "Supported driver scopes (logistics trips)",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "no canonical driver scope (FLOW-012) on main to test"
+        },
+        {
+          "id": "ui-direct-url",
+          "action": "Direct URL to a forbidden page shows a refusal, not data",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S04-project-smr-request",
+      "title": "Project → SMR → material request",
+      "flows": [
+        "FLOW-001",
+        "FLOW-020",
+        "FLOW-032"
+      ],
+      "roles": [
+        "requester"
+      ],
+      "expected": "Saved record survives refresh/relogin; stable project/item IDs; pending mapping cannot become usable stock",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "request-persists",
+          "action": "Requester creates a request on the synthetic project; after relogin the same id/project id is returned",
+          "ui": false,
+          "api_check": "request.create_persists_relogin",
+          "status": "pass",
+          "evidence": "request MR-0002 survives relogin with stable id/project/line ids"
+        },
+        {
+          "id": "smr-link",
+          "action": "The request is linked to an SMR line of the project",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "no canonical project → SMR → request link on main"
+        },
+        {
+          "id": "pending-mapping-not-stock",
+          "action": "A pending Master Data mapping cannot become usable stock",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "canonical warehouse (#53) is not on main"
+        },
+        {
+          "id": "ui-refresh",
+          "action": "Refresh the page: the record is still there",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S05-request-submit-approve-reject",
+      "title": "Request submit/approve/reject",
+      "flows": [
+        "FLOW-020",
+        "FLOW-034",
+        "FLOW-040"
+      ],
+      "roles": [
+        "requester",
+        "approver",
+        "denied"
+      ],
+      "expected": "Valid transitions, history/audit, duplicate click idempotent; requester cannot approve beyond permissions",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "submit-once",
+          "action": "Submit a draft; a duplicate submit does not create a second transition",
+          "ui": false,
+          "api_check": "request.submit_once",
+          "status": "pass",
+          "evidence": "one transition draft→submitted; duplicate submit answered 400 and changed nothing"
+        },
+        {
+          "id": "approve-reject",
+          "action": "Approver approves one request and rejects another",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "main has no material-request approve/reject (requests UI #54 not merged)"
+        },
+        {
+          "id": "requester-cannot-approve",
+          "action": "Requester cannot approve beyond permissions",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "no approval step to deny"
+        },
+        {
+          "id": "history-audit",
+          "action": "Every transition has history and an AuditEvent",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "material-request transitions write no canonical AuditEvent on main"
+        },
+        {
+          "id": "ui-requests",
+          "action": "Requests list/detail with approve/reject buttons",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "NO_SCREEN",
+          "reason": "#54 not merged"
+        }
+      ]
+    },
+    {
+      "id": "S06-receive-dispatch-partial-accept",
+      "title": "Receive → dispatch → partial accept",
+      "flows": [
+        "FLOW-009",
+        "FLOW-012",
+        "FLOW-020"
+      ],
+      "roles": [
+        "warehousekeeper",
+        "driver",
+        "requester"
+      ],
+      "expected": "Dispatch 10, accept 3+4+3 and 8+2; only accepted quantity costs project; zero unresolved at completion; value/layers conserved",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "dispatch-accept",
+          "action": "Dispatch 10, accept 3+4+3 and 8+2",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "no canonical dispatch / partial accept on main"
+        },
+        {
+          "id": "cost-accepted-only",
+          "action": "Only accepted quantity costs the project; value/layers conserved",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "canonical warehouse ledger (#53) is not on main"
+        },
+        {
+          "id": "ui-dispatch",
+          "action": "Dispatch and accept screens",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "NO_SCREEN",
+          "reason": "not on main"
+        }
+      ]
+    },
+    {
+      "id": "S07-stock-issue-consume-return",
+      "title": "Stock issue/consume/return",
+      "flows": [
+        "FLOW-009"
+      ],
+      "roles": [
+        "warehousekeeper",
+        "requester"
+      ],
+      "expected": "One canonical ledger, no legacy writers, no negative stock, reversal/history, equal rebuilt projections",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "canonical-ledger",
+          "action": "Issue, consume, return through one canonical ledger with reversal and rebuilt projections",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "main still has the legacy warehouse writers; the canonical ledger (#53) is not merged"
+        },
+        {
+          "id": "ui-stock",
+          "action": "Stock screens",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S08-payroll-recovery",
+      "title": "Payroll recovery regression",
+      "flows": [
+        "FLOW-028",
+        "FLOW-006"
+      ],
+      "roles": [
+        "accountant",
+        "owner"
+      ],
+      "expected": "Only selected eligible people; paid run cannot reopen/pay twice; account/ledger linkage and prior-period data limitations explicit",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "selected-only-no-double-pay",
+          "action": "Pay run with selected people only; a paid run cannot reopen or pay twice",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_RUNNER_CHECK",
+          "reason": "needs employees/attendance fixtures not in ST-01; covered by tests/test_r0_05_* and tests/test_r0_06_* (not a staging proof)"
+        },
+        {
+          "id": "ledger-linkage",
+          "action": "Account/ledger linkage",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "canonical Payment ledger (FLOW-006) is not implemented"
+        },
+        {
+          "id": "ui-payroll",
+          "action": "Pay run screens",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S09-finance-exports",
+      "title": "Finance and exports",
+      "flows": [
+        "FLOW-006",
+        "FLOW-008",
+        "FLOW-015"
+      ],
+      "roles": [
+        "accountant",
+        "viewer",
+        "denied"
+      ],
+      "expected": "Consistent gross/net totals and drill-down; internal cost hidden from client output; unauthorized exports denied; known unfinished paths visibly blocked",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "totals-exports",
+          "action": "Gross/net totals, drill-down, export permissions",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_RUNNER_CHECK",
+          "reason": "needs finance fixtures not in ST-01; no canonical export permission on main"
+        },
+        {
+          "id": "ui-finance",
+          "action": "Finance screens and exports",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S10-report-act-invoice-payment",
+      "title": "Daily report → quantity → act → invoice → payment",
+      "flows": [
+        "FLOW-014",
+        "FLOW-004",
+        "FLOW-006"
+      ],
+      "roles": [
+        "technician",
+        "requester",
+        "accountant",
+        "owner"
+      ],
+      "expected": "Each required stage linked and persistent; unavailable canonical stages explicitly fail acceptance rather than silently pass",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "chain",
+          "action": "Daily report → approved quantity → act → invoice → payment, linked",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "canonical Act/Invoice/Payment chain (Wave 1, FLOW-006) is not implemented"
+        },
+        {
+          "id": "ui-chain",
+          "action": "Chain screens",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    },
+    {
+      "id": "S11-phone-390x844",
+      "title": "Phone 390×844",
+      "flows": [
+        "FLOW-037",
+        "FLOW-020"
+      ],
+      "roles": [
+        "requester",
+        "approver"
+      ],
+      "expected": "Request list/create/detail/approve-reject usable without horizontal overflow; compact navigation/actions",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "ui-phone",
+          "action": "Requests list/create/detail/approve-reject at 390×844, no horizontal overflow",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "NO_SCREEN",
+          "reason": "approve/reject screens (#54) not on main"
+        }
+      ]
+    },
+    {
+      "id": "S12-failure-restart",
+      "title": "Failure and restart",
+      "flows": [
+        "FLOW-042",
+        "FLOW-040"
+      ],
+      "roles": [
+        "denied",
+        "requester"
+      ],
+      "expected": "Clear network/403/conflict errors, no fake zero totals; retries do not duplicate writes; records survive service restart",
+      "status": "blocked",
+      "steps": [
+        {
+          "id": "clear-403",
+          "action": "A denied write answers 403 with a message, writes nothing",
+          "ui": false,
+          "api_check": "roles.denied_zero_write",
+          "status": "pass",
+          "evidence": "6 roles refused with 403 + message; zero records written"
+        },
+        {
+          "id": "retry-no-duplicate",
+          "action": "A retried create does not duplicate the record",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_CANONICAL_FUNCTION",
+          "reason": "material-request create has no idempotency key on main; a retry creates a second record"
+        },
+        {
+          "id": "restart-persistence",
+          "action": "Records survive a service restart",
+          "ui": false,
+          "status": "blocked",
+          "reason_code": "NO_RUNNER_CHECK",
+          "reason": "the runner does not restart the service; run 'request.create_persists_relogin' again after a restart (README)"
+        },
+        {
+          "id": "ui-errors",
+          "action": "Network/403/conflict errors visible, no fake zero totals",
+          "ui": true,
+          "status": "blocked",
+          "reason_code": "UI_NOT_RUN_BY_API_RUNNER",
+          "reason": "browser step: run by the Bot session from the same list"
+        }
+      ]
+    }
+  ]
+}

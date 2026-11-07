@@ -148,6 +148,10 @@ async def signup_organization(data: OrgSignupRequest):
             # R0-03: the same 409 as every other creation path; no company is named.
             raise HTTPException(status_code=409, detail={
                 "error_code": "EMAIL_EXISTS", "message": "This email is already registered"})
+        if exc.code == "AUDIT_INDEXES_UNAVAILABLE":
+            raise HTTPException(status_code=503, detail={
+                "error_code": exc.code,
+                "message": "The company cannot be created right now; nothing was created"})
         if exc.code == "IDENTITY_CHECK_UNAVAILABLE":
             raise HTTPException(status_code=503, detail={
                 "error_code": exc.code,
@@ -189,7 +193,7 @@ async def signup_organization(data: OrgSignupRequest):
         await db.feature_flags.insert_one(flag)
     
     # Create token for auto-login
-    token = create_token({"user_id": user_id, "org_id": org_id, "role": "Owner"})
+    token = create_token({"user_id": user_id, "org_id": org_id, "role": "Owner", "av": 0})
     
     await log_audit(org_id, user_id, data.owner_email, "signup", "organization", org_id, {"name": data.org_name})
     
