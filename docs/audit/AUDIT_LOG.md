@@ -1666,8 +1666,8 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #72 W0-04-C01 | `04e0a1b` | **PASS** (FG-117: the DB-name marker is clean on 12 paths; leaks on `cb5d061`) | 2026-11-07 |
 | #73 LAB-01 | `4da2ee6` | **PASS** (PM73-01 closed; PM-01 real, not skipped) | 2026-11-07 |
 | #75 LAB-02 | `ef16a16` | **PASS** (PM75-01 closed; PM-01 real, not skipped) | 2026-11-07 |
-| #76 SUB-ADV-01 | `f42da33` | **PASS** (probe S1–S7 × 3 modes, on its own and + #72); notes D1–D3, merge with #70 conflicts in `finance.py` | 2026-11-07 |
-| #77 ACT-01 | `c6c7f1c` | **PASS** + MEDIUM ACT77-01 (concurrent first acts on a fresh tenant → 500 "namespace already in use") | 2026-11-07 |
+| #76 SUB-ADV-01 | `542fa2c` | **PASS** (Addendum A + B: S1–S9 × 3 modes; cap exact) | 2026-11-07 |
+| #77 ACT-01 | `8188689` | **PASS** (ACT77-01 fixed; Addendum B confirm / price / visibility checks pass) | 2026-11-07 |
 | #74 OH-01 | `45178ac` | **PASS** (OH74-05 closed: O16 and new O17 pass; FG-89 one source; #69 `3fb55f2` merge R0 6/6 = 814) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
@@ -3868,3 +3868,98 @@ PR comment updated (resolved).
 
 - **Merge with main `d226c49`:** a conflict in `services/project_pnl.py`, an import line where both sides are kept. The programmer must merge main into both. The merged re-runs are queued.
 - **The 48 auth cells** in PM-01 `matrix.csv` are byte-identical on #73 `41a43b5`, #75 `f0a0757` and #72 `04e0a1b` (now on main), so there is no content conflict.
+
+
+### main `d226c49` (#72 + #70) — sanity PASS
+
+| Check | Result |
+|---|---|
+| PAY | **630** |
+| probes `e_alloc_vs_reverse`, `d5_race`, `fg50` | FAILS none |
+| f703 transfer probe | **24/24** |
+| W0 | same 15 |
+| A2C | 0/214 |
+| A1 | 0/432 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+### #74 @ `31a9478` (FG-127, on FG-116 + addendum 2) — alone PASS
+
+- The code is `e76f485`; `31a9478` adds evidence only.
+- `test_27` / `test_31` drop their P&L special case, so P&L must equal every other reader. That is stronger, not weaker.
+- `test_32` checks one amount and one label across all 7 readers through legacy → mixed → recompute → allocate.
+- No double count in P&L: the legacy figure is the company-overhead share, and no other P&L line includes company overhead.
+
+| Gate | Result |
+|---|---|
+| OH-01 | 231 |
+| probes (O16 / O17 + Codex) | 27 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The #74 + #69 `3fb55f2` + main R0×5 run is **invalid**: #69 `3fb55f2` conflicts with main and the auto-resolution left markers, so the 11 SEC-01 / 8 R0 failures are artifacts. It will be redone on #69 `da47777` (which contains main).
+
+### #76 @ `542fa2c` (Addendum A FG-114/115 + B FG-103/128) — PASS
+
+`probes/subadv/probe_subadv01.py` with `PROBE_FG114=1`, off/shadow/enforce: **FAILS none**.
+
+| Case | Result |
+|---|---|
+| S1 / S2 concurrent deductions | 2 pass, deducted 800, counters = rows |
+| S3 cap | committed 3200 |
+| S4 / S5 interrupted advance / deduction, same-key retry | one of everything |
+| S6 tenant B | 404 |
+| S7 same key ×6 | 1 row |
+| **S8** cap boundary: 6 concurrent advances of 999.99, contract 5000 | **5 × 201 + 1 × 409**, total 4999.95 |
+| **S9** committed counts against the cap | 1800 → 201, then 0.01 → 409 `ADVANCE_EXCEEDS_PACKAGE_VALUE` |
+
+| Gate | Result |
+|---|---|
+| sub_adv + sec_01 | 38 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+D4 note: a pending reservation that is never retried holds headroom. By construction it only blocks (pending is never deductible, cost or paid). It needs a release path: owner-approved reconciliation or expiry, as debt.
+
+### #77 @ `8188689` (Addendum B FG-119..123 + ACT77-01) — PASS
+
+`probes/act01/probe_act01.py` with `PROBE_ACT_B=1`, × 3 modes: **FAILS none**.
+
+| Case | Result |
+|---|---|
+| **A1** fresh tenant × 10 | **2 × 201 + 4 × 409** every round (ACT77-01 fixed: collections ensured outside the transaction, bounded transient retry) |
+| A2 | 6 unique numbers |
+| A3 PUT delta | exact |
+| A4 cross-tenant / project / draft | 422, nothing written |
+| A5 R29 | holds, 1 event |
+| **A7** confirm | Viewer 403, no key 428 |
+| **A8** crash in the confirm audit | act stays Draft with 0 events; same-key retry → Accepted with 1 event |
+| **A9** price | 12.345 × 100 = **1234.50**; 12.35 given → 422 |
+| **A10** technician GET | no money keys |
+
+| Gate | Result |
+|---|---|
+| act01 tests | **101** |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 + merge with main | running |
+
+### Others
+
+- **#78 `48e28da`:** W0-04 + auth on real Mongo **196 passed** → full PASS.
+- **#75 R0 re-run:** 814. The billing line was the expected `SECURITY_EVENT` log of `test_17_F04`, not a failure.
+- **#73 / #75 + main** (my resolved trees, now superseded by the PRs' own merges `0c0f5f8` / `c68c942`):
+
+| Check | #73 + main | #75 + main |
+|---|---|---|
+| lab | 117 | 158 |
+| probes | lab01e P1 / P4 / P5 pass | lab02 / retake pass |
+| PM-01 | 6 | 6 |
+| PAY | 630 | — |
+
+- **#69 `3fb55f2`:** SEC-01 30, W0 same 15, R0 814, PM-01 6. Superseded by `da47777`, which is queued.
