@@ -50,3 +50,32 @@ W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
      10 7 passed, 17 deselected
 ## negative control: 009ac1d idempotency.py, DB without indexes, 6 parallel begin_idempotent one key: assert 6 == 1 (6 winners)
 ## with the guard: test_no_index_parallel_begin_with_one_key_have_exactly_one_winner (10 fresh DBs) 10/10 runs passed
+
+# merge of main 0f870c3 (PR #56) into W0-04-C01 — merge commit e30c567 (2026-11-07)
+## baseline main 0f870c3
+## A2C guard
+W0-03E-A2C tenant boundary guard: 211 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 426 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+154 passed, 6 warnings in 134.98s (0:02:14)
+## R0 (real mongo)
+814 passed, 6 warnings in 140.63s (0:02:20)
+## W0 DB-free
+15 failed, 1085 passed, 50 skipped, 6 warnings in 62.75s (0:01:02)
+## W0 real mongo
+15 failed, 1135 passed, 6 warnings in 97.96s (0:01:37)
+## merged tree e30c567
+## A2C guard
+W0-03E-A2C tenant boundary guard: 212 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 428 unit(s) checked, 0 violation(s)
+## W0-04 + C01 + auth_01/02 (real mongo)
+178 passed, 6 warnings in 143.77s (0:02:23)
+## R0 (real mongo)
+814 passed, 6 warnings in 143.19s (0:02:23)
+## W0 DB-free
+15 failed, 1092 passed, 67 skipped, 6 warnings in 59.28s
+## W0 real mongo
+15 failed, 1159 passed, 6 warnings in 103.19s (0:01:43)
+## W0 failures identical to main in both runs (15, test_w0_03e_legacy_routes); W0-04+C01+auth delta +24 = the C01 tests
