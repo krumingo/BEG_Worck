@@ -246,7 +246,6 @@ async def test_fg108_warehouse_only_excess_is_warned_on_the_integrity_screen(
 def _routes(monkeypatch, client, db):
     from app.routes import invoice_lines as routes
     monkeypatch.setattr(routes, "db", db)
-    monkeypatch.setattr(routes, "mongo_client", client)
     routes.audit_calls = []
 
     async def _audit(*args, **kw):                 # the legacy audit log (global db)

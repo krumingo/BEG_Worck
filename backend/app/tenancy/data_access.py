@@ -226,6 +226,17 @@ class TenantData:
         self._db = db
         self.org_id = _tenant_value(org_id)
 
+    @property
+    def transaction_client(self):
+        """The MongoDB client that can start a transaction over THIS tenant's
+        database (5C-C26l): the motor client of a real motor database, else
+        None (an in-memory test double — writes then run without a session)."""
+        try:
+            from motor.motor_asyncio import AsyncIOMotorDatabase
+        except Exception:                                  # pragma: no cover
+            return None
+        return self._db.client if isinstance(self._db, AsyncIOMotorDatabase) else None
+
     # --------------------------------------------------------- constructors
     @classmethod
     def for_user(cls, db, user: Mapping) -> "TenantData":

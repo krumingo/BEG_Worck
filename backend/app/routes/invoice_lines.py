@@ -7,10 +7,11 @@ from typing import Optional, List
 from datetime import datetime, timezone
 import uuid
 
-from app.db import db, client as mongo_client
+from app.db import db
 from app.services.invoice_line_lock import (
     InvoiceLineAllocationLocked, run_transaction, write_unless_linked,
 )
+from app.services.invoice_state import NOT_DRAFT, claim_invoice
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
@@ -62,7 +63,7 @@ async def _unless_linked(tenant: TenantData, line_id: str, write, *,
     receipts take (``app.services.invoice_line_lock``); ``write`` reads the
     current row in that transaction (F-55-C26-04)."""
     try:
-        await write_unless_linked(mongo_client, tenant, line_id, write,
+        await write_unless_linked(tenant, line_id, write,
                                   refuse_if_linked=refuse_if_linked)
     except InvoiceLineAllocationLocked as exc:
         raise HTTPException(status_code=409, detail=exc.detail())
@@ -184,7 +185,7 @@ async def get_org_require_full_allocation(tenant: TenantData) -> bool:
     return org.get("require_full_allocation", False) if org else False
 
 
-async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str):
+async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str, *, session=None):
     """Recalculate THIS tenant's invoice totals from its own lines.
 
     Both the invoice read and the invoice write carry the tenant predicate. The
@@ -197,6 +198,11 @@ async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str):
     MongoDB aborts one with a WriteConflict and ``with_transaction`` re-runs it
     against the committed lines — the stored header total is always Σ lines,
     never a total computed from a line set read before another edit.
+
+    Addendum N (FG-140): the line writers call it with their ``session`` —
+    the line write and the header write are one transaction that claimed the
+    invoice as Draft (``claim_invoice``); the header write itself carries
+    ``status: Draft`` as a condition.
     """
     async def _body(session):
         lines = await tenant.invoice_lines.find({"invoice_id": invoice_id},
@@ -206,7 +212,8 @@ async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str):
         total = round(subtotal + vat_total, 2)
         invoice = await tenant.invoices.get(invoice_id, session=session)
         paid_amount = (invoice or {}).get("paid_amount", 0) or 0
-        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+        # FG-140: only a Draft invoice's header is recomputed from its lines.
+        await tenant.invoices.update_one({"id": invoice_id, "status": "Draft"}, {"$set": {
             "subtotal": round(subtotal, 2),
             "vat_amount": round(vat_total, 2),
             "total": total,
@@ -214,7 +221,10 @@ async def recalculate_invoice_totals(tenant: TenantData, invoice_id: str):
             "lines_count": len(lines),
             "updated_at": datetime.now(timezone.utc).isoformat(),
         }}, session=session)
-    await run_transaction(mongo_client, _body)
+    if session is not None:
+        await _body(session)          # inside the caller's (claimed) transaction
+    else:
+        await run_transaction(tenant, _body)
 
 
 async def enrich_line_with_names(tenant: TenantData, line: dict) -> dict:
@@ -410,10 +420,14 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
     line = compute_line_totals(line)
     line = compute_allocation_stats(line)
     
-    await tenant.invoice_lines.insert_one(line)
-    
-    # Recalculate invoice totals
-    await recalculate_invoice_totals(tenant, data.invoice_id)
+    # FG-140: the Draft status is decided in the transaction (CAS on the
+    # invoice); the line and the header totals are written in it.
+    async def _body(session):
+        await claim_invoice(tenant, data.invoice_id, session=session, allowed=("Draft",),
+                            code=NOT_DRAFT)
+        await tenant.invoice_lines.insert_one(dict(line), session=session)
+        await recalculate_invoice_totals(tenant, data.invoice_id, session=session)
+    await run_transaction(tenant, _body)
     
     return {k: v for k, v in line.items() if k != "_id"}
 
@@ -493,8 +507,13 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
         created_lines.append(line)
     
     if created_lines:
-        await tenant.invoice_lines.insert_many(created_lines)
-        await recalculate_invoice_totals(tenant, invoice_id)
+        async def _body(session):                                  # FG-140
+            await claim_invoice(tenant, invoice_id, session=session, allowed=("Draft",),
+                                code=NOT_DRAFT)
+            await tenant.invoice_lines.insert_many([dict(l) for l in created_lines],
+                                                   session=session)
+            await recalculate_invoice_totals(tenant, invoice_id, session=session)
+        await run_transaction(tenant, _body)
     
     return {"ok": True, "count": len(created_lines), "lines": [{k: v for k, v in l.items() if k != "_id"} for l in created_lines]}
 
@@ -549,7 +568,13 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
         # Codex F-55-C26-04: a metadata-only PUT writes ONLY the fields it
         # was sent (+ updated_at) — never the derived money / allocation
         # fields, which a concurrent writer may have changed since the read.
-        await tenant.invoice_lines.update_one({"id": line_id}, {"$set": update})
+        async def _meta(session):
+            # FG-140: Draft decided in the transaction (CAS on the invoice).
+            await claim_invoice(tenant, line["invoice_id"], session=session,
+                                allowed=("Draft",), code=NOT_DRAFT)
+            await tenant.invoice_lines.update_one({"id": line_id}, {"$set": update},
+                                                  session=session)
+        await run_transaction(tenant, _meta)
     else:
         if "allocations" in update and update["allocations"]:
             update["allocations"] = [a if isinstance(a, dict) else a.model_dump()
@@ -560,6 +585,10 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
         async def _write(session):
             # F-55-C26-04: read, validate, compute and write in ONE
             # transaction under the per-line lock — from the CURRENT row.
+            # FG-140: the invoice is claimed as Draft in the same transaction
+            # and the header totals are written in it.
+            await claim_invoice(tenant, line["invoice_id"], session=session,
+                                allowed=("Draft",), code=NOT_DRAFT)
             current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0},
                                                           session=session)
             if not current:
@@ -583,14 +612,12 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
             }
             await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},
                                                   session=session)
+            await recalculate_invoice_totals(tenant, line["invoice_id"], session=session)
         # FG-109 / FG-124: the costing inputs are refused (409) on a linked
         # line; vat_percent alone is not costing but still derives totals.
         await _unless_linked(tenant, line_id, _write,
                              refuse_if_linked=any(k in update for k in LOCKED_WHEN_LINKED))
 
-    # Recalculate invoice
-    await recalculate_invoice_totals(tenant, line["invoice_id"])
-    
     result = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
     result = normalize_allocations(result)
     result = compute_allocation_stats(result)
@@ -681,11 +708,12 @@ async def delete_invoice_line(line_id: str, user: dict = Depends(require_m5)):
     invoice_id = line["invoice_id"]
 
     async def _write(session):
+        # FG-140: Draft decided in the transaction; header written in it.
+        await claim_invoice(tenant, invoice_id, session=session, allowed=("Draft",),
+                            code=NOT_DRAFT)
         await tenant.invoice_lines.delete_one({"id": line_id}, session=session)
+        await recalculate_invoice_totals(tenant, invoice_id, session=session)
     await _unless_linked(tenant, line_id, _write)    # FG-109: a linked line is never deleted
-    
-    # Recalculate invoice
-    await recalculate_invoice_totals(tenant, invoice_id)
     
     return {"ok": True}
 

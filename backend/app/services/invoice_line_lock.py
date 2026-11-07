@@ -83,11 +83,15 @@ def _transactions_unsupported(exc: Exception) -> bool:
         or "replica set" in text.lower()
 
 
-async def run_transaction(client, body: Callable[[Optional[object]], Awaitable[None]]) -> None:
-    """Run ``body(session)`` in one MongoDB transaction (``with_transaction``
-    retries it on a WriteConflict). A deployment without transactions (no
-    canonical warehouse there, or an in-memory test double) runs
-    ``body(None)`` instead."""
+async def run_transaction(tenant, body: Callable[[Optional[object]], Awaitable[None]]) -> None:
+    """Run ``body(session)`` in one MongoDB transaction over the TENANT's own
+    database (``with_transaction`` retries it on a WriteConflict). A
+    deployment without transactions, or an in-memory test double
+    (``tenant.transaction_client`` is None), runs ``body(None)`` instead."""
+    client = getattr(tenant, "transaction_client", None)
+    if client is None:
+        await body(None)
+        return
     try:
         session_cm = await client.start_session()
     except Exception:
@@ -105,7 +109,7 @@ async def run_transaction(client, body: Callable[[Optional[object]], Awaitable[N
     await body(None)
 
 
-async def write_unless_linked(client, tenant, line_id: str,
+async def write_unless_linked(tenant, line_id: str,
                               write: Callable[[Optional[object]], Awaitable[None]], *,
                               refuse_if_linked: bool = True) -> None:
     """Run ``write(session)`` in one transaction under the line lock, and —
@@ -129,4 +133,4 @@ async def write_unless_linked(client, tenant, line_id: str,
                 raise InvoiceLineAllocationLocked(line_id, moved)
         await write(session)
 
-    await run_transaction(client, _body)
+    await run_transaction(tenant, _body)
