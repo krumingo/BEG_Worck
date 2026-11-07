@@ -161,3 +161,68 @@ async def ensure_audit_indexes_for_installation(op_db, system_db) -> List[Dict[s
         database = op_db if name == op_db.name else op_db.client[name]
         reports.append(await ensure_audit_indexes(database))
     return reports
+
+
+# ---------------------------------------------------------------------------
+# W0-04-C01 FG-57 — the lazy guard used by record_event and begin_idempotent.
+# ---------------------------------------------------------------------------
+
+# Databases already proven to carry a guarded index in this process:
+# (id(client), database name, collection, keys). Only a positive result is cached.
+_unique_index_verified = set()
+
+
+def is_mongo_handle(handle) -> bool:
+    """A real MongoDB database handle (Motor in production, mongomock-motor in
+    tests). Every production path passes one: the tenant resolver and the legacy
+    handle are both AsyncIOMotorDatabase. Pure in-memory test doubles (no
+    client, no indexes) hold no server-side state to protect and are not checked.
+    """
+    try:
+        from motor.motor_asyncio import AsyncIOMotorDatabase
+        if isinstance(handle, AsyncIOMotorDatabase):
+            return True
+    except ImportError:  # pragma: no cover
+        pass
+    return hasattr(handle, "client") and hasattr(handle, "name")
+
+
+def protects(info: Dict[str, Any], keys) -> bool:
+    """True when an index_information() entry is a full unique index on ``keys``."""
+    return (_norm_keys(info.get("key", [])) == _norm_keys(keys) and bool(info.get("unique"))
+            and "partialFilterExpression" not in info and not info.get("sparse"))
+
+
+async def unique_index_present(db, coll: str, keys) -> bool:
+    indexes = await db[coll].index_information()
+    return any(protects(i, keys) for i in indexes.values())
+
+
+async def require_unique_index(db, coll: str, keys, error_cls, *, create: bool = True) -> None:
+    """Fail closed unless ``coll`` carries the full unique index on ``keys``.
+
+    ``create=True``: a missing index is created with exactly the planned
+    definition, then checked again. ``create=False`` only checks — for a caller
+    inside an open transaction, where an index build would wait for the
+    transaction's own collection lock. Any refusal (conflicting index,
+    existing duplicates, an error, still absent) raises ``error_cls``; nothing
+    is dropped or deleted.
+    """
+    if not is_mongo_handle(db):
+        return
+    cache_key = (id(db.client), db.name, coll, tuple(_norm_keys(keys)))
+    if cache_key in _unique_index_verified:
+        return
+    try:
+        if not await unique_index_present(db, coll, keys):
+            if not create:
+                raise RuntimeError("the index is absent and cannot be built inside a transaction; "
+                                   "call it before the transaction starts")
+            await db[coll].create_index(keys, unique=True)
+            if not await unique_index_present(db, coll, keys):
+                raise RuntimeError("the index is still absent after create_index")
+    except Exception as exc:  # noqa: BLE001
+        raise error_cls(
+            "%s.%s: no unique %s index and it cannot be created; refusing to write "
+            "(concurrent writes could duplicate): %s" % (db.name, coll, _norm_keys(keys), exc)) from exc
+    _unique_index_verified.add(cache_key)

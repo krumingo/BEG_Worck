@@ -21,6 +21,7 @@ import json
 import random
 from typing import Dict, Any, Optional, List, Tuple
 
+from app.audit import indexes as _ix
 from app.audit.envelope import (
     build_event,
     validate_event,
@@ -63,60 +64,31 @@ class AuditChainUnprotected(RuntimeError):
 
 CHAIN_INDEX_KEYS = [("tenant_id", 1), ("sequence", 1)]
 
-# Databases already proven to carry the chain index in this process:
-# (id(client), database name). Only a positive result is cached.
-_chain_index_verified = set()
-
 
 def _protects_chain(info: Dict[str, Any]) -> bool:
-    keys = [(str(f), int(d)) for f, d in info.get("key", [])]
-    return (keys == CHAIN_INDEX_KEYS and bool(info.get("unique"))
-            and "partialFilterExpression" not in info and not info.get("sparse"))
-
-
-async def _chain_index_present(db) -> bool:
-    indexes = await db[AUDIT_COLLECTION].index_information()
-    return any(_protects_chain(i) for i in indexes.values())
+    return _ix.protects(info, CHAIN_INDEX_KEYS)
 
 
 def _is_mongo_handle(handle) -> bool:
-    """A real MongoDB database handle (Motor in production, mongomock-motor in
-    tests). Every production path passes one: the tenant resolver and the
-    legacy handle are both AsyncIOMotorDatabase. Pure in-memory test doubles
-    (no client, no indexes) cannot fork a server-side chain and are not checked.
-    """
-    try:
-        from motor.motor_asyncio import AsyncIOMotorDatabase
-        if isinstance(handle, AsyncIOMotorDatabase):
-            return True
-    except ImportError:  # pragma: no cover
-        pass
-    return hasattr(handle, "client") and hasattr(handle, "name")
+    return _ix.is_mongo_handle(handle)
 
 
-async def _require_chain_index(db) -> None:
+async def _require_chain_index(db, *, create: bool = True) -> None:
     """FG-57: never append to a chain the database cannot keep linear.
 
     The index normally exists (startup / onboarding, W0-04-C01). A database
     that missed both gets exactly the planned unique index here, before its
-    first append; if MongoDB refuses it, the append is refused.
+    first append; if MongoDB refuses it, the append is refused. Inside an open
+    transaction (create=False) it only checks: call ensure_chain_index() before
+    the transaction starts.
     """
-    if not _is_mongo_handle(db):
-        return
-    cache_key = (id(db.client), db.name)
-    if cache_key in _chain_index_verified:
-        return
-    try:
-        if not await _chain_index_present(db):
-            await db[AUDIT_COLLECTION].create_index(CHAIN_INDEX_KEYS, unique=True)
-            if not await _chain_index_present(db):
-                raise RuntimeError("the index is still absent after create_index")
-    except Exception as exc:  # noqa: BLE001
-        raise AuditChainUnprotected(
-            "%s.%s: no unique (tenant_id, sequence) index and it cannot be created; "
-            "refusing to append (a concurrent append could fork the chain): %s"
-            % (db.name, AUDIT_COLLECTION, exc)) from exc
-    _chain_index_verified.add(cache_key)
+    await _ix.require_unique_index(db, AUDIT_COLLECTION, CHAIN_INDEX_KEYS,
+                                   AuditChainUnprotected, create=create)
+
+
+async def ensure_chain_index(db) -> None:
+    """Public: guarantee the chain index BEFORE opening a transaction that appends."""
+    await _require_chain_index(db, create=True)
 
 
 def _is_sequence_collision(exc) -> bool:

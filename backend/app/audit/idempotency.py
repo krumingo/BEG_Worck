@@ -41,6 +41,30 @@ class IdempotencyConflict(RuntimeError):
     """Same idempotency key reused for a different request payload."""
 
 
+class IdempotencyUnprotected(RuntimeError):
+    """audit_idempotency has no unique ``id`` index and it cannot be created.
+
+    Without it two concurrent requests with one key can both insert their
+    reservation and both perform the write (IDEM-IDX-1), so begin_idempotent
+    refuses instead. Nothing is dropped or deleted; see
+    scripts/w0_04_bootstrap_audit_indexes.py.
+    """
+
+
+IDEMPOTENCY_INDEX_KEYS = [("id", 1)]
+
+
+async def ensure_idempotency_index(db) -> None:
+    """Fail closed unless the reservation id is unique (W0-04-C01).
+
+    Normally created at startup / onboarding; a database that missed both gets
+    exactly the planned unique index before its first reservation.
+    """
+    from app.audit.indexes import require_unique_index
+    await require_unique_index(db, IDEMPOTENCY_COLLECTION, IDEMPOTENCY_INDEX_KEYS,
+                               IdempotencyUnprotected)
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -78,6 +102,7 @@ async def begin_idempotent(
     """
     if not key or not key.strip():
         raise ValueError("idempotency key must be non-empty")
+    await ensure_idempotency_index(db)
 
     record = {
         "id": _record_id(tenant_id, action, key),

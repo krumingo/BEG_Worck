@@ -34,3 +34,19 @@ W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
 ## W0 deltas vs 35ae10b baseline 1085/15/50: DB-free +7 passed (pure C01) +13 skipped (C01 real-Mongo); the same 15 test_w0_03e_legacy_routes failures in both runs
 ## negative control FG-57: e733c66 store.py, DB without indexes, 20 parallel record_event: 3/3 runs FAILED, sequences [1, 1, 1, 1, 1, 1, ...] (forked)
 ## with FG-57: test_fg57_no_index_parallel_appends_do_not_fork (10 fresh DBs per run) 10/10 runs passed
+
+# idempotency lazy guard + check-only mode (2026-11-07), parent 009ac1d
+## A2C guard
+W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
+## R0 real mongo
+814 passed, 6 warnings in 143.35s (0:02:23)
+## W0 DB-free
+15 failed, 1092 passed, 67 skipped, 6 warnings in 65.13s (0:01:05)
+## W0 with real mongo
+15 failed, 1159 passed, 6 warnings in 109.88s (0:01:49)
+## stability: C01 -k 'parallel or fg57 or no_index' x10
+     10 7 passed, 17 deselected
+## negative control: 009ac1d idempotency.py, DB without indexes, 6 parallel begin_idempotent one key: assert 6 == 1 (6 winners)
+## with the guard: test_no_index_parallel_begin_with_one_key_have_exactly_one_winner (10 fresh DBs) 10/10 runs passed

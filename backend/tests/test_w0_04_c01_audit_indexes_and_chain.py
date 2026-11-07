@@ -354,7 +354,7 @@ def test_fg57_conflicting_chain_index_refuses_to_append():
         for _ in range(2):                                   # no positive result is cached
             with pytest.raises(store.AuditChainUnprotected) as exc:
                 await record_event(db, make_event())
-            assert "refusing to append" in str(exc.value)
+            assert "refusing to write" in str(exc.value)
         assert await db[AUDIT_COLLECTION].count_documents({}) == 0
         info = await db[AUDIT_COLLECTION].index_information()
         assert not info["tenant_id_1_sequence_1"].get("unique")      # not dropped
@@ -372,4 +372,70 @@ def test_fg57_existing_fork_refuses_to_append_and_deletes_nothing():
             await record_event(db, make_event())
         assert await db[AUDIT_COLLECTION].count_documents({}) == 2
         assert "tenant_id_1_sequence_1" not in await db[AUDIT_COLLECTION].index_information()
+    scratch(go)
+
+
+# ─────────────────────────────────────────────── lazy guard for begin_idempotent
+
+@real_mongo
+def test_no_index_parallel_begin_with_one_key_have_exactly_one_winner():
+    """A database that missed startup AND onboarding: 6 parallel reservations
+    with one key still give exactly one winner (before: 6 of 6)."""
+    async def go(client, dbs):
+        for db in dbs:
+            assert IDEMPOTENCY_COLLECTION not in await db.list_collection_names()
+            states = await asyncio.gather(*[
+                begin_idempotent(db, tenant_id="tenant-a", key="pay-1", action="payment.create",
+                                 request_fingerprint="fp") for _ in range(6)])
+            statuses = [s["status"] for s in states]
+            assert statuses.count(IDEMPOTENCY_STARTED) == 1, statuses
+            assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 1
+            assert await ix.unique_index_present(db, IDEMPOTENCY_COLLECTION, [("id", 1)])
+    scratch(go, n_dbs=10)
+
+
+@real_mongo
+def test_begin_refuses_on_a_conflicting_idempotency_index():
+    from app.audit.idempotency import IdempotencyUnprotected
+
+    async def go(client, dbs):
+        db = dbs[0]
+        await db[IDEMPOTENCY_COLLECTION].create_index([("id", 1)])          # non-unique
+        for _ in range(2):
+            with pytest.raises(IdempotencyUnprotected) as exc:
+                await begin_idempotent(db, tenant_id="t", key="k", action="a")
+            assert "refusing to write" in str(exc.value)
+        assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 0
+        info = await db[IDEMPOTENCY_COLLECTION].index_information()
+        assert not info["id_1"].get("unique")                              # not dropped
+    scratch(go)
+
+
+@real_mongo
+def test_begin_refuses_over_existing_duplicate_reservations_and_deletes_nothing():
+    from app.audit.idempotency import IdempotencyUnprotected
+
+    async def go(client, dbs):
+        db = dbs[0]
+        dup = {"id": "idem_t_a_k", "tenant_id": "t", "action": "a", "key": "k", "status": "completed"}
+        await db[IDEMPOTENCY_COLLECTION].insert_many([dict(dup), dict(dup)])
+        with pytest.raises(IdempotencyUnprotected):
+            await begin_idempotent(db, tenant_id="t", key="other", action="a")
+        assert await db[IDEMPOTENCY_COLLECTION].count_documents({}) == 2
+    scratch(go)
+
+
+@real_mongo
+def test_check_only_mode_never_builds_an_index_and_ensure_chain_index_does():
+    """The #56 merge: inside an open transaction record_event checks only
+    (create=False); ensure_chain_index() is called before the transaction."""
+    async def go(client, dbs):
+        db = dbs[0]
+        with pytest.raises(store.AuditChainUnprotected) as exc:
+            await store._require_chain_index(db, create=False)
+        assert "before the transaction starts" in str(exc.value)
+        assert AUDIT_COLLECTION not in await db.list_collection_names()
+        await store.ensure_chain_index(db)
+        await store._require_chain_index(db, create=False)                 # now passes
+        assert await ix.unique_index_present(db, AUDIT_COLLECTION, store.CHAIN_INDEX_KEYS)
     scratch(go)
