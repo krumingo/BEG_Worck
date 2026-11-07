@@ -132,6 +132,7 @@
 | app/routes/offers.py:can_manage_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
 | app/routes/offers.py:get_next_offer_no | (helper) | offers | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:_draft_was_used | (helper) | offer_events | find_one(offer_id, event_type) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_check_evidence_file | (helper) | media_files | get(id = file_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:create_offer | POST /offers | projects | get(id = data.project_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_offer | POST /offers | offers | insert_one(offer) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:list_offers | GET /offers | projects | get_many(id ∈ (o.get('project_id') for o in offers)) | TenantData org_id (session) | scoped@base | SAFE |
@@ -395,4 +396,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 380 accesses — FIXED 132, SAFE 248
+Totals: 381 accesses — FIXED 132, SAFE 249

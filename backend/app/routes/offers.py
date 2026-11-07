@@ -112,7 +112,9 @@ async def can_edit_offer(user: dict, offer: dict) -> bool:
 
 STATUS_SUPERSEDED = "Superseded"
 STATUS_CANCELLED = "Cancelled"
-VERSIONABLE_STATUSES = ("Sent", "Accepted", "Rejected")          # unchanged rule
+# Addendum A §2 (FLOW-003 „След приемане … само при ново възлагане/анекс“, FLOW-005): an
+# accepted offer gets no new version — the change is an additional offer / annex.
+VERSIONABLE_STATUSES = ("Draft", "Sent", "Rejected")
 CANCELLABLE_STATUSES = ("Sent", "Rejected", "NeedsRevision")
 OFFER_VERSION_SUPERSEDED = "OFFER_VERSION_SUPERSEDED"
 OFFER_IN_USE = "OFFER_IN_USE"
@@ -153,6 +155,24 @@ async def _draft_was_used(tenant: TenantData, offer: dict) -> bool:
         return True
     return bool(await tenant.offer_events.find_one(
         {"offer_id": offer["id"], "event_type": "sent"}, {"_id": 0, "id": 1}))
+
+
+async def _check_evidence_file(tenant: TenantData, offer: dict, file_id: str) -> None:
+    """Addendum A §3 (CLAUDE.md §2.6): the evidence of an acceptance is a file of THIS tenant,
+    linked to this offer's project or not linked yet — otherwise 422, nothing written.
+    The store is ``media_files``: the canonical File Registry (W0-06) is not built yet
+    (debt D-OFF01-12)."""
+    media = await tenant.media_files.get(file_id, {"_id": 0, "id": 1, "context_type": 1,
+                                                   "context_id": 1})
+    if not media:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "EVIDENCE_FILE_NOT_FOUND",
+            "message": "Файлът-доказателство не е намерен в тази фирма"})
+    ctype, cid = media.get("context_type"), media.get("context_id")
+    if cid and not (ctype == "project" and cid == offer.get("project_id")):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "EVIDENCE_FILE_NOT_LINKABLE",
+            "message": "Файлът-доказателство е свързан с друг запис"})
 
 
 def _require_key(header: Optional[str]) -> str:
@@ -473,6 +493,8 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
             raise _superseded_error()
         if offer["status"] != "Sent":
             raise HTTPException(status_code=400, detail="Only Sent offers can be accepted")
+        if data.evidence_file_id:
+            await _check_evidence_file(tenant, offer, data.evidence_file_id)
 
         async def body(session):
             from pymongo import ReturnDocument
@@ -550,19 +572,22 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
     async def work():
         if _is_superseded(offer):
             raise _superseded_error()
+        if seen_status == "Accepted":
+            raise _conflict("OFFER_ACCEPTED_USE_ANNEX",
+                            "Приета оферта не се променя с нова версия — направете допълнителна "
+                            "оферта или анекс")
         if seen_status not in VERSIONABLE_STATUSES:
-            raise HTTPException(status_code=400, detail="Can only version non-Draft offers")
+            raise HTTPException(status_code=400, detail="Can only version Draft, Sent or Rejected offers")
 
         async def body(session):
             now = datetime.now(timezone.utc).isoformat()
             new_id = str(uuid.uuid4())
+            # the old version is replaced and any approval on it is void (FLOW-003
+            # „invalidation на approval при нова версия“) — never two accepted versions
             mark = {"superseded_by": new_id, "superseded_at": now,
                     "superseded_by_user": user["id"], "updated_at": now,
+                    "status": STATUS_SUPERSEDED, "status_before_supersede": seen_status,
                     **_revoke_link(offer, "superseded", now)}
-            if seen_status != "Accepted":
-                # an accepted version keeps "Accepted" (it was accepted); every other one
-                # is replaced (debt D-OFF01-2: what an accepted offer's new version means)
-                mark.update({"status": STATUS_SUPERSEDED, "status_before_supersede": seen_status})
             won = await tenant.offers.update_one(
                 {"id": offer_id, "status": seen_status, "superseded_by": None},
                 {"$set": mark}, session=session)
@@ -608,8 +633,7 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
                 session, tenant_id=user["org_id"], actor_type="human", actor_id=user["id"],
                 action="offers.offer.superseded", offer=offer, idem_key=key,
                 roles=[user.get("role") or ""], endpoint="POST /api/offers/{offer_id}/new-version",
-                diff={"status": {"before": seen_status,
-                                 "after": mark.get("status", seen_status)},
+                diff={"status": {"before": seen_status, "after": STATUS_SUPERSEDED},
                       "superseded_by": new_id, "new_version": new_version,
                       "review_link_revoked": bool(mark.get("review_token_status"))})
             return new_offer

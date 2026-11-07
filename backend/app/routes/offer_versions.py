@@ -21,6 +21,22 @@ def _tenant(user: dict) -> TenantData:
 router = APIRouter(tags=["Offer Versions"])
 
 
+def _refuse_if_used(offer: dict, draft_was_used: bool) -> None:
+    """OFF-01 Addendum A §1 (OFF79-01): restore rewrites the offer's lines and totals in
+    place, and a version delete removes a snapshot for good. Both are allowed only on a draft
+    that was never sent — the same rule as DELETE /offers/{id}. Anything else → 409."""
+    if offer.get("status") != "Draft" or draft_was_used:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "OFFER_IN_USE",
+            "message": "Изпратена или използвана оферта не се променя и версиите ѝ не се "
+                       "изтриват — направете нова версия"})
+
+
+async def _draft_was_used(tenant: TenantData, offer: dict) -> bool:
+    from app.routes.offers import _draft_was_used as used
+    return await used(tenant, offer)
+
+
 class VersionCreate(BaseModel):
     note: Optional[str] = None
 
@@ -208,6 +224,7 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
     
     if not await can_manage_project(user, offer["project_id"]):
         raise HTTPException(status_code=403, detail="Access denied")
+    _refuse_if_used(offer, await _draft_was_used(tenant, offer))
     
     # Get the version to restore
     version = await tenant.offer_versions.find_one(
@@ -292,6 +309,7 @@ async def delete_offer_version(offer_id: str, version_number: int, user: dict = 
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
+    _refuse_if_used(offer, await _draft_was_used(tenant, offer))
     
     version = await tenant.offer_versions.find_one(
         {"org_id": user["org_id"], "offer_id": offer_id, "version_number": version_number}

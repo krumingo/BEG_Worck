@@ -652,7 +652,9 @@ def test_14_accepted_offer_gets_no_new_version(monkeypatch, backend, mode):
         before = await snap(op)
         r = await new_version(c, "o-acc")
         assert r.status_code == 409 and code(r) == "OFFER_ACCEPTED_USE_ANNEX", r.text
-        assert await snap(op) == before
+        after = await snap(op)          # the refused key stays recorded as failed (W0-04)
+        for coll in ("offers", "offer_events", "audit_events", "audit_logs"):
+            assert after[coll] == before[coll], coll
 
         # Sent v1 → v2 → v1 Superseded; v2 sent and accepted → exactly one accepted version
         await op.offers.insert_one(offer_doc("o1", token=TOKEN))
