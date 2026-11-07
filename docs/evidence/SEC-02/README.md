@@ -558,10 +558,15 @@ Route-ът е R20-2B (SiteManager член на проекта може да з�
 ### FG-141 (Допълнение I) + одит SEC71-06 — праг на правило: fail closed
 Първата версия (`30a8c22`) разпознаваше паричната метрика по името (`is_money_metric`). Одитът SEC71-06 показа, че това fail-ва open: total_spend, expenses, overhead_total, paid_total, outstanding, debt, cash, fee, receivables, deficit, overspend запазваха прага.
 
-Сега решението е **по типа на правилото**, по който `alarm_engine` разклонява (името на `metric` не се чете). За роля без финансово право `GET /alarm-rules` показва:
-* `threshold` само за типовете, които engine-ът оценява в непарична единица (`finance_read.NON_MONEY_THRESHOLD_TYPES`): budget → % изхарчено, overhead → % промяна, overtime → часове / седмица, attendance → дни без работници, deadline → дни до срока;
-* `secondary_threshold` само за единственото оценявано второ условие: budget + `secondary_metric` „progress_pct“ (% прогрес);
-* всеки друг тип (custom, pricing, procurement, непознат) или второ условие — без праг.
+Сега решението е по **явен allowlist (тип на правилото, метрика)** (`finance_read.NON_MONEY_THRESHOLD_METRICS`). Затягането след FLOW Guard (FG-141 частично @ `eb91eec`): `type: budget` с метрика сума в EUR показваше прага 48250. За роля без финансово право `GET /alarm-rules` показва:
+* `threshold` само когато типът е оценяван от `alarm_engine` в непарична единица **и** метриката е известна метрика на тази единица за този тип:
+  * budget — burn_pct, budget_pct, budget_burn_pct (% изхарчено);
+  * overhead — overhead_change_pct, overhead_pct (% промяна);
+  * overtime — weekly_overtime_hours, overtime_hours (часове / седмица);
+  * attendance — days_without_workers, attendance_days (дни);
+  * deadline — days_left, days_to_deadline (дни);
+* `secondary_threshold` само за budget + `secondary_metric` „progress_pct“ (% прогрес);
+* всяка друга двойка — budget с „amount_eur“, непозната или липсваща метрика, метрика на друг тип, custom / pricing / procurement — без праг.
 
 Името на правилото остава (свободен admin текст, решено в Допълнение G). Тест: `test_fg141_money_metric_rules_give_no_threshold` — имената от одита + EUR метрики × непарични и парични типове, второто условие и името.
 

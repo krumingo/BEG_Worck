@@ -465,16 +465,25 @@ ALARM_CONDITION_KEYS: FrozenSet[str] = frozenset(
      "secondary_threshold"})
 
 
-# SEC-02-G (FG-141, addendum I; audit SEC71-06): FAIL CLOSED. A caller without the finance
-# right sees a rule's threshold only when alarm_engine evaluates it as a non-money unit —
-# decided by the rule TYPE the engine branches on (its ``metric`` name is not read):
-#   budget -> burn %, overhead -> % change, overtime -> hours / week,
-#   attendance -> days without workers, deadline -> days left;
-# and secondary_threshold only for the one secondary condition the engine evaluates
-# (budget + secondary_metric "progress_pct" -> progress %). Every other type (custom,
-# pricing, procurement, unknown) or secondary metric: no threshold. The name stays.
-NON_MONEY_THRESHOLD_TYPES: FrozenSet[str] = frozenset(
-    {"budget", "overhead", "overtime", "attendance", "deadline"})
+# SEC-02-G (FG-141, addendum I; audit SEC71-06; FLOW Guard FG-141 partial @ eb91eec):
+# FAIL CLOSED by an explicit (rule type, metric) allowlist. A caller without the finance
+# right sees a rule's threshold only when the rule's type is one alarm_engine evaluates in
+# a non-money unit AND its metric is a known metric of that unit for that type:
+#   budget     -> burn % of the labor budget      (burn_pct, budget_pct, budget_burn_pct)
+#   overhead   -> % change month on month          (overhead_change_pct, overhead_pct)
+#   overtime   -> hours per week                   (weekly_overtime_hours, overtime_hours)
+#   attendance -> days without workers             (days_without_workers, attendance_days)
+#   deadline   -> days to the end date             (days_left, days_to_deadline)
+# and secondary_threshold only for budget + progress_pct (% progress). Any other pair —
+# a budget rule on "amount_eur", an unknown / missing metric, custom / pricing /
+# procurement — gives no threshold. The rule name stays (admin text, addendum G).
+NON_MONEY_THRESHOLD_METRICS: Dict[str, FrozenSet[str]] = {
+    "budget": frozenset({"burn_pct", "budget_pct", "budget_burn_pct"}),
+    "overhead": frozenset({"overhead_change_pct", "overhead_pct"}),
+    "overtime": frozenset({"weekly_overtime_hours", "overtime_hours"}),
+    "attendance": frozenset({"days_without_workers", "attendance_days"}),
+    "deadline": frozenset({"days_left", "days_to_deadline"}),
+}
 NON_MONEY_SECONDARY = frozenset({("budget", "progress_pct")})
 
 
@@ -483,7 +492,7 @@ def safe_alarm_rule(rule: dict) -> dict:
     if isinstance(out.get("condition"), dict):
         cond = {k: v for k, v in out["condition"].items() if k in ALARM_CONDITION_KEYS}
         rtype = out.get("type")
-        if rtype not in NON_MONEY_THRESHOLD_TYPES:
+        if cond.get("metric") not in NON_MONEY_THRESHOLD_METRICS.get(rtype, frozenset()):
             cond.pop("threshold", None)
         if (rtype, cond.get("secondary_metric")) not in NON_MONEY_SECONDARY:
             cond.pop("secondary_threshold", None)

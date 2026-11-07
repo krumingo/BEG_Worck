@@ -1731,37 +1731,41 @@ def test_fg133_alarm_rules_give_only_known_condition_keys(monkeypatch):
 
 
 def test_fg141_money_metric_rules_give_no_threshold():
-    """SEC-02-G (FLOW Guard FG-141, addendum I; audit SEC71-06 — fail closed): a caller
-    without the finance right sees a rule's threshold only for the rule types alarm_engine
-    evaluates in a non-money unit (budget %, overhead % change, overtime hours,
-    attendance / deadline days), and secondary_threshold only for budget + progress_pct.
-    Every other type / metric name — the audit's total_spend, expenses, overhead_total,
-    paid_total, outstanding, debt, cash, fee, receivables, deficit, overspend, and any
-    EUR metric — gets none. The rule name (admin text) stays."""
-    from app.permissions.finance_read import safe_alarm_rule
-    full = lambda rtype, metric, sec="progress_pct": {
-        "id": "r", "name": "Правило %s" % metric, "type": rtype,
-        "condition": {"metric": metric, "operator": ">", "threshold": 5000,
+    """SEC-02-G (FLOW Guard FG-141, addendum I; audit SEC71-06; FG-141 partial @ eb91eec —
+    fail closed by (type, metric)): a caller without the finance right sees a rule's
+    threshold only for a known non-money metric of the rule's type (budget burn %,
+    overhead % change, overtime hours, attendance / deadline days) and secondary_threshold
+    only for budget + progress_pct. A budget rule on an EUR metric (48250), the audit's
+    names, unknown or missing metrics, other types: no threshold. The name stays."""
+    from app.permissions.finance_read import safe_alarm_rule, NON_MONEY_THRESHOLD_METRICS
+    rule = lambda rtype, metric, thr=48250, sec="progress_pct": {
+        "id": "r", "name": "Правило", "type": rtype,
+        "condition": {"metric": metric, "operator": ">", "threshold": thr,
                       "secondary_metric": sec, "secondary_operator": "<",
                       "secondary_threshold": 50}}
-    audit = ("total_spend", "expenses", "overhead_total", "paid_total", "outstanding",
-             "debt", "cash", "fee", "receivables", "deficit", "overspend", "amount_eur",
-             "limit_eur", "labor_cost", "burn_pct", "")
-    for rtype in ("custom", "pricing", "procurement", "unknown", None):
-        for m in audit:
-            c = safe_alarm_rule(full(rtype, m))["condition"]
-            assert "threshold" not in c and "secondary_threshold" not in c, (rtype, m, c)
-    # the engine's own units: the threshold stays whatever the metric is called
-    for rtype in ("budget", "overhead", "overtime", "attendance", "deadline"):
-        for m in audit:
-            c = safe_alarm_rule(full(rtype, m, sec="cash"))["condition"]
-            assert c["threshold"] == 5000 and "secondary_threshold" not in c, (rtype, m, c)
-    # the one evaluated secondary condition: budget + progress %
-    c = safe_alarm_rule(full("budget", "burn_pct"))["condition"]
-    assert c["threshold"] == 5000 and c["secondary_threshold"] == 50, c
-    for rtype in ("overhead", "overtime", "attendance", "deadline", "custom"):
-        assert "secondary_threshold" not in safe_alarm_rule(full(rtype, "x"))["condition"]
-    v = safe_alarm_rule({"id": "r", "name": "Разход над 5000 EUR", "type": "custom",
+    money = ("amount_eur", "limit_eur", "labor_cost", "total_spend", "expenses",
+             "overhead_total", "paid_total", "outstanding", "debt", "cash", "fee",
+             "receivables", "deficit", "overspend", "spent", "budget_amount", "", None)
+    types = ("budget", "overhead", "overtime", "attendance", "deadline", "custom",
+             "pricing", "procurement", "unknown", None)
+    for rtype in types:
+        for m in money:
+            c = safe_alarm_rule(rule(rtype, m))["condition"]
+            assert "threshold" not in c, (rtype, m, c)           # FG-141: 48250 hidden
+    # a known metric of ANOTHER type does not count either
+    assert "threshold" not in safe_alarm_rule(rule("budget", "weekly_overtime_hours"))["condition"]
+    assert "threshold" not in safe_alarm_rule(rule("overtime", "burn_pct"))["condition"]
+    assert "threshold" not in safe_alarm_rule(rule("custom", "burn_pct"))["condition"]
+    for rtype, metrics in NON_MONEY_THRESHOLD_METRICS.items():
+        for m in metrics:
+            c = safe_alarm_rule(rule(rtype, m, thr=80, sec="cash"))["condition"]
+            assert c["threshold"] == 80 and "secondary_threshold" not in c, (rtype, m, c)
+    c = safe_alarm_rule(rule("budget", "burn_pct", thr=80))["condition"]
+    assert c["threshold"] == 80 and c["secondary_threshold"] == 50, c
+    for rtype in types:
+        if rtype != "budget":
+            assert "secondary_threshold" not in safe_alarm_rule(rule(rtype, "x"))["condition"]
+    v = safe_alarm_rule({"id": "r", "name": "Разход над 5000 EUR", "type": "budget",
                          "condition": {"metric": "amount_eur", "threshold": 5000}})
     assert v["name"] == "Разход над 5000 EUR" and v["condition"] == {"metric": "amount_eur"}
 
