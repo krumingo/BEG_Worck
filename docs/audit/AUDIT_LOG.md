@@ -1665,7 +1665,7 @@ Proof, real Mongo RS, one Idempotency-Key, 6 concurrent requests:
 | #70 PAY-01 | `31ed258` | **PASS** (D5-R1/R2 fixed by locks; FG-50 422); IDEM-IDX-1 resolved once #72 is merged (proved on a scratch merge) | 2026-11-07 |
 | #72 W0-04-C01 | `8ac194a` | **PASS** (lazy unique guard for begin_idempotent too; check-only in transactions) | 2026-11-07 |
 | #73 LAB-01 | `25f1d6c` | **PASS** (LAB-01-F FG-84 source-keyed corrections; FG-85 verified on #72 merge; fail-closed 503 without the index); note F2 (draft netting supersedes) for Krum | 2026-11-07 |
-| #74 OH-01 | `09409f0` | **PASS**: OH01-1 and OH01-2 closed (snapshot lock + CAS + unique partial index; single-winner archive); #69 harness fixed | 2026-11-07 |
+| #74 OH-01 | `240cbcf` | **PASS** (FG-86/87/88); notes: OH01-3 #69-merge guidance wrong for the SEC-01 real-Mongo test (createIndex $cmd, not 428); D6 overlap doubles (Krum) | 2026-11-07 |
 
 - **Self-correction:** my #69 C03 PASS (P1c "6 concurrent → +1") was a single lucky run. The same probe on `07faab5` gives +3 in 2 of 3 runs. The suspected "merge regression" on #71 was this flake.
 - **Not verified:** whether production databases already have the index (someone may have run the script by hand). I have no production access.
@@ -2620,3 +2620,69 @@ Gates:
 | merge-tree #69 / #70 / #71 | known conflicts (`labor_smr.py`; `project_pnl.py`; `all_reports.py` + `labor_smr.py` + A2B inventory) |
 
 Note for Krum (business, not blocking), F2: a **draft** run that nets a salary overpayment against later unpaid earnings of the same person supersedes the pending correction. It is recoverable: the next run that sees the overpayment reopens it. But while only the draft exists, the overpayment is not visible as a pending correction. Krum decides whether superseding should happen only on confirm, or whether netting against later salary is acceptable at all (CLAUDE.md §7: no automatic netting of receivables and payables).
+
+
+## #74 OH-01 FG-86/87/88 @ `240cbcf` — 2026-11-07 ~07:45 UTC — PASS (2 notes)
+
+Delta `09409f0..240cbcf` (fast-forward, 1 commit):
+- **FG-86, compute:** compute supersedes every active snapshot of the **same exact period** (and their current allocations), and assigns `snapshot_version`.
+  - The active snapshot carries `active_period_key`, protected by a unique sparse index.
+  - Compute and allocate share one `period_lock` (conditional upsert on `_id` in `overhead_period_locks`, 30 s stale takeover).
+- **FG-86, allocate:** allocating a superseded snapshot → 409 `SNAPSHOT_SUPERSEDED`; a new allocation supersedes every current allocation of the period.
+- **FG-87:** `_guarded_update`.
+  - Archived record → 409 `RECORD_ARCHIVED`; used record → 409 `OVERHEAD_RECORD_IN_USE`.
+  - For a cost, the new date is checked too.
+  - The write is conditional on status (a racing archive gives 409); an accepted PUT writes an AuditEvent with before/after of the changed fields.
+- **FG-88:** compute requires a key (428) and runs under `KeyedWrite` (replay, 409 on a different body).
+
+Probes `docs/audit/probes/oh01/test_probe_oh01.py` (O6 adapted to `overhead_period_locks`; new O7–O10), real Mongo RS, enforce:
+
+| Probe | Result |
+|---|---|
+| O1: 4 parallel re-allocations × 5 rounds | 0/5 with >1 current; each round 1×200 + 3×409; total 400 = snapshot |
+| O2 parallel archive | 1×200 + 5×409, 1 event |
+| O3 cross-tenant | 404/404 |
+| O5 same key | 1×200 + 3×409, 2 rows |
+| O6 lock edges | fresh → 409 `ALLOCATION_BUSY`, 0 rows, lock intact; stale → taken over, released |
+| **O8**: 4 parallel computes of one period × 3 rounds (FG-86) | each round 1×200 + 3×409; **exactly 1 active snapshot**; versions 1, 2, 3. PROVED |
+| **O9**: allocate S1, compute S2 (same period) | 0 current allocation rows after S2; allocate S1 → 409 `SNAPSHOT_SUPERSEDED`; allocate S2 → 200, total 400 = snapshot. PROVED |
+| **O10** FG-87 | unused cost moved into a computed period → 409; used cost edit → 409; accepted edit → AuditEvent `{"amount": {"before": 50.0, "after": 55.0}}`; DELETE racing 3 PUTs → [200, 409, 409, 409], final archived with the amount unchanged; PUT on archived → 409. PROVED |
+| **O7** (D6): month Oct 1–31 **and** half-month Oct 1–15, both allocated | **2 active snapshots, current allocation total 800 for one 400 cost** (double count) |
+
+Gates on `240cbcf`:
+
+| Gate | Result |
+|---|---|
+| OH-01 tests | **87 passed** |
+| W0 | 1085/15/50, same 15 |
+| A2C | 0/205 |
+| A1 | 0/416 |
+| `yarn build` | compiled (warnings) |
+| R0, real Mongo | **814** |
+| PM-01, real Mongo | 6 passed |
+| PM-01 matrix diff | exactly 9 cells: compute × owner/admin/accountant × 3 modes, 200/wrote → 428/nothing |
+| merge-tree main / #72 / #73 / #55 | clean |
+| merge-tree #70 | `idempotency.js` (known) |
+| merge-tree #69, #71 | `overhead.py` (compute signature) + `matrix.csv`. #71 carries #69's compute change: same conflict, same resolution |
+
+Trial merge with #69 `7300864`, resolved as the HANDOFF says (keep `_sec01` and `idempotency_key`; matrix taken from one side):
+- OH-01: **87 passed**.
+- SEC-01: 29 passed, **1 failed**: `test_sec_01_c01_all_money_writes::test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode`.
+- `test_the_pm01_matrix_shows_the_money_write_cells_closed` passed without regeneration.
+
+**OH01-3, MEDIUM, PROVED: the HANDOFF's diagnosis of that SEC-01 failure is wrong.**
+- The HANDOFF says compute "now gets 428". On the merged tree the SEC-01 harness sends a key and compute returns **200** (off, Owner, tenant A).
+- The assertion that fails is `written_orgs == ['A']`: the actual value is `['A', 'None']`. The written namespaces are `op.$cmd, op.audit_events, op.audit_logs, op.overhead_period_locks, op.overhead_snapshots`.
+- The lock row carries `org_id` (checked directly). The org-less write is the **`createIndexes` command** from `ensure_snapshot_indexes` on the first compute in a fresh database (`$cmd` oplog entry, no `_id`/org).
+- So "update the expectation to 428" will not make it pass. The fix is either:
+  - create the OH-01 indexes at startup/onboarding (like #72's `ensure_audit_indexes`), not per request (this also closes my earlier low note), or
+  - teach the SEC-01 harness to ignore `$cmd` DDL.
+
+**Note for Krum, HIGH business impact, not blocking (pre-existing on main; documented as HANDOFF D6), O7:**
+- Snapshots of **overlapping** periods are both active, and both allocations count in P&L: 800 for a 400 cost.
+- Recommendation: refuse a compute whose period overlaps an active snapshot of a different period (or supersede it).
+
+Other notes:
+- Between "new snapshot computed" and "new snapshot allocated", P&L shows 0 overhead for the period (HANDOFF; behaviour change).
+- FG-87 is strict and also blocks non-financial fields on used records (HANDOFF; Krum).
+- FG-89: `full_cost.py` is a second overhead path writing into `overhead_snapshots` with no versions or key (HANDOFF debt; needs a decision).
