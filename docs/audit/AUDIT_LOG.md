@@ -3810,3 +3810,6 @@ Addendum F:
 | PM-01 | 6, real |
 
 PR comment 6695992847 updated (blocking).
+
+- **#71 known-pay variant:** decided by Krum as **R42** (recorded @ `940bd49`). The R31 threshold stays at 2 paid workers, and the known-pay derivation is accepted. It is **not a finding**.
+- **SEC71-05:** dispatched to SEC-02 as Addendum H. It will be re-checked on the next #71 head.
