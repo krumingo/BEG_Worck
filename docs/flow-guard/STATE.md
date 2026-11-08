@@ -20,7 +20,7 @@
 | `claude/lab-02-quantity-approval` (LAB-02) | `388b81c` | 21 | FLOW-028, Р33 |
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `aa369d8` | 31 | слят в main (`ea57121`);  FLOW-021, Р39/Р40 |
 | `claude/act-01-client-act-from-offer` (ACT-01) | `c7df7ca` | 27 | слят в main (`fddb0185`);  FLOW-004 |
-| `claude/off-01-offer-version-accept` (OFF-01) | `8dc3c45` | 21 | FLOW-003, FLOW-002 magic link |
+| #79 `claude/off-01-offer-version-accept` (OFF-01) | `f526182` | 32 | FLOW-003, FLOW-002 magic link |
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `72e7e87` | 32 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `1e455e3` | 31 | FLOW-010, Р48 |
