@@ -326,3 +326,32 @@ On `9f86d0b` the new rule is 6 red; `r59_red_on_9f86d0b_real_mongo.txt`. The Е�
 - The code merged cleanly.
 
 Gates for this head: `gates_r59.txt`.
+
+## 15. FLOW Guard pass 28 (FG-275, FG-267 remaining, R59 variants) and the merge of main `3699c3b`
+
+**FG-275 (R48.3): every full display is audited.**
+- Ordinary reads return the ЕГН **masked for every role, Owner and Accountant included**. This covers `GET /projects`, `GET /projects/{id}`, `GET /projects/{id}/invoice-details`, and the PUT/POST project responses.
+- The `possible_visible` exception for Owner / Accountant was removed.
+- The full value comes only from `POST /persons/{id}/egn/reveal` (Owner / Accountant), which writes `person.egn.revealed` before the value is returned.
+
+**FG-267 (remaining): a 10-digit value counts as a company tax id only when the owner is a real company of this tenant.**
+- `owner_type=company` alone is not enough.
+- An unknown `owner_id`, another tenant's company, or a person → the value is masked as a possible ЕГН.
+- The check is a read of `companies` through TenantData (`projects._company_confirmed`). `counterparty_rules.egn_copy_fields` takes `company_confirmed` and defaults to *not a company*.
+- The migration script uses the same check, so such a copy is kept and gets a DQ issue.
+
+**R59 variants:** the cash test now also covers each variant FLOW Guard proved: a typo, a Latin spelling, an unknown ЕИК, a name with an unknown ЕИК, each of those without a receipt, and a chosen counterparty without a receipt. All give 422 and write nothing. These already passed on `6fcd345`, where R59 landed.
+
+**Tests:**
+- `test_fg275_owner_and_accountant_see_the_full_egn_only_by_reveal`
+- `test_fg267_a_possible_egn_without_a_company_owner_is_masked`, now for all 6 roles, with unknown / foreign-tenant / person owners
+- the migration test, with case `pu`
+- `test_fg242_r59_…`, with the variants
+
+Red on `6fcd345`: 42 failed (`pass28_red_on_6fcd345_real_mongo.txt`).
+
+**Merge:** main `3699c3b` (#87, canon R56–R59, docs only) merged with a merge commit; no conflicts.
+
+**D9 (debt, for the orchestrator):** an ЕГН copy in `invoice_details` that has **no canonical `persons` record** is kept (CP83-03), but no role can see it in full now, because there is no reveal for a project copy. The way to use it is the DQ issue „ЕГН копие без каноничен запис“: the Accountant creates the person, whose ЕГН is then revealed with an audit. A separate audited `invoice-details` reveal would need a decision.
+
+Gates for this head: `gates_pass28.txt`.
