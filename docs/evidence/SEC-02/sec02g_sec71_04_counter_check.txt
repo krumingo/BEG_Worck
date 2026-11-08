@@ -1,0 +1,11 @@
+# audit probe probe_sec71_d1_band_bisect.py at 02a1441 (before SEC71-04 fix)
+off: first answer (201, 200, {'total_budget': 50000.0, 'status': 'on_track'}) | steps 21 statuses ['on_track', 'over_budget', 'warning'] | derived spent 6196.90 vs actual 6200.00 (paid workers on P1: 1)
+shadow: first answer (201, 200, {'total_budget': 50000.0, 'status': 'on_track'}) | steps 21 statuses ['on_track', 'over_budget', 'warning'] | derived spent 6196.90 vs actual 6200.00 (paid workers on P1: 1)
+enforce: first answer (201, 200, {'total_budget': 50000.0, 'status': 'on_track'}) | steps 21 statuses ['on_track', 'over_budget', 'warning'] | derived spent 6196.90 vs actual 6200.00 (paid workers on P1: 1)
+FAILS: ["off: TM derives the site's cumulative labor spent 6196.90 (actual 6200.00) in 21 budget edits", "shadow: TM derives the site's cumulative labor spent 6196.90 (actual 6200.00) in 21 budget edits", "enforce: TM derives the site's cumulative labor spent 6196.90 (actual 6200.00) in 21 budget edits"]
+
+# same probe, SEC-02-G (SEC71-04)
+off: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+shadow: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+enforce: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+FAILS: none

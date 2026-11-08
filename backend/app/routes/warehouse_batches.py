@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.services.fifo_service import (
     add_batch, consume_fifo, get_current_stock, get_stock_value,
     InsufficientStockError,
@@ -70,6 +71,7 @@ class ConsumeRequest(BaseModel):
 # ── List batches ──
 
 @router.get("/warehouse/batches")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def list_batches(
     item_id: str = "", warehouse_id: str = "", status: str = "",
     page: int = 1, page_size: int = 50,
@@ -96,6 +98,7 @@ async def list_batches(
 
 
 @router.get("/warehouse/batches/{batch_id}")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     batch = await tenant.warehouse_batches.find_one(
@@ -109,11 +112,13 @@ async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
 # ── Item stock & batches ──
 
 @router.get("/warehouse/items/{item_id}/stock-summary")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def item_stock_summary(item_id: str, warehouse_id: str = "", user: dict = Depends(get_current_user)):
     return await get_current_stock(user["org_id"], item_id, warehouse_id or None)
 
 
 @router.get("/warehouse/items/{item_id}/batches")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     cursor = tenant.warehouse_batches.find(
@@ -128,6 +133,7 @@ async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
 # ── Create batch ──
 
 @router.post("/warehouse/batches", status_code=201)
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)):
     """LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
     ``warehouse_batches`` is a projector over the canonical ledger;
@@ -177,7 +183,10 @@ async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
 # ── Warehouse total value ──
 
 @router.get("/warehouse/value")
-async def warehouse_value(warehouse_id: str = "", user: dict = Depends(get_current_user)):
+async def warehouse_value(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.warehouse_value.read", module=None, resource_type="warehouse_value")),  # SEC-02 (R20-1): before any read
+    warehouse_id: str = "", user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     if not warehouse_id:
         # All warehouses

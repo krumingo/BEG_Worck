@@ -624,6 +624,28 @@ ENFORCE_EXTRA_WRITES = {
     ("PUT", "/api/ocr-invoice/{intake_id}/approve"): "denial",
     ("POST", "/api/sales/commit"): "denial",
     ("POST", "/api/pricing/refresh"): "denial",
+    # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
+    ("GET", "/api/reports/company-finance-export"): "denial",
+    # SEC-02-A (D1): the money-only file exports (significant verb "export").
+    ("GET", "/api/smr-analyses/{analysis_id}/export-excel"): "denial",
+    ("GET", "/api/offers/{offer_id}/pdf"): "denial",
+    ("GET", "/api/offers/{offer_id}/xlsx"): "denial",
+    # SEC-02-E (audit SEC02D-1 + POST/PUT money sweep): execute / update denials are audited.
+    ("POST", "/api/budget-freezes/{project_id}"): "denial",
+    ("POST", "/api/client-acts/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/price-modifiers/calculate"): "denial",
+    ("POST", "/api/pulse/generate-all"): "denial",
+    ("POST", "/api/resource-model/subcontractor-burden-preview"): "denial",
+    ("POST", "/api/resource-model/worker-cost-preview"): "denial",
+    ("POST", "/api/revenue-snapshots/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/sites/{site_id}/pulse/generate"): "denial",
+    # SEC-02-G (audit SEC71-05): evaluating every alarm rule is finance only
+    ("POST", "/api/alarms/evaluate"): "denial",
+    ("POST", "/api/smr-analyses/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/smr-analyses/{analysis_id}/recalculate"): "denial",
+    ("POST", "/api/smr-analyses/{analysis_id}/recalculate-with-modifiers"): "denial",
+    ("PUT", "/api/client-acts/{act_id}"): "denial",
+    ("PUT", "/api/execution-packages/{pkg_id}"): "denial",
     # LIVE-OPS-01 / TASK 5C (#55, Р28): the refused migration execute writes the
     # enforce "access denied" AuditEvent — 403 in every mode, nothing else written.
     ("POST", "/api/warehouse/migration-readiness/execute"): "denial",

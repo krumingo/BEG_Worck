@@ -38,6 +38,9 @@ export const formatTime = (dateStr) => {
 
 // Format currency
 export const formatCurrency = (amount, currency = 'EUR') => {
+  // SEC-02-A (R20): an amount the backend did not send (money hidden for this role) is
+  // shown as a dash, never as a fake 0. null / 0 keep the old "0" rendering.
+  if (amount === undefined) return '—';
   const locale = getLocale();
   return new Intl.NumberFormat(locale, { 
     style: 'currency', 

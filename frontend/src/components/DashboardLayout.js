@@ -4,6 +4,7 @@ import { useActiveProject } from "@/contexts/ProjectContext";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { canReadMasterData } from "@/lib/masterDataAccess";
+import { canReadFinance } from "@/lib/financeAccess";
 import { canOpenCanonicalWarehouse } from "@/lib/warehouseCanonicalAccess";
 import {
   LayoutDashboard, Users, Building2, Blocks, ScrollText, LogOut, KeyRound,
@@ -39,7 +40,7 @@ const NAV_GROUPS = [
     children: [
       { to: "/offers", icon: FileText, labelKey: "nav.offers" },
       { to: "/smr-analyses", icon: Calculator, labelKey: "nav.smrAnalysis" },
-      { to: "/pricing", icon: TrendingUp, labelKey: "nav.pricing" },
+      { to: "/pricing", icon: TrendingUp, labelKey: "nav.pricing", finance: true },
       { to: "/activity-catalog", icon: Layers, labelKey: "nav.activities" },
       { to: "/ai-calibration", icon: Sparkles, labelKey: "nav.aiCalibration" },
       { to: "/historical-offers", icon: Archive, labelKey: "nav.historicalOffers" },
@@ -63,7 +64,8 @@ const NAV_GROUPS = [
     ],
   },
   {
-    id: "finances", icon: Landmark, labelKey: "nav.finances",
+    // SEC-02 (R20): the whole group is company finance — finance roles only.
+    id: "finances", icon: Landmark, labelKey: "nav.finances", finance: true,
     children: [
       { to: "/finance", icon: Landmark, labelKey: "nav.finance" },
       { to: "/pay-runs", icon: Receipt, labelKey: "nav.payRuns" },
@@ -102,8 +104,8 @@ const NAV_GROUPS = [
       { to: "/data/master-data", icon: Inbox, labelKey: "nav.masterDataReview" },
       { to: "/data/counterparties", icon: Building2, labelKey: "nav.counterparties" },
       { to: "/data/clients", icon: Users, labelKey: "nav.clients" },
-      { to: "/data/prices", icon: TrendingUp, labelKey: "nav.prices" },
-      { to: "/data/turnover", icon: BarChart3, labelKey: "nav.turnover" },
+      { to: "/data/prices", icon: TrendingUp, labelKey: "nav.prices", finance: true },
+      { to: "/data/turnover", icon: BarChart3, labelKey: "nav.turnover", finance: true },
     ],
   },
   {
@@ -247,12 +249,15 @@ export default function DashboardLayout({ children }) {
   const isTabActive = (tabPath) => tabPath === "/" ? location.pathname === "/" : location.pathname.startsWith(tabPath);
 
   // Build effective groups for admin (add platform admin children to settings)
+  // SEC-02 (R20): finance menus only for Owner/Admin/Accountant (lib/financeAccess.js).
+  const seesFinance = canReadFinance(user?.role);
   const getGroups = () => {
-    return NAV_GROUPS.map(g => {
+    return NAV_GROUPS.filter(g => seesFinance || !g.finance).map(g => {
+      const children = g.children ? g.children.filter(c => seesFinance || !c.finance) : g.children;
       if (g.id === "settings" && isPlatformAdmin) {
-        return { ...g, children: [...(g.children || []), ...PLATFORM_ADMIN_CHILDREN] };
+        return { ...g, children: [...(children || []), ...PLATFORM_ADMIN_CHILDREN] };
       }
-      return g;
+      return children === g.children ? g : { ...g, children };
     });
   };
 
