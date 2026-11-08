@@ -150,6 +150,11 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
                 Одобри
               </Button>
             )}
+            {n.difference_accepted?.company_cost > 0 && (
+              <Badge variant="outline" className="text-xs">
+                Фирмен разход (загуба от връщане): {n.difference_accepted.company_cost}
+              </Badge>
+            )}
             {n.direction === "incoming" && !n.applied && n.expected_link?.matched === false && !n.superseded_by && (
               <Badge variant="outline" className="text-xs text-amber-400">Разлика в кредитно известие</Badge>
             )}

@@ -1,0 +1,10 @@
+# Р58 / FG-265 red proof — the new test run against the code of b99c0eb (real Mongo rs0)
+# On b99c0eb the accepted difference on a WAREHOUSE-received line was booked nowhere:
+# not a project cost (the line is no Path B cost) and no company cost (no split, no reader).
+E       KeyError: 'split'
+E       KeyError: 'split'
+E       KeyError: 'split'
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[enforce]
+3 failed, 129 deselected, 1 warning in 2.88s

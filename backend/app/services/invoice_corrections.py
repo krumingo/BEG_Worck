@@ -901,11 +901,14 @@ async def _accepted_difference_lines(tenant, project_id: str, note: dict,
         return []
     diff_net = cents(diff_gross * note_net / note_gross)       # the note's own VAT ratio
     at = _moment(acc.get("at"))
+    company = {s["original_line_id"] for s in acc.get("split") or [] if s.get("target") == COST_TARGET_COMPANY}
     out: List[dict] = []
     for l in note.get("lines") or []:
         line_id = l.get("original_line_id")
         if line_id not in counted_by_line or note_net <= 0:
             continue                                   # not a line of THIS project
+        if line_id in company:
+            continue                                   # Р58: a warehouse line → company cost
         row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
         share = _project_share(row or {}, project_id)
         value = cents(diff_net * cents(l.get("net")) / note_net * share)
@@ -916,6 +919,68 @@ async def _accepted_difference_lines(tenant, project_id: str, note: dict,
                     "material_name": l.get("description") or "", "package_id": None, "at": at,
                     "period": period_of(at), "ref": note.get("id"), "invoice_line_id": line_id,
                     "note_number": note.get("number")})
+    return out
+
+
+COST_TARGET_COMPANY = "company"
+COST_TARGET_PROJECT = "project"
+
+
+async def line_received_in_warehouse(tenant, invoice_id: str, line_id: str, *, session=None) -> bool:
+    """Р58: was this supplier invoice line received INTO THE WAREHOUSE? A canonical ledger
+    movement that names the line, or names the invoice with no line at all."""
+    from app.services.invoice_line_lock import first_linked_movement
+    if await first_linked_movement(tenant, line_id, session=session):
+        return True
+    return bool(await tenant.warehouse_transactions.find_one(
+        {"action": {"$exists": True}, "invoice_id": invoice_id, "invoice_line_id": {"$in": [None, ""]}},
+        {"_id": 0, "movement_id": 1}, session=session))
+
+
+async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, session=None) -> List[dict]:
+    """Р55(3) + Р58: split the accepted (uncredited) difference over the note's lines, net
+    of VAT by the note's own VAT ratio, and say WHERE each part is a cost — frozen at the
+    moment of acceptance:
+
+    * a line received into the warehouse → ``company``: a company cost (a loss on the
+      return) in the period of acceptance; the warehouse FIFO prices are NOT changed;
+    * any other line → ``project``: the original line's project / SMR (FG-251)."""
+    note_gross, note_net = cents(note.get("gross")), cents(note.get("net"))
+    if diff_gross <= 0 or note_gross <= 0 or note_net <= 0:
+        return []
+    diff_net = cents(diff_gross * note_net / note_gross)
+    lines = [l for l in note.get("lines") or [] if cents(l.get("net")) > 0]
+    out: List[dict] = []
+    left = diff_net
+    for i, l in enumerate(lines):
+        part = left if i == len(lines) - 1 else cents(diff_net * cents(l.get("net")) / note_net)
+        left -= part
+        warehouse = await line_received_in_warehouse(tenant, note["original_invoice_id"],
+                                                     l.get("original_line_id"), session=session)
+        out.append({"original_line_id": l.get("original_line_id"), "net": money(part),
+                    "target": COST_TARGET_COMPANY if warehouse else COST_TARGET_PROJECT})
+    return out
+
+
+async def company_cost_lines(tenant, period: Optional[str] = None) -> List[dict]:
+    """Р58: the company costs (losses on a return) of accepted differences on lines received
+    into the warehouse — derived from the accepted notes themselves (no second ledger),
+    dated by the acceptance → its period."""
+    from app.services.canonical_material_cost import _moment, period_of
+    out: List[dict] = []
+    async for n in tenant.credit_debit_notes.find(
+            {"direction": INCOMING, "difference_accepted.split.target": COST_TARGET_COMPANY}, {"_id": 0}):
+        acc = n["difference_accepted"]
+        at = _moment(acc.get("at"))
+        if period and period_of(at) != period:
+            continue
+        for s in acc.get("split") or []:
+            if s.get("target") != COST_TARGET_COMPANY or cents(s.get("net")) <= 0:
+                continue
+            out.append({"source": "supplier_note", "kind": "accepted_difference_company",
+                        "value": s["net"], "at": at, "period": period_of(at), "ref": n.get("id"),
+                        "invoice_id": n.get("original_invoice_id"), "invoice_line_id": s["original_line_id"],
+                        "note_number": n.get("number"), "reason": acc.get("reason")})
     return out
 
 

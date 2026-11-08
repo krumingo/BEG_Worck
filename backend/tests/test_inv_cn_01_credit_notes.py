@@ -1295,6 +1295,72 @@ def test_fg251_an_accepted_difference_after_a_reversal_is_project_cost_in_the_ac
 
 
 
+def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged(monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services.canonical_material_cost import project_material_cost
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        bill = await sent(c, direction="Received", project="prj-1")
+        for lid, desc in (("il-58w", "Плочки"), ("il-58p", "Лепило")):
+            row = {"id": lid, "org_id": ORG_A, "invoice_id": bill["id"], "description": desc,
+                   "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+                   "created_at": "2026-10-02T08:00:00+00:00"}
+            if lid == "il-58p":
+                row["allocations"] = [{"type": "project", "ref_id": "prj-1", "qty": 10}]
+            await op.invoice_lines.insert_one(row)
+        # il-58w was received INTO THE WAREHOUSE (a canonical ledger movement + its FIFO layer)
+        await op.warehouse_transactions.insert_one({
+            "id": "wt-58", "org_id": ORG_A, "action": "receipt", "movement_id": "mv-58",
+            "invoice_id": bill["id"], "invoice_line_id": "il-58w", "qty": 10, "unit_cost": 10.0})
+        await op.warehouse_transactions.insert_one({
+            "id": "wt-58r", "org_id": ORG_A, "action": "receipt_reversal", "movement_id": "mv-58r",
+            "invoice_id": bill["id"], "invoice_line_id": "il-58w", "qty": -3, "unit_cost": 10.0})
+        fifo_before = await op.warehouse_transactions.find({}, {"_id": 0}).sort("id", 1).to_list(50)
+        # the awaited credit 72.00 (3 × 10 + VAT on each line); the supplier credits 60.00
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_58", "org_id": ORG_A, "invoice_id": bill["id"], "invoice_line_id": "il-58w",
+            "amount": 72.0, "status": "open", "created_at": "2026-10-05T08:00:00+00:00",
+            "dq_task": {"status": "open"}})
+        n = (await note(c, bill, number="CN-58", expected_credit_note_ids=["ecn_58"],
+                        lines=[{"original_line_id": "il-58w", "amount": 25.0},
+                               {"original_line_id": "il-58p", "amount": 25.0}])).json()
+        assert (n["gross"], n["applied"]) == (60.0, False)
+        before = await project_material_cost(tenant, ORG_A, "prj-1")
+        r = await c.post("/api/finance/credit-notes/%s/accept-difference" % n["id"], headers=hdr("owner-a"),
+                         json={"reason": "доставчикът не коригира"})
+        assert r.status_code == 200, r.text
+        acc = r.json()["difference_accepted"]
+        period = acc["at"][:7]
+        # 12.00 gross → 10.00 net, split by the note's lines: 5.00 warehouse + 5.00 project
+        assert sorted((s["original_line_id"], s["net"], s["target"]) for s in acc["split"]) == [
+            ("il-58p", 5.0, "project"), ("il-58w", 5.0, "company")]
+        assert acc["company_cost"] == 5.0
+        # the warehouse part is a COMPANY cost (loss on the return) in the acceptance period
+        r = await c.get("/api/finance/company-costs/accepted-differences?period=%s" % period,
+                        headers=hdr("owner-a"))
+        assert r.status_code == 200, r.text
+        assert r.json()["total"] == 5.0
+        assert [(l["invoice_line_id"], l["value"], l["period"]) for l in r.json()["lines"]] == [
+            ("il-58w", 5.0, period)]
+        r = await c.get("/api/finance/company-costs/accepted-differences?period=1999-01", headers=hdr("owner-a"))
+        assert r.json()["total"] == 0.0
+        # ...it is NOT a project cost; only the project line's part is (FG-251)
+        after = await project_material_cost(tenant, ORG_A, "prj-1")
+        assert round(after["total_cost"] - before["total_cost"], 2) == 5.0
+        assert [ln["invoice_line_id"] for ln in after["lines"] if ln.get("kind") == "accepted_difference"] == [
+            "il-58p"]
+        # FIFO prices / ledger unchanged
+        assert await op.warehouse_transactions.find({}, {"_id": 0}).sort("id", 1).to_list(50) == fifo_before
+        # AuditEvent carries the split, the company cost and the period
+        ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_accepted"})
+        diff = ev["structured_diff"]
+        assert (diff["company_cost"], diff["cost_period"], diff["difference_gross"]) == (5.0, period, 12.0)
+        # tenant isolation: another org sees nothing
+        r = await c.get("/api/finance/company-costs/accepted-differences", headers=hdr("admin-b"))
+        assert r.status_code == 200 and r.json()["lines"] == [], r.text
+    run(monkeypatch, mode, scenario)
+
+
 def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
     async def scenario(c, op):
         body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",

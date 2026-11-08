@@ -399,11 +399,17 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
             if open_rows != len(rows):
                 raise ic.conflict(ic.NOT_PENDING, "Очакваното известие вече е покрито")
             at = ic.now_iso()
+            diff_gross = ic.cents(link.get("expected")) - ic.cents(note.get("gross"))
+            # Р58 / FG-265: a warehouse-received line → company cost; other → project (FG-251)
+            split = await ic.split_accepted_difference(tenant, note, diff_gross, session=session)
+            company_cost = sum((ic.cents(s["net"]) for s in split if s["target"] == ic.COST_TARGET_COMPANY),
+                               Decimal(0))
             await tenant.credit_debit_notes.update_one(
                 {"id": note_id, "applied": False},
                 {"$set": {"applied": True, "difference_accepted": {
                     "by": user["id"], "reason": reason, "at": at,
-                    "expected": link.get("expected"), "registered": note.get("gross")},
+                    "expected": link.get("expected"), "registered": note.get("gross"),
+                    "split": split, "company_cost": ic.money(company_cost)},
                     "updated_at": at}}, session=session)
             await tenant.expected_credit_notes.update_many(
                 {"id": {"$in": rows}, "status": "open"},
@@ -423,10 +429,12 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
                                                   "original_invoice_id": note["original_invoice_id"],
                                                   # Р55(3) / FG-251: the uncredited part stays a
                                                   # cost of the original line's project, dated now
-                                                  "difference_gross": ic.money(
-                                                      ic.cents(link.get("expected"))
-                                                      - ic.cents(note.get("gross"))),
-                                                  "cost_period": at[:7]},
+                                                  "difference_gross": ic.money(diff_gross),
+                                                  "cost_period": at[:7],
+                                                  # Р58: the warehouse part is a company cost
+                                                  # (loss on the return); FIFO unchanged
+                                                  "split": split,
+                                                  "company_cost": ic.money(company_cost)},
                                 key, session)
         await fin._tx(run_in_transaction, tx_body)
         return _public(await tenant.credit_debit_notes.find_one({"id": note_id}, {"_id": 0}))
@@ -481,6 +489,18 @@ async def invoice_corrections(invoice_id: str, user: dict = Depends(require_m5))
         "credited_by_line": {k: ic.money(v) for k, v in credited.items()},
         "notes": notes, "offsets": offsets, "expected_credit_notes": expected,
     }
+
+
+@router.get("/finance/company-costs/accepted-differences")
+async def company_cost_of_accepted_differences(period: Optional[str] = None,
+                                               user: dict = Depends(require_m5)):
+    """Read-only, Р58 / FG-265: the company costs (losses on a return) of accepted credit
+    differences on warehouse-received lines, in the period of acceptance — derived from
+    the accepted notes (no second ledger). ``period`` = YYYY-MM."""
+    _guard(user)
+    lines = await ic.company_cost_lines(fin._tenant(user), period)
+    total = sum((ic.cents(l["value"]) for l in lines), Decimal(0))
+    return {"period": period, "total": ic.money(total), "lines": lines}
 
 
 # ═════════════════════════════════════════════════════════════ refund (Р49.6 а)
