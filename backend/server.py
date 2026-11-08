@@ -431,6 +431,9 @@ async def startup():
     await password_reset.ensure_indexes(db)
     await rate_limit.ensure_indexes(db)
     await auth_events.ensure_indexes(db)
+    # ACT-01: unique act number per tenant (counter-numbered acts) + offer-line lookup.
+    from app.services import client_acts as client_acts_service
+    await client_acts_service.ensure_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

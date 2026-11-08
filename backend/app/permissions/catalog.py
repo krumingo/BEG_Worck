@@ -90,6 +90,8 @@ ACTIONS: Set[str] = {
     # writes a Viewer could reach. One action per endpoint; finance roles only.
     "finance.subcontractor_payment.create",  # POST /api/subcontractor-payments (FG-27)
     "revenue.client_act_confirm.execute",    # POST /api/client-acts/{act_id}/confirm
+    # ACT-01 (#77, R14): a client act carries client prices and a receivable
+    "revenue.client_act.create",             # POST /api/client-acts
     "subcontract.act_confirm.execute",       # POST /api/subcontractor-acts/{act_id}/confirm
     "procurement.supplier_invoice.update",   # PUT  /api/supplier-invoices/{inv_id}
     "overhead.worker_calendar.create",       # POST /api/worker-calendar
@@ -193,6 +195,8 @@ MONEY_WRITE_ACTIONS: Set[str] = {
     "labor.package_recompute.execute",
     "finance.overhead_snapshot_compute.execute",
     "pricing.project_modifier.delete",
+    # ACT-01 (#77): POST /api/client-acts — finance roles only (R14), the C01 rule
+    "revenue.client_act.create",
 }
 # SEC-01-C02 (R14; FG-27, FG-30): same rule, same holders (Owner/Admin/Accountant).
 MONEY_WRITE_ACTIONS_C02: Set[str] = {

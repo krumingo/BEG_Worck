@@ -1,0 +1,158 @@
+# ACT-01 checks (2026-11-07), parent 0f870c3 + ACT-01 working tree, run from backend/ with PYTHONPATH=.
+# MongoDB: disposable local docker mongo:7.0, replica set rs0 (127.0.0.1:27019), W0_03_REAL_MONGO_URL + MONGO_URL set.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## tests/test_act_01_client_act_from_offer.py + tests/test_pm_01_permission_matrix.py (real Mongo, -rs: no SKIPPED line = 0 skipped)
+80 passed, 6 warnings in 200.00s (0:03:20)
+  on main 0f870c3: test_pm_01 = 2 failed / 4 passed (the committed matrix lacked POST /api/auth/forgot-password and
+  POST /api/auth/reset-password from PR #56); test_act_01 against main = 70 failed / 4 passed (main-0f870c3-results.json)
+## tests/test_r0_0*.py (real Mongo)
+814 passed, 6 warnings in 141.21s (0:02:21)
+  main 0f870c3: 814 passed
+## W0: tests/test_w0_*.py (real Mongo URL set)
+15 failed, 1135 passed — the same 15 as main 0f870c3 (15 failed, 1135 passed):
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+## Full backend/tests (real Mongo URL set; REACT_APP_BACKEND_URL = closed port, so the legacy live-server tests fail on both sides)
+main 0f870c3 : 168 failed, 2312 passed, 996 errors
+ACT-01       : 166 failed, 2391 passed, 993 errors
+FAILED/ERROR names new on ACT-01: none.
+Only on main: the 2 PM-01 tests (stale matrix, fixed by the regeneration) and 3 ST-02 setup errors
+("bundle directory already exists" — the two suites ran in parallel and shared one /tmp/pytest-of-root
+release directory; environmental, not ACT-01). +79 passed = 74 ACT-01 + 2 PM-01 + 3 ST-02.
+
+# ── Addendum A (offer versions) + D12 (VAT/currency from the offer), rerun on the new head ──
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 + PM-01
+harness_rc=0
+86 passed, 6 warnings in 198.17s (0:03:18)
+## R0
+814 passed, 6 warnings in 149.55s (0:02:29)
+## W0
+15 failed, 1135 passed, 6 warnings in 105.68s (0:01:45)
+SAME_15
+  test_act_01 against main 0f870c3 (re-recorded main-0f870c3-results.json): 75 failed / 5 passed
+
+# ── Addendum B (FG-119..123), rerun on the new head ──
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 committed results + ACT-01 fresh + PM-01 (real Mongo, -rs)
+harness_rc=0
+104 passed, 6 warnings in 194.25s (0:03:14)
+## R0
+814 passed, 6 warnings in 148.71s (0:02:28)
+## W0
+15 failed, 1135 passed, 6 warnings in 101.42s (0:01:41)
+SAME_15
+  test_act_01 against main 0f870c3 (re-recorded main-0f870c3-results.json): 93 failed / 5 passed
+  FG-123 probe: with guard_offer_family disabled, test_a_version_accepted_during_the_act_transaction_blocks_the_act
+  fails in all three modes (3 failed / 95 passed) — the guard write is what closes the race.
+  PM-01 matrix: only POST /api/client-acts/{act_id}/confirm changed (non-finance 404 -> 403, audited in enforce;
+  finance 404 -> 428 without a key; nothing written anywhere).
+
+# ── ACT77-01 (audit, MEDIUM): fresh tenant, concurrent first acts ──
+before the fix, on 0a5f894 + the new fresh-tenant scenario (10 concurrent first acts on lines of 3 offers,
+client_acts / client_act_line_totals / org_counters / audit_events dropped first):
+  enforce [201, 500, 500, 201, 201, 201, 201, 500, 500, 201]; off [500, 201, 500, 201, 201, 201, 201, 201, 201, 201]; shadow [201, 201, 201, 201, 500, 201, 500, 201, 201, 201]
+  server log: 16x "namespace '...client_act_line_totals' is already in use. :: Please retry" (implicit
+  collection creation inside the transaction)
+after the fix (collections created outside the transaction + bounded TransientTransactionError retry):
+  all modes: 10x201, 10 unique act numbers; 10 concurrent x10 on a fresh 10 m2 line: 1x201 + 9x409; 0 "already in use"
+## A2C guard
+W0-03E-A2C tenant boundary guard: 213 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 430 unit(s) checked, 0 violation(s)
+## ACT-01 (committed results regenerated) + fresh ACT-01 + PM-01 (real Mongo, -rs)
+harness_rc=0
+107 passed, 6 warnings in 191.46s (0:03:11)
+## R0
+814 passed, 6 warnings in 146.93s (0:02:26)
+## W0
+15 failed, 1135 passed, 6 warnings in 113.62s (0:01:53)
+SAME_15
+## Trial merge (local, not pushed) of this head with #69 @ 3fb55f2 and with #71 @ e90aa5f
+conflicts only in backend/app/routes/revenue_expense.py, backend/tests/test_pm_01_permission_matrix.py,
+docs/evidence/PM-01/matrix.csv, docs/evidence/PM-01/run_meta.json; catalog.py merges cleanly.
+
+# ── Addendum C (FG-131) + merge of main d226c49 (PR #70 PAY-01, PR #72 W0-04-C01), merge commit 611435e ──
+before (8188689 + the new test): 33+33+34 at 12.345 -> 407.39+407.39+419.73 = 1234.51; 100 x 1 -> 1235.00;
+  edit sequence -> 1234.51 (3 failed in off/shadow/enforce)
+after: 407.39 + 407.38 + 419.73 = 1234.50; 100 x 1 = 1234.50; 10 concurrent x 10 = 1234.50; edits = 1234.50
+## A2C guard
+W0-03E-A2C tenant boundary guard: 216 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 436 unit(s) checked, 0 violation(s)
+## ACT-01 (committed results regenerated) + fresh ACT-01 + PM-01 (real Mongo, -rs)
+harness_rc=0
+110 passed, 6 warnings in 178.82s (0:02:58)
+## R0
+814 passed, 6 warnings in 147.57s (0:02:27)
+## W0
+15 failed, 1173 passed, 6 warnings in 118.18s (0:01:58)
+## PAY-01 + W0-04-C01 suites from main
+test_pay_01_c01_amounts_reason.py
+test_pay_01_c01_e_serialisation.py
+test_pay_01_c01_idempotency.py
+test_pay_01_c01_source_module.py
+test_pay_01_payment_reversal.py
+test_w0_04_c01_audit_indexes_and_chain.py
+668 passed, 1 warning in 168.53s (0:02:48)
+  W0 on main d226c49 (worktree, same Mongo): 15 failed / 1173 passed — the identical 15 names
+  PM-01 matrix regenerated by the harness on the merged tree: vs main d226c49 only the 5 ACT-01 client-act routes differ
+
+# ── ACT77-02 (audit, BLOCKING on 611d17e): moved / removed draft lines, confirm interleaved ──
+before (611d17e + the new test): move 0.3 off LD -> 1234.51; move 33 -> 1234.49; remove a middle draft -> 1234.49
+after: all 1234.50; per-line invariant sum(values) == round(sum(qty) x price) holds after every step
+audit probe docs/audit/probes/act01/probe_act01.py (claude/audit-log), PROBE_ACT_C2=1 PROBE_ACT_C=1, off/shadow/enforce: FAILS: none
+## A2C guard
+W0-03E-A2C tenant boundary guard: 216 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 436 unit(s) checked, 0 violation(s)
+## ACT-01 (committed results regenerated) + fresh ACT-01 + PM-01 (real Mongo, -rs)
+harness_rc=0
+116 passed, 6 warnings in 181.20s (0:03:01)
+## R0
+814 passed, 6 warnings in 139.14s (0:02:19)
+## W0
+15 failed, 1173 passed, 6 warnings in 111.52s (0:01:51)
+SAME_AS_MAIN_d226c49
+## PAY-01 + W0-04-C01
+668 passed, 1 warning in 155.00s (0:02:34)
+
+# ── Addendum D (FG-142): confirm names the values seen ──
+before (dd11e8e + the new test): confirmer saw 407.38 (488.86 gross) -> 200, 407.39 stored
+after: 409 ACT_VALUE_CHANGED (total 488.87, line 407.39), nothing written; re-confirm with the new values -> 200
+## A2C guard
+W0-03E-A2C tenant boundary guard: 216 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 436 unit(s) checked, 0 violation(s)
+## ACT-01 (committed results regenerated) + fresh ACT-01 + PM-01 (real Mongo, -rs)
+harness_rc=0
+119 passed, 6 warnings in 192.13s (0:03:12)
+## R0
+814 passed, 6 warnings in 141.05s (0:02:21)
+## W0
+15 failed, 1173 passed, 6 warnings in 111.29s (0:01:51)
+SAME_AS_MAIN_d226c49
+## PAY-01 + W0-04-C01
+668 passed, 1 warning in 159.97s (0:02:39)
