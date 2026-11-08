@@ -1,0 +1,288 @@
+# L01R gates (2026-11-08) — head e802e6f — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness exit=0
+  changed cells vs. the branch before the merge:
+    changed cells: 2702
+    - DELETE /api/overhead/assets/{asset_id}: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - DELETE /api/overhead/categories/{cat_id}: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - DELETE /api/overhead/costs/{cost_id}: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - DELETE /api/price-modifiers/project/{project_id}: status 200→409, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - DELETE /api/price-modifiers/project/{project_id}: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - DELETE /api/price-modifiers/project/{project_id}: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - GET /api/ai-config/hourly-rates: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/billing/subscription: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/billing/usage: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/cash-vs-earned/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/cashflow/forecast: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/cashflow/forecast/compact: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/client-acts: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/client-acts/remaining/{project_id}: status —→200, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - GET /api/client-acts/remaining/{project_id}: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/client-acts/{act_id}: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/clients/{client_id}/invoices: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/contract-payments: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/dashboard/pending-payments: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/employee-cost/{user_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/employee-dossier/{worker_id}: status 200→403, wrote no→no — 12 cells: roles driver, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/execution-packages: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/execution-packages/financial-breakdown/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/execution-packages/{pkg_id}/net-financial: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/finance/bonus-payments: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/finance/cash-transactions: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/finance/overhead-transactions: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/financial-alerts/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/fixed-expenses: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines: status 400→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines/by-client/{client_id}: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines/by-project/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines/by-purchaser/{user_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines/by-warehouse/{warehouse_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines/unallocated: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/invoice-lines/{line_id}: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/labor-cost/by-execution-package/{pkg_id}: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/labor-cost/by-project/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/labor-warnings/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/offers/{offer_id}/pdf: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - GET /api/offers/{offer_id}/pdf: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - GET /api/offers/{offer_id}/xlsx: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - GET /api/offers/{offer_id}/xlsx: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - GET /api/org/pnl-overview: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead-snapshots: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead-snapshots/aggregate: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead/allocations: status 200→403, wrote no→no — 3 cells: roles requester × modes enforce, off, shadow
+    - GET /api/overhead/assets: status 200→403, wrote no→no — 3 cells: roles requester × modes enforce, off, shadow
+    - GET /api/overhead/categories: status 200→403, wrote no→no — 3 cells: roles requester × modes enforce, off, shadow
+    - GET /api/overhead/costs: status 200→403, wrote no→no — 3 cells: roles requester × modes enforce, off, shadow
+    - GET /api/overhead/realtime: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead/realtime/by-project: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead/realtime/daily: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead/realtime/trend: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/overhead/snapshots: status 200→403, wrote no→no — 3 cells: roles requester × modes enforce, off, shadow
+    - GET /api/overhead/snapshots/{snapshot_id}: status 404→403, wrote no→no — 3 cells: roles requester × modes enforce, off, shadow
+    - GET /api/pay-runs: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pay-runs/audit-check: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pay-runs/{run_id}: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pay-runs/{run_id}/allocations: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pay-runs/{run_id}/history: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/payroll-weeks: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/price-modifiers/effective/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/price-modifiers/org: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/price-modifiers/project/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/prices: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pricing/catalog: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pricing/history: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/pricing/material: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/procurement-alerts/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/profit-by-period/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/project-net-profit/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/project-profit/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/project-risk/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/project-smr-view/{project_id}: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/activities-overview: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/activity-budget-summary: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/activity-budgets: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/budget-health: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/centralized-reports: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/centralized-reports/activities: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/centralized-reports/finance: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/centralized-reports/personnel: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/expected-actual: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/expected-actual/compact: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/financial-results: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/financial-results/breakdown: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/invoice-details: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/pnl: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/pnl/aggregated: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/pnl/breakdown: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/pnl/summary: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/projects/{project_id}/pnl/trend: status 403→200, wrote no→no — 3 cells: roles accountant × modes enforce, off, shadow
+    - GET /api/reports/company-finance-compare: status 422→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/company-finance-export: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - GET /api/reports/company-finance-export: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - GET /api/reports/company-finance-series: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/company-finance-summary: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/finance-details/by-counterparty: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/finance-details/by-project: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/finance-details/summary: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/finance-details/top-counterparties: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/finance-details/transactions: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/turnover-by-client: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/turnover-by-counterparty: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/reports/turnover-by-counterparty/{counterparty_id}/invoices: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/revenue-snapshots: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/revenue-snapshots/{snapshot_id}: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/sales/history: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/settings/sales-margins: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/smr-analyses/{analysis_id}/export-excel: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - GET /api/smr-analyses/{analysis_id}/export-excel: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - GET /api/smr-analyses/{analysis_id}/lines/{line_id}/modifier-breakdown: status 404→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/subcontractor-acts: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/subcontractor-payments: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/balance/{item_id}: status —→200, wrote —→no — 15 cells: roles accountant, admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/balance/{item_id}: status —→403, wrote —→no — 9 cells: roles driver, technician, viewer × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/central-stock/{item_id}: status —→200, wrote —→no — 18 cells: roles accountant, admin, owner, requester, technician, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/central-stock/{item_id}: status —→403, wrote —→no — 6 cells: roles driver, viewer × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/history: status —→200, wrote —→no — 15 cells: roles accountant, admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/history: status —→403, wrote —→no — 9 cells: roles driver, technician, viewer × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/integrity-warnings: status —→200, wrote —→no — 15 cells: roles accountant, admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/integrity-warnings: status —→403, wrote —→no — 9 cells: roles driver, technician, viewer × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/price-history: status —→200, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/price-history: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/stock/{item_id}: status —→400, wrote —→no — 15 cells: roles accountant, admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/canonical/stock/{item_id}: status —→403, wrote —→no — 9 cells: roles driver, technician, viewer × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/free-text-to-item: status —→403, wrote —→no — 18 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/free-text-to-item: status —→200, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/ledger-batch-reconciliation: status —→403, wrote —→no — 18 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/ledger-batch-reconciliation: status —→200, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/legacy-writer-inventory: status —→403, wrote —→no — 18 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/legacy-writer-inventory: status —→200, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/main-to-central: status —→403, wrote —→no — 18 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - GET /api/warehouse/migration-readiness/main-to-central: status —→200, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - GET /api/warehouse/value: status 200→403, wrote no→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - PATCH /api/projects/{project_id}/client-link: status 200→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PATCH /api/projects/{project_id}/client-link: status 200→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/alarms/evaluate: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/alarms/evaluate: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/budget-freezes/{project_id}: status 400→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/budget-freezes/{project_id}: status 400→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/client-acts: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/client-acts: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/client-acts: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/client-acts/from-offer/{offer_id}: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/client-acts/from-offer/{offer_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/client-acts/from-offer/{offer_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/client-acts/{act_id}/confirm: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/client-acts/{act_id}/confirm: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/client-acts/{act_id}/confirm: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/execution-packages/recompute-labor/{project_id}: status 200→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/execution-packages/recompute-labor/{project_id}: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/execution-packages/recompute-labor/{project_id}: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/finance/bonus-payments: status 201→422, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/bonus-payments: status 201→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/finance/bonus-payments: status 201→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/finance/cash-transactions: status 201→422, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/cash-transactions: status 201→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/finance/cash-transactions: status 201→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/finance/overhead-transactions: status 201→422, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/finance/overhead-transactions: status 201→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/finance/overhead-transactions: status 201→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries: status 201→422, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/labor-entries: status 201→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries: status 201→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/sync-from-work-reports: status 400→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/sync-from-work-reports: status 400→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/sync-from-work-reports: status 400→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/overhead-allocation/compute/{project_id}: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/overhead-allocation/compute/{project_id}: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/overhead-snapshots: status 201→422, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/overhead-snapshots: status 201→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/overhead-snapshots: status 201→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/overhead/snapshots/compute: status 200→428, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/overhead/snapshots/compute: status 403→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/overhead/snapshots/{snapshot_id}/allocate: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/price-modifiers/calculate: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/price-modifiers/calculate: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/pricing/refresh: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/pricing/refresh: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/project-consumption: status 400→410, wrote no→no — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/projects/{project_id}/material-waste: status 201→428, wrote yes→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/projects/{project_id}/material-waste: status 201→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/projects/{project_id}/material-waste: status 201→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/pulse/generate-all: status 200→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/pulse/generate-all: status 200→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/resource-model/subcontractor-burden-preview: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/resource-model/subcontractor-burden-preview: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/resource-model/worker-cost-preview: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/resource-model/worker-cost-preview: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/revenue-snapshots/from-offer/{offer_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/revenue-snapshots/from-offer/{offer_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/sales/commit: status 400→410, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/sales/commit: status 400→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/sales/commit: status 400→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/sites/{site_id}/pulse/generate: status 200→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/sites/{site_id}/pulse/generate: status 200→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/smr-analyses/from-offer/{offer_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/smr-analyses/from-offer/{offer_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/smr-analyses/{analysis_id}/recalculate: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/smr-analyses/{analysis_id}/recalculate: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/smr-analyses/{analysis_id}/recalculate-with-modifiers: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/smr-analyses/{analysis_id}/recalculate-with-modifiers: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/subcontractor-acts/{act_id}/advance-deduction: status —→422, wrote —→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/subcontractor-acts/{act_id}/advance-deduction: status —→403, wrote —→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/subcontractor-acts/{act_id}/advance-deduction: status —→403, wrote —→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/subcontractor-acts/{act_id}/confirm: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/subcontractor-acts/{act_id}/confirm: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/subcontractor-packages/{pkg_id}/advances: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/subcontractor-packages/{pkg_id}/advances: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/subcontractor-packages/{pkg_id}/advances: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/subcontractor-payments: status 404→422, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - POST /api/subcontractor-payments: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/subcontractor-payments: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/supplier-invoices/{inv_id}/post-to-warehouse: status 403→410, wrote no→no — 12 cells: roles accountant, driver, technician, viewer × modes enforce, off, shadow
+    - POST /api/supplier-invoices/{inv_id}/post-to-warehouse: status 404→410, wrote no→no — 12 cells: roles admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse-issue: status 403→410, wrote no→no — 12 cells: roles accountant, driver, technician, viewer × modes enforce, off, shadow
+    - POST /api/warehouse-issue: status 400→410, wrote no→no — 12 cells: roles admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse-return: status 400→410, wrote no→no — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse/batches: status 403→410, wrote no→no — 15 cells: roles accountant, driver, requester, technician, viewer × modes enforce, off, shadow
+    - POST /api/warehouse/batches: status 201→410, wrote yes→no — 9 cells: roles admin, owner, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse/canonical/movements: status —→403, wrote —→no — 12 cells: roles accountant, driver, technician, viewer × modes enforce, off, shadow
+    - POST /api/warehouse/canonical/movements: status —→422, wrote —→no — 12 cells: roles admin, owner, requester, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse/canonical/project-writeoff: status —→422, wrote —→no — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse/consume: status 403→410, wrote no→no — 9 cells: roles accountant, driver, viewer × modes enforce, off, shadow
+    - POST /api/warehouse/consume: status 400→410, wrote no→no — 15 cells: roles admin, owner, requester, technician, warehousekeeper × modes enforce, off, shadow
+    - POST /api/warehouse/migration-readiness/execute: status —→403, wrote —→audit_only — 6 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/warehouse/migration-readiness/execute: status —→403, wrote —→no — 12 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/warehouse/migration-readiness/execute: status —→405, wrote —→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+    - POST /api/worker-calendar: status 400→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/worker-calendar: status 400→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/worker-calendar/bulk: status 201→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/worker-calendar/bulk: status 201→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/worker-calendar/sync-from-sessions: status 200→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/worker-calendar/sync-from-sessions: status 200→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - PUT /api/client-acts/{act_id}: status 404→428, wrote no→no — 9 cells: roles accountant, admin, owner × modes enforce, off, shadow
+    - PUT /api/client-acts/{act_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/client-acts/{act_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - PUT /api/execution-packages/{pkg_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/execution-packages/{pkg_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - PUT /api/ocr-invoice/{intake_id}/approve: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/ocr-invoice/{intake_id}/approve: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - PUT /api/price-modifiers/org: status 403→403, wrote no→audit_only — 6 cells: roles accountant, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/price-modifiers/project/{project_id}: status 200→403, wrote yes→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/price-modifiers/project/{project_id}: status 200→403, wrote yes→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - PUT /api/supplier-invoices/{inv_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/supplier-invoices/{inv_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - PUT /api/warehouse/batches/{batch_id}/block: status 403→410, wrote no→no — 15 cells: roles accountant, driver, requester, technician, viewer × modes enforce, off, shadow
+    - PUT /api/warehouse/batches/{batch_id}/block: status 404→410, wrote no→no — 9 cells: roles admin, owner, warehousekeeper × modes enforce, off, shadow
+    - PUT /api/worker-calendar/{entry_id}: status 404→403, wrote no→audit_only — 5 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - PUT /api/worker-calendar/{entry_id}: status 404→403, wrote no→no — 10 cells: roles driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+  changed cells vs. main's committed matrix:
+    changed cells: 6
+    - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+## W0-03E-A2B inventory regenerated: scripts/w0_03e_a2b_inventory.py exit=0
+## PM-01 tests
+6 passed, 10 warnings in 221.64s (0:03:41)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 243 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 490 unit(s) checked, 0 violation(s)
+## LAB suites
+117 passed, 1 warning in 7.23s
+## SEC-01 (money_write_permissions + c01 + c02 + c03)
+30 passed, 10 warnings in 124.80s (0:02:04)
+## SEC-02 (test_sec_02_finance_read.py)
+31 passed, 10 warnings in 218.49s (0:03:38)
+## PAY-01
+630 passed, 1 warning in 157.63s (0:02:37)
+## W0-04 (real)
+74 passed, 1 warning in 14.53s
+## AUTH-01/02
+122 passed, 10 warnings in 153.83s (0:02:33)
+## R0 tests/test_r0_0*.py (real)
+814 passed, 10 warnings in 169.00s (0:02:49)
+## W0 DB-free (no real Mongo URL)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 74.13s (0:01:14)
+  non-legacy_routes failures: 0
+## warehouse canonical — see warehouse-suite-LAB-01-R.txt (separate full run on a fresh container)
+  note: this run's warehouse section was not valid: the local mongod aborted (open-file limit) mid-suite, and
+  C20–C26 failed with 'Event loop is closed' — a real merge regression in the TESTS: their db patch lists lacked
+  app.services.labor_cost / app.services.report_normalizer (LAB-01 reads labor through them). Fixed in caf8413
+  (fixture only, no assertion changed); C22 passes on plain main ea57121 and now on #73.
