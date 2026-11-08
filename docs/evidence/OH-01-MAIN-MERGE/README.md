@@ -1,6 +1,6 @@
 # OH-01 — сливане на main `fddb018` в #74
 
-Клон `claude/oh-01-overhead` (#74) @ `31a9478` + `origin/main` @ `fddb018` („Merge PR #77“; преди това #69, #71, #80, #85). Сливането е с merge commit **`182ea57`** (родители `31a9478`, `fddb018`), без rebase и без force-push. Регенерираните доказателства (PM-01, SEC-01-C01/C02/C03) са в същия merge commit; тази папка е в следващия. Merge в main няма — чака „да“ от Крум.
+Клон `claude/oh-01-overhead` (#74) @ `31a9478` + `origin/main` @ `fddb018` („Merge PR #77“; преди това #69, #71, #80, #85). Сливането е с merge commit **`182ea57`** (родители `31a9478`, `fddb018`), без rebase и без force-push. Регенерираните доказателства (PM-01, SEC-01-C01/C02/C03) са в същия merge commit; промяната на c03 пробата, повторно регенерираният C03 и тази папка — в `4c8b313` и следващия commit. Merge в main няма — чака „да“ от Крум.
 
 ## Принцип
 
@@ -29,6 +29,7 @@
 |---|---|
 | `backend/tests/test_sec_01_c03_payment_amount_idempotency.py` (assert за `overhead_compute`) | Compute на OH-01 записва и реда на period lock-а (`op.overhead_period_locks`, счетоводство на „един активен snapshot за период“, FG-86). Очакването е `["op.overhead_period_locks", "op.overhead_snapshots"]`; **„един snapshot за ключ“ (`admin_snapshots_after == 1`) е непроменено**. |
 | `backend/tests/test_sec_01_c02_flow_guard_money_writes.py` (`expected()`) | `POST /overhead-allocation/compute/{project_id}` след FG-89 е **read-only проекция** на публикуваното OH-01 разпределение: финансова роля → 200, **нищо записано**; правото на #69 остава първа dependency (не-финанси → 403, чужд обект → 404). |
+| `backend/tests/test_sec_01_c03_payment_amount_idempotency.py` (audit-crash probe на одита на #69 @ da47777) | Пробата пада „веднага след реда на стъпка `audit`“ и приема, че тази стъпка пише legacy `audit_logs` реда (така е в `MoneyWrite` на #69). В OH-01 стъпка `audit` е **каноничният AuditEvent**, а legacy редът е отделна стъпка `legacy_audit` (OH74-04). За `overhead_compute` пробата брои и каноничното събитие и проверява: след срива **1** канонично събитие и **0** legacy реда; след 2 повторения със същия ключ — **точно 1 от всеки**, 200. Случаят `subcontractor_payment` е непроменен. (Първото пускане преди тази промяна: 2 failed — точно това очакване.) |
 | `docs/evidence/SEC-01-C01/C02/C03/results.json` | Регенерирани с harness-ите си върху сливането (compute: + `op.audit_events`, `op.overhead_period_locks`; `oh_alloc`: без запис). |
 | `check_overhead_access` (`overhead.py`) | Р20-1 на #71 (само Owner/Admin/Accountant и за четене) е влязъл без конфликт и важи за всички overhead route-ове на OH-01 (архив, версии, списъци). |
 
@@ -49,4 +50,6 @@
 
 ## Gates
 
-Виж `test_summary.txt` в тази папка.
+Виж `test_summary.txt` и `warehouse_suite.txt` в тази папка.
+
+Среда: в контейнера липсваше `pytest_asyncio` (нужен на warehouse тестовете) — инсталиран; локалният mongod спря веднъж по време на warehouse пускането (WiredTiger „Too many open files“, лимит 20 000 файла след ден тестови бази) — рестартиран на чиста data директория, файловете от c26j до края са пуснати повторно.
