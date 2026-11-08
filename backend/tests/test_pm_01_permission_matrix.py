@@ -624,6 +624,9 @@ ENFORCE_EXTRA_WRITES = {
     ("PUT", "/api/ocr-invoice/{intake_id}/approve"): "denial",
     ("POST", "/api/sales/commit"): "denial",
     ("POST", "/api/pricing/refresh"): "denial",
+    # SUB-ADV-01 (R39): the advance (Owner/Accountant) and its deduction on an act.
+    ("POST", "/api/subcontractor-packages/{pkg_id}/advances"): "denial",
+    ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"): "denial",
     # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
     ("GET", "/api/reports/company-finance-export"): "denial",
     # SEC-02-A (D1): the money-only file exports (significant verb "export").
