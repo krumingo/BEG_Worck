@@ -60,7 +60,9 @@ def safe_view(collection: str, doc: Optional[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def diff(collection: str, before: Optional[Dict[str, Any]], after: Dict[str, Any]) -> Dict[str, Any]:
-    b, a = safe_view(collection, before), safe_view(collection, after)
+    # FG-266: an AuditEvent never holds a full ЕГН / possible ЕГН / IBAN
+    b = cr.mask_for_log(safe_view(collection, before))
+    a = cr.mask_for_log(safe_view(collection, after))
     skip = {"updated_at", "version", "created_at"}
     keys = sorted((set(b) | set(a)) - skip)
     return {k: {"before": b.get(k), "after": a.get(k)} for k in keys if b.get(k) != a.get(k)}

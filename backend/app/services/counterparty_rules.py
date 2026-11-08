@@ -119,8 +119,24 @@ def mask_person(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 EGN_COPY_FIELDS = ("eik", "egn", "tax_id")
 
 
-def egn_copy_fields(details: Any, owner_type: Any) -> list:
-    """The fields of ``details`` that hold an unmasked ЕГН copy."""
+def _is_confirmed_company(owner_type: Any, owner_id: Any) -> bool:
+    return owner_type == "company" and bool(owner_id)
+
+
+def possible_egn(value: Any) -> bool:
+    """FG-267 (FLOW-040 §9, privacy-safe): exactly 10 digits — the shape of an ЕГН (an ЕИК
+    has 9 or 13). Without a confirmed company owner it is treated as a possible ЕГН."""
+    return len(re.sub(r"\D", "", str(value or ""))) == 10
+
+
+def egn_copy_fields(details: Any, owner_type: Any, owner_id: Any = None, *,
+                    include_possible: bool = True) -> list:
+    """The fields of ``details`` that hold an unmasked (possible) ЕГН copy:
+    * a person owner: ``eik`` / ``egn`` / ``tax_id``;
+    * any owner: the explicit ``egn`` field;
+    * FG-267: no confirmed company owner (none, unknown, or a person) and a 10-digit value in
+      ``eik`` / ``tax_id`` → a possible ЕГН (``include_possible``);
+    * a confirmed company owner's 10-digit tax id (e.g. a foreign VAT number) is not one."""
     if not isinstance(details, dict):
         return []
     out = []
@@ -130,17 +146,43 @@ def egn_copy_fields(details: Any, owner_type: Any) -> list:
             continue
         if field == "egn" or owner_type == "person":
             out.append(field)
+        elif include_possible and not _is_confirmed_company(owner_type, owner_id) \
+                and possible_egn(value):
+            out.append(field)
     return out
 
 
-def mask_invoice_details(details: Any, owner_type: Any, fields=None) -> Any:
+def mask_invoice_details(details: Any, owner_type: Any, fields=None, owner_id: Any = None, *,
+                         include_possible: bool = True) -> Any:
     """``details`` with the ЕГН copy fields masked (all of them, or ``fields``)."""
     if not isinstance(details, dict):
         return details
     out = dict(details)
-    for field in (fields if fields is not None else egn_copy_fields(details, owner_type)):
+    if fields is None:
+        fields = egn_copy_fields(details, owner_type, owner_id, include_possible=include_possible)
+    for field in fields:
         out[field] = mask_egn(out[field])
     return out
+
+
+def mask_for_log(value: Any) -> Any:
+    """FG-266: what a log row / audit detail may hold — every IBAN as ``****1234`` and every
+    ЕГН or possible ЕГН (``egn`` / ``eik`` / ``tax_id`` with 10 digits, recursively) masked,
+    for every role (a log is read by people who may not see the value)."""
+    if isinstance(value, list):
+        return [mask_for_log(v) for v in value]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if k in IBAN_KEYS and isinstance(v, str) and v and not v.startswith("****"):
+                out[k] = mask_iban(v)
+            elif k in EGN_COPY_FIELDS and isinstance(v, (str, int)) and v \
+                    and not str(v).startswith(EGN_MASK_PREFIX) and (k == "egn" or possible_egn(v)):
+                out[k] = mask_egn(v)
+            else:
+                out[k] = mask_for_log(v)
+        return out
+    return value
 
 
 def same_egn(a: Any, b: Any) -> bool:

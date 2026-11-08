@@ -768,16 +768,19 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
             # 2. a copy with no canonical record → kept as it is, DQ issue for the Accountant
             await op.projects.insert_one({"id": "pn", "org_id": ORG_A, "owner_type": "person",
                                           "owner_id": "pe-none", "invoice_details": {"eik": "7501011111"}})
-            # 3. a company's 10-digit foreign VAT id is never an ЕГН → untouched
+            # 3. a confirmed company's 10-digit foreign VAT id is never an ЕГН → untouched
             await op.projects.insert_one({"id": "pc", "org_id": ORG_A, "owner_type": "company",
-                                          "invoice_details": {"eik": "1234567890"}})
+                                          "owner_id": "co-x", "invoice_details": {"eik": "1234567890"}})
+            # 4. FG-267: a 10-digit value with no owner is a possible ЕГН → kept + DQ, not masked
+            await op.projects.insert_one({"id": "po", "org_id": ORG_A,
+                                          "invoice_details": {"eik": "6602021212"}})
             report = await mig.plan(op)
             assert len(report["to_create"]) == 2 and len(report["invalid"]) == 1
-            assert report["projects_with_full_egn"] == 2
+            assert report["projects_with_full_egn"] == 3
             assert [p["id"] for p in report["projects_to_mask"]] == ["pm"]
-            assert [p["id"] for p in report["egn_copies_without_canonical"]] == ["pn"]
+            assert sorted(p["id"] for p in report["egn_copies_without_canonical"]) == ["pn", "po"]
             shown = mig.printable(report)
-            for secret in (IBAN_OLD, IBAN_NEW, EGN, "7501011111"):
+            for secret in (IBAN_OLD, IBAN_NEW, EGN, "7501011111", "6602021212"):
                 assert no_full(shown, secret)
             assert await rows(op, "verified_bank_accounts") == []          # dry run writes nothing
             # --apply without the dry run's token is refused, nothing written
@@ -790,11 +793,13 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
             assert prj["pm"]["invoice_details"]["eik"] == EGN_MASKED
             assert prj["pn"]["invoice_details"]["eik"] == "7501011111"      # not destroyed
             assert prj["pc"]["invoice_details"]["eik"] == "1234567890"
+            assert prj["po"]["invoice_details"]["eik"] == "6602021212"      # kept, masked on read
             ev = await rows(op, "audit_events", {"action": "project.invoice_details.egn_copy_masked"})
             assert [e["entity_id"] for e in ev] == ["pm"] and no_full(ev, EGN)
             dq = await rows(op, "dq_issues", {"type": "EGN_COPY_WITHOUT_CANONICAL"})
-            assert len(dq) == 1 and dq[0]["entity_id"] == "pn" and dq[0]["owner_role"] == "accountant"
-            assert dq[0]["title"] == "ЕГН копие без каноничен запис"
+            assert sorted(d["entity_id"] for d in dq) == ["pn", "po"]
+            assert all(d["owner_role"] == "accountant" and d["title"] == "ЕГН копие без каноничен запис"
+                       for d in dq)
             accs = await rows(op, "verified_bank_accounts")
             assert {a["status"] for a in accs} == {"pending_verification"}  # never verified
             again = await mig.plan(op)
@@ -1297,4 +1302,95 @@ def test_fg245_a_masked_form_value_never_overwrites_the_stored_iban(monkeypatch,
         assert r.status_code == 200, r.text
         prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
         assert prj["invoice_details"]["iban"] == IBAN_OTHER and prj["invoice_details"]["company_name"] == "Ново"
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 26 (#83 @ bc0d1c7)
+TYPED = "7501011111"        # a typed ЕГН with no canonical persons record
+
+
+def test_fg266_a_typed_egn_never_reaches_logs_or_responses(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": {"company_name": "Мария П", "eik": TYPED,
+                                                  "iban": IBAN_OTHER}})
+        assert r.status_code == 200 and no_full(r.json(), TYPED) and no_full(r.json(), IBAN_OTHER)
+        logs = await rows(op, "audit_logs")
+        assert logs and no_full(logs, TYPED) and no_full(logs, IBAN_OTHER), logs
+        assert no_full(await rows(op, "audit_events"), TYPED)
+        # the stored copy is kept (CP83-03) and a DQ issue is open
+        assert (await rows(op, "projects", {"id": "prj-1"}))[0]["invoice_details"]["eik"] == TYPED
+        assert await rows(op, "dq_issues", {"type": "EGN_COPY_WITHOUT_CANONICAL"})
+        # the create response is a reader too
+        r = await c.post("/api/projects", headers=hdr("admin-a"), json={
+            "code": "P-266", "name": "P-266", "owner_type": "person", "owner_id": "pe1",
+            "invoice_details": {"company_name": "X", "eik": TYPED}})
+        assert r.status_code == 201, r.text
+        assert no_full(r.json(), TYPED)
+        # /audit-logs (platform admin) masks rows written before CP-01 on read
+        await op.audit_logs.insert_one({"id": "old-row", "org_id": ORG_A, "action": "updated",
+                                        "timestamp": "2026-01-01", "changes": {
+                                            "invoice_details": {"eik": TYPED, "iban": IBAN_OLD}}})
+        from app.routes import auth as r_auth
+        monkeypatch.setattr(r_auth, "db", op)
+        got = await r_auth.list_audit_logs(user={"id": "admin-a", "org_id": ORG_A, "role": "Admin"},
+                                           limit=50, skip=0)
+        assert got["total"] >= 2 and no_full(got, TYPED) and no_full(got, IBAN_OLD)
+    run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("who,full", [("owner-a", True), ("acct-a", True), ("admin-a", False),
+                                      ("viewer-a", False), ("site-a", False), ("tech-a", False)])
+def test_fg267_a_possible_egn_without_a_company_owner_is_masked(monkeypatch, backend, mode, who, full):
+    async def scenario(c, op):
+        await op.projects.insert_one({"id": "prj-none", "org_id": ORG_A, "code": "N", "name": "N",
+                                      "status": "Active", "invoice_details": {"eik": TYPED}})
+        await op.projects.insert_one({"id": "prj-co", "org_id": ORG_A, "code": "C", "name": "C",
+                                      "status": "Active", "owner_type": "company", "owner_id": "co1",
+                                      "invoice_details": {"eik": "1234567890"}})   # a foreign VAT id
+        await op.project_team.insert_many([
+            {"id": "pt-%s-%s" % (p, u), "org_id": ORG_A, "project_id": p, "user_id": u,
+             "active": True, "role_in_project": "SiteManager"}
+            for p in ("prj-none", "prj-co") for u in ("site-a", "tech-a", "viewer-a")])
+        seen = 0
+        for url in ("/api/projects/prj-none", "/api/projects/prj-none/invoice-details", "/api/projects"):
+            r = await c.get(url, headers=hdr(who))
+            if r.status_code != 200:
+                continue
+            seen += 1
+            assert (TYPED in json.dumps(r.json())) == full, (who, url)
+        assert seen >= 1, who
+        r = await c.get("/api/projects/prj-co/invoice-details", headers=hdr(who))
+        if r.status_code == 200:      # a confirmed company's 10-digit tax id is never masked
+            assert r.json()["invoice_details"]["eik"] == "1234567890"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg268_name_variants_and_eik_do_not_bypass_the_cash_block(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await seed_account(op, "ba-pend", IBAN_NEW, "pending_verification")      # cp1 is blocked
+        cash = dict(method="Cash", account_id=CASH_A, cash_receipt_file_id="file_r",
+                    cash_recipient_name="Иван")
+        for name in ("Доставчик  cp1", " доставчик CP1 ", "Доставчик cp1 ООД", "„Доставчик cp1“ ЕООД",
+                     "Dostavchik cp1", "DOSTAVCHIK CP1 OOD"):
+            r = await manual_pay(c, counterparty_name=name, **cash)
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN", (name, r.text)
+        # a different name but cp1's ЕИК in the body
+        r = await manual_pay(c, counterparty_name="Друг", counterparty_eik="111 111 111", **cash)
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=dict(
+            cash, amount=5.0, project_id="prj-1", counterparty_name="X", counterparty_eik="111111111"))
+        assert r.status_code == 409, r.text
+        # counterparty_id of cp2 with cp1's ЕИК → the request names two payees
+        r = await manual_pay(c, counterparty_id="cp2", counterparty_eik="111111111", **cash)
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "PAYEE_MISMATCH"
+        # an ambiguous name never bypasses the block: two counterparties normalise alike
+        await op.counterparties.insert_one({"id": "cp1-twin", "org_id": ORG_A, "name": "DOSTAVCHIK CP1 EOOD",
+                                            "type": "supplier", "active": True})
+        r = await manual_pay(c, counterparty_name="доставчик cp1", **cash)
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
+        assert [p for p in await rows(op, "finance_payments")] == []
+        # a payee that is no counterparty at all still pays against a receipt
+        r = await manual_pay(c, counterparty_name="Пазар Ромфея", **cash)
+        assert r.status_code == 201
     run(monkeypatch, backend, mode, scenario)

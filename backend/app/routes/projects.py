@@ -165,7 +165,7 @@ async def list_projects(
         else:
             p["site_manager_name"] = ""
         p["team_count"] = await project_team.active_member_count(_team(user), p["id"])
-        _mask_owner_egn(p, full_iban)                        # FG-226 / FG-245
+        _mask_owner_egn(p, full_iban, cr.can_reveal_egn(user))   # FG-226 / FG-245 / FG-267
     return projects
 
 @router.post("/projects", status_code=201)
@@ -245,7 +245,9 @@ async def create_project(data: ProjectCreate, request: Request,
             user_id=data.default_site_manager_id, role_in_project="SiteManager",
             active=True, from_date=data.start_date, to_date=data.end_date)
     await log_audit(user["org_id"], user["id"], user["email"], "created", "project", project["id"], {"code": data.code, "name": data.name})
-    return {k: v for k, v in project.items() if k != "_id"}
+    # FG-266: the create response is a reader too — the stored copy is shown masked
+    return _mask_owner_egn({k: v for k, v in project.items() if k != "_id"},
+                           await cr.full_iban_allowed(user), cr.can_reveal_egn(user))
 
 @router.get("/projects/{project_id}")
 async def get_project(project_id: str, user: dict = Depends(get_current_user)):
@@ -262,14 +264,17 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     else:
         project["site_manager_name"] = ""
     project["team_count"] = await project_team.active_member_count(_team(user), project_id)
-    _mask_owner_egn(project, await cr.full_iban_allowed(user))
+    _mask_owner_egn(project, await cr.full_iban_allowed(user), cr.can_reveal_egn(user))
     return project
 
 
-def _mask_invoice_details(details, owner_type):
-    """R48.3 / FG-226 / CP83-03: every reader masks the ЕГН copy in ``invoice_details`` —
-    only for a person owner, or the explicit ``egn`` field (never a 10-digit company tax id)."""
-    return cr.mask_invoice_details(details, owner_type)
+def _mask_invoice_details(details, owner_type, owner_id=None, possible_visible=False):
+    """R48.3 / FG-226 / CP83-03 / FG-267: every reader masks the ЕГН copy in
+    ``invoice_details`` — always for a person owner and the explicit ``egn`` field; a 10-digit
+    value without a confirmed company owner is a possible ЕГН, masked for every role except
+    Owner / Accountant (``possible_visible``); never a confirmed company's tax id."""
+    return cr.mask_invoice_details(details, owner_type, owner_id=owner_id,
+                                   include_possible=not possible_visible)
 
 
 async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
@@ -277,7 +282,7 @@ async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
     stored masked only when the canonical ``persons`` record of the owner holds the SAME ЕГН
     (the copy is redundant). Otherwise it is kept as typed — readers still mask it — and a DQ
     issue „ЕГН копие без каноничен запис“ is opened for the Accountant."""
-    fields = cr.egn_copy_fields(details, owner_type)
+    fields = cr.egn_copy_fields(details, owner_type, owner_id)   # incl. a possible ЕГН (FG-267)
     if not fields:
         return details
     person = await tenant.persons.get(owner_id, {"_id": 0, "egn": 1}) if owner_type == "person" else None
@@ -292,12 +297,14 @@ async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
     return cr.mask_invoice_details(details, owner_type, redundant)
 
 
-def _mask_owner_egn(project: dict, full_iban: bool = False) -> dict:
-    """R48.3: every project reader shows ``invoice_details`` with the ЕГН masked; FG-245: and
-    its IBAN as ``****1234`` unless the reader may see a full IBAN (Q005 / D5)."""
+def _mask_owner_egn(project: dict, full_iban: bool = False, possible_visible: bool = False) -> dict:
+    """R48.3: every project reader shows ``invoice_details`` with the ЕГН masked (FG-267: a
+    possible ЕГН too, except for Owner / Accountant); FG-245: and its IBAN as ``****1234``
+    unless the reader may see a full IBAN (Q005 / D5)."""
     if isinstance(project, dict) and isinstance(project.get("invoice_details"), dict):
         project["invoice_details"] = cr.mask_iban_fields(
-            _mask_invoice_details(project["invoice_details"], project.get("owner_type")), full_iban)
+            _mask_invoice_details(project["invoice_details"], project.get("owner_type"),
+                                  project.get("owner_id"), possible_visible), full_iban)
     return project
 
 
@@ -385,9 +392,11 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
     await tenant.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
-    await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
+    # FG-266: the legacy audit row never holds a full ЕГН / IBAN (every reader of /audit-logs)
+    await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id,
+                    cr.mask_for_log(update))
     return _mask_owner_egn(await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0}),
-                           await cr.full_iban_allowed(user))
+                           await cr.full_iban_allowed(user), cr.can_reveal_egn(user))
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, user: dict = Depends(require_admin)):
@@ -419,11 +428,12 @@ async def get_invoice_details(
         "finance.project_invoice_detail.read", module=None, resource_type="project_invoice_detail")),  # SEC-02 (R20-2): before any read
     user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1, "owner_type": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1, "owner_type": 1, "owner_id": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return {"project_id": project_id, "invoice_details": cr.mask_iban_fields(  # FG-226 / FG-245
-        _mask_invoice_details(project.get("invoice_details") or {}, project.get("owner_type")),
+    return {"project_id": project_id, "invoice_details": cr.mask_iban_fields(  # FG-226/245/267
+        _mask_invoice_details(project.get("invoice_details") or {}, project.get("owner_type"),
+                              project.get("owner_id"), cr.can_reveal_egn(user)),
         await cr.full_iban_allowed(user))}
 
 

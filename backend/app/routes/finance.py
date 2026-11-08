@@ -625,7 +625,7 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
             bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
             cash_receipt_file_id=data.get("cash_receipt_file_id"),
             cash_recipient_name=data.get("cash_recipient_name"),
-            payee_name=data.get("counterparty_name"),                 # FG-242
+            payee_name=data.get("counterparty_name"), payee_eik=data.get("counterparty_eik"),  # FG-242/268
             path="/finance/other-expense") or {}
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
@@ -1842,7 +1842,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
             party_type="counterparty" if data.counterparty_id else None,
             party_id=data.counterparty_id, bank_account_id=data.bank_account_id,
             cash_receipt_file_id=data.cash_receipt_file_id, cash_recipient_name=data.cash_recipient_name,
-            payee_name=data.counterparty_name,                       # FG-242
+            payee_name=data.counterparty_name, payee_eik=data.counterparty_eik,   # FG-242/268
             path="/finance/payments") or {}
         # Route to the correct account: cash → Каса, otherwise the chosen account.
         account_id = await _resolve_payment_account(tenant, data.method, data.account_id)

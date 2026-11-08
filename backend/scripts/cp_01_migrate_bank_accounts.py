@@ -12,7 +12,8 @@ VerifiedBankAccount rows in status „за проверка“ (pending_verifica
 * an invalid IBAN is not migrated; it is listed in the report (masked) for a human;
 * the report never prints a full IBAN or ЕГН;
 * FG-226 / CP83-03: a project ``invoice_details`` ЕГН copy (person owner, or an ``egn``
-  field — never a 10-digit company tax id) is masked with ``--apply`` ONLY when the canonical
+  field, or a possible ЕГН without a confirmed company owner — FG-267; never a confirmed
+  company's 10-digit tax id) is masked with ``--apply`` ONLY when the canonical
   ``persons`` record holds the same full ЕГН, with one AuditEvent per project; any other copy
   is kept (readers mask it) and a DQ issue „ЕГН копие без каноничен запис“ is opened.
 * ``--apply`` runs only with the ``--plan-token`` its dry run printed.
@@ -69,7 +70,7 @@ async def plan(db):
     async for p in db.projects.find({"invoice_details": {"$type": "object"}},
                                     {"_id": 0, "id": 1, "org_id": 1, "owner_type": 1, "owner_id": 1,
                                      "invoice_details": 1}):
-        fields = cr.egn_copy_fields(p["invoice_details"], p.get("owner_type"))
+        fields = cr.egn_copy_fields(p["invoice_details"], p.get("owner_type"), p.get("owner_id"))
         if not fields:
             continue
         report["projects_with_full_egn"] += 1

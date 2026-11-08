@@ -55,29 +55,61 @@ PAYEE_BLOCKED_PENDING_IBAN = "PAYEE_BLOCKED_PENDING_IBAN"
 CASH_RECEIPT_REQUIRED = "CASH_RECEIPT_REQUIRED"
 
 
-async def resolve_payee(tenant, *, name: Any = None, eik: Any = None):
-    """FG-242: a payee given only by ЕИК or by name is resolved to the counterparty it names
-    (ЕИК first; then an exact, case-insensitive name that matches ONE counterparty) — so the
-    block of its unverified IBAN cannot be bypassed by leaving out ``counterparty_id``."""
-    e = cr.normalize_eik(eik)
-    if e:
-        found, _ = await resolve_invoice_party(tenant, {"counterparty_eik": e})
-        if found:
-            return "counterparty", _
-    n = name.strip().lower() if isinstance(name, str) else ""
-    if not n:
-        return None, None
+#: FG-268: Bulgarian Cyrillic → Latin (the official streamlined system), so "Строй ООД" and
+#: "Stroy OOD" are the same name.
+_TRANSLIT = {"а": "a", "б": "b", "в": "v", "г": "g", "д": "d", "е": "e", "ж": "zh", "з": "z",
+             "и": "i", "й": "y", "к": "k", "л": "l", "м": "m", "н": "n", "о": "o", "п": "p",
+             "р": "r", "с": "s", "т": "t", "у": "u", "ф": "f", "х": "h", "ц": "ts", "ч": "ch",
+             "ш": "sh", "щ": "sht", "ъ": "a", "ь": "y", "ю": "yu", "я": "ya"}
+#: legal-form words that do not identify the organisation (BG and the usual foreign ones)
+_LEGAL_FORMS = {"ood", "eood", "ad", "ead", "et", "sd", "kd", "kda", "dzzd", "zad",
+                "ltd", "llc", "gmbh", "sa", "srl", "inc", "plc", "bv", "ag", "oy", "ab"}
+
+
+def normalize_party_name(name: Any) -> str:
+    """FG-268: case, whitespace, punctuation, quotes, Cyrillic/Latin spelling and the legal
+    form do not make another payee."""
     import re as _re
-    hits = await tenant.counterparties.find(
-        {"name": {"$regex": "^%s$" % _re.escape(name.strip()), "$options": "i"}},
-        {"_id": 0, "id": 1}).to_list(2)
-    if len(hits) == 1:
-        return "counterparty", hits[0]["id"]
-    return None, None
+    if not isinstance(name, str):
+        return ""
+    low = name.lower()
+    latin = "".join(_TRANSLIT.get(ch, ch) for ch in low)
+    words = _re.sub(r"[^0-9a-z]+", " ", latin).split()
+    return " ".join(w for w in words if w not in _LEGAL_FORMS)
+
+
+async def payee_by_eik(tenant, eik: Any):
+    e = cr.normalize_eik(eik)
+    if not e:
+        return None, None
+    return await resolve_invoice_party(tenant, {"counterparty_eik": e})
+
+
+async def payee_candidates(tenant, name: Any) -> list:
+    """Every counterparty of this tenant whose normalised name equals the given one."""
+    n = normalize_party_name(name)
+    if not n:
+        return []
+    rows = await tenant.counterparties.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(10000)
+    return [r["id"] for r in rows if normalize_party_name(r.get("name")) == n]
+
+
+async def resolve_payee(tenant, *, name: Any = None, eik: Any = None):
+    """FG-242 / FG-268: a payee given only by ЕИК or by name → (party_type, party_id,
+    candidates). The ЕИК decides when given; otherwise a normalised name that matches ONE
+    counterparty resolves it; several matches stay ``candidates`` (the cash block then
+    applies if ANY of them has an unverified IBAN)."""
+    ptype, pid = await payee_by_eik(tenant, eik)
+    if pid:
+        return ptype, pid, [pid]
+    cands = await payee_candidates(tenant, name)
+    if len(cands) == 1:
+        return "counterparty", cands[0], cands
+    return None, None, cands
 
 
 async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient_name,
-                      payee_named: bool = False):
+                      payee_named: bool = False, candidates=()):
     """R50.1 (Addendum A / D6): cash to a counterparty only against a receipt / cash document
     (a File Registry ``file_id``) with the recipient's name; while the counterparty has an
     unverified (new or changed) IBAN, cash is blocked too — the protection is not bypassed
@@ -86,6 +118,11 @@ async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient
         return None                       # no payee at all (e.g. a cash withdrawal)
     pending = 0 if not party_id else await accounts.count({"party_type": party_type, "counterparty_id": party_id,
                                     "status": cr.BA_PENDING})
+    others = [c for c in candidates if c != party_id]
+    if not pending and others:          # FG-268: an ambiguous name never bypasses the block
+        pending = await accounts.count({"party_type": "counterparty",
+                                        "counterparty_id": {"$in": others},
+                                        "status": cr.BA_PENDING})
     if pending:
         raise HTTPException(status_code=409, detail={
             "error_code": PAYEE_BLOCKED_PENDING_IBAN,
@@ -183,8 +220,16 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
         return None
     accounts = tenant.verified_bank_accounts
     payee_named = bool((isinstance(payee_name, str) and payee_name.strip()) or cr.normalize_eik(payee_eik))
+    candidates: list = []
+    if cr.normalize_eik(payee_eik):
+        # FG-268: an ЕИК in the request is always checked — it names the payee
+        etype, eid = await payee_by_eik(tenant, payee_eik)
+        if eid and party_id and eid != party_id:
+            raise _refuse("PAYEE_MISMATCH", "ЕИК в заявката е на друг контрагент")
+        if eid and not party_id:
+            party_type, party_id = etype, eid
     if not party_id and payee_named:
-        party_type, party_id = await resolve_payee(tenant, name=payee_name, eik=payee_eik)
+        party_type, party_id, candidates = await resolve_payee(tenant, name=payee_name, eik=payee_eik)
     if account is not None:
         method = "cash" if is_cash_account(account) else "bank"
 
@@ -213,7 +258,7 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
             await _iban_mismatch(tenant, user, party_type, party_id, iban, path)
         if cr.is_cash_method(method):          # cash: the receipt rule still applies (R50.1)
             return await _check_cash(accounts, party_type, party_id, cash_receipt_file_id,
-                                     cash_recipient_name, payee_named or bool(party_id))
+                                     cash_recipient_name, payee_named or bool(party_id), candidates)
         if not auto_resolve:
             # an existing payment whose account was never recorded: the money's target is
             # unknown — it cannot be proved to be this verified account (legacy, by mode)
@@ -222,7 +267,7 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
 
     if cr.is_cash_method(method):
         return await _check_cash(accounts, party_type, party_id, cash_receipt_file_id,
-                                 cash_recipient_name, payee_named)
+                                 cash_recipient_name, payee_named, candidates)
 
     if party_id:
         verified = await accounts.find({"party_type": party_type, "counterparty_id": party_id,

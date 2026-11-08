@@ -123,6 +123,7 @@ class PaymentCreate(BaseModel):
     note: Optional[str] = None
     # CP-01 §1: the payee and its verified bank account (FLOW-010 §3.3 / FLOW-006)
     counterparty_id: Optional[str] = None
+    counterparty_eik: Optional[str] = None      # FG-268: an ЕИК names the payee too
     bank_account_id: Optional[str] = None
     # R50.1: a cash payment to a counterparty — the receipt (File Registry file_id) + recipient
     cash_receipt_file_id: Optional[str] = None
