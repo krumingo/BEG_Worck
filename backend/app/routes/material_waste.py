@@ -78,6 +78,10 @@ async def create_waste_entry(project_id: str, data: WasteEntryCreate, request: R
     `file_ids` (evidence), an `Idempotency-Key` header (or
     `idempotency_key`) and a reason (`reason`, else the `waste_type`)."""
     from app.routes import warehouse_canonical as canon
+    # WHFIX81-05: the Р27 rights are decided FIRST (as the canonical endpoint,
+    # FG-55): a caller without the right gets 403 whatever the body holds.
+    ctx = await canon.require_project_writeoff(request, user)
+    await _r27_first(canon, ctx, user, project_id, data.subproject_id, request)
     if not data.item_id:
         raise HTTPException(status_code=422, detail={
             "error_code": "MASTER_IDENTITY_MISSING",
@@ -97,11 +101,41 @@ async def create_waste_entry(project_id: str, data: WasteEntryCreate, request: R
     except Exception as exc:                      # pydantic validation → 422
         raise HTTPException(status_code=422, detail={
             "error_code": "INVALID_WASTE", "message": str(exc)})
-    ctx = await canon.require_project_writeoff(request, user)
     result = await canon.post_project_writeoff(body, request, user=user, ctx=ctx)
     return {"movement_id": result.movement_id, "audit_event_id": result.audit_event_id,
             "replay": result.replay, "envelope": result.envelope,
             "source": "warehouse_write_off"}
+
+
+async def _r27_first(canon, ctx, user, project_id, subproject_id, request) -> None:
+    """Р27 on the project (a subproject → its DB parent) in every mode; the
+    denial is audited in enforce exactly as POST /project-writeoff does."""
+    from app.permissions.audit_hooks import audit_permission_denied
+    from app.permissions.catalog import PROJECT_WRITEOFF_ACTION
+    from app.permissions.deps import MODE_ENFORCE
+    from app.services.warehouse_movements.errors import (
+        PermissionDeniedError, WarehouseMovementError,
+    )
+    tenant = canon._tenant_for(user)
+    real = project_id
+    if subproject_id:
+        from app.services.warehouse_movements.service import resolve_subproject_parent
+        try:
+            real = await resolve_subproject_parent(tenant._db, tenant.org_id, subproject_id)
+        except WarehouseMovementError:
+            real = subproject_id
+    try:
+        await canon._r27_decide(ctx, user, tenant, real, request)
+    except PermissionDeniedError as exc:
+        if getattr(ctx, "mode", None) == MODE_ENFORCE:
+            class _Decision:
+                allowed = False
+                reason_code = exc.context.get("reason_code", "DENIED")
+            await audit_permission_denied(
+                ctx, PROJECT_WRITEOFF_ACTION, module="warehouse", resource_type="project",
+                resource_id=real, scope_type="project", scope_id=real,
+                decision=_Decision(), request=request)
+        raise canon._render_error(exc) from exc
 
 
 @router.get("/projects/{project_id}/material-waste/log")

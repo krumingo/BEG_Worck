@@ -167,6 +167,19 @@ def path_values(fx: Dict[str, Any]) -> Dict[str, str]:
             "user_id": a["users"]["denied"]["id"], "org_id": a["tenant_id"]}
 
 
+# WH-FIX-01 (WHFIX81-05): routes whose generated body cannot reach the rights
+# decision get a VALID body, so their cells test the permissions, not a 422.
+# The Master item is seeded for tenant A by the harness (PM01_ITEM_ID).
+PM01_ITEM_ID = "pm01-item-a"
+BODY_OVERRIDES = {
+    ("POST", "/api/projects/{project_id}/material-waste"): {
+        "material_name": "PM01", "item_id": PM01_ITEM_ID, "qty": 1, "unit": "бр",
+        "reason": "PM01", "file_ids": ["pm01-file"]},
+}
+# … and the headers they need (a fresh Idempotency-Key per cell).
+HEADER_OVERRIDES = {("POST", "/api/projects/{project_id}/material-waste")}
+
+
 def build_request(method: str, path: str, spec: Dict[str, Any], values: Dict[str, str]):
     op = spec.get("paths", {}).get(path, {}).get(method.lower(), {})
     url = re.sub(r"\{([^}:]+)(:[^}]*)?\}",
@@ -181,6 +194,8 @@ def build_request(method: str, path: str, spec: Dict[str, Any], values: Dict[str
         body = sample(content["application/json"].get("schema", {}), spec)
     # multipart/form-data: no body is generated (no file is uploaded anywhere); the
     # route answers 422 unless its authorization refuses first.
+    if (method.upper(), path) in BODY_OVERRIDES:
+        body = dict(BODY_OVERRIDES[(method.upper(), path)])
     return url, query, body
 
 
@@ -278,6 +293,13 @@ def run_harness(mongo_url: str, out_csv: Path, out_meta: Path,
             return await seed_mod.seed(client[op_name], client[sys_name], SYNTH_PASSWORD)
         report = tc.portal.call(_seed)
 
+        async def _seed_item():
+            tenant_a = next(t["tenant_id"] for t in report["tenants"] if t["key"] == "A")
+            await client[op_name]["md_item"].insert_one(
+                {"id": PM01_ITEM_ID, "tenant_id": tenant_a, "canonical_unit": "бр",
+                 "display_name": "PM01 item"})
+        tc.portal.call(_seed_item)
+
         fx: Dict[str, Any] = {}
         for t in report["tenants"]:
             fx[t["key"]] = {"tenant_id": t["tenant_id"], "project_id": t["project_id"],
@@ -304,6 +326,8 @@ def run_harness(mongo_url: str, out_csv: Path, out_meta: Path,
                     t0 = time.time()
                     kwargs: Dict[str, Any] = {"params": query,
                                               "headers": {"Authorization": "Bearer " + tokens[key]}}
+                    if (method.upper(), path) in HEADER_OVERRIDES:
+                        kwargs["headers"]["Idempotency-Key"] = "pm01-%s-%s" % (mode, key)
                     if body is not None:
                         kwargs["json"] = body
                     try:
