@@ -5455,3 +5455,27 @@ SEC71-M1 resolved. No blocking finding remains.
 | **warehouse** | **1121 (44 files, 0 bad)** |
 
 Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in the route but the project id in the migration.
+
+## 2026-11-08 18:25 UTC: #86 `0bd77a1` (PRJ-01, R54; new PR): PASS, no blocking finding
+
+- **PRJ86-01 (red at `4bf5eae`):** `test_the_committed_evidence_is_a_run_of_this_harness` failed because `docs/evidence/PRJ-01/results.json` was not committed. Resolved at `0bd77a1` (evidence-only commit; no code change).
+- **Delete (FG-239):** only an empty Draft. Any business link → 409 PROJECT_HAS_HISTORY with the links; a non-Draft → 409 PROJECT_NOT_DRAFT. It needs a key (428), is Owner/Admin only, and writes the AuditEvent in the same transaction. Archive/cancel: reason + key + a conditional status change + an AuditEvent.
+- **Photos (FG-238):** retired (status, reason, who, when); the row and the file are never deleted.
+- **Reopen (FG-237):** reason (400), key (428), Owner/Admin only (others 403, cross-tenant 404), one open cycle, AuditEvent `project.reopen` (FLOW-001); covered by the PR test incl. enforce.
+- **Warranty migration (FG-236):** dry run by default; `--apply` needs `--approved-by` and the current plan SHA; no deletes; an AuditEvent per link.
+- **Score (FG-240, R54):**
+  - writers: Owner/Admin anywhere; a SiteManager only on a project they manage;
+  - every change is a new version (the previous one stays in `subcontractor_performance_versions`) plus an AuditEvent, in one transaction;
+  - "paid" is computed from `finance_payments` Outflow rows of subcontractor payments (`active_payments`, reversals excluded); a typed value → 422 ACTUAL_PAID_IS_COMPUTED.
+  - Minor: `quality_score` has no range check.
+
+| Gate | Result |
+|---|---|
+| prj_01 | 9 |
+| SEC-01 | 30 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
