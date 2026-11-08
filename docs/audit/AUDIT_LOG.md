@@ -5310,3 +5310,31 @@ SEC71-M1 resolved. No blocking finding remains.
 | R0 | 814 |
 | PM-01 | 6 |
 | **warehouse** | **1088 / 1121** |
+
+## 2026-11-08 15:30 UTC: #81 `20b1663` (Codex F-81-01 / F-81-02): gates PASS; WH81-03 open (orchestrator / Krum decision)
+
+- **F-81-01:** supplier invoices reach these readers only by their lines' allocation (`received_result`):
+  - finance-details/summary;
+  - company-finance-series;
+  - reports company-finance-summary, month totals and export;
+  - the project-profit fallback.
+- **F-81-02:** Issued invoices stay on the header total in every reader.
+- **Not a result under Р45 (not a finding):** by-counterparty turnover and the transactions list show the full Received document total; that is document turnover.
+
+**WH81-03 (pre-existing on main), probe X8:** four project readers query invoices by `{org_id, project_id}` with no `direction` filter, so a Received invoice with a header project is counted as project REVENUE.
+- **Where:** `project_pnl.compute_project_pnl` L29, `compute_pnl_trend` L223, `centralized_reports` L324, `project_financial_results` L31.
+- **X8:** a 1000 + VAT supplier invoice, unallocated or allocated to another project → prj-1 P&L revenue 1000, invoiced 1200, trend 1000, centralized revenue 1000. Expected 0.
+- Sent to the orchestrator: blocking or follow-up.
+
+| Gate | Result |
+|---|---|
+| probe X5–X7 | 18 |
+| probe X1–X4 | 12 + X4 (the probe's known `request=None` limitation) |
+| SEC-01 | 30 |
+| wh_fix_01 (incl. f81_readers) | 287 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
