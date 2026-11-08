@@ -180,3 +180,8 @@ off / shadow / enforce × mongomock + real).
 Not changed (document lists, by design or not revenue): project card 5 (a per-invoice list that
 carries `direction`), the morning-briefing payment reminders, client recent-invoice lists,
 by-counterparty turnover, the transactions list.
+
+Gates @ `9ddab66` code / `c2c7f53` tests (real Mongo rs0, `-rs`, baseline main `4bca18a`): R0 814 / 0
+skipped · W0 the same 15 (identical set) · PAY-01 630 · SEC-01 30/30 · PM-01 6 / 0 skipped · A2C
+237/0 · A1 478/0 (inventory unchanged) · warehouse 4 failed + 16 errors (identical to main) ·
+WH-FIX-01 suites 299 passed, 0 skipped.
