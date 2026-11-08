@@ -642,3 +642,40 @@ async def test_fg191_line_price_is_stored_quantized(canonical_mongo_db, allow_al
     res = await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
                     quantity=Decimal("3"), invoice_id="inv-q", invoice_line_id="line-q")
     assert str(res.envelope["unit_value"]) == "33.3333"
+
+
+# ═══════════ WHFIX81-03 — no invoice disappears from finance-by-project ═══════════
+
+async def test_whfix81_03_header_allocated_invoices_are_counted_or_flagged(
+        canonical_mongo_db, monkeypatch):
+    _client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    for pid in ("p-1", "p-2"):
+        await db["projects"].insert_one({"id": pid, "org_id": T, "code": pid, "name": pid})
+
+    async def _inv(inv_id, total, header, line_allocs=None):
+        await db["invoices"].insert_one({
+            "id": inv_id, "org_id": T, "invoice_no": inv_id, "direction": "Received",
+            "total": total, "issue_date": "2026-11-01", "status": "Sent", "allocations": header})
+        await db["invoice_lines"].insert_one({          # a line WITHOUT a project allocation
+            "id": "l-" + inv_id, "org_id": T, "invoice_id": inv_id, "qty": 1,
+            "unit_price": total, "line_total_ex_vat": total, "line_total_inc_vat": total,
+            "allocations": line_allocs or []})
+    await _inv("h-single", 100.0, [{"type": "project", "ref_id": "p-1"}])
+    await _inv("h-amounts", 90.0, [{"type": "project", "ref_id": "p-1", "amount": 30},
+                                   {"type": "project", "ref_id": "p-2", "amount": 60}])
+    await _inv("h-unsplit", 50.0, [{"type": "project", "ref_id": "p-1"},
+                                   {"type": "project", "ref_id": "p-2"}])
+    from app.routes import dashboard
+    out = await dashboard.get_finance_by_project(
+        user=_user(), date_from="2026-10-01", date_to="2026-11-30", preset=None,
+        page=1, page_size=20)
+    by = {r["project_id"]: r["total_expenses"] for r in out["items"]}
+    assert by == {"p-1": 130.0, "p-2": 60.0}            # header single + header amounts
+    assert [u["invoice_id"] for u in out["unsplit_invoices"]] == ["h-unsplit"]
+    # the unclassifiable one is in „фактури за разпределяне" (DQ), never dropped
+    from app.services.invoice_allocation import invoices_to_allocate
+    listed = {i["id"]: i["allocation_status"] for i in
+              await invoices_to_allocate(TenantData.for_resolved_org(db, T), T)}
+    assert listed == {"h-unsplit": "header_unsplit"}
+    assert await db["dq_issues"].count_documents({"entity_id": "h-unsplit", "status": "open"}) == 1

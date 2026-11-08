@@ -172,3 +172,16 @@ def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mo
         alarm = await op.alarm_events.find_one({"context.entity_id": INV})
         assert alarm["severity"] == "critical" and alarm["context"]["escalated_to_role"] == "owner"
     run(monkeypatch, backend, mode, scenario)
+
+
+def test_whfix81_03_header_allocated_supplier_invoice_payment_is_unchanged(monkeypatch, backend, mode):
+    """Open with the FLOW Guard: does a header-level allocation count as 100 %
+    for Р44? Until it answers, such an invoice is paid as before (not refused)."""
+    async def scenario(c, op):
+        await op.invoices.update_one({"id": INV}, {"$set": {
+            "allocations": [{"type": "project", "ref_id": "prj-1"}]}})
+        await op.invoice_lines.update_one({"id": LINE}, {"$set": {"allocations": []}})
+        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
+                         json={"amount": 100.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 201, r.text
+    run(monkeypatch, backend, mode, scenario)

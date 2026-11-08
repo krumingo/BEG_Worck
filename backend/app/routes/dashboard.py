@@ -757,7 +757,13 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
             row["total_income"] += amount
         row["_invoices"].add(inv["id"])
 
-    with_lines = set()
+    # Invoices whose LINES carry a project allocation are split per line
+    # (FG-154). Every other invoice keeps its HEADER allocation, as before
+    # (WHFIX81-03: no invoice may disappear): one header project → the whole
+    # total; several with amounts → those amounts; several without → not
+    # classifiable → listed in `unsplit_invoices` and in „фактури за
+    # разпределяне" (DQ), never silently dropped.
+    line_split = set()
     if invoices:
         async for line in tenant.invoice_lines.find(
                 {"org_id": org_id, "invoice_id": {"$in": list(invoices)}},
@@ -767,28 +773,31 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
             inv = invoices.get(line.get("invoice_id"))
             if inv is None:
                 continue
-            with_lines.add(inv["id"])
+            project_allocs = [a for a in effective_allocations(line)
+                              if a["type"] == "project" and a["ref_id"]]
+            if not project_allocs:
+                continue
+            line_split.add(inv["id"])
             amount = _line_amount(line)
             qty = line.get("qty")
             qty = float(qty) if qty not in (None, "") else None
-            for a in effective_allocations(line):
-                if a["type"] != "project" or not a["ref_id"]:
-                    continue
+            for a in project_allocs:
                 if a["qty"] is not None and qty and qty > 0:
                     share = min(a["qty"], qty) / qty
                 else:
                     share = 1.0
                 _add(a["ref_id"], inv, amount * share)
     for inv in invoices.values():
-        if inv["id"] in with_lines:
+        if inv["id"] in line_split:
             continue
-        # A header-level allocation without lines (older data): one project
-        # takes the whole total; several cannot be split → Data Quality.
-        projects = sorted({a.get("ref_id") for a in (inv.get("allocations") or [])
-                           if isinstance(a, dict) and a.get("type") == "project"
-                           and a.get("ref_id")})
+        header = [a for a in (inv.get("allocations") or [])
+                  if isinstance(a, dict) and a.get("type") == "project" and a.get("ref_id")]
+        projects = sorted({a["ref_id"] for a in header})
         if len(projects) == 1:
             _add(projects[0], inv, float(inv.get("total") or 0))
+        elif len(projects) > 1 and all(a.get("amount") is not None for a in header):
+            for a in header:
+                _add(a["ref_id"], inv, float(a.get("amount") or 0))
         elif len(projects) > 1:
             unsplit.append({"invoice_id": inv["id"], "invoice_no": inv.get("invoice_no"),
                             "project_ids": projects})

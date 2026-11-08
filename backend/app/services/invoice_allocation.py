@@ -99,11 +99,33 @@ def is_supplier_invoice(invoice: Optional[dict]) -> bool:
     return bool(invoice) and invoice.get("direction") == "Received"
 
 
+def header_allocated_only(invoice: dict, state: Dict[str, Any], lines_with_allocations: int) -> bool:
+    """WHFIX81-03 — an invoice allocated at HEADER level only (its lines carry
+    no allocation). Whether that counts as 100 % for Р44 is open (FLOW Guard);
+    until it answers its payment behaviour is unchanged (not refused)."""
+    header = [a for a in (invoice.get("allocations") or []) if isinstance(a, dict) and a.get("ref_id")]
+    return bool(header) and lines_with_allocations == 0
+
+
+async def _lines_with_allocations(tenant, invoice_id: str, *, session=None) -> int:
+    n = 0
+    async for line in tenant.invoice_lines.find(
+            {"invoice_id": invoice_id},
+            {"_id": 0, "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1},
+            session=session):
+        if line.get("allocations") or (line.get("allocation_type") and line.get("allocation_ref_id")):
+            n += 1
+    return n
+
+
 async def ensure_payable(tenant, invoice: dict, *, session=None) -> None:
     """Р44 — 409 before anything is written when a supplier invoice has a line
     without final (100 %) allocation."""
     if not is_supplier_invoice(invoice):
         return
+    if invoice.get("allocations") and header_allocated_only(
+            invoice, {}, await _lines_with_allocations(tenant, invoice["id"], session=session)):
+        return        # WHFIX81-03: unchanged until the FLOW Guard rules (debt)
     state = await invoice_allocation_state(tenant, invoice["id"], session=session)
     if state["status"] != ALLOCATED:
         raise HTTPException(status_code=409, detail={
@@ -189,12 +211,26 @@ async def invoices_to_allocate(tenant, org_id: str, *, now: Optional[datetime] =
     days = await deadline_days(tenant)
     out = []
     async for inv in tenant.invoices.find(
-            {"org_id": org_id, "direction": "Received", "status": {"$ne": "Cancelled"}},
+            {"org_id": org_id, "status": {"$ne": "Cancelled"},
+             "$or": [{"direction": "Received"}, {"allocations.1": {"$exists": True}}]},
             {"_id": 0, "id": 1, "invoice_no": 1, "issue_date": 1, "counterparty_name": 1,
-             "total": 1, "status": 1}):
+             "total": 1, "status": 1, "direction": 1, "allocations": 1}):
         state = await invoice_allocation_state(tenant, inv["id"])
+        if header_allocated_only(inv, state, await _lines_with_allocations(tenant, inv["id"])):
+            projects = {a.get("ref_id") for a in inv.get("allocations") or []
+                        if isinstance(a, dict) and a.get("type") == "project" and a.get("ref_id")}
+            header = [a for a in inv.get("allocations") or [] if isinstance(a, dict)]
+            if len(projects) > 1 and not all(a.get("amount") is not None for a in header):
+                # WHFIX81-03: a header split to several projects that no line
+                # or amount classifies — not counted on any project → DQ.
+                state = {"status": "header_unsplit", "pending_lines": state["pending_lines"]}
+            else:
+                state = {"status": ALLOCATED, "pending_lines": []}   # counted by its header
+        elif inv.get("direction") != "Received":
+            continue
         issue = await sync_invoice_issue(tenant, org_id, inv, state, now=now, days=days)
         if state["status"] != ALLOCATED:
+            inv.pop("allocations", None)
             out.append({**inv, "allocation_status": state["status"],
                         "pending_lines": state["pending_lines"], "dq_issue": issue})
     return out
