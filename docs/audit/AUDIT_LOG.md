@@ -5479,3 +5479,9 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 | A2C / A1 | 0 / 0 |
 | R0 | 814 |
 | PM-01 | 6 |
+
+## 2026-11-08 18:30 UTC: main `fddb018` (merge of #77): verified
+
+- **Parents:** `ec7ddd8` + `c7df7ca` (the audited head; PASS at 17:15).
+- **Byte check:** the tree `faeb3b8` equals `merge-tree(ec7ddd8, c7df7ca)`.
+- **Next:** #84 (`2c2e75f`, running against main `ec7ddd8`), #81, #83 and #86 must take in `fddb018` before their own merge; each such merge gets a full re-audit.
