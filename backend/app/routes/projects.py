@@ -2,7 +2,7 @@
 Project routes - /api/projects/*, /api/project-enums, /api/persons/*, /api/companies/*
 Includes owner (person/company) management merged from Sites module.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timezone
@@ -26,6 +26,7 @@ from app.deps.modules import enforce_limit
 from app.permissions.money_write import (check_money_write, require_finance_read, strip_money_for_non_finance)
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import guarded_identity_delete
+from app.services import project_lifecycle as lifecycle
 
 router = APIRouter(tags=["projects"])
 
@@ -51,6 +52,19 @@ PROJECT_TEAM_ROLES = ["SiteManager", "Technician", "Viewer"]
 OWNER_TYPES = ["person", "company"]
 WARRANTY_OPTIONS = [3, 6, 12, 24]  # months
 OBJECT_TYPES = ["apartment", "house", "office", "commercial", "industrial", "public", "other"]
+# PRJ-01 / R54 (FG-236): "Warranty" stays a known type of the EXISTING legacy projects (the
+# migration links each to its original project); no project is created or turned into one.
+WARRANTY_TYPE = "Warranty"
+# PRJ-01 (FG-239): archive/cancel carry a reason, Owner/Admin rights and an AuditEvent —
+# only through POST /projects/{id}/archive and /cancel, never through the generic PUT.
+LIFECYCLE_ENDPOINT_STATUSES = {"Archived": "archive", "Cancelled": "cancel"}
+
+
+def _warranty_in_original() -> HTTPException:
+    return lifecycle.refuse(
+        409, "WARRANTY_IN_ORIGINAL_PROJECT",
+        "Гаранционната работа не създава нов обект — отворете отново оригиналния обект "
+        "(POST /projects/{id}/reopen, вид „warranty“). FLOW-001 P-08, P-13; Р54.")
 
 # Models
 class ProjectCreate(BaseModel):
@@ -180,6 +194,8 @@ async def create_project(data: ProjectCreate, request: Request,
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(PROJECT_STATUSES)}")
     if data.type not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid type. Must be: {', '.join(PROJECT_TYPES)}")
+    if data.type == WARRANTY_TYPE:
+        raise _warranty_in_original()
     # Validate owner type if provided
     if data.owner_type and data.owner_type not in OWNER_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid owner type. Must be: {', '.join(OWNER_TYPES)}")
@@ -278,18 +294,15 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     
     # Enforce status transitions
     if "status" in update:
-        TRANSITIONS = {
-            "Draft": ["Active", "Cancelled"],
-            "Active": ["Paused", "Stopped", "Completed"],
-            "Paused": ["Active", "Stopped", "Cancelled"],
-            "Stopped": ["Active", "Cancelled"],
-            "Completed": ["Archived"],
-            "Cancelled": ["Archived"],
-            "Overhead": ["Active", "Archived"],
-            "Archived": [],
-        }
+        TRANSITIONS = lifecycle.TRANSITIONS
         current_status = project.get("status", "Draft")
         new_status = update["status"]
+        if current_status != new_status and new_status in LIFECYCLE_ENDPOINT_STATUSES:
+            # PRJ-01 (FG-239): archive/cancel need a reason, Owner/Admin and an AuditEvent.
+            raise lifecycle.refuse(
+                409, "USE_LIFECYCLE_ENDPOINT",
+                "Архивиране/отказ става с причина: POST /projects/{id}/%s"
+                % LIFECYCLE_ENDPOINT_STATUSES[new_status])
         if current_status != new_status:
             allowed = TRANSITIONS.get(current_status, [])
             if new_status not in allowed:
@@ -299,6 +312,15 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
                 )
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
+    if "type" in update and update["type"] != project.get("type"):
+        # PRJ-01 / R54 (FG-236): no project becomes a warranty project, and the type is
+        # fixed once the project has its first record (else the history is relabelled).
+        if update["type"] == WARRANTY_TYPE:
+            raise _warranty_in_original()
+        links = await lifecycle.business_links(tenant, project_id)
+        if links:
+            raise lifecycle.refuse(409, "PROJECT_TYPE_LOCKED",
+                                   "Типът на обекта не се сменя след първия запис", links=links)
     # Auto-generate address_text from structured_address
     sa = update.get("structured_address")
     if sa and "address_text" not in update:
@@ -315,29 +337,164 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
     await tenant.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
+    if update.get("status") == "Completed" and project.get("current_reopen_id"):
+        # PRJ-01 (FLOW-001 P-08): closing again ends the open reopen cycle.
+        await tenant.projects.update_one(
+            {"id": project_id, "org_id": user["org_id"]},
+            {"$set": {"reopen_cycles.$[c].closed_at": update["updated_at"],
+                      "reopen_cycles.$[c].closed_by": user["id"]},
+             "$unset": {"current_reopen_id": ""}},
+            array_filters=[{"c.id": project["current_reopen_id"]}])
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
     return await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
 
 @router.delete("/projects/{project_id}")
-async def delete_project(project_id: str, user: dict = Depends(require_admin)):
+async def delete_project(project_id: str, user: dict = Depends(require_admin),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """PRJ-01 (FG-239; CLAUDE.md §2 rule 9; FLOW-001 P-04, P-06): no hard delete of history.
+
+    * a project that ANY tenant record names (offer, act, invoice, payment, warehouse
+      movement, report, photo, file, labor, subcontract, child project, ...) → 409
+      ``PROJECT_HAS_HISTORY`` with the links: archive or cancel it instead;
+    * a project that is not a Draft → 409 ``PROJECT_NOT_DRAFT`` (same advice);
+    * only an EMPTY Draft is removed (P-06 „Празно ниво може да се изтрие“), with its team
+      and phases, in one transaction with the canonical AuditEvent ``project.delete``.
+    Owner/Admin (``require_admin``); Idempotency-Key required (428)."""
+    key = lifecycle.require_key(idempotency_key)
     tenant = _tenant(user)
-    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]})
-    if not project:
-        raise HTTPException(status_code=404, detail="Project not found")
-    # Guard: don't delete parent with children
-    child_count = await tenant.projects.count_documents({"parent_project_id": project_id, "org_id": user["org_id"]})
-    if child_count > 0:
-        raise HTTPException(status_code=400, detail=f"Обектът има {child_count} под-обекта. Изтрийте или преместете ги първо.")
-    await tenant.projects.delete_one({"id": project_id})
-    # W0-03E-A2: scoped to this tenant — an unscoped delete_many would remove
-    # another tenant's memberships whenever the project ids collide. A row of
-    # UNRESOLVED provenance therefore survives this delete; that is deliberate:
-    # it authorizes nothing anyway, and hard-deleting a row whose owner is
-    # unknown would destroy the evidence a human still has to decide on.
-    await _team(user).collection("project_team").delete_many({"project_id": project_id})
-    await tenant.project_phases.delete_many({"project_id": project_id})
-    await log_audit(user["org_id"], user["id"], user["email"], "deleted", "project", project_id, {"code": project.get("code")})
-    return {"ok": True}
+    team = _team(user).collection("project_team")
+
+    async def work(session):
+        project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]},
+                                                 {"_id": 0}, session=session)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        links = await lifecycle.business_links(tenant, project_id, session=session)
+        if links:
+            raise lifecycle.refuse(
+                409, "PROJECT_HAS_HISTORY",
+                "Обектът има история и не се изтрива — архивирайте го "
+                "(POST /projects/{id}/archive) или го откажете (POST /projects/{id}/cancel)",
+                links=links)
+        if project.get("status") != "Draft":
+            raise lifecycle.refuse(
+                409, "PROJECT_NOT_DRAFT",
+                "Изтрива се само празна чернова — архивирайте или откажете обекта")
+        await tenant.projects.delete_one({"id": project_id}, session=session)
+        # W0-03E-A2: scoped to this tenant (a foreign row with a colliding id survives).
+        await team.delete_many({"project_id": project_id}, session=session)
+        await tenant.project_phases.delete_many({"project_id": project_id}, session=session)
+        await lifecycle.audit(session, user, action="project.delete", entity_type="project",
+                              entity_id=project_id, reason="празна чернова", key=key,
+                              diff={"before": {k: project.get(k) for k in
+                                               ("code", "name", "status", "type")},
+                                    "after": None})
+        return {"ok": True, "deleted": project_id}
+
+    return await lifecycle.keyed_transaction(user, key, "project.delete",
+                                             {"project_id": project_id}, work)
+
+
+async def _change_status(user: dict, project_id: str, key: str, *, action: str,
+                         target: str, reason: str, extra_set: dict,
+                         extra_push: Optional[dict] = None, allowed_from=None) -> dict:
+    """One status change of PRJ-01: conditional on the status read, one transaction with
+    its AuditEvent, once per Idempotency-Key."""
+    tenant = _tenant(user)
+
+    async def work(session):
+        project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]},
+                                                 {"_id": 0}, session=session)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        current = project.get("status", "Draft")
+        allowed = (current in allowed_from) if allowed_from is not None else \
+            (target in lifecycle.TRANSITIONS.get(current, []))
+        if not allowed:
+            raise lifecycle.refuse(409, "INVALID_TRANSITION",
+                                   "Не е позволен преход от %s към %s" % (current, target),
+                                   current_status=current)
+        now = lifecycle.now_iso()
+        update = {"$set": {"status": target, "updated_at": now, **extra_set(now, current)}}
+        if extra_push:
+            update["$push"] = extra_push(now)
+        res = await tenant.projects.update_one({"id": project_id, "status": current}, update,
+                                               session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "STATUS_CHANGED", "Статусът на обекта току-що се промени")
+        after = {"status": target}
+        if extra_push:
+            cycle = update["$push"]["reopen_cycles"]
+            after.update({"kind": cycle["kind"], "reopen_id": cycle["id"]})
+        await lifecycle.audit(session, user, action=action, entity_type="project",
+                              entity_id=project_id, reason=reason, key=key,
+                              diff={"before": {"status": current}, "after": after})
+        return await tenant.projects.find_one({"id": project_id}, {"_id": 0}, session=session)
+
+    return await lifecycle.keyed_transaction(user, key, action,
+                                             {"project_id": project_id, "target": target,
+                                              "reason": reason}, work)
+
+
+@router.post("/projects/{project_id}/archive")
+async def archive_project(project_id: str, body: Optional[dict] = Body(None),
+                          user: dict = Depends(require_admin),
+                          idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """PRJ-01 (FG-239; FLOW-001 P-07, P-11): Owner/Admin archive a project with a reason.
+    The project stays in every financial report; nothing is deleted."""
+    key = lifecycle.require_key(idempotency_key)
+    reason = lifecycle.require_reason((body or {}).get("reason"))
+    return await _change_status(
+        user, project_id, key, action="project.archive", target="Archived", reason=reason,
+        extra_set=lambda now, current: {"archived_reason": reason, "archived_at": now,
+                                        "archived_by": user["id"],
+                                        "status_before_archive": current})
+
+
+@router.post("/projects/{project_id}/cancel")
+async def cancel_project(project_id: str, body: Optional[dict] = Body(None),
+                         user: dict = Depends(require_admin),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """PRJ-01 (FG-239; FLOW-001 P-04 „Отказан“, P-07): Owner/Admin cancel with a reason."""
+    key = lifecycle.require_key(idempotency_key)
+    reason = lifecycle.require_reason((body or {}).get("reason"))
+    return await _change_status(
+        user, project_id, key, action="project.cancel", target="Cancelled", reason=reason,
+        extra_set=lambda now, current: {"cancelled_reason": reason, "cancelled_at": now,
+                                        "cancelled_by": user["id"],
+                                        "status_before_cancel": current})
+
+
+@router.post("/projects/{project_id}/reopen")
+async def reopen_project(project_id: str, body: Optional[dict] = Body(None),
+                         user: dict = Depends(require_admin),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """PRJ-01 (FG-237; FLOW-001 P-08, P-13; FLOW-018; R54): a Completed project opens
+    again to Active — for warranty, a defect, completion, additional work or a correction.
+
+    Owner/Admin (P-07: they activate, pause, resume and close projects). A reason is
+    required; the reopen cycle (kind, reason, who, when) is kept on the project and closed
+    when the project is set to Completed again; the canonical AuditEvent ``project.reopen``
+    is written in the same transaction. Warranty work is done HERE, in the original
+    project, never in a new one."""
+    key = lifecycle.require_key(idempotency_key)
+    body = body or {}
+    reason = lifecycle.require_reason(body.get("reason"))
+    kind = body.get("kind")
+    if kind not in lifecycle.REOPEN_KINDS:
+        raise lifecycle.refuse(400, "REOPEN_KIND_INVALID",
+                               "Вид на повторното отваряне: " + ", ".join(lifecycle.REOPEN_KINDS))
+    import uuid as _uuid
+    cycle_id = str(_uuid.uuid5(_uuid.NAMESPACE_URL, "beg-project-reopen:%s:%s:%s:%s" % (
+        user["org_id"], project_id, user["id"], key)))
+
+    return await _change_status(
+        user, project_id, key, action="project.reopen", target="Active", reason=reason,
+        allowed_from=lifecycle.REOPENABLE,
+        extra_set=lambda now, current: {"current_reopen_id": cycle_id},
+        extra_push=lambda now: {"reopen_cycles": {
+            "id": cycle_id, "kind": kind, "reason": reason, "opened_at": now,
+            "opened_by": user["id"], "closed_at": None, "closed_by": None}})
 
 # ── Extended Project Details Endpoints ──────────────────────────────
 
@@ -867,18 +1024,23 @@ async def delete_company(company_id: str, request: Request, user: dict = Depends
 # ══════════════════════════════════════════════════════════════════════════════
 
 ALLOWED_PHOTO_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
+PHOTO_RETIRED = "retired"   # PRJ-01 (FG-238): a retired photo stays, hidden from the list
 MAX_PHOTO_SIZE_MB = 10
 
 
 @router.get("/projects/{project_id}/photos")
-async def list_project_photos(project_id: str, user: dict = Depends(get_current_user)):
+async def list_project_photos(project_id: str, include_retired: bool = False,
+                              user: dict = Depends(get_current_user)):
     """List all photos for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
     project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    photos = await tenant.project_photos.find({"project_id": project_id, "org_id": org_id}, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
+    flt = {"project_id": project_id, "org_id": org_id}
+    if not include_retired:
+        flt["status"] = {"$ne": PHOTO_RETIRED}   # PRJ-01 (FG-238): retired, not deleted
+    photos = await tenant.project_photos.find(flt, {"_id": 0}).sort("uploaded_at", -1).to_list(100)
     user_ids = list(set(p.get("uploaded_by") for p in photos if p.get("uploaded_by")))
     users_map = {}
     if user_ids:
@@ -959,27 +1121,49 @@ async def serve_project_photo(filename: str, user: dict = Depends(get_current_us
 
 
 @router.delete("/projects/photos/{photo_id}")
-async def delete_project_photo(photo_id: str, user: dict = Depends(get_current_user)):
-    """Delete a project photo (owner or admin only)"""
+async def delete_project_photo(photo_id: str, body: Optional[dict] = Body(None),
+                               reason: Optional[str] = None,
+                               user: dict = Depends(get_current_user),
+                               idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """PRJ-01 (FG-238; FLOW-018 „НЕ … изтриване на дефектна история“; CLAUDE.md §2 rule 9,
+    §4): a project photo is evidence — it is RETIRED, never deleted.
+
+    The row stays with ``status="retired"``, the reason, who and when; the original file
+    stays where it is; the default photo list no longer shows it. Same rights as before
+    (the uploader, Admin or Owner); a reason (body or ``?reason=``) and an Idempotency-Key
+    are required; one transaction with the canonical AuditEvent ``project.photo.retire``."""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    photo = await tenant.project_photos.find_one({"id": photo_id, "org_id": org_id}, {"_id": 0})
-    if not photo:
-        raise HTTPException(status_code=404, detail="Photo not found")
-    if photo.get("uploaded_by") != user["id"] and user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only the uploader or admin can delete this photo")
-    stored_filename = photo.get("stored_filename")
-    if stored_filename:
-        file_path = Path("/app/backend/uploads/projects") / stored_filename
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except OSError:
-                pass
-    await tenant.project_photos.delete_one({"id": photo_id})
-    await log_audit(org_id, user["id"], user["email"], "photo_deleted", "project", photo.get("project_id"), {"photo_id": photo_id})
-    return {"ok": True, "deleted": photo_id}
+    key = lifecycle.require_key(idempotency_key)
+    why = lifecycle.require_reason((body or {}).get("reason") if (body or {}).get("reason")
+                                   is not None else reason)
 
+    async def work(session):
+        photo = await tenant.project_photos.find_one({"id": photo_id, "org_id": org_id},
+                                                     {"_id": 0}, session=session)
+        if not photo:
+            raise HTTPException(status_code=404, detail="Photo not found")
+        if photo.get("uploaded_by") != user["id"] and user["role"] not in ["Admin", "Owner"]:
+            raise HTTPException(status_code=403, detail="Only the uploader or admin can retire this photo")
+        if photo.get("status") == PHOTO_RETIRED:
+            raise lifecycle.refuse(409, "PHOTO_ALREADY_RETIRED", "Снимката вече е скрита")
+        now = lifecycle.now_iso()
+        res = await tenant.project_photos.update_one(
+            {"id": photo_id, "status": {"$ne": PHOTO_RETIRED}},
+            {"$set": {"status": PHOTO_RETIRED, "retired_reason": why, "retired_at": now,
+                      "retired_by": user["id"]}}, session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "PHOTO_ALREADY_RETIRED", "Снимката вече е скрита")
+        await lifecycle.audit(session, user, action="project.photo.retire",
+                              entity_type="project_photo", entity_id=photo_id, reason=why,
+                              key=key, source_flow="FLOW-029",
+                              diff={"before": {"status": photo.get("status") or "active"},
+                                    "after": {"status": PHOTO_RETIRED},
+                                    "project_id": photo.get("project_id")})
+        return {"ok": True, "retired": photo_id}
+
+    return await lifecycle.keyed_transaction(user, key, "project.photo.retire",
+                                             {"photo_id": photo_id, "reason": why}, work)
 
 
 @router.get("/projects/{project_id}/invoice-context")

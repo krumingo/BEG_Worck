@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { canReadFinance, canReadBudgetView } from "@/lib/financeAccess";
 import API from "@/lib/api";
 import AssetQrBlock from "@/components/AssetQrBlock";
+import ProjectReopenButton from "@/components/ProjectReopenButton";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -283,6 +284,7 @@ export default function ProjectDetailPage() {
         )}
 
         <AssetQrBlock entityType="project" entityId={projectId} name={project.name} code={project.code} />
+        <ProjectReopenButton project={project} role={user?.role} onDone={() => fetchDashboard()} />
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
       </div>
 

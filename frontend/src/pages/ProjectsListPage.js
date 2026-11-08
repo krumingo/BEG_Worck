@@ -2,6 +2,8 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { apiErrorText } from "@/lib/idempotency";
+import { LIFECYCLE_ENDPOINT, changeProjectStatus, deleteProject } from "@/lib/projectLifecycle";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -183,10 +185,11 @@ export default function ProjectsListPage() {
   const handleDelete = async (p) => {
     if (!window.confirm(`${t("projects.deleteConfirm")}\n\n${p.code} — ${p.name}`)) return;
     try {
-      await API.delete(`/projects/${p.id}`);
+      // PRJ-01 (FG-239): only an empty Draft is deleted; anything with history → archive/cancel.
+      await deleteProject(p.id);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      alert(apiErrorText(err, t("toast.deleteFailed")));
     }
   };
 
@@ -226,7 +229,16 @@ export default function ProjectsListPage() {
       };
       if (editing) {
         const { code, ...updatePayload } = payload;
+        // PRJ-01 (FG-239): archive / cancel go through their own endpoint with a reason.
+        const lifecycleStatus = form.status !== form._origStatus && LIFECYCLE_ENDPOINT[form.status] ? form.status : null;
+        let reason = "";
+        if (lifecycleStatus) {
+          reason = (window.prompt(`Причина (${STATUS_BG[lifecycleStatus] || lifecycleStatus}):`) || "").trim();
+          if (!reason) { setSaving(false); return; }
+          updatePayload.status = form._origStatus;
+        }
         await API.put(`/projects/${editing.id}`, updatePayload);
+        if (lifecycleStatus) await changeProjectStatus(editing.id, lifecycleStatus, reason);
       } else {
         const res = await API.post("/projects", payload);
         try {
@@ -236,7 +248,7 @@ export default function ProjectsListPage() {
       setDialogOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
@@ -489,7 +501,8 @@ function ProjectWizard({ form, setForm, editing, managers, saving, onSave, statu
               <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
                 <SelectTrigger className="bg-background"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {["Billable", "Overhead", "Warranty"].map(t => <SelectItem key={t} value={t}>{t === "Billable" ? "Фактурируем" : t === "Overhead" ? "Режиен" : "Гаранционен"}</SelectItem>)}
+                  {/* PRJ-01 / R54: no new warranty project — warranty work reopens the original project */}
+                  {["Billable", "Overhead", ...(form.type === "Warranty" ? ["Warranty"] : [])].map(t => <SelectItem key={t} value={t}>{t === "Billable" ? "Фактурируем" : t === "Overhead" ? "Режиен" : "Гаранционен"}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

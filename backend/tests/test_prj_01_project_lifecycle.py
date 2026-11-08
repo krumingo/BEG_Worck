@@ -646,9 +646,9 @@ def test_fg236_the_warranty_migration_links_dry_run_first_idempotent_never_delet
     m = obs["fg236"]["migration"]
     assert m["available"] is True, m
     assert m["dry_wrote"] == 0
-    assert m["dry_counts"] == {"link": 2, "dq": 2, "already": 0}
+    assert m["dry_counts"] == {"link": 2, "dq": 2, "already": 0, "dq_open": 0}
     assert m["wrong_plan_refused"] == "PlanMismatch"
-    assert m["first_counts"] == {"link": 2, "dq": 2, "already": 0}
+    assert m["first_counts"] == {"link": 2, "dq": 2, "already": 0, "dq_open": 0}
     assert m["second_counts"] == {"link": 0, "dq": 0, "already": 2, "dq_open": 2}
     assert m["projects_after"] == m["projects_before"]
     assert m["parent_linked_to"] == m["parent_expected"] and m["parent_type"] == "Warranty"
