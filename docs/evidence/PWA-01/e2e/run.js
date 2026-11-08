@@ -224,6 +224,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) });
   await p2.getByTestId("mobile-menu-toggle").click();
   await p2.getByTestId("pwa-install-menu").waitFor();
   check("phone: install button in the menu", await p2.getByTestId("pwa-install-menu").isVisible());
+  await p2.waitForTimeout(800);
   await shot(p2, "phone-menu-install.png");
   await p2.keyboard.press("Escape");
   await phone.setOffline(true);
@@ -246,6 +247,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) });
   await p3.getByTestId("pwa-ios-steps").waitFor();
   const steps = await p3.getByTestId("pwa-ios-steps").innerText();
   check("iOS: Сподели → Добави към началния екран steps", steps.includes("Сподели") && steps.includes("Добави към началния екран"));
+  await p3.waitForTimeout(500);
   await shot(p3, "phone-ios-install-steps.png");
   await ios.close();
 

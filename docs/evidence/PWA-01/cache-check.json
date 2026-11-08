@@ -1,0 +1,312 @@
+{
+  "base": "http://localhost:4173",
+  "checks": [
+    {
+      "name": "index.html links the manifest",
+      "ok": true,
+      "detail": "/manifest.webmanifest"
+    },
+    {
+      "name": "manifest: name/short_name/start_url/scope/display/lang",
+      "ok": true
+    },
+    {
+      "name": "manifest: 192/512 any + maskable icons",
+      "ok": true,
+      "detail": [
+        "192x192:any",
+        "512x512:any",
+        "192x192:maskable",
+        "512x512:maskable"
+      ]
+    },
+    {
+      "name": "icon /icons/icon-192.png served",
+      "ok": true,
+      "detail": 200
+    },
+    {
+      "name": "icon /icons/icon-512.png served",
+      "ok": true,
+      "detail": 200
+    },
+    {
+      "name": "icon /icons/icon-maskable-192.png served",
+      "ok": true,
+      "detail": 200
+    },
+    {
+      "name": "icon /icons/icon-maskable-512.png served",
+      "ok": true,
+      "detail": 200
+    },
+    {
+      "name": "icon /icons/apple-touch-icon.png served",
+      "ok": true,
+      "detail": 200
+    },
+    {
+      "name": "apple-touch-icon + apple meta tags",
+      "ok": true
+    },
+    {
+      "name": "service worker active, scope /",
+      "ok": true,
+      "detail": {
+        "scope": "http://localhost:4173/",
+        "active": "activated",
+        "scriptURL": "http://localhost:4173/service-worker.js",
+        "version": {
+          "build_sha": "5a91711dc061e2a6ef3fff1aecf414d161601a2f",
+          "cache": "bw-shell-5a91711dc061-f2afcc3f"
+        }
+      }
+    },
+    {
+      "name": "SW version = RC-01 build identity",
+      "ok": true,
+      "detail": {
+        "build_sha": "5a91711dc061e2a6ef3fff1aecf414d161601a2f",
+        "cache": "bw-shell-5a91711dc061-f2afcc3f"
+      }
+    },
+    {
+      "name": "Chromium installability: no errors",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "desktop: install button in the sidebar",
+      "ok": true
+    },
+    {
+      "name": "Cache Storage: only the app-shell cache exists",
+      "ok": true,
+      "detail": [
+        "bw-shell-5a91711dc061-f2afcc3f"
+      ]
+    },
+    {
+      "name": "Cache Storage: no /api, /uploads or /ws entry",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "Cache Storage: shell has index.html + js + css",
+      "ok": true
+    },
+    {
+      "name": "offline: shell opens from cache",
+      "ok": true
+    },
+    {
+      "name": "offline: Без връзка bar visible",
+      "ok": true,
+      "detail": "Без връзка — промените няма да се запишат"
+    },
+    {
+      "name": "offline: /api is not answered from any cache",
+      "ok": true,
+      "detail": "network-error"
+    },
+    {
+      "name": "offline: deep link navigation falls back to the shell",
+      "ok": true
+    },
+    {
+      "name": "logout: no token / user / tenant marker / tenant draft in localStorage",
+      "ok": true,
+      "detail": [
+        "lang"
+      ]
+    },
+    {
+      "name": "logout: sessionStorage empty",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "logout: only the app-shell cache remains",
+      "ok": true,
+      "detail": [
+        "bw-shell-5a91711dc061-f2afcc3f"
+      ]
+    },
+    {
+      "name": "tenant switch: tenant A draft + session storage cleared",
+      "ok": true
+    },
+    {
+      "name": "tenant switch: tenant B login kept, marker = org-b",
+      "ok": true
+    },
+    {
+      "name": "tenant switch: only the app-shell cache remains",
+      "ok": true,
+      "detail": [
+        "bw-shell-5a91711dc061-f2afcc3f"
+      ]
+    },
+    {
+      "name": "update: Има нова версия bar shown, page not reloaded silently",
+      "ok": true
+    },
+    {
+      "name": "update: Обнови activates the new worker and reloads once",
+      "ok": true
+    },
+    {
+      "name": "phone: install button in the menu",
+      "ok": true
+    },
+    {
+      "name": "phone offline: shell + Без връзка bar",
+      "ok": true
+    },
+    {
+      "name": "phone: no /api, /uploads or /ws entry in Cache Storage",
+      "ok": true
+    },
+    {
+      "name": "iOS: Сподели → Добави към началния екран steps",
+      "ok": true
+    }
+  ],
+  "cache_snapshots": {
+    "after_login_online": {
+      "bw-shell-5a91711dc061-f2afcc3f": [
+        "/index.html",
+        "/static/css/main.32922fdb.css",
+        "/manifest.webmanifest",
+        "/icons/icon.svg",
+        "/static/js/main.50f0340b.js",
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/icons/icon-maskable-192.png",
+        "/icons/apple-touch-icon.png",
+        "/icons/favicon-32.png",
+        "/icons/icon-maskable-512.png"
+      ]
+    },
+    "after_logout": {
+      "bw-shell-5a91711dc061-f2afcc3f": [
+        "/index.html",
+        "/static/css/main.32922fdb.css",
+        "/manifest.webmanifest",
+        "/icons/icon.svg",
+        "/static/js/main.50f0340b.js",
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/icons/icon-maskable-192.png",
+        "/icons/apple-touch-icon.png",
+        "/icons/favicon-32.png",
+        "/icons/icon-maskable-512.png"
+      ]
+    },
+    "phone_offline": {
+      "bw-shell-5a91711dc061-f2afcc3f": [
+        "/index.html",
+        "/static/css/main.32922fdb.css",
+        "/manifest.webmanifest",
+        "/icons/icon.svg",
+        "/static/js/main.50f0340b.js",
+        "/icons/icon-192.png",
+        "/icons/icon-512.png",
+        "/icons/icon-maskable-192.png",
+        "/icons/icon-maskable-512.png",
+        "/icons/apple-touch-icon.png",
+        "/icons/favicon-32.png"
+      ]
+    }
+  },
+  "manifest": {
+    "id": "/",
+    "name": "BEG_Work",
+    "short_name": "BEG_Work",
+    "description": "BEG_Work — от разговор на обекта до изпълнено и платено СМР.",
+    "lang": "bg",
+    "dir": "ltr",
+    "start_url": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "theme_color": "#070b13",
+    "background_color": "#070b13",
+    "icons": [
+      {
+        "src": "/icons/icon-192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/icons/icon-512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "any"
+      },
+      {
+        "src": "/icons/icon-maskable-192.png",
+        "sizes": "192x192",
+        "type": "image/png",
+        "purpose": "maskable"
+      },
+      {
+        "src": "/icons/icon-maskable-512.png",
+        "sizes": "512x512",
+        "type": "image/png",
+        "purpose": "maskable"
+      }
+    ],
+    "shortcuts": [
+      {
+        "name": "Табло",
+        "short_name": "Табло",
+        "url": "/",
+        "icons": [
+          {
+            "src": "/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+          }
+        ]
+      }
+    ]
+  },
+  "service_worker": {
+    "scope": "http://localhost:4173/",
+    "active": "activated",
+    "scriptURL": "http://localhost:4173/service-worker.js",
+    "version": {
+      "build_sha": "5a91711dc061e2a6ef3fff1aecf414d161601a2f",
+      "cache": "bw-shell-5a91711dc061-f2afcc3f"
+    }
+  },
+  "installability_errors": [],
+  "debt_d1_offline_reload_token": "dropped",
+  "after_logout": {
+    "local": [
+      "lang"
+    ],
+    "session": [],
+    "caches": [
+      "bw-shell-5a91711dc061-f2afcc3f"
+    ]
+  },
+  "after_tenant_switch": {
+    "local_keys": [
+      "bw_pwa_tenant",
+      "bw_token",
+      "bw_user",
+      "lang"
+    ],
+    "session": [],
+    "caches": [
+      "bw-shell-5a91711dc061-f2afcc3f"
+    ]
+  },
+  "summary": {
+    "passed": 32,
+    "failed": 0
+  }
+}
