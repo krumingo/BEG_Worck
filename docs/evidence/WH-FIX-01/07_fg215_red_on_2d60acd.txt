@@ -1,0 +1,5 @@
+      1 7 failed, 177 deselected in 2.77s
+      6 E   AssertionError: assert 
+      1 E   AssertionError: assert {} == {'p-1': 500.0}
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_fg215_new_line_of_an_issued_invoice_is_not_stamped
+      1 FAILED tests/test_wh_fix_01_post_55.py::test_fg215_issued_invoice_with_header_project_counts_as_income_like_main
