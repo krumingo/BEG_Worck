@@ -5554,3 +5554,21 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 - **PM-01:** the committed matrix at `d5d3089` lacks the 24 cells of the new Р58 route `GET /finance/company-costs/accepted-differences`. `caea933` (evidence only) adds them: finance roles 200, the 5 other roles 403, nothing written, 3 modes. My PM-01 re-run on `caea933` was stopped because the head moves again.
 - **Moving heads:** `ef7cddd` (Q007: company_losses in `/org/pnl-attribution`), then FG-269..271 + the merge of main `1ea98fe`. A full re-audit follows on the final head.
 - **#86 `28fb230`** (= `e0fd1e2` + evidence, no code change): gates running.
+
+## 2026-11-08 19:10 UTC: #86 `28fb230` (PRJ-01 rounds 2–3 + merge `e0fd1e2` of main `fddb018` + evidence): PASS, no blocking finding
+
+- **Merge checks:** see the `e0fd1e2` entry (only generated files differ from merge-tree; role-union 0; PM-01 168/168, 0 extra). `28fb230` adds evidence only.
+
+| Gate | Result |
+|---|---|
+| prj_01 | 9 |
+| SEC-01 | 30 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 (with the regenerated matrix) |
+
+- Minor (carried over): `quality_score` has no range check.
+- **Next:** #84's final head. #83, #84 and #86 need main `1ea98fe` before their own merge.
