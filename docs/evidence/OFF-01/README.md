@@ -319,3 +319,39 @@ The public review view set `updated_at` with no condition. Every draft and trans
 | W0 | 1173 passed, **the same 15** (`test_w0_03e_legacy_routes.py`) |
 | A2C / A1 guards | 215 modules / 434 units, 0 violations |
 | PM-01 | harness re-run → matrix byte-identical |
+
+## Round 9 (08.11) — Codex review of `653a1a5` (comment 6718782031): CHANGES_REQUESTED
+
+**F-79-01 [P2]: the public unit price was rounded separately from the line value.** For qty 100 at 5 + 7.345, the review payload and the PDF showed `12.34` next to `1234.50`, and 100 × 12.34 = 1234.00.
+
+- **Red first:** `6d7948b` (tests only). On `653a1a5`, `test_27` fails in 3 of 3 modes.
+- **Fix `5675e17`:**
+  - `client_unit_price()` is the exact `Decimal` sum of the stored components (a float goes through `repr`: 7.345 → `Decimal('7.345')`).
+  - The review payload has `unit_price` (the exact number) and **`unit_price_text`**: at least 2 decimals and as many more as the price has (`12.345`, `0.30`, `1.2346`, `100.00`).
+  - The **PDF** prints `unit_price_text`, and the **quantity** is exact too (2.25 printed as "2.2" before).
+  - `OfferReviewPage` shows `unit_price_text`.
+  - `line_total` is shown as it was sent and is never re-fitted to a rounded price. R43 holds: no material/labour field anywhere.
+- **`test_27`:** five lines (fractional prices, qty 100, a fractional quantity). Each one is created through `POST /offers` and sent, then checked:
+  - payload price text = the exact sum;
+  - qty × shown price = the shown line value to the cent;
+  - the sent `line_total` is unchanged;
+  - the PDF text has the exact price and quantity, and never `12.34`.
+
+**test_16 was timing-sensitive** (Codex: `stats["send"] > 0` failed 1 of 6 on an unchanged rerun). Now deterministic:
+- **pause hooks** placed right after each side has read the offer **force** the two orderings that matter;
+- *send_first*: the rival pauses, /send commits, the rival resumes → 409 `OFFER_IN_USE`;
+- *rival_first*: /send pauses before its transaction, the rival commits, /send resumes → 409 `OFFER_CHANGED`;
+- each forced ordering has exactly one allowed outcome;
+- the free-race rounds and every original assertion are kept, and `orderings == {send_first: 20, rival_first: 20}` is asserted;
+- **6 of 6** unchanged reruns pass, after 5 of 5 before the fix commit.
+
+### Gates on `5675e17` (real `mongo:7.0` rs0, sequential)
+
+| Gate | Result |
+|---|---|
+| OFF-01 (90) + audit probe (147) + PM-01 + all `test_pay_01*` + A1 collision matrix | **878 passed, 0 skipped** |
+| `test_16` unchanged reruns | **6 / 6 passed** |
+| R0 | **814 passed** |
+| W0 | 1173 passed, **the same 15** (`test_w0_03e_legacy_routes.py`) |
+| A2C / A1 guards | 215 modules / 434 units, 0 violations |
+| PM-01 | harness re-run → matrix byte-identical |
