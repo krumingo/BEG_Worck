@@ -56,6 +56,7 @@
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | projects | get(id = proj_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractor_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:_insert_supplier_invoice | (helper) | invoices | insert_one(dict(invoice)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:create_invoice | POST /finance/invoices | client_acts | find_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:create_invoice | POST /finance/invoices | invoices | insert_one(invoice) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
@@ -406,4 +407,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 391 accesses — FIXED 129, SAFE 262
+Totals: 392 accesses — FIXED 129, SAFE 263
