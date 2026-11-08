@@ -30,11 +30,13 @@ export default function ProfitAttributionWidget() {
   const { totals, top_winners, top_losers, expense_breakdown } = data;
   const donutData = Object.entries(expense_breakdown || {}).filter(([, v]) => v.amount > 0).map(([k, v]) => ({ name: LABELS[k] || k, value: v.amount, pct: v.pct, fill: COLORS[k] || "#888" }));
   const fmt = (n) => `${(n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 })} €`;
+  // FG-271: the heading is the FINAL company result (projects − company losses)
+  const finalProfit = totals.final_profit ?? totals.profit;
 
   return (
     <div className="rounded-xl border border-border bg-card p-4 mb-4" data-testid="profit-attribution">
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2"><PieChart className="w-5 h-5 text-primary" /><h3 className="text-sm font-semibold">Защо си на {totals.profit >= 0 ? "печалба" : "загуба"}</h3><span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></div>
+        <div className="flex items-center gap-2"><PieChart className="w-5 h-5 text-primary" /><h3 className="text-sm font-semibold" data-testid="attribution-heading">Защо си на {finalProfit >= 0 ? "печалба" : "загуба"} · {fmt(finalProfit)}</h3><span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></div>
         <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/finance/analysis")}>Пълен анализ <ArrowRight className="w-3 h-3 ml-1" /></Button>
       </div>
 

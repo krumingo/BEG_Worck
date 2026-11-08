@@ -11,6 +11,7 @@ An approval is by the Owner, a different person from the author, on the exact ve
 """
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -409,7 +410,9 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
                 {"$set": {"applied": True, "difference_accepted": {
                     "by": user["id"], "reason": reason, "at": at,
                     "expected": link.get("expected"), "registered": note.get("gross"),
-                    "split": split, "company_cost": ic.money(company_cost)},
+                    "split": split, "company_cost": ic.money(company_cost),
+                    # FG-276/277: the append-only cost journal of this difference
+                    "postings": ic.initial_postings(split, at, user["id"], reason)},
                     "updated_at": at}}, session=session)
             await tenant.expected_credit_notes.update_many(
                 {"id": {"$in": rows}, "status": "open"},
@@ -441,6 +444,135 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
 
     return await fin._once(user, key, "finance.credit_note.accept_difference",
                            {"note_id": note_id, "reason": reason}, work)
+
+
+async def _difference_write(user: dict, note_id: str, key: str, action: str, payload: dict, apply):
+    """FG-276 / FG-277: one consequential write on an accepted difference — in a transaction
+    under the invoice claim, a CAS on the posting journal (append-only), an AuditEvent, the
+    Idempotency-Key. ``apply(note, session)`` returns (postings_to_append, audit_diff, reason)."""
+    async def work():
+        from app.services.auth_tx import run_in_transaction
+        tenant = fin._tenant(user)
+
+        async def tx_body(session):
+            note = await tenant.credit_debit_notes.find_one({"id": note_id}, {"_id": 0}, session=session)
+            if note is None:
+                raise HTTPException(status_code=404, detail="Note not found")
+            acc = note.get("difference_accepted") or {}
+            if note.get("direction") != ic.INCOMING or acc.get("postings") is None:
+                raise ic.conflict(ic.NOT_PENDING, "Няма приета разлика по това известие")
+            await _claim(tenant, note["original_invoice_id"], session)
+            new, diff, reason = await apply(tenant, note, session)
+            res = await tenant.credit_debit_notes.update_one(
+                {"id": note_id, "difference_accepted.postings": {"$size": len(acc["postings"])}},
+                {"$push": {"difference_accepted.postings": {"$each": new}},
+                 "$set": {"updated_at": ic.now_iso()}}, session=session)
+            if res.modified_count != 1:
+                raise ic.conflict(ic.NOT_PENDING, "Разликата беше променена — опреснете")
+            await fin._audit_tx(user, action, "finance.credit_note", note_id, reason,
+                                {**diff, "postings": new,
+                                 "original_invoice_id": note["original_invoice_id"]}, key, session)
+        await fin._tx(run_in_transaction, tx_body)
+        return _public(await tenant.credit_debit_notes.find_one({"id": note_id}, {"_id": 0}))
+
+    return await fin._once(user, key, action, payload, work)
+
+
+@router.post("/finance/credit-notes/{note_id}/difference-lines/{line_id}/resolve")
+async def resolve_difference_line(note_id: str, line_id: str, body: dict = Body(...),
+                                  user: dict = Depends(require_m5),
+                                  idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-277: a line of an accepted difference that is booked nowhere (``undetermined`` at
+    acceptance, or reversed by the Owner) is decided by a finance user (Р14: Owner / Admin
+    / Accountant): ``target = project`` (+ ``project_id``, optional ``package_id`` = the
+    SMR) or ``company``. An undetermined line is booked in the ACCEPTANCE period; a line
+    re-booked after a reversal, in the current period (the reversal already left the
+    acceptance period). The DQ issue closes; an AuditEvent is written."""
+    _guard(user)
+    key = fin._require_key(idempotency_key)
+    body = body if isinstance(body, dict) else {}
+    reason = _reason(body)
+    target = body.get("target")
+    if target not in (ic.COST_TARGET_PROJECT, ic.COST_TARGET_COMPANY):
+        raise HTTPException(status_code=422, detail={"error_code": "TARGET_REQUIRED",
+                                                     "message": "Изберете обект или фирма"})
+    project_id = body.get("project_id") if target == ic.COST_TARGET_PROJECT else None
+    package_id = body.get("package_id") if target == ic.COST_TARGET_PROJECT else None
+    if target == ic.COST_TARGET_PROJECT and not project_id:
+        raise HTTPException(status_code=422, detail={"error_code": "PROJECT_REQUIRED",
+                                                     "message": "Изберете обект"})
+
+    async def apply(tenant, note, session):
+        open_lines = {l["original_line_id"]: l for l in ic.open_difference_lines(note)}
+        line = open_lines.get(line_id)
+        if line is None:
+            raise ic.conflict(ic.NOT_PENDING, "Редът няма неразпределена разлика")
+        if project_id and not await tenant.projects.find_one({"id": project_id}, {"_id": 0, "id": 1},
+                                                             session=session):
+            raise HTTPException(status_code=422, detail={"error_code": "PROJECT_NOT_FOUND",
+                                                         "message": "Няма такъв обект"})
+        if package_id and not await tenant.execution_packages.find_one(
+                {"id": package_id, "project_id": project_id}, {"_id": 0, "id": 1}, session=session):
+            raise HTTPException(status_code=422, detail={"error_code": "PACKAGE_NOT_FOUND",
+                                                         "message": "Няма такова СМР в обекта"})
+        acc = note["difference_accepted"]
+        at = ic.now_iso()
+        period = acc["at"][:7] if line["state"] == ic.COST_TARGET_UNDETERMINED else at[:7]
+        posting = ic._posting(ic.POSTING_RESOLUTION, line_id, ic.cents(line["net"]), target, at,
+                              period=period, by=user["id"], reason=reason, project_id=project_id,
+                              package_id=package_id, basis="resolved_by_" + (user.get("role") or "").lower())
+        for kind in (ic.DQ_DIFFERENCE_LINE_UNDETERMINED, ic.DQ_DIFFERENCE_LINE_REVERSED):
+            await tenant.dq_issues.update_many(
+                {"kind": kind, "entity_id": {"$regex": "^%s:%s(:|$)" % (re.escape(note["id"]), re.escape(line_id))},
+                 "status": "open"},
+                {"$set": {"status": "closed", "closed_at": at, "closed_by": user["id"],
+                          "resolution": {"target": target, "project_id": project_id, "posting_id": posting["id"]}}},
+                session=session)
+        return [posting], {"line_id": line_id, "target": target, "project_id": project_id,
+                           "package_id": package_id, "cost_period": period, "net": line["net"]}, reason
+
+    return await _difference_write(user, note_id, key, "finance.credit_note.difference_line_resolved",
+                                   {"note_id": note_id, "line_id": line_id, "target": target,
+                                    "project_id": project_id, "package_id": package_id, "reason": reason},
+                                   apply)
+
+
+@router.post("/finance/credit-notes/{note_id}/reverse-difference")
+async def reverse_difference(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-276: the correction path of an accepted difference. The OWNER, with a reason,
+    reverses every line booked now: an APPEND-ONLY reversal posting (−net, same target /
+    project) in the period of the reversal — nothing is edited or deleted. Each reversed
+    line is then open again (a DQ issue for the Accountant) and is re-booked through the
+    FG-277 resolve action. The note itself (the tax document) and the payable are unchanged."""
+    _guard(user)
+    _approver(user)
+    key = fin._require_key(idempotency_key)
+    reason = _reason(body if isinstance(body, dict) else {})
+
+    async def apply(tenant, note, session):
+        acc = note["difference_accepted"]
+        at = ic.now_iso()
+        current: dict = {}
+        for p in acc["postings"]:
+            k = (p["original_line_id"], p["target"], p.get("project_id"), p.get("package_id"))
+            current[k] = current.get(k, Decimal(0)) + ic.cents(p.get("net"))
+        new = [ic._posting(ic.POSTING_REVERSAL, line, -net, target, at, period=at[:7], by=user["id"],
+                           reason=reason, project_id=proj, package_id=pkg, basis="reversal")
+               for (line, target, proj, pkg), net in current.items() if net != 0]
+        if not new:
+            raise ic.conflict(ic.NOT_PENDING, "Няма осчетоводена разлика за сторниране")
+        for line in sorted({p["original_line_id"] for p in new}):
+            await ic.open_dq_issue(
+                tenant, kind=ic.DQ_DIFFERENCE_LINE_REVERSED, entity_type="finance.credit_note_line",
+                entity_id="%s:%s:%s" % (note["id"], line, new[0]["id"]),
+                title="сторнирана приета разлика: изберете обект или фирма",
+                assignee_role="accountant", source="finance.credit_note.reverse_difference", session=session)
+        return new, {"reversed_net": ic.money(sum((ic.cents(p["net"]) for p in new), Decimal(0))),
+                     "cost_period": at[:7]}, reason
+
+    return await _difference_write(user, note_id, key, "finance.credit_note.difference_reversed",
+                                   {"note_id": note_id, "reason": reason}, apply)
 
 
 @router.get("/finance/credit-notes")

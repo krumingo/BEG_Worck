@@ -37,6 +37,8 @@ export default function FinanceAnalysisPage() {
   const projects = overview?.projects || [];
   const totals = overview?.totals || { revenue: 0, expense: 0, profit: 0, margin_pct: 0 };
   const fmt = (n) => (n || 0).toLocaleString("bg-BG", { maximumFractionDigits: 0 });
+  // FG-271: the profit card is the FINAL company result (projects − company losses)
+  const finalProfit = totals.final_profit ?? totals.profit;
 
   const sorted = [...projects].sort((a, b) => {
     if (sortBy === "profit") return (b.profit || 0) - (a.profit || 0);
@@ -67,7 +69,7 @@ export default function FinanceAnalysisPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Приходи<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono">{fmt(totals.revenue)} €</p></div>
         <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Разходи<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono text-red-400">{fmt(totals.expense)} €</p></div>
-        <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Печалба<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className={`text-lg font-bold font-mono ${totals.profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(totals.profit)} €</p></div>
+        <div className="rounded-xl border p-3" data-testid="analysis-profit-card"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Печалба (краен фирмен резултат)<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className={`text-lg font-bold font-mono ${finalProfit >= 0 ? "text-emerald-400" : "text-red-400"}`} data-testid="analysis-final-profit">{fmt(finalProfit)} €</p>{totals.company_losses ? <p className="text-[9px] text-muted-foreground" data-testid="analysis-profit-split">Обекти: {fmt(totals.profit)} € · Фирмени загуби: −{fmt(totals.company_losses)} €</p> : null}</div>
         <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Марж<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono">{totals.margin_pct || 0}%</p></div>
       </div>
 

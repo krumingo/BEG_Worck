@@ -1466,6 +1466,118 @@ def test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination(
     run(monkeypatch, mode, scenario)
 
 
+def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services.canonical_material_cost import project_material_cost
+        from app.services import invoice_corrections as ic
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        bill = await sent(c, direction="Received", project="prj-1")
+        for lid in ("il-27p", "il-27x"):
+            row = {"id": lid, "org_id": ORG_A, "invoice_id": bill["id"], "description": lid,
+                   "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+                   "created_at": "2026-10-02T08:00:00+00:00"}
+            if lid == "il-27p":
+                row["allocations"] = [{"type": "project", "ref_id": "prj-1", "qty": 10}]
+            await op.invoice_lines.insert_one(row)
+        await op.warehouse_transactions.insert_one({        # invoice-level only → il-27x undetermined
+            "id": "wt-27", "org_id": ORG_A, "action": "receive_from_supplier", "movement_id": "mv-27",
+            "invoice_id": bill["id"], "qty": 10, "destination": {"location_type": "central_warehouse"}})
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_27", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 72.0, "status": "open",
+            "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+        n = (await note(c, bill, number="CN-27", expected_credit_note_ids=["ecn_27"],
+                        lines=[{"original_line_id": "il-27p", "amount": 25.0},
+                               {"original_line_id": "il-27x", "amount": 25.0}])).json()
+        r = await c.post("/api/finance/credit-notes/%s/accept-difference" % n["id"], headers=hdr("owner-a"),
+                         json={"reason": "доставчикът не коригира"})
+        assert r.status_code == 200, r.text
+        accepted_at = r.json()["difference_accepted"]["at"]
+        base = await project_material_cost(tenant, ORG_A, "prj-1")
+        url = "/api/finance/credit-notes/%s/difference-lines/il-27x/resolve" % n["id"]
+        body = {"target": "project", "project_id": "prj-1", "reason": "стоката е за обекта"}
+
+        # FG-277: rights (Р14), Idempotency-Key, validation
+        r = await c.post(url, headers={k: v for k, v in hdr("acct-a").items() if k != "Idempotency-Key"}, json=body)
+        assert r.status_code == 428, r.text
+        assert (await c.post(url, headers=hdr("viewer-a"), json=body)).status_code == 403
+        assert (await c.post(url, headers=hdr("site-a"), json=body)).status_code == 403
+        assert (await c.post(url, headers=hdr("admin-b"), json=body)).status_code == 404     # other tenant
+        r = await c.post(url, headers=hdr("acct-a"), json={**body, "project_id": "nope"})
+        assert code(r) == "PROJECT_NOT_FOUND", r.text
+        r = await c.post(url, headers=hdr("acct-a"), json={"target": "x", "reason": "r"})
+        assert code(r) == "TARGET_REQUIRED", r.text
+        # the Accountant books the open line on the project, in the ACCEPTANCE period
+        key = hdr("acct-a")
+        r = await c.post(url, headers=key, json=body)
+        assert r.status_code == 200, r.text
+        again = await c.post(url, headers=key, json=body)                        # replay: same result
+        assert again.status_code == 200 and again.json()["difference_accepted"]["postings"] == \
+            r.json()["difference_accepted"]["postings"]
+        assert (await c.post(url, headers=hdr("acct-a"), json=body)).status_code == 409   # nothing open now
+        after = await project_material_cost(tenant, ORG_A, "prj-1")
+        res_lines = [ln for ln in after["lines"] if ln.get("posting") == "resolution"]
+        assert [(ln["invoice_line_id"], ln["value"], ln["period"]) for ln in res_lines] == [
+            ("il-27x", 5.0, accepted_at[:7])]
+        assert round(after["total_cost"] - base["total_cost"], 2) == 5.0
+        dq = await op.dq_issues.find_one({"kind": "accepted_difference_line_undetermined"}, {"_id": 0})
+        assert dq["status"] == "closed" and dq["resolution"]["target"] == "project"
+        ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_line_resolved"})
+        assert ev and ev["structured_diff"]["cost_period"] == accepted_at[:7]
+
+        # FG-276: only the Owner reverses, with a reason; append-only reversal postings
+        rev = "/api/finance/credit-notes/%s/reverse-difference" % n["id"]
+        assert (await c.post(rev, headers=hdr("acct-a"), json={"reason": "грешка"})).status_code == 403
+        assert (await c.post(rev, headers=hdr("owner-a"), json={})).status_code == 400
+        before_rev = (await op.credit_debit_notes.find_one({"id": n["id"]}))["difference_accepted"]["postings"]
+        r = await c.post(rev, headers=hdr("owner-a"), json={"reason": "грешно приета разлика"})
+        assert r.status_code == 200, r.text
+        postings = r.json()["difference_accepted"]["postings"]
+        assert postings[:len(before_rev)] == [{k: v for k, v in p.items() if k != "_id"} for p in before_rev]
+        reversals = [p for p in postings if p["kind"] == "reversal"]
+        assert sorted((p["original_line_id"], p["net"]) for p in reversals) == [("il-27p", -5.0), ("il-27x", -5.0)]
+        assert ic.booked_by_line(postings) == {"il-27p": 0, "il-27x": 0}
+        reversed_cost = await project_material_cost(tenant, ORG_A, "prj-1")
+        assert round(reversed_cost["total_cost"] - base["total_cost"], 2) == -5.0  # both lines out
+        assert await op.dq_issues.count_documents({"kind": "accepted_difference_line_reversed",
+                                                   "status": "open"}) == 2
+        assert await op.audit_events.find_one({"action": "finance.credit_note.difference_reversed"})
+        assert (await c.post(rev, headers=hdr("owner-a"), json={"reason": "пак"})).status_code == 409
+        # the correction: re-book il-27x as a company loss, in the CURRENT period
+        r = await c.post(url, headers=hdr("acct-a"), json={"target": "company", "reason": "загуба от връщане"})
+        assert r.status_code == 200, r.text
+        block = await ic.company_losses_block(tenant)
+        assert block["amount"] == 5.0
+        assert await op.dq_issues.count_documents({"kind": "accepted_difference_line_reversed",
+                                                   "entity_id": {"$regex": ":il-27x:"}, "status": "open"}) == 0
+
+        # FG-278: every company-result reader uses the same (cumulative) scope as its
+        # project sums; a period filter gives only that period's postings
+        import importlib
+        from tests.test_warehouse_canonical_c22_all_reports_cutover import _DB_MODULES
+        for name in set(_DB_MODULES) | {"app.services.pnl_aggregator", "app.services.project_pnl",
+                                        "app.permissions.money_write", "app.routes.project_pnl"}:
+            module = importlib.import_module(name)
+            if hasattr(module, "db"):
+                monkeypatch.setattr(module, "db", op)
+        for path in ("/api/org/pnl-attribution", "/api/org/pnl-overview", "/api/finance/stats"):
+            r = await c.get(path, headers=hdr("owner-a"))
+            assert r.status_code == 200, r.text
+            assert r.json()["company_losses"]["scope"] == {"period": None, "basis": "cumulative"}, path
+            assert r.json()["company_losses"]["amount"] == block["amount"], path
+        await op.credit_debit_notes.update_one(                 # an older posting in another period
+            {"id": n["id"]}, {"$push": {"difference_accepted.postings": {
+                "id": "dp_old", "kind": "booking", "original_line_id": "il-27x", "net": 7.0,
+                "target": "company", "at": "2025-01-10T00:00:00+00:00", "period": "2025-01"}}})
+        assert (await ic.company_losses_block(tenant))["amount"] == 12.0          # cumulative: all
+        assert (await ic.company_losses_block(tenant, "2025-01"))["amount"] == 7.0
+        r = await c.get("/api/finance/company-costs/accepted-differences?period=2025-01", headers=hdr("owner-a"))
+        assert r.json()["total"] == 7.0
+        ov = (await c.get("/api/org/pnl-overview", headers=hdr("owner-a"))).json()
+        assert ov["totals"]["final_profit"] == round(ov["totals"]["profit"] - 12.0, 2)
+    run(monkeypatch, mode, scenario)
+
+
 def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
     async def scenario(c, op):
         body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",

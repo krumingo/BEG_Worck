@@ -26,6 +26,7 @@ Source of truth:
 from __future__ import annotations
 
 import re
+import uuid
 
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
@@ -889,40 +890,62 @@ async def _accepted_difference_lines(tenant, project_id: str, note: dict,
     """Р55(3) / FG-251: when the Owner ACCEPTED a difference between a supplier credit
     note linked to a receipt reversal and the credit it awaited, the part the supplier
     did not credit stays a cost of the ORIGINAL line's project / SMR, in the period of
-    the acceptance (not of the invoice, not of the note). Net of VAT, by the line's
-    direct project share; split over the note's lines by their net."""
+    the acceptance. Read from the note's append-only ``difference_accepted.postings``
+    (booking at acceptance, FG-277 resolution, FG-276 reversal / re-booking), only the
+    ``project`` postings: a direct delivery names its project (FG-269, the whole part);
+    a line allocated to projects takes this project's direct share (Path B)."""
+    from app.services.canonical_material_cost import _moment
+    acc = note.get("difference_accepted") or {}
+    postings = acc.get("postings")
+    if postings is None:
+        return await _legacy_accepted_difference_lines(tenant, project_id, note, counted_by_line)
+    descriptions = {l.get("original_line_id"): l.get("description") or "" for l in note.get("lines") or []}
+    out: List[dict] = []
+    for p in postings:
+        if p.get("target") != COST_TARGET_PROJECT:
+            continue
+        line_id = p["original_line_id"]
+        net = cents(p.get("net"))
+        if p.get("project_id"):
+            if p["project_id"] != project_id:
+                continue
+            value = net
+        else:
+            if line_id not in counted_by_line:
+                continue                                   # not a line of THIS project
+            row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
+            value = cents(net * _project_share(row or {}, project_id))
+        if value == 0:
+            continue
+        at = _moment(p.get("at"))
+        out.append({"source": "supplier_note", "kind": "accepted_difference", "waste": False,
+                    "value": float(value), "qty": 0.0, "item_id": None, "unit": None,
+                    "material_name": descriptions.get(line_id, ""), "package_id": p.get("package_id"),
+                    "at": at, "period": p["period"], "ref": note.get("id"), "invoice_line_id": line_id,
+                    "note_number": note.get("number"), "posting": p.get("kind"), "posting_id": p.get("id")})
+    return out
+
+
+async def _legacy_accepted_difference_lines(tenant, project_id: str, note: dict,
+                                            counted_by_line: Dict[str, float]) -> List[dict]:
+    """A note accepted before the posting journal existed (no ``postings``): FG-251 as it was."""
     from app.services.canonical_material_cost import _moment, period_of
     acc = note.get("difference_accepted") or {}
     if not acc:
         return []
     diff_gross = cents(acc.get("expected")) - cents(acc.get("registered"))
     note_gross, note_net = cents(note.get("gross")), cents(note.get("net"))
-    if diff_gross <= 0 or note_gross <= 0:
+    if diff_gross <= 0 or note_gross <= 0 or note_net <= 0:
         return []
-    diff_net = cents(diff_gross * note_net / note_gross)       # the note's own VAT ratio
+    diff_net = cents(diff_gross * note_net / note_gross)
     at = _moment(acc.get("at"))
-    split = {s["original_line_id"]: s for s in acc.get("split") or []}
     out: List[dict] = []
     for l in note.get("lines") or []:
         line_id = l.get("original_line_id")
-        entry = split.get(line_id)
-        if entry is not None and entry.get("target") != COST_TARGET_PROJECT:
-            continue                                   # Р58 company / FG-270 undetermined
-        if entry is not None and entry.get("project_id"):
-            # FG-269: a direct delivery — the project of the delivery, the whole line part
-            if entry["project_id"] != project_id or cents(entry.get("net")) <= 0:
-                continue
-            out.append({"source": "supplier_note", "kind": "accepted_difference", "waste": False,
-                        "value": float(cents(entry["net"])), "qty": 0.0, "item_id": None, "unit": None,
-                        "material_name": l.get("description") or "", "package_id": None, "at": at,
-                        "period": period_of(at), "ref": note.get("id"), "invoice_line_id": line_id,
-                        "note_number": note.get("number")})
+        if line_id not in counted_by_line:
             continue
-        if line_id not in counted_by_line or note_net <= 0:
-            continue                                   # not a line of THIS project
         row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
-        share = _project_share(row or {}, project_id)
-        value = cents(diff_net * cents(l.get("net")) / note_net * share)
+        value = cents(diff_net * cents(l.get("net")) / note_net * _project_share(row or {}, project_id))
         if value <= 0:
             continue
         out.append({"source": "supplier_note", "kind": "accepted_difference", "waste": False,
@@ -937,6 +960,10 @@ COST_TARGET_COMPANY = "company"
 COST_TARGET_PROJECT = "project"
 COST_TARGET_UNDETERMINED = "undetermined"
 DQ_DIFFERENCE_LINE_UNDETERMINED = "accepted_difference_line_undetermined"
+DQ_DIFFERENCE_LINE_REVERSED = "accepted_difference_line_reversed"
+POSTING_BOOKING = "booking"            # at the Owner's acceptance (Р55(3) / Р58)
+POSTING_RESOLUTION = "resolution"      # FG-277: the Accountant decides an open line
+POSTING_REVERSAL = "reversal"          # FG-276: the Owner reverses (append-only)
 COMPANY_LOSSES_LABEL = "Фирмени загуби (не се разпределят)"
 COMPANY_LOSSES_INCLUDES = ("Приети разлики по кредитни известия на доставчици за стока, приета в склада "
                            "(загуба от връщане, Р58), в периода на приемането. Не са в резултата на "
@@ -1014,33 +1041,78 @@ async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, 
     return out
 
 
-async def company_cost_lines(tenant, period: Optional[str] = None) -> List[dict]:
-    """Р58: the company costs (losses on a return) of accepted differences on lines received
-    into the warehouse — derived from the accepted notes themselves (no second ledger),
-    dated by the acceptance → its period."""
-    from app.services.canonical_material_cost import _moment, period_of
-    out: List[dict] = []
-    async for n in tenant.credit_debit_notes.find(
-            {"direction": INCOMING, "difference_accepted.split.target": COST_TARGET_COMPANY}, {"_id": 0}):
-        acc = n["difference_accepted"]
-        at = _moment(acc.get("at"))
-        if period and period_of(at) != period:
-            continue
-        for s in acc.get("split") or []:
-            if s.get("target") != COST_TARGET_COMPANY or cents(s.get("net")) <= 0:
-                continue
-            out.append({"source": "supplier_note", "kind": "accepted_difference_company",
-                        "value": s["net"], "at": at, "period": period_of(at), "ref": n.get("id"),
-                        "invoice_id": n.get("original_invoice_id"), "invoice_line_id": s["original_line_id"],
-                        "note_number": n.get("number"), "reason": acc.get("reason")})
+def _posting(kind: str, line_id: str, net: Decimal, target: str, at: str, *, period: str,
+             by: str, reason: Optional[str] = None, project_id: Optional[str] = None,
+             package_id: Optional[str] = None, basis: Optional[str] = None) -> dict:
+    return {"id": "dp_" + uuid.uuid4().hex[:16], "kind": kind, "original_line_id": line_id,
+            "net": money(net), "target": target, "project_id": project_id, "package_id": package_id,
+            "basis": basis, "at": at, "period": period, "by": by, "reason": reason}
+
+
+def initial_postings(split: List[dict], at: str, by: str, reason: str) -> List[dict]:
+    """The bookings made at the acceptance: every line whose target is known (company /
+    project). An ``undetermined`` line books nothing until FG-277 resolves it."""
+    return [_posting(POSTING_BOOKING, s["original_line_id"], cents(s["net"]), s["target"], at,
+                     period=at[:7], by=by, reason=reason, project_id=s.get("project_id"),
+                     basis=s.get("basis"))
+            for s in split if s["target"] in (COST_TARGET_COMPANY, COST_TARGET_PROJECT) and cents(s["net"]) != 0]
+
+
+def booked_by_line(postings: List[dict]) -> Dict[str, Decimal]:
+    """The net currently booked per line (bookings + resolutions − reversals)."""
+    out: Dict[str, Decimal] = {}
+    for p in postings or []:
+        out[p["original_line_id"]] = out.get(p["original_line_id"], Decimal(0)) + cents(p.get("net"))
     return out
 
 
-async def company_losses_block(tenant) -> dict:
+def open_difference_lines(note: dict) -> List[dict]:
+    """FG-277 / FG-276: the lines of an accepted difference that are booked NOWHERE now —
+    ``undetermined`` at acceptance, or reversed by the Owner — with what is to book."""
+    acc = note.get("difference_accepted") or {}
+    postings = acc.get("postings") or []
+    booked = booked_by_line(postings)
+    reversed_lines = {p["original_line_id"] for p in postings if p.get("kind") == POSTING_REVERSAL}
+    out = []
+    for s in acc.get("split") or []:
+        line_id = s["original_line_id"]
+        if cents(s.get("net")) <= 0 or booked.get(line_id, Decimal(0)) != 0:
+            continue
+        if s["target"] == COST_TARGET_UNDETERMINED or line_id in reversed_lines:
+            out.append({"original_line_id": line_id, "net": s["net"],
+                        "state": "reversed" if line_id in reversed_lines else COST_TARGET_UNDETERMINED})
+    return out
+
+
+async def company_cost_lines(tenant, period: Optional[str] = None) -> List[dict]:
+    """Р58: the company costs (losses on a return) of accepted differences — the ``company``
+    postings of the accepted notes (no second ledger): a booking or an FG-277 resolution is
+    +, an FG-276 reversal is −, each in its own posting period."""
+    out: List[dict] = []
+    async for n in tenant.credit_debit_notes.find(
+            {"direction": INCOMING, "difference_accepted.postings.target": COST_TARGET_COMPANY}, {"_id": 0}):
+        acc = n["difference_accepted"]
+        for p in acc.get("postings") or []:
+            if p.get("target") != COST_TARGET_COMPANY or cents(p.get("net")) == 0:
+                continue
+            if period and p["period"] != period:
+                continue
+            out.append({"source": "supplier_note", "kind": "accepted_difference_company",
+                        "posting": p.get("kind"), "posting_id": p.get("id"),
+                        "value": p["net"], "at": p["at"], "period": p["period"], "ref": n.get("id"),
+                        "invoice_id": n.get("original_invoice_id"), "invoice_line_id": p["original_line_id"],
+                        "note_number": n.get("number"), "reason": p.get("reason") or acc.get("reason")})
+    return out
+
+
+async def company_losses_block(tenant, period: Optional[str] = None) -> dict:
     """Q007 / FG-271: THE one shape of the company-losses line every company-result reader
-    returns — same label, same "what it includes" text, same drill-down."""
-    lines = await company_cost_lines(tenant)
+    returns — same label, same "what it includes" text, same drill-down. FG-278: the
+    reader passes the SAME period scope its project sums use (``None`` = cumulative, as
+    every project P&L in main is); ``scope`` echoes it so a total never mixes scopes."""
+    lines = await company_cost_lines(tenant, period)
     return {"label": COMPANY_LOSSES_LABEL, "includes": COMPANY_LOSSES_INCLUDES,
+            "scope": {"period": period, "basis": "period" if period else "cumulative"},
             "amount": money(sum((cents(l["value"]) for l in lines), Decimal(0))), "lines": lines}
 
 

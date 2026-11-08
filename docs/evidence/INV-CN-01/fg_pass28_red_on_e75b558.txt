@@ -1,0 +1,18 @@
+# FLOW Guard pass 28 red proofs (FG-277/276/278 + the FG-271 UI rest) — the new tests run against e75b558
+
+## backend (real Mongo rs0, 3 modes): test_fg277_fg276_fg278_… — there is no resolve path (the endpoint does not exist)
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 428
+E        +  where 404 = <Response [404 Not Found]>.status_code
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 428
+E        +  where 404 = <Response [404 Not Found]>.status_code
+E       AssertionError: {"detail":"Not Found"}
+E       assert 404 == 428
+
+## frontend jest: CompanyLosses.fg271.test.js — the losses line is folded, the tiles show the project sum, not final_profit
+  ✕ the losses line is visible — label, amount, what it includes — not only in a fold (48 ms)
+  ✕ „Текущ фирмен резултат“ tile shows final_profit, not the project sum (1010 ms)
+  ✕ profit-attribution heading is the final result (1006 ms)
+  ✕ Финансов анализ profit card shows the final result and the losses, visibly (1007 ms)
+Tests:       4 failed, 4 total

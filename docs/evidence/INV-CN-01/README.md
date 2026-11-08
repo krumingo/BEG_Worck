@@ -195,6 +195,18 @@ Red proof against b99c0eb: `r58_red_on_b99c0eb.txt`. On b99c0eb the warehouse pa
 
 Red proofs against ef7cddd: `fg_pass27_red_on_ef7cddd.txt`. FG-269: a direct delivery became `company`. FG-270: both lines became `company`. FG-271: neither reader had the line.
 
+## FLOW Guard pass 28 (after the audit of e75b558): point → code → test
+
+| Point | Fix | Test |
+|---|---|---|
+| **Journal** | Every accepted difference now has an **append-only cost journal**, `difference_accepted.postings`. It holds the `booking` made at acceptance, any FG-277 `resolution`, and any FG-276 `reversal`. Each posting carries its line, signed net, target (project + optional SMR, or company), time, period, author and reason. The project cost (`project_material_cost`) and the company losses read **only** this journal. Nothing in it is edited or deleted. | all below |
+| **FG-277** | `POST /finance/credit-notes/{id}/difference-lines/{line_id}/resolve`, body `{target: project\|company, project_id, package_id?, reason}`. Rights per **Р14** (Owner / Admin / Accountant; Viewer and SiteManager → 403); another tenant → 404; Idempotency-Key (428 without), replay-safe. It runs in a transaction under the invoice claim, with a CAS on the journal and an **AuditEvent** `finance.credit_note.difference_line_resolved`. An `undetermined` line is booked in the **acceptance period**. The DQ issue closes. A second resolve → 409. | `test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference` |
+| **FG-276** | `POST /finance/credit-notes/{id}/reverse-difference`, **Owner only**, with a reason. It **appends** reversal postings (−net on the same target, project and SMR) in the **period of the reversal**. Earlier postings stay byte-identical. Each reversed line reopens as a DQ issue for the Accountant and is re-booked through FG-277 in the current period. A second reversal with nothing booked → 409. AuditEvent `finance.credit_note.difference_reversed`. The note (the tax document) and the payable are unchanged. | same test |
+| **FG-278** | `company_losses_block(period)` takes the reader's period scope and echoes it as `scope`. Every company-result reader in main sums projects **cumulatively** (no reader has a period filter), so each passes `None` → `{"basis": "cumulative"}`. A period filter, such as `/finance/company-costs/accepted-differences?period=` or a future period reader, gets only that period's postings. `final_profit` never mixes scopes. | same test: three readers, the same block and scope; cumulative 12.00 versus the 2025-01 period 7.00 |
+| **FG-271 UI rest** | `CompanyLossesLine` now always shows the line, its amount, the final result and the "what it includes" text; only the drill-down folds. The **„Текущ фирмен резултат“** tile (Финансов pulse, FLOW-015) shows `final_profit`, with the split "Обекти / Фирмени загуби". The profit-attribution **heading** shows the final result. The Финансов анализ **„Печалба“** card shows the final result and the losses. D18 (the FLOW-009 warehouse-loss view) stays a debt. | jest `CompanyLosses.fg271.test.js` (4 tests) |
+
+Red proofs against e75b558: `fg_pass28_red_on_e75b558.txt`. The backend fails 3/3: there is no resolve path. Jest fails 4/4.
+
 ## Debts after Addendum A
 
 | # | Status |
