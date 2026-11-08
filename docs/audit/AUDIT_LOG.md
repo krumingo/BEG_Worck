@@ -5388,3 +5388,19 @@ SEC71-M1 resolved. No blocking finding remains.
 | PM-01 | 6 |
 
 #81 still has to take in main `0750d75` before its merge; that merge gets a full re-audit.
+
+## 2026-11-08 16:35 UTC: periodic pass. main `ec7ddd8` verified; #77 / #83 / #86 under audit
+
+- **main `ec7ddd8`** (merge of #85, canon R52–R55 + task packages): docs only (3 files under `docs/`). Tree `9365caa` equals `merge-tree(0750d75, ea9ef8e)`.
+- **#77 `c7df7ca` (merge `5d75736` of main `0750d75`):**
+  - Not a plain merge: it ports ACT-01's own permission code onto main's mechanisms. `client_act_write.py` is removed; create/confirm use #69 `require_money_write`; PUT, from-offer and remaining use #71 `require_finance_read` (R20-2 for PUT and from-offer, as on main; R20-1 for remaining).
+  - **Role-union:** every role equals the union of both parents except `finance.client_act_money.read`, which is dropped from owner/admin/accountant. It narrows rights, nothing references it any more, and the act GETs are R20-1 (finance only).
+  - **PM-01 delta:** all 120 of #77's own cells keep the PR's value on the merge (0 differ). 45 of them already had that value on main. No extra cells.
+- **#83 `e36af6e`** (`6449dac` CP83-02/03 fixes, merge `616a66c` of `0750d75`, CP83-04 fixture):
+  - **Merge:** only the 4 conflict files differ from `merge-tree`. `subcontractors.py` takes the union of the imports (`require_money_write` + `require_finance_read` + `strip_money_for_non_finance`). The guard stays before `MoneyWrite.begin`.
+  - **CP83-02:** the guard is removed from other-income.
+  - **CP83-03:** a stored copy is masked only when `persons` holds the same ЕГН; otherwise it is kept with a DQ issue. The migration writes an AuditEvent per masked project and `--apply` needs the dry run's `--plan-token`; a 10-digit company `tax_id` is no longer masked.
+    - Minor: the DQ `entity_id` is the owner id in the route but the project id in the migration.
+  - **CP83-04:** the fixture gets a verified supplier account through the real register (Accountant enters, Owner verifies from 2 sources); the guard stays on; no assertion changed.
+- **#86 `4bf5eae`** (PRJ-01, new): first review only. Delete is allowed only for an empty Draft (409 PROJECT_HAS_HISTORY / PROJECT_NOT_DRAFT); it needs a key and writes an AuditEvent in one transaction. Archive/cancel are conditional status changes with a reason. Photos are retired, not deleted.
+- **Machine restart at ~16:26 UTC:** the first gate runs (b77f/b83d/b86a) were voided and re-run from scratch.
