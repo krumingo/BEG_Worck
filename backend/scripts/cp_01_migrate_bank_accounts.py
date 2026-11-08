@@ -70,7 +70,12 @@ async def plan(db):
     async for p in db.projects.find({"invoice_details": {"$type": "object"}},
                                     {"_id": 0, "id": 1, "org_id": 1, "owner_type": 1, "owner_id": 1,
                                      "invoice_details": 1}):
-        fields = cr.egn_copy_fields(p["invoice_details"], p.get("owner_type"), p.get("owner_id"))
+        # FG-267 (pass 28): a company only when its record exists in the same tenant
+        company_ok = bool(p.get("owner_type") == "company" and p.get("owner_id") and
+                          await db.companies.find_one({"id": p["owner_id"], "org_id": p.get("org_id")},
+                                                      {"_id": 1}))
+        fields = cr.egn_copy_fields(p["invoice_details"], p.get("owner_type"), p.get("owner_id"),
+                                    company_confirmed=company_ok)
         if not fields:
             continue
         report["projects_with_full_egn"] += 1

@@ -769,16 +769,20 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
             await op.projects.insert_one({"id": "pn", "org_id": ORG_A, "owner_type": "person",
                                           "owner_id": "pe-none", "invoice_details": {"eik": "7501011111"}})
             # 3. a confirmed company's 10-digit foreign VAT id is never an ЕГН → untouched
+            await op.companies.insert_one({"id": "co-x", "org_id": ORG_A, "name": "Foreign GmbH"})
             await op.projects.insert_one({"id": "pc", "org_id": ORG_A, "owner_type": "company",
                                           "owner_id": "co-x", "invoice_details": {"eik": "1234567890"}})
+            # 3b. FG-267 (pass 28): owner_type=company with no company record → a possible ЕГН
+            await op.projects.insert_one({"id": "pu", "org_id": ORG_A, "owner_type": "company",
+                                          "owner_id": "co-gone", "invoice_details": {"eik": "5503031313"}})
             # 4. FG-267: a 10-digit value with no owner is a possible ЕГН → kept + DQ, not masked
             await op.projects.insert_one({"id": "po", "org_id": ORG_A,
                                           "invoice_details": {"eik": "6602021212"}})
             report = await mig.plan(op)
             assert len(report["to_create"]) == 2 and len(report["invalid"]) == 1
-            assert report["projects_with_full_egn"] == 3
+            assert report["projects_with_full_egn"] == 4
             assert [p["id"] for p in report["projects_to_mask"]] == ["pm"]
-            assert sorted(p["id"] for p in report["egn_copies_without_canonical"]) == ["pn", "po"]
+            assert sorted(p["id"] for p in report["egn_copies_without_canonical"]) == ["pn", "po", "pu"]
             shown = mig.printable(report)
             for secret in (IBAN_OLD, IBAN_NEW, EGN, "7501011111", "6602021212"):
                 assert no_full(shown, secret)
@@ -794,10 +798,11 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
             assert prj["pn"]["invoice_details"]["eik"] == "7501011111"      # not destroyed
             assert prj["pc"]["invoice_details"]["eik"] == "1234567890"
             assert prj["po"]["invoice_details"]["eik"] == "6602021212"      # kept, masked on read
+            assert prj["pu"]["invoice_details"]["eik"] == "5503031313"      # kept, masked on read
             ev = await rows(op, "audit_events", {"action": "project.invoice_details.egn_copy_masked"})
             assert [e["entity_id"] for e in ev] == ["pm"] and no_full(ev, EGN)
             dq = await rows(op, "dq_issues", {"type": "EGN_COPY_WITHOUT_CANONICAL"})
-            assert sorted(d["entity_id"] for d in dq) == ["pn", "po"]
+            assert sorted(d["entity_id"] for d in dq) == ["pn", "po", "pu"]
             assert all(d["owner_role"] == "accountant" and d["title"] == "ЕГН копие без каноничен запис"
                        for d in dq)
             accs = await rows(op, "verified_bank_accounts")
@@ -1180,6 +1185,10 @@ def test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list(monk
         before = await rows(op, "finance_payments")
         for extra in ({"counterparty_name": "Някой Друг"}, {"counterparty_name": "Доставчик cp1"},
                       {"counterparty_name": "DOSTAVCHIK  CP1 OOD"},
+                      {"counterparty_name": "Доставчк cp1"},                    # FG-268: a typo
+                      {"counterparty_name": "Dostavchik cp1"},                  # FG-268: Latin spelling
+                      {"counterparty_name": None, "counterparty_eik": "999999999"},   # unknown ЕИК
+                      {"counterparty_name": "Доставчик cp1", "counterparty_eik": "999999999"},
                       {"counterparty_name": None, "counterparty_eik": "111111111"}):
             r = await manual_pay(c, **dict(cash, **extra))
             assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_REQUIRED", (extra, r.text)
@@ -1191,6 +1200,15 @@ def test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list(monk
         r = await c.post("/api/finance/invoices/inv-r1/payments", headers=hdr("acct-a"),
                          json=dict(cash, amount=5.0))          # an invoice linked to no counterparty
         assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_REQUIRED"
+        assert await rows(op, "finance_payments") == before
+        # every variant above with no receipt is refused too, and nothing is written
+        for extra in ({"counterparty_name": "Доставчк cp1"}, {"counterparty_name": "Dostavchik cp1"},
+                      {"counterparty_name": None, "counterparty_eik": "999999999"}):
+            r = await manual_pay(c, method="Cash", account_id=CASH_A, **extra)
+            assert r.status_code == 422, (extra, r.text)
+        # the counterparty chosen from the list but no receipt → 422, nothing written
+        r = await manual_pay(c, counterparty_id="cp1", method="Cash", account_id=CASH_A)
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED", r.text
         assert await rows(op, "finance_payments") == before
         # the counterparty chosen from the list: receipt + recipient → paid
         r = await manual_pay(c, counterparty_id="cp1", **cash)
@@ -1351,9 +1369,11 @@ def test_fg266_a_typed_egn_never_reaches_logs_or_responses(monkeypatch, backend,
     run(monkeypatch, backend, mode, scenario)
 
 
-@pytest.mark.parametrize("who,full", [("owner-a", True), ("acct-a", True), ("admin-a", False),
-                                      ("viewer-a", False), ("site-a", False), ("tech-a", False)])
-def test_fg267_a_possible_egn_without_a_company_owner_is_masked(monkeypatch, backend, mode, who, full):
+@pytest.mark.parametrize("who", ["owner-a", "acct-a", "admin-a", "viewer-a", "site-a", "tech-a"])
+def test_fg267_a_possible_egn_without_a_company_owner_is_masked(monkeypatch, backend, mode, who):
+    """FG-267 + FG-275 (pass 28): a possible ЕГН is masked in every ordinary read, for every
+    role; a company's 10-digit tax id is shown only when the owner is an existing company of
+    THIS tenant — not for an unknown id or another tenant's company."""
     async def scenario(c, op):
         await op.projects.insert_one({"id": "prj-none", "org_id": ORG_A, "code": "N", "name": "N",
                                       "status": "Active", "invoice_details": {"eik": TYPED}})
@@ -1370,11 +1390,53 @@ def test_fg267_a_possible_egn_without_a_company_owner_is_masked(monkeypatch, bac
             if r.status_code != 200:
                 continue
             seen += 1
-            assert (TYPED in json.dumps(r.json())) == full, (who, url)
+            assert TYPED not in json.dumps(r.json()), (who, url)
         assert seen >= 1, who
         r = await c.get("/api/projects/prj-co/invoice-details", headers=hdr(who))
         if r.status_code == 200:      # a confirmed company's 10-digit tax id is never masked
             assert r.json()["invoice_details"]["eik"] == "1234567890"
+        # FG-267 remaining: owner_type=company alone is not a company
+        await op.companies.insert_one({"id": "co-b", "org_id": ORG_B, "name": "B", "eik": "777777777"})
+        for owner_id in ("co-missing", "co-b", "pe1"):
+            await op.projects.update_one({"id": "prj-co"}, {"$set": {"owner_id": owner_id}})
+            for url in ("/api/projects/prj-co", "/api/projects/prj-co/invoice-details", "/api/projects"):
+                r = await c.get(url, headers=hdr(who))
+                if r.status_code == 200:
+                    assert "1234567890" not in json.dumps(r.json()), (who, owner_id, url)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg275_owner_and_accountant_see_the_full_egn_only_by_reveal(monkeypatch, backend, mode):
+    """FG-275 (R48.3): ordinary reads and write responses are masked for Owner / Accountant
+    too; the full ЕГН only via /reveal, which writes an AuditEvent first."""
+    async def scenario(c, op):
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {
+            "owner_type": "person", "owner_id": "pe1", "invoice_details": {"eik": EGN, "egn": TYPED}}})
+        for who in ("owner-a", "acct-a"):
+            seen = 0
+            for url in ("/api/projects", "/api/projects/prj-1", "/api/projects/prj-1/invoice-details",
+                        "/api/persons/pe1"):
+                r = await c.get(url, headers=hdr(who))
+                if r.status_code != 200:          # a reader this role may not use at all
+                    continue
+                seen += 1
+                assert no_full(r.json(), EGN) and no_full(r.json(), TYPED), (who, url)
+            assert seen >= 3, (who, seen)
+        r = await c.put("/api/projects/prj-1", headers=hdr("owner-a"),
+                        json={"invoice_details": {"company_name": "M", "eik": TYPED}})
+        assert r.status_code == 200 and no_full(r.json(), TYPED), r.text
+        r = await c.post("/api/projects", headers=hdr("owner-a"), json={
+            "code": "P-275", "name": "P-275", "owner_type": "person", "owner_id": "pe1",
+            "invoice_details": {"company_name": "X", "eik": TYPED}})
+        assert r.status_code == 201 and no_full(r.json(), TYPED), r.text
+        assert await rows(op, "audit_events", {"action": "person.egn.revealed"}) == []
+        for who in ("owner-a", "acct-a"):
+            r = await c.post("/api/persons/pe1/egn/reveal", headers=hdr(who))
+            assert r.status_code == 200 and r.json()["egn"] == EGN, r.text
+        ev = await rows(op, "audit_events", {"action": "person.egn.revealed"})
+        assert len(ev) == 2 and no_full(ev, EGN)
+        r = await c.post("/api/persons/pe1/egn/reveal", headers=hdr("admin-a"))
+        assert r.status_code == 403
     run(monkeypatch, backend, mode, scenario)
 
 

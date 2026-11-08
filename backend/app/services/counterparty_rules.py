@@ -119,8 +119,11 @@ def mask_person(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
 EGN_COPY_FIELDS = ("eik", "egn", "tax_id")
 
 
-def _is_confirmed_company(owner_type: Any, owner_id: Any) -> bool:
-    return owner_type == "company" and bool(owner_id)
+def _is_confirmed_company(owner_type: Any, owner_id: Any, company_confirmed: bool) -> bool:
+    """FG-267 (pass 28): a company only when the caller confirmed that ``owner_id`` is an
+    existing company record of this tenant (``company_confirmed``) — ``owner_type`` alone, an
+    unknown id or a person never counts."""
+    return owner_type == "company" and bool(owner_id) and company_confirmed is True
 
 
 def possible_egn(value: Any) -> bool:
@@ -130,7 +133,7 @@ def possible_egn(value: Any) -> bool:
 
 
 def egn_copy_fields(details: Any, owner_type: Any, owner_id: Any = None, *,
-                    include_possible: bool = True) -> list:
+                    include_possible: bool = True, company_confirmed: bool = False) -> list:
     """The fields of ``details`` that hold an unmasked (possible) ЕГН copy:
     * a person owner: ``eik`` / ``egn`` / ``tax_id``;
     * any owner: the explicit ``egn`` field;
@@ -146,20 +149,22 @@ def egn_copy_fields(details: Any, owner_type: Any, owner_id: Any = None, *,
             continue
         if field == "egn" or owner_type == "person":
             out.append(field)
-        elif include_possible and not _is_confirmed_company(owner_type, owner_id) \
+        elif include_possible and not _is_confirmed_company(owner_type, owner_id,
+                                                            company_confirmed) \
                 and possible_egn(value):
             out.append(field)
     return out
 
 
 def mask_invoice_details(details: Any, owner_type: Any, fields=None, owner_id: Any = None, *,
-                         include_possible: bool = True) -> Any:
+                         include_possible: bool = True, company_confirmed: bool = False) -> Any:
     """``details`` with the ЕГН copy fields masked (all of them, or ``fields``)."""
     if not isinstance(details, dict):
         return details
     out = dict(details)
     if fields is None:
-        fields = egn_copy_fields(details, owner_type, owner_id, include_possible=include_possible)
+        fields = egn_copy_fields(details, owner_type, owner_id, include_possible=include_possible,
+                                 company_confirmed=company_confirmed)
     for field in fields:
         out[field] = mask_egn(out[field])
     return out
