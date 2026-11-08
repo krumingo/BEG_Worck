@@ -5143,3 +5143,12 @@ PR comment 6695992847 updated.
 - **Payment guard:** a named unverified account, an invoice-IBAN mismatch or a pending-only counterparty → 409 in every mode. The legacy case with no account and no counterparty follows `BANK_ACCOUNT_GUARD_MODE`; the default shadow lets the payment through with a DQ row (debt D1, for Krum).
 - **W0 test edit** (4 collections → `test_cp01_counterparty_identities_are_never_deleted`): stricter, not a weakening; the generic delete paths are still covered via `location_nodes`.
 - PR comment 6721864098. Gates pending.
+
+## 2026-11-08 13:30 UTC: main → `8c52e92` (Merge PR #80, docs only)
+
+Verified:
+- The tree of `8c52e92` = `merge-tree(4bca18a, e1bf2eb)`.
+- Parents: `4bca18a` + `e1bf2eb`.
+- 0 files changed outside `docs/` vs `4bca18a`.
+
+So gates run on heads containing `4bca18a` stay valid. New canon: Р51 (invoice cancellation approval, incoming debit note, wrong incoming invoice, every offset two people) plus INV-CN-01 addendum A. #84 must follow it on its next head.
