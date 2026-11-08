@@ -177,6 +177,14 @@ Every test runs on real Mongo in off / shadow / enforce. The same file fails the
 
 Red proof against 2c2e75f: `fg264_red_on_2c2e75f.txt`.
 
+## Addendum E: Р58 (FG-265, decided by Krum 08.11)
+
+| Point | Fix | Test |
+|---|---|---|
+| **Р58** | When the Owner accepts a supplier credit difference, the uncredited difference (net, by the note's own VAT ratio) is **split over the note's lines and the target frozen at acceptance** (`difference_accepted.split`): a line received **into the warehouse** (a canonical ledger movement naming the line, or the invoice with no line) → `company`; any other line → `project` (FG-251, unchanged). The company part is a **company cost (loss on the return) in the period of acceptance**; `difference_accepted.company_cost` and the **AuditEvent** `finance.credit_note.difference_accepted` carry the split, `company_cost` and `cost_period`. **FIFO prices and the warehouse ledger are not touched.** A read-only `GET /finance/company-costs/accepted-differences?period=YYYY-MM` derives the company cost from the accepted notes (no second ledger); the panel shows it on the note. | `test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged`: a note on a warehouse line + a project line, difference 12.00 gross → 10.00 net = 5.00 company (period of acceptance, in the reader; not in the project's cost) + 5.00 project (FG-251); the warehouse ledger is byte-identical before/after; AuditEvent fields; another tenant sees nothing; 3 modes |
+
+Red proof against b99c0eb: `r58_red_on_b99c0eb.txt`. On b99c0eb the warehouse part of an accepted difference was booked **nowhere**.
+
 ## Debts after Addendum A
 
 | # | Status |
@@ -188,7 +196,7 @@ Red proof against 2c2e75f: `fg264_red_on_2c2e75f.txt`.
 | D5 File Registry | **Open (needs #44).** `file_id` is now **required** for offsets and supplier debit notes, but is not validated against a registry. |
 | D6 supplier invoice cancel / delete | **Closed by Р51(3).** |
 | D7 resolving a supplier-note mismatch | **Fixed by Р52(2).** |
-| D8 P&L cost side of supplier notes | **Fixed by Р52(1).** One residual case is open: a credit without a reversal on a line received **into a warehouse** (not allocated to a project) has no project to apply to here. Its effect belongs to the FIFO layer value (FLOW-009), outside this PR. |
+| D8 P&L cost side of supplier notes | **Fixed by Р52(1).** An ACCEPTED difference on a warehouse line is a company cost (Р58, above). One residual case is open: a credit without a reversal on a line received **into a warehouse** (not allocated to a project) has no project to apply to here. Its effect belongs to the FIFO layer value (FLOW-009), outside this PR. |
 | D9 refund reversal | **Fixed.** A reversed refund recomputes its invoice (`test_d9_…`). |
 | D10 reject / withdraw | **Fixed** for notes, offsets and cancellation proposals (`test_d10_…`, `test_r51_1_…`, the offset test). A full Approval Center is out of scope. |
 | D11 legacy numbered drafts | **Fixed** by the migration with a dry-run report (run on production only after the Owner approves the report). |
@@ -198,6 +206,7 @@ Red proof against 2c2e75f: `fg264_red_on_2c2e75f.txt`.
 | D14 out of scope | Act correction (t24), VAT ledger/export, e-invoice/SAF-T, partial release of retentions, full Approval Center. |
 | D15 Overdue in P&L; Paid stays Paid | **Fixed** (`test_d15_…`). Overdue now counts as issued revenue. |
 | D16 approver | **Closed.** The Owner approves (Р49.4, Р51). |
+| D17 Р58 company cost in company reports | **Open (canon silent; question for Krum).** The company cost of Р58 is canonical in the accepted note + AuditEvent and readable through `GET /finance/company-costs/accepted-differences`. Which company-level report shows it (`overhead_transactions` / `overhead_snapshots` / full cost / company P&L) is not decided. It is deliberately **not** posted into overhead, because overhead is allocated back onto projects by labour hours (`/overhead-allocation/compute`), and Р58 says "company, not project". |
 | SEC-01 (#69, now in main) | **Open.** `finance.py` routes, old and new, still use `finance_permission` (Owner/Admin/Accountant); #69 did not migrate `finance.py`. Moving the whole module to `require_money_write` plus catalog actions is one follow-up, so the module keeps a single rule. |
 
 ## Gates (`gates.txt`, Addendum D head; main ec7ddd8 merged; real Mongo = disposable local mongo:7.0 rs0, a fresh container per block)
