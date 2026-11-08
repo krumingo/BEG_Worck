@@ -55,9 +55,14 @@ def test_v2_cancel_races_send(monkeypatch, mode, rep):
             c.post(u + "cancel", headers=hdr("acct-a"), json={"reason": "грешка"}),
             c.post(u + "send", headers=hdr("acct-a")))
         doc = await op.invoices.find_one({"id": inv["id"]})
-        print("V2 %s/%d: cancel %s send %s | status %s sent_at %s" % (
-            mode, rep, a.status_code, b.status_code, doc.get("status"), bool(doc.get("sent_at"))))
-        assert not (a.status_code == 200 and b.status_code == 200)
+        appr = "-"
+        req = doc.get("cancellation_request") or {}
+        if req.get("status") == "pending_approval":          # Р51: the cancel is a proposal
+            r = await c.post(u + "cancel/approve", headers=hdr("owner-a"), json={"version": req["version"]})
+            appr = (r.status_code, code(r)) if r.status_code != 200 else 200
+            doc = await op.invoices.find_one({"id": inv["id"]})
+        print("V2 %s/%d: cancel %s send %s | approve-pending %s | status %s sent_at %s" % (
+            mode, rep, a.status_code, b.status_code, appr, doc.get("status"), bool(doc.get("sent_at"))))
         assert not (doc["status"] == "Cancelled" and doc.get("sent_at"))
     run(monkeypatch, mode, scenario)
 
@@ -70,10 +75,17 @@ def test_v3_cancel_races_payment(monkeypatch, mode, rep):
             c.post("/api/finance/invoices/%s/cancel" % inv["id"], headers=hdr("acct-a"), json={"reason": "грешка"}),
             quick_pay(c, inv["id"], 10.0))
         doc = await op.invoices.find_one({"id": inv["id"]})
+        appr = "-"
+        req = doc.get("cancellation_request") or {}
+        if req.get("status") == "pending_approval":
+            r = await c.post("/api/finance/invoices/%s/cancel/approve" % inv["id"], headers=hdr("owner-a"),
+                             json={"version": req["version"]})
+            appr = (r.status_code, code(r)) if r.status_code != 200 else 200
+            doc = await op.invoices.find_one({"id": inv["id"]})
         active = await op.payment_allocations.count_documents(
             {"invoice_id": inv["id"], "status": {"$nin": ["cancelled", "reversed"]}})
-        print("V3 %s/%d: cancel %s pay %s | status %s active allocations %d" % (
-            mode, rep, a.status_code, b.status_code, doc.get("status"), active))
+        print("V3 %s/%d: cancel %s pay %s | approve-pending %s | status %s active allocations %d" % (
+            mode, rep, a.status_code, b.status_code, appr, doc.get("status"), active))
         assert not (doc["status"] == "Cancelled" and active)
     run(monkeypatch, mode, scenario)
 
@@ -87,7 +99,9 @@ def test_v4_refund_races_offset_approval(monkeypatch, mode, rep):
         assert (await approve(c, n["id"])).status_code == 200            # credit balance 36
         b = await sent(c)
         off = (await c.post("/api/finance/offsets", headers=hdr("acct-a"), json={
-            "source_invoice_id": a["id"], "target_invoice_id": b["id"], "amount": 36, "reason": "прихващане"})).json()
+            "source_invoice_id": a["id"], "target_invoice_id": b["id"], "amount": 36, "reason": "прихващане",
+            # Р51 / FG-222 (71957db): legal basis + document + the source credit note
+            "legal_basis": "чл. 103 ЗЗД", "file_id": "file_offset_1", "source_credit_note_id": n["id"]})).json()
         ref, app_ = await asyncio.gather(
             c.post("/api/finance/invoices/%s/refund" % a["id"], headers=hdr("acct-a"), json={
                 "amount": 36.0, "reason": "връщане", "account_id": BANK_A, "method": "BankTransfer"}),
