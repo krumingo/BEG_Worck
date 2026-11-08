@@ -5661,3 +5661,22 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - Minimal fix: `catch (err)` and clear only on `err.response?.status === 401` (and 403 from `/auth/me`). On a network error or 5xx keep the token and, to stay usable offline, restore `user` from the cached `bw_user`. The API 401 interceptor still ends a really expired session.
 - **Minor:** `logout()` does not await `clearTenantLocalData()`; cache deletion continues in the background, and an immediate unload could leave non-shell caches (normally none exist).
 - **Pending:** the jest / `yarn build` / Playwright re-run needs a frontend `node_modules` (~1 GB); about 1.2 GB is free while the Mongo gates run.
+
+## 2026-11-08 20:56 UTC: #76 `aa369d8` (SUB-ADV-01 + merge `8780cfb` of main `1ea98fe` + direct-call fix): PASS, no blocking finding
+
+- **Merge checks / fix:** see the 20:0x entry (only the conflict files differ; role-union 0; PM-01 503/503, 0 extra; fail-closed `advance_visible` with no request).
+
+| Gate | Result |
+|---|---|
+| sub_adv | 9 |
+| probe subadv (FG114, F76) | FAILS none |
+| SEC-02 ×3 | 31 / 31 / 31 (the 7777 flake did not occur) |
+| SEC-01 | 30 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+- **Next (chain6, serial):** #81 `72e7e87` → #84 `cdd3dc8` → #86 `dbb04ba` → #83 `1e455e3`. All four are evidence-only on top of the merge-checked heads.
