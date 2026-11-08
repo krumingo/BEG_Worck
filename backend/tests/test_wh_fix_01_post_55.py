@@ -406,6 +406,8 @@ async def _waste(mw, data, user, key):
         kw["request"] = None
     if "idempotency_key_header" in params:
         kw["idempotency_key_header"] = key
+    elif "idempotency_key" in params:            # the name main (SEC-01) uses
+        kw["idempotency_key"] = key
     return await mw.create_waste_entry(PROJECT, data, **kw)
 
 
@@ -595,9 +597,8 @@ async def test_whfix81_01_receipt_committing_between_check_and_write_is_409(
     assert True in calls                          # decided inside the transaction
     inv = await db["supplier_invoices"].find_one({"id": "si-157"})
     assert inv["lines"][0]["unit_price"] == 10 and inv["subtotal"] == 100   # nothing written
-    lock = await db["warehouse_ledger_counters"].find_one(
-        {"_id": f"supplier_invoice_lock:{T}:si-157"})
-    assert lock and lock["value"] >= 1            # the receipt wrote the shared lock
+    inv = await db["supplier_invoices"].find_one({"id": "si-157"})
+    assert inv.get("link_lock_seq", 0) >= 1       # the receipt wrote the shared lock
 
 
 async def test_whfix81_01_receipt_linked_by_line_id_locks_the_invoice(
@@ -608,8 +609,7 @@ async def test_whfix81_01_receipt_linked_by_line_id_locks_the_invoice(
     run = _Run(client, allow_always_gate, db)
     await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
               quantity=Decimal("10"), unit_value=Decimal("10"), invoice_line_id="sl-1")
-    assert await db["warehouse_ledger_counters"].find_one(
-        {"_id": f"supplier_invoice_lock:{T}:si-157"})
+    assert (await db["supplier_invoices"].find_one({"id": "si-157"})).get("link_lock_seq", 0) >= 1
     from app.routes import procurement
     with pytest.raises(HTTPException) as exc:
         await procurement.update_supplier_invoice("si-157", {"total": 1}, user=_user())

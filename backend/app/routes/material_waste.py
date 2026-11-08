@@ -4,11 +4,14 @@ Routes - Material Waste Tracking v1.
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import List, Optional
 from datetime import datetime, timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_field_cost_write
+from app.permissions.money_input import money_value, project_in_tenant  # SEC-01-C03
+from app.services.money_amount import strict_number  # SEC-01-C03-B (FG-47)
 from app.services.material_waste import build_material_waste_summary
 from app.tenancy.data_access import TenantData
 
@@ -28,6 +31,12 @@ class WasteEntryCreate(BaseModel):
     location_id: Optional[str] = None
     qty: float
     unit: str = "бр"
+
+    @field_validator("qty", mode="before")
+    @classmethod
+    def qty_is_a_number(cls, value):
+        """SEC-01-C03-B (FG-47): only a JSON number — refused BEFORE Pydantic coerces "12"/true."""
+        return strict_number(value)
     waste_type: str = "damaged"
     notes: Optional[str] = None
     date: Optional[str] = None
@@ -61,10 +70,12 @@ async def get_compact_waste(project_id: str, user: dict = Depends(get_current_us
 
 
 @router.post("/projects/{project_id}/material-waste", status_code=201)
-async def create_waste_entry(project_id: str, data: WasteEntryCreate, request: Request,
-                             user: dict = Depends(get_current_user),
-                             idempotency_key_header: Optional[str] = Header(
-                                 None, alias="Idempotency-Key")):
+async def create_waste_entry(
+        project_id: str, data: WasteEntryCreate, request: Request,
+        user: dict = Depends(require_field_cost_write(
+            "material_waste.entry.create", module="M2", resource_type="material_waste_entry",
+            project_from="path")),  # SEC-01 + C01 (R16) — merged from main 4bca18a
+        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """WH-FIX-01 (FG-159, Р10 / Р27 / Р37; FLOW-009): a waste („фира") from
     the project is a CANONICAL write-off movement through the single writer
     (the same path as POST /warehouse/canonical/project-writeoff): Р27
@@ -78,19 +89,25 @@ async def create_waste_entry(project_id: str, data: WasteEntryCreate, request: R
     `file_ids` (evidence), an `Idempotency-Key` header (or
     `idempotency_key`) and a reason (`reason`, else the `waste_type`)."""
     from app.routes import warehouse_canonical as canon
+    # SEC-01-C03 (main 4bca18a): finite qty > 0, the project of THIS tenant —
+    # before any write. The idempotency of the write is the canonical command
+    # service's (one key per movement); SEC-01's MoneyWrite register is not used
+    # twice for the same request.
+    money_value(data.qty, "qty", places=None)
+    await project_in_tenant(_tenant(user), project_id)
     # WHFIX81-05: the Р27 rights are decided FIRST (as the canonical endpoint,
     # FG-55): a caller without the right gets 403 whatever the body holds.
     ctx = await canon.require_project_writeoff(request, user)
     await _r27_first(canon, ctx, user, project_id, data.subproject_id, request)
-    if not data.item_id:
-        raise HTTPException(status_code=422, detail={
-            "error_code": "MASTER_IDENTITY_MISSING",
-            "message": "a waste needs a Master item (item_id); free text cannot be written off"})
-    key = (idempotency_key_header or data.idempotency_key or "").strip()
+    key = (idempotency_key or data.idempotency_key or "").strip()
     if not key:
         raise HTTPException(status_code=428, detail={
             "error_code": "IDEMPOTENCY_KEY_REQUIRED",
             "message": "send an Idempotency-Key header"})
+    if not data.item_id:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "MASTER_IDENTITY_MISSING",
+            "message": "a waste needs a Master item (item_id); free text cannot be written off"})
     reason = (data.reason or data.waste_type or "").strip()
     try:
         body = canon.ProjectWriteOffBody(

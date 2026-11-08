@@ -138,37 +138,26 @@ async def write_unless_linked(tenant, line_id: str,
 
 # ───────────── WH-FIX-01 (WHFIX81-01) — the per-SUPPLIER-INVOICE lock ─────────────
 # The FG-157 lock of PUT /supplier-invoices is decided in ONE transaction that
-# writes this document, and every canonical supplier receipt that links the
-# supplier invoice (by `invoice_id`, or by `invoice_line_id` of one of its
-# lines) writes the SAME document in its movement transaction. A receipt that
-# commits while the PUT is in flight makes the PUT's transaction write-conflict
-# → `with_transaction` re-runs it → it sees the receipt → 409. (The pattern of
-# the per-line lock above, 5C-C26 Addendum K.)
+# writes the supplier invoice document itself (`link_lock_seq` $inc), and every
+# canonical supplier receipt that links that invoice (by `invoice_id`, or by
+# `invoice_line_id` of one of its lines) writes the SAME field in its movement
+# transaction. A receipt that commits while the PUT is in flight makes the PUT's
+# transaction write-conflict → `with_transaction` re-runs it → it sees the
+# receipt → 409. The document always exists (no collection is created), and it
+# is the tenant's own supplier invoice (org_id-scoped through TenantData).
 
 def supplier_invoice_lock_id(org_id: str, invoice_id: str) -> str:
     return f"supplier_invoice_lock:{org_id}:{invoice_id}"
 
 
 async def ensure_supplier_invoice_lock(tenant, invoice_id: str) -> None:
-    """Create the lock document OUTSIDE any transaction (idempotent)."""
-    from pymongo.errors import DuplicateKeyError
-    try:
-        await tenant.warehouse_ledger_counters.update_one(
-            {"_id": supplier_invoice_lock_id(tenant.org_id, invoice_id)},
-            {"$setOnInsert": {"tenant_id": tenant.org_id, "name": "supplier_invoice_lock",
-                              "supplier_invoice_id": invoice_id, "value": 0}},
-            upsert=True)
-    except DuplicateKeyError:
-        pass
+    """Nothing to create: the lock is the supplier invoice document."""
+    return None
 
 
 async def bump_supplier_invoice_lock(tenant, invoice_id: str, *, session=None) -> None:
-    await tenant.warehouse_ledger_counters.update_one(
-        {"_id": supplier_invoice_lock_id(tenant.org_id, invoice_id)},
-        {"$inc": {"value": 1},
-         "$setOnInsert": {"tenant_id": tenant.org_id, "name": "supplier_invoice_lock",
-                          "supplier_invoice_id": invoice_id}},
-        upsert=True, session=session)
+    await tenant.supplier_invoices.update_one(
+        {"id": invoice_id}, {"$inc": {"link_lock_seq": 1}}, session=session)
 
 
 async def supplier_invoices_of_receipt(tenant, invoice_id, invoice_line_id, *, session=None):

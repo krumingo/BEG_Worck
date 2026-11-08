@@ -12,6 +12,7 @@ from app.deps.modules import require_m2
 from app.services.pricing_engine import get_material_price, batch_get_prices
 from app.routes.smr_analysis import calc_line, calc_totals
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -42,7 +43,13 @@ async def get_batch_prices(data: BatchRequest, user: dict = Depends(require_m2))
 
 
 @router.post("/pricing/refresh")
-async def refresh_price(name: str, user: dict = Depends(require_m2)):
+async def refresh_price(
+    name: str,
+    _sec01: dict = Depends(require_money_write(
+        "pricing.material_price_refresh.execute", module='M2',
+        resource_type="material_price")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     result = await get_material_price(name, user["org_id"], force_refresh=True)
     return result
 

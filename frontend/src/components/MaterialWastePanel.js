@@ -9,7 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
-import { createKeyHolder, apiErrorText } from "@/lib/idempotency";
+import { createIdempotencyHolder, idempotencyHeaders, apiErrorText } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -51,7 +51,11 @@ export default function MaterialWastePanel({ projectId }) {
   const [onProject, setOnProject] = useState([]);
   const [evidence, setEvidence] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [keys] = useState(() => createKeyHolder());
+  // main 4bca18a (SEC-01): one key per endpoint + payload until the server answers.
+  const [wasteKeys] = useState(() => createIdempotencyHolder());
+  // the evidence is uploaded ONCE per chosen file: a retry re-sends the same
+  // payload (same file_id) → the same Idempotency-Key → never a second write-off.
+  const [uploaded, setUploaded] = useState(null);
 
   const load = useCallback(async () => {
     try {
@@ -84,15 +88,22 @@ export default function MaterialWastePanel({ projectId }) {
     setSaving(true);
     let err = null;
     try {
-      const fd = new FormData();
-      fd.append("file", evidence);
-      fd.append("context_type", "project");
-      fd.append("context_id", projectId);
-      const up = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+      let fileId = uploaded && uploaded.file === evidence ? uploaded.id : null;
+      if (!fileId) {
+        const fd = new FormData();
+        fd.append("file", evidence);
+        fd.append("context_type", "project");
+        fd.append("context_id", projectId);
+        const up = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
+        fileId = up.data.id;
+        setUploaded({ file: evidence, id: fileId });
+      }
       const reason = (WASTE_TYPES.find(w => w.value === form.waste_type) || {}).label || form.waste_type;
-      await API.post(`/projects/${projectId}/material-waste`, {
-        ...form, qty: parseFloat(form.qty), reason, file_ids: [up.data.id],
-      }, { headers: { "Idempotency-Key": keys.get() } });
+      const endpoint = `/projects/${projectId}/material-waste`;
+      const payload = { ...form, qty: parseFloat(form.qty), reason, file_ids: [fileId] };
+      await API.post(endpoint, payload, idempotencyHeaders(wasteKeys.keyFor(endpoint, payload)));
+      wasteKeys.done();
+      setUploaded(null);
       toast.success(t("materialWaste.added"));
       setShowAdd(false);
       setForm(EMPTY);
@@ -102,7 +113,9 @@ export default function MaterialWastePanel({ projectId }) {
       err = e;
       toast.error(wasteErrorText(e, t));
     } finally {
-      keys.settle(err);
+      // a refusal from the server ends this submission's key; a lost
+      // connection keeps it (the retry is the same request)
+      if (err && err.response) wasteKeys.done();
       setSaving(false);
     }
   };
