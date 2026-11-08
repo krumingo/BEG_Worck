@@ -6,7 +6,7 @@ Phase 3: Actual labor cost by execution package
 Phase 4: Variance + progress + warnings
 Phase 5: Project/profit integration
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -16,11 +16,30 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_field_cost_write
+from app.permissions.money_input import (MoneyWrite, money_value, project_in_tenant,  # SEC-01-C03
+                                         labor_money_visible, without_labor_money)
 
 
 def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
+
+
+# SEC-01-C02 (FG-26): a labor row that is neither a reversal nor reversed. Sums need no
+# filter (a reversal carries the negative hours/cost); counts use this.
+ACTIVE_LABOR_ROW = {"entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
+
+
+def _sync_fingerprint(row: dict) -> tuple:
+    """What makes two synced labor rows the same row (SEC-01-C02, FG-26)."""
+    cost = row.get("labor_cost")
+    rate = row.get("hourly_rate")
+    return (row.get("work_report_id"), row.get("employee_id"), row.get("date", ""),
+            round(float(row.get("hours", 0) or 0), 4), row.get("activity_name", ""),
+            row.get("note", ""), row.get("execution_package_id"), row.get("offer_line_id"),
+            None if rate is None else round(float(rate), 4),
+            None if cost is None else round(float(cost), 2))
 
 router = APIRouter(tags=["Labor by SMR"])
 
@@ -30,10 +49,20 @@ router = APIRouter(tags=["Labor by SMR"])
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/labor-entries", status_code=201)
-async def create_labor_entry(data: dict, user: dict = Depends(require_m2)):
+async def create_labor_entry(
+    data: dict,
+    request: Request,
+    _sec01: dict = Depends(require_field_cost_write(
+        "labor.entry.create", module="M2", resource_type="labor_entry",
+        project_from="body")),  # SEC-01 + C01 (R16): before any read/write
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
     """Create a labor time entry linked to an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
+    hours = money_value(data.get("hours"), "hours", places=None)  # SEC-01-C03: finite > 0, else 422 before any write
+    await project_in_tenant(tenant, data.get("project_id"))  # SEC-01-C03-B (FG-29)
     now = datetime.now(timezone.utc).isoformat()
 
     entry = {
@@ -45,7 +74,7 @@ async def create_labor_entry(data: dict, user: dict = Depends(require_m2)):
         "offer_line_id": data.get("offer_line_id"),
         "work_report_id": data.get("work_report_id"),
         "date": data.get("date", now[:10]),
-        "hours": float(data.get("hours", 0)),
+        "hours": hours,
         "activity_name": data.get("activity_name", ""),
         "note": data.get("note", ""),
         "hourly_rate": None,  # populated by aggregator
@@ -60,12 +89,42 @@ async def create_labor_entry(data: dict, user: dict = Depends(require_m2)):
         entry["hourly_rate"] = profile["hourly_rate"]
         entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
 
-    await tenant.labor_entries.insert_one(entry)
-    return {k: v for k, v in entry.items() if k != "_id"}
+    mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
+    # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
+    # a replay shows them to a caller without the finance right (an R16 member).
+    show_money = await labor_money_visible(request, user)
+    if mw.replay_id:
+        replay = await tenant.labor_entries.find_one({"id": mw.replay_id}, {"_id": 0})
+        return replay if show_money else without_labor_money(replay)
+    entry["id"] = mw.new_id("labor_entry")
+    async with mw:
+        async with mw.insert_once():
+            await tenant.labor_entries.insert_one(mw.unique(entry))
+        mw.result_id = entry["id"]
+    out = {k: v for k, v in entry.items() if k != "_id"}
+    return out if show_money else without_labor_money(out)
 
 
 @router.post("/labor-entries/sync-from-work-reports")
-async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(require_m2)):
+async def sync_labor_entries_from_work_reports(
+    data: dict,
+    _sec01: dict = Depends(require_field_cost_write(
+        "labor.work_report_sync.execute", module="M2", resource_type="labor_entry",
+        project_from="body")),  # SEC-01-C01 (R16): before any read/write
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """SEC-01-C03-C (F-69-02, R29): key required (428); the inputs are fingerprinted and a
+    repeat of the key returns the stored answer, without running the sync again."""
+    mw = await MoneyWrite.begin(user, "labor.work_report_sync.execute", idempotency_key, data)
+    if mw.replay_id:
+        return mw.replay_payload()
+    async with mw:
+        mw.result_payload = await _sync_labor_entries(data, user)
+    return mw.result_payload
+
+
+async def _sync_labor_entries(data: dict, user: dict) -> dict:
     """Sync labor entries from existing work reports for a project, with optional execution package mapping"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -92,12 +151,18 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(1000)
 
-    # Clear old synced entries for this project
-    await tenant.labor_entries.delete_many({"org_id": org_id, "project_id": project_id, "source": "work_report_sync"})
-
+    # SEC-01-C02 (FG-26; CLAUDE.md §2.9, §7): NO delete. Labor rows are the basis of
+    # pay (FLOW-028), so a re-sync never removes or edits one. It compares the rows the
+    # work reports give NOW with the active synced rows:
+    #   same row (fingerprint)  -> kept as it is;
+    #   row no longer given     -> a REVERSAL row (negative hours/cost, same date and
+    #                              package) is appended and the original is marked
+    #                              reversed_by_entry_id — every sum stays correct;
+    #   new row                 -> inserted.
+    # A re-sync with no change writes nothing (idempotent by content).
     now = datetime.now(timezone.utc).isoformat()
-    created = 0
 
+    desired = []
     for wr in reports:
         uid = wr["user_id"]
         rate = rate_map.get(uid, 0)
@@ -114,7 +179,7 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
             ep_id = matched_pkg["id"] if matched_pkg else None
             ol_id = matched_pkg.get("offer_line_id") if matched_pkg else None
 
-            entry = {
+            desired.append({
                 "id": str(uuid.uuid4()),
                 "org_id": org_id,
                 "project_id": project_id,
@@ -131,11 +196,54 @@ async def sync_labor_entries_from_work_reports(data: dict, user: dict = Depends(
                 "source": "work_report_sync",
                 "mapped": ep_id is not None,
                 "created_at": now,
-            }
-            await tenant.labor_entries.insert_one(entry)
-            created += 1
+            })
 
-    return {"ok": True, "synced": created, "project_id": project_id}
+    active = await tenant.labor_entries.find(
+        {"org_id": org_id, "project_id": project_id, "source": "work_report_sync",
+         "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None},
+        {"_id": 0}).to_list(10000)
+    pool = {}
+    for row in active:
+        pool.setdefault(_sync_fingerprint(row), []).append(row)
+
+    created = unchanged = 0
+    for entry in desired:
+        same = pool.get(_sync_fingerprint(entry))
+        if same:
+            same.pop()
+            unchanged += 1
+            continue
+        await tenant.labor_entries.insert_one(entry)
+        created += 1
+
+    reversed_count = 0
+    for rows in pool.values():
+        for old in rows:
+            reversal = {
+                "id": str(uuid.uuid4()), "org_id": org_id, "project_id": project_id,
+                "employee_id": old.get("employee_id"),
+                "execution_package_id": old.get("execution_package_id"),
+                "offer_line_id": old.get("offer_line_id"),
+                "work_report_id": old.get("work_report_id"),
+                "date": old.get("date", ""),
+                "hours": -float(old.get("hours", 0) or 0),
+                "activity_name": old.get("activity_name", ""),
+                "note": "Сторно при повторна синхронизация",
+                "hourly_rate": old.get("hourly_rate"),
+                "labor_cost": (-float(old["labor_cost"]) if old.get("labor_cost") is not None
+                               else None),
+                "source": "work_report_sync", "entry_kind": "reversal",
+                "reverses_entry_id": old["id"], "mapped": old.get("mapped", False),
+                "created_by": user["id"], "created_at": now,
+            }
+            await tenant.labor_entries.insert_one(reversal)
+            await tenant.labor_entries.update_one(
+                {"id": old["id"], "org_id": org_id, "reversed_by_entry_id": None},
+                {"$set": {"reversed_by_entry_id": reversal["id"], "reversed_at": now}})
+            reversed_count += 1
+
+    return {"ok": True, "synced": created, "unchanged": unchanged,
+            "reversed": reversed_count, "project_id": project_id}
 
 
 @router.get("/labor-entries")
@@ -159,7 +267,25 @@ async def list_labor_entries(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/execution-packages/recompute-labor/{project_id}")
-async def recompute_execution_package_labor(project_id: str, user: dict = Depends(require_m2)):
+async def recompute_execution_package_labor(
+    project_id: str,
+    _sec01: dict = Depends(require_field_cost_write(
+        "labor.package_recompute.execute", module="M2", resource_type="execution_package",
+        project_from="path")),  # SEC-01-C01 (R16): before any read/write
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """SEC-01-C03-C (F-69-02, R29): key required (428); a repeat returns the stored answer."""
+    mw = await MoneyWrite.begin(user, "labor.package_recompute.execute", idempotency_key,
+                                {"project_id": project_id})
+    if mw.replay_id:
+        return mw.replay_payload()
+    async with mw:
+        mw.result_payload = await _recompute_package_labor(project_id, user)
+    return mw.result_payload
+
+
+async def _recompute_package_labor(project_id: str, user: dict) -> dict:
     """Recompute planned hours and labor budget for execution packages"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -327,11 +453,12 @@ async def get_labor_warnings(project_id: str, user: dict = Depends(require_m2)):
     ).to_list(200)
 
     # Count unmapped entries
+    # SEC-01-C02: count the active rows only (a reversal and the row it reverses cancel out).
     unmapped = await tenant.labor_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": None}
+        {"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW}
     )
     total_entries = await tenant.labor_entries.count_documents(
-        {"org_id": org_id, "project_id": project_id}
+        {"org_id": org_id, "project_id": project_id, **ACTIVE_LABOR_ROW}
     )
 
     warnings = []

@@ -46,6 +46,7 @@ human resolves it.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Mapping, Optional
 
 from app.tenancy.data_access import TENANT_KEY, TenantData, TenantScopeViolation
@@ -90,10 +91,33 @@ def _ident(value: Any, what: str) -> str:
     return value
 
 
+def _today_utc() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+
+def membership_date_window(today: Optional[str] = None) -> Dict[str, Any]:
+    """SEC-R1 (SEC-01-C02 addendum A; R16): a membership counts only on the days it
+    covers. ``from_date`` <= today (when set) and ``to_date`` >= today (when set);
+    a missing / null / empty bound is open. Dates are ISO strings ("YYYY-MM-DD" or a
+    full ISO timestamp), compared as strings on the UTC date. A bound of any other
+    type never matches (fail closed).
+    """
+    day = today or _today_utc()
+    return {"$and": [
+        {"$or": [{"from_date": None}, {"from_date": ""},
+                 {"from_date": {"$type": "string", "$lte": day + "\uffff"}}]},
+        {"$or": [{"to_date": None}, {"to_date": ""},
+                 {"to_date": {"$type": "string", "$gte": day}}]},
+    ]}
+
+
 def membership_filter(user_id: Any, project_id: Any,
                       role_in_project: Optional[str] = None,
-                      active: bool = True) -> Dict[str, Any]:
+                      active: bool = True, today: Optional[str] = None) -> Dict[str, Any]:
     """The only shape an authorization query may have: user AND project (AND role).
+
+    ``active`` also requires the membership's date window to cover today (SEC-R1):
+    an expired or not-yet-started membership is not a membership.
 
     The tenant key is NOT added here — :meth:`TenantData.scoped` appends it
     last, so a caller can neither forget it nor override it.
@@ -102,6 +126,7 @@ def membership_filter(user_id: Any, project_id: Any,
                            "user_id": _ident(user_id, "user_id")}
     if active:
         flt["active"] = True
+        flt.update(membership_date_window(today))
     if role_in_project:
         flt["role_in_project"] = role_in_project
     return flt

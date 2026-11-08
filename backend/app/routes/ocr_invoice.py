@@ -15,6 +15,7 @@ from app.services.ocr_invoice import create_ocr_intake
 from app.master_data.intake_hooks import observe_ocr_supplier
 from pathlib import Path
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write
 
 
 def _tenant(user: dict) -> TenantData:
@@ -177,7 +178,13 @@ async def review_intake(intake_id: str, data: ReviewData, user: dict = Depends(g
 # ── Approve ────────────────────────────────────────────────────────
 
 @router.put("/ocr-invoice/{intake_id}/approve")
-async def approve_intake(intake_id: str, user: dict = Depends(get_current_user)):
+async def approve_intake(
+    intake_id: str,
+    _sec01: dict = Depends(require_money_write(
+        "ocr_invoice.intake.approve", module=None,
+        resource_type="ocr_invoice_intake")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     doc = await tenant.ocr_invoice_intake.find_one({"id": intake_id, "org_id": user["org_id"]})
     if not doc:

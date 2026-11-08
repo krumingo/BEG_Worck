@@ -210,13 +210,16 @@
 | app/routes/reports.py:get_month_finance_totals | (helper) | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:list_cash_transactions | GET /finance/cash-transactions | cash_transactions | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_cash_transactions | GET /finance/cash-transactions | cash_transactions | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | insert_one(txn) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | insert_one(mw.unique(txn)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:list_overhead_transactions | GET /finance/overhead-transactions | overhead_transactions | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_overhead_transactions | GET /finance/overhead-transactions | overhead_transactions | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | insert_one(txn) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | insert_one(mw.unique(txn)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:list_bonus_payments | GET /finance/bonus-payments | bonus_payments | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_bonus_payments | GET /finance/bonus-payments | bonus_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | insert_one(payment) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | insert_one(mw.unique(payment)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | organizations | own_organization(id = tenant org_id) | TenantData | scoped@base | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | invoices | find(direction, issue_date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | cash_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
@@ -400,4 +403,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 385 accesses — FIXED 131, SAFE 254
+Totals: 388 accesses — FIXED 131, SAFE 257

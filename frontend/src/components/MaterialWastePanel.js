@@ -9,6 +9,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,6 +24,9 @@ import {
   Package, Loader2, ChevronDown, ChevronRight, Plus, AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+
+// SEC-01-C03: one Idempotency-Key per waste submission (a retry never writes twice).
+const wasteKeys = createIdempotencyHolder();
 
 const STATUS_CFG = {
   ok: { color: "text-emerald-400", dot: "bg-emerald-500" },
@@ -60,12 +64,18 @@ export default function MaterialWastePanel({ projectId }) {
   const handleAdd = async () => {
     if (!form.material_name || !form.qty) { toast.error(t("materialWaste.fillRequired")); return; }
     try {
-      await API.post(`/projects/${projectId}/material-waste`, { ...form, qty: parseFloat(form.qty) });
+      const endpoint = `/projects/${projectId}/material-waste`;
+      const payload = { ...form, qty: parseFloat(form.qty) };
+      await API.post(endpoint, payload, idempotencyHeaders(wasteKeys.keyFor(endpoint, payload)));
+      wasteKeys.done();
       toast.success(t("materialWaste.added"));
       setShowAdd(false);
       setForm({ material_name: "", qty: "", unit: "бр", waste_type: "damaged", notes: "" });
       load();
-    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    } catch (err) {
+      const detail = err.response?.data?.detail;
+      toast.error(detail?.message || detail || t("common.error"));
+    }
   };
 
   if (loading) return <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin" /></div>;
