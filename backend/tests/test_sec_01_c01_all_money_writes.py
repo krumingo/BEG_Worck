@@ -437,6 +437,8 @@ GUARDED_ROUTES = {
     ("POST", "/api/execution-packages/recompute-labor/{project_id}"):
         "labor.package_recompute.execute",
     ("POST", "/api/projects/{project_id}/material-waste"): "material_waste.entry.create",
+    # ACT-01 (merge with #77): a client act is a money write (R14) — finance roles only
+    ("POST", "/api/client-acts"): "revenue.client_act.create",
 }
 R16_ROUTES = {k for k, a in GUARDED_ROUTES.items() if a.startswith(("labor.", "material_waste."))}
 
