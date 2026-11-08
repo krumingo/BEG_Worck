@@ -242,7 +242,6 @@
 | app/routes/dashboard.py:get_finance_by_counterparty | GET /reports/finance-details/by-counterparty | counterparties | find(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:get_finance_by_project | GET /reports/finance-details/by-project | projects | find(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/dashboard.py:_finance_by_project_rows | (helper) | invoices | find(issue_date) | TenantData org_id (session) | new read | SAFE |
-| app/routes/dashboard.py:_finance_by_project_rows | (helper) | invoice_lines | find(invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | invoices | find(inv_query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | cash_transactions | find(cash_query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/dashboard.py:get_finance_transactions | GET /reports/finance-details/transactions | overhead_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
@@ -397,4 +396,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 382 accesses — FIXED 130, SAFE 252
+Totals: 381 accesses — FIXED 130, SAFE 251

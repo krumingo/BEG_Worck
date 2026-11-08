@@ -132,3 +132,33 @@ unit), FLOW-008 L142 (unallocated not in project P&L), FLOW-009 L84 („Оста
 
 Debt: a REVERSED receipt (WH-REV-01 / #82) should not lock a supplier invoice — the reversal field
 is not on this base; whichever PR merges second carries that rule.
+
+## Codex review @ 625ece1 (comment 6722712113) — F-81-01 / F-81-02
+
+Red run: `08_f81_red_on_625ece1.txt` (`tests/test_wh_fix_01_f81_readers.py` on a clean worktree of
+`625ece1`: 78 failed / 24 passed — the passes are the 100 % cases, where old and new agree, and
+the Received by-project control). HTTP, off / shadow / enforce × mongomock + real Mongo.
+
+| Finding | Fix | Test |
+|---|---|---|
+| F-81-01 supplier invoices in official aggregates | one per-line projection `invoice_allocation.received_line_allocations` (allocated qty / line qty × line amount; `invoice_lines` docs, else embedded lines; Received only). Readers moved to it: `/reports/finance-details/summary` (company, `project_id`, `warehouse_id` filters; the unallocated rest in the new `expenses_invoices_to_allocate` / `_count`, not in the result), `/reports/company-finance-series`, `/reports/company-finance-summary` + the export (weekly, ex VAT), `get_month_finance_totals` (compare, incl. VAT — its own basis kept), `/project-profit/{id}` subcontract fallback (the line share to the project, no header `project_id`) | `test_f81_01_*` 0 / 60 / 100 % → 0 / 600 / 1000 |
+| F-81-02 Issued income changed by line allocation | `_finance_by_project_rows`: Issued invoices never enter the per-line share; the header allocation gets the whole total, exactly as main's pipeline | `test_f81_02_*` (line to the header project / to another project × `invoice_lines` / embedded) → 500 on the header project |
+
+Decisions inside the finding (recorded, not new rules):
+* **D-04 / project P&L:** `invoice_lines` documents allocated to a project are already in the
+  material cost (Path B, FG-17). The subcontract fallback therefore reads only invoices whose lines
+  are embedded, so a cost is not counted twice. On main, a header `project_id` and Path B could
+  count the same invoice twice.
+* **Company result:** an allocation to any destination counts: project, warehouse, overhead.
+  At 100 % the figure equals main's.
+* **Not changed (document volume, not a result):** these readers list or total whole invoices per
+  counterparty, not a company or project result. Open for Крум if they should also be re-cut.
+  * turnover / by-counterparty / top-counterparties;
+  * the transactions list;
+  * outstanding payables.
+* **Pre-existing, not touched (debt):** these project readers query `invoices` by `project_id`
+  with no `direction` filter, so a supplier invoice with a header project counts as revenue there.
+  This is main's behaviour and outside R45.
+  * `project_pnl`;
+  * `project_financial_results`;
+  * project dashboard card 5 / `count_invoices`.

@@ -10,6 +10,7 @@ import re
 from app.db import db
 from app.tenancy.data_access import TenantData
 from app.services.paid_labor import paid_labor_v3
+from app.services.invoice_allocation import RECEIVED_LINE_FIELDS
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 
@@ -353,8 +354,9 @@ async def get_finance_series(
             "org_id": org_id,
             "direction": "Received",
             "issue_date": {"$gte": date_from, "$lte": date_to}
-        }, {"_id": 0, "total": 1, "subtotal": 1}).to_list(1000)
-        expenses_invoices = sum((inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)) for inv in received_invoices)
+        }, {"_id": 0, "total": 1, "subtotal": 1, **RECEIVED_LINE_FIELDS}).to_list(1000)
+        # F-81-01 / Р45: only the part allocated by the lines (ex VAT)
+        expenses_invoices = (await _received_in_result(tenant, org_id, received_invoices))[0]
         
         # Expenses from cash
         cash_expense = await tenant.cash_transactions.find({
@@ -421,6 +423,42 @@ async def get_finance_series(
             "net": round(total_net, 2),
         }
     }
+
+
+# ── F-81-01 — supplier invoices in the official result (Р45) ─────────
+
+async def _received_in_result(tenant, org_id: str, received: list, *, basis: str = "ex",
+                              project_id: Optional[str] = None,
+                              warehouse_id: Optional[str] = None):
+    """(amount in the result, invoices counted, amount to allocate, invoices to
+    allocate) for supplier invoices: the per-line projection, never the
+    invoice header / whole subtotal. A project / warehouse filter reads only
+    the part allocated to it (and lists nothing to allocate)."""
+    from app.services.invoice_allocation import received_line_allocations, allocated_amount
+    parts = await received_line_allocations(tenant, org_id, received)
+    if warehouse_id:
+        dest = ("warehouse", warehouse_id)
+    elif project_id:
+        dest = ("project", project_id)
+    else:
+        dest = (None, None)
+    amount, count, rest, rest_count = 0.0, 0, 0.0, 0
+    for inv in received:
+        plist = parts.get(inv.get("id"), [])
+        part = allocated_amount(plist, basis=basis, dest_type=dest[0], ref_id=dest[1])
+        if part:
+            amount += part
+            count += 1
+        if dest[0] is None and inv.get("status") != "Cancelled":
+            if basis == "ex":
+                whole = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            else:
+                whole = inv.get("total", 0)
+            left = float(whole or 0) - allocated_amount(plist, basis=basis)
+            if left > 0.005:
+                rest += left
+                rest_count += 1
+    return amount, count, rest, rest_count
 
 
 # ── Finance Details Endpoints ──────────────────────────────────────
@@ -500,11 +538,17 @@ async def get_finance_details_summary(
     income_invoices = sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in issued)
     income_count = len(issued)
     
-    # Received invoices (expenses)
-    received_query = {**inv_query, "direction": "Received"}
-    received = await _tenant(user).invoices.find(received_query, {"_id": 0, "total": 1, "subtotal": 1, "vat": 1}).to_list(10000)
-    expenses_invoices = sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in received)
-    expenses_invoice_count = len(received)
+    # Received invoices (expenses) — F-81-01 / Р45: only the part allocated by
+    # the lines (ex VAT) is in the result; a project / warehouse filter reads
+    # the part allocated to it. The rest is listed separately (to_allocate).
+    received_query = {k: v for k, v in inv_query.items() if k != "allocations"}
+    received_query["direction"] = "Received"
+    received = await _tenant(user).invoices.find(
+        received_query, {"_id": 0, "total": 1, "subtotal": 1, "vat": 1,
+                         "status": 1, **RECEIVED_LINE_FIELDS}).to_list(10000)
+    expenses_invoices, expenses_invoice_count, to_allocate_amount, to_allocate_count = \
+        await _received_in_result(_tenant(user), org_id, received,
+                                  project_id=project_id, warehouse_id=warehouse_id)
     
     # Cash transactions
     cash_query = {"org_id": org_id, "date": {"$gte": date_from, "$lte": date_to}}
@@ -557,10 +601,13 @@ async def get_finance_details_summary(
             "expenses_overhead": round(expenses_overhead, 2),
             "expenses_payroll": round(expenses_payroll, 2),
             "expenses_bonus": round(expenses_bonus, 2),
+            # F-81-01: the unallocated part of the supplier invoices (not in the result)
+            "expenses_invoices_to_allocate": round(to_allocate_amount, 2),
         },
         "counts": {
             "income_invoice_count": income_count,
             "expenses_invoice_count": expenses_invoice_count,
+            "expenses_invoices_to_allocate_count": to_allocate_count,
             "cash_count": len(cash_txns),
             "overhead_count": len(overhead),
             "payroll_count": len(payroll),
@@ -733,31 +780,9 @@ async def get_finance_by_project(
     }
 
 
-def _f_or_none(v):
-    try:
-        return None if v in (None, "") else float(v)
-    except (TypeError, ValueError):
-        return None
-
-
-def _line_amount(line: dict) -> float:
-    """A line's amount incl. VAT (stored total, else ex VAT + VAT)."""
-    if line.get("line_total_inc_vat") is not None:
-        return float(line.get("line_total_inc_vat") or 0)
-    ex = line.get("line_total_ex_vat")
-    if ex is None:
-        ex = float(line.get("qty") or 0) * float(line.get("unit_price") or 0)
-    ex = float(ex or 0)
-    vat = line.get("vat_amount")
-    if vat is None:
-        vat = ex * float(line.get("vat_percent") or 0) / 100
-    return ex + float(vat or 0)
-
-
 async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to: str):
     """WH-FIX-01 (FG-154) — {project: expenses / income / invoices} from the
     per-line allocations of the period's invoices."""
-    from app.services.canonical_material_cost import effective_allocations
     invoices = {}
     async for inv in tenant.invoices.find(
             {"org_id": org_id, "issue_date": {"$gte": date_from, "$lte": date_to}},
@@ -776,71 +801,28 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
             row["total_income"] += amount
         row["_invoices"].add(inv["id"])
 
-    # A4 / Р45 (oracle Q002): the allocation unit is the invoice LINE. Only
-    # line allocations reach a project (FG-154: allocated qty / line qty × the
-    # line amount). No provisional split by header / percentage (A4 #12). An
-    # invoice that is not finally allocated by lines is NEVER dropped: it is
-    # listed in `to_allocate` („фактури за разпределяне", A4 #8).
+    # A4 / Р45 (oracle Q002): the allocation unit of a SUPPLIER (Received)
+    # invoice is its LINE. Only line allocations reach a project (FG-154:
+    # allocated qty / line qty × the line amount) — the one per-line projection
+    # `received_line_allocations` (F-81-01, also read by the summary / series).
+    # No provisional split by header / percentage (A4 #12). An invoice that is
+    # not finally allocated by lines is NEVER dropped: it is listed in
+    # `to_allocate` („фактури за разпределяне", A4 #8).
     from app.services.invoice_allocation import (
-        ALLOCATED, header_destinations, invoice_final_state,
+        ALLOCATED, header_destinations, invoice_final_state, received_line_allocations,
+        under_r45,
     )
-    with_line_docs = set()          # invoices with a line-level PROJECT allocation
-    seen_line_docs = set()          # invoices with invoice_lines documents
-    embedded_projects = set()       # invoices with an embedded line project allocation
-    if invoices:
-        async for line in tenant.invoice_lines.find(
-                {"org_id": org_id, "invoice_id": {"$in": list(invoices)}},
-                {"_id": 0, "invoice_id": 1, "qty": 1, "unit_price": 1, "vat_percent": 1,
-                 "vat_amount": 1, "line_total_ex_vat": 1, "line_total_inc_vat": 1,
-                 "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1}):
-            inv = invoices.get(line.get("invoice_id"))
-            if inv is None:
-                continue
-            if any(a["type"] == "project" and a["ref_id"] for a in effective_allocations(line)):
-                with_line_docs.add(inv["id"])
-            seen_line_docs.add(inv["id"])
-            amount = _line_amount(line)
-            qty = line.get("qty")
-            qty = float(qty) if qty not in (None, "") else None
-            for a in effective_allocations(line):
-                if a["type"] != "project" or not a["ref_id"]:
-                    continue
-                if a["qty"] is not None and qty and qty > 0:
-                    share = min(a["qty"], qty) / qty
-                else:
-                    share = 1.0
-                _add(a["ref_id"], inv, amount * share)
-    # FG-200: an invoice of the finance UI keeps its lines EMBEDDED — the same
-    # per-line rule on them (a line's `allocations[]`, or its `project_id`).
-    from app.services.invoice_allocation import embedded_as_line
+    parts = await received_line_allocations(tenant, org_id, list(invoices.values()))
+    for iid, plist in parts.items():
+        for p in plist:
+            if p["type"] == "project":
+                _add(p["ref_id"], invoices[iid], p["inc"])
+    # FG-215 / F-81-02: an INCOME (Issued) invoice keeps main's behaviour
+    # exactly — its header allocation is counted (every header project gets the
+    # total) and its lines' allocations are not read at all: R45 / the
+    # per-line share applies to supplier invoices only.
     for inv in invoices.values():
-        if inv["id"] in seen_line_docs:
-            continue
-        vat = float(inv.get("vat_percent") or 0)
-        for el in inv.get("lines") or []:
-            if not isinstance(el, dict):
-                continue
-            line = embedded_as_line(el)
-            ex = float(el.get("line_total") if el.get("line_total") is not None
-                       else float(el.get("qty") or 0) * float(el.get("unit_price") or 0))
-            amount = ex * (1 + vat / 100)
-            qty = _f_or_none(line.get("qty"))
-            for a in effective_allocations(line):
-                if a["type"] != "project" or not a["ref_id"]:
-                    continue
-                embedded_projects.add(inv["id"])
-                share = (min(a["qty"], qty) / qty) if (a["qty"] is not None and qty) else 1.0
-                _add(a["ref_id"], inv, amount * share)
-    from app.services.invoice_allocation import under_r45
-    # FG-215: an INCOME (Issued) invoice keeps main's behaviour — with no line
-    # carrying a project allocation, its header allocation is counted (every
-    # header project gets the total, as the pipeline of main did).
-    line_projects = set()
-    for inv in invoices.values():
-        if inv["id"] in with_line_docs or inv["id"] in embedded_projects:
-            line_projects.add(inv["id"])
-    for inv in invoices.values():
-        if under_r45(inv) or inv["id"] in line_projects:
+        if under_r45(inv):
             continue
         for a in inv.get("allocations") or []:
             if isinstance(a, dict) and a.get("type") == "project" and a.get("ref_id"):

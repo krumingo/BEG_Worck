@@ -495,3 +495,102 @@ async def audit_allocation_change(tenant, user: dict, line_id: str, before: list
         reason=reason,
         effective_role_assignments=[user.get("role") or ""], source_channel="api")
     await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access
+
+
+# ─────────── F-81-01 — the per-line projection of supplier invoices ───────────
+# Р45 / FG-155 #2: a supplier (Received) invoice reaches an official result
+# (company summary / series / weekly report / project P&L) ONLY through its
+# lines' final allocation: allocated qty / line qty × the line amount. The
+# unallocated remainder is in no result — it stays visible in „фактури за
+# разпределяне" (A4 #8). No header fallback (a header destination is final only
+# once it is written on the lines, A4 #9). The original invoice is unchanged.
+# Issued (income) invoices are NOT read through this (FG-215 — main's rules).
+RECEIVED_LINE_FIELDS = {"id": 1, "direction": 1, "lines": 1, "vat_percent": 1}
+
+
+def _line_doc_amounts(line: dict) -> tuple:
+    """(ex VAT, incl. VAT) of an ``invoice_lines`` document."""
+    ex = line.get("line_total_ex_vat")
+    if ex is None:
+        ex = float(line.get("qty") or 0) * float(line.get("unit_price") or 0)
+    ex = float(ex or 0)
+    if line.get("line_total_inc_vat") is not None:
+        return ex, float(line.get("line_total_inc_vat") or 0)
+    vat = line.get("vat_amount")
+    if vat is None:
+        vat = ex * float(line.get("vat_percent") or 0) / 100
+    return ex, ex + float(vat or 0)
+
+
+def _shares(line: dict):
+    from app.services.canonical_material_cost import effective_allocations
+    qty = _f(line.get("qty"))
+    for a in effective_allocations(line):
+        if not a.get("type") or not a.get("ref_id"):
+            continue
+        if a["qty"] is not None and qty and qty > 0:
+            share = min(a["qty"], qty) / qty
+        else:
+            share = 1.0                       # a whole-line allocation (no qty)
+        yield a["type"], a["ref_id"], share
+
+
+async def received_line_allocations(tenant, org_id: str, invoices: List[dict]) -> Dict[str, List[dict]]:
+    """{invoice_id: [{type, ref_id, ex, inc}]} — the allocated part of every
+    supplier invoice in ``invoices`` (docs with ``RECEIVED_LINE_FIELDS``), by
+    line. ``invoice_lines`` documents win; an invoice without them is read from
+    its embedded lines (FG-200: a line's ``allocations[]`` or its
+    ``project_id``). Non-Received invoices are skipped."""
+    by_id = {i["id"]: i for i in invoices if i.get("id") and under_r45(i)}
+    out: Dict[str, List[dict]] = {iid: [] for iid in by_id}
+    if not by_id:
+        return out
+    with_docs = set()
+    async for line in tenant.invoice_lines.find(
+            {"org_id": org_id, "invoice_id": {"$in": list(by_id)}},
+            {"_id": 0, "invoice_id": 1, "qty": 1, "unit_price": 1, "vat_percent": 1,
+             "vat_amount": 1, "line_total_ex_vat": 1, "line_total_inc_vat": 1,
+             "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1}):
+        iid = line.get("invoice_id")
+        if iid not in by_id:
+            continue
+        with_docs.add(iid)
+        ex, inc = _line_doc_amounts(line)
+        for typ, ref, share in _shares(line):
+            out[iid].append({"type": typ, "ref_id": ref, "ex": ex * share, "inc": inc * share})
+    for iid, inv in by_id.items():
+        if iid in with_docs:
+            continue
+        vat = float(inv.get("vat_percent") or 0)
+        for el in inv.get("lines") or []:
+            if not isinstance(el, dict):
+                continue
+            ex = float(el.get("line_total") if el.get("line_total") is not None
+                       else float(el.get("qty") or 0) * float(el.get("unit_price") or 0))
+            inc = ex * (1 + vat / 100)
+            for typ, ref, share in _shares(embedded_as_line(el)):
+                out[iid].append({"type": typ, "ref_id": ref, "ex": ex * share, "inc": inc * share})
+    return out
+
+
+def allocated_amount(parts: List[dict], *, basis: str = "ex", dest_type: Optional[str] = None,
+                     ref_id: Optional[str] = None) -> float:
+    """Σ of the allocated parts of one invoice (``basis`` "ex" / "inc"),
+    optionally only those to one destination."""
+    total = 0.0
+    for p in parts:
+        if dest_type and p["type"] != dest_type:
+            continue
+        if ref_id and p["ref_id"] != ref_id:
+            continue
+        total += p[basis]
+    return total
+
+
+async def received_result(tenant, org_id: str, invoices: List[dict], *, basis: str = "ex",
+                          dest_type: Optional[str] = None,
+                          ref_id: Optional[str] = None) -> Dict[str, float]:
+    """{invoice_id: the part of it in the official result} for supplier invoices."""
+    parts = await received_line_allocations(tenant, org_id, invoices)
+    return {iid: allocated_amount(p, basis=basis, dest_type=dest_type, ref_id=ref_id)
+            for iid, p in parts.items()}

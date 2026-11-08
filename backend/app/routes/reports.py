@@ -11,6 +11,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.master_data.legacy_adapter import annotate_refs, require_tenant_identity
 from app.services.paid_labor import paid_labor_v3
+from app.services.invoice_allocation import RECEIVED_LINE_FIELDS, received_result
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
 from app.permissions.money_write import require_money_write
@@ -587,12 +588,15 @@ async def get_company_finance_summary(
     received_invoices = await tenant.invoices.find({
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
+    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1, **RECEIVED_LINE_FIELDS}).to_list(1000)
+    # F-81-01 / Р45: a supplier invoice is in the result only by its lines'
+    # final allocation (ex VAT); the unallocated part is in no week.
+    _in_result = await received_result(tenant, tenant.org_id, received_invoices)
     
     for inv in received_invoices:
         week_num = get_week_number_in_month(inv["issue_date"])
         if week_num in weekly_data:
-            _net = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            _net = _in_result.get(inv.get("id"), 0.0)
             weekly_data[week_num]["expenses_invoices"] += _net
             weekly_data[week_num]["expenses"] += _net
     
@@ -739,8 +743,10 @@ async def get_month_finance_totals(tenant: TenantData, year: int, month: int) ->
     received_invoices = await tenant.invoices.find({
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "total": 1}).to_list(1000)
-    expenses_invoices = sum(inv.get("total", 0) for inv in received_invoices)
+    }, {"_id": 0, "total": 1, **RECEIVED_LINE_FIELDS}).to_list(1000)
+    # F-81-01 / Р45: only the allocated part (this reader's basis: incl. VAT)
+    expenses_invoices = sum((await received_result(
+        tenant, tenant.org_id, received_invoices, basis="inc")).values())
     
     # 3. Cash Transactions
     cash_txns = await tenant.cash_transactions.find({
@@ -1166,12 +1172,15 @@ async def export_company_finance(
     received_invoices = await tenant.invoices.find({
         "direction": "Received",
         "issue_date": {"$gte": date_from, "$lte": date_to}
-    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1}).to_list(1000)
+    }, {"_id": 0, "issue_date": 1, "total": 1, "subtotal": 1, **RECEIVED_LINE_FIELDS}).to_list(1000)
+    # F-81-01 / Р45: a supplier invoice is in the result only by its lines'
+    # final allocation (ex VAT); the unallocated part is in no week.
+    _in_result = await received_result(tenant, tenant.org_id, received_invoices)
     
     for inv in received_invoices:
         week_num = get_week_number_in_month(inv["issue_date"])
         if week_num in weekly_data:
-            _net = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            _net = _in_result.get(inv.get("id"), 0.0)
             weekly_data[week_num]["expenses_invoices"] += _net
             weekly_data[week_num]["expenses"] += _net
     
