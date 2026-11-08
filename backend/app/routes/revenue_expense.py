@@ -426,7 +426,7 @@ async def update_execution_package(
 @router.get("/project-profit/{project_id}")
 async def get_project_profit_summary(
     project_id: str,
-    request: Request,                           # SUB-ADV-01 (FG-128): finance-only advance view
+    request: Request = None,                    # SUB-ADV-01 (FG-128); None = direct call
     _sec02: dict = Depends(require_finance_read(
         "finance.project_profit.read", module="M2", resource_type="project_profit")),  # SEC-02 (R20-2): before any read
     user: dict = Depends(require_m2)):

@@ -896,6 +896,31 @@ def test_the_advance_ledger_row_is_not_hard_deleted():
     assert "finance_payments.delete_one" not in inspect.getsource(finance)
 
 
+def test_the_finance_only_reads_still_work_as_direct_calls():
+    """Merge with main 1ea98fe: the warehouse suite calls these handlers directly
+    (``get_project_profit_summary(project_id, user=...)``). The SUB-ADV-01 Request parameter
+    must stay optional — FastAPI injects it on HTTP; a direct call in enforce hides the
+    advance (fail closed)."""
+    import asyncio
+    from app.routes import revenue_expense, subcontractors as s
+    for fn in (revenue_expense.get_project_profit_summary, s.list_packages, s.get_package,
+               s.list_subcontractor_acts, s.list_subcontractor_payments):
+        p = inspect.signature(getattr(fn, "__wrapped__", fn)).parameters["request"]
+        assert p.default is None, fn.__name__
+    before = os.environ.get("PERMISSION_SERVICE_MODE")
+    try:
+        os.environ["PERMISSION_SERVICE_MODE"] = "enforce"
+        assert asyncio.run(s.advance_visible(None, {"role": "Owner"})) is False
+        os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        assert asyncio.run(s.advance_visible(None, {"role": "Accountant"})) is True
+        assert asyncio.run(s.advance_visible(None, {"role": "Technician"})) is False
+    finally:
+        if before is None:
+            os.environ.pop("PERMISSION_SERVICE_MODE", None)
+        else:
+            os.environ["PERMISSION_SERVICE_MODE"] = before
+
+
 def test_reason_rule():
     from fastapi import HTTPException
     from app.routes.subcontractors import _reason

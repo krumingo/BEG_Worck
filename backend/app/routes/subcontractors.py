@@ -52,6 +52,8 @@ async def advance_visible(request: Request, user: dict) -> bool:
     from app.permissions.money_write import FINANCE_WRITE_ROLES
     if current_mode() != MODE_ENFORCE:
         return user.get("role") in FINANCE_WRITE_ROLES
+    if request is None:     # a direct (non-HTTP) call in enforce: fail closed, as SEC71-M1
+        return False
     from app.tenancy.guard import get_tenant_context
     from app.permissions.service import evaluate_permission
     ctx = await get_tenant_context(request, user)
@@ -173,7 +175,7 @@ async def create_package(data: PackageCreate, user: dict = Depends(require_m2)):
 
 @router.get("/subcontractor-packages")
 @strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
-async def list_packages(request: Request, project_id: Optional[str] = None, subcontractor_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_packages(request: Request = None, project_id: Optional[str] = None, subcontractor_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if project_id: q["project_id"] = project_id
@@ -188,7 +190,7 @@ async def list_packages(request: Request, project_id: Optional[str] = None, subc
 
 @router.get("/subcontractor-packages/{pkg_id}")
 @strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
-async def get_package(pkg_id: str, request: Request, user: dict = Depends(require_m2)):
+async def get_package(pkg_id: str, request: Request = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": user["org_id"]}, {"_id": 0})
     if not pkg:
@@ -477,7 +479,7 @@ async def create_subcontractor_act(data: dict, user: dict = Depends(require_m2))
 
 @router.get("/subcontractor-acts")
 async def list_subcontractor_acts(
-    request: Request,                           # SUB-ADV-01 (FG-128)
+    request: Request = None,                    # SUB-ADV-01 (FG-128); None = direct call
     _sec02: dict = Depends(require_finance_read(
         "finance.subcontractor_act.read", module="M2", resource_type="subcontractor_act")),  # SEC-02 (R20-1): before any read
     project_id: Optional[str] = None, package_id: Optional[str] = None, user: dict = Depends(require_m2)):
@@ -954,7 +956,7 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
 
 @router.get("/subcontractor-payments")
 async def list_subcontractor_payments(
-    request: Request,                           # SUB-ADV-01 (FG-128)
+    request: Request = None,                    # SUB-ADV-01 (FG-128); None = direct call
     _sec02: dict = Depends(require_finance_read(
         "finance.subcontractor_payment.read", module="M2", resource_type="subcontractor_payment")),  # SEC-02 (R20-1): before any read
     project_id: Optional[str] = None, package_id: Optional[str] = None, user: dict = Depends(require_m2)):
