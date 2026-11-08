@@ -84,5 +84,28 @@ with TestClient(app, raise_server_exceptions=False) as tc:
         if a.status_code != 409 or float(p.get("paid_total") or 0) > 100.005:
             F.append("%s F3 %s %s paid %s" % (mode, a.status_code, b.status_code, p.get("paid_total")))
         restore()
+        if os.environ.get("PROBE_G") == "1":
+            # G (#69 25ffd9b, addendum G): crash right AFTER the payment's audit insert, then 2
+            # same-key retries -> exactly 1 audit_logs row "subcontractor_payment_created"
+            restore()
+            real_la = sc.log_audit; st = {"armed": True}
+            async def la(*a, **k):
+                r = await real_la(*a, **k)
+                if st["armed"] and a[3] == "subcontractor_payment_created":
+                    st["armed"] = False
+                    raise RuntimeError("synthetic crash after the audit insert")
+                return r
+            sc.log_audit = la
+            k = "G-" + uuid.uuid4().hex[:6]
+            l0 = q(lambda: op.audit_logs.count_documents({"action": "subcontractor_payment_created"}))
+            g1 = tc.post("/api/subcontractor-payments", json=pay(60), headers=H(k))
+            sc.log_audit = real_la
+            g2 = tc.post("/api/subcontractor-payments", json=pay(60), headers=H(k))
+            g3 = tc.post("/api/subcontractor-payments", json=pay(60), headers=H(k))
+            dl = q(lambda: op.audit_logs.count_documents({"action": "subcontractor_payment_created"})) - l0
+            print(mode, "G payment crash after audit:", g1.status_code, g2.status_code, g3.status_code, "audit rows +%d" % dl, "ledger", ledger())
+            if dl != 1 or g3.status_code >= 500:
+                F.append("%s G audit +%d" % (mode, dl))
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")
