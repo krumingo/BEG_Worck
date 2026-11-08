@@ -13,7 +13,8 @@ Run from `backend/`: `PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider �
 |---|---|
 | `01_red_on_main_cd03324.txt` | `tests/test_wh_fix_01_post_55.py` run on a clean worktree of main `cd03324` |
 | `02_green_after_fix.txt` | the same file on the fix |
-| `03_gates.txt` | warehouse suite, R0, W0, A2C/A1 guards, PM-01 — main vs fix |
+| `03_gates.txt` | warehouse suite, R0, W0, PAY-01, A2C/A1 guards, PM-01 — main vs fix |
+| `04_a2_a3_red_on_main.txt` | `tests/test_wh_fix_01_a3_r44_allocation.py` on main `cd03324` (48 failed / 6 passed — the 6 are the "Issued invoices unaffected" control) |
 
 ## Red → green per item
 
@@ -67,6 +68,44 @@ main with a behavioural assertion (no setup errors):
    has no env flag; the route constructs the service with `strict_master_identity=True`.
    New fixture `strict_mongo_db` keeps the production default.
 
+## Addenda A2 + A3 (08.11) — FG-155 per canon (oracle Q001) and Р44
+
+`backend/app/services/invoice_allocation.py`, tests `tests/test_wh_fix_01_a3_r44_allocation.py`
+(off / shadow / enforce × mongomock + real Mongo, 54 tests, 0 skipped):
+
+* A line's allocation state is derived from `allocations[]` (source, no second truth): final
+  `allocated` only at 100 %, otherwise the interim `pending_allocation` („чака разпределение").
+  The final state always needs 100 % — `require_full_allocation` is effectively True for the final
+  status and cannot be switched off; the tenant setting of the same name still only decides
+  whether an interim partial allocation may be SAVED (unchanged).
+* The remainder is in no project result (Path B and the FG-154 split count allocated qty only;
+  test: line 100, 60 → P&L(P) = 600 = 60 × 10). Nothing is defaulted.
+* **Р44**: quick-pay and payment-allocate to a supplier (Received) invoice with any line < 100 % →
+  409 `INVOICE_NOT_FULLY_ALLOCATED`, nothing written (full and partial amounts tested). These are
+  the only two writers of `payment_allocations` in the code base.
+* `GET /api/invoice-lines/invoices-to-allocate` (Owner / Admin / Accountant; others 403) —
+  „фактури за разпределяне" with drill-down to the lines; syncs ONE deduplicated DQ issue
+  (`dq_issues`, „фактура без обект или разпределение", owner Accountant, deadline
+  `allocation_dq_deadline_days` per tenant, default 3, then escalated to Owner, severity high) and
+  ONE alarm (`alarm_events`, warning → critical on escalation). Full allocation RESOLVES both
+  (never deleted).
+* An allocation change (`POST /invoice-lines/{id}/allocate`, `PUT /invoice-lines/{id}` with
+  allocations) writes a canonical AuditEvent `finance.invoice_line.allocation_corrected` in the
+  same transaction.
+
+Debt / still open (A2/A3 "ЧАКА решение на Крум" — not programmed):
+* Approval for an allocation to overhead; where the pending item is shown (project vs company);
+  a value tolerance for amount-only lines.
+* The DQ issue / alarm are refreshed when the pending list is read (and resolve on the next read
+  after allocation); a scheduler / canonical DQ runtime (Wave 0) should own them later.
+* Company-level reports that sum whole Received invoice totals (e.g. `dashboard.py` income/expense
+  views, `reports.py`, `revenue_expense.py` subcontract fallback by header `project_id`) were not
+  re-cut to allocated shares — FG-155 #2 "not in the company result" needs a separate pass over
+  those reports (listed, not changed here).
+* An invoice with NO lines (header only) has no line to allocate; Р44 is literal ("a line not 100 %
+  allocated") so it is not blocked — open for Крум.
+* Sending (finalizing) a Received invoice with pending lines is not blocked (only payment, Р44).
+
 ## Not in scope (package)
 
-FG-153, FG-155, FG-162 — untouched.
+FG-153, FG-162 — untouched. FG-155 — done per Addenda A2/A3 above.
