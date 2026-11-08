@@ -85,6 +85,8 @@ class InvoiceLineUpdate(BaseModel):
     cost_category: Optional[str] = None
     scan_line_ref: Optional[ScanLineRefInput] = None
     notes: Optional[str] = None
+    # WH-REV-01 / FG-195: the reason of a correction (see InvoiceLineAllocationsUpdate).
+    reason: Optional[str] = None
 
 
 class InvoiceLineBulkCreate(BaseModel):
@@ -95,6 +97,9 @@ class InvoiceLineBulkCreate(BaseModel):
 class InvoiceLineAllocationsUpdate(BaseModel):
     """Update allocations for a line - replaces all existing allocations"""
     allocations: List[AllocationItem]
+    # WH-REV-01 / FG-195: required when the line's linked receipts were
+    # reversed — the change is then a correction (version + AuditEvent).
+    reason: Optional[str] = None
 
 
 # DEPRECATED: Keep for backward compatibility

@@ -174,3 +174,10 @@ class ReceiptReversalConflictError(WarehouseMovementError):
 class ReasonRequiredError(InvariantViolationError):
     """WH-REV-01: a receipt reversal needs a non-blank reason — 422."""
     error_code = "REASON_REQUIRED"
+
+
+class InvoiceBusyError(WarehouseMovementError):
+    """WH-REV-01 / Р47: the supplier invoice is held by a payment (PAY-01 row
+    lock) — the reversal that would make it await a credit note is refused,
+    nothing written; retry. 409."""
+    error_code = "INVOICE_BUSY"

@@ -134,11 +134,11 @@ PERMISSION_ACTION = {
     CanonicalAction.REVISION_ADJUSTMENT: "warehouse.revision_adjustment",
     CanonicalAction.QUARANTINE_ENTRY: "warehouse.quarantine_entry",
     CanonicalAction.QUARANTINE_RELEASE: "warehouse.quarantine_release",
-    # WH-REV-01 — the SAME right as the receipt being reversed (R16 / R28):
-    # who may book that receipt may reverse it, nobody else.
-    CanonicalAction.REVERSE_SUPPLIER_RECEIPT: "warehouse.receive_from_supplier",
+    # WH-REV-01 — Р46 (Крум 08.11.2026, FG-194): Warehousekeeper, Accountant,
+    # Owner, Admin reverse a supplier receipt (both kinds); nobody else.
+    CanonicalAction.REVERSE_SUPPLIER_RECEIPT: "warehouse.reverse_supplier_receipt",
     CanonicalAction.REVERSE_SUPPLIER_RECEIPT_TO_PROJECT:
-        "warehouse.receive_from_supplier_to_project",
+        "warehouse.reverse_supplier_receipt_to_project",
 }
 
 # Actions whose dispositions require evidence (file_id). Fail CLOSED when

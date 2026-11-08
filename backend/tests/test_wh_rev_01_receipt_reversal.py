@@ -78,10 +78,12 @@ async def _each_rebuild(db, check):
         await check(i)
 
 
-def _allocate_to(routes, project):
+def _allocate_to(routes, project, reason="корекция след сторно"):
+    # FG-195: after a reversal the reallocation is a correction — with a reason.
     from app.models.invoice_lines import InvoiceLineAllocationsUpdate
     return routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
-        allocations=[{"type": "project", "ref_id": project, "qty": 10}]), user=OWNER)
+        allocations=[{"type": "project", "ref_id": project, "qty": 10}],
+        reason=reason), user=OWNER)
 
 
 # ═══════════════════════ the gap (fails on main) ═══════════════════════
@@ -292,10 +294,11 @@ async def test_reversal_racing_an_issue(canonical_mongo_db, allow_always_gate, m
 # ═══════════════════════ rights (R16 / R28), 3 modes ═══════════════════════
 
 ROLE_CASES = {          # legacy role, catalog role, may reverse (warehouse, direct)
+    # Р46 (Крум 08.11.2026, FG-194): Warehousekeeper, Accountant, Owner, Admin.
     "Owner": ("Owner", "owner", True, True),
     "Admin": ("Admin", "admin", True, True),
-    "Warehousekeeper": ("Warehousekeeper", "warehouse", True, False),
-    "Accountant": ("Accountant", "accountant", False, False),
+    "Warehousekeeper": ("Warehousekeeper", "warehouse", True, True),
+    "Accountant": ("Accountant", "accountant", True, True),
     "SiteManager": ("SiteManager", "site_manager", False, False),
     "Technician": ("Technician", "LEGACY_TECHNICIAN", False, False),
     "Viewer": ("Viewer", "LEGACY_VIEWER", False, False),
@@ -359,3 +362,198 @@ async def test_a_blank_reason_is_422_and_writes_nothing(canonical_mongo_db, allo
     assert await db["audit_events"].count_documents({}) == audits
     out = await _reverse(wc, mode, receipt, reason="  грешно засичане  ")
     assert out.envelope["reason"] == "грешно засичане"            # stored trimmed
+
+
+# ═══════════════════ FG-195 — reallocation after a reversal is a correction ═══════════════════
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_fg195_reallocation_after_a_reversal_on_a_paid_invoice_is_a_correction(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """e9633aa: Paid invoice, linked receipt reversed, /allocate P → Q moved
+    the cost silently (no reason, no version, no AuditEvent). Now: no reason
+    → 409 ALLOCATION_CORRECTION_REQUIRED (#81's code), nothing written; with a reason → the change, a
+    version snapshot of the line before it and a canonical AuditEvent, in
+    one transaction. Costs follow (live + rebuild ×2)."""
+    from app.models.invoice_lines import InvoiceLineAllocationsUpdate, InvoiceLineUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate,
+                                          monkeypatch, mode, allocations=ONLY_P)
+    routes, wc = _routes(monkeypatch, client, db), _wc(monkeypatch, client, db)
+    await db["invoices"].update_one({"id": "inv-c26"}, {"$set": {"status": "Paid"}})
+    receipt = await _book(svc, mode, db, run, PRJ)
+    await _reverse(wc, mode, receipt)
+    before = await db["invoice_lines"].find_one({"id": IL}, {"_id": 0})
+    audits = await db["audit_events"].count_documents({"action": "invoice_line.allocation_corrected"})
+    to_q = [{"type": "project", "ref_id": Q, "qty": 10}]
+    with pytest.raises(HTTPException) as exc:
+        await routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
+            allocations=to_q, reason="   "), user=OWNER)
+    assert (exc.value.status_code, exc.value.detail["error_code"]) == (409, "ALLOCATION_CORRECTION_REQUIRED")
+    assert exc.value.detail["reversed_receipts"] == [receipt]
+    with pytest.raises(HTTPException) as exc:          # PUT: a Paid invoice's lines stay
+        await routes.update_invoice_line(IL, InvoiceLineUpdate(allocations=to_q),
+                                         user=OWNER)
+    assert exc.value.status_code == 400                # the Draft-only rule (unchanged)
+    assert await db["invoice_lines"].find_one({"id": IL}, {"_id": 0}) == before
+    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 0
+    assert await db["audit_events"].count_documents(
+        {"action": "invoice_line.allocation_corrected"}) == audits
+
+    await routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
+        allocations=to_q, reason="грешен обект при засичане"), user=OWNER)
+    version = await db["invoice_versions"].find_one({"invoice_line_id": IL}, {"_id": 0})
+    assert version["kind"] == "invoice_line_correction" and version["version_no"] == 1
+    assert version["snapshot"]["allocations"] == before["allocations"]
+    assert version["reason"] == "грешен обект при засичане"
+    assert version["reversed_receipts"] == [receipt]
+    events = await db["audit_events"].find(
+        {"action": "invoice_line.allocation_corrected", "entity_id": IL}).to_list(None)
+    assert len(events) == 1
+    diff = events[0]["structured_diff"]
+    assert diff["allocations"]["before"][0]["ref_id"] == PROJECT
+    assert diff["allocations"]["after"][0]["ref_id"] == Q
+    assert diff["invoice_status"] == "Paid" and diff["reversed_receipts"] == [receipt]
+
+    async def check(i):
+        assert await _costs(run) == (pytest.approx(0.0), pytest.approx(100.0)), i
+    await _each_rebuild(db, check)
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_fg195_a_never_linked_line_keeps_the_plain_rule(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    from app.models.invoice_lines import InvoiceLineAllocationsUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate,
+                                          monkeypatch, mode, allocations=ONLY_P)
+    routes = _routes(monkeypatch, client, db)
+    await routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
+        allocations=[{"type": "project", "ref_id": Q, "qty": 10}]), user=OWNER)
+    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 0
+
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_fg195_put_of_the_allocation_after_a_reversal_needs_a_reason(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """The PUT path (Draft invoice): the same correction rule."""
+    from app.models.invoice_lines import InvoiceLineUpdate
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate,
+                                          monkeypatch, mode, allocations=ONLY_P)
+    routes, wc = _routes(monkeypatch, client, db), _wc(monkeypatch, client, db)
+    receipt = await _book(svc, mode, db, run, WH)
+    await _reverse(wc, mode, receipt)
+    to_q = [{"type": "project", "ref_id": Q, "qty": 10}]
+    with pytest.raises(HTTPException) as exc:
+        await routes.update_invoice_line(IL, InvoiceLineUpdate(allocations=to_q), user=OWNER)
+    assert (exc.value.status_code, exc.value.detail["error_code"]) == (409, "ALLOCATION_CORRECTION_REQUIRED")
+    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 0
+    out = await routes.update_invoice_line(
+        IL, InvoiceLineUpdate(allocations=to_q, reason="грешен обект"), user=OWNER)
+    assert out["allocations"][0]["ref_id"] == Q and "reason" not in out
+    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 1
+    assert await db["audit_events"].count_documents(
+        {"action": "invoice_line.allocation_corrected", "entity_id": IL}) == 1
+
+
+
+async def test_r46_procurement_no_longer_reverses(canonical_mongo_db, allow_always_gate,
+                                                  monkeypatch):
+    """Р46: procurement books receipts but does not reverse them (enforce —
+    procurement has no legacy session role)."""
+    from app.permissions import service as perm
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate,
+                                          monkeypatch, "enforce", allocations=ONLY_P)
+    wc = _wc(monkeypatch, client, db)
+    receipt = await _book(svc, "enforce", db, run, WH)
+    monkeypatch.setattr(perm, "_load_assignments", _loader(_real("procurement")))
+    before = await _rows(db)
+    with pytest.raises(HTTPException) as exc:
+        await _reverse(wc, "enforce", receipt)
+    assert exc.value.status_code == 403
+    assert await _rows(db) == before
+
+
+# ═══════════════ Р47 — after a reversal the invoice awaits a credit note ═══════════════
+
+async def _sent_invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    from tests.test_warehouse_canonical_c26l_n_invoice_status import _invoice
+    db, lines, finance = await _invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    await db["invoices"].update_one({"id": "inv-c26"}, {"$set": {"status": "Sent"}})
+    return db, finance
+
+
+def _pay(finance, amount, key):
+    return finance.add_invoice_payment("inv-c26", {"amount": amount, "method": "BankTransfer",
+                                                   "account_id": "acc-c26"},
+                                       user=OWNER, idempotency_key=key)
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_r47_reversal_makes_the_invoice_await_a_credit_note(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """L 10 @10 (+20 % VAT = 120). 4 received (linked) and reversed: the
+    invoice awaits a credit of 48; the Accountant's DQ task is listed; paying
+    72 works, 1 more → 409 INVOICE_AWAITS_CREDIT_NOTE (quick-pay AND
+    allocate), nothing written. A replay of the reversal adds no 2nd record."""
+    from app.models.finance import AllocatePaymentRequest, PaymentCreate
+    db, finance = await _sent_invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    client = db.client
+    from tests.test_warehouse_canonical_c25_cost_at_accept_transit import _Run
+    run = _Run(client, allow_always_gate, db)
+    from app.services.warehouse_movements.service import CommandService
+    svc = CommandService(client)
+    wc = _wc(monkeypatch, client, db)
+    receipt = await _book(svc, mode, db, run, WH, qty="4")
+    await _reverse(wc, mode, receipt)
+    await _reverse(wc, mode, receipt)                                    # replay
+    credits = await finance.list_expected_credit_notes(user=OWNER)
+    assert len(credits) == 1
+    c = credits[0]
+    assert (c["invoice_id"], c["amount"], c["receipt_movement_id"]) == ("inv-c26", 48.0, receipt)
+    assert c["dq_task"] == {"assignee_role": "accountant",
+                            "title": "очаква кредитно известие", "status": "open"}
+    assert (await db["invoices"].find_one({"id": "inv-c26"}))["awaiting_credit_note"] is True
+
+    await _pay(finance, 72.0, "k-pay-1")
+    allocs = await db["payment_allocations"].count_documents({})
+    with pytest.raises(HTTPException) as exc:
+        await _pay(finance, 1.0, "k-pay-2")
+    assert (exc.value.status_code, exc.value.detail["error_code"]) == (
+        409, "INVOICE_AWAITS_CREDIT_NOTE")
+    assert exc.value.detail["awaited_credit"] == 48.0
+    pay = await finance.create_payment(PaymentCreate(
+        direction="Outflow", amount=1.0, date="2026-11-08", method="BankTransfer",
+        account_id="acc-c26"), user=OWNER, idempotency_key="k-pay-3")
+    with pytest.raises(HTTPException) as exc:
+        await finance.allocate_payment(pay["id"], AllocatePaymentRequest(
+            allocations=[{"invoice_id": "inv-c26", "amount": 1.0}]),
+            user=OWNER, idempotency_key="k-alloc-1")
+    assert (exc.value.status_code, exc.value.detail["error_code"]) == (
+        409, "INVOICE_AWAITS_CREDIT_NOTE")
+    assert await db["payment_allocations"].count_documents({}) == allocs   # nothing written
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_r47_a_reversal_while_the_invoice_is_being_paid_is_409(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """The PAY-01 row lock is held: the reversal is refused (409
+    INVOICE_BUSY), nothing written; released → it goes through."""
+    from datetime import datetime, timezone
+    from app.services.invoice_state import ROW_LOCK_FIELD
+    db, finance = await _sent_invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    client = db.client
+    from tests.test_warehouse_canonical_c25_cost_at_accept_transit import _Run
+    from app.services.warehouse_movements.service import CommandService
+    run, svc, wc = _Run(client, allow_always_gate, db), CommandService(client), \
+        _wc(monkeypatch, client, db)
+    receipt = await _book(svc, mode, db, run, WH, qty="4")
+    await db["invoices"].update_one({"id": "inv-c26"}, {"$set": {ROW_LOCK_FIELD: {
+        "token": "t", "at": datetime.now(timezone.utc).isoformat()}}})
+    before = await _rows(db)
+    with pytest.raises(HTTPException) as exc:
+        await _reverse(wc, mode, receipt)
+    assert (exc.value.status_code, exc.value.detail["error_code"]) == (409, "INVOICE_BUSY")
+    assert await _rows(db) == before
+    assert await db["expected_credit_notes"].count_documents({}) == 0
+    await db["invoices"].update_one({"id": "inv-c26"}, {"$unset": {ROW_LOCK_FIELD: ""}})
+    await _reverse(wc, mode, receipt)
+    assert await db["expected_credit_notes"].count_documents({}) == 1

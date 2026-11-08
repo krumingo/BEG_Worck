@@ -167,6 +167,7 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         "RECEIPT_NOT_REVERSIBLE": 422,
         "RECEIPT_REVERSAL_CONFLICT": 409,
         "REASON_REQUIRED": 422,
+        "INVOICE_BUSY": 409,
         "INVOICE_LINE_FULLY_LINKED": 409,
         "INVOICE_LINE_UNIT_MISMATCH": 422,
         "NEGATIVE_STOCK": 422,
@@ -468,8 +469,8 @@ async def post_receipt_reversal(
     request: Request,
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_permission(
-        "warehouse.write_command", module="warehouse",
-        legacy_check=catalog_legacy_check("warehouse.write_command"))),
+        "warehouse.reverse_supplier_receipt", module="warehouse",
+        legacy_check=catalog_legacy_check("warehouse.reverse_supplier_receipt"))),
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ) -> MovementCommandResponse:
     """WH-REV-01 (FLOW-009 correction by a reverse movement, CLAUDE §2.9 /
@@ -478,9 +479,9 @@ async def post_receipt_reversal(
     receipt row stays. Everything except the reason / notes is derived from
     the stored receipt — the client names only WHICH receipt.
 
-    Rights: the SAME right as the receipt (R16 / R28 —
-    ``warehouse.receive_from_supplier`` or ``..._to_project``), decided by the
-    canonical service in every Permission Service mode; values in the answer
+    Rights: Р46 (Крум 08.11.2026) — ``warehouse.reverse_supplier_receipt``
+    (Warehousekeeper, Accountant, Owner, Admin), at the route and in the
+    canonical service, in every Permission Service mode (R28); values in the answer
     follow the value policy (Р20 / Р32). R29: no Idempotency-Key → 428,
     nothing read or written. The AuditEvent is written in the movement's
     transaction."""

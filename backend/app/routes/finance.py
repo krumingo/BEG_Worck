@@ -1285,6 +1285,9 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
     remaining = await _invoice_remaining(tenant, invoice, [allocation_id])
     if amount > remaining + 0.01:  # small tolerance for rounding
         raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
+    credit = await _awaited_credit(tenant, invoice_id)            # Р47
+    if credit and amount > remaining - credit + 0.01:
+        raise _awaits_credit_refusal(invoice_id, credit, remaining - credit)
 
     method = data.get("method") or data.get("payment_method", "BankTransfer")
     # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
@@ -1481,6 +1484,28 @@ def _invoice_lock(tenant: TenantData, invoice_id: str):
                      invoice_id, "INVOICE_BUSY",
                      "Фактурата се обработва от друга заявка — опитайте отново",
                      "Invoice %s not found" % invoice_id)
+
+
+INVOICE_AWAITS_CREDIT_NOTE = "INVOICE_AWAITS_CREDIT_NOTE"
+
+
+async def _awaited_credit(tenant: TenantData, invoice_id: str) -> float:
+    """WH-REV-01 — Р47 (Крум 08.11.2026, FG-196): the credit a supplier invoice
+    still awaits after receipt reversals (open ``expected_credit_notes``).
+    Read under the invoice lock, like the remaining amount."""
+    rows = await tenant.expected_credit_notes.find(
+        {"invoice_id": invoice_id, "status": "open"}, {"_id": 0, "amount": 1}).to_list(1000)
+    return round(sum(float(r.get("amount") or 0) for r in rows), 2)
+
+
+def _awaits_credit_refusal(invoice_id: str, credit: float, payable: float) -> HTTPException:
+    """Р47: paying above the net received value (invoice − reversed) → 409."""
+    return HTTPException(status_code=409, detail={
+        "error_code": INVOICE_AWAITS_CREDIT_NOTE,
+        "message": "Фактурата очаква кредитно известие за сторнирана доставка — "
+                   "плащане над нетно полученото не се записва",
+        "invoice_id": invoice_id, "awaited_credit": credit,
+        "payable_until_credit_note": round(max(payable, 0), 2)})
 
 
 async def _invoice_remaining(tenant: TenantData, invoice: dict, exclude_ids=()) -> float:
@@ -1858,6 +1883,11 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                 remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
                 if amount > remaining + 1e-9:
                     raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
+                if "_credit" not in invoice:                                  # Р47
+                    invoice["_credit"] = await _awaited_credit(tenant, alloc.invoice_id)
+                if invoice["_credit"] and amount > remaining - invoice["_credit"] + 1e-9:
+                    raise _awaits_credit_refusal(alloc.invoice_id, invoice["_credit"],
+                                                 remaining - invoice["_credit"])
                 planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount
                 available -= amount
 
@@ -2392,3 +2422,20 @@ async def upcoming_payments(days: int = 5, user: dict = Depends(require_m5)):
         }
 
     return {"receivables": [enrich(r) for r in receivables], "payables": [enrich(p) for p in payables]}
+
+
+
+# ── WH-REV-01 / Р47: the credit notes supplier invoices await ─────────────────
+
+@router.get("/finance/expected-credit-notes")
+async def list_expected_credit_notes(user: dict = Depends(require_m5),
+                                     status: Optional[str] = "open"):
+    """The Accountant's DQ tasks „очаква кредитно известие“: one per reversed
+    linked supplier receipt (WH-REV-01). Read-only; the full credit-note
+    model is debt (t26)."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    tenant = _tenant(user)
+    flt = {"status": status} if status else {}
+    return await tenant.expected_credit_notes.find(flt, {"_id": 0}).sort(
+        "created_at", -1).to_list(500)

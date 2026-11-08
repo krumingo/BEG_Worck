@@ -1261,6 +1261,12 @@ class CommandService:
             ledger_row["transit_origin"] = transit_origin
         await tenant_collection.insert_one(ledger_row, session=session)
 
+        # WH-REV-01 — Р47: a reversed LINKED receipt makes its supplier invoice
+        # await a credit note (same transaction).
+        if action in REVERSAL_ACTIONS and reversed_invoice_line_id:
+            await self._expect_credit_note(tenant_collection, session=session, env=env,
+                                           invoice_line_id=reversed_invoice_line_id)
+
         # If this is a dispatch, open a mirrored IN_TRANSIT inbound row
         # that carries the SAME layer_allocations — so a later acceptance
         # can source traced layers (C04 conservation).
@@ -1936,6 +1942,68 @@ class CommandService:
             source_movement_id=receipt_id, layer_sequence=1, quantity=qty,
             unit_value=layer.unit_value, currency=layer.currency)]
         return allocations, (qty * layer.unit_value).quantize(Decimal("0.0001")), line_id
+
+    @staticmethod
+    async def _expect_credit_note(tenant_collection, *, session, env,
+                                  invoice_line_id: str) -> None:
+        """WH-REV-01 — Р47 (Крум 08.11.2026, FG-196): after a reversal the
+        supplier invoice AWAITS A CREDIT NOTE. No credit-note model exists, so
+        a minimal record (``expected_credit_notes``, deterministic id per
+        reversal — a replay never adds a second) carries the expected credit
+        (the reversed share of the line, VAT included) and the Accountant's DQ
+        task „очаква кредитно известие“; the full credit note is debt (t26).
+        Payments above the net received value are refused by FLOW-006
+        (``finance._awaited_credit``).
+
+        The invoice document is written too (``awaiting_credit_note``), as a
+        CAS that respects the PAY-01 row lock: while a payment holds the
+        invoice the reversal is refused (409 INVOICE_BUSY, nothing written),
+        and a payment that starts later sees the expected credit."""
+        from datetime import datetime as _dt, timedelta as _td, timezone as _tz
+        from app.services.invoice_state import PAYMENT_LOCK_STALE_SECONDS, ROW_LOCK_FIELD
+        from app.services.warehouse_movements.errors import InvoiceBusyError
+        tenant = tenant_collection.tenant
+        line = await tenant.invoice_lines.find_one({"id": invoice_line_id}, {"_id": 0},
+                                                   session=session)
+        if not line or not line.get("invoice_id"):
+            return
+        invoice_id = line["invoice_id"]
+        invoice = await tenant.invoices.find_one({"id": invoice_id}, {"_id": 0, "id": 1},
+                                                 session=session)
+        if not invoice:
+            return
+        stale = (_dt.now(_tz.utc) - _td(seconds=PAYMENT_LOCK_STALE_SECONDS)).isoformat()
+        res = await tenant.invoices.update_one(
+            {"id": invoice_id, "$or": [{ROW_LOCK_FIELD: {"$exists": False}},
+                                       {ROW_LOCK_FIELD + ".at": {"$lt": stale}}]},
+            {"$inc": {"edit_seq": 1}, "$set": {"awaiting_credit_note": True}},
+            session=session)
+        if res.matched_count == 0:
+            raise InvoiceBusyError(
+                "the supplier invoice is being paid — retry the reversal",
+                context={"invoice_id": invoice_id})
+        qty = Decimal(str(env.quantity))
+        line_qty = Decimal(str(line.get("qty") or "0"))
+        gross = line.get("line_total_inc_vat")
+        if gross is None:
+            gross = (Decimal(str(line.get("line_total_ex_vat") or "0"))
+                     + Decimal(str(line.get("vat_amount") or "0")))
+        gross = Decimal(str(gross))
+        share = (qty / line_qty) if line_qty > 0 else Decimal("1")
+        amount = (gross * min(share, Decimal("1"))).quantize(Decimal("0.01"))
+        await tenant.expected_credit_notes.update_one(
+            {"id": f"ecn_{env.movement_id}"},
+            {"$setOnInsert": {
+                "invoice_id": invoice_id, "invoice_line_id": invoice_line_id,
+                "reversal_movement_id": env.movement_id,
+                "receipt_movement_id": env.reverses_movement_id,
+                "quantity": str(qty), "unit": env.unit, "amount": float(amount),
+                "currency": env.currency, "status": "open", "reason": env.reason,
+                "created_at": env.recorded_at, "created_by": env.actor_id,
+                "dq_task": {"assignee_role": "accountant",
+                            "title": "очаква кредитно известие", "status": "open"},
+            }},
+            upsert=True, session=session)
 
     @staticmethod
     async def _lock_invoice_line(tenant_collection, *, session, invoice_line_id: str) -> None:

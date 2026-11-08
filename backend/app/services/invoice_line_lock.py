@@ -81,6 +81,19 @@ async def first_linked_movement(tenant, line_id: str, *, session=None) -> Option
     return (rows[0].get("movement_id") or "linked") if rows else None
 
 
+async def reversed_receipts(tenant, line_id: str, *, session=None) -> list:
+    """WH-REV-01 / FG-195 — the line's linked supplier receipts that were
+    REVERSED. Non-empty means the line was linked (its allocation had been
+    locked, FG-109) and the lock was released by a reversal: changing the
+    allocation now is a CORRECTION of an official record (CLAUDE §7) — it
+    needs a reason, a version and an AuditEvent, never a silent move."""
+    from app.services.warehouse_movements.reversal import reversed_ids
+    ids = [row["movement_id"] async for row in tenant.warehouse_transactions.find(
+        {"action": {"$in": list(LINKED_RECEIPT_ACTIONS)}, "invoice_line_id": line_id},
+        {"_id": 0, "movement_id": 1}, session=session)]
+    return sorted(await reversed_ids(tenant.warehouse_transactions, ids, session=session))
+
+
 def _transactions_unsupported(exc: Exception) -> bool:
     if isinstance(exc, NotImplementedError):     # an in-memory test double
         return True

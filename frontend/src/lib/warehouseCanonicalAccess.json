@@ -27,6 +27,8 @@
       "warehouse.release_reservation",
       "warehouse.reserve",
       "warehouse.return_to_supplier",
+      "warehouse.reverse_supplier_receipt",
+      "warehouse.reverse_supplier_receipt_to_project",
       "warehouse.revision_adjustment",
       "warehouse.transfer_project_to_project",
       "warehouse.transfer_project_to_warehouse",
@@ -50,6 +52,8 @@
       "warehouse.release_reservation",
       "warehouse.reserve",
       "warehouse.return_to_supplier",
+      "warehouse.reverse_supplier_receipt",
+      "warehouse.reverse_supplier_receipt_to_project",
       "warehouse.revision_adjustment",
       "warehouse.transfer_project_to_project",
       "warehouse.transfer_project_to_warehouse",
@@ -88,7 +92,9 @@
       "warehouse.read_central_stock",
       "warehouse.read_history",
       "warehouse.read_price_history",
-      "warehouse.read_stock"
+      "warehouse.read_stock",
+      "warehouse.reverse_supplier_receipt",
+      "warehouse.reverse_supplier_receipt_to_project"
     ],
     "warehouse": [
       "warehouse.accept_delivery",
@@ -101,6 +107,8 @@
       "warehouse.receive_from_supplier",
       "warehouse.release_reservation",
       "warehouse.reserve",
+      "warehouse.reverse_supplier_receipt",
+      "warehouse.reverse_supplier_receipt_to_project",
       "warehouse.transfer_project_to_warehouse",
       "warehouse.transfer_warehouse_to_warehouse",
       "warehouse.write_command"
@@ -127,8 +135,8 @@
     "transfer_warehouse_to_warehouse": "warehouse.transfer_warehouse_to_warehouse",
     "consume_to_smr": "warehouse.consume_smr",
     "return_to_supplier": "warehouse.return_to_supplier",
-    "reverse_supplier_receipt": "warehouse.receive_from_supplier",
-    "reverse_supplier_receipt_to_project": "warehouse.receive_from_supplier_to_project",
+    "reverse_supplier_receipt": "warehouse.reverse_supplier_receipt",
+    "reverse_supplier_receipt_to_project": "warehouse.reverse_supplier_receipt_to_project",
     "write_off": "warehouse.write_off",
     "revision_adjustment": "warehouse.revision_adjustment",
     "quarantine_entry": "warehouse.quarantine_entry",
