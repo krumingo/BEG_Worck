@@ -240,6 +240,11 @@ def make_app(monkeypatch, db, user):
 def set_mode(monkeypatch, db, mode):
     monkeypatch.setenv(ENV_MODE, mode)
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+    # CP-01 (Addendum A / D1): without ENV the IBAN guard is enforce (production). This is a
+    # tenant-isolation matrix whose fixture has no verified bank accounts; the IBAN rule
+    # itself is proved in test_cp_01_counterparty_iban_egn.py, so here the guard is off.
+    monkeypatch.setenv("ENV", "test")
+    monkeypatch.setenv("BANK_ACCOUNT_GUARD_MODE", "off")
     if mode == "enforce":
         ctx = RouteCtx(db)
 

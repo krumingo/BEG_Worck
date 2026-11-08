@@ -77,10 +77,20 @@ def next_version(doc: Dict[str, Any]) -> int:
     return int(doc.get("version") or 0) + 1
 
 
+#: Addendum A / D2 (R50, FLOW-032 L99/L109): every other role PROPOSES through the existing
+#: Master Data pending queue („За мапване“) — no new model; the office maps it.
+PROPOSE_PATH = {"method": "POST", "path": "/api/master-data/pending",
+                "action": "master_data.pending.propose"}
+
+
 def require_writer(user) -> None:
     if not cr.can_write_master(user):
-        raise forbidden("Контрагенти/клиенти/фирми/лица се създават и редактират само от "
-                        "Счетоводител, Админ или Собственик (Р48)")
+        raise HTTPException(status_code=403, detail={
+            "error_code": "FORBIDDEN",
+            "message": "Контрагенти/клиенти/фирми/лица се създават и редактират само от "
+                       "Счетоводител, Админ или Собственик (Р48). Предложете нов запис "
+                       "„За мапване“.",
+            "propose": PROPOSE_PATH})
 
 
 def _tenant(db, user) -> TenantData:
@@ -214,6 +224,9 @@ async def lifecycle(db, user, idem: Optional[str], *, collection: str, record_id
         res = await coll.update_one(cas_filter(doc), {"$set": changes}, **kw(session))
         if res.matched_count != 1:
             raise conflict("VERSION_CONFLICT", "Записът е променен междувременно — презаредете")
+        if action == "reactivate" and current == cr.LIFECYCLE_ARCHIVED and \
+                collection in ("counterparties", "subcontractors"):
+            await _reverify_bank_accounts(db, tenant, session, user, collection, record_id, key)
         past = {"deactivate": "deactivated", "reactivate": "reactivated", "archive": "archived"}[action]
         await audit(db, session, user, "%s.%s" % (entity_type, past), entity_type=entity_type,
                     entity_id=record_id, key=key, reason=reason, entity_version=str(version),
@@ -223,6 +236,32 @@ async def lifecycle(db, user, idem: Optional[str], *, collection: str, record_id
 
     return await once_in_tx(db, user, key, "%s.%s" % (entity_type, action),
                             {"id": record_id, "reason": reason}, tx)
+
+
+async def _reverify_bank_accounts(db, tenant, session, user, collection, record_id, key):
+    """R50.3: a counterparty back from the archive does not get its old IBAN back as valid —
+    every verified account of it returns to „за проверка“ (a fresh 2-source verification by
+    an Owner/Accountant who did not enter it), in the same transaction, each with an event."""
+    party_type = "counterparty" if collection == "counterparties" else "subcontractor"
+    accounts = await tenant.verified_bank_accounts.find(
+        {"party_type": party_type, "counterparty_id": record_id, "status": cr.BA_VERIFIED},
+        {"_id": 0}, **kw(session)).to_list(50)
+    now = _now()
+    for acc in accounts:
+        res = await tenant.verified_bank_accounts.update_one(
+            {"id": acc["id"], "version": acc.get("version")},
+            {"$set": {"status": cr.BA_PENDING, "verification": None, "approvals": [],
+                      "is_change": False, "reverification_reason": "unarchived",
+                      "previous_verification": acc.get("verification"),
+                      "version": int(acc.get("version") or 0) + 1, "updated_at": now}},
+            **kw(session))
+        if res.matched_count != 1:
+            raise conflict("VERSION_CONFLICT", "Банкова сметка е променена междувременно")
+        await audit(db, session, user, "bank_account.reverification_required",
+                    entity_type="bank_account", entity_id=acc["id"], key=key,
+                    reason="контрагентът е върнат от архив (Р50.3)",
+                    diff={"status": {"before": cr.BA_VERIFIED, "after": cr.BA_PENDING},
+                          "iban_masked": cr.mask_iban(acc.get("iban"))})
 
 
 def hide_archived(query: Dict[str, Any], include_archived: bool = False) -> Dict[str, Any]:

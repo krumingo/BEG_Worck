@@ -173,6 +173,7 @@ def _app(monkeypatch, op, sysdb, mode):
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
     monkeypatch.setenv("BANK_ACCOUNT_GUARD_MODE", mode)
+    monkeypatch.setenv("ENV", "test")        # D1: only a non-production ENV may relax the guard
     for module in mods:
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
@@ -261,8 +262,14 @@ def test_red_payment_to_an_unverified_account_is_refused(monkeypatch, backend, m
         r = await manual_pay(c, counterparty_id="cp1")
         assert r.status_code == 409, r.text
         assert await rows(op, "finance_payments") == before
-        # a draft is still allowed (FLOW-010 L250): an incoming / cash payment is not checked
-        r = await manual_pay(c, counterparty_id="cp1", method="Cash", account_id=CASH_A)
+        # R50.1: cash does not bypass it — while the IBAN is unverified, cash is blocked too
+        r = await manual_pay(c, counterparty_id="cp1", method="Cash", account_id=CASH_A,
+                             cash_receipt_file_id="file_rcpt_1", cash_recipient_name="Иван")
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
+        assert await rows(op, "finance_payments") == before
+        # an incoming payment is never checked
+        r = await manual_pay(c, counterparty_id="cp1", direction="Inflow")
         assert r.status_code == 201, r.text
     run(monkeypatch, backend, mode, scenario)
 
@@ -461,7 +468,7 @@ def test_iban_change_needs_verification_and_double_approval(monkeypatch, backend
         assert new["status"] == "pending_verification" and len(new["approvals"]) == 1
         r = await c.post("/api/bank-accounts/%s/approve-change" % new["id"], headers=hdr("owner-a"),
                          json={"version": new["version"]})
-        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "ALREADY_APPROVED"
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SAME_PERSON_APPROVAL"
         r = await c.post("/api/bank-accounts/%s/approve-change" % new["id"], headers=hdr("acct2-a"),
                          json={"version": new["version"]})
         assert r.status_code == 200, r.text
@@ -690,7 +697,15 @@ def test_iban_is_masked_for_roles_that_do_not_verify(monkeypatch, backend, mode)
         full = (await c.get("/api/counterparties/cp1/bank-accounts", headers=hdr("acct-a"))).json()
         assert full[0]["iban"] == IBAN_OLD
         masked = (await c.get("/api/counterparties/cp1/bank-accounts", headers=hdr("admin-a"))).json()
-        assert no_full(masked, IBAN_OLD)
+        assert no_full(masked, IBAN_OLD) and masked[0]["iban"] == "****" + IBAN_OLD[-4:]
+        # D5: an Admin sees it only with the explicit sensitive right on their own assignment
+        from app.tenancy import registry
+        await registry.tenant_role_assignments.update_one(
+            {"id": "ra_admin-a"}, {"$set": {"permissions": ["sensitive.iban.read"]}})
+        full = (await c.get("/api/counterparties/cp1/bank-accounts", headers=hdr("admin-a"))).json()
+        assert full[0]["iban"] == IBAN_OLD
+        await registry.tenant_role_assignments.update_one(
+            {"id": "ra_admin-b"}, {"$set": {"permissions": ["sensitive.iban.read"]}})
         assert (await c.get("/api/counterparties/cp1/bank-accounts", headers=hdr("site-a"))).status_code == 403
     run(monkeypatch, backend, mode, scenario)
 
@@ -753,3 +768,149 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
             assert await mig.apply(op, await mig.plan(op)) == 0             # idempotent
             assert len(await rows(op, "verified_bank_accounts")) == 2
     asyncio.run(go())
+
+
+
+# ═══════════════════════════════════════════════ Addendum A (R50, Q005)
+@pytest.mark.parametrize("env,var,expected", [
+    ("production", "shadow", "enforce"), ("production", "off", "enforce"), (None, "shadow", "enforce"),
+    ("prod", "off", "enforce"), ("staging", "shadow", "shadow"), ("staging", None, "enforce"),
+    ("test", "off", "off"), ("development", "nonsense", "enforce")])
+def test_a1_production_is_always_enforce(monkeypatch, env, var, expected):
+    from app.services import counterparty_rules as cr
+    for k, v in (("ENV", env), ("BANK_ACCOUNT_GUARD_MODE", var)):
+        if v is None:
+            monkeypatch.delenv(k, raising=False)
+        else:
+            monkeypatch.setenv(k, v)
+    assert cr.bank_guard_mode() == expected
+
+
+def test_a1_production_refuses_a_legacy_payment_even_with_shadow_set(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        import os
+        os.environ["ENV"] = "production"
+        try:
+            r = await manual_pay(c)
+        finally:
+            os.environ["ENV"] = "test"
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "NO_VERIFIED_BANK_ACCOUNT"
+        assert await rows(op, "finance_payments") == []
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_a2_other_roles_are_pointed_to_the_pending_proposal(monkeypatch, backend, mode):
+    def app_with_master_data(mp, op, sysdb, m):
+        app = _app(mp, op, sysdb, m)
+        from app.master_data.deps import ENV_MODE
+        from app.routes import master_data as md
+        mp.setenv(ENV_MODE, "enforce")
+        app.include_router(md.router, prefix="/api")
+        return app
+
+    async def scenario(c, op):
+        before = await rows(op, "counterparties")
+        r = await c.post("/api/counterparties", headers=hdr("site-a"), json={"name": "Нов ООД"})
+        assert r.status_code == 403
+        assert r.json()["detail"]["propose"]["path"] == "/api/master-data/pending"
+        r = await c.post("/api/master-data/pending", headers=hdr("site-a"), json={
+            "entity_type": "organization", "raw_value": "Нов ООД", "source_channel": "ocr",
+            "source_ref": "scan-17"})
+        assert r.status_code == 201 and r.json()["performed"] is True, r.text
+        assert r.json()["pending"]["status"] == "pending"
+        assert await rows(op, "counterparties") == before           # a proposal, not a record
+        for who in ("viewer-a", "tech-a"):                          # the catalog is not widened
+            r = await c.post("/api/master-data/pending", headers=hdr(who), json={
+                "entity_type": "organization", "raw_value": "X", "source_channel": "ocr"})
+            assert r.status_code == 403
+    import httpx
+
+    async def go():
+        async with _Dbs(backend) as (op, sysdb):
+            await _bootstrap_indexes(op)
+            await _seed(op, sysdb)
+            app = app_with_master_data(monkeypatch, op, sysdb, mode)
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                         base_url="http://cp01") as c:
+                return await scenario(c, op)
+    asyncio.run(go())
+
+
+def test_a6_cash_to_a_counterparty_needs_a_receipt(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await seed_account(op, "ba-ok", IBAN_OLD, "verified")
+        cash = dict(counterparty_id="cp1", method="Cash", account_id=CASH_A)
+        for extra in ({}, {"cash_receipt_file_id": "file_r"}, {"cash_recipient_name": "Иван"},
+                      {"cash_receipt_file_id": "https://x/r.pdf", "cash_recipient_name": "Иван"}):
+            r = await manual_pay(c, **cash, **extra)
+            assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+        assert await rows(op, "finance_payments") == []
+        r = await manual_pay(c, **cash, cash_receipt_file_id="file_r1", cash_recipient_name="Иван Петров")
+        assert r.status_code == 201, r.text
+        assert r.json()["cash_receipt_file_id"] == "file_r1" and r.json()["cash_recipient_name"] == "Иван Петров"
+        # a cash payment that names no counterparty is not a counterparty payment
+        r = await manual_pay(c, method="Cash", account_id=CASH_A)
+        assert r.status_code == 201
+        if backend != "real":       # #69's cap reservation uses $round: real Mongo only
+            return
+        # a subcontractor in cash: the same rule, and blocked while its IBAN is unverified
+        body = {"package_id": "pkg1", "amount": 50.0, "payment_method": "cash", "account_id": CASH_A}
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json=body)
+        assert r.status_code == 422, r.text
+        body.update(cash_receipt_file_id="file_r2", cash_recipient_name="Бригадир")
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json=body)
+        assert r.status_code == 201, r.text
+        await seed_account(op, "ba-sub-new", IBAN_NEW, "pending_verification", party="sub1",
+                           party_type="subcontractor")
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json=body)
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_a7_entrant_verifier_approvers_are_three_people(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        old = (await register(c, IBAN_OLD, who="admin-a")).json()
+        assert (await verify(c, old, who="owner-a")).status_code == 200
+        new = (await register(c, IBAN_NEW, who="acct-a")).json()          # entrant: acct-a
+        new = (await verify(c, new, who="owner-a")).json()                # verifier: owner-a
+        url = "/api/bank-accounts/%s/approve-change" % new["id"]
+        r = await c.post(url, headers=hdr("acct-a"), json={"version": new["version"]})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SAME_PERSON_APPROVAL"
+        r = await c.post(url, headers=hdr("owner-a"), json={"version": new["version"]})
+        assert r.status_code == 200, r.text                               # verifier = approver 1
+        v = r.json()["version"]
+        r = await c.post(url, headers=hdr("owner-a"), json={"version": v})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SAME_PERSON_APPROVAL"
+        r = await c.post(url, headers=hdr("acct-a"), json={"version": v})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "SAME_PERSON_APPROVAL"
+        stored = [a for a in await rows(op, "verified_bank_accounts") if a["id"] == new["id"]][0]
+        assert stored["status"] == "pending_verification" and len(stored["approvals"]) == 1
+        r = await c.post(url, headers=hdr("acct2-a"), json={"version": v})
+        assert r.status_code == 200 and r.json()["status"] == "verified"
+        assert {a["approver_id"] for a in r.json()["approvals"]} == {"owner-a", "acct2-a"}
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_a8_unarchive_sends_the_iban_back_to_verification(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        acc = (await register(c, IBAN_OLD, who="acct-a")).json()
+        assert (await verify(c, acc, who="owner-a")).status_code == 200
+        assert (await c.post("/api/counterparties/cp1/archive", headers=hdr("admin-a"),
+                             json={"reason": "закрит"})).status_code == 200
+        r = await c.post("/api/counterparties/cp1/reactivate", headers=hdr("acct-a"), json={"reason": "x"})
+        assert r.status_code == 403                                       # Admin / Owner only
+        r = await c.post("/api/counterparties/cp1/reactivate", headers=hdr("admin-a"), json={})
+        assert r.status_code == 400                                       # a reason is required
+        r = await c.post("/api/counterparties/cp1/reactivate", headers=hdr("admin-a"),
+                         json={"reason": "отново работим"})
+        assert r.status_code == 200 and r.json()["lifecycle_status"] == "active"
+        stored = (await rows(op, "verified_bank_accounts"))[0]
+        assert stored["status"] == "pending_verification" and stored["verification"] is None
+        assert stored["reverification_reason"] == "unarchived"
+        r = await manual_pay(c, counterparty_id="cp1")
+        assert r.status_code == 409                                       # the old IBAN is not valid
+        ev = [e["action"] for e in await rows(op, "audit_events")]
+        assert "bank_account.reverification_required" in ev and "counterparty.reactivated" in ev
+        assert (await verify(c, stored, who="owner-a")).json()["status"] == "verified"
+        assert (await manual_pay(c, counterparty_id="cp1")).status_code == 201
+    run(monkeypatch, backend, mode, scenario)

@@ -143,11 +143,12 @@ def iban_is_valid(iban: Any) -> bool:
 
 
 def mask_iban(iban: Any) -> str:
-    """``BG**…**1234``: country + last 4. Used in AuditEvent, logs and DQ rows."""
+    """``****1234`` — the last 4 characters only (R50 / Q005, FLOW-040 §9). Used for every
+    reader without the full-IBAN right, and always in AuditEvent, DQ rows, logs, exports."""
     value = normalize_iban(iban)
-    if len(value) < 8:
+    if len(value) < 4:
         return "****"
-    return value[:2] + "*" * (len(value) - 6) + value[-4:]
+    return "****" + value[-4:]
 
 
 # ── VerifiedBankAccount (FLOW-010 §3.3; package statuses) ────────────────────
@@ -194,13 +195,20 @@ def check_sources(sources: Any) -> Optional[str]:
     return None
 
 
-def public_bank_account(doc: Dict[str, Any], user) -> Dict[str, Any]:
-    """The API view of a bank account. The full IBAN only for the roles that verify it
-    (Owner / Accountant); everyone else gets the mask (FLOW-040 §9; debt CP-01-D5)."""
+#: Addendum A / R50 (Q005): the explicit sensitive right an Admin needs to see a full IBAN.
+#: It is a permission on the Admin's own active RoleAssignment (``permissions``), never part
+#: of a role's default set — by default no Admin has it (FLOW-040 §9/§11).
+SENSITIVE_IBAN_PERMISSION = "sensitive.iban.read"
+IBAN_FULL_ROLES = frozenset({"Owner", "Accountant"})
+
+
+def public_bank_account(doc: Dict[str, Any], full_allowed: bool) -> Dict[str, Any]:
+    """The API view of a bank account: the full IBAN only when ``full_allowed``
+    (Owner / Accountant, or an Admin with the sensitive right); otherwise ``****1234``."""
     out = {k: v for k, v in doc.items() if k != "_id"}
     out["status_label"] = BA_LABELS.get(out.get("status"), out.get("status"))
     out["iban_masked"] = mask_iban(doc.get("iban"))
-    if not can_verify_bank_account(user):
+    if not full_allowed:
         out["iban"] = out["iban_masked"]
     return out
 
@@ -210,11 +218,21 @@ ENV_BANK_GUARD_MODE = "BANK_ACCOUNT_GUARD_MODE"
 GUARD_OFF, GUARD_SHADOW, GUARD_ENFORCE = "off", "shadow", "enforce"
 
 
+#: Р15: only a non-production environment may relax the guard (staging starts in shadow).
+RELAXABLE_ENVS = ("staging", "development", "test")
+
+
 def bank_guard_mode() -> str:
-    """off = log only · shadow = DQ row + metric · enforce = 409. Default shadow (debt CP-01-D1)."""
+    """Addendum A / D1 (Q005; FLOW-010 L250/L254/L385, FLOW-025 L187): production is
+    ``enforce``. ``BANK_ACCOUNT_GUARD_MODE`` = off / shadow is honoured ONLY when ``ENV`` is
+    staging / development / test; production, an unknown or a missing ``ENV`` → enforce
+    (fail closed). off = log only · shadow = DQ row + metric · enforce = 409."""
     import os
-    value = (os.environ.get(ENV_BANK_GUARD_MODE) or GUARD_SHADOW).strip().lower()
-    return value if value in (GUARD_OFF, GUARD_SHADOW, GUARD_ENFORCE) else GUARD_SHADOW
+    from app.core.build_info import environment_label
+    if environment_label() not in RELAXABLE_ENVS:
+        return GUARD_ENFORCE
+    value = (os.environ.get(ENV_BANK_GUARD_MODE) or GUARD_ENFORCE).strip().lower()
+    return value if value in (GUARD_OFF, GUARD_SHADOW, GUARD_ENFORCE) else GUARD_ENFORCE
 
 
 def is_cash_method(method: Any) -> bool:

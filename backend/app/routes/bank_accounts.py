@@ -40,6 +40,22 @@ def _tenant(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
 
+async def full_iban_allowed(user: dict) -> bool:
+    """Addendum A / D5 (Q005, FLOW-040 §9/§11): Owner and Accountant see the full IBAN; an
+    Admin only with the explicit ``sensitive.iban.read`` permission on one of their own
+    active RoleAssignments in THIS tenant (none by default); everyone else ``****1234``."""
+    role = cr.role_of(user)
+    if role in cr.IBAN_FULL_ROLES:
+        return True
+    if role != "Admin":
+        return False
+    from app.tenancy import registry
+    row = await registry.tenant_role_assignments.find_one(
+        {"user_id": user["id"], "tenant_id": user["org_id"], "status": "active",
+         "permissions": cr.SENSITIVE_IBAN_PERMISSION}, {"_id": 0, "id": 1})
+    return row is not None
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -108,7 +124,8 @@ async def _list(party_type: str, party_id: str, user: dict):
     rows = await tenant.verified_bank_accounts.find(
         {"party_type": party_type, "counterparty_id": party_id}, {"_id": 0}
     ).sort("created_at", -1).to_list(100)
-    return [cr.public_bank_account(r, user) for r in rows]
+    full = await full_iban_allowed(user)
+    return [cr.public_bank_account(r, full) for r in rows]
 
 
 @router.get("/counterparties/{party_id}/bank-accounts")
@@ -133,6 +150,7 @@ async def _register(party_type: str, party_id: str, body: Dict[str, Any], user: 
         raise unprocessable("IBAN_INVALID", "Невалиден IBAN (проверка mod-97)")
     evidence = _file_ids(body.get("evidence_file_ids"))
     tenant = _tenant(user)
+    full = await full_iban_allowed(user)
 
     async def tx(session):
         party = await _party(tenant, party_type, party_id, session)
@@ -174,7 +192,7 @@ async def _register(party_type: str, party_id: str, body: Dict[str, Any], user: 
                                data={"bank_account_id": acc["id"], "party_type": party_type,
                                      "counterparty_id": party_id})
         acc.pop("_id", None)
-        return cr.public_bank_account(acc, user)
+        return cr.public_bank_account(acc, full)
 
     return await once_in_tx(db, user, key, "bank_account.register",
                             {"party": [party_type, party_id], "body": body}, tx)
@@ -233,6 +251,7 @@ async def verify_bank_account(account_id: str, body: Dict[str, Any] = Body(defau
     sources = [{"kind": s["kind"], "description": s["description"].strip(),
                 "source_origin": s["source_origin"]} for s in body["sources"]]
     tenant = _tenant(user)
+    full = await full_iban_allowed(user)
 
     async def tx(session):
         acc = await tenant.verified_bank_accounts.get(account_id, {"_id": 0}, **kw(session))
@@ -268,7 +287,7 @@ async def verify_bank_account(account_id: str, body: Dict[str, Any] = Body(defau
                                       for s in sources],
                           "awaiting_double_approval": is_change})
         out = await tenant.verified_bank_accounts.get(acc["id"], {"_id": 0}, **kw(session))
-        return cr.public_bank_account(out, user)
+        return cr.public_bank_account(out, full)
 
     return await once_in_tx(db, user, key, "bank_account.verify",
                             {"id": account_id, "body": body}, tx)
@@ -285,6 +304,7 @@ async def approve_bank_account_change(account_id: str, body: Dict[str, Any] = Bo
     body = body if isinstance(body, dict) else {}
     version = _version(body)
     tenant = _tenant(user)
+    full = await full_iban_allowed(user)
 
     async def tx(session):
         acc = await tenant.verified_bank_accounts.get(account_id, {"_id": 0}, **kw(session))
@@ -297,8 +317,14 @@ async def approve_bank_account_change(account_id: str, body: Dict[str, Any] = Bo
         if acc.get("version") != version:
             raise conflict("VERSION_CONFLICT", "Одобрението сочи към стара версия — презаредете")
         approvals = list(acc.get("approvals") or [])
+        # R50.2: the entrant never approves; the verifier may be approver 1; approver 2 is a
+        # different person — at least three different people for a change of IBAN.
+        if acc.get("entered_by") == user["id"]:
+            raise conflict("SAME_PERSON_APPROVAL",
+                           "Въвелият новия IBAN не може да го одобрява (Р50.2)")
         if any(a.get("approver_id") == user["id"] for a in approvals):
-            raise conflict("ALREADY_APPROVED", "Вече сте одобрили тази смяна — нужен е втори човек")
+            raise conflict("SAME_PERSON_APPROVAL",
+                           "Вече сте одобрили тази смяна — вторият одобряващ е различен човек (Р50.2)")
         now = _now()
         approval = {"approval_id": "apr_" + uuid.uuid4().hex, "approver_id": user["id"],
                     "role": user.get("role"), "at": now, "version": version}
@@ -323,7 +349,7 @@ async def approve_bank_account_change(account_id: str, body: Dict[str, Any] = Bo
                                data={"bank_account_id": acc["id"],
                                      "replaced": [o["id"] for o in replaced]})
         out = await tenant.verified_bank_accounts.get(acc["id"], {"_id": 0}, **kw(session))
-        res = cr.public_bank_account(out, user)
+        res = cr.public_bank_account(out, full)
         res["replaced_account_ids"] = [o["id"] for o in replaced]
         return res
 
@@ -342,6 +368,7 @@ async def reject_bank_account(account_id: str, body: Dict[str, Any] = Body(defau
     reason = _reason(body)
     version = _version(body)
     tenant = _tenant(user)
+    full = await full_iban_allowed(user)
 
     async def tx(session):
         acc = await tenant.verified_bank_accounts.get(account_id, {"_id": 0}, **kw(session))
@@ -358,7 +385,7 @@ async def reject_bank_account(account_id: str, body: Dict[str, Any] = Body(defau
                     diff={**_audit_view(acc), "status": {"before": cr.BA_PENDING,
                                                          "after": cr.BA_REJECTED}})
         out = await tenant.verified_bank_accounts.get(acc["id"], {"_id": 0}, **kw(session))
-        return cr.public_bank_account(out, user)
+        return cr.public_bank_account(out, full)
 
     return await once_in_tx(db, user, key, "bank_account.reject",
                             {"id": account_id, "body": body}, tx)

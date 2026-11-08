@@ -219,7 +219,9 @@ def ids_of(tkey: str) -> Dict[str, str]:
 def body_for(key: str, t: Dict[str, Any], rec_tkey: str, project_id: Optional[str]):
     tech = t["users"]["technician"]["id"]
     if key == "subpay":
-        return {"package_id": rid(rec_tkey, "pkg"), "amount": 10}
+        # CP-01 R50.1: cash to a counterparty only against a receipt with the recipient's name
+        return {"package_id": rid(rec_tkey, "pkg"), "amount": 10,
+                "cash_receipt_file_id": "file_cash_receipt", "cash_recipient_name": "Бригадир"}
     if key == "subpay_unknown_account":
         return {"package_id": rid(rec_tkey, "pkg"), "amount": 10,
                 "account_id": rid(rec_tkey, "no-such-account")}

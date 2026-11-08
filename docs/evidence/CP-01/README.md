@@ -129,20 +129,68 @@ Nothing is deleted automatically. Before a revert, list `verified_bank_accounts`
 
 | ID | Debt |
 |---|---|
-| **CP-01-D1** | `BANK_ACCOUNT_GUARD_MODE` defaults to **`shadow`**: a legacy payment that names no account, to a party with no registered IBAN, still passes with a DQ row. `enforce` refuses it. Krum decides when to switch to `enforce` (after the migration and the IBAN entry). |
-| **CP-01-D2** | Non-office roles get **403**. A „за мапване“ draft/proposal flow (FLOW-032 L99, R48.5 "само предлагат чернова") is not built. |
+| ~~CP-01-D1~~ | **Closed by Addendum A / Q005.** The guard is always `enforce` unless `ENV` is staging, development or test (Р15). Production, an unknown `ENV` or a missing `ENV` → enforce. |
+| ~~CP-01-D2~~ | **Closed by Addendum A / R50.** Direct writes stay 403, and the 403 names the existing propose path `POST /api/master-data/pending` (`master_data.pending.propose`). The catalog is not widened: SiteManager may propose, Viewer and Technician may not. Remaining: the pending module accepts only the channels ai, ocr, excel and import, so a typed (human) proposal from a field user has no channel → **CP-01-D18**. |
 | **CP-01-D3** | There is no canonical DQ/Approval runtime (W0-07). DQ rows live in `dq_issues`. The IBAN-change approvals are stored on the bank-account record and the ЕИК approval on the counterparty, each with an `approval_id` in the AuditEvent. They move to W0-07 when it exists. |
 | **CP-01-D4** | Evidence `file_id`s are checked for shape only (no URL/path). The File Registry (W0-06 stack) is not on main, so their existence is not checked. |
-| **CP-01-D5** | The full IBAN is shown to Owner and Accountant; Admin and everyone else get the mask. FLOW-040 §9 says "by role" without a matrix, so Krum should confirm. |
-| **CP-01-D6** | Cash payments (no account, no IBAN) are not checked against the register. Krum should confirm. |
-| **CP-01-D7** | The two approvers of an IBAN change must be different people. The person who entered or verified the change may be one of them; otherwise a two-person office could never change an IBAN. Not stated in R48. |
-| **CP-01-D8** | An archived record can be reactivated by Admin or Owner (the correction path of CLAUDE.md §14). R48.4 does not say whether archiving is reversible. |
+| ~~CP-01-D5~~ | **Closed by Addendum A / Q005.** The full IBAN is shown to the Owner and the Accountant, and to an Admin only when one of that Admin's own active RoleAssignments carries `sensitive.iban.read` (none by default; the catalog is untouched). Everyone else gets `****1234`, and so do the AuditEvent, DQ rows, logs and payment stamps. |
+| ~~CP-01-D6~~ | **Closed by R50.1.** A cash payment to a counterparty needs `cash_receipt_file_id` and `cash_recipient_name` (422 `CASH_RECEIPT_REQUIRED`). While the counterparty has an unverified IBAN, cash is refused too: 409 `PAYEE_BLOCKED_PENDING_IBAN`. Cash that names no counterparty is not checked. There is no UI field for the receipt yet (D11). |
+| ~~CP-01-D7~~ | **Closed by R50.2.** The entrant can never approve. The verifier may be approver 1. Approver 2 must be a different person (409 `SAME_PERSON_APPROVAL`). |
+| ~~CP-01-D8~~ | **Closed by R50.3.** Only an Admin or the Owner can bring a record back from the archive, with a reason and an AuditEvent. In the same transaction every verified IBAN of that counterparty or subcontractor goes back to „за проверка“ (`bank_account.reverification_required`), and payments to it are blocked until a new verification. |
 | **CP-01-D9** | Subcontractors are a separate collection from counterparties (FLOW-010 wants one MasterOrganization). The register serves both; unification and de-duplication across counterparties, companies and subcontractors → CP-02 / FG-166. The subcontractor ЕИК is not checked for duplicates. |
 | **CP-01-D10** | ЕГН: `/clients/search/unified` still accepts a full ЕГН as the query, so it works as an existence check. The Master Data reports (`md_person` identifiers, `uniqueness.mask_value`) use the old `12****90` mask. An invoice to a person now gets a masked ЕГН from import-client-invoice / invoice-context; issuing one with the full ЕГН needs the reveal (no UI yet). |
 | **CP-01-D11** | Frontend: there is no UI yet for the bank-account register, verification and approvals, archive/reactivate, ЕИК-change approval or ЕГН reveal. The old delete buttons on Counterparties and Clients now deactivate with a prompt for the reason, and every changed call sends an `Idempotency-Key`. A UX design is needed from Krum. |
-| **CP-01-D12** | `POST /subcontractor-payments` is still open to every M2 role and has no `Idempotency-Key` (payment rights → SEC/PAY-01-C01 part 2). `POST /finance/other-expense` (documentless, no counterparty) is not guarded. |
+| **CP-01-D12** | After the merge of #69, `POST /subcontractor-payments` has SEC-01's money-write permission and Idempotency-Key; the CP-01 guard runs before the key is reserved. `POST /finance/other-expense` (documentless, no counterparty) is still not guarded. |
 | **CP-01-D13** | `PUT /projects/{id}` with an owner change now enforces R22 and selectability, but it has no key and no AuditEvent of its own; the client-link route has both. |
 | **CP-01-D14** | The rewritten routes write only the canonical AuditEvent, not the legacy `audit_logs` rows (`counterparty_created`, `client_created`, `created person/company`). A reader of `audit_logs` for these events would no longer see them (W0-04 parallel-record debt). |
 | **CP-01-D15** | A real standalone mongod (no replica set) now refuses these master-data writes with 503 (auth_tx has no fallback). Production Atlas is a replica set. |
 | **CP-01-D16** | ЕИК uniqueness uses claim rows, not a unique DB index, because legacy data may already hold duplicates. An index, after a duplicate report, is a follow-up. |
 | **CP-01-D17** | The R48.2 notification is the existing in-app `notifications` collection. There is no e-mail or push. |
+| **CP-01-D18** | A typed (human) proposal from a field user: the existing `master_data.pending.propose` refuses a human channel by design (W0-03). Allowing one is a model decision for W0-03 / Krum. |
+
+## 8. Addendum A (08.11.2026): R50 + Q005, and the merge of #69
+
+Package: Addendum A in `CP-01_COUNTERPARTY_IBAN_EGN_NO_DELETE.md` (branch `claude/happy-meitner-bmcnel` @ d8dc6c2).
+
+| Point | Code | Tests (`test_cp_01_counterparty_iban_egn.py`) |
+|---|---|---|
+| D1 production = enforce | `counterparty_rules.bank_guard_mode` (`ENV` via `build_info.environment_label`) | `test_a1_production_is_always_enforce` (8 cases), `test_a1_production_refuses_a_legacy_payment_even_with_shadow_set` |
+| D2 propose path | `master_records.require_writer`: 403 + `propose` | `test_a2_other_roles_are_pointed_to_the_pending_proposal` |
+| D5 IBAN view | `bank_accounts.full_iban_allowed`; `mask_iban` → `****1234` | `test_iban_is_masked_for_roles_that_do_not_verify` (Admin masked, then full with `sensitive.iban.read`) |
+| D6 cash | `bank_account_guard._check_cash` on manual, quick-pay and subcontractor payments | `test_a6_cash_to_a_counterparty_needs_a_receipt`; `test_red_payment_to_an_unverified_account_is_refused` (cash blocked) |
+| D7 three people | `approve_bank_account_change` | `test_a7_entrant_verifier_approvers_are_three_people`, `test_iban_change_needs_verification_and_double_approval` |
+| D8 unarchive | `master_records._reverify_bank_accounts` | `test_a8_unarchive_sends_the_iban_back_to_verification` |
+
+**The merge of origin/main `4bca18a` (#69, SEC-01)** is a merge commit, not a rebase. Both sides of every conflict were kept:
+- `PATCH /projects/{id}/client-link` keeps SEC-01's `require_money_write` and adds CP-01's key, R22, CAS and AuditEvent.
+- `PUT /projects/{id}` runs SEC-01's `check_money_write` and then CP-01's R22 check and selectability.
+- `POST /subcontractor-payments` keeps SEC-01's `MoneyWrite`, cap reservation and ledger-first order. The CP-01 guard runs before `MoneyWrite.begin`, so a refusal reserves no key.
+- `ProjectOperationsPage`: SEC-01's money keys stay, and the other writes send a key too.
+
+The A1 and A2B inventories and PM-01 were regenerated with their own tools. One existing fixture changed because R50.1 changed the rule: SEC-01-C02 `body_for("subpay")` now sends a cash receipt and a recipient name. The SEC-01 tests that use it are unchanged.
+
+Gates for this head: `gates_addendum_a.txt`.
+
+**Gates for this head**, against main `4bca18a`:
+
+| Gate | main `4bca18a` | this head |
+|---|---|---|
+| R0 | 814 | 814 |
+| W0 | 15 failed | 9 failed, all among main's 15 |
+| PAY-01 | 630 | 630 |
+| SEC-01 | 30 | 30 |
+| PM-01 (real, `-rs`) | — | 6 passed, 0 skipped |
+| CP-01 | — | 439 passed, 3 skipped (mongomock copies of the concurrency test) |
+| A1 / A2C guards | 0 / 0 | 0 / 0 |
+| full DB-free suite | 166 failed, 993 errors | 160 failed, 993 errors; the branch's failing set is a strict subset of main's |
+| frontend | — | 173 passed |
+
+The Addendum A tests fail on the previous head `ea51030`: 23 red (`addendum_a_red_on_ea51030_real_mongo.txt`).
+
+**PM-01 against `4bca18a`:** 264 changed cells, all toward refusal; 528 cells on the 22 new routes; **0 cells that newly write** (`pm01_matrix_diff_vs_main.md`).
+
+**SEC-01 evidence** (`SEC-01/results.json`, `SEC-01-C01/results.json`) was regenerated by its harnesses. The only difference is `op.audit_events` added to the client-link writes: that is CP-01's canonical AuditEvent. No status changed.
+
+Two tests changed because the rules changed:
+- `test_sec_01_money_write_permissions.KEY_REQUIRED` now also lists client-link. PM-01 shows 428 there because the harness sends no key.
+- `test_w0_03e_a1_collision_matrix.set_mode` sets `ENV=test` and the IBAN guard to `off`. This tenant-isolation fixture has no verified accounts, and the IBAN rule itself is proved in the CP-01 tests.

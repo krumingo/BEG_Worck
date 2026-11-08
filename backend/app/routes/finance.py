@@ -1312,6 +1312,8 @@ async def _quick_pay_bank_target(tenant: TenantData, user: dict, invoice_id: str
         tenant, user, direction="Outflow", method=method, party_type=party_type, party_id=party_id,
         bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
         invoice_iban=invoice.get("counterparty_iban"),
+        cash_receipt_file_id=data.get("cash_receipt_file_id"),
+        cash_recipient_name=data.get("cash_recipient_name"),
         path="/finance/invoices/{id}/payments") or {}
 
 
@@ -1793,6 +1795,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
             tenant, user, direction=data.direction, method=data.method,
             party_type="counterparty" if data.counterparty_id else None,
             party_id=data.counterparty_id, bank_account_id=data.bank_account_id,
+            cash_receipt_file_id=data.cash_receipt_file_id, cash_recipient_name=data.cash_recipient_name,
             path="/finance/payments") or {}
         # Route to the correct account: cash → Каса, otherwise the chosen account.
         account_id = await _resolve_payment_account(tenant, data.method, data.account_id)

@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 30.9,
+ "seconds": 28.9,
  "rows": [
   {
    "mode": "off",
@@ -1305,6 +1305,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1322,6 +1323,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1365,6 +1367,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1421,6 +1424,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1438,6 +1442,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1481,6 +1486,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4282,6 +4288,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4299,6 +4306,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4342,6 +4350,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4398,6 +4407,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4415,6 +4425,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4458,6 +4469,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7844,6 +7856,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7861,6 +7874,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7904,6 +7918,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7960,6 +7975,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7977,6 +7993,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -8020,6 +8037,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10821,6 +10839,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10838,6 +10857,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10881,6 +10901,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10937,6 +10958,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10954,6 +10976,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10997,6 +11020,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14485,6 +14509,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14502,6 +14527,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14549,6 +14575,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14611,6 +14638,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14628,6 +14656,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14675,6 +14704,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17652,6 +17682,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17669,6 +17700,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17716,6 +17748,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17778,6 +17811,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17795,6 +17829,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17842,6 +17877,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [

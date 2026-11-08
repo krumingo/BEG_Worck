@@ -20,8 +20,8 @@ Rules (no flag, role or Approval unlocks them — FLOW-025 L187):
 5. legacy — no account named, none registered, or no counterparty identified —
    ``BANK_ACCOUNT_GUARD_MODE``: off = log only, shadow = DQ row + metric, enforce = 409.
 
-Cash payments (method cash, no account and no IBAN named) never go to an IBAN and are not
-checked (debt CP-01-D6). Incoming payments are not checked. A verified IBAN is NOT an
+Cash to a counterparty (R50.1): only with a receipt ``file_id`` + the recipient's name, and
+blocked (409 PAYEE_BLOCKED_PENDING_IBAN) while the counterparty has an unverified IBAN. Incoming payments are not checked. A verified IBAN is NOT an
 approval of the payment (FLOW-010 L296): every other payment rule still applies.
 """
 import logging
@@ -49,6 +49,34 @@ def _refuse(reason: str, message: str, **extra) -> HTTPException:
 
 def _stamp(account: Dict[str, Any]) -> Dict[str, Any]:
     return {"bank_account_id": account["id"], "bank_account_iban_masked": cr.mask_iban(account.get("iban"))}
+
+
+PAYEE_BLOCKED_PENDING_IBAN = "PAYEE_BLOCKED_PENDING_IBAN"
+CASH_RECEIPT_REQUIRED = "CASH_RECEIPT_REQUIRED"
+
+
+async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient_name):
+    """R50.1 (Addendum A / D6): cash to a counterparty only against a receipt / cash document
+    (a File Registry ``file_id``) with the recipient's name; while the counterparty has an
+    unverified (new or changed) IBAN, cash is blocked too — the protection is not bypassed
+    by paying in cash. A cash payment that names no counterparty is not checked here."""
+    if not party_id:
+        return None
+    pending = await accounts.count({"party_type": party_type, "counterparty_id": party_id,
+                                    "status": cr.BA_PENDING})
+    if pending:
+        raise HTTPException(status_code=409, detail={
+            "error_code": PAYEE_BLOCKED_PENDING_IBAN,
+            "message": "Получателят има непроверен (нов/сменен) IBAN — плащането, и в брой, е "
+                       "спряно до проверката (Р50.1)"})
+    fid = receipt_file_id.strip() if isinstance(receipt_file_id, str) else ""
+    name = recipient_name.strip() if isinstance(recipient_name, str) else ""
+    if not fid or not name or "://" in fid or "/" in fid or "\\" in fid:
+        raise HTTPException(status_code=422, detail={
+            "error_code": CASH_RECEIPT_REQUIRED,
+            "message": "Плащане в брой към контрагент — само срещу разписка/касов документ "
+                       "(cash_receipt_file_id) с име на получателя (cash_recipient_name)"})
+    return {"cash_receipt_file_id": fid, "cash_recipient_name": name}
 
 
 async def resolve_invoice_party(tenant, invoice: Dict[str, Any]):
@@ -87,6 +115,8 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
                                party_type: Optional[str], party_id: Optional[str],
                                bank_account_id: Optional[str] = None,
                                invoice_iban: Optional[str] = None,
+                               cash_receipt_file_id: Any = None,
+                               cash_recipient_name: Any = None,
                                path: str = "") -> Optional[Dict[str, Any]]:
     if direction != "Outflow":
         return None
@@ -123,7 +153,8 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
         return _stamp(match)
 
     if cr.is_cash_method(method):
-        return None
+        return await _check_cash(accounts, party_type, party_id, cash_receipt_file_id,
+                                 cash_recipient_name)
 
     if party_id:
         verified = await accounts.find({"party_type": party_type, "counterparty_id": party_id,

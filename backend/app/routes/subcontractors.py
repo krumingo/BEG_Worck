@@ -577,6 +577,8 @@ async def create_subcontractor_payment(
     bank_stamp = await check_payment_target(
         tenant, user, direction="Outflow", method=method, party_type="subcontractor",
         party_id=pkg["subcontractor_id"], bank_account_id=data.get("bank_account_id"),
+        cash_receipt_file_id=data.get("cash_receipt_file_id"),
+        cash_recipient_name=data.get("cash_recipient_name"),
         path="/subcontractor-payments") or {}
 
     mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
@@ -666,7 +668,8 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
             "note": "Подизпълнител/бригада плащане",
             "project_id": pkg["project_id"],
             "subcontractor_payment_id": payment["id"],
-            **{k: payment[k] for k in ("bank_account_id", "bank_account_iban_masked") if k in payment},
+            **{k: payment[k] for k in ("bank_account_id", "bank_account_iban_masked",
+                                       "cash_receipt_file_id", "cash_recipient_name") if k in payment},
             "created_at": now, "updated_at": now,
         }))
     async with mw.insert_once():
