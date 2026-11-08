@@ -206,3 +206,71 @@ async def test_r7_lot_moved_whole_to_the_project(canonical_mongo_db, allow_alway
         d.movement_id in takers, acc.movement_id in takers))
     assert exc.value.status_code == 409 and ctx.get("code") == "RECEIPT_ALREADY_ISSUED"
     assert d.movement_id in takers and await _rows(db) == before
+
+
+# ═════ 1622f62 (Addendum A): Р47 under concurrency ═════
+from tests.test_wh_rev_01_receipt_reversal import _pay, _sent_invoice  # noqa: E402
+
+
+async def _r47_setup(canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    db, finance = await _sent_invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    client = db.client
+    from tests.test_warehouse_canonical_c25_cost_at_accept_transit import _Run
+    from app.services.warehouse_movements.service import CommandService
+    run = _Run(client, allow_always_gate, db)
+    svc = CommandService(client)
+    wc = _wc(monkeypatch, client, db)
+    receipt = await _book(svc, mode, db, run, WH, qty="4")
+    return db, finance, wc, receipt
+
+
+@pytest.mark.parametrize("rep", range(10))
+@pytest.mark.parametrize("mode", MODES)
+async def test_r8_reversal_races_full_payment(canonical_mongo_db, allow_always_gate, monkeypatch, mode, rep):
+    """Invoice 120 (L 10 @10 +20 %); 4 linked received. Concurrently: reverse the 4 (credit 48)
+    ∥ quick-pay 120. Allowed: payment first (paid 120; reversal then 201 or 409 INVOICE_BUSY) or
+    reversal first (payment 409 INVOICE_AWAITS_CREDIT_NOTE). Never: payment 201 decided while an
+    open credit already existed (paid > 72 with the ECN created BEFORE the payment's allocation)."""
+    db, finance, wc, receipt = await _r47_setup(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    rev, pay = await asyncio.gather(_reverse(wc, mode, receipt), _pay(finance, 120.0, "k-full"),
+                                    return_exceptions=True)
+    ecn = await db["expected_credit_notes"].find_one({}) or {}
+    alloc = await db["payment_allocations"].find_one({"invoice_id": "inv-c26"}) or {}
+    def st(x):
+        if isinstance(x, HTTPException):
+            return (x.status_code, (x.detail or {}).get("error_code"))
+        return "ok" if not isinstance(x, Exception) else type(x).__name__
+    order = None
+    if ecn and alloc:
+        order = "credit-first" if str(ecn.get("created_at")) < str(alloc.get("allocated_at") or alloc.get("created_at")) else "pay-first"
+    print("R8 %s/%d: reversal %s | payment %s | ECN %s | paid alloc %s | order %s" % (
+        mode, rep, st(rev), st(pay), ecn.get("amount"), alloc.get("amount_allocated"), order))
+    assert not (st(pay) == "ok" and st(rev) == "ok" and order == "credit-first"), \
+        "a full payment committed after the invoice started awaiting a credit"
+    if st(rev) != "ok":
+        assert st(rev) == (409, "INVOICE_BUSY") and not ecn
+    if st(pay) != "ok":
+        assert st(pay) == (409, "INVOICE_AWAITS_CREDIT_NOTE") and not alloc
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_r9_reversal_while_payment_holds_the_lock(canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """Deterministic: the payment pauses inside its credit read (row lock held) while the
+    reversal runs → the reversal must be 409 INVOICE_BUSY, and the payment then goes through."""
+    db, finance, wc, receipt = await _r47_setup(canonical_mongo_db, allow_always_gate, monkeypatch, mode)
+    real = finance._awaited_credit
+    box = {}
+
+    async def paused(tenant, invoice_id):
+        if "rev" not in box:
+            try:
+                box["rev"] = await _reverse(wc, mode, receipt)
+            except HTTPException as exc:
+                box["rev"] = (exc.status_code, (exc.detail or {}).get("error_code"))
+        return await real(tenant, invoice_id)
+    monkeypatch.setattr(finance, "_awaited_credit", paused)
+    pay = await _pay(finance, 120.0, "k-full")
+    ecn = await db["expected_credit_notes"].count_documents({})
+    print("R9 %s: reversal during the payment -> %s | payment %s | ECN rows %d" % (
+        mode, box["rev"] if isinstance(box["rev"], tuple) else "201", "ok" if pay else pay, ecn))
+    assert box["rev"] == (409, "INVOICE_BUSY") and ecn == 0
