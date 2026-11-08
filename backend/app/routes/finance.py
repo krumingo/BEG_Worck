@@ -32,6 +32,7 @@ from ..models.finance import (
     PaymentCreate, AllocatePaymentRequest
 )
 
+from app.services import counterparty_rules as cr
 from app.services.bank_account_guard import (check_allocation, check_payment_target,
                                              require_selectable_party, resolve_invoice_party)
 
@@ -624,6 +625,7 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
             bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
             cash_receipt_file_id=data.get("cash_receipt_file_id"),
             cash_recipient_name=data.get("cash_recipient_name"),
+            payee_name=data.get("counterparty_name"),                 # FG-242
             path="/finance/other-expense") or {}
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
@@ -785,6 +787,7 @@ async def list_invoices(
         query.setdefault("issue_date", {})["$lte"] = to_date
     
     invoices = await tenant.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    invoices = cr.mask_iban_fields(invoices, await cr.full_iban_allowed(user))   # FG-245
     # W0-03E-A1: the related projects come from the caller's tenant only, in one
     # read; a project id that does not resolve here enriches to empty strings.
     projects_by_id = await tenant.projects.get_many(
@@ -978,6 +981,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
 async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     tenant = _tenant(user)
     invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
+    invoice = cr.mask_iban_fields(invoice, await cr.full_iban_allowed(user))      # FG-245
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -1104,7 +1108,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             await update_invoice_status(tenant, invoice_id, session=session)
     await run_transaction(tenant, _body)
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
+                               await cr.full_iban_allowed(user))            # FG-245
 
 
 @router.put("/finance/invoices/{invoice_id}/lines")
@@ -1163,7 +1168,8 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
         await update_invoice_status(tenant, invoice_id, session=session)
     await run_transaction(tenant, _body)
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
+                               await cr.full_iban_allowed(user))            # FG-245
 
 
 @router.post("/finance/invoices/{invoice_id}/send")
@@ -1200,7 +1206,8 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_sent", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
+                               await cr.full_iban_allowed(user))            # FG-245
 
 
 @router.post("/finance/invoices/{invoice_id}/cancel")
@@ -1236,7 +1243,8 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
+                               await cr.full_iban_allowed(user))            # FG-245
 
 
 @router.delete("/finance/invoices/{invoice_id}")
@@ -1320,6 +1328,7 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         async with _invoice_lock(tenant, invoice_id):
             ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key, bank_stamp)
         updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})   # read after the unlock
+        updated_invoice = cr.mask_iban_fields(updated_invoice, await cr.full_iban_allowed(user))
         return {
             "ok": True,
             "payment_id": ids["payment_id"],
@@ -1349,6 +1358,7 @@ async def _quick_pay_bank_target(tenant: TenantData, user: dict, invoice_id: str
         invoice_iban=invoice.get("counterparty_iban"),
         cash_receipt_file_id=data.get("cash_receipt_file_id"),
         cash_recipient_name=data.get("cash_recipient_name"),
+        payee_name=invoice.get("counterparty_name"), payee_eik=invoice.get("counterparty_eik"),  # FG-242
         path="/finance/invoices/{id}/payments") or {}
 
 
@@ -1832,6 +1842,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
             party_type="counterparty" if data.counterparty_id else None,
             party_id=data.counterparty_id, bank_account_id=data.bank_account_id,
             cash_receipt_file_id=data.cash_receipt_file_id, cash_recipient_name=data.cash_recipient_name,
+            payee_name=data.counterparty_name,                       # FG-242
             path="/finance/payments") or {}
         # Route to the correct account: cash → Каса, otherwise the chosen account.
         account_id = await _resolve_payment_account(tenant, data.method, data.account_id)

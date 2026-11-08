@@ -119,6 +119,11 @@ async def _with_duplicate_dq(tenant, user, eik: str, attempted_for: Optional[str
         raise
 
 
+async def _masked(user, awaitable):
+    """FG-245: a counterparty in a write response shows its legacy IBAN masked as in the readers."""
+    return cr.mask_iban_fields(await awaitable, await cr.full_iban_allowed(user))
+
+
 def _public(cp: Dict[str, Any]) -> Dict[str, Any]:
     out = {k: v for k, v in cp.items() if k != "_id"}
     out["lifecycle_status"] = cr.lifecycle_of(cp, "counterparties")
@@ -182,6 +187,7 @@ async def list_counterparties(
         cp["invoice_count"] = invoice_count
         cp["lifecycle_status"] = cr.lifecycle_of(cp, "counterparties")
     
+    counterparties = cr.mask_iban_fields(counterparties, await cr.full_iban_allowed(user))  # FG-245
     return {
         "items": counterparties,
         "total": total,
@@ -216,9 +222,9 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
         if await _eik_owner(tenant_, eik_value, None, session):
             raise conflict(EIK_ALREADY_EXISTS, "Контрагент с този ЕИК вече съществува")
 
-    return await _with_duplicate_dq(tenant, user, eik_value, None, lambda: mr.create(
+    return await _masked(user, _with_duplicate_dq(tenant, user, eik_value, None, lambda: mr.create(
         db, user, idempotency_key, collection="counterparties", doc=counterparty,
-        fingerprint=data.model_dump(), check=check, result=_public))
+        fingerprint=data.model_dump(), check=check, result=_public)))
 
 
 @router.get("/counterparties/{counterparty_id}")
@@ -242,7 +248,7 @@ async def get_counterparty(counterparty_id: str, user: dict = Depends(require_m5
     counterparty["total_invoiced"] = sum(inv.get("total", 0) for inv in invoices)
     counterparty["lifecycle_status"] = cr.lifecycle_of(counterparty, "counterparties")
     
-    return counterparty
+    return cr.mask_iban_fields(counterparty, await cr.full_iban_allowed(user))   # FG-245
 
 
 @router.put("/counterparties/{counterparty_id}")
@@ -299,12 +305,12 @@ async def update_counterparty(counterparty_id: str, data: CounterpartyUpdate, us
         out["eik_change_pending"] = bool(eik_request)
         return out
 
-    return await _with_duplicate_dq(tenant, user, new_eik, counterparty_id, lambda: mr.update(
+    return await _masked(user, _with_duplicate_dq(tenant, user, new_eik, counterparty_id, lambda: mr.update(
         db, user, idempotency_key, collection="counterparties", record_id=counterparty_id,
         changes=changes, fingerprint={"id": counterparty_id, "body": data.model_dump()},
         check=check, result=result,
         action_name="eik_change_requested" if eik_request else "updated",
-        reason=eik_request["reason"] if eik_request else None))
+        reason=eik_request["reason"] if eik_request else None)))
 
 
 async def _eik_decision(counterparty_id: str, body: Dict[str, Any], user: dict,
@@ -353,9 +359,9 @@ async def _eik_decision(counterparty_id: str, body: Dict[str, Any], user: dict,
         after = await tenant.counterparties.get(counterparty_id, {"_id": 0}, **kw(session))
         return _public(after)
 
-    return await _with_duplicate_dq(tenant, user, req0.get("new_eik") or "", counterparty_id, lambda: once_in_tx(
+    return await _masked(user, _with_duplicate_dq(tenant, user, req0.get("new_eik") or "", counterparty_id, lambda: once_in_tx(
         db, user, key, "counterparty.eik_change.%s" % ("approve" if approve else "reject"),
-        {"id": counterparty_id, "body": body}, tx))
+        {"id": counterparty_id, "body": body}, tx)))
 
 
 @router.post("/counterparties/{counterparty_id}/eik-change/approve")

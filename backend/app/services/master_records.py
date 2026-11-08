@@ -244,14 +244,18 @@ async def _reverify_bank_accounts(db, tenant, session, user, collection, record_
     an Owner/Accountant who did not enter it), in the same transaction, each with an event."""
     party_type = "counterparty" if collection == "counterparties" else "subcontractor"
     accounts = await tenant.verified_bank_accounts.find(
-        {"party_type": party_type, "counterparty_id": record_id, "status": cr.BA_VERIFIED},
+        # FG-243: every live account — verified, or pending with a verification / approvals
+        # collected before the archive — starts again from „за проверка“ with nothing carried
+        {"party_type": party_type, "counterparty_id": record_id,
+         "status": {"$in": [cr.BA_VERIFIED, cr.BA_PENDING]}},
         {"_id": 0}, **kw(session)).to_list(50)
     now = _now()
     for acc in accounts:
         res = await tenant.verified_bank_accounts.update_one(
             {"id": acc["id"], "version": acc.get("version")},
             {"$set": {"status": cr.BA_PENDING, "verification": None, "approvals": [],
-                      "is_change": False, "reverification_reason": "unarchived",
+                      "is_change": False, "replaces_account_id": None,
+                      "reverification_reason": "unarchived",
                       "previous_verification": acc.get("verification"),
                       "version": int(acc.get("version") or 0) + 1, "updated_at": now}},
             **kw(session))
@@ -260,7 +264,9 @@ async def _reverify_bank_accounts(db, tenant, session, user, collection, record_
         await audit(db, session, user, "bank_account.reverification_required",
                     entity_type="bank_account", entity_id=acc["id"], key=key,
                     reason="контрагентът е върнат от архив (Р50.3)",
-                    diff={"status": {"before": cr.BA_VERIFIED, "after": cr.BA_PENDING},
+                    diff={"status": {"before": acc.get("status"), "after": cr.BA_PENDING},
+                          "verification_cleared": bool(acc.get("verification")),
+                          "approvals_cleared": len(acc.get("approvals") or []),
                           "iban_masked": cr.mask_iban(acc.get("iban"))})
 
 

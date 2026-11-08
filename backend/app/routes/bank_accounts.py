@@ -41,19 +41,8 @@ def _tenant(user: dict) -> TenantData:
 
 
 async def full_iban_allowed(user: dict) -> bool:
-    """Addendum A / D5 (Q005, FLOW-040 §9/§11): Owner and Accountant see the full IBAN; an
-    Admin only with the explicit ``sensitive.iban.read`` permission on one of their own
-    active RoleAssignments in THIS tenant (none by default); everyone else ``****1234``."""
-    role = cr.role_of(user)
-    if role in cr.IBAN_FULL_ROLES:
-        return True
-    if role != "Admin":
-        return False
-    from app.tenancy import registry
-    row = await registry.tenant_role_assignments.find_one(
-        {"user_id": user["id"], "tenant_id": user["org_id"], "status": "active",
-         "permissions": cr.SENSITIVE_IBAN_PERMISSION}, {"_id": 0, "id": 1})
-    return row is not None
+    """See ``counterparty_rules.full_iban_allowed`` (Q005 / D5)."""
+    return await cr.full_iban_allowed(user)
 
 
 def _now() -> str:

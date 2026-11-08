@@ -237,6 +237,58 @@ SENSITIVE_IBAN_PERMISSION = "sensitive.iban.read"
 IBAN_FULL_ROLES = frozenset({"Owner", "Accountant"})
 
 
+#: FG-245: every field that can carry an IBAN in a response (legacy and CP-01).
+IBAN_KEYS = frozenset({"iban", "IBAN", "bank_iban", "bank_account", "bank_account_iban",
+                       "counterparty_iban"})
+
+
+async def full_iban_allowed(user) -> bool:
+    """Q005 / D5: Owner and Accountant see a full IBAN; an Admin only with the explicit
+    ``sensitive.iban.read`` permission on one of their own active RoleAssignments in this
+    tenant (none by default); everyone else ``****1234``."""
+    role = role_of(user)
+    if role in IBAN_FULL_ROLES:
+        return True
+    if role != "Admin":
+        return False
+    from app.tenancy import registry
+    row = await registry.tenant_role_assignments.find_one(
+        {"user_id": user["id"], "tenant_id": user["org_id"], "status": "active",
+         "permissions": SENSITIVE_IBAN_PERMISSION}, {"_id": 0, "id": 1})
+    return row is not None
+
+
+def mask_iban_fields(value: Any, full: bool) -> Any:
+    """FG-245: a copy of ``value`` (dict / list, recursively) with every IBAN field shown as
+    ``****1234`` unless ``full``. Non-IBAN text in such a field is masked the same way."""
+    if full:
+        return value
+    if isinstance(value, list):
+        return [mask_iban_fields(v, full) for v in value]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if k in IBAN_KEYS and isinstance(v, str) and v and not v.startswith("****"):
+                out[k] = mask_iban(v)
+            else:
+                out[k] = mask_iban_fields(v, full)
+        return out
+    return value
+
+
+def keep_stored_if_masked(incoming: Any, stored: Any, keys=("iban", "eik", "egn", "tax_id")) -> Any:
+    """A form that sends back a masked value (``****1234`` / ``******1234``) never overwrites
+    the stored one with the mask (CLAUDE.md §2: no data destroyed by a masked read)."""
+    if not isinstance(incoming, dict) or not isinstance(stored, dict):
+        return incoming
+    out = dict(incoming)
+    for k in keys:
+        v = out.get(k)
+        if isinstance(v, str) and v.startswith("****") and stored.get(k):
+            out[k] = stored[k]
+    return out
+
+
 def public_bank_account(doc: Dict[str, Any], full_allowed: bool) -> Dict[str, Any]:
     """The API view of a bank account: the full IBAN only when ``full_allowed``
     (Owner / Accountant, or an Admin with the sensitive right); otherwise ``****1234``."""

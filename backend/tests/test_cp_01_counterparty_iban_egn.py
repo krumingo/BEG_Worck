@@ -901,8 +901,9 @@ def test_a6_cash_to_a_counterparty_needs_a_receipt(monkeypatch, backend, mode):
         r = await manual_pay(c, **cash, cash_receipt_file_id="file_r1", cash_recipient_name="Иван Петров")
         assert r.status_code == 201, r.text
         assert r.json()["cash_receipt_file_id"] == "file_r1" and r.json()["cash_recipient_name"] == "Иван Петров"
-        # a cash payment that names no counterparty is not a counterparty payment
-        r = await manual_pay(c, method="Cash", account_id=CASH_A)
+        # a cash payment that names no payee at all is not a counterparty payment (FG-242: a
+        # payee named only by its name IS one — see test_fg242_…)
+        r = await manual_pay(c, method="Cash", account_id=CASH_A, counterparty_name=None)
         assert r.status_code == 201
         if backend != "real":       # #69's cap reservation uses $round: real Mongo only
             return
@@ -1158,4 +1159,142 @@ def test_fg230_dq_rows_have_the_one_schema_of_81(monkeypatch, backend, mode):
                       "owner_role", "opened_at", "updated_at"):
             assert row.get(field) is not None, (field, row)
         assert row["status"] == "open" and row["owner_role"] == "accountant" and row["org_id"] == ORG_A
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 24 (#83 @ 7e0b914)
+def test_fg242_cash_to_a_payee_named_only_by_name_or_eik(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        cash = dict(method="Cash", account_id=CASH_A)
+        # a payee named only by its name: a receipt is required
+        r = await manual_pay(c, counterparty_name="Някой Друг", **cash)
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+        r = await manual_pay(c, counterparty_name="Някой Друг", cash_receipt_file_id="file_r",
+                             cash_recipient_name="Някой Друг", **cash)
+        assert r.status_code == 201, r.text
+        # the name resolves to cp1, whose IBAN is unverified → blocked, also with a receipt
+        await seed_account(op, "ba-pend", IBAN_NEW, "pending_verification")
+        for name in ("Доставчик cp1", "доставчик CP1"):
+            r = await manual_pay(c, counterparty_name=name, cash_receipt_file_id="file_r",
+                                 cash_recipient_name="Иван", **cash)
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN", r.text
+        # the same through other-expense, and through quick-pay of cp1's invoice (by its ЕИК)
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+            "amount": 5.0, "project_id": "prj-1", "method": "Cash", "counterparty_name": "Доставчик cp1",
+            "cash_receipt_file_id": "file_r", "cash_recipient_name": "Иван"})
+        assert r.status_code == 409, r.text
+        await op.invoices.update_one({"id": "inv-r1"}, {"$unset": {"supplier_counterparty_id": ""}})
+        r = await c.post("/api/finance/invoices/inv-r1/payments", headers=hdr("acct-a"), json={
+            "amount": 5.0, "method": "Cash", "account_id": CASH_A,
+            "cash_receipt_file_id": "file_r", "cash_recipient_name": "Иван"})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
+        # cash with no payee at all (a withdrawal) is not a payment to a payee
+        r = await manual_pay(c, counterparty_name=None, **cash)
+        assert r.status_code == 201
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg243_unarchive_resets_a_pending_change_too(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        old = (await register(c, IBAN_OLD, who="admin-a")).json()
+        assert (await verify(c, old, who="owner-a")).status_code == 200
+        new = (await register(c, IBAN_NEW, who="admin-a")).json()
+        new = (await verify(c, new, who="acct-a")).json()                 # verified, awaiting approvals
+        r = await c.post("/api/bank-accounts/%s/approve-change" % new["id"], headers=hdr("owner-a"),
+                         json={"version": new["version"]})
+        assert r.status_code == 200 and len(r.json()["approvals"]) == 1
+        v = r.json()["version"]
+        assert (await c.post("/api/counterparties/cp1/archive", headers=hdr("admin-a"),
+                             json={"reason": "закрит"})).status_code == 200
+        assert (await c.post("/api/counterparties/cp1/reactivate", headers=hdr("owner-a"),
+                             json={"reason": "отново"})).status_code == 200
+        accs = {a["id"]: a for a in await rows(op, "verified_bank_accounts")}
+        for acc in accs.values():
+            assert acc["status"] == "pending_verification" and acc["verification"] is None, acc
+            assert acc["approvals"] == [] and acc["reverification_reason"] == "unarchived"
+        # the second approval of the pre-archive version no longer activates anything
+        r = await c.post("/api/bank-accounts/%s/approve-change" % new["id"], headers=hdr("acct2-a"),
+                         json={"version": v})
+        assert r.status_code == 409, r.text
+        assert accs[new["id"]]["status"] == "pending_verification"
+        assert (await manual_pay(c, counterparty_id="cp1")).status_code == 409
+        ev = await rows(op, "audit_events", {"action": "bank_account.reverification_required"})
+        assert {e["entity_id"] for e in ev} == {old["id"], new["id"]}
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg244_subcontractor_deactivate_archive_reactivate(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        url = "/api/subcontractors/sub1/%s"
+        assert (await c.post(url % "deactivate", headers=hdr("site-a"), json={"reason": "x"})).status_code == 403
+        assert (await c.post(url % "deactivate", headers=hdr("acct-a"), json={})).status_code == 400
+        r = await c.post(url % "deactivate", headers=hdr("acct-a"), json={"reason": "пауза"})
+        assert r.status_code == 200 and r.json()["lifecycle_status"] == "inactive"
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json={
+            "package_id": "pkg1", "amount": 10.0, "payment_method": "cash", "account_id": CASH_A,
+            "cash_receipt_file_id": "f", "cash_recipient_name": "n"})
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_NOT_SELECTABLE"
+        assert (await c.post(url % "reactivate", headers=hdr("acct-a"), json={"reason": "ок"})).status_code == 200
+        assert (await c.post(url % "archive", headers=hdr("acct-a"), json={"reason": "стар"})).status_code == 403
+        assert (await c.post(url % "archive", headers=hdr("admin-a"), json={"reason": "стар"})).status_code == 200
+        listed = (await c.get("/api/subcontractors", headers=hdr("acct-a"))).json()
+        assert "sub1" not in {s["id"] for s in listed}
+        listed = (await c.get("/api/subcontractors?include_archived=true", headers=hdr("acct-a"))).json()
+        assert "sub1" in {s["id"] for s in listed}
+        assert (await c.post(url % "reactivate", headers=hdr("acct-a"), json={"reason": "y"})).status_code == 403
+        assert (await c.post(url % "reactivate", headers=hdr("owner-a"), json={"reason": "y"})).status_code == 200
+        acts = [e["action"] for e in await rows(op, "audit_events", {"entity_id": "sub1"})]
+        assert acts == ["subcontractor.deactivated", "subcontractor.reactivated",
+                        "subcontractor.archived", "subcontractor.reactivated"]
+        assert len(await rows(op, "subcontractors", {"id": "sub1"})) == 1    # never deleted
+    run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("who,full", [("owner-a", True), ("acct-a", True), ("admin-a", False),
+                                      ("viewer-a", False), ("site-a", False), ("tech-a", False)])
+def test_fg245_legacy_iban_fields_masked_by_role(monkeypatch, backend, mode, who, full):
+    async def scenario(c, op):
+        await op.counterparties.update_one({"id": "cp1"}, {"$set": {"iban": IBAN_OLD}})
+        await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"bank_iban": IBAN_NEW}})
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"invoice_details.iban": IBAN_OTHER}})
+        await op.invoices.update_one({"id": "inv-r1"}, {"$set": {"counterparty_iban": IBAN_OLD}})
+        readers = ["/api/counterparties?active_only=false", "/api/counterparties/cp1",
+                   "/api/subcontractors", "/api/subcontractors/sub1", "/api/projects",
+                   "/api/projects/prj-1", "/api/projects/prj-1/invoice-details",
+                   "/api/finance/invoices", "/api/finance/invoices/inv-r1",
+                   "/api/reports/turnover-by-counterparty/cp1/invoices"]
+        seen = 0
+        for url in readers:
+            r = await c.get(url, headers=hdr(who))
+            if r.status_code != 200:
+                continue
+            text = json.dumps(r.json(), ensure_ascii=False)
+            for iban in (IBAN_OLD, IBAN_NEW, IBAN_OTHER):
+                if full:
+                    continue
+                assert iban not in text, (who, url)
+            seen += 1
+        assert seen >= 3, (who, seen)
+        if full:   # the full value is there for Owner / Accountant
+            r = await c.get("/api/counterparties/cp1", headers=hdr(who))
+            assert r.json()["iban"] == IBAN_OLD
+        if who == "admin-a":     # an Admin with the explicit sensitive right sees it
+            from app.tenancy import registry
+            await registry.tenant_role_assignments.update_one(
+                {"id": "ra_admin-a"}, {"$set": {"permissions": ["sensitive.iban.read"]}})
+            r = await c.get("/api/counterparties/cp1", headers=hdr(who))
+            assert r.json()["iban"] == IBAN_OLD
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg245_a_masked_form_value_never_overwrites_the_stored_iban(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"invoice_details.iban": IBAN_OTHER}})
+        shown = (await c.get("/api/projects/prj-1/invoice-details", headers=hdr("admin-a"))).json()
+        assert shown["invoice_details"]["iban"] == "****" + IBAN_OTHER[-4:]
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": dict(shown["invoice_details"], company_name="Ново")})
+        assert r.status_code == 200, r.text
+        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+        assert prj["invoice_details"]["iban"] == IBAN_OTHER and prj["invoice_details"]["company_name"] == "Ново"
     run(monkeypatch, backend, mode, scenario)

@@ -266,3 +266,17 @@ On `7e0b914` these tests are **7 red** on real Mongo (`cp83_red_on_7e0b914_real_
 | Full DB-free suite | no line only on the branch |
 
 Details in `gates_cp83_04.txt`.
+
+## 12. FLOW Guard pass 24 (on `7e0b914`)
+
+On `e36af6e` these tests are 24 red, 6 passed on real Mongo (`fg_pass24_red_on_e36af6e_real_mongo.txt`). The 6 that pass are the Owner/Accountant "full view" cases.
+
+| Finding | Fix | Test |
+|---|---|---|
+| **FG-241** | = CP83-02, already fixed in `6449dac` (other-income is never guarded) | `test_cp83_02_other_income_is_never_blocked` |
+| **FG-242**: cash to a payee given only by `counterparty_name` / ЕИК passed | `bank_account_guard.resolve_payee`: if no `counterparty_id` is given, the ЕИК, or else an exact (case-insensitive) name matching **one** counterparty, resolves the payee. Every cash outflow **to a payee** (named or resolved) needs a receipt `file_id` + recipient. While the resolved counterparty has an unverified IBAN → 409 `PAYEE_BLOCKED_PENDING_IBAN`. Wired into manual payments, other-expense, quick-pay (invoice name / ЕИК) and allocate. Cash with no payee at all (a withdrawal) is not checked. | `test_fg242_cash_to_a_payee_named_only_by_name_or_eik` |
+| **FG-243**: a pending change verified before the archive survived the unarchive | On unarchive (R50.3), **every** live account (verified **and** pending) goes back to „за проверка“ with its verification, approvals and `replaces_account_id` cleared, plus one AuditEvent per account. The pre-archive second approval → 409. | `test_fg243_unarchive_resets_a_pending_change_too` |
+| **FG-244**: subcontractors had no lifecycle routes | `POST /subcontractors/{id}/deactivate`, `/reactivate`, `/archive`, with the same rules as counterparties (R48.4, R50.3). The subcontractor list hides archived records (`include_archived`). An inactive or archived subcontractor is not chosen for a new package or payment (422). | `test_fg244_subcontractor_deactivate_archive_reactivate` |
+| **FG-245**: full IBAN in legacy fields | `counterparty_rules.mask_iban_fields` + `full_iban_allowed` (Owner / Accountant, Admin only with `sensitive.iban.read`). Applied to: counterparties list / detail / write responses (`iban`), subcontractors list / detail (`bank_iban`), projects list / detail / invoice-details (`invoice_details.iban`), finance invoices list / detail / write responses / quick-pay (`counterparty_iban`), and the turnover drill report. A project form that sends back the masked value never overwrites the stored one (`keep_stored_if_masked`). | `test_fg245_legacy_iban_fields_masked_by_role` (6 roles × 10 readers), `test_fg245_a_masked_form_value_never_overwrites_the_stored_iban` |
+
+**Whichever merges second (#81 or #83):** both PRs add `"dq_issues"` to `ownership.py` (#81 under its own family; #83 under FAMILY_AUDIT). The second one to merge must keep **one** registration; otherwise the A2B classification test sees a duplicate. The row schema is already the same (§9, FG-230).

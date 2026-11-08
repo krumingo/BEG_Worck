@@ -6,8 +6,8 @@ Phase 3: Subcontractor Acts (Certified Expense)
 Phase 4: Subcontractor Payments
 Phase 5: Profit Integration (extends revenue_expense)
 """
-from fastapi import APIRouter, Depends, Header, HTTPException
-from typing import Optional, List
+from fastapi import APIRouter, Body, Depends, Header, HTTPException
+from typing import Any, Dict, Optional, List
 import logging
 
 logger = logging.getLogger(__name__)
@@ -100,15 +100,38 @@ async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(r
 
 
 @router.get("/subcontractors")
-async def list_subcontractors(user: dict = Depends(require_m2)):
+async def list_subcontractors(user: dict = Depends(require_m2), include_archived: bool = False):
     tenant = _tenant(user)
-    subs = await tenant.subcontractors.find({"org_id": user["org_id"]}, {"_id": 0}).sort("name", 1).to_list(200)
+    subs = await tenant.subcontractors.find(mr.hide_archived({"org_id": user["org_id"]}, include_archived),
+                                            {"_id": 0}).sort("name", 1).to_list(200)
+    from app.services import counterparty_rules as cr
+    subs = cr.mask_iban_fields(subs, await cr.full_iban_allowed(user))       # CP-01 FG-245
     return subs
+
+
+def _sub_lifecycle(action: str):
+    """FG-244 (R48.4): a subcontractor is a counterparty — never deleted; „неактивен“
+    (Accountant / Admin / Owner, reversible) or „архивиран“ (Admin / Owner); reason + AuditEvent;
+    back from the archive its IBANs return to „за проверка“ (R50.3)."""
+    async def handler(sub_id: str, body: Dict[str, Any] = Body(default={}),
+                      user: dict = Depends(require_m2),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+        return await mr.lifecycle(db, user, idempotency_key, collection="subcontractors",
+                                  record_id=sub_id, action=action, body=body)
+    handler.__name__ = "%s_subcontractor" % action
+    return handler
+
+
+for _action in mr.LIFECYCLE_ACTIONS:
+    router.add_api_route("/subcontractors/{sub_id}/%s" % _action, _sub_lifecycle(_action),
+                         methods=["POST"])
 
 
 @router.get("/subcontractors/{sub_id}")
 async def get_subcontractor(sub_id: str, user: dict = Depends(require_m2)):
     sub = await _tenant(user).subcontractors.get(sub_id, {"_id": 0})
+    from app.services import counterparty_rules as cr
+    sub = cr.mask_iban_fields(sub, await cr.full_iban_allowed(user))         # CP-01 FG-245
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
     # W0-03E: additive master_ref in MASTER_DATA_MODE=enforce only.
@@ -136,6 +159,7 @@ async def create_package(data: PackageCreate, user: dict = Depends(require_m2)):
     sub = await tenant.subcontractors.find_one({"id": data.subcontractor_id, "org_id": org_id})
     if not sub:
         raise HTTPException(status_code=404, detail="Subcontractor not found")
+    await require_selectable_party(tenant, "subcontractor", data.subcontractor_id)  # R48.4
 
     now = datetime.now(timezone.utc).isoformat()
     pkg = {

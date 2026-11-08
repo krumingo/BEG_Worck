@@ -156,6 +156,7 @@ async def list_projects(
     if search:
         s = search.lower()
         projects = [p for p in projects if s in p.get("code", "").lower() or s in p.get("name", "").lower()]
+    full_iban = await cr.full_iban_allowed(user)          # FG-245
     for p in projects:
         if p.get("default_site_manager_id"):
             mgr = await tenant.users.find_one({"id": p["default_site_manager_id"], "org_id": user["org_id"]},
@@ -164,7 +165,7 @@ async def list_projects(
         else:
             p["site_manager_name"] = ""
         p["team_count"] = await project_team.active_member_count(_team(user), p["id"])
-        _mask_owner_egn(p)                                   # FG-226
+        _mask_owner_egn(p, full_iban)                        # FG-226 / FG-245
     return projects
 
 @router.post("/projects", status_code=201)
@@ -261,7 +262,7 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     else:
         project["site_manager_name"] = ""
     project["team_count"] = await project_team.active_member_count(_team(user), project_id)
-    _mask_owner_egn(project)
+    _mask_owner_egn(project, await cr.full_iban_allowed(user))
     return project
 
 
@@ -291,11 +292,12 @@ async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
     return cr.mask_invoice_details(details, owner_type, redundant)
 
 
-def _mask_owner_egn(project: dict) -> dict:
-    """R48.3: every project reader shows ``invoice_details`` with the ЕГН masked."""
+def _mask_owner_egn(project: dict, full_iban: bool = False) -> dict:
+    """R48.3: every project reader shows ``invoice_details`` with the ЕГН masked; FG-245: and
+    its IBAN as ``****1234`` unless the reader may see a full IBAN (Q005 / D5)."""
     if isinstance(project, dict) and isinstance(project.get("invoice_details"), dict):
-        project["invoice_details"] = _mask_invoice_details(project["invoice_details"],
-                                                           project.get("owner_type"))
+        project["invoice_details"] = cr.mask_iban_fields(
+            _mask_invoice_details(project["invoice_details"], project.get("owner_type")), full_iban)
     return project
 
 
@@ -361,6 +363,9 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
     if "invoice_details" in update:        # FG-226: no full ЕГН is ever stored in a project
+        # FG-245: the form sends back what it was shown (****1234 / ******1234) — keep the stored value
+        update["invoice_details"] = cr.keep_stored_if_masked(update["invoice_details"],
+                                                             project.get("invoice_details") or {})
         update["invoice_details"] = await _store_invoice_details(
             tenant, user, update["invoice_details"], update.get("owner_type", project.get("owner_type")),
             update.get("owner_id", project.get("owner_id")))
@@ -381,7 +386,8 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
     await tenant.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
-    return _mask_owner_egn(await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0}))
+    return _mask_owner_egn(await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0}),
+                           await cr.full_iban_allowed(user))
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, user: dict = Depends(require_admin)):
@@ -416,8 +422,9 @@ async def get_invoice_details(
     project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1, "owner_type": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return {"project_id": project_id, "invoice_details": _mask_invoice_details(  # FG-226
-        project.get("invoice_details") or {}, project.get("owner_type"))}
+    return {"project_id": project_id, "invoice_details": cr.mask_iban_fields(  # FG-226 / FG-245
+        _mask_invoice_details(project.get("invoice_details") or {}, project.get("owner_type")),
+        await cr.full_iban_allowed(user))}
 
 
 @router.post("/projects/{project_id}/import-client-invoice")
