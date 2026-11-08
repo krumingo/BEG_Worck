@@ -5248,3 +5248,23 @@ PR comment 6722039745 updated with the exact test fixes.
 | **warehouse** | **1121 (44 files, 0 bad)** |
 
 INV84-01 resolved. Remaining minor note (non-blocking): the migration drops the legacy unique index before creating the new one.
+
+## 2026-11-08 15:05 UTC: #71 `6fe8594` (= `021a078` + evidence; SEC71-M1 fix): PASS
+
+- **Wrapper:** `_request_of` returns None on a direct call, and the decorators then strip money (fail closed, no crash).
+- **#55 tests:** they pass `_sec02_request`; 6 calls changed, 0 assertions changed.
+- **Enforce fixture:** it gives only `u-<tenant>` an Owner assignment; everyone else goes through the real loader, so no rights are widened.
+
+| Gate | Result |
+|---|---|
+| sec01 probe G/H | none |
+| bisect probe | only the known-pay variant (R42, accepted) |
+| SEC-02 + SEC-01 | 61 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+
+SEC71-M1 resolved. No blocking finding remains.
