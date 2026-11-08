@@ -4951,4 +4951,8 @@ Audit hygiene: one #81 probe run overlapped the b82 batch on rs3, against my own
 
 **WHFIX81-04: stale A1 inventory.** `test_the_committed_inventory_is_the_generated_one` fails: generated 376 / FIXED 130, committed 377 / 131. The README references a `03_gates.txt` that is not committed.
 
-PR comment 6719287307 updated (four blocking findings). R0 814, PM-01 6.
+PR comment 6719287307 updated. R0 814. **PM-01: 1 failed (WHFIX81-05).**
+
+**WHFIX81-05 (blocking): the committed PM-01 matrix is not regenerated.** `test_a_fresh_real_mongo_run_reproduces_the_committed_matrix` has 24 cells differing: `POST /api/projects/{project_id}/material-waste` for every role in off/shadow/enforce. The committed matrix has (201, yes, op.material_waste_entries); the real run gives (422, no, -). Regenerate with `--harness` after fixing WHFIX81-02.
+
+Correction: commit 0df7c09 wrote "PM-01 6" by mistake; the real result is 1 failed / 5 passed.
