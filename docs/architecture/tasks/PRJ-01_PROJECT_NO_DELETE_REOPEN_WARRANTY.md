@@ -25,3 +25,8 @@ Idempotency-Key (Р29), транзакция + canonical AuditEvent, права 
 
 ## Предаване
 HANDOFF в PR, `docs/evidence/PRJ-01/`, дългове D1…. Съобщение: `PRJ-01 DONE pr=… head=… tests=…`. Без merge.
+
+## Допълнение A (08.11) — FLOW Guard на #86 @ 0bd77a1 + oracle Q006 + Р56
+Кодови: FG-252 (никакъв нов Warranty по нито един път), FG-254 (историята включва media_files context_type/context_id, asset_qr_codes entity_type/entity_id и всяка друга форма на препратка), FG-253 (свързан гаранционен проект не се отваря отново), FG-255 (без пари за не-финансови роли; /log по Р54), FG-256 (PUT без приети полета → 422; DQ се затваря след --map), D3 (pause/complete с причина + canonical AuditEvent), D6 (оттеглена снимка не се сервира на Viewer).
+„Платено“ на подизпълнител: от единния Payment ledger (FLOW-006) — всички плащания и аванси към подизпълнителя (Р39), не само `subcontractor_payments`; ако каноничният ключ е различен по колекции — изброи ги в HANDOFF.
+Р56: (1) отваряне — само Owner/Admin (SiteManager → 403, може да поиска); (2) чернова с екип/етапи/оферта/клиент → 409 PROJECT_HAS_HISTORY, архив вместо изтриване; (3) quality_score цяло 1–5 (422 иначе); (4) неопределим оригинал → DQ към SiteManager, 7 дни, ескалация към Owner; връзката = подобект (parent_project_id).
