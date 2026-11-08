@@ -4775,3 +4775,16 @@ For the fix heads, add:
 - (b) M concurrent piece-rate changes → distinct, gap-free versions, each with its own AuditEvent; the latest wins.
 
 Main sanity run `bmain2` (PAY, 43 warehouse files, W0, R0, PM-01) is running.
+
+main `cd03324` sanity — **PASS**.
+
+| Gate | Result |
+|---|---|
+| PAY | 630 |
+| warehouse canonical | **44 files / 1121 passed**, 0 bad |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+Identical to #55 `ed48595`'s gates, so the merge introduced nothing.
