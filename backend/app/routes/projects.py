@@ -288,6 +288,17 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     status_reason = update.pop("status_reason", None)
+    if "parent_project_id" in update:
+        # PRJ-01 / FG-279 (R60): the structure changes ONLY through the structure commands
+        # (create-sub-project / wrap-in-group / the warranty link), which check depth and
+        # warranty and write an AuditEvent. The same value is a no-op.
+        if (update["parent_project_id"] or None) != (project.get("parent_project_id") or None):
+            raise lifecycle.refuse(
+                409, "PARENT_CHANGE_NOT_ALLOWED",
+                "Структурата на обекта не се сменя с редакция — използвайте „Нов под-обект“ "
+                "или „Обвий в шапка“ (create-sub-project / wrap-in-group)",
+                current_parent_project_id=project.get("parent_project_id"))
+        update.pop("parent_project_id")
     if any(f in update and update[f] != project.get(f) for f in ("owner_type", "owner_id")):
         # SEC-01-C01 (R14): changing the paying client is a money write — the same rule
         # as PATCH /projects/{id}/client-link, before any write. Unchanged values pass.
@@ -2139,10 +2150,20 @@ async def wrap_in_group(project_id: str, data: WrapInGroupRequest, user: dict = 
     await tenant.projects.insert_one(group_doc)
 
     # 2) Existing project става child под шапката — БЕЗ ДА ПИПАМЕ ДРУГИ ДАННИ
-    await tenant.projects.update_one(
-        {"id": project_id, "org_id": org_id},
-        {"$set": {"parent_project_id": group_id, "updated_at": now}}
-    )
+    # PRJ-01 / FG-279: the parent change and its canonical AuditEvent commit together.
+    async def reparent(session):
+        res = await tenant.projects.update_one(
+            {"id": project_id, "org_id": org_id, "parent_project_id": project.get("parent_project_id")},
+            {"$set": {"parent_project_id": group_id, "updated_at": now}}, session=session)
+        if res.modified_count != 1:
+            raise lifecycle.refuse(409, "PROJECT_CHANGED", "Обектът току-що се промени")
+        await lifecycle.audit(session, user, action="project.parent_change", entity_type="project",
+                              entity_id=project_id, key=None, reason="wrap-in-group",
+                              diff={"before": {"parent_project_id": project.get("parent_project_id")},
+                                    "after": {"parent_project_id": group_id}})
+
+    from app.services.auth_tx import run_in_transaction
+    await run_in_transaction(db, reparent)
 
     # 3) Създаваме нов празен под-обект (втори брат)
     new_sub_id = str(uuid.uuid4())
@@ -2389,10 +2410,14 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
 
 @router.get("/projects/{project_id}/aggregate")
 async def get_project_aggregate(project_id: str, user: dict = Depends(get_current_user)):
-    """Read-only aggregate: own data + all direct children data."""
+    """Read-only aggregate: own data + all children data (a child includes its warranty
+    sub-projects — R60, FG-280)."""
     tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if not await tenant.projects.get(project_id, {"_id": 0, "id": 1}):
+        # PRJ-01 / FG-280: another tenant's (or an unknown) project is not found here
+        raise HTTPException(status_code=404, detail="Project not found")
 
     # Get all project IDs (parent + children)
     children = await tenant.projects.find(
@@ -2403,6 +2428,16 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     if not child_ids:
         return {"has_children": False}
+
+    # PRJ-01 / FG-280 (R60): a legacy warranty project may sit one level BELOW a child (the
+    # only second level allowed); its data rolls up to that child, then to this project.
+    warranty_kids = await tenant.projects.find(
+        {"org_id": org_id, "type": WARRANTY_TYPE, "parent_project_id": {"$in": child_ids}},
+        {"_id": 0, "id": 1, "parent_project_id": 1}).to_list(500)
+    group = {cid: [cid] for cid in child_ids}
+    for w in warranty_kids:
+        group[w["parent_project_id"]].append(w["id"])
+    subtree_ids = [pid for cid in child_ids for pid in group[cid]]
 
     # ── Team ──
     async def count_team(pid):
@@ -2426,8 +2461,11 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     per_child = {}
     for c in children:
         cid = c["id"]
-        ct = await count_team(cid)
-        cr = await count_reported(cid)
+        ct, cr = 0, {"reported": 0, "approved": 0, "hours": 0}
+        for gid in group[cid]:
+            ct += await count_team(gid)
+            r_ = await count_reported(gid)
+            cr = {k: cr[k] + r_[k] for k in cr}
         child_team += ct
         child_rpt["reported"] += cr["reported"]
         child_rpt["approved"] += cr["approved"]
@@ -2460,9 +2498,9 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         return {"count": count, "invoiced": invoiced, "paid": paid, "unpaid": unpaid, "overdue": overdue, "proforma_future": proforma_future}
 
     own_inv = await count_invoices([project_id])
-    child_inv = await count_invoices(child_ids) if child_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0}
+    child_inv = await count_invoices(subtree_ids) if subtree_ids else {"count": 0, "invoiced": 0, "paid": 0, "unpaid": 0, "overdue": 0}
     for c in children:
-        per_child[c["id"]]["invoices"] = await count_invoices([c["id"]])
+        per_child[c["id"]]["invoices"] = await count_invoices(group[c["id"]])
 
     # ── Offers ──
     async def count_offers(pids):
@@ -2471,9 +2509,9 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         return {"count": count, "approved": approved}
 
     own_off = await count_offers([project_id])
-    child_off = await count_offers(child_ids) if child_ids else {"count": 0, "approved": 0}
+    child_off = await count_offers(subtree_ids) if subtree_ids else {"count": 0, "approved": 0}
     for c in children:
-        per_child[c["id"]]["offers"] = await count_offers([c["id"]])
+        per_child[c["id"]]["offers"] = await count_offers(group[c["id"]])
 
     # ── Reports total (all time) ──
     async def count_report_hours(pids):
@@ -2484,9 +2522,9 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         return {"count": len(reps), "hours": round(sum(r.get("hours", 0) for r in reps), 1)}
 
     own_reps = await count_report_hours([project_id])
-    child_reps = await count_report_hours(child_ids) if child_ids else {"count": 0, "hours": 0}
+    child_reps = await count_report_hours(subtree_ids) if subtree_ids else {"count": 0, "hours": 0}
     for c in children:
-        per_child[c["id"]]["reports"] = await count_report_hours([c["id"]])
+        per_child[c["id"]]["reports"] = await count_report_hours(group[c["id"]])
 
     # ── Work Sessions (часове + labor cost) ──
     async def count_work(pids):
@@ -2499,9 +2537,9 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         return {"hours": hours, "labor_cost": cost, "sessions": len(sessions)}
 
     own_work = await count_work([project_id])
-    child_work = await count_work(child_ids) if child_ids else {"hours": 0, "labor_cost": 0, "sessions": 0}
+    child_work = await count_work(subtree_ids) if subtree_ids else {"hours": 0, "labor_cost": 0, "sessions": 0}
     for c in children:
-        per_child[c["id"]]["work"] = await count_work([c["id"]])
+        per_child[c["id"]]["work"] = await count_work(group[c["id"]])
 
     # ── Materials (от warehouse transactions) ──
     async def count_materials(pids):
@@ -2514,18 +2552,18 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         return {"ex_vat": ex_vat, "inc_vat": inc_vat, "count": len(txns)}
 
     own_mat = await count_materials([project_id])
-    child_mat = await count_materials(child_ids) if child_ids else {"ex_vat": 0, "inc_vat": 0, "count": 0}
+    child_mat = await count_materials(subtree_ids) if subtree_ids else {"ex_vat": 0, "inc_vat": 0, "count": 0}
     for c in children:
-        per_child[c["id"]]["materials"] = await count_materials([c["id"]])
+        per_child[c["id"]]["materials"] = await count_materials(group[c["id"]])
 
     # ── Paid Labor (from v3 paid pay_runs) ──
     async def count_paid_labor(pids):
         return await paid_labor_for_projects_v3(org_id, pids)
 
     own_paid = await count_paid_labor([project_id])
-    child_paid = await count_paid_labor(child_ids) if child_ids else {"gross_labor": 0, "paid_hours": 0}
+    child_paid = await count_paid_labor(subtree_ids) if subtree_ids else {"gross_labor": 0, "paid_hours": 0}
     for c in children:
-        per_child[c["id"]]["paid_labor"] = await count_paid_labor([c["id"]])
+        per_child[c["id"]]["paid_labor"] = await count_paid_labor(group[c["id"]])
 
     def merge(own, children):
         return {k: round((own.get(k, 0) or 0) + (children.get(k, 0) or 0), 2) for k in set(list(own.keys()) + list(children.keys()))}

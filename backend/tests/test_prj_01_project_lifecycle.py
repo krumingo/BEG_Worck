@@ -583,6 +583,53 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                    "second_level_non_warranty": call(
                        "POST", "/api/projects/%s/create-sub-project" % pid("A", "sub_orig"),
                        json={"name": "трето ниво"})["status"]}
+            # FG-279: PUT cannot change the structure (the parent); the same value is a no-op
+            r60["put_parent_billable"] = call("PUT", "/api/projects/%s" % pid("A", "type_empty"),
+                                              json={"parent_project_id": pid("A", "sub_orig")})
+            r60["put_parent_warranty_root"] = call("PUT", "/api/projects/%s" % pid("A", "warr_sub"),
+                                                   json={"parent_project_id": A["project_id"]})
+            r60["put_parent_warranty_empty"] = call("PUT", "/api/projects/%s" % pid("A", "warr_sub"),
+                                                    json={"parent_project_id": ""})
+            r60["put_parent_same"] = call("PUT", "/api/projects/%s" % pid("A", "warr_sub"),
+                                          json={"parent_project_id": pid("A", "sub_orig"),
+                                                "notes": "без промяна на структурата"})["status"]
+            r60["put_parent_other_tenant"] = call("PUT", "/api/projects/%s" % pid("A", "warr_sub"),
+                                                  tkey="B", json={"parent_project_id": ""})["status"]
+            for k2 in ("put_parent_billable", "put_parent_warranty_root", "put_parent_warranty_empty"):
+                r60[k2] = [r60[k2]["status"], r60[k2]["error_code"]]
+            r60["parents_after_put"] = [(project_doc(n) or {}).get("parent_project_id")
+                                        for n in ("type_empty", "warr_sub")]
+            # FG-279: the structure command that re-parents (wrap-in-group) writes an AuditEvent
+            r = call("POST", "/api/projects/%s/wrap-in-group" % pid("A", "completed"),
+                     json={"new_subproject_name": "втори"})
+            r60["wrap"] = r["status"]
+            r60["wrap_events"] = [e["diff"] for e in events(pid("A", "completed"), "project.parent_change")]
+            # FG-280: every reader rolls the second-level warranty up through the sub-project
+            ag = call("GET", "/api/projects/%s/aggregate" % A["project_id"], key=None)["body"]
+            ag_sub = next((c for c in (ag or {}).get("children", []) if c.get("id") == pid("A", "sub_orig")), {}) \
+                if isinstance(ag, dict) else {}
+            r60["aggregate_children_labor"] = ((ag or {}).get("work") or {}).get("children", {}).get("labor_cost") \
+                if isinstance(ag, dict) else None
+            r60["aggregate_sub_labor"] = (ag_sub.get("work") or {}).get("labor_cost")
+            r60["aggregate_other_tenant"] = call("GET", "/api/projects/%s/aggregate" % A["project_id"],
+                                                 tkey="B", key=None)["status"]
+            from app.tenancy.data_access import TenantData
+            from app.services.warehouse_movements import price_history
+            from app.services.warehouse_movements.service import resolve_subproject_parent
+            tA = TenantData.for_resolved_org(op_db, A["tenant_id"])
+            q(lambda: op_db.warehouse_transactions.insert_one({
+                "id": pid("A", "wt_warr"), "org_id": A["tenant_id"], "movement_id": pid("A", "mv_warr"),
+                "action": "receive_from_supplier_to_project", "item_id": "item-x", "unit": "бр",
+                "unit_value": "2.50", "quantity": "4", "occurred_at": NOW,
+                "destination": {"location_id": pid("A", "warr_sub"), "location_type": "subproject"},
+                "source": {"location_id": "sup-1", "location_type": "supplier"}}))
+            r60["buckets_have_warranty"] = pid("A", "warr_sub") in q(
+                lambda: price_history._project_buckets(tA, A["project_id"]))
+            r60["purchases_have_warranty_delivery"] = any(
+                x.get("movement_id") == pid("A", "mv_warr")
+                for x in q(lambda: price_history.project_purchases(tA, A["tenant_id"], A["project_id"])))
+            r60["resolve_parent_of_warranty"] = q(lambda: resolve_subproject_parent(
+                op_db, A["tenant_id"], pid("A", "warr_sub")))
             code_before = wp.get("code")
             r = call("POST", "/api/projects/%s/create-sub-project" % A["project_id"],
                      json={"name": "Нов етап"})
@@ -957,6 +1004,20 @@ def test_fg236_the_warranty_migration_links_dry_run_first_idempotent_never_delet
     assert r60["sub_entry_expense"] == 140 and r60["sub_entry_warranty_children"] == ["prj01-A-warr_sub"]
     assert r60["agg_minus_parent"] == 140
     assert r60["second_level_non_warranty"] == 400
+    # FG-279: no structure change through PUT (409 with a hint); same value accepted; B → 404
+    assert r60["put_parent_billable"] == [409, "PARENT_CHANGE_NOT_ALLOWED"]
+    assert r60["put_parent_warranty_root"] == [409, "PARENT_CHANGE_NOT_ALLOWED"]
+    assert r60["put_parent_warranty_empty"] == [409, "PARENT_CHANGE_NOT_ALLOWED"]
+    assert r60["put_parent_same"] == 200 and r60["put_parent_other_tenant"] == 404
+    assert r60["parents_after_put"] == [None, "prj01-A-sub_orig"]
+    assert r60["wrap"] == 201 and len(r60["wrap_events"]) == 1
+    assert r60["wrap_events"][0]["before"] == {"parent_project_id": None}
+    # FG-280: /aggregate and the warehouse price history include the warranty under the
+    # sub-project; resolve_subproject_parent gives the sub-project (it then rolls up) — disproved
+    assert r60["aggregate_sub_labor"] == 140 and r60["aggregate_children_labor"] >= 140
+    assert r60["aggregate_other_tenant"] == 404
+    assert r60["buckets_have_warranty"] is True and r60["purchases_have_warranty_delivery"] is True
+    assert r60["resolve_parent_of_warranty"] == "prj01-A-sub_orig"
     # FG-273: the rename after linking writes its AuditEvent
     assert m["sub_after_link"] == 201 and m["code_renamed"] is True
     assert m["code_events"] == [[m["code_before"], m["code_after"]]]
