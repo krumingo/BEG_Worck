@@ -298,8 +298,8 @@
 | FG-276 | low | #84 `ef7cddd` | приета разлика (фирмен разход) няма път за сторно/корекция | PROVEN | resolved (#84 `cdd3dc8`, PROVEN: `POST /finance/credit-notes/{id}/reverse-difference` (`routes/invoice_corrections.py:540-575`, `_difference_write` `:449-478`) — транзакция + CAS върху добавящ се дневник, Idempotency-Key (428 без), canonical AuditEvent `finance.credit_note.difference_reversed`; само Owner (Accountant/Admin 403); старите записи непроменени, нов −5.00 в периода на сторното; DQ към Счетоводителя; повторно → 409); пренасочването след сторно → FG-281 |
 | FG-277 | medium | #84 `e75b558` | ред с неопределен вид (`undetermined`) не се осчетоводява никъде; DQ задачата няма изход | PROVEN | resolved (#84 `cdd3dc8`, PROVEN: `POST …/difference-lines/{line_id}/resolve` (`invoice_corrections.py:481-537`), Owner/Admin/Accountant; осчетоводява се в периода на приемането (Р58); DQ задачата се затваря с `closed_by`; AuditEvent; повторно → 409; Viewer/SiteManager 403) |
 | FG-278 | low | #84 `e75b558` | фирмените загуби са за цялото време, а сумите на обектите — само за активни статуси; крайният резултат смесва обхвати | PROVEN | partial (#84 `cdd3dc8`, PROVEN: периодът е оправен — `company_losses_block(period)` и трите четящи са кумулативни; статусите не: `/org/pnl-overview` брои само Active/Draft/Paused (`routes/project_pnl.py:93`, макс. 100), `/org/pnl-attribution` — всички коренни (`services/pnl_aggregator.py:89`); проба с един Completed обект: −5.00 срещу 195.00; свързано с FG-262) |
-| FG-279 | medium | #86 PRJ-01 `abc6fda` | `PUT /projects/{id}` сменя `parent_project_id` без проверка и без AuditEvent — заобикаля Р60 | PROVEN | open (#86 PRJ-01 `dbb04ba`, PROVEN: PUT мести обикновен обект под подобект — 200 без AuditEvent; PUT мести свързана гаранция към корена — 200, `warranty_of_project_id` остава към подобекта) |
-| FG-280 | medium | #86 PRJ-01 `abc6fda` | агрегатът на обекта и складът гледат само едно ниво — гаранцията на второ ниво не стига до корена | PROVEN | open (#86 PRJ-01 `dbb04ba`, PROVEN: труд 111 на гаранция второ ниво — `/pnl/aggregated` на корена 1481 (вкл.), `/projects/{root}/aggregate` само 100+1000 (`projects.py:2390-2402`), `_project_buckets(root)` пропуска внука (`price_history.py:36-39`)) |
+| FG-279 | medium | #86 PRJ-01 `abc6fda` | `PUT /projects/{id}` сменя `parent_project_id` без проверка и без AuditEvent — заобикаля Р60 | PROVEN | resolved (#86 PRJ-01 `8e8be48`/`24ffe07`, PROVEN: PUT с друг родител → 409 `PARENT_CHANGE_NOT_ALLOWED` (`routes/projects.py:291-301`) — 4 опита, родителят непроменен; същата стойност/`null` → no-op; wrap-in-group прехвърля с CAS и `project.parent_change` в транзакция (`:2153-2166`); всички писатели на `parent_project_id` проверени); стари данни → FG-304; липсваща команда за преместване → FG-305 |
+| FG-280 | medium | #86 PRJ-01 `abc6fda` | агрегатът на обекта и складът гледат само едно ниво — гаранцията на второ ниво не стига до корена | PROVEN | resolved (#86 PRJ-01 `8e8be48`, PROVEN: R → S → W (гаранция) и R → S2; `/aggregate` на R = 1211.0 (S = 1111.0), равно на `/pnl/aggregated`; `_project_buckets(R)` = [R, S, S2, W]; две нива, второто само за Warranty — по Р60; `resolve_subproject_parent` връща S — правилно) |
 | FG-281 | medium | #84 `cdd3dc8` | след сторно на приета разлика редът се преосчетоводява където и да е (друг обект, фирмен разход, приключен обект) от един човек — заобикаля Р55 (2)/(3) и Р58 | PROVEN | open (+ Krum: свобода на Счетоводителя) |
 | FG-282 | medium | main `3699c3b` | приходът на обекта брои и входящи (`Received`) фактури с `project_id` — печалбата и `final_profit` се надуват | PROVEN | open |
 | FG-290 | medium | #83 CP-01 `1e455e3` | касовият бон (`file_id`) не се проверява във File Registry — приема се всеки низ | PROVEN | open |
@@ -307,9 +307,12 @@
 | FG-292 | low | #83 CP-01 `1e455e3` | бързо плащане в брой на входяща фактура без контрагент минава като разход без получател | PROVEN | open |
 | FG-293 | medium | main `3699c3b` | заем/аванс в брой към външно лице по свободен текст (`/advances`) заобикаля Р59 и Р50 (1) | PROVEN | open — Krum decision (покрива ли Р59 авансите) |
 | FG-294 | medium | #83 CP-01 `1e455e3` | издадена фактура с 10-цифрено ЕГН в `counterparty_eik` се връща изцяло на Admin (срещу Р48.3) и на Owner без AuditEvent | PROVEN | open |
-| FG-300 | low | #86 PRJ-01 `dbb04ba` | състезание в транзакцията за изтриване — оферта, вмъкната след повторната проверка, остава към tombstone | PROVEN | open |
-| FG-301 | low | #86 PRJ-01 `dbb04ba` | пълното сканиране за история се пуска два пъти (извън и в транзакцията) при всяко DELETE | PROVEN | open |
-| FG-302 | low | #86 PRJ-01 `dbb04ba` | tombstone-ите се връщат в `TenantData.lookup`, тихо се пропускат от `update_many`/`delete_many`; няма път за възстановяване | SUSPECTED | open — частично Krum decision (възстановяване) |
+| FG-300 | low | #86 PRJ-01 `dbb04ba` | състезание в транзакцията за изтриване — оферта, вмъкната след повторната проверка, остава към tombstone | PROVEN | open (#86 `8e8be48`, PROVEN отново: `orphan_offer = 1`) |
+| FG-301 | low | #86 PRJ-01 `dbb04ba` | пълното сканиране за история се пуска два пъти (извън и в транзакцията) при всяко DELETE | PROVEN | open (#86 `8e8be48`, PROVEN отново: `scan_calls = {none: 1, txn: 1}`) |
+| FG-302 | low | #86 PRJ-01 `dbb04ba` | tombstone-ите се връщат в `TenantData.lookup`, тихо се пропускат от `update_many`/`delete_many`; няма път за възстановяване | SUSPECTED | open (#86 `8e8be48`: `TenantData.lookup("projects")` връща tombstone — PROVEN като механизъм, днес няма такова извикване; масовите пътища и възстановяването — SUSPECTED) |
+| FG-303 | low | #86 PRJ-01 `8e8be48` | wrap-in-group създава групата извън транзакцията на прехвърлянето — при загуба остава група-сирак без AuditEvent | PROVEN | open |
+| FG-304 | medium | main `ea57121` (от 28.06.2026) | PUT е позволявал смяна на `parent_project_id` без проверки — реални данни може да имат негаранционно второ ниво или цикъл, които не се обобщават | PROVEN (ефект) / SUSPECTED (данни) | open (+ Krum: вдигане или обобщаване) |
+| FG-305 | low | #86 PRJ-01 `8e8be48` | няма команда за поставяне на съществуващ обект под друг корен/група или за обединяване на нива (P-06 „обедини“) | SUSPECTED | open — Krum decision |
 | FG-315 | medium | PWA-01 `a05167a` | локалните данни са по tenant, не по потребител; изходът/401 трие всичко без предупреждение — основа, която противоречи на Р61 (5) за PWA-02 | PROVEN | open (дълг за PWA-02) |
 | FG-316 | low | PWA-01 `a05167a` | изчистването не покрива IndexedDB, бисквитки и HTTP кеша | PROVEN | open |
 | FG-317 | medium | PWA-01 `a05167a` | външни скриптове с запис на сесията (PostHog `session_recording`) са в инсталираното приложение — могат да запишат ЕГН/IBAN/суми | PROVEN | open — Krum decision |
@@ -2725,6 +2728,29 @@
 - **Код (#86 PRJ-01 `dbb04ba`):** `tenancy/data_access.py:346-359` — `TenantData.lookup` връща tombstone с код `~deleted~`; `:103-112` — `update_many`/`delete_many` тихо пропускат tombstone-ите (миграциите по tenant ги пропускат); няма път за преглед/възстановяване.
 - **Решение:** промяна в кода (`lookup`, migration runner); Крум решава може ли изтрита празна чернова да се възстанови и кой я вижда.
 
+## FG-303 — wrap-in-group оставя група-сирак при неуспешно прехвърляне
+
+- **Тежест:** low. **Статус:** open. **PROVEN** (проход 31b).
+- **Канон:** FLOW-001 P-06 „Всички промени се записват в AuditEvent“; CLAUDE.md §14.
+- **Код (#86 PRJ-01 `8e8be48`):** `routes/projects.py:2150` създава групата преди и извън транзакцията на прехвърлянето.
+- **Проба:** принудена загуба → 409 `PROJECT_CHANGED`, остава Active група `is_group` с 0 AuditEvent; две паралелни извиквания → [201, 409] и 2 групи.
+- **Решение:** промяна в кода — една транзакция (група + прехвърляне + нов подобект) с AuditEvent и Idempotency-Key. Застъпва се с FG-261.
+
+## FG-304 — стари данни със свободно сменен `parent_project_id`
+
+- **Тежест:** medium. **Статус:** open (+ Krum decision). Ефектът — **PROVEN**; наличието в реални данни — **SUSPECTED**.
+- **Канон:** FLOW-001 P-05 „Основният обект обобщава данните от всички свои нива“; Р60 (второ ниво само за гаранция); CLAUDE.md §15 (migration/backfill).
+- **Код:** main `ea57121` (28.06.2026) — PUT сменя родителя без проверки; #86 затваря пътя занапред, но не проверява наличните данни.
+- **Проба:** негаранционен обект на второ ниво с труд 77 липсва от `/aggregate`, `/pnl/aggregated` и `_project_buckets`; DQ задача не се отваря.
+- **Решение:** промяна в кода — сканиране (първо dry-run), DQ задачи за второ негаранционно ниво, самородителство и цикли; Крум решава дали такива обекти се вдигат на първо ниво или се обобщават.
+
+## FG-305 — няма команда за преместване/обединяване на нива
+
+- **Тежест:** low. **Статус:** open — Krum decision. **SUSPECTED**.
+- **Канон:** FLOW-001 P-06 „преименува, **обедини** или архивира“.
+- **Код (#86 PRJ-01 `8e8be48`):** след затварянето на PUT няма път, който поставя съществуващ обект под съществуващ корен/група или обединява две нива.
+- **Решение:** ако Крум иска — команда `move-under` за Owner/Admin с причина, проверките по Р60, Idempotency-Key и транзакция с `project.parent_change`.
+
 ## FG-315 — локалните данни са по tenant, не по потребител; изходът трие всичко без предупреждение
 
 - **Тежест:** medium. **Статус:** open (дълг за PWA-02). **PROVEN** — днес няма загуба (няма опашка).
@@ -3566,7 +3592,7 @@
 - main без промяна (`3699c3b`).
 - Р61 (Q008, offline) записан дословно в `oracle/Q008_offline_first_pwa02.md` (`242d5517`).
 - #83 CP-01 `1e455e3`: FG-242, FG-268 (заобикалянето с име/ЕИК), FG-275 → resolved (PROVEN). FG-267 — кодът прилага неодобрено правило, чака Крум. FG-245 — partial. Нови FG-290..294. Тестове: CP-01 реален Mongo 28 passed, PAY-01 21 passed; 43 грешки в широкия набор са от срива на `fgmongo` (среда).
-- #86 PRJ-01 `dbb04ba`: FG-274 partial (tombstone, rollback, 409 за използвана чернова — PROVEN); FG-272, FG-279 open; FG-280 → PROVEN; нови FG-300..302. Новата глава `8e8be48` (FG-279/280) — в проверка.
+- #86 PRJ-01 `dbb04ba`: FG-274 partial (tombstone, rollback, 409 за използвана чернова — PROVEN); FG-272, FG-279 open; FG-280 → PROVEN; нови FG-300..302. Проход 31b на `8e8be48` (`24ffe07`): FG-279, FG-280 → resolved (PROVEN); tombstone съвместим с FLOW-001 P-03/P-06 и Р56 (2) — 404, скрит от списъци, кодът се освобождава, старият остава в `original_code` и AuditEvent; FG-300/301/302 open; нови FG-303..305. Тестове: PRJ-01 9 passed, свързани 570 passed / 32 грешки среда.
 - PWA-01 `a05167a` (нов клон): само app shell, без `/api` кеш, без офлайн опашка, обновяване само с клик — съответства на Р61 (1); нови FG-315..321 (medium/low). Production build + 35/35 Jest + Playwright проба.
 - Бавен преглед FLOW-022 на main: нови FG-325..335 (4 high). COVERAGE обновен.
 - #84 INV-CN-01 `cdd3dc8`: FG-276, FG-277 → resolved (PROVEN); FG-278, FG-271 partial; FG-247 без промяна; нови FG-281, FG-282. Тестове (частен Mongo): INV-CN-01 147/147, склад 1117 passed / 4 failed (`c13_mongo`, същите на main) / 16 грешки среда; jest 183 passed.
