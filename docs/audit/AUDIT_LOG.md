@@ -5122,3 +5122,24 @@ Merge queue (orchestrator): #71 (merging main) → #77 → #74 → #76 → #73 +
 - Fix: pass a Request in those direct calls, or make the wrapper fail closed (strip) when no request is present, never "visible". Then re-run warehouse.
 
 PR comment 6695992847 updated.
+
+## 2026-11-08 13:20 UTC: #81 `d2fe80b` (merge of main `4bca18a`): BLOCKING, WHFIX81-M1
+
+- **Byte check:** the tree equals `merge-tree(7d887fd, 4bca18a)` plus the resolutions:
+  - material_waste.py: SEC-01 gate + qty + project-in-tenant, then the R27 / FG-159 canonical write-off;
+  - MaterialWastePanel.js;
+  - the WHFIX81-01 lock moved onto `supplier_invoices.link_lock_seq`;
+  - plus SEC-01 / WH-FIX-01 test and evidence edits.
+- **Test edits:** all of them are `waste_create` → 422 (FG-159, no Master item in the harness body). The rights asserts are kept (Viewer → 403). SEC-01's waste idempotency probe is skipped; that coverage moves to `test_fg159_*`.
+- **Probes:** X1a 409 (the price stays 10); X5–X7 18.
+- **wh_fix_01 + a3_r44:** 185.
+- **WHFIX81-M1 (blocking): SEC-01 29 / 30.** `test_the_pm01_matrix_shows_the_money_write_cells_closed` fails: PM-01 has POST material-waste at **503** for Owner / Admin / Accountant in every mode; main has **428**. The key check now runs after `require_project_writeoff` / `_r27_first`, which do DB and index work (the canonical 503). Fix: key (428) before the R27 resolution; regenerate PM-01; SEC-01 must be 30.
+- PR comment 6719287307 updated. W0, R0, PM-01 and warehouse are still running (b81e).
+
+## 2026-11-08 13:20 UTC: #83 `ea51030` CP-01 (counterparties, Р48): BLOCKING, CP83-01
+
+- **CP83-01 (blocking):** `approve-change` does not exclude the entrant or the verifier. Probe `cp01/test_probe_cp01.py` K1, 3 modes × (mongomock, real): acct-a enters, the Owner verifies, acct-a approves 200, the Owner approves 200. The new IBAN is **verified**, the old one replaced, and the payment goes to the new IBAN, with **2 distinct people**. Fix: entrant ≠ approver; recommended: verifier ≠ approver.
+- **K2 ×10, activation ∥ payment:** the payment always goes to the old or the new **verified** account. OK.
+- **Payment guard:** a named unverified account, an invoice-IBAN mismatch or a pending-only counterparty → 409 in every mode. The legacy case with no account and no counterparty follows `BANK_ACCOUNT_GUARD_MODE`; the default shadow lets the payment through with a DQ row (debt D1, for Krum).
+- **W0 test edit** (4 collections → `test_cp01_counterparty_identities_are_never_deleted`): stricter, not a weakening; the generic delete paths are still covered via `location_nodes`.
+- PR comment 6721864098. Gates pending.
