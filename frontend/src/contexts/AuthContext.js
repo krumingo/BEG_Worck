@@ -8,6 +8,24 @@ import { clearTenantLocalData, noteActiveTenant } from "@/lib/pwa/clearLocalData
 
 const AuthContext = createContext(null);
 
+// PWA-01 D1: only a refused session ends it — 401 from any call, or 403 from /auth/me.
+// A network error or a 5xx (offline, server down) keeps the token; the user is shown
+// from the bw_user stored at login and the offline bar explains why nothing loads.
+export function sessionRejected(err) {
+  const status = err?.response?.status;
+  if (status === 401) return true;
+  return status === 403 && /\/auth\/me$/.test(err?.config?.url || "");
+}
+
+function storedUser() {
+  try {
+    const u = JSON.parse(localStorage.getItem("bw_user") || "null");
+    return u && typeof u === "object" ? u : null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [org, setOrg] = useState(null);
@@ -27,11 +45,16 @@ export function AuthProvider({ children }) {
       await noteActiveTenant(orgRes.data?.id);
       setUser(meRes.data);
       setOrg(orgRes.data);
-    } catch {
-      localStorage.removeItem("bw_token");
-      localStorage.removeItem("bw_user");
-      setUser(null);
-      setOrg(null);
+    } catch (err) {
+      if (sessionRejected(err)) {
+        localStorage.removeItem("bw_token");
+        localStorage.removeItem("bw_user");
+        setUser(null);
+        setOrg(null);
+      } else {
+        // Nothing from /api is cached: the user comes from bw_user, org stays unknown.
+        setUser(storedUser());
+      }
     } finally {
       setLoading(false);
     }
@@ -53,11 +76,11 @@ export function AuthProvider({ children }) {
     return res.data;
   };
 
-  const logout = () => {
+  const logout = async () => {
     localStorage.removeItem("bw_token");
     localStorage.removeItem("bw_user");
     // PWA-01: no tenant data stays on the device after logout (storage + caches).
-    clearTenantLocalData();
+    await clearTenantLocalData();
     setUser(null);
     setOrg(null);
   };

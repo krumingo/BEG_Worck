@@ -237,7 +237,7 @@ export default function DashboardLayout({ children }) {
 
   const toggleGroup = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const handleLogout = () => { logout(); navigate("/login"); };
+  const handleLogout = async () => { await logout(); navigate("/login"); };
   const mobileTabs = getTabsForRole(user?.role);
   const isProfileRoute = location.pathname === "/profile";
   const isPlatformAdmin = user?.is_platform_admin === true;

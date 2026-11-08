@@ -150,11 +150,12 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) });
   await desk.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
-  // Known debt D1 (pre-existing): AuthContext.fetchUser drops the token on ANY error,
-  // so the offline reload above ended the session. Recorded, not changed in PWA-01.
+  // D1 (fixed): an offline reload keeps the session — the user stays inside the shell.
   const keptToken = await page.evaluate(() => localStorage.getItem("bw_token"));
-  results.debt_d1_offline_reload_token = keptToken ? "kept" : "dropped";
-  console.log(`INFO  D1: token after offline reload: ${results.debt_d1_offline_reload_token}`);
+  results.d1_offline_reload_token = keptToken ? "kept" : "dropped";
+  check("D1 offline reload: token kept", !!keptToken, results.d1_offline_reload_token);
+  check("D1 offline reload: still inside the shell (dashboard layout, no login page)",
+    (await page.getByTestId("dashboard-layout").count()) === 1 && (await page.getByTestId("login-page").count()) === 0);
 
   // ── Logout clears local data ─────────────────────────────────────────────
   await login(page, "a@example.test");
@@ -231,6 +232,7 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) });
   await p2.reload();
   await p2.getByTestId("pwa-offline-banner").waitFor({ timeout: 10000 });
   check("phone offline: shell + Без връзка bar", await p2.getByTestId("pwa-offline-banner").isVisible());
+  check("D1 phone offline reload: still inside the shell", (await p2.getByTestId("dashboard-layout").count()) === 1);
   await p2.waitForTimeout(800);
   await shot(p2, "phone-offline.png");
   snap = await cacheSnapshot(p2);
