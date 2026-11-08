@@ -58,7 +58,13 @@ LINKS = {
     "material_waste": ("material_waste_entries", {"qty": 1}),
     "child_project": ("projects", {"code": "PRB-CHILD", "name": "child", "status": "Draft",
                                     "type": "Billable"}),
+    # FG-254: references that are not a *_id field
+    "media_context": ("media_files", {"filename": "m.jpg", "context_type": "project"}),
+    "qr_entity": ("asset_qr_codes", {"entity_type": "project", "qr_id": "QR-PRB"}),
 }
+#: the field each link row uses for the project (default ``project_id``)
+LINK_FIELD = {"child_project": "parent_project_id", "media_context": "context_id",
+              "qr_entity": "entity_id"}
 
 
 def _pm01():
@@ -102,10 +108,7 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
         await op_db.projects.insert_many(docs)
         for kind, (coll, extra) in LINKS.items():
             row = {"id": pid(tkey, "row_" + kind), "org_id": org, "created_at": NOW, **extra}
-            if kind == "child_project":
-                row["parent_project_id"] = pid(tkey, "link_" + kind)
-            else:
-                row["project_id"] = pid(tkey, "link_" + kind)
+            row[LINK_FIELD.get(kind, "project_id")] = pid(tkey, "link_" + kind)
             await op_db[coll].insert_one(row)
         await op_db.work_reports.insert_one({"id": pid(tkey, "wr_type_used"), "org_id": org,
                                              "project_id": pid(tkey, "type_used"),
@@ -268,14 +271,25 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                        "events": events(pid("A", "draft_cancel"), "project.")}
         # the generic PUT may no longer archive/cancel without a reason (P-07, rule 9)
         r = call("PUT", "/api/projects/%s" % A["project_id"], role="requester",
-                 json={"status": "Paused"})
+                 json={"status": "Paused", "status_reason": "чака материал"})
         r_put = call("PUT", "/api/projects/%s" % A["project_id"], role="requester",
                      json={"status": "Cancelled"})
         d["put_cancel_by_site_manager"] = {
             "pause": r["status"], "status": r_put["status"], "error_code": r_put["error_code"],
             "project_status": (q(lambda: op_db.projects.find_one(
                 {"id": A["project_id"]}, {"_id": 0, "status": 1})) or {}).get("status")}
-        call("PUT", "/api/projects/%s" % A["project_id"], role="owner", json={"status": "Active"})
+        # D3 (P-04A): a status change through PUT needs a reason and a key, writes an AuditEvent
+        d3 = {"no_reason": call("PUT", "/api/projects/%s" % A["project_id"],
+                                json={"status": "Active"})["status"],
+              "no_key": call("PUT", "/api/projects/%s" % A["project_id"], key=None,
+                             json={"status": "Active", "status_reason": "материалът дойде"})["status"],
+              "ok": call("PUT", "/api/projects/%s" % A["project_id"],
+                         json={"status": "Active", "status_reason": "материалът дойде"})["status"],
+              "name_only": call("PUT", "/api/projects/%s" % A["project_id"], key=None,
+                                json={"name": "ST01 A — преименуван"})["status"]}
+        d3["events"] = [{"action": e["action"], "reason": e["reason"], "diff": e["diff"]}
+                        for e in events(A["project_id"], "project.status_change")]
+        d["put_status_d3"] = d3
         obs["fg239"] = d
 
         # ─────────────────────────────────────────────── FG-237 — reopen
@@ -314,7 +328,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                   "events": events(pid("A", "completed"), "project.")})
         d["again_while_active"] = call("POST", url, json=body)["status"]
         # close again (P-08 „След работата се затваря отново“)
-        r = call("PUT", "/api/projects/%s" % pid("A", "completed"), json={"status": "Completed"})
+        r = call("PUT", "/api/projects/%s" % pid("A", "completed"),
+                 json={"status": "Completed", "status_reason": "течът е отстранен"})
         doc = project_doc("completed") or {}
         d["reclose"] = r["status"]
         d["cycles_after_close"] = [{"kind": c.get("kind"), "closed": bool(c.get("closed_at"))}
@@ -329,6 +344,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         d["enforce_owner"] = call("POST", url, json={"kind": "defect",
                                                     "reason": "втори дефект"})["status"]
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        # FG-253: a legacy Warranty project is not reopened (warranty work → the original)
+        r = call("POST", "/api/projects/%s/reopen" % pid("A", "warr_parent"),
+                 json={"kind": "warranty", "reason": "нов дефект"})
+        d["reopen_warranty_project"] = {"status": r["status"], "error_code": r["error_code"],
+                                        "project_status": (project_doc("warr_parent") or {}).get("status")}
         obs["fg237"] = d
 
         # ─────────────────────────────────────────────── FG-238 — photos
@@ -356,6 +376,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                 if isinstance(p, dict)) if isinstance(listing["body"], list)
                   else None,
                   "events": events(photo.get("id"), "project.photo")})
+        furl = "/api/projects/photos/file/%s" % photo.get("stored_filename")
+        d["file_viewer"] = call("GET", furl, role="viewer", key=None)["status"]
+        d["file_uploader"] = call("GET", furl, role="technician", key=None)["status"]
+        d["file_owner"] = call("GET", furl, key=None)["status"]
         obs["fg238"] = d
 
         # ─────────────────────────────────────────────── FG-236 — warranty
@@ -368,6 +392,19 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         r = call("POST", "/api/projects", json={"code": "PRB-B-NEW", "name": "Нов", "type":
                                                 "Billable"})
         d["create_billable"] = r["status"]
+        # FG-252: no sub-project / group path creates a new Warranty project
+        before_n = q(lambda: op_db.projects.count_documents({"org_id": A["tenant_id"]}))
+        d["sub_paths"] = {
+            "create_sub": call("POST", "/api/projects/%s/create-sub-project" % pid("A", "warr_orphan"),
+                               json={"name": "Б"})["error_code"],
+            "wrap": call("POST", "/api/projects/%s/wrap-in-group" % pid("A", "warr_orphan"),
+                         json={"new_subproject_name": "2"})["error_code"],
+            "add_sub": call("POST", "/api/projects/%s/add-subproject" % pid("A", "warr_orphan"),
+                            json={"name": "2"})["error_code"],
+            "new_projects": q(lambda: op_db.projects.count_documents(
+                {"org_id": A["tenant_id"]})) - before_n,
+            "warranty_projects": q(lambda: op_db.projects.count_documents(
+                {"org_id": A["tenant_id"], "type": "Warranty"}))}
         r = call("PUT", "/api/projects/%s" % pid("A", "type_used"), json={"type": "Overhead"})
         d["type_used"] = {"status": r["status"], "error_code": r["error_code"],
                           "type": (project_doc("type_used") or {}).get("type")}
@@ -399,11 +436,16 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             dry2 = q(lambda: mig.migrate(op_db, apply=False))
             second = q(lambda: mig.migrate(op_db, apply=True, approved_by="Крум",
                                            plan_sha=dry2["plan_sha"]))
-            wp = project_doc("warr_parent") or {}
-            wo = project_doc("warr_orphan") or {}
-            wpb = project_doc("warr_parent", "B") or {}
+            wo = project_doc("warr_orphan") or {}      # before the operator's --map
             dq = q(lambda: op_db.dq_issues.find({"entity_id": pid("A", "warr_orphan")},
                                                 {"_id": 0}).to_list(None))
+            audit_after_second = q(lambda: op_db.audit_events.count_documents({}))
+            mapping = {pid("A", "warr_orphan"): pid("A", "completed2")}
+            dry3 = q(lambda: mig.migrate(op_db, apply=False, mapping=mapping))
+            third = q(lambda: mig.migrate(op_db, apply=True, approved_by="Крум",
+                                          plan_sha=dry3["plan_sha"], mapping=mapping))
+            wp = project_doc("warr_parent") or {}
+            wpb = project_doc("warr_parent", "B") or {}
             d["migration"] = {
                 "available": True,
                 "dry_counts": dry["counts"], "dry_wrote": after_dry,
@@ -417,8 +459,14 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 "b_linked_to_own": wpb.get("warranty_of_project_id") == fx["B"]["project_id"],
                 "orphan_linked": wo.get("warranty_of_project_id"),
                 "orphan_dq": [{"type": x.get("type"), "status": x.get("status")} for x in dq],
-                "audit_new": q(lambda: op_db.audit_events.count_documents({})) - audit_before,
+                "audit_new": audit_after_second - audit_before,
                 "link_events": len(events(pid("A", "warr_parent"), "project.warranty_link")),
+                "map_counts": third["counts"],
+                "orphan_after_map": (project_doc("warr_orphan") or {}).get("warranty_of_project_id"),
+                "orphan_dq_after_map": [x.get("status") for x in q(lambda: op_db.dq_issues.find(
+                    {"entity_id": pid("A", "warr_orphan")}, {"_id": 0}).to_list(None))],
+                "dq_resolve_events": q(lambda: op_db.audit_events.count_documents(
+                    {"action": "dq.issue.resolve"})),
             }
         obs["fg236"] = d
 
@@ -446,6 +494,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         d["created_version"] = rec.get("version")
         purl = "/api/subcontractor-performance/%s" % rid
         d["update_viewer"] = call("PUT", purl, role="viewer", json={"quality_score": 1})["status"]
+        d["update_nothing"] = call("PUT", purl, json={"foo": 1})["status"]
         d["update_paid_field"] = call("PUT", purl, json={"actual_paid_amount": 1})["status"]
         k = uuid.uuid4().hex
         r = call("PUT", purl, key=k, json={"quality_score": 2, "rework_flag": True})
@@ -466,6 +515,20 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             {"id": pid("A", "perf_legacy")}, {"_id": 0})) or {}).get("actual_paid_amount")
         d["legacy_manual_exposed"] = legacy.get("legacy_manual_paid_amount")
         d["legacy_paid_source"] = legacy.get("actual_paid_source")
+        # FG-255 (R20): no money for a non-finance role; the history only for R54 writers
+        for role in ("viewer", "requester"):
+            lst = call("GET", "/api/subcontractor-performance?project_id=%s" % p1, role=role, key=None)
+            its = (lst["body"] or {}).get("items", []) if isinstance(lst["body"], dict) else []
+            d["get_%s_money_keys" % role] = sorted(
+                {k for it in its for k in it if k in ("actual_paid_amount", "promised_amount",
+                                                      "legacy_manual_paid_amount", "variance_amount")})
+        d["log_technician"] = call("GET", "/api/subcontractor-performance/log?project_id=%s" % p1,
+                                   role="technician", key=None)["status"]
+        d["log_viewer"] = call("GET", "/api/subcontractor-performance/log", role="viewer",
+                               key=None)["status"]
+        d["log_site_manager"] = call("GET", "/api/subcontractor-performance/log?project_id=%s" % p1,
+                                     role="requester", key=None)["status"]
+        d["log_owner"] = call("GET", "/api/subcontractor-performance/log", key=None)["status"]
         obs["fg240"] = d
 
     out_json.write_text(json.dumps(obs, indent=1, ensure_ascii=False, sort_keys=True) + "\n",
@@ -586,6 +649,12 @@ def test_fg239_archive_and_cancel_carry_reason_rights_key_and_audit_event(obs):
     assert _actions(c["events"]) == ["project.cancel"]
     p = obs["fg239"]["put_cancel_by_site_manager"]
     assert p["pause"] == 200
+    d3 = obs["fg239"]["put_status_d3"]
+    assert d3["no_reason"] == 400 and d3["no_key"] == 428 and d3["ok"] == 200
+    assert d3["name_only"] == 200                     # no status change: as before
+    assert [(e["action"], e["reason"], e["diff"]["after"]["status"]) for e in d3["events"]] == [
+        ("project.status_change", "чака материал", "Paused"),
+        ("project.status_change", "материалът дойде", "Active")]
     assert p["status"] == 409 and p["error_code"] == "USE_LIFECYCLE_ENDPOINT"
     assert p["project_status"] == "Paused"
 
@@ -614,6 +683,8 @@ def test_fg237_a_completed_project_reopens_with_reason_audit_and_owner_admin_onl
     assert d["current_reopen_after_close"] is False
     assert d["put_reopen"] == 400
     assert d["enforce_viewer"] == 403 and d["enforce_owner"] == 200
+    assert d["reopen_warranty_project"] == {"status": 409, "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
+                                            "project_status": "Completed"}
 
 
 @real
@@ -626,6 +697,7 @@ def test_fg238_a_project_photo_is_retired_never_deleted(obs):
     assert d["file_kept"] is True
     assert d["listed"] is False
     assert _actions(d["events"]) == ["project.photo.retire"]
+    assert d["file_viewer"] == 404 and d["file_uploader"] == 404 and d["file_owner"] == 200
 
 
 @real
@@ -639,6 +711,9 @@ def test_fg236_no_new_warranty_project_and_the_type_is_locked_after_the_first_re
     assert d["to_warranty"] == {"status": 409, "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
                                 "type": "Billable"}
     assert d["type_empty"] == {"status": 200, "type": "Overhead"}
+    sp = d["sub_paths"]
+    assert sp["create_sub"] == sp["wrap"] == sp["add_sub"] == "WARRANTY_IN_ORIGINAL_PROJECT", sp
+    assert sp["new_projects"] == 0 and sp["warranty_projects"] == 2
 
 
 @real
@@ -657,6 +732,9 @@ def test_fg236_the_warranty_migration_links_dry_run_first_idempotent_never_delet
     assert m["orphan_dq"] == [{"type": "PROJECT_WARRANTY_ORIGINAL_UNKNOWN", "status": "open"}]
     assert m["link_events"] == 1
     assert m["audit_new"] == 4          # 2 links + 2 DQ issues, tenants A and B; none twice
+    assert m["map_counts"] == {"link": 1, "dq": 0, "already": 2, "dq_open": 1}
+    assert m["orphan_after_map"] == "prj01-A-completed2"
+    assert m["orphan_dq_after_map"] == ["resolved"] and m["dq_resolve_events"] == 1
 
 
 @real
@@ -670,6 +748,7 @@ def test_fg240_rating_rights_versions_audit_and_paid_from_the_ledger(obs):
     assert d["create_unknown_sub"] == 422
     assert d["create_site_manager"] == 201 and d["created_version"] == 1
     assert d["update_viewer"] == 403 and d["update_paid_field"] == 422
+    assert d["update_nothing"] == 422
     assert d["update_owner"] == 200 and d["update_replay_same"]
     assert d["version_after"] == 2 and d["versions"] == [1, 2]
     assert d["events"] == ["subcontractor_performance.create", "subcontractor_performance.update"]
@@ -677,6 +756,9 @@ def test_fg240_rating_rights_versions_audit_and_paid_from_the_ledger(obs):
     assert d["legacy_manual_kept"] == 999         # history kept, not used
     assert d["legacy_manual_exposed"] == 999
     assert d["legacy_paid_source"] == "payment_ledger"
+    assert d["get_viewer_money_keys"] == [] and d["get_requester_money_keys"] == []
+    assert d["log_technician"] == 403 and d["log_viewer"] == 403
+    assert d["log_site_manager"] == 200 and d["log_owner"] == 200
 
 
 @real

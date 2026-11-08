@@ -152,6 +152,21 @@ async def _apply_row(db, row: Dict[str, Any], approved_by: str) -> bool:
                      diff={"before": {"warranty_of_project_id": None},
                            "after": {"warranty_of_project_id": row["original"]},
                            "source": row["source"], "approved_by": approved_by})
+        # FG-256: the DQ issue of this project (if any) is resolved by the decision
+        rid = dq_id(org, wid)
+        res = await tenant.dq_issues.update_one(
+            {"id": rid, "status": "open"},
+            {"$set": {"status": "resolved", "resolved_at": now, "resolved_by": approved_by,
+                      "resolution": {"warranty_of_project_id": row["original"],
+                                     "source": row["source"]}, "updated_at": now}},
+            session=session)
+        if res.modified_count == 1:
+            await _event(db, session, org=org, action="dq.issue.resolve",
+                         entity_type="dq_issue", entity_id=rid,
+                         reason="Р54: оригиналният обект е посочен (%s)" % row["source"],
+                         diff={"before": {"status": "open"},
+                               "after": {"status": "resolved",
+                                         "warranty_of_project_id": row["original"]}})
         return True
 
     async def dq(session):

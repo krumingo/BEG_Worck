@@ -25,9 +25,23 @@ from fastapi import HTTPException
 from app.db import db
 from app.tenancy.ownership import ORG_KEYED
 
-#: The fields through which a tenant-owned record names a project.
+#: Named fields through which a tenant-owned record names a project (top level or nested).
 PROJECT_LINK_FIELDS = ("project_id", "site_id", "subproject_id", "parent_project_id",
-                       "warranty_of_project_id")
+                       "warranty_of_project_id", "context_id", "entity_id",
+                       "day_entries.project_id", "transit_origin.project_id",
+                       "context.entity_id", "lines.project_id")
+
+
+def _any_top_level_value(project_id: str) -> Dict[str, Any]:
+    """PRJ-01 / FG-254: a reference in ANY top-level field — ``context_type/context_id``
+    (media files), ``entity_type/entity_id`` (QR codes), or any other name — and inside a
+    top-level array of ids. Ids are UUIDs, so an equal value is a reference."""
+    values = {"$map": {"input": {"$objectToArray": "$$ROOT"}, "as": "kv", "in": "$$kv.v"}}
+    return {"$expr": {"$anyElementTrue": [{"$map": {
+        "input": values, "as": "v",
+        "in": {"$cond": [{"$isArray": "$$v"}, {"$in": [project_id, "$$v"]},
+                         {"$eq": ["$$v", project_id]}]}}}]}}
+
 
 #: Records that are the project's own structure, not business history: the team
 #: (an authorization relation), the phases (FLOW-001 P-06: an empty level may go) and the
@@ -89,13 +103,16 @@ async def business_links(tenant, project_id: str, session=None) -> Dict[str, int
     project's own structure. A child project (``parent_project_id``) and a legacy warranty
     project linked to it (``warranty_of_project_id``) count too.
     """
-    flt = {"$or": [{f: project_id} for f in PROJECT_LINK_FIELDS]}
+    flt = {"$or": [{f: project_id} for f in PROJECT_LINK_FIELDS]
+           + [_any_top_level_value(project_id)]}
     kw = {} if session is None else {"session": session}
     out: Dict[str, int] = {}
     for name in sorted(ORG_KEYED):
         if name in STRUCTURAL:
             continue
-        n = await tenant.collection(name).count_documents(flt, **kw)
+        # the project's own document carries its id; it is not a reference to itself
+        q = {"$and": [flt, {"id": {"$ne": project_id}}]} if name == "projects" else flt
+        n = await tenant.collection(name).count_documents(q, **kw)
         if n:
             out[name] = n
     return out

@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
-import { apiErrorText } from "@/lib/idempotency";
+import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { LIFECYCLE_ENDPOINT, changeProjectStatus, deleteProject } from "@/lib/projectLifecycle";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
@@ -237,7 +237,16 @@ export default function ProjectsListPage() {
           if (!reason) { setSaving(false); return; }
           updatePayload.status = form._origStatus;
         }
-        await API.put(`/projects/${editing.id}`, updatePayload);
+        // PRJ-01 / D3 (FLOW-001 P-04A): any other status change states why and carries a key.
+        const statusChanged = !lifecycleStatus && form.status !== form._origStatus;
+        let putConfig;
+        if (statusChanged) {
+          const why = (window.prompt(`Причина за промяната на статуса (${STATUS_BG[form.status] || form.status}):`) || "").trim();
+          if (!why) { setSaving(false); return; }
+          updatePayload.status_reason = why;
+          putConfig = idempotencyHeaders(newIdempotencyKey());
+        }
+        await API.put(`/projects/${editing.id}`, updatePayload, putConfig);
         if (lifecycleStatus) await changeProjectStatus(editing.id, lifecycleStatus, reason);
       } else {
         const res = await API.post("/projects", payload);

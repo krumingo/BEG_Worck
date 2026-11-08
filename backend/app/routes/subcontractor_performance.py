@@ -10,6 +10,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import can_manage_project, get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 from app.services import project_lifecycle as lifecycle
 from app.services.subcontractor_performance import apply_ledger_paid, build_subcontractor_performance
 from app.tenancy.data_access import TenantData
@@ -75,6 +76,7 @@ def _version_row(doc: dict, user: dict, now: str, key: str) -> dict:
 
 
 @router.get("/subcontractor-performance")
+@strip_money_for_non_finance   # PRJ-01 / FG-255 (R20-5M): the ledger "paid" is money
 async def get_performance(
     project_id: Optional[str] = None,
     subcontractor_id: Optional[str] = None,
@@ -84,6 +86,7 @@ async def get_performance(
 
 
 @router.get("/subcontractor-performance/compact")
+@strip_money_for_non_finance   # PRJ-01 / FG-255 (R20-5M)
 async def get_compact(
     project_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
@@ -171,6 +174,10 @@ async def update_performance(record_id: str, request: Request, body: dict = Body
     await _require_writer(user, current.get("project_id"))
     key = lifecycle.require_key(idempotency_key)
     changes = {k: v for k, v in data.model_dump().items() if v is not None}
+    if not changes:
+        # PRJ-01 / FG-256: nothing accepted to change → no empty version, no AuditEvent
+        raise lifecycle.refuse(422, "NOTHING_TO_UPDATE",
+                               "Няма промяна в полетата, които могат да се редактират")
 
     async def work(session):
         doc = await tenant.subcontractor_performance.find_one({"id": record_id}, {"_id": 0},
@@ -205,10 +212,20 @@ async def update_performance(record_id: str, request: Request, body: dict = Body
 
 
 @router.get("/subcontractor-performance/log")
+@strip_money_for_non_finance   # PRJ-01 / FG-255 (R20-5M)
 async def get_log(
     project_id: Optional[str] = None,
     user: dict = Depends(get_current_user),
 ):
+    """PRJ-01 / FG-255: the rating history is read by its writers (R54-2): Owner/Admin, or
+    the SiteManager of the named project. Everyone else → 403."""
+    if user.get("role") in ("Owner", "Admin"):
+        pass
+    elif user.get("role") == "SiteManager" and project_id and \
+            await can_manage_project(user, project_id):
+        pass
+    else:
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
