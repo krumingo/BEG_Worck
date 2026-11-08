@@ -88,7 +88,8 @@ ORG_KEYED: Dict[str, str] = {
               "subcontractor_payments", "subcontractor_performance"),
     **_family(FAMILY_COMMERCIAL,
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
-              "change_orders", "client_acts", "contract_payments", "invoices",
+              "change_orders", "client_acts", "client_act_line_totals", "contract_payments",
+              "invoices",
               "invoice_lines", "invoice_versions", "invoice_settings", "supplier_invoices",
               # INV-CN-01 / Р49: credit / debit notes and offsets (FLOW-006);
               # expected_credit_notes is also added by PR #82 (WH-REV-01, Р47) —
