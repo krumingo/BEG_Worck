@@ -130,8 +130,9 @@ def run(monkeypatch, mode, scenario):
             for coll, keys, opts in PLANNED_INDEXES:
                 await op[coll].create_index(keys, **opts)
             try:                                   # the invoice-number index server.py builds
-                from app.services.invoice_corrections import INVOICE_NO_INDEX
+                from app.services.invoice_corrections import INVOICE_NO_INDEX, SUPPLIER_NO_INDEX
                 await op.invoices.create_index(INVOICE_NO_INDEX[1], **INVOICE_NO_INDEX[2])
+                await op.invoices.create_index(SUPPLIER_NO_INDEX[1], **SUPPLIER_NO_INDEX[2])
             except ImportError:                    # main cd03324: the legacy startup index
                 await op.invoices.create_index([("org_id", 1), ("invoice_no", 1)], unique=True,
                                                sparse=True)
@@ -339,9 +340,12 @@ def test_r51_1_the_proposer_cannot_approve_and_a_proposal_can_be_rejected(monkey
     async def scenario(c, op):
         inv = await issued(c)
         url = "/api/finance/invoices/%s/cancel" % inv["id"]
-        assert (await c.post(url, headers=hdr("owner-a"), json={"reason": "грешка"})).status_code == 200
-        r = await c.post(url + "/approve", headers=hdr("owner-a"), json={"version": 1})
-        assert r.status_code == 409 and code(r) == "SAME_PERSON_APPROVAL"
+        # Р53(2) / FG-234: the Owner approves, never proposes
+        r = await c.post(url, headers=hdr("owner-a"), json={"reason": "грешка"})
+        assert r.status_code == 403 and code(r) == "CANCEL_ROLE_REQUIRED"
+        assert (await c.post(url, headers=hdr("admin-a"), json={"reason": "грешка"})).status_code == 200
+        r = await c.post(url + "/approve", headers=hdr("admin-a"), json={"version": 1})
+        assert r.status_code == 403                                      # the Admin proposed; Owner approves
         r = await c.post(url + "/reject", headers=hdr("acct-a"), json={"reason": "не"})
         assert r.status_code == 403                                      # neither Owner nor proposer
         r = await c.post(url + "/reject", headers=hdr("owner-a"), json={"reason": "оттеглям"})
@@ -351,14 +355,27 @@ def test_r51_1_the_proposer_cannot_approve_and_a_proposal_can_be_rejected(monkey
         assert (await c.post(url, headers=hdr("acct-a"), json={"reason": "грешка"})).status_code == 200
         r = await c.post(url + "/approve", headers=hdr("owner-a"), json={"version": 2})
         assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
-        # a proposal on an invoice sent in between is refused at approval
+        # FG-234: a pending proposal is superseded when the invoice is sent (AuditEvent)…
         inv2 = await issued(c)
         assert (await c.post("/api/finance/invoices/%s/cancel" % inv2["id"], headers=hdr("acct-a"),
                              json={"reason": "x"})).status_code == 200
         assert (await c.post("/api/finance/invoices/%s/send" % inv2["id"], headers=hdr("acct-a"))).status_code == 200
+        assert (await get_inv(c, inv2["id"]))["cancellation_request"]["status"] == "superseded"
         r = await c.post("/api/finance/invoices/%s/cancel/approve" % inv2["id"], headers=hdr("owner-a"),
                          json={"version": 1})
-        assert r.status_code == 409 and code(r) == "USE_CREDIT_NOTE"
+        assert r.status_code == 409 and code(r) == "NOT_PENDING_APPROVAL"
+        assert "finance.invoice.cancellation_superseded" in await audit_actions(op)
+        # … or paid (a legacy numbered draft, cancellable while unsent, paid in between)
+        await op.invoices.insert_one({
+            "id": "legacy-p", "org_id": ORG_A, "invoice_no": "INV-0090", "direction": "Issued",
+            "kind": "Invoice", "status": "Issued", "issued_at": "2026-11-01T00:00:00+00:00",
+            "issue_date": "2026-11-01", "due_date": "2099-12-31", "currency": "EUR", "lines": [],
+            "subtotal": 100.0, "vat_percent": 0, "vat_amount": 0, "total": 100.0, "paid_amount": 0,
+            "remaining_amount": 100.0})
+        assert (await c.post("/api/finance/invoices/legacy-p/cancel", headers=hdr("acct-a"),
+                             json={"reason": "x"})).status_code == 200
+        assert (await quick_pay(c, "legacy-p", 10.0)).status_code == 201
+        assert (await get_inv(c, "legacy-p"))["cancellation_request"]["status"] == "superseded"
     run(monkeypatch, mode, scenario)
 
 
@@ -457,6 +474,10 @@ def test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit(monkeyp
         assert r.status_code == 201 and r.json()["applied"] is True, r.text
         ecn = await op.expected_credit_notes.find_one({"id": "ecn_1"})
         assert ecn["status"] == "fulfilled" and ecn["dq_task"]["status"] == "closed"
+        # Р52(2a): the corrected note closed the mismatch DQ; the mismatched note is superseded
+        assert ecn["dq_mismatch"]["status"] == "closed"
+        cn77 = await op.credit_debit_notes.find_one({"number": "CN-77"})
+        assert (cn77["applied"], cn77["superseded_by"]) == (False, r.json()["id"])
         after = await get_inv(c, bill["id"])
         assert after["remaining_amount"] == 204.0
         assert (await quick_pay(c, bill["id"], 204.0)).status_code == 201
@@ -826,6 +847,10 @@ def test_r51_3_supplier_invoice_entered_by_mistake_is_cancelled_not_deleted(monk
         d = await draft(c, direction="Received")
         r = await c.delete("/api/finance/invoices/" + d["id"], headers=hdr("acct-a"))
         assert r.status_code == 409 and code(r) == "INVOICE_NUMBERED"
+        for who in ("admin-a", "owner-a"):                  # FG-235 / Р51(3): the Accountant only
+            r = await c.post("/api/finance/invoices/%s/cancel" % d["id"], headers=hdr(who),
+                             json={"reason": "въведена по грешка"})
+            assert r.status_code == 403, (who, r.text)
         r = await c.post("/api/finance/invoices/%s/cancel" % d["id"], headers=hdr("acct-a"),
                          json={"reason": "въведена по грешка"})
         assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
@@ -846,6 +871,13 @@ def test_r51_3_supplier_invoice_entered_by_mistake_is_cancelled_not_deleted(monk
                          json={"reason": "грешка"})
         assert r.status_code == 409 and code(r) == "USE_CORRECTION", r.text
         assert (await get_inv(c, linked["id"]))["status"] == "Sent"
+        # FG-233: a receipt linked to the invoice ONLY by invoice_id (no line) counts too
+        by_id = await sent(c, direction="Received")
+        await op.warehouse_transactions.insert_one({"id": "wt-2", "org_id": ORG_A, "action": "receive_from_supplier",
+                                                    "invoice_id": by_id["id"], "movement_id": "mv-2"})
+        r = await c.post("/api/finance/invoices/%s/cancel" % by_id["id"], headers=hdr("acct-a"),
+                         json={"reason": "грешка"})
+        assert r.status_code == 409 and code(r) == "USE_CORRECTION", r.text
     run(monkeypatch, mode, scenario)
 
 
@@ -895,4 +927,158 @@ def test_d15_paid_invoice_with_every_payment_cancelled_is_open_again(monkeypatch
         assert r.status_code == 200, r.text
         after = await get_inv(c, inv["id"])
         assert (after["status"], after["remaining_amount"]) == ("Sent", 240.0)
+    run(monkeypatch, mode, scenario)
+
+
+# ═══════════════════════════════════════════════════ Addendum B (Р52) + Addendum C (Р53)
+def test_r52_d7_owner_accepts_the_difference_limit_uses_the_real_amount(monkeypatch, mode):
+    async def scenario(c, op):
+        bill = await sent(c, direction="Received")                                     # 240
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_d7", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "dq_task": {"title": "очаква кредитно известие", "status": "open"}})
+        r = await note(c, bill, number="CN-D7", expected_credit_note_ids=["ecn_d7"],
+                       lines=[{"original_line_id": bill["lines"][0]["id"], "amount": 25.0}])   # 30.00
+        assert r.status_code == 201 and r.json()["applied"] is False, r.text
+        n = r.json()
+        url = "/api/finance/credit-notes/%s/accept-difference" % n["id"]
+        assert (await c.post(url, headers=hdr("acct-a"), json={"reason": "приемам"})).status_code == 403
+        assert (await c.post(url, headers=hdr("owner-a"), json={})).status_code == 400
+        r = await c.post(url, headers=hdr("owner-a"), json={"reason": "доставчикът не коригира"})
+        assert r.status_code == 200, r.text
+        assert r.json()["applied"] is True and r.json()["difference_accepted"]["by"] == "owner-a"
+        ecn = await op.expected_credit_notes.find_one({"id": "ecn_d7"})
+        assert (ecn["status"], ecn["dq_mismatch"]["status"]) == ("fulfilled_with_difference", "accepted_by_owner")
+        inv = await get_inv(c, bill["id"])
+        assert (inv["remaining_amount"], inv["awaiting_credit_note"]) == (210.0, False)   # 240 − 30.00
+        assert "finance.credit_note.difference_accepted" in await audit_actions(op)
+        r = await c.post(url, headers=hdr("owner-a"), json={"reason": "пак"})
+        assert r.status_code == 409
+    run(monkeypatch, mode, scenario)
+
+
+def test_r52_d8_unlinked_supplier_credit_reduces_project_cost_once_linked_does_not(monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services.project_pnl import compute_project_pnl
+        cost = lambda p: p["expense"]["material_cost"]
+        reduction = lambda p: p["expense"]["supplier_notes_cost_reduction"]
+        bill = await sent(c, direction="Received", project="prj-1")
+        base = await compute_project_pnl(ORG_A, "prj-1")
+        # a discount / defect credit (no reversal) → the original line's project, once
+        r = await note(c, bill, number="CN-D8a")                                         # net 30
+        assert r.status_code == 201 and r.json()["applied"] is True
+        after = await compute_project_pnl(ORG_A, "prj-1")
+        assert (round(cost(base) - cost(after), 2), reduction(after)) == (30.0, 30.0)
+        again = await compute_project_pnl(ORG_A, "prj-1")
+        assert cost(again) == cost(after)                                               # exactly once
+        # a credit linked to a receipt reversal → payable only, no second P&L effect
+        bill2 = await sent(c, direction="Received", project="prj-1")
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_d8", "org_id": ORG_A, "invoice_id": bill2["id"], "amount": 36.0, "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat(), "dq_task": {"status": "open"}})
+        r = await note(c, bill2, number="CN-D8b", expected_credit_note_ids=["ecn_d8"])
+        assert r.status_code == 201 and r.json()["applied"] is True
+        linked = await compute_project_pnl(ORG_A, "prj-1")
+        assert cost(linked) == cost(after) and reduction(linked) == 30.0
+        assert (await get_inv(c, bill2["id"]))["remaining_amount"] == 204.0               # payable reduced
+        # a line allocated to two projects: only this project's share
+        bill3 = await sent(c, direction="Received", project="prj-2")
+        await op.invoice_lines.insert_one({
+            "id": "il-d8", "org_id": ORG_A, "invoice_id": bill3["id"], "qty": 10, "unit_price": 10,
+            "vat_percent": 20, "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 4},
+                                               {"type": "project", "ref_id": "prj-2", "qty": 6}]})
+        r = await note(c, bill3, number="CN-D8c", lines=[{"original_line_id": "il-d8", "amount": 50}])
+        assert r.status_code == 201, r.text
+        shared = await compute_project_pnl(ORG_A, "prj-1")
+        assert round(cost(after) - cost(shared), 2) == 20.0                              # 4/10 × 50
+    run(monkeypatch, mode, scenario)
+
+
+def test_r52_d12_prefix_change_does_not_reset_the_counter(monkeypatch, mode):
+    async def scenario(c, op):
+        assert (await issued(c))["invoice_no"] == "INV-0001"
+        assert (await issued(c))["invoice_no"] == "INV-0002"
+        r = await c.put("/api/finance/invoice-settings", headers=hdr("owner-a"), json={"issued_prefix": "BG"})
+        assert r.status_code == 200
+        assert (await issued(c))["invoice_no"] == "BG-0003"
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg231_same_number_from_two_suppliers_is_fine_same_supplier_is_a_duplicate(monkeypatch, mode):
+    async def scenario(c, op):
+        body = {"direction": "Received", "invoice_no": "F-100", "issue_date": "2026-11-08",
+                "due_date": "2099-12-31", "lines": LINES}
+        r1 = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
+                          json={**body, "counterparty_eik": EIK, "counterparty_name": "Доставчик 1"})
+        r2 = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
+                          json={**body, "counterparty_eik": "831826092", "counterparty_name": "Доставчик 2"})
+        assert (r1.status_code, r2.status_code) == (201, 201), (r1.text, r2.text)
+        r3 = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
+                          json={**body, "counterparty_eik": EIK, "counterparty_name": "Доставчик 1"})
+        assert r3.status_code == 409 and code(r3) == "DUPLICATE_SUPPLIER_INVOICE", r3.text
+        # the index enforces it too (a write that skips the check)
+        from pymongo.errors import DuplicateKeyError
+        dup = {**(await op.invoices.find_one({"id": r1.json()["id"]}, {"_id": 0})), "id": "dup-1"}
+        with pytest.raises(DuplicateKeyError):
+            await op.invoices.insert_one(dup)
+        # our outgoing series is separate: our INV-0001 next to a supplier's INV-0001
+        r4 = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
+                          json={**body, "invoice_no": "INV-0001", "counterparty_eik": EIK})
+        assert r4.status_code == 201
+        assert (await issued(c))["invoice_no"] == "INV-0001"
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg231_migration_backfills_supplier_key_and_reports_conflicts(monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services import invoice_corrections_migration as mig
+        await op.invoices.drop_index("inv_cn_02_supplier_invoice_no")      # a legacy database
+        for i, (eik, no) in enumerate((("111111111", "A-1"), ("222222222", "A-1"))):
+            await op.invoices.insert_one({"id": "leg-%d" % i, "org_id": ORG_A, "direction": "Received",
+                                          "status": "Sent", "invoice_no": no, "counterparty_eik": eik})
+        plan = await mig.plan(op)
+        keys = {k["id"]: k["supplier_key"] for t in plan["tenants"] for k in t["supplier_keys_to_set"]}
+        assert keys == {"leg-0": "eik:111111111", "leg-1": "eik:222222222"} and plan["supplier_conflicts"] == 0
+        await mig.apply(op, actor_id="owner-a")
+        assert (await op.invoices.find_one({"id": "leg-1"}))["supplier_key"] == "eik:222222222"
+        assert "inv_cn_02_supplier_invoice_no" in await op.invoices.index_information()
+        # the same supplier + number twice → reported, apply refuses, nothing changed
+        await op.invoices.drop_index("inv_cn_02_supplier_invoice_no")
+        await op.invoices.insert_one({"id": "leg-2", "org_id": ORG_A, "direction": "Received",
+                                      "status": "Sent", "invoice_no": "A-1", "counterparty_eik": "111111111"})
+        plan = await mig.plan(op)
+        assert plan["supplier_conflicts"] == 1
+        with pytest.raises(RuntimeError):
+            await mig.apply(op, actor_id="owner-a")
+        assert "supplier_key" not in await op.invoices.find_one({"id": "leg-2"})
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg232_editor_put_of_a_draft_with_a_typed_number_is_not_a_500(monkeypatch, mode):
+    async def scenario(c, op):
+        d = await draft(c)
+        # exactly the InvoiceEditorPage PUT payload
+        r = await c.put("/api/finance/invoices/" + d["id"], headers=hdr("acct-a"), json={
+            "invoice_no": "INV-0042", "kind": "Invoice", "counterparty_name": "Клиент ООД",
+            "counterparty_eik": EIK, "counterparty_vat_no": None, "counterparty_address": None,
+            "counterparty_mol": None, "counterparty_email": None, "counterparty_phone": None,
+            "project_id": "prj-1", "issue_date": "2026-11-08", "due_date": "2099-12-31",
+            "vat_percent": 20, "notes": "бележка"})
+        assert r.status_code == 200, r.text
+        assert "invoice_no" not in await op.invoices.find_one({"id": d["id"]})   # still unnumbered
+        bill = await draft(c, direction="Received")
+        r = await c.put("/api/finance/invoices/" + bill["id"], headers=hdr("acct-a"),
+                        json={"invoice_no": "SUP-NEW", "notes": "x"})
+        assert r.status_code == 200 and r.json()["invoice_no"] == "SUP-NEW", r.text
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg235_notes_change_on_a_sent_invoice_is_audited(monkeypatch, mode):
+    async def scenario(c, op):
+        inv = await sent(c)
+        r = await c.put("/api/finance/invoices/" + inv["id"], headers=hdr("acct-a"), json={"notes": "нова бележка"})
+        assert r.status_code == 200, r.text
+        ev = await op.audit_events.find_one({"action": "finance.invoice.notes_changed"})
+        assert ev and ev["structured_diff"]["notes"]["after"] == "нова бележка"
     run(monkeypatch, mode, scenario)

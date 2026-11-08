@@ -444,10 +444,11 @@ export default function InvoiceEditorPage() {
   const canDeleteDraft = isDraft && !isNew && canManage && !invoice?.invoice_no;   // Р49 / Р51(3)
   // Р49.2: an outgoing invoice is cancelled only while issued and not sent
   // Р51(3): a supplier invoice entered by mistake is cancelled too (not paid, not received)
-  const canCancel = invoice && canManage && !(invoice.cancellation_request?.status === "pending_approval") &&
+  // Р53(2): Accountant / Admin propose (the Owner approves); Р51(3): a supplier invoice — Accountant only
+  const canCancel = invoice && !(invoice.cancellation_request?.status === "pending_approval") &&
     (invoice.direction === "Issued"
-      ? invoice.status === "Issued"
-      : ["Draft", "Sent", "Overdue"].includes(invoice.status) && !(invoice.paid_amount > 0));
+      ? ["Accountant", "Admin"].includes(user?.role) && invoice.status === "Issued"
+      : user?.role === "Accountant" && ["Draft", "Sent", "Overdue"].includes(invoice.status) && !(invoice.paid_amount > 0));
   const pendingCancel = invoice?.cancellation_request?.status === "pending_approval";
   const canDecideCancel = pendingCancel && user?.role === "Owner" && invoice.cancellation_request.requested_by !== user?.id;
   const canWithdrawCancel = pendingCancel && invoice.cancellation_request.requested_by === user?.id;

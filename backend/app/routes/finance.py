@@ -911,8 +911,12 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
             raise HTTPException(status_code=400, detail="Номерът на фактурата е задължителен")
     else:
         # Check uniqueness for provided number
-        if not await validate_invoice_no_unique(_tenant(user), invoice_no):
-            raise HTTPException(status_code=400, detail=f"Фактура с номер {invoice_no} вече съществува")
+        # FG-231 / Р53(1): a supplier number is a duplicate only for the SAME supplier
+        from app.services.invoice_corrections import supplier_number_taken
+        if await supplier_number_taken(_tenant(user), data.model_dump(), invoice_no):
+            raise HTTPException(status_code=409, detail={
+                "error_code": "DUPLICATE_SUPPLIER_INVOICE",
+                "message": f"Фактура с номер {invoice_no} от този доставчик вече е въведена"})
     
     now = datetime.now(timezone.utc).isoformat()
     
@@ -957,6 +961,10 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     }
     if manual_number:
         invoice["manual_number"] = manual_number
+    if data.direction == "Received":
+        from app.services.invoice_corrections import supplier_key
+        invoice["supplier_counterparty_id"] = data.supplier_counterparty_id
+        invoice["supplier_key"] = supplier_key(invoice)          # FG-231 / Р53(1)
     if not invoice.get("invoice_no"):
         # FG-217: a draft has NO number field at all (not null) — a unique number index
         # never sees it, so a tenant may hold any number of drafts.
@@ -1076,14 +1084,16 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         raise HTTPException(status_code=400, detail=vat_check["message"])
 
     # Check invoice_no uniqueness if changed
-    if data.invoice_no and data.invoice_no != invoice["invoice_no"]:
-        existing = await tenant.invoices.find_one({
-            "direction": invoice["direction"],
-            "invoice_no": data.invoice_no,
-            "id": {"$ne": invoice_id},
-        })
-        if existing:
-            raise HTTPException(status_code=400, detail="Invoice number already exists")
+    # FG-232: a draft has no invoice_no field — .get, never a KeyError (500)
+    if (data.invoice_no and data.invoice_no != invoice.get("invoice_no")
+            and invoice.get("direction") == "Received"):
+        # FG-231 / Р53(1): unique per supplier (with the supplier as it will be after the edit)
+        from app.services.invoice_corrections import supplier_number_taken
+        merged = {**invoice, **{k: v for k, v in data.model_dump().items() if v is not None}}
+        if await supplier_number_taken(tenant, merged, data.invoice_no, exclude_invoice_id=invoice_id):
+            raise HTTPException(status_code=409, detail={
+                "error_code": "DUPLICATE_SUPPLIER_INVOICE",
+                "message": "Фактура с този номер от този доставчик вече е въведена"})
     
     update = dict(requested)
     due_change = None
@@ -1107,6 +1117,12 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         settings = await get_invoice_settings(user["org_id"])
         if typed and not settings.get("issued_auto_numbering", True):
             update["manual_number"] = typed
+    if not is_locked(invoice) and invoice.get("direction") == "Received":
+        from app.services.invoice_corrections import supplier_key
+        update["supplier_key"] = supplier_key({**invoice, **update})
+    notes_change = None
+    if is_locked(invoice) and "notes" in update and update["notes"] != invoice.get("notes"):
+        notes_change = {"before": invoice.get("notes"), "after": update["notes"]}   # FG-235
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     version_id = str(uuid.uuid4())
 
@@ -1138,6 +1154,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             await _audit_tx(user, "finance.invoice.due_date_changed", "finance.invoice", invoice_id,
                             due_reason, {"due_date": due_change,
                                          "invoice_no": current.get("invoice_no")}, None, session)
+        if notes_change is not None:
+            # FG-235: an issued / sent invoice's notes change leaves a canonical AuditEvent
+            await _audit_tx(user, "finance.invoice.notes_changed", "finance.invoice", invoice_id,
+                            due_reason or "", {"notes": notes_change,
+                                               "invoice_no": current.get("invoice_no")}, None, session)
 
         # Recompute if vat changed
         if "vat_percent" in update:
@@ -1360,8 +1381,25 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_sent", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
+    await _supersede_cancellation(tenant, user, invoice_id, "sent")          # FG-234
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
+
+
+async def _supersede_cancellation(tenant: TenantData, user: dict, invoice_id: str, cause: str) -> None:
+    """Р53(2) / FG-234: a PENDING cancellation proposal is superseded automatically when the
+    invoice is sent or paid (one conditional write; AuditEvent only when it changed)."""
+    from app.services import invoice_corrections as ic
+    at = ic.now_iso()
+    res = await tenant.invoices.update_one(
+        {"id": invoice_id, "cancellation_request.status": ic.NOTE_PENDING},
+        {"$set": {"cancellation_request.status": "superseded",
+                  "cancellation_request.superseded_by": cause,
+                  "cancellation_request.superseded_at": at}})
+    if res.modified_count == 1:
+        await _audit(user, "finance.invoice.cancellation_superseded", "finance.invoice", invoice_id,
+                     cause, {"cancellation_request": {"before": ic.NOTE_PENDING, "after": "superseded"},
+                             "cause": cause}, None)
 
 
 def _cancel_refusal(inv: dict) -> Optional[HTTPException]:
@@ -1440,16 +1478,30 @@ async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    outgoing = invoice.get("direction") == "Issued"
+    # Р53(2) / FG-234: an outgoing cancellation is PROPOSED by the Accountant or Admin
+    # (the Owner approves, never proposes); Р51(3) / FG-235: a supplier invoice entered by
+    # mistake is cancelled by the Accountant only.
+    allowed = ("Accountant", "Admin") if outgoing else ("Accountant",)
+    if user.get("role") not in allowed:
+        raise HTTPException(status_code=403, detail={
+            "error_code": "CANCEL_ROLE_REQUIRED",
+            "message": ("Анулиране предлага Счетоводител или Администратор; Собственикът одобрява"
+                        if outgoing else "Входяща фактура анулира само Счетоводителят")})
     req = _Request(body, reason, idempotency_key)      # reason (400) + key (428)
     first = _cancel_refusal(invoice)
     if first is not None:
         raise first
-    outgoing = invoice.get("direction") == "Issued"
 
     async def work():
+        if not outgoing:
+            await ic.ensure_invoice_line_locks(tenant, invoice)          # FG-233 (outside tx)
+
         async def tx_body(session):
             current = await claim_invoice(tenant, invoice_id, session=session,
                                           forbidden=("Cancelled",), code=STATUS_CHANGED)
+            if not outgoing:
+                await ic.lock_invoice_lines(tenant, current, session=session)   # FG-233
             again = _cancel_refusal(current)
             if again is not None:
                 raise again
@@ -1733,6 +1785,7 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
     }
     await tenant.payment_allocations.update_one({"id": allocation_id}, {"$setOnInsert": allocation}, upsert=True)
     await update_invoice_status(tenant, invoice_id)
+    await _supersede_cancellation(tenant, user, invoice_id, "paid")          # FG-234
     await log_audit(org_id, user["id"], user["email"], "invoice_payment_added", "invoice", invoice_id,
                     {"amount": amount, "payment_id": payment_id})
     return {"payment_id": payment_id, "allocation_id": allocation_id}
@@ -2304,6 +2357,7 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                 results.append(allocation)
             for invoice_id in planned_by_invoice:
                 await update_invoice_status(tenant, invoice_id)
+                await _supersede_cancellation(tenant, user, invoice_id, "paid")   # FG-234
 
         await log_audit(user["org_id"], user["id"], user["email"], "payment_allocated", "payment", payment_id,
                         {"allocations": len(results)})

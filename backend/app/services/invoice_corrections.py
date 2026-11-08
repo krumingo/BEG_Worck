@@ -186,6 +186,28 @@ async def seed_number_counter(tenant, prefix: str, settings: dict) -> None:
 MAX_NUMBER_SKIPS = 10000
 
 
+def supplier_key(invoice: dict) -> Optional[str]:
+    """Р53(1): the supplier identity of an incoming invoice / note — the ЕИК, else the
+    counterparty record, else the normalised name. None when nothing identifies it."""
+    inv = invoice or {}
+    eik = (inv.get("counterparty_eik") or "").strip()
+    if eik:
+        return "eik:" + eik
+    cp = (inv.get("supplier_counterparty_id") or "").strip() if isinstance(
+        inv.get("supplier_counterparty_id"), str) else ""
+    if cp:
+        return "cp:" + cp
+    name = " ".join((inv.get("counterparty_name") or "").lower().split())
+    return ("name:" + name) if name else None
+
+
+async def supplier_number_taken(tenant, invoice: dict, number: str, *, exclude_invoice_id=None) -> bool:
+    flt = {"direction": "Received", "invoice_no": number, "supplier_key": supplier_key(invoice)}
+    if exclude_invoice_id:
+        flt["id"] = {"$ne": exclude_invoice_id}
+    return bool(await tenant.invoices.find_one(flt, {"_id": 0, "id": 1}))
+
+
 async def number_taken(tenant, number: str, *, session=None, exclude_invoice_id=None) -> bool:
     """Is ``number`` already used by an OUR document (outgoing invoice or outgoing note)?
     Supplier numbers (incoming invoices / notes) are another series and never count."""
@@ -295,11 +317,21 @@ async def resolve_line(tenant, invoice: dict, line_id: str, *, session=None) -> 
                                               {"_id": 0}, session=session)
     if row is None:
         return None
+    # the supplier line as it was INVOICED (routes/invoice_lines.compute_line): its own
+    # net (line_total_ex_vat) and VAT rate (vat_amount / net; a missing vat_percent is the
+    # module's default 20 %, the same reading as compute_line)
     qty = Decimal(str(row.get("qty") or 0))
-    price = Decimal(str(row.get("unit_price") or 0))
-    return {"id": line_id, "qty": qty, "unit_price": price, "net": cents(qty * price),
-            "vat_percent": Decimal(str(row.get("vat_percent") if row.get("vat_percent") is not None
-                                       else invoice.get("vat_percent") or 0)),
+    if row.get("line_total_ex_vat") is not None:
+        net = cents(row["line_total_ex_vat"])
+    else:
+        net = cents(qty * Decimal(str(row.get("unit_price") or 0)))
+    price = (Decimal(str(row["unit_price"])) if row.get("unit_price") is not None
+             else (net / qty if qty > 0 else Decimal(0)))
+    if row.get("vat_amount") is not None and net > 0:
+        rate = (Decimal(str(row["vat_amount"])) / net * Decimal(100)).quantize(Decimal("0.0001"))
+    else:
+        rate = Decimal(str(row.get("vat_percent", 20) or 0))
+    return {"id": line_id, "qty": qty, "unit_price": price, "net": net, "vat_percent": rate,
             "description": row.get("description")}
 
 
@@ -491,11 +523,18 @@ def expected_escalation(row: dict, now: Optional[datetime] = None) -> dict:
 #: a missing number as null (the second draft → DuplicateKeyError). The legacy index is
 #: dropped only by the migration (``invoice_corrections_migration``).
 INVOICE_NO_INDEX = ("invoices", [("org_id", 1), ("direction", 1), ("invoice_no", 1)],
-                    {"name": "inv_cn_01_invoice_no_by_direction", "unique": True,
-                     "partialFilterExpression": {"invoice_no": {"$gt": ""}}})
+                    {"name": "inv_cn_02_outgoing_invoice_no", "unique": True,
+                     "partialFilterExpression": {"direction": "Issued", "invoice_no": {"$gt": ""}}})
+#: FG-231 / Р53(1): a supplier invoice is a duplicate only for the SAME supplier + number.
+SUPPLIER_NO_INDEX = ("invoices", [("org_id", 1), ("supplier_key", 1), ("invoice_no", 1)],
+                     {"name": "inv_cn_02_supplier_invoice_no", "unique": True,
+                      "partialFilterExpression": {"direction": "Received", "invoice_no": {"$gt": ""}}})
+#: index names of earlier versions, replaced by the migration
+SUPERSEDED_INDEX_NAMES = ("inv_cn_01_invoice_no_by_direction",)
 
 PLANNED_INDEXES = (
     INVOICE_NO_INDEX,
+    SUPPLIER_NO_INDEX,
     ("invoices", [("org_id", 1), ("issued_number", 1)],
      {"name": "inv_cn_01_issued_number_unique", "unique": True,
       "partialFilterExpression": {"issued_number": {"$type": "string"}}}),
@@ -530,6 +569,8 @@ async def ensure_indexes(database) -> None:
     for coll, keys, opts in PLANNED_INDEXES:
         plan.setdefault(coll, []).append((keys, opts))
     for keys, opts in plan["invoices"]:
+        if opts["name"] in (INVOICE_NO_INDEX[2]["name"], SUPPLIER_NO_INDEX[2]["name"]):
+            continue    # built at startup and by the migration (after the supplier_key backfill)
         await database.invoices.create_index(keys, **opts)
     for keys, opts in plan["credit_debit_notes"]:
         await database.credit_debit_notes.create_index(keys, **opts)
@@ -604,6 +645,15 @@ async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, ro
                       "dq_task.status": "closed", "dq_task.closed_at": at}}, session=session)
         if res.modified_count != len(ids):
             raise conflict(EXPECTED_LINK_INVALID, "Очакваното известие вече е покрито")
+        # Р52(2a): a corrected note closes the earlier mismatch; the mismatched note stays
+        # registered (never applied) and is marked superseded by this one.
+        await tenant.expected_credit_notes.update_many(
+            {"id": {"$in": ids}, "dq_mismatch": {"$exists": True}},
+            {"$set": {"dq_mismatch.status": "closed", "dq_mismatch.closed_by_credit_note_id": note_id,
+                      "dq_mismatch.closed_at": at}}, session=session)
+        await tenant.credit_debit_notes.update_many(
+            {"expected_link.rows": {"$in": ids}, "applied": False, "id": {"$ne": note_id}},
+            {"$set": {"superseded_by": note_id, "updated_at": at}}, session=session)
         if not await tenant.expected_credit_notes.find_one(
                 {"invoice_id": invoice_id, "status": "open"}, {"_id": 0, "id": 1}, session=session):
             await tenant.invoices.update_one({"id": invoice_id},
@@ -619,14 +669,40 @@ async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, ro
 
 
 async def linked_to_warehouse(tenant, invoice: dict, *, session=None) -> bool:
-    """Р51(3): is a supplier invoice linked to a warehouse receipt? Any of its
-    ``invoice_lines`` rows referenced by a canonical ledger movement."""
+    """Р51(3) / FG-233: is a supplier invoice linked to a warehouse receipt? A canonical
+    ledger movement that names the invoice itself (``invoice_id``, with or without a
+    line) or any of its ``invoice_lines`` rows. In a transaction the caller also bumps
+    the line locks (``lock_invoice_lines``), so a linked receipt racing the cancel of the
+    same line is serialised."""
     from app.services.invoice_line_lock import first_linked_movement
+    if await tenant.warehouse_transactions.find_one(
+            {"action": {"$exists": True}, "invoice_id": invoice["id"]}, {"_id": 0, "movement_id": 1},
+            session=session):
+        return True
     async for line in tenant.invoice_lines.find({"invoice_id": invoice["id"]}, {"_id": 0, "id": 1},
                                                 session=session):
         if await first_linked_movement(tenant, line["id"], session=session):
             return True
     return False
+
+
+async def ensure_invoice_line_locks(tenant, invoice: dict) -> None:
+    """FG-233, OUTSIDE the transaction: create the per-line lock documents (idempotent)."""
+    from app.services.invoice_line_lock import ensure_line_lock
+    async for l in tenant.invoice_lines.find({"invoice_id": invoice["id"]}, {"_id": 0, "id": 1}):
+        await ensure_line_lock(tenant, l["id"])
+
+
+async def lock_invoice_lines(tenant, invoice: dict, *, session) -> None:
+    """FG-233, INSIDE the transaction: write the per-line lock document of every line of
+    the invoice (the same document a linked receipt writes in ITS transaction), so the
+    cancel and a receipt of the same line are serialised (WriteConflict → retry)."""
+    from app.services.invoice_line_lock import bump_line_lock
+    if session is None:
+        return
+    async for l in tenant.invoice_lines.find({"invoice_id": invoice["id"]}, {"_id": 0, "id": 1},
+                                             session=session):
+        await bump_line_lock(tenant, l["id"], session=session)
 
 
 async def pending_debit(tenant, invoice_id: str, *, session=None) -> Decimal:
@@ -637,4 +713,38 @@ async def pending_debit(tenant, invoice_id: str, *, session=None) -> Decimal:
             {"original_invoice_id": invoice_id, "kind": KIND_DEBIT, "status": NOTE_PENDING},
             {"_id": 0, "gross": 1}, session=session):
         total += cents(n.get("gross"))
+    return total
+
+
+async def supplier_note_cost_effect(tenant, project_id: str) -> Decimal:
+    """Р52(1) / D8 — the effect of supplier credit / debit notes on a project's cost.
+
+    * a note LINKED to a receipt reversal (``expected_link.rows``) only reduces the
+      payable and is the tax document: the reversal already took the cost out of the
+      project — no second P&L effect;
+    * a note WITHOUT a reversal (discount, defect) changes the cost of the project of the
+      ORIGINAL line (Р49.7): the line's direct project allocations (Path B, by quantity
+      share), else the line's / invoice's project. Credit → minus, debit → plus.
+    Returns the amount to SUBTRACT from the project's material cost (net, whole cents)."""
+    from app.services.canonical_material_cost import effective_allocations
+    total = Decimal(0)
+    async for n in tenant.credit_debit_notes.find(
+            {"direction": INCOMING, "applied": True, "status": {"$in": [NOTE_REGISTERED, NOTE_APPROVED]}},
+            {"_id": 0}):
+        if (n.get("expected_link") or {}).get("rows"):
+            continue                                   # linked to a reversal: payable only
+        sign = Decimal(1) if n.get("kind") == KIND_CREDIT else Decimal(-1)
+        for l in n.get("lines") or []:
+            net = cents(l.get("net"))
+            row = await tenant.invoice_lines.find_one({"id": l["original_line_id"]}, {"_id": 0})
+            if row is not None:
+                allocs = [a for a in effective_allocations(row) if a.get("type") == "project"]
+                qty = Decimal(str(row.get("qty") or 0))
+                for a in allocs:
+                    if a.get("ref_id") != project_id:
+                        continue
+                    share = (Decimal(str(a["qty"])) / qty) if (a.get("qty") and qty > 0) else Decimal(1)
+                    total += sign * cents(net * min(share, Decimal(1)))
+            elif n.get("project_id") == project_id:
+                total += sign * net
     return total

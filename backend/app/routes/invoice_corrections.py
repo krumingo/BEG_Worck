@@ -358,6 +358,68 @@ async def reject_offset(offset_id: str, body: dict = Body(...), user: dict = Dep
                            {"offset_id": offset_id, "reason": reason}, work)
 
 
+@router.post("/finance/credit-notes/{note_id}/accept-difference")
+async def accept_difference(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+                            idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Р52(2) / D7: a supplier credit note that differs from the awaited credit stays
+    registered and NOT applied (the limit stays) until either a corrected note arrives
+    (it closes the DQ) or the OWNER — never the Accountant — accepts the difference with a
+    reason. Then the note applies with its REAL amount (payment limit = net received −
+    the note), the awaited rows close and a canonical AuditEvent is written."""
+    _guard(user)
+    _approver(user)
+    key = fin._require_key(idempotency_key)
+    reason = _reason(body if isinstance(body, dict) else {})
+
+    async def work():
+        from app.services.auth_tx import run_in_transaction
+        tenant = fin._tenant(user)
+
+        async def tx_body(session):
+            note = await tenant.credit_debit_notes.find_one({"id": note_id}, {"_id": 0}, session=session)
+            if note is None:
+                raise HTTPException(status_code=404, detail="Note not found")
+            link = note.get("expected_link") or {}
+            if (note.get("direction") != ic.INCOMING or note.get("applied") or link.get("matched") is not False
+                    or note.get("superseded_by")):
+                raise ic.conflict(ic.NOT_PENDING, "Няма отворена разлика за приемане по това известие")
+            rows = link.get("rows") or []
+            await _claim(tenant, note["original_invoice_id"], session)
+            open_rows = await tenant.expected_credit_notes.count_documents(
+                {"id": {"$in": rows}, "status": "open"}, session=session)
+            if open_rows != len(rows):
+                raise ic.conflict(ic.NOT_PENDING, "Очакваното известие вече е покрито")
+            at = ic.now_iso()
+            await tenant.credit_debit_notes.update_one(
+                {"id": note_id, "applied": False},
+                {"$set": {"applied": True, "difference_accepted": {
+                    "by": user["id"], "reason": reason, "at": at,
+                    "expected": link.get("expected"), "registered": note.get("gross")},
+                    "updated_at": at}}, session=session)
+            await tenant.expected_credit_notes.update_many(
+                {"id": {"$in": rows}, "status": "open"},
+                {"$set": {"status": "fulfilled_with_difference", "credit_note_id": note_id,
+                          "fulfilled_at": at, "dq_task.status": "closed", "dq_task.closed_at": at,
+                          "dq_mismatch.status": "accepted_by_owner", "dq_mismatch.closed_at": at}},
+                session=session)
+            if not await tenant.expected_credit_notes.find_one(
+                    {"invoice_id": note["original_invoice_id"], "status": "open"}, {"_id": 0, "id": 1},
+                    session=session):
+                await tenant.invoices.update_one({"id": note["original_invoice_id"]},
+                                                 {"$set": {"awaiting_credit_note": False}}, session=session)
+            await fin.update_invoice_status(tenant, note["original_invoice_id"], session=session)
+            await fin._audit_tx(user, "finance.credit_note.difference_accepted", "finance.credit_note",
+                                note_id, reason, {"expected": link.get("expected"),
+                                                  "registered": note.get("gross"), "rows": rows,
+                                                  "original_invoice_id": note["original_invoice_id"]},
+                                key, session)
+        await fin._tx(run_in_transaction, tx_body)
+        return _public(await tenant.credit_debit_notes.find_one({"id": note_id}, {"_id": 0}))
+
+    return await fin._once(user, key, "finance.credit_note.accept_difference",
+                           {"note_id": note_id, "reason": reason}, work)
+
+
 @router.get("/finance/credit-notes")
 async def list_notes(invoice_id: Optional[str] = None, user: dict = Depends(require_m5)):
     _guard(user)

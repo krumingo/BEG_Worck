@@ -106,6 +106,11 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
   };
 
   const approve = (note) => post(`/finance/credit-notes/${note.id}/approve`, { version: note.version });
+  // Р52(2) / D7: the Owner accepts a supplier note's difference (reason + AuditEvent)
+  const acceptDifference = (note) => {
+    const reason = (window.prompt("Причина за приемане на разликата:") || "").trim();
+    if (reason) post(`/finance/credit-notes/${note.id}/accept-difference`, { reason });
+  };
   const reject = (note) => {
     const reason = (window.prompt("Причина за отхвърляне / оттегляне:") || "").trim();
     if (reason) post(`/finance/credit-notes/${note.id}/reject`, { reason });
@@ -143,6 +148,14 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
             {n.status === "pending_approval" && isOwner && n.created_by !== user?.id && (
               <Button size="sm" disabled={busy} onClick={() => approve(n)} data-testid={`approve-note-${n.id}`}>
                 Одобри
+              </Button>
+            )}
+            {n.direction === "incoming" && !n.applied && n.expected_link?.matched === false && !n.superseded_by && (
+              <Badge variant="outline" className="text-xs text-amber-400">Разлика в кредитно известие</Badge>
+            )}
+            {isOwner && n.direction === "incoming" && !n.applied && n.expected_link?.matched === false && !n.superseded_by && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => acceptDifference(n)} data-testid={`accept-diff-${n.id}`}>
+                Приеми разликата
               </Button>
             )}
             {n.status === "pending_approval" && (isOwner || n.created_by === user?.id) && (

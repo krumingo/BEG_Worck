@@ -10,7 +10,11 @@ Owner's approval of that exact report — CLAUDE.md §8, critical migration):
      before INV-CN-01) becomes ``Issued`` — locked — with ``issued_number`` and a
      canonical AuditEvent per invoice (``finance.invoice.issued_by_migration``);
   3. FG-217: the legacy unique+sparse ``(org_id, invoice_no)`` index (it indexes a
-     missing number as null) is dropped and the partial, direction-scoped index is built.
+     missing number as null) is dropped and the partial index of OUR series is built;
+  4. FG-231 / Р53(1): every supplier invoice gets ``supplier_key`` (ЕИК, else the
+     counterparty record, else the name) and the per-supplier unique index is built —
+     two suppliers may use the same number, the same supplier may not. Rows that would
+     collide are listed by the dry run and ``apply`` refuses until they are resolved.
 
 Running it again finds nothing to do (each step is conditional). Rollback: the report
 lists every invoice id changed; the status can be put back to Draft from it, and the
@@ -35,8 +39,9 @@ def _is_legacy_index(spec: dict) -> bool:
 async def plan(database) -> Dict:
     """Read-only report: what ``apply`` would change (per tenant), and the index state."""
     indexes = await database.invoices.index_information()
-    legacy = sorted(n for n, spec in indexes.items() if _is_legacy_index(spec))
-    target = ic.INVOICE_NO_INDEX[2]["name"]
+    legacy = sorted(n for n, spec in indexes.items()
+                    if _is_legacy_index(spec) or n in ic.SUPERSEDED_INDEX_NAMES)
+    targets = [ic.INVOICE_NO_INDEX[2]["name"], ic.SUPPLIER_NO_INDEX[2]["name"]]
     tenants: List[Dict] = []
     for org_id in await all_tenant_ids(database):
         tenant = TenantData.for_resolved_org(database, org_id)
@@ -46,14 +51,32 @@ async def plan(database) -> Dict:
         numbered = await tenant.invoices.find(
             {"status": ic.DRAFT, "direction": "Issued", "invoice_no": {"$gt": ""}},
             {"_id": 0, "id": 1, "invoice_no": 1, "total": 1, "created_at": 1}).to_list(None)
-        if empty or numbered:
+        keys, seen, conflicts = [], {}, []
+        async for inv in tenant.invoices.find({"direction": "Received"},
+                                              {"_id": 0, "id": 1, "invoice_no": 1, "supplier_key": 1,
+                                               "counterparty_eik": 1, "counterparty_name": 1,
+                                               "supplier_counterparty_id": 1}):
+            key = ic.supplier_key(inv)
+            if inv.get("supplier_key") != key:
+                keys.append({"id": inv["id"], "supplier_key": key})
+            if isinstance(inv.get("invoice_no"), str) and inv["invoice_no"].strip():
+                ident = (key, inv["invoice_no"])
+                if ident in seen:
+                    conflicts.append({"supplier_key": key, "invoice_no": inv["invoice_no"],
+                                      "ids": [seen[ident], inv["id"]]})
+                seen.setdefault(ident, inv["id"])
+        if empty or numbered or keys or conflicts:
             tenants.append({"org_id": org_id,
                             "drafts_number_removed": [d["id"] for d in empty],
-                            "legacy_numbered_drafts_to_issue": numbered})
-    return {"legacy_index": legacy, "target_index": target,
-            "target_index_present": target in indexes, "tenants": tenants,
+                            "legacy_numbered_drafts_to_issue": numbered,
+                            "supplier_keys_to_set": keys, "supplier_conflicts": conflicts})
+    missing = [n for n in targets if n not in indexes]
+    return {"legacy_index": legacy, "target_indexes": targets, "missing_indexes": missing,
+            "tenants": tenants,
+            "supplier_conflicts": sum(len(t["supplier_conflicts"]) for t in tenants),
             "changes": sum(len(t["drafts_number_removed"]) + len(t["legacy_numbered_drafts_to_issue"])
-                           for t in tenants) + len(legacy) + (0 if target in indexes else 1)}
+                           + len(t["supplier_keys_to_set"]) for t in tenants)
+            + len(legacy) + len(missing)}
 
 
 async def apply(database, *, actor_id: str) -> Dict:
@@ -61,6 +84,9 @@ async def apply(database, *, actor_id: str) -> Dict:
     from app.audit.envelope import ACTOR_SYSTEM, RETENTION_R1_CRITICAL_BUSINESS, build_event
     from app.audit.store import record_event
     report = await plan(database)
+    if report["supplier_conflicts"]:
+        raise RuntimeError("the same supplier + number exists twice — resolve the rows listed by "
+                           "the dry run (supplier_conflicts) first; nothing was changed")
     now = ic.now_iso()
     for t in report["tenants"]:
         tenant = TenantData.for_resolved_org(database, t["org_id"])
@@ -68,6 +94,9 @@ async def apply(database, *, actor_id: str) -> Dict:
             await tenant.invoices.update_many(
                 {"id": {"$in": t["drafts_number_removed"]}, "status": ic.DRAFT,
                  "invoice_no": {"$exists": True, "$in": [None, ""]}}, {"$unset": {"invoice_no": ""}})
+        for row in t["supplier_keys_to_set"]:
+            await tenant.invoices.update_one({"id": row["id"], "direction": "Received"},
+                                             {"$set": {"supplier_key": row["supplier_key"]}})
         for inv in t["legacy_numbered_drafts_to_issue"]:
             res = await tenant.invoices.update_one(
                 {"id": inv["id"], "status": ic.DRAFT, "invoice_no": inv["invoice_no"]},
@@ -85,6 +114,6 @@ async def apply(database, *, actor_id: str) -> Dict:
                     effective_role_assignments=["migration"], source_channel="migration"))
     for name in report["legacy_index"]:
         await database.invoices.drop_index(name)
-    keys, opts = ic.INVOICE_NO_INDEX[1], ic.INVOICE_NO_INDEX[2]
-    await database.invoices.create_index(keys, **opts)
+    for _, keys, opts in (ic.INVOICE_NO_INDEX, ic.SUPPLIER_NO_INDEX):
+        await database.invoices.create_index(keys, **opts)
     return report
