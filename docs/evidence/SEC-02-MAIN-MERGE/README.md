@@ -27,5 +27,17 @@
 * GET: 5790 извиквания, **0 hits** (включва новите route-ове от main).
 * POST/PUT: 4620 извиквания, **0 hits**.
 
+## SEC71-M1 (одит, БЛОКИРАЩО) — складовият пакет беше червен върху сливането
+При `eff56bf`: 1084 passed / 37 failed (main: 1121). Тестовете за отчетите на #55 (c19, c20, c22 и всички, които ползват `c22._all_reports`: c23, c24, c25, c26, c26k) викат R20-декорираните handler-и директно, без FastAPI. Декораторът вземаше заявката с `kwargs.pop("_sec02_request")` → `KeyError`.
+
+Поправка, двете части:
+1. **Fail closed** (`money_write._request_of`, `6034190`): без заявка трите декоратора (`strip_money_for_non_finance`, `strip_for_budget_view`, `strip_pulse_for_non_finance`) махат парите. Не показват нищо и не падат. Тест: `test_sec71_m1_decorators_fail_closed_without_a_request`.
+2. **Тестовете на #55 подават истинска заявка за своята роля** (`a8ef905`):
+   * при всяко извикване на декориран handler има `_sec02_request=_sec02_req()` — истински `starlette.requests.Request`, добавен с AST точно на тези извиквания;
+   * ролята е `user=` на теста (`_user()`: „u-<tenant>“, Owner). В enforce декораторът пита **истинския** Tenant Guard и Permission Service. `warehouse_canonical_conftest.sec02_owner_in_enforce` регистрира tenant-ите на теста, активното членство на потребителя и Owner company assignment-а, който `_user()` представя. Всеки друг потребител минава през истинския loader (същият подход като c26a / c26f с `_load_assignments`);
+   * **нито едно assertion не е променено.**
+
+Резултат: **44 файла / 1121 passed** (= main) — `warehouse_suite.txt`. Файловете са пуснати поотделно, с документираната среда (`PERMISSION_SERVICE_MODE=enforce`, `WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1`, `MONGO_TEST_DB`). c26j е пуснат повторно самостоятелно: Mongo контейнерът се рестартира по време на общото пускане (Docker daemon-ът, не тестът) → 58 passed.
+
 ## Gates (локален реален MongoDB 7.0 rs0, файл по файл)
 Виж `test_summary.txt` в тази папка.
