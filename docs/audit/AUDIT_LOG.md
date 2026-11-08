@@ -5087,3 +5087,21 @@ Verified:
 So the main sanity of `4bca18a` is covered by that run; no re-run is needed.
 
 Merge queue (orchestrator): #71 (merging main) → #77 → #74 → #76 → #73 + #75 → #79 → #81 → #82. Each must be re-audited on its merge with the new main (conflict resolution and gates).
+
+## 2026-11-08 12:55 UTC: #81 `7d887fd` (delta from `2d60acd`: FG-215, Р44 / Р45 for supplier invoices only): PASS
+
+- **The change:** `under_r45(inv)` = `direction == "Received"`. It gates stamping, the final state (an Issued invoice counts as ALLOCATED), `apply_header_destination`, the DQ refresh and the migration query. `_finance_by_project_rows` keeps main's header counting for Issued invoices that have no line-level project allocation.
+- **The three W0 test edits** move back toward main's expectations (`pr-only-b` counted again because its invoice is Issued) and keep the restored shared-project name check. Not a weakening.
+
+| Gate | Result |
+|---|---|
+| Probe `_r44` X5–X7 | 18 passed |
+| wh_fix_01 + a3_r44 | 185 |
+| warehouse canonical | 44 files / 1121, 0 bad |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+#80 `344c197`: docs only (decisions Р48 / Р49, packages CP-01 and INV-CN-01).
