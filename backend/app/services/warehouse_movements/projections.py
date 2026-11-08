@@ -51,6 +51,7 @@ from app.services.warehouse_movements.actions import (
     CanonicalAction,
     OUTBOUND_ACTIONS,
     INBOUND_ACTIONS,
+    REVERSAL_ACTIONS,
     QUARANTINE_ACTIONS,
 )
 from app.services.warehouse_movements.envelope import (
@@ -138,6 +139,9 @@ async def apply_projection(
     # 1b. 5C-C25 (Р18) — a quarantine entry / release with a source moves
     # traced FIFO layers between two states of one location: drain them.
     if act in {a.value for a in QUARANTINE_ACTIONS} and env.layer_allocations:
+        await _drain_batches(tenant_db, env, session=session)
+    # 1c. WH-REV-01 — a receipt reversal takes the receipt's own layer out.
+    if act in {a.value for a in REVERSAL_ACTIONS}:
         await _drain_batches(tenant_db, env, session=session)
 
     # 2. Direct inbound (new layers from supplier etc.)
@@ -408,7 +412,7 @@ WAREHOUSE_LOCATION_TYPES = (LocationType.CENTRAL_WAREHOUSE.value,
 # 5C-C25 (Р17) — `movement_kind` of the rows that ARE project cost (signed
 # `total_value`) and of the rows that only ALLOCATE it (value in
 # `movement_value`, `total_value` 0).
-COST_ROW_KINDS = ("accept", "return", "transfer_out")
+COST_ROW_KINDS = ("accept", "return", "transfer_out", "receipt_reversal")
 ALLOCATION_ROW_KINDS = ("consume", "write_off")
 
 
@@ -531,6 +535,28 @@ def material_cost_rows(env, *, transit_origin: Optional[Dict[str, Any]] = None) 
                 "transfer_movement_id": origin.get("dispatch_movement_id"),
                 "accepted_at": env.recorded_at,
             }))
+        return rows
+
+    # WH-REV-01 — a reversed DIRECT delivery leaves the project's cost: a
+    # `receipt_reversal` row, −V at the delivery's own value (the warehouse
+    # receipt's reversal is stock, no project cost).
+    if act == CanonicalAction.REVERSE_SUPPLIER_RECEIPT_TO_PROJECT.value \
+            and is_project_location(env.source):
+        qty = Decimal(str(env.quantity))
+        value = movement_exact_value(env)
+        rows.append(dict(base, **{
+            "id": f"me_{env.movement_id}",
+            "project_id": _project_of(env.source, env.project_id),
+            "movement_kind": "receipt_reversal",
+            "cost_recognized": True,
+            "direct_delivery": True,
+            "reverses_movement_id": getattr(env, "reverses_movement_id", None),
+            "quantity": str(-qty),
+            "unit_value": _unit(env.unit_value),
+            "total_value": str(-value),
+            "movement_value": str(-value),
+            "reversed_at": env.recorded_at,
+        }))
         return rows
 
     if act == CanonicalAction.CONSUME_TO_SMR.value:

@@ -71,7 +71,9 @@ CANONICAL_SOURCE = "canonical_warehouse_service"
 # 5C-C25 (Р17) — the `material_entries` kinds that ARE project cost
 # (signed `total_value`): acceptance / direct delivery (+), a lot accepted
 # away from the project (−).
-COST_KINDS: Tuple[str, ...] = ("accept", "return", "transfer_out")
+COST_KINDS: Tuple[str, ...] = ("accept", "return", "transfer_out",
+                                # WH-REV-01: a reversed direct delivery (−V)
+                                "receipt_reversal")
 # Allocation-only kinds (value in `movement_value`): consumption per SMR and
 # the „фира" line (Р10). Never added to the cost a second time.
 ALLOCATION_KINDS: Tuple[str, ...] = ("consume", "write_off")
@@ -362,7 +364,10 @@ async def ledger_invoice_line_links(tenant, org_id: str, ids: List[str]) -> Dict
          # for a subproject destination, its DB-resolved parent (FG-38).
          "project_id": 1},
     )
-    async for row in cursor:
+    # WH-REV-01: a reversed receipt (and the reversal row) is no link.
+    from app.services.warehouse_movements.reversal import without_reversed
+    for row in await without_reversed(tenant.warehouse_transactions,
+                                      [r async for r in cursor]):
         out.setdefault(row["invoice_line_id"], []).append(row)
     return out
 
@@ -476,10 +481,13 @@ async def project_link_conflicts(tenant, org_id: str, project_id: str) -> List[d
     canon); the warning makes the conflicting allocation visible."""
     delivered: Dict[str, float] = {}
     units: Dict[str, set] = {}
-    async for row in tenant.warehouse_transactions.find(
-            {"org_id": org_id, "action": "receive_from_supplier_to_project",
-             "project_id": project_id, "invoice_line_id": {"$nin": [None, ""]}},
-            {"_id": 0, "invoice_line_id": 1, "quantity": 1, "unit": 1}):
+    from app.services.warehouse_movements.reversal import without_reversed
+    rows = [r async for r in tenant.warehouse_transactions.find(
+        {"org_id": org_id, "action": "receive_from_supplier_to_project",
+         "project_id": project_id, "invoice_line_id": {"$nin": [None, ""]}},
+        {"_id": 0, "movement_id": 1, "action": 1, "invoice_line_id": 1, "quantity": 1,
+         "unit": 1})]
+    for row in await without_reversed(tenant.warehouse_transactions, rows):  # WH-REV-01
         lid = row["invoice_line_id"]
         delivered[lid] = delivered.get(lid, 0.0) + (_f(row.get("quantity")) or 0.0)
         units.setdefault(lid, set()).add(_norm_unit(row.get("unit")))

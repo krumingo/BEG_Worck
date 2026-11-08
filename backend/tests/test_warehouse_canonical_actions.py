@@ -30,6 +30,9 @@ def test_vocabulary_covers_every_flow_009_movement():
         "transfer_warehouse_to_warehouse",
         "consume_to_smr",
         "return_to_supplier",
+        # WH-REV-01 — correction of a receipt by a reverse movement (FLOW-009).
+        "reverse_supplier_receipt",
+        "reverse_supplier_receipt_to_project",
         "write_off",
         "revision_adjustment",
         "quarantine_entry",

@@ -58,12 +58,20 @@ export const canOpenCanonicalWarehouse = (role) =>
   canReadWarehouseStock(role) || canReadWarehouseHistory(role)
   || canReadCentralStock(role) || canReadPriceHistory(role);
 
+/** WH-REV-01: a supplier receipt reversal is written only by
+ * POST /receipts/{movement_id}/reverse (derived from the stored receipt);
+ * POST /movements refuses these actions, so the picker never offers them. */
+export const REVERSAL_ACTIONS = Object.freeze([
+  "reverse_supplier_receipt", "reverse_supplier_receipt_to_project",
+]);
+
 /** Canonical actions this role may post, in picker order.
  * Needs both the outer route gate and the per-action right. */
 export function allowedCommandActions(role) {
   const held = warehouseActions(role);
   if (!held.has(WH_WRITE_COMMAND)) return [];
-  return Object.keys(PERMISSION_FOR_ACTION).filter((a) => held.has(PERMISSION_FOR_ACTION[a]));
+  return Object.keys(PERMISSION_FOR_ACTION).filter(
+    (a) => !REVERSAL_ACTIONS.includes(a) && held.has(PERMISSION_FOR_ACTION[a]));
 }
 
 export const canWriteWarehouse = (role) => allowedCommandActions(role).length > 0;

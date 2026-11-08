@@ -127,6 +127,8 @@
     "transfer_warehouse_to_warehouse": "warehouse.transfer_warehouse_to_warehouse",
     "consume_to_smr": "warehouse.consume_smr",
     "return_to_supplier": "warehouse.return_to_supplier",
+    "reverse_supplier_receipt": "warehouse.receive_from_supplier",
+    "reverse_supplier_receipt_to_project": "warehouse.receive_from_supplier_to_project",
     "write_off": "warehouse.write_off",
     "revision_adjustment": "warehouse.revision_adjustment",
     "quarantine_entry": "warehouse.quarantine_entry",
