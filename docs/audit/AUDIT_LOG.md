@@ -4894,3 +4894,43 @@ Gates on the head:
 **Merge with main `cd03324` conflicts** in `permissions/catalog.py`, `routes/procurement.py`, `routes/sales.py`, `tests/test_pm_01_permission_matrix.py` and PM-01 `matrix.csv` / `run_meta.json`. These come from #55's merge; the same files already conflicted at `25ffd9b`. #69 needs a rebase onto `cd03324` before merge. The trial-merge gates must be re-run then.
 
 **Main observation (not #69, debt D-MAIN-PAY-SUBCENT):** finance quick-pay / `create_payment` / `allocate` call `positive_amount` without `places`. Sub-cent amounts are stored as-is; the overpay is bounded by the fixed `remaining + 0.01` tolerance, because after one overshoot the remaining is negative.
+
+## 2026-11-08 09:20 UTC: #82 `ed8f9e7` WH-REV-01 (supplier receipt reversal): PASS, with 1 minor note
+
+Read: the route `POST /warehouse/canonical/receipts/{id}/reverse`, `reversal.py`, `_plan_receipt_reversal` (decided inside the movement transaction), the readers that skip reversed receipts (line lock, covered quantity, Path B links, price history, project conflicts), the `receipt_reversal` cost row, and the actions / envelope.
+
+Checks:
+- No hard delete; the receipt row stays.
+- `reverses_movement_id` is in the idempotency fingerprint, so reusing a key on another receipt is a 409 conflict.
+- Rights: the receipt's own right, in every mode.
+- The `distinct("invoice_line_id")` callers in `canonical_material_cost.py` only gather candidates; the rows themselves are filtered by `ledger_invoice_line_links`, which applies `without_reversed`.
+- PM-01: the matrix diff only adds rows (24, all for the reverse route).
+
+Probe `docs/audit/probes/whrev01/test_probe_whrev01.py`, real Mongo, 3 modes: **111 passed.**
+
+| Probe | Result |
+|---|---|
+| R1 ×10: reversal ∥ reversal | 1 × 201 + 409 RECEIPT_ALREADY_REVERSED; one row; WH free 0, live + rebuild ×2 |
+| R2 ×10: reversal ∥ new linked delivery | live linked qty ≤ 10 always; P cost = 100 × live deliveries (29 refused, 1 ordered after the reversal) |
+| R3 ×10: reversal ∥ reallocation P→Q | reallocation only after the reversal; costs consistent ×3 |
+| R4: key K on receipt A, then K on identical receipt B | 409 IDEMPOTENCY_CONFLICT; B untouched (WH free 10) |
+| R5: 3 @ 3.3333, 7 @ 0.0001, 1.5 @ 12.345, 0.001 @ 99999.9999 | Σ material_entries exactly 0.0000, live + rebuild ×2 |
+| R7: lot moved whole (dispatch + accept) | 409 RECEIPT_ALREADY_ISSUED naming both |
+
+Gates (rs3; PR based on current main, so the merge is trivial):
+
+| Gate | Result |
+|---|---|
+| wh_rev_01 | 76 |
+| warehouse canonical | **44 files / 1121**, 0 bad |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+Minor (D-WHREV-01): R6, `reason` = "   " (blank) is accepted and stored, because `min_length=1` does not strip whitespace.
+
+Interaction with #81 (see WHFIX81): `service.py` conflicts, and #81's `_supplier_invoice_link` must skip reversed receipts.
+
+Audit hygiene: one #81 probe run overlapped the b82 batch on rs3, against my own rule. b82 shows no failed file, so no re-run was needed.
