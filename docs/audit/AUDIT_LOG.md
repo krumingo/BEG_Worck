@@ -4742,4 +4742,10 @@ F1–F4 still pass (FAILS none).
 | W0 | same 15 |
 | A2C / A1 | 0 / 0 |
 | R0 | 814 |
-| PM-01 + merge with main | (finishing) |
+| PM-01 | 6 |
+
+The merge with main `2ec61f3` is clean → **full PASS**.
+
+**Other `log_audit` steps in #69.** Both `mw.step` audits (`overhead.py`, `subcontractors.py`) now carry `entry_id`. The two `wf.step("legacy_audit", log_audit(…))` calls in `auth.py` have no `entry_id`, but they are **main's** AUTH code (2 on `2ec61f3`), not #69's change. That is the same class pre-existing on main; noted as an observation (debt), not a #69 finding.
+
+**Trial merge #69 × #76 `b313933`.** One code conflict, in `subcontractors.py` at the payment audit call. #76's side is a superset (adds `advance_deducted` and the deduction call). Both use `entry_id=mw.new_id("audit_payment")`, so the id is identical whichever merges first. The other conflicts are text only (`run_meta`, the `idempotency.js` pair, which is code-identical).
