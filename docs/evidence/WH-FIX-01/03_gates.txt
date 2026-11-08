@@ -1,4 +1,4 @@
-# WH-FIX-01 gates — code at f91528c (branch claude/wh-fix-01-post-55), main baseline cd03324
+# WH-FIX-01 gates — code at 78c249d (branch claude/wh-fix-01-post-55), main baseline cd03324
 # local disposable mongo:7.0 replica set rs0 (docker); from backend/: PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfEs
 # W0_03_REAL_MONGO_URL=MONGO_URL=mongodb://127.0.0.1:27017 WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1
 
@@ -17,22 +17,22 @@ skipped: 0
 
 ## fix
 ## fix R0
-814 passed in 151.64s (0:02:31)
+814 passed in 148.70s (0:02:28)
 skipped: 0
 ## fix W0
-15 failed, 1177 passed in 123.86s (0:02:03)
+15 failed, 1177 passed in 126.26s (0:02:06)
 skipped: 0
 ## fix PAY-01
-630 passed in 144.89s (0:02:24)
+630 passed in 148.73s (0:02:28)
 skipped: 0
 ## fix PM-01
-6 passed in 161.13s (0:02:41)
+6 passed in 162.81s (0:02:42)
 skipped: 0
 ## fix WH-FIX-01 new
-118 passed in 26.63s
+134 passed in 29.57s
 skipped: 0
 ## fix warehouse
-4 failed, 1120 passed, 16 errors in 597.30s (0:09:57)
+4 failed, 1120 passed, 16 errors in 605.30s (0:10:05)
 skipped: 0
 
 ## guards (fix)
