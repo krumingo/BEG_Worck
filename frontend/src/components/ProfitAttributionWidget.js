@@ -37,6 +37,22 @@ export default function ProfitAttributionWidget() {
         <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/finance/analysis")}>Пълен анализ <ArrowRight className="w-3 h-3 ml-1" /></Button>
       </div>
 
+      {data.company_losses?.amount > 0 && (
+        <details className="mb-3 text-xs" data-testid="company-losses">
+          <summary className="cursor-pointer flex justify-between" title={data.company_losses.includes}>
+            <span>{data.company_losses.label}</span>
+            <span className="text-red-400 font-mono">−{fmt(data.company_losses.amount)} · Краен резултат: {fmt(totals.final_profit)}</span>
+          </summary>
+          <p className="text-[10px] text-muted-foreground mt-1">{data.company_losses.includes}</p>
+          {data.company_losses.lines.map((l) => (
+            <div key={`${l.ref}-${l.invoice_line_id}`} className="flex justify-between pl-2">
+              <span>{l.period} · известие {l.note_number} · {l.reason}</span>
+              <span className="font-mono">{fmt(l.value)}</span>
+            </div>
+          ))}
+        </details>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Winners */}
         <div className="space-y-2">

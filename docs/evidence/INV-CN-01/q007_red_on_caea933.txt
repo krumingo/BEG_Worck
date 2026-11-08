@@ -1,0 +1,9 @@
+# Q007 / D17 red proof — the updated Р58 test run against the code of caea933 (real Mongo rs0)
+# On caea933 /org/pnl-attribution (the company result reader) had no 'Фирмени загуби (не се разпределят)' line.
+E       KeyError: 'company_losses'
+E       KeyError: 'company_losses'
+E       KeyError: 'company_losses'
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_unchanged[enforce]
+3 failed, 129 deselected, 1 warning in 3.06s

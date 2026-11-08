@@ -108,6 +108,9 @@ def _app(monkeypatch, op, sysdb, mode):
     monkeypatch.setattr(guard, "get_tenant_db", _get_db)
     app = FastAPI()
     app.include_router(r_finance.router, prefix="/api")
+    from app.routes import project_pnl as r_pnl           # /org/pnl-attribution (Q007)
+    monkeypatch.setattr(r_pnl, "db", op)
+    app.include_router(r_pnl.router, prefix="/api")
     try:                                   # absent on main cd03324 (the proof run)
         from app.routes import invoice_corrections as r_corr
         app.include_router(r_corr.router, prefix="/api")
@@ -1355,9 +1358,31 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
         ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_accepted"})
         diff = ev["structured_diff"]
         assert (diff["company_cost"], diff["cost_period"], diff["difference_gross"]) == (5.0, period, 12.0)
+        # Q007 / FLOW-024: a separate line of the FINAL company result, with drill-down and a
+        # label; never in project P&L, never in the overhead allocation base
+        import importlib
+        from tests.test_warehouse_canonical_c22_all_reports_cutover import _DB_MODULES
+        for name in set(_DB_MODULES) | {"app.services.pnl_aggregator", "app.services.project_pnl"}:
+            module = importlib.import_module(name)
+            if hasattr(module, "db"):
+                monkeypatch.setattr(module, "db", op)
+        r = await c.get("/api/org/pnl-attribution", headers=hdr("owner-a"))
+        assert r.status_code == 200, r.text
+        res = r.json()
+        assert res["company_losses"]["label"] == "Фирмени загуби (не се разпределят)"
+        assert "склада" in res["company_losses"]["includes"]
+        assert res["company_losses"]["amount"] == res["totals"]["company_losses"] == 5.0
+        assert res["totals"]["final_profit"] == round(res["totals"]["profit"] - 5.0, 2)
+        assert [(l["ref"], l["invoice_line_id"], l["value"]) for l in res["company_losses"]["lines"]] == [
+            (n["id"], "il-58w", 5.0)]
+        assert await op.overhead_transactions.count_documents({}) == 0
+        assert await op.overhead_snapshots.count_documents({}) == 0
+        assert await op.overhead_costs.count_documents({}) == 0
         # tenant isolation: another org sees nothing
         r = await c.get("/api/finance/company-costs/accepted-differences", headers=hdr("admin-b"))
         assert r.status_code == 200 and r.json()["lines"] == [], r.text
+        r = await c.get("/api/org/pnl-attribution", headers=hdr("admin-b"))
+        assert r.status_code == 200 and r.json()["company_losses"]["amount"] == 0, r.text
     run(monkeypatch, mode, scenario)
 
 
