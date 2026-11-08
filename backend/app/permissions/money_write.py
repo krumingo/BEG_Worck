@@ -271,6 +271,16 @@ def _session_user(kwargs) -> dict:
     return kwargs["ctx"].user
 
 
+def _request_of(kwargs, own_request):
+    """SEC-02-G (audit SEC71-M1): the request a decorated handler was called with — its own
+    Request parameter or the injected ``_sec02_request``. A direct call without one (no
+    FastAPI) returns None, and the decorators then FAIL CLOSED: money is stripped, never
+    shown, never a crash."""
+    if own_request:
+        return kwargs.get(own_request)
+    return kwargs.pop("_sec02_request", None)
+
+
 def _request_param(sig):
     """FastAPI injects ONE Request per endpoint: reuse the handler's own Request
     parameter if it has one, else add a keyword-only ``_sec02_request``."""
@@ -306,9 +316,9 @@ def strip_money_for_non_finance(fn=None, *, keep=()):
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
-        request = kwargs[own_request] if own_request else kwargs.pop("_sec02_request")
+        request = _request_of(kwargs, own_request)        # SEC71-M1: None -> fail closed
         result = await fn(*args, **kwargs)
-        if await money_values_visible(request, _session_user(kwargs)):
+        if request is not None and await money_values_visible(request, _session_user(kwargs)):
             return result
         return strip_money(jsonable_encoder(result), keep)
 
@@ -354,9 +364,11 @@ def strip_for_budget_view(fn=None, *, labor_source: str = "sessions"):
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
-        request = kwargs[own_request] if own_request else kwargs.pop("_sec02_request")
+        request = _request_of(kwargs, own_request)        # SEC71-M1: None -> fail closed
         result = await fn(*args, **kwargs)
         user = _session_user(kwargs)
+        if request is None:                               # SEC71-M1: no request, no money
+            return strip_money(jsonable_encoder(result))
         if await money_values_visible(request, user):
             return result
         body = jsonable_encoder(result)
@@ -423,9 +435,11 @@ def strip_pulse_for_non_finance(fn):
 
     @functools.wraps(fn)
     async def wrapper(*args, **kwargs):
-        request = kwargs[own_request] if own_request else kwargs.pop("_sec02_request")
+        request = _request_of(kwargs, own_request)        # SEC71-M1: None -> fail closed
         result = await fn(*args, **kwargs)
         user = _session_user(kwargs)
+        if request is None:                               # SEC71-M1: no request, no money
+            return strip_money(jsonable_encoder(result))
         if await money_values_visible(request, user):
             return result
         body = jsonable_encoder(result)
