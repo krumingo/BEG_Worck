@@ -313,6 +313,7 @@
 | FG-303 | low | #86 PRJ-01 `8e8be48` | wrap-in-group създава групата извън транзакцията на прехвърлянето — при загуба остава група-сирак без AuditEvent | PROVEN | open |
 | FG-304 | medium | main `ea57121` (от 28.06.2026) | PUT е позволявал смяна на `parent_project_id` без проверки — реални данни може да имат негаранционно второ ниво или цикъл, които не се обобщават | PROVEN (ефект) / SUSPECTED (данни) | open (+ Krum: вдигане или обобщаване) |
 | FG-305 | low | #86 PRJ-01 `8e8be48` | няма команда за поставяне на съществуващ обект под друг корен/група или за обединяване на нива (P-06 „обедини“) | SUSPECTED | open — Krum decision |
+| FG-310 | low | #81 `a7166d4` (merge `fdfad135`) | сливането на main запази остарели evidence файлове (PM-01 run_meta, SEC-01/C01/C02/C03 results) — 2 теста за evidence са червени само на #81 | PROVEN | open |
 | FG-315 | medium | PWA-01 `a05167a` | локалните данни са по tenant, не по потребител; изходът/401 трие всичко без предупреждение — основа, която противоречи на Р61 (5) за PWA-02 | PROVEN | open (дълг за PWA-02) |
 | FG-316 | low | PWA-01 `a05167a` | изчистването не покрива IndexedDB, бисквитки и HTTP кеша | PROVEN | open |
 | FG-317 | medium | PWA-01 `a05167a` | външни скриптове с запис на сесията (PostHog `session_recording`) са в инсталираното приложение — могат да запишат ЕГН/IBAN/суми | PROVEN | open — Krum decision |
@@ -2751,6 +2752,14 @@
 - **Код (#86 PRJ-01 `8e8be48`):** след затварянето на PUT няма път, който поставя съществуващ обект под съществуващ корен/група или обединява две нива.
 - **Решение:** ако Крум иска — команда `move-under` за Owner/Admin с причина, проверките по Р60, Idempotency-Key и транзакция с `project.parent_change`.
 
+## FG-310 — сливането на main в #81 запази остарели evidence файлове
+
+- **Тежест:** low (evidence/CI, без код). **Статус:** open. **PROVEN** (проход 31).
+- **Канон:** CLAUDE.md §15 „документация и source traceability“; §16 „не обявявай Implementation Gate PASS без тестови доказателства“.
+- **Код (#81 `a7166d4`, merge `fdfad135`):** auto-merge `60c6928` и реалното дърво `6f3eaa3` се различават само в 5 evidence файла (PM-01 `run_meta.json`, SEC-01/C01/C02/C03 `results.json`) — взета е версията на #81, без редовете на OH-01 от main (`op.audit_events`, `op.overhead_period_locks`, `op.execution_packages`).
+- **Проба:** `test_sec_01_c02_flow_guard_money_writes.py::test_the_committed_evidence_satisfies_the_package` и `test_sec_01_c03_payment_amount_idempotency.py::test_the_committed_evidence_satisfies_the_package` падат на `a7166d4`, минават на main `3699c3b` и на `aa369d8`.
+- **Решение:** промяна (без код) — файловете от main или регенериране с техните harness-и на слетия head.
+
 ## FG-315 — локалните данни са по tenant, не по потребител; изходът трие всичко без предупреждение
 
 - **Тежест:** medium. **Статус:** open (дълг за PWA-02). **PROVEN** — днес няма загуба (няма опашка).
@@ -3596,7 +3605,10 @@
 - PWA-01 `a05167a` (нов клон): само app shell, без `/api` кеш, без офлайн опашка, обновяване само с клик — съответства на Р61 (1); нови FG-315..321 (medium/low). Production build + 35/35 Jest + Playwright проба.
 - Бавен преглед FLOW-022 на main: нови FG-325..335 (4 high). COVERAGE обновен.
 - #84 INV-CN-01 `cdd3dc8`: FG-276, FG-277 → resolved (PROVEN); FG-278, FG-271 partial; FG-247 без промяна; нови FG-281, FG-282. Тестове (частен Mongo): INV-CN-01 147/147, склад 1117 passed / 4 failed (`c13_mongo`, същите на main) / 16 грешки среда; jest 183 passed.
-- #81 `a7166d4`, SUB-ADV-01 `aa369d8` — проверката продължава (сривове на `fgmongo`, контейнерът е създаден наново празен).
+- #81 WH-FIX-01 `a7166d4`: сливането на main (`fdfad135`) пази всички пазачи (права, tenant, пари, AuditEvent, idempotency, 410); F-81-03 (`projects.py:1290-1460`, приход на табло само от платени Issued + `project_payments`; `paid_*` се изрязват за роли без пари) — PASS; нов FG-310 (evidence). Тестове: 1429 passed, 4 failed (`c13_mongo`, същите на main), WH-FIX-01 311/311.
+- SUB-ADV-01 `aa369d8`: сливането на main `1ea98fe` (`8780cfbf`) е чисто (всички разлики спрямо auto-merge прегледани — запазени `MONEY_WRITE_ACTIONS`, SEC-02 четения, `strip_money_for_non_finance`); `aa369d8` — fail-closed при липсваща заявка. FG-132, FG-147, FG-148 без промяна. Тестове: 1126 passed, 4 failed (същите на main).
+- #81 + #82: `git merge-tree a7166d4 1622f62` — същите 4 кодови конфликта като в проход 22; FG-213 / FG-214 / FG-216 без промяна.
+- `fgmongo` падаше (лимит 20000 файла); контейнерът е създаден наново празен ~21:43 UTC; засегнатите тестове са пуснати отново.
 
 ## Бележки, които не са разминавания
 
