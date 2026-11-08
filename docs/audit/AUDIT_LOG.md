@@ -5016,3 +5016,8 @@ Non-blocking:
 - D-WHFIX-03b: the FG-191 quantize stores unit 33.3333, so the `material_entries` value is 99.9999 against an invoice line of 100.00 (0.0001 residue; total_cost rounds to 100.0). Storing the lot value, not only the unit, would be exact.
 - The W0 isolation coverage is thinner: with the Р45 expectations, the colliding project id `pr-x` no longer shows A's name anywhere, so "colliding id → A's name, not B's" is no longer asserted for finance-by-project. Suggestion: add an A line allocated to `pr-x` in the fixture.
 - #82 interaction: `_supplier_invoice_link` still does not skip reversed receipts. This is recorded as debt in the code; whichever PR merges second carries it.
+
+## 2026-11-08 10:30 UTC: periodic pass
+
+- #69 `faa3da0` = `20bd36c` plus one evidence file (`docs/evidence/SEC-01-MAIN-MERGE/README.md`, +16, docs only). The `20bd36c` PASS applies; no code changed.
+- All other heads are unchanged since their last audit: 71 b1ab349, 73 ef8661c, 74 31a9478, 75 388b81c, 76 b313933, 77 2cc1147, 79 8dc3c45, 80 28b5ab6, 81 d2d0ba2, 82 e9633aa (waiting for the FG-195 head). main `cd03324`.
