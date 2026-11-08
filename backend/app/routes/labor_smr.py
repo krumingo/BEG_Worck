@@ -42,12 +42,24 @@ def _sync_fingerprint(row: dict) -> tuple:
             round(float(row.get("hours", 0) or 0), 4), row.get("activity_name", ""),
             row.get("note", ""), row.get("execution_package_id"), row.get("offer_line_id"),
             None if rate is None else round(float(rate), 4),
-            None if cost is None else round(float(cost), 2),
-            # LAB-01: the pricing basis — a changed approved quantity / piece rate / cost type
-            # is a different row (reversal + new row), never an in-place edit
-            row.get("cost_type"), row.get("pay_type"),
-            None if row.get("approved_quantity") is None else round(float(row["approved_quantity"]), 4),
-            None if row.get("piece_rate") is None else round(float(row["piece_rate"]), 4))
+            None if cost is None else round(float(cost), 2))
+
+
+def _pricing_basis(row: dict) -> tuple:
+    """LAB-01: the pricing basis of a synced row — a changed approved quantity / piece rate /
+    cost type is a different row (reversal + new row), never an in-place edit."""
+    q, pr = row.get("approved_quantity"), row.get("piece_rate")
+    return (row.get("cost_type"), row.get("pay_type"),
+            None if q is None else round(float(q), 4), None if pr is None else round(float(pr), 4))
+
+
+def _same_synced_row(old: dict, new: dict) -> bool:
+    """Same fingerprint (hours, rate, cost …) and — when the stored row was priced by LAB-01 —
+    the same pricing basis. A row synced before LAB-01 (no ``labor_calc``) with the same
+    hours, rate and cost is the same row: nothing changed in money, nothing is written."""
+    if _sync_fingerprint(old) != _sync_fingerprint(new):
+        return False
+    return not old.get("labor_calc") or _pricing_basis(old) == _pricing_basis(new)
 
 router = APIRouter(tags=["Labor by SMR"])
 
@@ -249,9 +261,10 @@ async def _sync_labor_entries(data: dict, user: dict) -> dict:
 
     created = unchanged = 0
     for entry in desired:
-        same = pool.get(_sync_fingerprint(entry))
-        if same:
-            same.pop()
+        same = pool.get(_sync_fingerprint(entry)) or []
+        match = next((i for i, old in enumerate(same) if _same_synced_row(old, entry)), None)
+        if match is not None:
+            same.pop(match)
             unchanged += 1
             continue
         await tenant.labor_entries.insert_one(entry)

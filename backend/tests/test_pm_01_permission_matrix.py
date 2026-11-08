@@ -471,8 +471,10 @@ async def seed_existing_records(op_db, fx: Dict[str, Any]) -> None:
             "id": probe_id(tkey, "ep1"), "org_id": org, "project_id": p1,
             "activity_name": "Probe activity", "qty": 1, "labor_budget_total": 100,
             "created_at": now})
+        # LAB-01: an hourly rate is the pay only of an HOURLY worker (no pay_type → Monthly,
+        # which needs monthly_salary) — the probe worker is hourly, 20/h
         await op_db.employee_profiles.insert_one({"org_id": org, "user_id": tech,
-                                                  "hourly_rate": 20})
+                                                  "hourly_rate": 20, "pay_type": "Hourly"})
         await op_db.labor_entries.insert_one({
             "id": probe_id(tkey, "le1"), "org_id": org, "project_id": p1,
             "employee_id": tech, "execution_package_id": probe_id(tkey, "ep1"),

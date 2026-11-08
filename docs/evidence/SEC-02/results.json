@@ -885,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 141.0,
+ "seconds": 188.2,
  "rows": [
   {
    "mode": "off",
@@ -11028,7 +11028,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11055,7 +11059,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11112,7 +11120,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11174,7 +11186,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11195,7 +11210,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11240,7 +11258,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11298,7 +11319,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11325,7 +11350,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11382,7 +11411,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11444,7 +11477,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11465,7 +11501,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -11510,7 +11549,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -23156,6 +23198,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -23168,6 +23211,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23188,6 +23232,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -23200,6 +23245,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23261,6 +23307,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -23273,6 +23320,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23341,6 +23389,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -23352,6 +23401,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23372,6 +23422,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -23383,6 +23434,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -23427,6 +23479,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -23438,6 +23491,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -35618,7 +35672,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35645,7 +35703,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35702,7 +35764,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35764,7 +35830,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35785,7 +35854,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35830,7 +35902,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35888,7 +35963,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35915,7 +35994,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -35972,7 +36055,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36034,7 +36121,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36055,7 +36145,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -36100,7 +36193,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -47746,6 +47842,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -47758,6 +47855,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -47778,6 +47876,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -47790,6 +47889,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -47851,6 +47951,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -47863,6 +47964,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -47931,6 +48033,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -47942,6 +48045,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -47962,6 +48066,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -47973,6 +48078,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -48017,6 +48123,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -48028,6 +48135,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -51519,7 +51627,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -51540,7 +51651,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -51597,7 +51711,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -51618,7 +51735,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -53209,6 +53329,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -53220,6 +53341,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -53240,6 +53362,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -53251,6 +53374,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -63594,7 +63718,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63621,7 +63749,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63678,7 +63810,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63740,7 +63876,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63761,7 +63900,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63806,7 +63948,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63864,7 +64009,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63891,7 +64040,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -63948,7 +64101,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64010,7 +64167,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64031,7 +64191,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -64076,7 +64239,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -75722,6 +75888,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -75734,6 +75901,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -75754,6 +75922,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -75766,6 +75935,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -75827,6 +75997,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -75839,6 +76010,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -75907,6 +76079,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -75918,6 +76091,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -75938,6 +76112,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -75949,6 +76124,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -75993,6 +76169,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -76004,6 +76181,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -88184,7 +88362,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88211,7 +88393,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88268,7 +88454,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88330,7 +88520,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88351,7 +88544,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88396,7 +88592,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88454,7 +88653,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88481,7 +88684,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88538,7 +88745,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88600,7 +88811,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88621,7 +88835,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -88666,7 +88883,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -100312,6 +100532,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -100324,6 +100545,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -100344,6 +100566,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -100356,6 +100579,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -100417,6 +100641,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -100429,6 +100654,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -100497,6 +100723,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -100508,6 +100735,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -100528,6 +100756,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -100539,6 +100768,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -100583,6 +100813,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -100594,6 +100825,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -104085,7 +104317,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -104106,7 +104341,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -104163,7 +104401,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -104184,7 +104425,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -105775,6 +106019,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -105786,6 +106031,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -105806,6 +106052,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -105817,6 +106064,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -116170,7 +116418,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116197,7 +116449,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116254,7 +116510,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116316,7 +116576,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116337,7 +116600,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116382,7 +116648,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116440,7 +116709,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116467,7 +116740,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116524,7 +116801,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116586,7 +116867,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116607,7 +116891,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -116652,7 +116939,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -128484,6 +128774,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -128496,6 +128787,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -128516,6 +128808,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -128528,6 +128821,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -128589,6 +128883,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -128601,6 +128896,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -128669,6 +128965,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -128680,6 +128977,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -128700,6 +128998,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -128711,6 +129010,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -128755,6 +129055,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -128766,6 +129067,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -140976,7 +141278,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141003,7 +141309,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141060,7 +141370,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141122,7 +141436,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141143,7 +141460,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141188,7 +141508,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141246,7 +141569,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141273,7 +141600,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141330,7 +141661,11 @@
    "foreign_ids": false,
    "actual_keys": [
     "actual_cost",
+    "cost_type",
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141392,7 +141727,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141413,7 +141751,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -141458,7 +141799,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -153290,6 +153634,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -153302,6 +153647,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -153322,6 +153668,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -153334,6 +153681,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -153395,6 +153743,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "has_budget",
     "labor_budget",
     "labor_remaining",
@@ -153407,6 +153756,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -153475,6 +153825,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -153486,6 +153837,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -153506,6 +153858,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -153517,6 +153870,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -153561,6 +153915,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -153572,6 +153927,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -157083,7 +157439,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -157104,7 +157463,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -157161,7 +157523,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -157182,7 +157547,10 @@
    "written": [],
    "foreign_ids": false,
    "actual_keys": [
+    "downtime_cost",
+    "labor_actual_cost",
     "total_actual_cost",
+    "total_labor_cost_incl_downtime",
     "variance_cost"
    ],
    "worker_detail": [],
@@ -158785,6 +159153,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -158796,6 +159165,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -158816,6 +159186,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "downtime_spent",
     "labor_budget",
     "labor_remaining",
     "labor_spent",
@@ -158827,6 +159198,7 @@
    "hidden_budget_keys": [],
    "leaks_7777": false,
    "actual_keys": [
+    "downtime_spent",
     "labor_remaining",
     "labor_spent",
     "materials_remaining",
@@ -159200,7 +159572,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -159209,13 +159581,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "scope_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -159231,7 +159603,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "485d058a0980baa7b67de80662b47515c60636f079311742db5feece17959f20"
+     "integrity_hash": "f10a22d3fe86ab51412c60d9b786cbfba671340577e2a970a21f34c1e4ba60fc"
     }
    ]
   },
@@ -159242,7 +159614,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -159251,7 +159623,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159276,7 +159648,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "ad0d2dbec6a3ed9c6f59b482b5b42baba40777273aefebdd6d6a4c07caf1e565"
+     "integrity_hash": "90bebb4e00fb99433a34652af28cdc4ee27bf33ddabb0ae4535b13c9525ebb12"
     }
    ]
   },
@@ -159287,7 +159659,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -159299,7 +159671,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -159308,7 +159680,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159334,7 +159706,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "6e6a389fb9eb8fe7970fbf88fcd0943278ca15b6cf83a3d13d6260fd174d70b8"
+     "integrity_hash": "f0d6bba8eb04016d7361add15bc61d63f827c895d98ea2cf651ef9ff9c36ff5d"
     }
    ]
   },
@@ -159345,7 +159717,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -159357,7 +159729,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -159369,7 +159741,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -159378,13 +159750,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "scope_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159402,7 +159774,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "321d065740a4ef8e1b64d79caf52152462815ae16d196bdbbee8674c12265d44"
+     "integrity_hash": "0cd8b1d22cf42438ca0e4d5985a9c0507d8dc37440672fc84cf899e2a95aeea1"
     }
    ]
   },
@@ -159413,7 +159785,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -159422,7 +159794,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159448,7 +159820,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "b1c74fadb9074fd088d24395293104a6273dde26ffe8db65a34305f19b928383"
+     "integrity_hash": "41b73ce8f9121cb1cfff3987e95a8e958f2fb39c5feffbaa94d35689e5a5aead"
     }
    ]
   },
@@ -159459,7 +159831,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -159471,7 +159843,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -159480,7 +159852,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159506,7 +159878,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "cd6698db3eace6c4ddea8c355c5208db188487d2340a0a0dcd899f7d133509d5"
+     "integrity_hash": "17a7184726457d4df77829adb9942dfc4a5e9b9a29dfe7f9c3b0f60f9d59057a"
     }
    ]
   },
@@ -159517,7 +159889,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -159529,7 +159901,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -159541,7 +159913,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -159550,13 +159922,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "scope_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159574,7 +159946,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "025752855c0c3740e61c36e4c155b6d9f5f83baa080b7c8c46278eec5cf10e71"
+     "integrity_hash": "47f3766f1d52a5f95ec444046f07e8ee2fb3de9cfc39a12ae5003a4932be2ac6"
     }
    ]
   },
@@ -159585,7 +159957,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -159594,7 +159966,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159620,7 +159992,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "abfe89442fff1bb90f7899618d34e916063c3d9fa29658a2b58cfd32a15d5232"
+     "integrity_hash": "0b973f4d49bfdfd3180e9bfd9c80ba3024309ee7a25e3bdbdeb9cdfbd8a0fdd5"
     }
    ]
   },
@@ -159631,7 +160003,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -159643,7 +160015,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -159652,7 +160024,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+     "tenant_id": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159678,7 +160050,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "6c00d975c325852eecb05b24624120d4b1de2c93de5dfe8ad25f5dd8d54e0669"
+     "integrity_hash": "64b495eb260c71fbf5334701814ccaf2e779237d5af2cf6c57829fc1276afb65"
     }
    ]
   },
@@ -159689,7 +160061,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -159701,7 +160073,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "67b73f60-cbb9-4170-bcda-5aa37baa15ff",
+   "expected_tenant": "5540f7ee-3c6c-4334-bd45-7d9e940dd19b",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []

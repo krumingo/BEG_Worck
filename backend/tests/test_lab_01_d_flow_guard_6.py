@@ -238,7 +238,11 @@ def test_fg76_budget_burn_uses_the_lab01_number_not_work_sessions(monkeypatch, b
         await op.work_sessions.insert_one({"id": "ws1", "org_id": ORG, "site_id": "prj-1",
                                            "ended_at": "2026-10-05T18:00", "labor_cost": 5000})
         user = {"id": "admin", "org_id": ORG, "role": "Admin"}
-        res = await budget_progress.get_progress_warnings("prj-1", user)
+        # SEC-02 (R20-5M): a direct call needs a real Request, else the decorator fails
+        # closed and strips the money warnings even for the Admin
+        from starlette.requests import Request
+        req = Request({"type": "http", "method": "GET", "path": "/", "headers": [], "query_string": b""})
+        res = await budget_progress.get_progress_warnings("prj-1", user=user, _sec02_request=req)
         kinds = [w["type"] for w in res["warnings"]]
         assert "budget_overrun" not in kinds                       # 825 approved of 1000
         assert "budget_burn_high" in kinds                         # 82.5 % burn at 10 % progress

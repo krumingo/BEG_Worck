@@ -498,7 +498,9 @@ def test_confirmed_pay_run_is_not_repriced_open_one_only_by_edit(monkeypatch, ba
 
 def test_labor_sync_reads_approved_work_reports_only(monkeypatch, backend):
     async def scenario(c, op):
-        from app.routes.labor_smr import sync_labor_entries_from_work_reports
+        # main SEC-01-C03-C wraps the route in an Idempotency-Key MoneyWrite; the sync itself
+        # (what this test checks) is _sync_labor_entries
+        from app.routes.labor_smr import _sync_labor_entries as sync_labor_entries_from_work_reports
         await op.work_reports.insert_many([
             {"id": "wr-ok", "org_id": ORG, "project_id": "prj-1", "user_id": "w-month",
              "date": DAYS[0], "status": "Approved",
