@@ -1,7 +1,7 @@
 """
 Routes - Dashboard Stats + Overhead (M9) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone, date as date_type
 import uuid
@@ -10,6 +10,8 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m9
 from app.utils.audit import log_audit
+from app.permissions.money_write import require_money_write
+from app.permissions.money_input import MoneyWrite  # SEC-01-C03-C (F-69-02, R29)
 from ..models.overhead import (
     OVERHEAD_FREQUENCIES, OVERHEAD_ALLOCATION_TYPES, OVERHEAD_METHODS,
     OverheadCategoryCreate, OverheadCategoryUpdate,
@@ -313,7 +315,14 @@ async def delete_overhead_asset(asset_id: str, user: dict = Depends(require_m9))
 # ── Overhead Snapshots ─────────────────────────────────────────────
 
 @router.post("/overhead/snapshots/compute")
-async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = Depends(require_m9)):
+async def compute_overhead_snapshot(
+    data: OverheadSnapshotCompute,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot_compute.execute", module="M9",
+        resource_type="overhead_snapshot")),  # SEC-01-C01: before any read/write
+    user: dict = Depends(require_m9),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")
@@ -378,10 +387,16 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
     rate_per_person_day = round(total_overhead / total_person_days, 2) if total_person_days > 0 else 0
     rate_per_hour = round(total_overhead / total_hours, 2) if total_hours > 0 else 0
     
-    # 6. Create immutable snapshot
+    # 6. Create immutable snapshot — SEC-01-C03-C (F-69-02, R29): key required (428), one
+    # snapshot per key; a repeat returns the stored snapshot. (#74 OH-01 rewrites this step
+    # with its own keyed, versioned write — at merge, #74's version of this block wins.)
+    mw = await MoneyWrite.begin(user, "finance.overhead_snapshot_compute.execute",
+                                idempotency_key, data.model_dump())
+    if mw.replay_id:
+        return await tenant.overhead_snapshots.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     snapshot = {
-        "id": str(uuid.uuid4()),
+        "id": mw.new_id("snapshot"),
         "org_id": org_id,
         "period_start": period_start,
         "period_end": period_end,
@@ -398,13 +413,16 @@ async def compute_overhead_snapshot(data: OverheadSnapshotCompute, user: dict = 
         "computed_by_name": user.get("name", user.get("email", "")),
         "notes": data.notes,
     }
-    await tenant.overhead_snapshots.insert_one(snapshot)
-    await log_audit(user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot", snapshot["id"], {
-        "period": f"{period_start} - {period_end}",
-        "total_overhead": total_overhead,
-        "method": data.method
-    })
-    return {k: v for k, v in snapshot.items() if k != "_id"}
+    async with mw:
+        async with mw.insert_once():
+            await tenant.overhead_snapshots.insert_one(mw.unique(snapshot))
+        await mw.step("audit", lambda: log_audit(
+            user["org_id"], user["id"], user["email"], "computed", "overhead_snapshot",
+            snapshot["id"], {"period": f"{period_start} - {period_end}",
+                             "total_overhead": total_overhead, "method": data.method},
+            entry_id=mw.new_id("audit_snapshot")))   # one audit row per snapshot
+        mw.result_id = snapshot["id"]
+    return await tenant.overhead_snapshots.find_one({"id": snapshot["id"]}, {"_id": 0})
 
 
 @router.get("/overhead/snapshots")
