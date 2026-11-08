@@ -5580,3 +5580,27 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 - **#86 `6479cf1`** (merge `0fe133db` of main `3699c3b` + `quality_score` 1–5 on POST and PUT): only `run_meta.json` differs from merge-tree; role-union 0; PM-01 168/168, 0 extra. The minor `quality_score` note is addressed (probes follow in the gates).
 - **#83 `9f86d0b`** (FG-266..268): no merge of main yet; waiting for its next head.
 - **Gates:** serial, #84 then #86 (disk at about 1.9 GB free).
+
+## 2026-11-08 19:41 UTC: #84 `e75b558` (final; = `2ceb2a9` + evidence): PASS, no blocking finding
+
+- **`e75b558` vs `2ceb2a9`:** README, `gates.txt`, `warehouse_suite.txt` and PM-01 `run_meta.json` only. No code change and the matrix is unchanged, so the gates on `2ceb2a9` apply.
+- **Merge `2ceb2a9` of main `1ea98fe`:** see the 19:16 entry (only `run_meta` differs from merge-tree; role-union 0; PM-01 384/384). Main `3699c3b` adds only docs to `1ea98fe`.
+- **New code since `081f35b`:**
+  - FG-246..251, FG-233, FG-264 (one supplier + number under one lock; index at startup);
+  - Р58/FG-265 (the accepted difference on a warehouse line is a company cost; FIFO untouched; read-only reader, finance roles only);
+  - Q007 (company_losses line in `/org/pnl-attribution`; answers my Р58 observation);
+  - FG-269..271.
+
+| Gate (run on `2ceb2a9`) | Result |
+|---|---|
+| probe invcn01 | 99 |
+| inv_cn_01 | 135 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+
+Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt) and INV84-02 (other project cost readers) — re-check whether FG-246..271 changed them is left to Codex.
