@@ -230,7 +230,8 @@ async def create_project(data: ProjectCreate, request: Request,
         "object_type": data.object_type,
         "structured_address": data.structured_address,
         "contacts": data.contacts,
-        "invoice_details": _mask_invoice_details(data.invoice_details, data.owner_type),  # FG-226
+        "invoice_details": await _store_invoice_details(tenant, user, data.invoice_details,
+                                                        data.owner_type, data.owner_id),  # CP83-03
         "object_details": data.object_details,
         "created_at": now,
         "updated_at": now,
@@ -265,20 +266,29 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
 
 
 def _mask_invoice_details(details, owner_type):
-    """R48.3 / FG-226: ``invoice_details`` never carries a full ЕГН. For a person owner the
-    ``eik`` field holds the person's ЕГН (import-client-invoice, or typed); any 10-digit value
-    there is an ЕГН (an ЕИК has 9 or 13 digits). ``egn`` keys are masked as well."""
-    if not isinstance(details, dict):
+    """R48.3 / FG-226 / CP83-03: every reader masks the ЕГН copy in ``invoice_details`` —
+    only for a person owner, or the explicit ``egn`` field (never a 10-digit company tax id)."""
+    return cr.mask_invoice_details(details, owner_type)
+
+
+async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
+    """CP83-03 (CLAUDE.md §2: no data destroyed): a full ЕГН typed into ``invoice_details`` is
+    stored masked only when the canonical ``persons`` record of the owner holds the SAME ЕГН
+    (the copy is redundant). Otherwise it is kept as typed — readers still mask it — and a DQ
+    issue „ЕГН копие без каноничен запис“ is opened for the Accountant."""
+    fields = cr.egn_copy_fields(details, owner_type)
+    if not fields:
         return details
-    out = dict(details)
-    for field in ("eik", "egn", "tax_id"):
-        value = out.get(field)
-        if not value or str(value).startswith(cr.EGN_MASK_PREFIX):
-            continue
-        digits = re.sub(r"\D", "", str(value))
-        if field == "egn" or owner_type == "person" or len(digits) == 10:
-            out[field] = cr.mask_egn(value)
-    return out
+    person = await tenant.persons.get(owner_id, {"_id": 0, "egn": 1}) if owner_type == "person" else None
+    redundant = [f for f in fields if person and cr.same_egn(details[f], person.get("egn"))]
+    if len(redundant) < len(fields):
+        from app.services.master_write import dq_issue
+        await dq_issue(tenant, None, code="EGN_COPY_WITHOUT_CANONICAL", severity="warning",
+                       entity_type="project_invoice_details", entity_id=owner_id or None,
+                       message="ЕГН копие без каноничен запис",
+                       data={"fields": [f for f in fields if f not in redundant]},
+                       created_by=user.get("id"))
+    return cr.mask_invoice_details(details, owner_type, redundant)
 
 
 def _mask_owner_egn(project: dict) -> dict:
@@ -351,8 +361,9 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
     if "invoice_details" in update:        # FG-226: no full ЕГН is ever stored in a project
-        update["invoice_details"] = _mask_invoice_details(
-            update["invoice_details"], update.get("owner_type", project.get("owner_type")))
+        update["invoice_details"] = await _store_invoice_details(
+            tenant, user, update["invoice_details"], update.get("owner_type", project.get("owner_type")),
+            update.get("owner_id", project.get("owner_id")))
     # Auto-generate address_text from structured_address
     sa = update.get("structured_address")
     if sa and "address_text" not in update:

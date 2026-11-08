@@ -1,0 +1,8 @@
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_migration_dry_run_then_apply_is_pending_and_idempotent[real]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg226_a_stored_project_never_holds_a_full_egn[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg226_a_stored_project_never_holds_a_full_egn[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg226_a_stored_project_never_holds_a_full_egn[real-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_02_other_income_is_never_blocked[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_02_other_income_is_never_blocked[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_02_other_income_is_never_blocked[real-enforce]
+7 failed, 484 deselected, 1 warning in 5.17s

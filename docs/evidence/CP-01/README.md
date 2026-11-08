@@ -228,3 +228,12 @@ Every item below has its own test in `test_cp_01_counterparty_iban_egn.py`. Each
 - **CP-01-D20:** FG-175 / §8.4, our own IBAN (above).
 - **CP-01-D21:** after #81 merges, one shared DQ writer and resolve path.
 - **CP-01-D22:** an HR loan to a guest (`guest_name`) is an outflow to a person who is outside the counterparty register.
+
+## 10. Early audit of `7e0b914`: CP83-02, CP83-03
+
+| Finding | Fix | Test |
+|---|---|---|
+| **CP83-02 (blocking)**: the outflow guard had also landed in `create_other_income`. The other-expense edit was a `str.replace`, and other-income contains the identical block. | Removed from other-income: income is not a payment to a payee. I checked every other CP-01 insertion for such duplicates; there are none, apart from the intentional `counterparty_iban` on both InvoiceCreate and InvoiceUpdate. | `test_cp83_02_other_income_is_never_blocked`: income to a Bank or Cash account, with and without a counterparty (one of them with a pending IBAN), in off, shadow and enforce → 201. The auditor's probe file `docs/audit/probes/cp01/test_probe_cp01.py` (K1–K3, 84 cases) passes. |
+| **CP83-03**: the migration masked `invoice_details` with no AuditEvent and could destroy data | A copy is masked **only** when it belongs to a person owner or is the `egn` field (never a 10-digit company tax id), **and** the canonical `persons` record holds the same full ЕГН. Each masked project gets one AuditEvent `project.invoice_details.egn_copy_masked` (masked values only). Every other copy is kept as it is, readers mask it, and a DQ issue „ЕГН копие без каноничен запис“ (owner_role accountant) is opened. `--apply` refuses to run without the `--plan-token` from the dry run. The project create/update path uses the same rule (`_store_invoice_details`). | `test_migration_dry_run_then_apply_is_pending_and_idempotent`, `test_fg226_a_stored_project_never_holds_a_full_egn` |
+
+On `7e0b914` these tests are **7 red** on real Mongo (`cp83_red_on_7e0b914_real_mongo.txt`). Gates for this head: `gates_cp83.txt`.

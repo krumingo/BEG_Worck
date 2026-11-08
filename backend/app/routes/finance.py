@@ -667,20 +667,7 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5),
         project_id = data.get("project_id")
         method = data.get("method") or "Cash"
         tenant = _tenant(user)
-        # CP-01 / FG-225 (c): a documentless expense paid by bank transfer is an outflow to a
-        # payee too — verified account (or, with no payee, the legacy mode: enforce → 409);
-        # in cash to a named counterparty: receipt + recipient (R50.1). Before any write.
-        cp_id = data.get("counterparty_id") if isinstance(data.get("counterparty_id"), str) else None
-        if cp_id:
-            await require_selectable_party(tenant, "counterparty", cp_id)
-        bank_stamp = await check_payment_target(
-            tenant, user, direction="Outflow", method=method,
-            account=await _peek_payment_account(tenant, method, data.get("account_id")),
-            party_type="counterparty" if cp_id else None, party_id=cp_id,
-            bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
-            cash_receipt_file_id=data.get("cash_receipt_file_id"),
-            cash_recipient_name=data.get("cash_recipient_name"),
-            path="/finance/other-expense") or {}
+        # CP83-02: income is not a payment to a payee — no IBAN / receipt guard here.
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
         if not account:

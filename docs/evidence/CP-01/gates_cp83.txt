@@ -1,0 +1,15 @@
+# CP-01 after CP83-02/03 — gates vs main 4bca18a (real MongoDB 7.0 rs0)
+cp01: 488 passed, 3 skipped, 1 warning in 148.11s (0:02:28)
+pay01: 630 passed, 1 warning in 155.46s (0:02:35)
+sec01: 30 passed, 10 warnings in 109.61s (0:01:49)
+r0: 814 passed, 10 warnings in 158.74s (0:02:38)
+w0: 9 failed, 1165 passed, 10 warnings in 145.99s (0:02:25)
+pm01: 6 passed, 10 warnings in 181.29s (0:03:01)
+pm01 SKIPPED lines: 0
+W0 failures only on the branch: 0 (9, all among main's 15)
+A1 486 units / A2C 241 modules: 0 violations
+auditor probe docs/audit/probes/cp01/test_probe_cp01.py (claude/audit-log @ 9756f20), K1-K3: 84 passed
+CP83 tests on 7e0b914 (real): 7 failed, 484 deselected, 1 warning in 5.17s
+full DB-free: 160 failed, 2598 passed, 2021 skipped, 11 warnings, 996 errors in 462.67s (0:07:42)  (main 4bca18a: 166 failed, 2366 passed, 1777 skipped, 11 warnings, 993 errors in 453.65s (0:07:33))
+lines only on the branch: 3 ERROR in tests/test_st_02_staging_stack.py::test_c03_r26_* — release_build.py --commit HEAD refused while the gate run used the same working tree; run alone: 162 passed; the same 3 also ERROR on main cd03324 in the first baseline run (environmental, not code)
+Tests:       173 passed, 173 total

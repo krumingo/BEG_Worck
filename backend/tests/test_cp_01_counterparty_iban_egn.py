@@ -754,25 +754,74 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
     async def go():
         async with _Dbs(backend) as (op, _sys):
             from scripts import cp_01_migrate_bank_accounts as mig
+            from scripts.w0_04_bootstrap_audit_indexes import PLANNED_INDEXES
+            for coll, keys, opts in PLANNED_INDEXES:
+                await op[coll].create_index(keys, **opts)
             await op.counterparties.insert_one({"id": "cpm", "org_id": ORG_A, "name": "M", "iban": IBAN_OLD})
             await op.subcontractors.insert_one({"id": "sbm", "org_id": ORG_A, "name": "S",
                                                 "bank_account": IBAN_NEW.lower()})
             await op.counterparties.insert_one({"id": "cpx", "org_id": ORG_A, "name": "X", "iban": "BG00XXXX"})
+            await op.persons.insert_one({"id": "pe-m", "org_id": ORG_A, "first_name": "M", "egn": EGN})
+            # 1. a redundant copy: the canonical person holds the same ЕГН → masked + AuditEvent
             await op.projects.insert_one({"id": "pm", "org_id": ORG_A, "owner_type": "person",
-                                          "invoice_details": {"eik": EGN}})
+                                          "owner_id": "pe-m", "invoice_details": {"eik": EGN}})
+            # 2. a copy with no canonical record → kept as it is, DQ issue for the Accountant
+            await op.projects.insert_one({"id": "pn", "org_id": ORG_A, "owner_type": "person",
+                                          "owner_id": "pe-none", "invoice_details": {"eik": "7501011111"}})
+            # 3. a company's 10-digit foreign VAT id is never an ЕГН → untouched
+            await op.projects.insert_one({"id": "pc", "org_id": ORG_A, "owner_type": "company",
+                                          "invoice_details": {"eik": "1234567890"}})
             report = await mig.plan(op)
             assert len(report["to_create"]) == 2 and len(report["invalid"]) == 1
-            assert report["projects_with_full_egn"] == 1
-            assert no_full(mig.printable(report), IBAN_OLD) and no_full(mig.printable(report), IBAN_NEW)
+            assert report["projects_with_full_egn"] == 2
+            assert [p["id"] for p in report["projects_to_mask"]] == ["pm"]
+            assert [p["id"] for p in report["egn_copies_without_canonical"]] == ["pn"]
+            shown = mig.printable(report)
+            for secret in (IBAN_OLD, IBAN_NEW, EGN, "7501011111"):
+                assert no_full(shown, secret)
             assert await rows(op, "verified_bank_accounts") == []          # dry run writes nothing
-            assert await mig.apply(op, report) == 3                  # 2 accounts + 1 project
-            assert no_full(await rows(op, "projects"), EGN)
+            # --apply without the dry run's token is refused, nothing written
+            url = "mongodb://unused"
+            refused = await _main_with(mig, op, ["--apply"])
+            assert refused["refused"] is True and await rows(op, "verified_bank_accounts") == []
+            ok = await _main_with(mig, op, ["--apply", "--plan-token", mig.plan_token(report)])
+            assert ok["written"] == 3                                      # 2 accounts + 1 project
+            prj = {p["id"]: p for p in await rows(op, "projects")}
+            assert prj["pm"]["invoice_details"]["eik"] == EGN_MASKED
+            assert prj["pn"]["invoice_details"]["eik"] == "7501011111"      # not destroyed
+            assert prj["pc"]["invoice_details"]["eik"] == "1234567890"
+            ev = await rows(op, "audit_events", {"action": "project.invoice_details.egn_copy_masked"})
+            assert [e["entity_id"] for e in ev] == ["pm"] and no_full(ev, EGN)
+            dq = await rows(op, "dq_issues", {"type": "EGN_COPY_WITHOUT_CANONICAL"})
+            assert len(dq) == 1 and dq[0]["entity_id"] == "pn" and dq[0]["owner_role"] == "accountant"
+            assert dq[0]["title"] == "ЕГН копие без каноничен запис"
             accs = await rows(op, "verified_bank_accounts")
             assert {a["status"] for a in accs} == {"pending_verification"}  # never verified
-            assert await mig.apply(op, await mig.plan(op)) == 0             # idempotent
+            again = await mig.plan(op)
+            assert await mig.apply(op, again) == 0                          # idempotent
             assert len(await rows(op, "verified_bank_accounts")) == 2
     asyncio.run(go())
 
+
+async def _main_with(mig, op, extra):
+    """Run the script's main() against the test database (its client is replaced)."""
+    import motor.motor_asyncio as mm
+    real = mm.AsyncIOMotorClient
+
+    class _Client:
+        def __init__(self, *a, **kw):
+            pass
+
+        def __getitem__(self, name):
+            return op
+
+        def close(self):
+            pass
+    mm.AsyncIOMotorClient = _Client
+    try:
+        return await mig.main(["--mongo-url", "mongodb://127.0.0.1:1/", "--db", "x"] + extra)
+    finally:
+        mm.AsyncIOMotorClient = real
 
 
 # ═══════════════════════════════════════════════ Addendum A (R50, Q005)
@@ -1018,12 +1067,51 @@ def test_fg225c_other_expense_by_bank_is_guarded(monkeypatch, backend, mode):
 
 def test_fg226_a_stored_project_never_holds_a_full_egn(monkeypatch, backend, mode):
     async def scenario(c, op):
+        # the canonical person pe1 holds this ЕГН → the copy is redundant and stored masked
         r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
                         json={"invoice_details": {"company_name": "Мария П", "eik": EGN}})
         assert r.status_code == 200, r.text
         assert no_full(r.json(), EGN)
         prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
         assert prj["invoice_details"]["eik"] == EGN_MASKED
+        # CP83-03: a typed ЕГН with no canonical record is NOT destroyed — kept, masked on read,
+        # DQ issue „ЕГН копие без каноничен запис“ for the Accountant
+        other = "7501011111"
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": {"company_name": "Мария П", "eik": other}})
+        assert r.status_code == 200 and no_full(r.json(), other)
+        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+        assert prj["invoice_details"]["eik"] == other
+        for who in ("viewer-a", "site-a", "admin-a"):
+            for url in ("/api/projects/prj-1/invoice-details", "/api/projects", "/api/projects/prj-1"):
+                got = await c.get(url, headers=hdr(who))
+                if got.status_code == 200:
+                    assert no_full(got.json(), other), (who, url)
+        dq = await rows(op, "dq_issues", {"type": "EGN_COPY_WITHOUT_CANONICAL"})
+        assert len(dq) == 1 and dq[0]["title"] == "ЕГН копие без каноничен запис"
+        # a company's 10-digit tax id (e.g. a foreign VAT number) is never masked as an ЕГН
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"owner_type": "company", "owner_id": "co1"}})
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": {"company_name": "Foreign GmbH", "eik": "1234567890"}})
+        assert r.status_code == 200 and r.json()["invoice_details"]["eik"] == "1234567890"
+        got = await c.get("/api/projects/prj-1/invoice-details", headers=hdr("admin-a"))
+        assert got.json()["invoice_details"]["eik"] == "1234567890"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_cp83_02_other_income_is_never_blocked(monkeypatch, backend, mode):
+    """CP83-02: income is not a payment to a payee — no IBAN / receipt guard, in every mode."""
+    async def scenario(c, op):
+        await seed_account(op, "ba-pend", IBAN_NEW, "pending_verification")   # even a blocked payee
+        for body in ({"method": "BankTransfer", "account_id": BANK_A},
+                     {"method": "Cash", "account_id": BANK_A},               # PaymentsPage default
+                     {"method": "Cash", "account_id": CASH_A},
+                     {"method": "BankTransfer", "account_id": BANK_A, "counterparty_id": "cp1"},
+                     {"method": "Cash", "account_id": CASH_A, "counterparty_id": "cp1"}):
+            r = await c.post("/api/finance/other-income", headers=hdr("acct-a"),
+                             json=dict(body, amount=25.0, project_id="prj-1"))
+            assert r.status_code == 201, (body, r.text)
+        assert len(await rows(op, "finance_payments", {"direction": "Inflow"})) == 5
     run(monkeypatch, backend, mode, scenario)
 
 

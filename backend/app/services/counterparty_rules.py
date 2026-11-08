@@ -113,6 +113,41 @@ def mask_person(doc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
     return out
 
 
+#: CP83-03: the ``invoice_details`` fields that may hold a person's ЕГН. Only for a PERSON
+#: owner (``eik`` / ``tax_id`` there are the ЕГН) or the explicit ``egn`` field — never a
+#: company's tax id because it happens to have 10 digits (e.g. a foreign VAT number).
+EGN_COPY_FIELDS = ("eik", "egn", "tax_id")
+
+
+def egn_copy_fields(details: Any, owner_type: Any) -> list:
+    """The fields of ``details`` that hold an unmasked ЕГН copy."""
+    if not isinstance(details, dict):
+        return []
+    out = []
+    for field in EGN_COPY_FIELDS:
+        value = details.get(field)
+        if not value or str(value).startswith(EGN_MASK_PREFIX):
+            continue
+        if field == "egn" or owner_type == "person":
+            out.append(field)
+    return out
+
+
+def mask_invoice_details(details: Any, owner_type: Any, fields=None) -> Any:
+    """``details`` with the ЕГН copy fields masked (all of them, or ``fields``)."""
+    if not isinstance(details, dict):
+        return details
+    out = dict(details)
+    for field in (fields if fields is not None else egn_copy_fields(details, owner_type)):
+        out[field] = mask_egn(out[field])
+    return out
+
+
+def same_egn(a: Any, b: Any) -> bool:
+    da, db_ = re.sub(r"\D", "", str(a or "")), re.sub(r"\D", "", str(b or ""))
+    return bool(da) and da == db_
+
+
 # ── EIK ──────────────────────────────────────────────────────────────────────
 def normalize_eik(eik: Any) -> str:
     if eik is None:

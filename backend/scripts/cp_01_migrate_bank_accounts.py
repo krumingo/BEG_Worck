@@ -5,14 +5,17 @@ VerifiedBankAccount rows in status „за проверка“ (pending_verifica
 „проверена“ automatically (package §1, FLOW-010 §8.1). Dry-run by default.
 
     python scripts/cp_01_migrate_bank_accounts.py --mongo-url URL --db NAME            # dry run
-    python scripts/cp_01_migrate_bank_accounts.py --mongo-url URL --db NAME --apply    # write
+    python scripts/cp_01_migrate_bank_accounts.py --mongo-url URL --db NAME --apply --plan-token T
 
 * per tenant (``org_id``), idempotent: the row id is uuid5(org, party type, party id, IBAN),
   written with ``$setOnInsert`` — a second run adds nothing;
 * an invalid IBAN is not migrated; it is listed in the report (masked) for a human;
 * the report never prints a full IBAN or ЕГН;
-* FG-226: project ``invoice_details`` that still hold a full ЕГН copied before CP-01 are
-  reported, and with ``--apply`` masked (``******1234``) — the original stays in ``persons``.
+* FG-226 / CP83-03: a project ``invoice_details`` ЕГН copy (person owner, or an ``egn``
+  field — never a 10-digit company tax id) is masked with ``--apply`` ONLY when the canonical
+  ``persons`` record holds the same full ЕГН, with one AuditEvent per project; any other copy
+  is kept (readers mask it) and a DQ issue „ЕГН копие без каноничен запис“ is opened.
+* ``--apply`` runs only with the ``--plan-token`` its dry run printed.
 
 Rollback: the rows carry ``source: "cp01_migration"``; deleting them is a separate,
 approved operator decision (CLAUDE.md §2.9) — this script never deletes anything.
@@ -62,30 +65,55 @@ async def plan(db):
                     continue
                 report["to_create"].append({"id": rid, "org_id": org, "party_type": party_type,
                                             "counterparty_id": doc["id"], "iban": iban, "field": f})
-    report["projects_to_mask"] = []
+    report["projects_to_mask"], report["egn_copies_without_canonical"] = [], []
     async for p in db.projects.find({"invoice_details": {"$type": "object"}},
-                                    {"_id": 0, "id": 1, "org_id": 1, "owner_type": 1, "invoice_details": 1}):
-        masked = mask_invoice_details(p["invoice_details"], p.get("owner_type"))
-        if masked != p["invoice_details"]:
-            report["projects_with_full_egn"] += 1
-            report["projects_to_mask"].append({"id": p["id"], "org_id": p.get("org_id"),
-                                               "before": p["invoice_details"], "after": masked})
+                                    {"_id": 0, "id": 1, "org_id": 1, "owner_type": 1, "owner_id": 1,
+                                     "invoice_details": 1}):
+        fields = cr.egn_copy_fields(p["invoice_details"], p.get("owner_type"))
+        if not fields:
+            continue
+        report["projects_with_full_egn"] += 1
+        person = None
+        if p.get("owner_type") == "person" and p.get("owner_id"):
+            person = await db.persons.find_one({"id": p["owner_id"], "org_id": p.get("org_id")},
+                                               {"_id": 0, "egn": 1})
+        # CP83-03 (CLAUDE.md §2): mask only a REDUNDANT copy — the canonical persons record,
+        # under its access control, holds the same full ЕГН. Anything else is kept and
+        # reported to the Accountant as a DQ issue; the readers mask it on read.
+        redundant = [f for f in fields
+                     if person and cr.same_egn(p["invoice_details"][f], person.get("egn"))]
+        rest = [f for f in fields if f not in redundant]
+        if redundant:
+            report["projects_to_mask"].append({
+                "id": p["id"], "org_id": p.get("org_id"), "fields": redundant,
+                "before": p["invoice_details"],
+                "after": cr.mask_invoice_details(p["invoice_details"], p.get("owner_type"), redundant)})
+        if rest:
+            report["egn_copies_without_canonical"].append({"id": p["id"], "org_id": p.get("org_id"),
+                                                           "fields": rest})
     return report
 
 
-def mask_invoice_details(details, owner_type):
-    """The same rule as the project readers/writers (FG-226): a person's ЕГН in
-    ``invoice_details`` is a copy — the original stays in ``persons``."""
-    import re
-    out = dict(details)
-    for field in ("eik", "egn", "tax_id"):
-        value = out.get(field)
-        if not value or str(value).startswith(cr.EGN_MASK_PREFIX):
-            continue
-        digits = re.sub(r"\D", "", str(value))
-        if field == "egn" or owner_type == "person" or len(digits) == 10:
-            out[field] = cr.mask_egn(value)
-    return out
+def plan_token(report) -> str:
+    """The dry run's fingerprint: --apply runs only the plan a human has just seen."""
+    import hashlib
+    return hashlib.sha256(json.dumps(printable(report), sort_keys=True, ensure_ascii=False)
+                          .encode("utf-8")).hexdigest()[:16]
+
+
+async def _audit_mask(db, p):
+    """One canonical AuditEvent per masked project (FLOW-040), masked values only."""
+    from app.audit.envelope import ACTOR_SYSTEM, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    event = build_event(
+        tenant_id=p["org_id"], actor_type=ACTOR_SYSTEM, actor_id="cp01_migration",
+        action="project.invoice_details.egn_copy_masked", source_flow="FLOW-040",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="project", entity_id=p["id"],
+        reason="ЕГН копие — каноничното ЕГН е в persons (R48.3, CP83-03)",
+        structured_diff={f: {"before": cr.mask_egn(p["before"][f]), "after": p["after"][f],
+                             "canonical": "persons"} for f in p["fields"]},
+        source_channel="migration")
+    await record_event(db, event)
 
 
 async def apply(db, report):
@@ -106,7 +134,17 @@ async def apply(db, report):
         res = await db.projects.update_one(
             {"id": p["id"], "org_id": p["org_id"], "invoice_details": p["before"]},
             {"$set": {"invoice_details": p["after"], "egn_masked_by": "cp01_migration"}})
-        written += res.modified_count
+        if res.modified_count:
+            await _audit_mask(db, p)
+            written += 1
+    from app.services.master_write import dq_issue
+    from app.tenancy.data_access import TenantData
+    for p in report.get("egn_copies_without_canonical", []):
+        await dq_issue(TenantData.for_resolved_org(db, p["org_id"]), None,
+                       code="EGN_COPY_WITHOUT_CANONICAL", severity="warning",
+                       entity_type="project", entity_id=p["id"],
+                       message="ЕГН копие без каноничен запис", data={"fields": p["fields"]},
+                       created_by="cp01_migration")
     return written
 
 
@@ -114,7 +152,7 @@ def printable(report):
     out = dict(report)
     out["to_create"] = [dict({k: v for k, v in r.items() if k != "iban"},
                              iban_masked=cr.mask_iban(r["iban"])) for r in report["to_create"]]
-    out["projects_to_mask"] = [{"id": p["id"], "org_id": p["org_id"]}
+    out["projects_to_mask"] = [{"id": p["id"], "org_id": p["org_id"], "fields": p["fields"]}
                                for p in report.get("projects_to_mask", [])]
     return out
 
@@ -124,13 +162,22 @@ async def main(argv=None):
     ap.add_argument("--mongo-url", required=True)
     ap.add_argument("--db", required=True)
     ap.add_argument("--apply", action="store_true")
+    ap.add_argument("--plan-token", default=None,
+                    help="the plan_token printed by the dry run; --apply refuses without it")
     args = ap.parse_args(argv)
     from motor.motor_asyncio import AsyncIOMotorClient
     client = AsyncIOMotorClient(args.mongo_url, serverSelectionTimeoutMS=5000)
     db = client[args.db]
     report = await plan(db)
-    result = {"mode": "apply" if args.apply else "dry-run", **printable(report)}
+    token = plan_token(report)
+    result = {"mode": "apply" if args.apply else "dry-run", "plan_token": token, **printable(report)}
     if args.apply:
+        if args.plan_token != token:
+            # CP83-03: dry run first — apply only the plan that was just reviewed
+            print(json.dumps({"refused": "run the dry run first and pass its --plan-token",
+                              "plan_token_now": token}, ensure_ascii=False))
+            client.close()
+            return {"refused": True, "plan_token": token}
         result["written"] = await apply(db, report)
     print(json.dumps(result, ensure_ascii=False, indent=2))
     client.close()
