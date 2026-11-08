@@ -4749,3 +4749,29 @@ The merge with main `2ec61f3` is clean → **full PASS**.
 **Other `log_audit` steps in #69.** Both `mw.step` audits (`overhead.py`, `subcontractors.py`) now carry `entry_id`. The two `wf.step("legacy_audit", log_audit(…))` calls in `auth.py` have no `entry_id`, but they are **main's** AUTH code (2 on `2ec61f3`), not #69's change. That is the same class pre-existing on main; noted as an observation (debt), not a #69 finding.
 
 **Trial merge #69 × #76 `b313933`.** One code conflict, in `subcontractors.py` at the payment audit call. #76's side is a superset (adds `advance_deducted` and the deduction call). Both use `entry_id=mw.new_id("audit_payment")`, so the id is identical whichever merges first. The other conflicts are text only (`run_meta`, the `idempotency.js` pair, which is code-identical).
+
+### main → `cd03324` (#72 + #70 + #78 + **#55**)
+
+Codex results:
+
+| Result | PRs |
+|---|---|
+| PASS | #55, #71, #73, #77, #74, #78 |
+| CHANGES_REQUESTED | **#69 F-69-04**, **#75 F-75-01**, #76 (now fixed at `b313933`) |
+
+The new findings:
+
+- **F-69-04:** sub-cent amounts bypass the cap.
+- **F-75-01:** a concurrent piece-rate change gets the same version.
+
+**Audit misses (#69, #75; I had passed both).**
+
+- **#69:** my probes tested the cap with whole and decimal amounts (60 / 50 / 40, 999.99 ×6 on #76), but **not amounts below one cent** (e.g. 0.001 or 0.004 repeatedly) against the cent-tolerance (`_CENT = 0.005`) comparisons.
+- **#75:** I checked the LAB-02 retake / FG flows, but **not concurrent piece-rate (akord) changes** racing for the same version number (D-17 territory).
+
+For the fix heads, add:
+
+- (a) N × sub-cent payments and advances (0.001 / 0.004 / 0.0049) against a cap that is otherwise exactly full, sequential and concurrent, plus mixed with a 0.01 boundary. Expect refusal or rounding by the money rule (finite > 0 with 2 decimals?), never cumulative overshoot.
+- (b) M concurrent piece-rate changes → distinct, gap-free versions, each with its own AuditEvent; the latest wins.
+
+Main sanity run `bmain2` (PAY, 43 warehouse files, W0, R0, PM-01) is running.
