@@ -49,6 +49,13 @@ def run(monkeypatch, backend, mode, scenario):
                                     subcontractors, labor_smr)
             for mod in (dashboard, reports, revenue_expense, material_smr, subcontractors, labor_smr):
                 monkeypatch.setattr(mod, "db", op)
+            # every other loaded app module (the SEC-02 finance-read guard in
+            # permissions.money_write, resource_model, …) holds the global `db`
+            # too — bind them all to this test's database
+            import sys
+            for name, mod in list(sys.modules.items()):
+                if name.startswith("app.") and getattr(mod, "db", None) not in (None, op):
+                    monkeypatch.setattr(mod, "db", op)
 
             async def _no_payroll(*a, **k):
                 return []

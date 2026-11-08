@@ -54,6 +54,16 @@ def _patch_all(monkeypatch, db, client=None):
         monkeypatch.setattr(route, "mongo_client", client)
 
 
+def _sec02_req(path="/api/sec02-direct-call"):
+    """SEC-02-G (main, SEC71-M1): a real Request for a direct call of an R20-decorated
+    handler — the role is the ``user=`` the test passes (FastAPI injects the request in
+    production; without one the decorator fails closed and strips money)."""
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "GET", "path": path, "headers": [],
+                    "query_string": b"", "root_path": "", "scheme": "http",
+                    "server": ("testserver", 80), "client": ("testclient", 50000)})
+
+
 def _user(role="Owner"):
     return {"id": f"u-{role}", "org_id": T, "role": role, "email": f"{role}@x"}
 
@@ -216,7 +226,11 @@ async def test_fg150_project_dashboard_and_aggregate_show_the_canonical_cost(
     run = _Run(client, allow_always_gate, db)
     await _accepted(run)                                  # 10 @ 10 accepted = 100
     from app.routes import projects
-    dash = await projects.get_project_dashboard(PROJECT, user=_user())
+    # SEC-02 (main): the dashboard strips money unless the caller may see it; the
+    # imported c22/c25 modules set enforce, where an RoleAssignment-less fixture user
+    # is refused — this test is about the cost SOURCE, so the legacy role decides (Р28).
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+    dash = await projects.get_project_dashboard(PROJECT, user=_user(), _sec02_request=_sec02_req())
     assert dash["materials"]["total_ex_vat"] == 100.0
     await db["projects"].insert_one({"id": "p-child", "org_id": T, "code": "P22-А",
                                      "name": "child", "parent_project_id": PROJECT,
