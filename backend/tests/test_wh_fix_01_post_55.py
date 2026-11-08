@@ -779,3 +779,30 @@ async def test_fg215_issued_invoice_with_header_project_counts_as_income_like_ma
     assert rep == {"tenant": T, "dry_run": False, "written": [], "pending": [], "skipped": []}
     assert (await db["invoice_lines"].find_one({"id": "l-iss-1"}))["allocations"] == []
     assert await db["dq_issues"].count_documents({}) == 0
+
+
+async def test_fg215_issued_invoice_with_embedded_lines_like_the_probe(canonical_mongo_db,
+                                                                       monkeypatch):
+    """FLOW Guard repro (P6/P10): an Issued invoice with header project prj-1 and
+    EMBEDDED lines → income on the project as on main, not in „за разпределяне",
+    no DQ issue — also after a write (PUT lines) re-evaluates it."""
+    _client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await db["projects"].insert_one({"id": "prj-1", "org_id": T, "code": "P1", "name": "P1"})
+    await db["invoices"].insert_one({
+        "id": "iss-emb", "org_id": T, "invoice_no": "ISS-E", "direction": "Issued",
+        "total": 120.0, "vat_percent": 20, "issue_date": "2026-11-01", "status": "Sent",
+        "project_id": "prj-1", "allocations": [{"type": "project", "ref_id": "prj-1"}],
+        "lines": [{"id": "e1", "description": "СМР", "qty": 1, "unit_price": 100,
+                   "line_total": 100}]})
+    from app.routes import dashboard
+    out = await dashboard.get_finance_by_project(
+        user=_user(), date_from="2026-10-01", date_to="2026-11-30", preset=None,
+        page=1, page_size=20)
+    assert {r["project_id"]: r["total_income"] for r in out["items"]} == {"prj-1": 120.0}
+    assert out["to_allocate"] == []
+    tenant = TenantData.for_resolved_org(db, T)
+    from app.services.invoice_allocation import invoices_to_allocate, refresh_invoice_dq
+    assert await invoices_to_allocate(tenant, T) == []
+    await refresh_invoice_dq(tenant, "iss-emb", actor=_user())        # a write's hook
+    assert await db["dq_issues"].count_documents({}) == 0
