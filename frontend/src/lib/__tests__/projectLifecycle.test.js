@@ -2,7 +2,7 @@
 // archive/cancel/reopen send the reason, and the reopen kinds are the server's list.
 jest.mock("@/lib/api", () => ({ __esModule: true, default: { delete: jest.fn(() => Promise.resolve({})), post: jest.fn(() => Promise.resolve({})) } }));
 import API from "@/lib/api";
-import { REOPEN_KINDS, LIFECYCLE_ENDPOINT, deleteProject, changeProjectStatus, reopenProject } from "@/lib/projectLifecycle";
+import { REOPEN_KINDS, LIFECYCLE_ENDPOINT, deleteProject, changeProjectStatus, reopenProject, requestProjectReopen } from "@/lib/projectLifecycle";
 
 const keyOf = (call) => call[call.length - 1].headers["Idempotency-Key"];
 
@@ -29,5 +29,11 @@ describe("project lifecycle", () => {
     await reopenProject("p1", "warranty", "теч");
     expect(API.post).toHaveBeenCalledWith("/projects/p1/reopen", { kind: "warranty", reason: "теч" }, expect.any(Object));
     expect(Object.keys(REOPEN_KINDS)).toEqual(["warranty", "defect", "completion", "additional_work", "correction"]);
+  });
+
+  test("R56(1): the SiteManager's request goes to its own endpoint with a key", async () => {
+    await requestProjectReopen("p1", "defect", "пукнатина");
+    expect(API.post).toHaveBeenCalledWith("/projects/p1/reopen-request", { kind: "defect", reason: "пукнатина" }, expect.any(Object));
+    expect(keyOf(API.post.mock.calls[0])).toBeTruthy();
   });
 });

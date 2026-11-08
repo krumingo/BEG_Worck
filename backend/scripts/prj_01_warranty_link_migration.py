@@ -43,7 +43,7 @@ import json
 import os
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -51,7 +51,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 WARRANTY = "Warranty"
 DQ_TYPE = "PROJECT_WARRANTY_ORIGINAL_UNKNOWN"
-DQ_OWNER_ROLE = "admin"          # PRJ-01-D4: who resolves it (projects: Owner/Admin, P-07)
+DQ_OWNER_ROLE = "site_manager"   # R56(4): the technical manager resolves it ...
+DQ_DUE_DAYS = 7                  # ... within 7 days ...
+DQ_ESCALATE_ROLE = "owner"       # ... then it escalates to the Owner
 MIGRATION = "PRJ-01"
 
 
@@ -91,14 +93,17 @@ async def build_plan(db, mapping: Optional[Dict[str, str]] = None) -> List[Dict[
         original = None
         if candidate and candidate != wid:
             original = await db.projects.find_one({"id": candidate, "org_id": org},
-                                                  {"_id": 0, "id": 1, "type": 1})
-        if original and original.get("type") != WARRANTY:
-            rows.append({**base, "action": "link", "original": original["id"], "source": source})
+                                                  {"_id": 0, "id": 1, "type": 1,
+                                                   "parent_project_id": 1})
+        if original and original.get("type") != WARRANTY and not original.get("parent_project_id"):
+            rows.append({**base, "action": "link", "original": original["id"], "source": source,
+                         "previous_parent": p.get("parent_project_id")})
             continue
         open_dq = await db.dq_issues.find_one({"id": dq_id(org, wid), "org_id": org,
                                                "status": "open"}, {"_id": 1})
         rows.append({**base, "action": "dq_open" if open_dq else "dq",
-                     "why": "no_candidate" if not candidate else "candidate_invalid"})
+                     "why": "no_candidate" if not candidate else "candidate_invalid",
+                     "site_manager_id": p.get("default_site_manager_id")})
     return rows
 
 
@@ -140,17 +145,23 @@ async def _apply_row(db, row: Dict[str, Any], approved_by: str) -> bool:
     async def link(session):
         res = await tenant.projects.update_one(
             {"id": wid, "type": WARRANTY, "warranty_of_project_id": {"$exists": False}},
+            # R56(4): the link makes it a SUB-PROJECT of the original (own cost centre,
+            # summed into the original — FLOW-001 P-05/P-09/P-16); the old parent is kept.
             {"$set": {"warranty_of_project_id": row["original"],
+                      "parent_project_id": row["original"],
                       "warranty_link": {"source": row["source"], "migration": MIGRATION,
-                                        "approved_by": approved_by, "linked_at": now}}},
+                                        "approved_by": approved_by, "linked_at": now,
+                                        "previous_parent_project_id": row.get("previous_parent")}}},
             session=session)
         if res.modified_count != 1:
             return False
         await _event(db, session, org=org, action="project.warranty_link",
                      entity_type="project", entity_id=wid,
                      reason="Р54: гаранционният обект се свързва с оригиналния обект",
-                     diff={"before": {"warranty_of_project_id": None},
-                           "after": {"warranty_of_project_id": row["original"]},
+                     diff={"before": {"warranty_of_project_id": None,
+                                      "parent_project_id": row.get("previous_parent")},
+                           "after": {"warranty_of_project_id": row["original"],
+                                     "parent_project_id": row["original"]},
                            "source": row["source"], "approved_by": approved_by})
         # FG-256: the DQ issue of this project (if any) is resolved by the decision
         rid = dq_id(org, wid)
@@ -177,7 +188,10 @@ async def _apply_row(db, row: Dict[str, Any], approved_by: str) -> bool:
                           "без предположение — посочете го (--map %s=<id>)." % (
                               row.get("code") or wid, wid),
                "entity_type": "project", "entity_id": wid, "status": "open",
-               "severity": "warning", "owner_role": DQ_OWNER_ROLE, "opened_at": now,
+               "severity": "warning", "owner_role": DQ_OWNER_ROLE,
+               "assignee_user_id": row.get("site_manager_id"),
+               "due_at": (datetime.fromisoformat(now) + timedelta(days=DQ_DUE_DAYS)).isoformat(),
+               "escalate_to_role": DQ_ESCALATE_ROLE, "escalated_at": None, "opened_at": now,
                "created_at": now, "updated_at": now, "occurrences": 1,
                "created_by": "migration:PRJ-01",
                "data": {"why": row.get("why"), "approved_by": approved_by}}
@@ -195,6 +209,49 @@ async def _apply_row(db, row: Dict[str, Any], approved_by: str) -> bool:
     if row["action"] == "dq":
         return await run_in_transaction(db, dq)
     return False
+
+
+async def escalate_overdue(db, now: Optional[str] = None) -> Dict[str, Any]:
+    """R56(4): an open warranty DQ issue past its 7-day due date escalates to the Owner —
+    once, with an AuditEvent ``dq.issue.escalate`` and a notification to every active
+    Owner of the tenant. Idempotent. Meant to run daily (PRJ-01-D12: no scheduler yet)."""
+    from app.services.auth_tx import run_in_transaction
+    from app.tenancy.data_access import TenantData
+    now = now or _now()
+    escalated = 0
+    async for row in db.dq_issues.find({"type": DQ_TYPE, "status": "open",
+                                        "escalated_at": None, "due_at": {"$lte": now}},
+                                       {"_id": 0}):
+        org = row.get("org_id")
+        if not org:
+            continue
+        tenant = TenantData.for_resolved_org(db, org)
+
+        async def body(session, row=row, tenant=tenant, org=org):
+            res = await tenant.dq_issues.update_one(
+                {"id": row["id"], "status": "open", "escalated_at": None},
+                {"$set": {"escalated_at": now, "owner_role": DQ_ESCALATE_ROLE,
+                          "updated_at": now}}, session=session)
+            if res.modified_count != 1:
+                return False
+            owners = await tenant.users.find({"role": "Owner", "is_active": {"$ne": False}},
+                                             {"_id": 0, "id": 1}, session=session).to_list(50)
+            for o in owners:
+                await tenant.notifications.insert_one({
+                    "id": str(uuid.uuid5(uuid.NAMESPACE_URL, "dq-escalate:%s:%s" % (row["id"], o["id"]))),
+                    "org_id": org, "user_id": o["id"], "type": "dq_escalation",
+                    "title": "Просрочена DQ задача: гаранционен обект без оригинал",
+                    "message": row.get("message", ""), "data": {"dq_issue_id": row["id"],
+                                                               "project_id": row.get("entity_id")},
+                    "is_read": False, "created_at": now}, session=session)
+            await _event(db, session, org=org, action="dq.issue.escalate", entity_type="dq_issue",
+                         entity_id=row["id"], reason="Р56: 7 дни без решение — към Собственика",
+                         diff={"before": {"owner_role": row.get("owner_role")},
+                               "after": {"owner_role": DQ_ESCALATE_ROLE}, "owners": len(owners)})
+            return True
+
+        escalated += bool(await run_in_transaction(db, body))
+    return {"escalated": escalated}
 
 
 async def migrate(db, apply: bool = False, approved_by: Optional[str] = None,
@@ -232,10 +289,15 @@ def main(argv=None) -> int:
     ap.add_argument("--approved-by")
     ap.add_argument("--plan-sha")
     ap.add_argument("--map", action="append", default=[])
+    ap.add_argument("--escalate", action="store_true",
+                    help="escalate open warranty DQ issues past their due date (R56-4)")
     args = ap.parse_args(argv)
     from motor.motor_asyncio import AsyncIOMotorClient
     client = AsyncIOMotorClient(os.environ["MONGO_URL"])
     db = client[os.environ["DB_NAME"]]
+    if args.escalate:
+        print(json.dumps(asyncio.run(escalate_overdue(db)), indent=1))
+        return 0
     try:
         res = asyncio.run(migrate(db, apply=args.apply, approved_by=args.approved_by,
                                   plan_sha=args.plan_sha, mapping=_parse_map(args.map)))

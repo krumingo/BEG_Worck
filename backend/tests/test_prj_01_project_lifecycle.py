@@ -102,7 +102,13 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
                 project("type_empty", "Draft"), project("type_used", "Active"),
                 project("warr_parent", "Completed", "Warranty",
                         parent_project_id=t["project_id"]),
-                project("warr_orphan", "Completed", "Warranty")]
+                project("warr_orphan", "Completed", "Warranty",
+                        default_site_manager_id=t["users"]["requester"]["id"]),
+                # R56(2): a Draft with phases / a client / a team is USED
+                project("draft_phase", "Draft"), project("draft_client", "Draft",
+                                                          owner_type="company",
+                                                          owner_id=t.get("company1_id")),
+                project("draft_team", "Draft")]
         for kind in LINKS:
             docs.append(project("link_" + kind, "Draft"))
         await op_db.projects.insert_many(docs)
@@ -110,6 +116,9 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
             row = {"id": pid(tkey, "row_" + kind), "org_id": org, "created_at": NOW, **extra}
             row[LINK_FIELD.get(kind, "project_id")] = pid(tkey, "link_" + kind)
             await op_db[coll].insert_one(row)
+        await op_db.project_phases.insert_one({"id": pid(tkey, "phase1"), "org_id": org,
+                                               "project_id": pid(tkey, "draft_phase"),
+                                               "name": "Етап 1", "created_at": NOW})
         await op_db.work_reports.insert_one({"id": pid(tkey, "wr_type_used"), "org_id": org,
                                              "project_id": pid(tkey, "type_used"),
                                              "status": "Draft", "created_at": NOW})
@@ -119,14 +128,18 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
         await op_db.subcontractors.insert_one({"id": sub, "org_id": org, "name": "Probe Sub",
                                                "created_at": NOW})
         p1 = t["project_id"]
-        for n, amount, status in (("sp1", 150, "posted"), ("sp2", 50, "reversed")):
+        # sp3: an ADVANCE (R39, SUB-ADV-01 shape: a subcontractor_payments row of kind
+        # "advance" + its ledger row with subcontractor_advance) — it counts as paid.
+        for n, amount, status, extra in (("sp1", 150, "posted", {}), ("sp2", 50, "reversed", {}),
+                                         ("sp3", 30, "posted", {"kind": "advance"})):
             await op_db.subcontractor_payments.insert_one({
                 "id": pid(tkey, n), "org_id": org, "project_id": p1, "subcontractor_id": sub,
-                "amount": amount, "status": "completed", "created_at": NOW})
+                "amount": amount, "status": "completed", "created_at": NOW, **extra})
             await op_db.finance_payments.insert_one({
                 "id": pid(tkey, "fp_" + n), "org_id": org, "direction": "Outflow",
                 "amount": amount, "project_id": p1, "status": status,
-                "subcontractor_payment_id": pid(tkey, n), "created_at": NOW})
+                "subcontractor_payment_id": pid(tkey, n), "created_at": NOW,
+                **({"subcontractor_advance": True} if extra else {})})
         await op_db.finance_payments.insert_one({
             "id": pid(tkey, "fp_sp2_rev"), "org_id": org, "direction": "Inflow", "amount": 50,
             "project_id": p1, "status": "reversal", "reversal_of": pid(tkey, "fp_sp2"),
@@ -222,6 +235,17 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 "project_kept": project_doc("link_" + kind) is not None,
                 "row_kept": q(lambda: op_db[coll].count_documents(
                     {"id": pid("A", "row_" + kind)})) == 1}
+        r = tc.post("/api/projects/%s/team" % pid("A", "draft_team"),
+                    json={"user_id": A["users"]["technician"]["id"], "role_in_project": "Technician"},
+                    headers={"Authorization": "Bearer " + tokens[("A", "admin")]})
+        assert r.status_code == 201, r.text[:300]
+        for name in ("draft_team", "draft_phase", "draft_client"):
+            r = call("DELETE", "/api/projects/" + pid("A", name))
+            d[name] = {"status": r["status"], "error_code": r["error_code"],
+                       "links": sorted(((r["body"].get("detail") or {}).get("links") or {}).keys())
+                       if isinstance(r["body"], dict) and isinstance(r["body"].get("detail"), dict)
+                       else None,
+                       "project_kept": project_doc(name) is not None}
         r = call("DELETE", "/api/projects/" + pid("A", "active_empty"))
         d["active_empty"] = {"status": r["status"], "error_code": r["error_code"],
                              "project_kept": project_doc("active_empty") is not None}
@@ -344,6 +368,30 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         d["enforce_owner"] = call("POST", url, json={"kind": "defect",
                                                     "reason": "втори дефект"})["status"]
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        # R56(1): the SiteManager only REQUESTS a reopen; Owner/Admin reopen
+        r = tc.post("/api/projects/%s/team" % pid("A", "completed3"),
+                    json={"user_id": A["users"]["requester"]["id"], "role_in_project": "SiteManager"},
+                    headers={"Authorization": "Bearer " + tokens[("A", "admin")]})
+        assert r.status_code == 201, r.text[:300]
+        rq_url = "/api/projects/%s/reopen-request" % pid("A", "completed3")
+        rq = {"kind": "defect", "reason": "пукнатина в замазката"}
+        d["request_technician"] = call("POST", rq_url, role="technician", json=rq)["status"]
+        d["request_no_reason"] = call("POST", rq_url, role="requester", json={"kind": "defect"})["status"]
+        r = call("POST", rq_url, role="requester", json=rq)
+        d["request_ok"] = r["status"]
+        d["request_notified"] = (r["body"] or {}).get("notified") if isinstance(r["body"], dict) else None
+        d["request_site_manager_reopen"] = call(
+            "POST", "/api/projects/%s/reopen" % pid("A", "completed3"), role="requester",
+            json=rq)["status"]
+        d["request_status_before"] = [x.get("status") for x in
+                                      (project_doc("completed3") or {}).get("reopen_requests") or []]
+        d["request_owner_reopen"] = call("POST", "/api/projects/%s/reopen" % pid("A", "completed3"),
+                                         json=rq)["status"]
+        d["request_status_after"] = [x.get("status") for x in
+                                     (project_doc("completed3") or {}).get("reopen_requests") or []]
+        d["request_events"] = _actions_of(events(pid("A", "completed3"), "project.reopen"))
+        d["request_notifications"] = q(lambda: op_db.notifications.count_documents(
+            {"type": "project_reopen_request", "data.project_id": pid("A", "completed3")}))
         # FG-253: a legacy Warranty project is not reopened (warranty work → the original)
         r = call("POST", "/api/projects/%s/reopen" % pid("A", "warr_parent"),
                  json={"kind": "warranty", "reason": "нов дефект"})
@@ -467,6 +515,15 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     {"entity_id": pid("A", "warr_orphan")}, {"_id": 0}).to_list(None))],
                 "dq_resolve_events": q(lambda: op_db.audit_events.count_documents(
                     {"action": "dq.issue.resolve"})),
+                "parent_after_link": wp.get("parent_project_id"),
+                "orphan_parent_after_map": (project_doc("warr_orphan") or {}).get("parent_project_id"),
+                "dq_routing": [{k: x.get(k) for k in ("owner_role", "escalate_to_role")}
+                               | {"has_due": bool(x.get("due_at")),
+                                  "assignee_is_sm": x.get("assignee_user_id") == A["users"]["requester"]["id"]}
+                               for x in dq],
+                **_escalations(q, mig, op_db),
+                "escalated_rows": [x.get("owner_role") for x in q(lambda: op_db.dq_issues.find(
+                    {"escalated_at": {"$ne": None}}, {"_id": 0}).to_list(None))],
             }
         obs["fg236"] = d
 
@@ -485,6 +542,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                       json={**body, "actual_paid_amount": 5})["status"]
         d["create_no_key"] = call("POST", "/api/subcontractor-performance", key=None,
                                   json=body)["status"]
+        d["score_invalid"] = [call("POST", "/api/subcontractor-performance",
+                                   json={**body, "quality_score": v})["status"]
+                              for v in (0, 6, 4.5, "4", -1)]
         d["create_unknown_sub"] = call("POST", "/api/subcontractor-performance",
                                        json={**body, "subcontractor_id": "nope"})["status"]
         r = call("POST", "/api/subcontractor-performance", role="requester", json=body)
@@ -600,6 +660,21 @@ def obs(tmp_path_factory):
     return json.loads(out.read_text(encoding="utf-8"))
 
 
+def _escalations(q, mig, op_db) -> Dict[str, Any]:
+    """R56(4) escalation runs; ``None`` when the migration has no escalation (older code)."""
+    esc = getattr(mig, "escalate_overdue", None)
+    if esc is None:
+        return {"escalate_now": None, "escalate_later": None, "escalate_again": None}
+    later = "2099-01-01T00:00:00+00:00"
+    return {"escalate_now": q(lambda: esc(op_db))["escalated"],
+            "escalate_later": q(lambda: esc(op_db, now=later))["escalated"],
+            "escalate_again": q(lambda: esc(op_db, now=later))["escalated"]}
+
+
+def _actions_of(events):
+    return [e["action"] for e in events]
+
+
 def _actions(events):
     return [e["action"] for e in events]
 
@@ -618,6 +693,10 @@ def test_fg239_a_project_with_any_business_link_is_never_deleted(obs):
 @real
 def test_fg239_only_an_empty_draft_may_be_deleted_by_owner_admin_with_a_key(obs):
     d = obs["fg239"]
+    for name, link in (("draft_team", "project_team"), ("draft_phase", "project_phases"),
+                       ("draft_client", "client")):
+        assert d[name]["status"] == 409 and d[name]["error_code"] == "PROJECT_HAS_HISTORY", (name, d[name])
+        assert link in d[name]["links"] and d[name]["project_kept"], (name, d[name])
     assert d["active_empty"]["status"] == 409 and d["active_empty"]["project_kept"]
     assert d["active_empty"]["error_code"] == "PROJECT_NOT_DRAFT"
     assert d["no_key"]["status"] == 428 and d["no_key"]["project_kept"]
@@ -683,6 +762,13 @@ def test_fg237_a_completed_project_reopens_with_reason_audit_and_owner_admin_onl
     assert d["current_reopen_after_close"] is False
     assert d["put_reopen"] == 400
     assert d["enforce_viewer"] == 403 and d["enforce_owner"] == 200
+    assert d["request_technician"] == 403 and d["request_no_reason"] == 400
+    assert d["request_ok"] == 201 and d["request_notified"] >= 2
+    assert d["request_site_manager_reopen"] == 403
+    assert d["request_status_before"] == ["open"] and d["request_owner_reopen"] == 200
+    assert d["request_status_after"] == ["done"]
+    assert d["request_events"] == ["project.reopen_request", "project.reopen"]
+    assert d["request_notifications"] == d["request_notified"]
     assert d["reopen_warranty_project"] == {"status": 409, "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
                                             "project_status": "Completed"}
 
@@ -735,6 +821,13 @@ def test_fg236_the_warranty_migration_links_dry_run_first_idempotent_never_delet
     assert m["map_counts"] == {"link": 1, "dq": 0, "already": 2, "dq_open": 1}
     assert m["orphan_after_map"] == "prj01-A-completed2"
     assert m["orphan_dq_after_map"] == ["resolved"] and m["dq_resolve_events"] == 1
+    # R56(4): the link makes it a sub-project; the DQ goes to the SiteManager, 7 days, Owner
+    assert m["parent_after_link"] == m["parent_expected"]
+    assert m["orphan_parent_after_map"] == "prj01-A-completed2"
+    assert m["dq_routing"] == [{"owner_role": "site_manager", "escalate_to_role": "owner",
+                                "has_due": True, "assignee_is_sm": True}]
+    assert m["escalate_now"] == 0 and m["escalate_later"] == 1 and m["escalate_again"] == 0
+    assert m["escalated_rows"] == ["owner"]
 
 
 @real
@@ -752,7 +845,8 @@ def test_fg240_rating_rights_versions_audit_and_paid_from_the_ledger(obs):
     assert d["update_owner"] == 200 and d["update_replay_same"]
     assert d["version_after"] == 2 and d["versions"] == [1, 2]
     assert d["events"] == ["subcontractor_performance.create", "subcontractor_performance.update"]
-    assert d["legacy_paid_shown"] == 150          # 150 counted, 50 reversed: from the ledger
+    assert d["score_invalid"] == [422, 422, 422, 422, 422]      # R56(3): an integer 1–5
+    assert d["legacy_paid_shown"] == 180          # 150 + advance 30 (R39); 50 reversed
     assert d["legacy_manual_kept"] == 999         # history kept, not used
     assert d["legacy_manual_exposed"] == 999
     assert d["legacy_paid_source"] == "payment_ledger"

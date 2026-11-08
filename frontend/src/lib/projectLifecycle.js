@@ -32,3 +32,9 @@ export function reopenProject(id, kind, reason) {
   return API.post(`/projects/${id}/reopen`, { kind, reason },
     idempotencyHeaders(newIdempotencyKey()));
 }
+
+// R56(1): the technical manager (SiteManager) only requests a reopen; Owner/Admin reopen.
+export function requestProjectReopen(id, kind, reason) {
+  return API.post(`/projects/${id}/reopen-request`, { kind, reason },
+    idempotencyHeaders(newIdempotencyKey()));
+}

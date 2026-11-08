@@ -4,7 +4,7 @@ Additive layer — does NOT modify subcontractor core flows.
 """
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from typing import Optional
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, Field, StrictInt, ValidationError
 import json
 import uuid
 
@@ -32,7 +32,7 @@ class PerformanceCreate(BaseModel):
     actual_start_date: Optional[str] = None
     actual_end_date: Optional[str] = None
     promised_amount: Optional[float] = None
-    quality_score: Optional[int] = None
+    quality_score: Optional[StrictInt] = Field(None, ge=1, le=5)   # R56(3): an integer 1–5
     rework_flag: bool = False
     notes: Optional[str] = None
 
@@ -40,7 +40,7 @@ class PerformanceCreate(BaseModel):
 class PerformanceUpdate(BaseModel):
     actual_start_date: Optional[str] = None
     actual_end_date: Optional[str] = None
-    quality_score: Optional[int] = None
+    quality_score: Optional[StrictInt] = Field(None, ge=1, le=5)   # R56(3): an integer 1–5
     rework_flag: Optional[bool] = None
     notes: Optional[str] = None
 

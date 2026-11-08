@@ -403,6 +403,17 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
         if not project:
             raise HTTPException(status_code=404, detail="Project not found")
         links = await lifecycle.business_links(tenant, project_id, session=session)
+        # R56(2): a Draft with a team, phases, an offer or a client is USED — archived, not
+        # deleted (the offer is in ``links`` already).
+        n_team = await team.count_documents({"project_id": project_id}, session=session)
+        if n_team:
+            links["project_team"] = n_team
+        n_phases = await tenant.project_phases.count_documents({"project_id": project_id},
+                                                               session=session)
+        if n_phases:
+            links["project_phases"] = n_phases
+        if project.get("owner_id") or project.get("client_id"):
+            links["client"] = 1
         if links:
             raise lifecycle.refuse(
                 409, "PROJECT_HAS_HISTORY",
@@ -413,10 +424,8 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
             raise lifecycle.refuse(
                 409, "PROJECT_NOT_DRAFT",
                 "Изтрива се само празна чернова — архивирайте или откажете обекта")
+        # R56(2): only a truly empty Draft (no team, no phases, no record) reaches this point.
         await tenant.projects.delete_one({"id": project_id}, session=session)
-        # W0-03E-A2: scoped to this tenant (a foreign row with a colliding id survives).
-        await team.delete_many({"project_id": project_id}, session=session)
-        await tenant.project_phases.delete_many({"project_id": project_id}, session=session)
         await lifecycle.audit(session, user, action="project.delete", entity_type="project",
                               entity_id=project_id, reason="празна чернова", key=key,
                               diff={"before": {k: project.get(k) for k in
@@ -431,7 +440,7 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
 async def _change_status(user: dict, project_id: str, key: str, *, action: str,
                          target: str, reason: str, extra_set: dict,
                          extra_push: Optional[dict] = None, allowed_from=None,
-                         refuse_warranty: bool = False) -> dict:
+                         refuse_warranty: bool = False, array_filters=None) -> dict:
     """One status change of PRJ-01: conditional on the status read, one transaction with
     its AuditEvent, once per Idempotency-Key."""
     tenant = _tenant(user)
@@ -460,8 +469,12 @@ async def _change_status(user: dict, project_id: str, key: str, *, action: str,
         update = {"$set": {"status": target, "updated_at": now, **extra_set(now, current)}}
         if extra_push:
             update["$push"] = extra_push(now)
+        kw = {"array_filters": array_filters} if array_filters and project.get("reopen_requests") else {}
+        if not kw and array_filters:
+            update["$set"] = {k: v for k, v in update["$set"].items()
+                              if not k.startswith("reopen_requests.$[")}
         res = await tenant.projects.update_one({"id": project_id, "status": current}, update,
-                                               session=session)
+                                               session=session, **kw)
         if res.matched_count != 1:
             raise lifecycle.refuse(409, "STATUS_CHANGED", "Статусът на обекта току-що се промени")
         after = {"status": target}
@@ -507,6 +520,68 @@ async def cancel_project(project_id: str, body: Optional[dict] = Body(None),
                                         "status_before_cancel": current})
 
 
+@router.post("/projects/{project_id}/reopen-request", status_code=201)
+async def request_project_reopen(project_id: str, body: Optional[dict] = Body(None),
+                                 user: dict = Depends(get_current_user),
+                                 idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """PRJ-01 / R56(1): the technical manager (the project's SiteManager) cannot reopen a
+    Completed project, only REQUEST it. The request (kind, reason, who, when) is kept on the
+    project, every active Owner/Admin gets a notification, and an AuditEvent
+    ``project.reopen_request`` is written in the same transaction. The Owner/Admin then
+    reopens with POST /projects/{id}/reopen, which marks the open requests done."""
+    if user.get("role") != "SiteManager" or not await can_manage_project(user, project_id):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    key = lifecycle.require_key(idempotency_key)
+    body = body or {}
+    reason = lifecycle.require_reason(body.get("reason"))
+    kind = body.get("kind")
+    if kind not in lifecycle.REOPEN_KINDS:
+        raise lifecycle.refuse(400, "REOPEN_KIND_INVALID",
+                               "Вид на повторното отваряне: " + ", ".join(lifecycle.REOPEN_KINDS))
+    tenant = _tenant(user)
+    import uuid as _uuid
+    req_id = str(_uuid.uuid5(_uuid.NAMESPACE_URL, "beg-project-reopen-request:%s:%s:%s:%s" % (
+        user["org_id"], project_id, user["id"], key)))
+
+    async def work(session):
+        project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]},
+                                                 {"_id": 0}, session=session)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        if project.get("type") == WARRANTY_TYPE or project.get("warranty_of_project_id"):
+            raise lifecycle.refuse(409, "WARRANTY_IN_ORIGINAL_PROJECT",
+                                   "Гаранционен обект не се отваря отново — поискайте оригиналния")
+        if project.get("status") not in lifecycle.REOPENABLE:
+            raise lifecycle.refuse(409, "INVALID_TRANSITION",
+                                   "Отваряне се иска само за приключен обект",
+                                   current_status=project.get("status"))
+        now = lifecycle.now_iso()
+        request_row = {"id": req_id, "kind": kind, "reason": reason, "requested_by": user["id"],
+                       "requested_at": now, "status": "open"}
+        await tenant.projects.update_one({"id": project_id}, {"$push": {"reopen_requests": request_row}},
+                                         session=session)
+        approvers = await tenant.users.find({"role": {"$in": ["Owner", "Admin"]},
+                                             "is_active": {"$ne": False}},
+                                            {"_id": 0, "id": 1}, session=session).to_list(200)
+        for a in approvers:
+            await tenant.notifications.insert_one({
+                "id": str(_uuid.uuid5(_uuid.NAMESPACE_URL, "%s:%s" % (req_id, a["id"]))),
+                "org_id": user["org_id"], "user_id": a["id"], "type": "project_reopen_request",
+                "title": "Искане за повторно отваряне на обект",
+                "message": "%s: %s" % (project.get("code") or project_id, reason),
+                "data": {"project_id": project_id, "request_id": req_id, "kind": kind},
+                "is_read": False, "created_at": now}, session=session)
+        await lifecycle.audit(session, user, action="project.reopen_request",
+                              entity_type="project", entity_id=project_id, reason=reason,
+                              key=key, diff={"after": {"request_id": req_id, "kind": kind},
+                                             "notified": len(approvers)})
+        return {"ok": True, "request": request_row, "notified": len(approvers)}
+
+    return await lifecycle.keyed_transaction(user, key, "project.reopen_request",
+                                             {"project_id": project_id, "kind": kind,
+                                              "reason": reason}, work)
+
+
 @router.post("/projects/{project_id}/reopen")
 async def reopen_project(project_id: str, body: Optional[dict] = Body(None),
                          user: dict = Depends(require_admin),
@@ -533,7 +608,11 @@ async def reopen_project(project_id: str, body: Optional[dict] = Body(None),
     return await _change_status(
         user, project_id, key, action="project.reopen", target="Active", reason=reason,
         allowed_from=lifecycle.REOPENABLE, refuse_warranty=True,
-        extra_set=lambda now, current: {"current_reopen_id": cycle_id},
+        extra_set=lambda now, current: {"current_reopen_id": cycle_id,
+                                        # R56(1): the open requests are answered by this reopen
+                                        "reopen_requests.$[r].status": "done",
+                                        "reopen_requests.$[r].done_by_reopen": cycle_id},
+        array_filters=[{"r.status": "open"}],
         extra_push=lambda now: {"reopen_cycles": {
             "id": cycle_id, "kind": kind, "reason": reason, "opened_at": now,
             "opened_by": user["id"], "closed_at": None, "closed_by": None}})
