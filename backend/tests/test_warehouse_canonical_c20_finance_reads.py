@@ -36,6 +36,17 @@ from app.services.warehouse_movements import CanonicalAction, LocationKey, Locat
 from app.services.warehouse_movements.service import CommandInput, CommandService
 from app.tenancy.data_access import TenantData
 
+
+def _sec02_req(path="/api/sec02-direct-call"):
+    """SEC-02-G (audit SEC71-M1): a real Request for a direct call of an R20-decorated
+    handler — the role is the ``user=`` the test already passes (FastAPI injects this
+    request in production; without one the decorator fails closed and strips money)."""
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "GET", "path": path, "headers": [],
+                    "query_string": b"", "root_path": "", "scheme": "http",
+                    "server": ("testserver", 80), "client": ("testclient", 50000)})
+
+
 pytest_plugins = ["tests.warehouse_canonical_conftest"]
 
 T = "org_c20"
@@ -73,6 +84,8 @@ def _patch_dbs(monkeypatch, db):
                  "app.routes.subcontractors", "app.routes.procurement",
                  "app.routes.project_pnl", "app.services.project_pnl"):
         monkeypatch.setattr(importlib.import_module(name), "db", db)
+    from tests.warehouse_canonical_conftest import sec02_owner_in_enforce
+    sec02_owner_in_enforce(monkeypatch, T, T2)        # SEC-02-G (SEC71-M1): R20 reads
 
 
 async def _scenario(client, gate, db, tenant=T):
@@ -272,7 +285,7 @@ async def test_f10_package_reports_show_30_without_sync_or_recompute(
     assert summary["mapped_cost"] == pytest.approx(30.0)               # d8ac3a9: 0 (unmapped)
     assert summary["unmapped_cost"] == pytest.approx(20.0)
 
-    warn = await material_smr.get_material_warnings(PROJECT, user=_user())
+    warn = await material_smr.get_material_warnings(PROJECT, user=_user(), _sec02_request=_sec02_req())
     over = [w for w in warn["warnings"] if w["type"] == "over_material_budget"]
     assert len(over) == 1 and "30" in over[0]["message"]
 

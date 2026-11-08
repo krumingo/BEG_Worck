@@ -1263,6 +1263,14 @@ def test_the_money_key_rule():
                                  "total": 1, "page": 1}
 
 
+def _direct_req():
+    """A real Request for a direct call of an R20-decorated handler (SEC71-M1: without
+    one the decorators fail closed and strip every money value)."""
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "GET", "path": "/", "headers": [],
+                    "query_string": b""})
+
+
 def _fake_tenant(collections):
     """A minimal async TenantData stand-in: find(query) with equality, $ne, $in, $gte, $lte."""
     def match(doc, q):
@@ -1413,11 +1421,11 @@ def test_sec71_01_the_budget_freeze_answer_is_the_budget_view(monkeypatch):
         monkeypatch.setattr(money_write, "money_values_visible", mv)
         monkeypatch.setattr(money_write, "budget_view_visible", bv)
     visible(False, True)
-    v = asyncio.run(handler(project_id="P1", user={"id": "sm"}, _sec02_request=None))
+    v = asyncio.run(handler(project_id="P1", user={"id": "sm"}, _sec02_request=_direct_req()))
     assert forbidden_budget_view_keys(v) == [] and "12345" not in json.dumps(v), v
     assert v["packages"][0]["labor_budget_total"] == 500.0 and v["totals"]["total_budget"] == 600.0
     visible(True, True)
-    assert asyncio.run(handler(project_id="P1", user={"id": "acc"}, _sec02_request=None)) is freeze
+    assert asyncio.run(handler(project_id="P1", user={"id": "acc"}, _sec02_request=_direct_req())) is freeze
 
 
 def test_sec71_02_pulse_counts_only_paid_workers(monkeypatch):
@@ -1450,7 +1458,7 @@ def test_sec71_02_pulse_counts_only_paid_workers(monkeypatch):
     monkeypatch.setattr(money_write, "single_paid_sites", two_paid)
     monkeypatch.setattr(money_write, "money_values_visible", no)
     monkeypatch.setattr(money_write, "budget_view_visible", yes)
-    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "sm"}, _sec02_request=None))
+    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "sm"}, _sec02_request=_direct_req()))
 
     # Codex: 160 + 0 -> one paid worker -> no day total, no SMR total
     current = pulse([w("t", 160.0, "Мазилка"), w("d", 0, "Мазилка")], [("Мазилка", 160.0, 2)])
@@ -1528,7 +1536,7 @@ def test_sec71_03_budget_alert_text_gives_no_amount(monkeypatch):
     async def two_paid(_u, _sites):           # SEC71-04 is tested on its own below
         return set()
     monkeypatch.setattr(money_write, "single_paid_sites", two_paid)
-    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=None))
+    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=_direct_req()))
     for tm in (True, False):                       # Technical Manager / any other role
         visible(False, tm)
         answers = []
@@ -1659,7 +1667,7 @@ def test_sec71_04_no_band_with_fewer_than_two_paid_workers(monkeypatch):
         monkeypatch.setattr(money_write, "money_values_visible", mv)
         monkeypatch.setattr(money_write, "budget_view_visible", bv)
         monkeypatch.setattr(money_write, "single_paid_sites", sp)
-    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=None))
+    run = lambda: asyncio.run(handler(site_id="P1", user={"id": "u"}, _sec02_request=_direct_req()))
     for tm in (True, False):
         setup(False, tm, {"P1"})
         answers = []
@@ -1768,6 +1776,41 @@ def test_fg141_money_metric_rules_give_no_threshold():
     v = safe_alarm_rule({"id": "r", "name": "Разход над 5000 EUR", "type": "budget",
                          "condition": {"metric": "amount_eur", "threshold": 5000}})
     assert v["name"] == "Разход над 5000 EUR" and v["condition"] == {"metric": "amount_eur"}
+
+
+def test_sec71_m1_decorators_fail_closed_without_a_request(monkeypatch):
+    """SEC-02-G (audit SEC71-M1): an R20-decorated handler called directly, with no
+    request (no FastAPI), neither crashes nor shows money — even for a finance role: all
+    three decorators strip. With a real Request the role decides as before."""
+    import asyncio
+    from starlette.requests import Request
+    from app.permissions import money_write
+    body = {"total_cost": 90.0, "items": [{"name": "x", "labor_budget": 10.0, "spent": 9.0,
+                                            "sale_total": 12345.0}],
+            "site_id": "P1", "total_labor_cost": 90.0,
+            "budget_snapshot": {"total_budget": 10.0, "status": "over_budget"}}
+
+    @money_write.strip_money_for_non_finance
+    async def shared(project_id: str, user: dict = None):
+        return dict(body)
+
+    @money_write.strip_for_budget_view
+    async def budget(project_id: str, user: dict = None):
+        return dict(body)
+
+    @money_write.strip_pulse_for_non_finance
+    async def pulse(site_id: str, user: dict = None):
+        return dict(body)
+    owner = {"id": "o", "org_id": "T", "role": "Owner"}
+    for fn, kw in ((shared, {"project_id": "P1"}), (budget, {"project_id": "P1"}),
+                   (pulse, {"site_id": "P1"})):
+        v = asyncio.run(fn(user=owner, **kw))                     # no request at all
+        assert "12345" not in json.dumps(v) and "90.0" not in json.dumps(v), (fn, v)
+        assert "total_cost" not in v and "total_labor_cost" not in v, (fn, v)
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+    req = Request({"type": "http", "method": "GET", "path": "/", "headers": [],
+                   "query_string": b""})
+    assert asyncio.run(shared(project_id="P1", user=owner, _sec02_request=req)) == body
 
 
 def test_money_values_visible_off_and_shadow_follow_the_legacy_role(monkeypatch):
