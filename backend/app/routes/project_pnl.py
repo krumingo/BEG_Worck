@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from typing import Optional
 
 from app.db import db
-from app.deps.auth import get_current_user, can_access_project
+from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.services.project_pnl import compute_project_pnl, compute_pnl_trend
 from app.tenancy.data_access import TenantData
 
@@ -18,16 +19,24 @@ router = APIRouter(tags=["Project P&L"])
 
 
 @router.get("/projects/{project_id}/pnl")
-async def get_project_pnl(project_id: str, user: dict = Depends(get_current_user)):
-    if not await can_access_project(user, project_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def get_project_pnl(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_pnl.read", module=None, resource_type="project_pnl")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(get_current_user)):
+    # SEC-02 (R20-2): the finance roles read every project; the former project_team
+    # check (can_access_project) only ever let a MEMBER of any role through.
     return await compute_project_pnl(user["org_id"], project_id)
 
 
 @router.get("/projects/{project_id}/pnl/summary")
-async def get_pnl_summary(project_id: str, user: dict = Depends(get_current_user)):
-    if not await can_access_project(user, project_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def get_pnl_summary(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_pnl_summary.read", module=None, resource_type="project_pnl_summary")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(get_current_user)):
+    # SEC-02 (R20-2): the finance roles read every project; the former project_team
+    # check (can_access_project) only ever let a MEMBER of any role through.
     pnl = await compute_project_pnl(user["org_id"], project_id)
     return {
         "project_id": project_id,
@@ -50,23 +59,33 @@ async def get_pnl_summary(project_id: str, user: dict = Depends(get_current_user
 
 
 @router.get("/projects/{project_id}/pnl/breakdown")
-async def get_pnl_breakdown(project_id: str, user: dict = Depends(get_current_user)):
-    if not await can_access_project(user, project_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def get_pnl_breakdown(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_pnl_breakdown.read", module=None, resource_type="project_pnl_breakdown")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(get_current_user)):
+    # SEC-02 (R20-2): the finance roles read every project; the former project_team
+    # check (can_access_project) only ever let a MEMBER of any role through.
     pnl = await compute_project_pnl(user["org_id"], project_id)
     return {"budget": pnl["budget"], "revenue": pnl["revenue"], "expense": pnl["expense"],
             "profit": pnl["profit"], "warehouse_cost_basis": pnl["warehouse_cost_basis"]}
 
 
 @router.get("/projects/{project_id}/pnl/trend")
-async def get_pnl_trend(project_id: str, months: int = 6, user: dict = Depends(get_current_user)):
-    if not await can_access_project(user, project_id):
-        raise HTTPException(status_code=403, detail="Access denied")
+async def get_pnl_trend(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_pnl_trend.read", module=None, resource_type="project_pnl_trend")),  # SEC-02 (R20-2): before any read
+    months: int = 6, user: dict = Depends(get_current_user)):
+    # SEC-02 (R20-2): see get_project_pnl.
     return {"months": await compute_pnl_trend(user["org_id"], project_id, months)}
 
 
 @router.get("/org/pnl-overview")
-async def get_org_pnl_overview(user: dict = Depends(get_current_user)):
+async def get_org_pnl_overview(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.org_pnl_overview.read", module=None, resource_type="org_pnl_overview")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     """P&L overview for all projects in the organization."""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -107,7 +126,11 @@ async def get_org_pnl_overview(user: dict = Depends(get_current_user)):
 # ── Aggregated PnL + Profit Attribution ──
 
 @router.get("/projects/{project_id}/pnl/aggregated")
-async def get_aggregated_pnl(project_id: str, user: dict = Depends(get_current_user)):
+async def get_aggregated_pnl(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_pnl_aggregated.read", module=None, resource_type="project_pnl_aggregated")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(get_current_user)):
     from app.services.pnl_aggregator import compute_aggregated_pnl
     return await compute_aggregated_pnl(user["org_id"], project_id)
 
