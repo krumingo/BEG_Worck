@@ -5230,3 +5230,21 @@ The X4 probe failure is my probe's `request=None` limitation (known), not the co
 - `send_and_delete_are_conditional` must accept INVOICE_NUMBERED for the delete (verified: then it passes, nothing written).
 
 PR comment 6722039745 updated with the exact test fixes.
+
+## 2026-11-08 15:00 UTC: #84 `5cce932` (INV84-01 fix): PASS
+
+- **Diff vs `71957db`:** tests and evidence only. The lock test now cancels as the Accountant with a reason on a Received invoice; the send/delete stale snapshot is an unnumbered draft. No production code changed and no assertion weakened.
+- **Probe `invcn01`:** 99 passed.
+
+| Gate | Result |
+|---|---|
+| inv_cn_01 | 90 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+
+INV84-01 resolved. Remaining minor note (non-blocking): the migration drops the legacy unique index before creating the new one.
