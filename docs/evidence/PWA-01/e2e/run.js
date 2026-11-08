@@ -158,7 +158,8 @@ const shot = (page, name) => page.screenshot({ path: path.join(OUT, name) });
     (await page.getByTestId("dashboard-layout").count()) === 1 && (await page.getByTestId("login-page").count()) === 0);
 
   // ── Logout clears local data ─────────────────────────────────────────────
-  await login(page, "a@example.test");
+  await page.goto(`${BASE}/tech`);
+  await page.getByTestId("dashboard-layout").waitFor();
   await page.evaluate(async () => {
     localStorage.setItem("tenant_a_draft", "{\"note\":\"чернова\"}");
     sessionStorage.setItem("tenant_a_session", "x");

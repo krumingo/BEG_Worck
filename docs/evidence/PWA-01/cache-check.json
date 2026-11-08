@@ -57,8 +57,8 @@
         "active": "activated",
         "scriptURL": "http://localhost:4173/service-worker.js",
         "version": {
-          "build_sha": "5a91711dc061e2a6ef3fff1aecf414d161601a2f",
-          "cache": "bw-shell-5a91711dc061-f2afcc3f"
+          "build_sha": "e571b06a4d664301b90601b1e6d202fd1773f8f5",
+          "cache": "bw-shell-e571b06a4d66-90998068"
         }
       }
     },
@@ -66,8 +66,8 @@
       "name": "SW version = RC-01 build identity",
       "ok": true,
       "detail": {
-        "build_sha": "5a91711dc061e2a6ef3fff1aecf414d161601a2f",
-        "cache": "bw-shell-5a91711dc061-f2afcc3f"
+        "build_sha": "e571b06a4d664301b90601b1e6d202fd1773f8f5",
+        "cache": "bw-shell-e571b06a4d66-90998068"
       }
     },
     {
@@ -83,7 +83,7 @@
       "name": "Cache Storage: only the app-shell cache exists",
       "ok": true,
       "detail": [
-        "bw-shell-5a91711dc061-f2afcc3f"
+        "bw-shell-e571b06a4d66-90998068"
       ]
     },
     {
@@ -114,6 +114,15 @@
       "ok": true
     },
     {
+      "name": "D1 offline reload: token kept",
+      "ok": true,
+      "detail": "kept"
+    },
+    {
+      "name": "D1 offline reload: still inside the shell (dashboard layout, no login page)",
+      "ok": true
+    },
+    {
       "name": "logout: no token / user / tenant marker / tenant draft in localStorage",
       "ok": true,
       "detail": [
@@ -129,7 +138,7 @@
       "name": "logout: only the app-shell cache remains",
       "ok": true,
       "detail": [
-        "bw-shell-5a91711dc061-f2afcc3f"
+        "bw-shell-e571b06a4d66-90998068"
       ]
     },
     {
@@ -144,7 +153,7 @@
       "name": "tenant switch: only the app-shell cache remains",
       "ok": true,
       "detail": [
-        "bw-shell-5a91711dc061-f2afcc3f"
+        "bw-shell-e571b06a4d66-90998068"
       ]
     },
     {
@@ -164,6 +173,10 @@
       "ok": true
     },
     {
+      "name": "D1 phone offline reload: still inside the shell",
+      "ok": true
+    },
+    {
       "name": "phone: no /api, /uploads or /ws entry in Cache Storage",
       "ok": true
     },
@@ -174,42 +187,42 @@
   ],
   "cache_snapshots": {
     "after_login_online": {
-      "bw-shell-5a91711dc061-f2afcc3f": [
+      "bw-shell-e571b06a4d66-90998068": [
         "/index.html",
         "/static/css/main.32922fdb.css",
+        "/static/js/main.1dd73304.js",
         "/manifest.webmanifest",
         "/icons/icon.svg",
-        "/static/js/main.50f0340b.js",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
         "/icons/icon-maskable-192.png",
+        "/icons/icon-maskable-512.png",
         "/icons/apple-touch-icon.png",
-        "/icons/favicon-32.png",
-        "/icons/icon-maskable-512.png"
+        "/icons/favicon-32.png"
       ]
     },
     "after_logout": {
-      "bw-shell-5a91711dc061-f2afcc3f": [
+      "bw-shell-e571b06a4d66-90998068": [
         "/index.html",
         "/static/css/main.32922fdb.css",
+        "/static/js/main.1dd73304.js",
         "/manifest.webmanifest",
         "/icons/icon.svg",
-        "/static/js/main.50f0340b.js",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
         "/icons/icon-maskable-192.png",
+        "/icons/icon-maskable-512.png",
         "/icons/apple-touch-icon.png",
-        "/icons/favicon-32.png",
-        "/icons/icon-maskable-512.png"
+        "/icons/favicon-32.png"
       ]
     },
     "phone_offline": {
-      "bw-shell-5a91711dc061-f2afcc3f": [
+      "bw-shell-e571b06a4d66-90998068": [
         "/index.html",
         "/static/css/main.32922fdb.css",
         "/manifest.webmanifest",
         "/icons/icon.svg",
-        "/static/js/main.50f0340b.js",
+        "/static/js/main.1dd73304.js",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
         "/icons/icon-maskable-192.png",
@@ -278,19 +291,19 @@
     "active": "activated",
     "scriptURL": "http://localhost:4173/service-worker.js",
     "version": {
-      "build_sha": "5a91711dc061e2a6ef3fff1aecf414d161601a2f",
-      "cache": "bw-shell-5a91711dc061-f2afcc3f"
+      "build_sha": "e571b06a4d664301b90601b1e6d202fd1773f8f5",
+      "cache": "bw-shell-e571b06a4d66-90998068"
     }
   },
   "installability_errors": [],
-  "debt_d1_offline_reload_token": "dropped",
+  "d1_offline_reload_token": "kept",
   "after_logout": {
     "local": [
       "lang"
     ],
     "session": [],
     "caches": [
-      "bw-shell-5a91711dc061-f2afcc3f"
+      "bw-shell-e571b06a4d66-90998068"
     ]
   },
   "after_tenant_switch": {
@@ -302,11 +315,11 @@
     ],
     "session": [],
     "caches": [
-      "bw-shell-5a91711dc061-f2afcc3f"
+      "bw-shell-e571b06a4d66-90998068"
     ]
   },
   "summary": {
-    "passed": 32,
+    "passed": 35,
     "failed": 0
   }
 }

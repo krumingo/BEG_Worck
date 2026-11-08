@@ -9,7 +9,7 @@
   `REACT_APP_BUILD_SHA` = commit-а на кода (виж `cache-check.json` → `service_worker.version`).
 - `e2e/server.js` сервира build-а като `nginx.conf` (SPA fallback; `/api`, `/uploads` → mock backend).
 - `e2e/run.js` — Playwright с предварително инсталирания Chromium (без `playwright install`).
-  Резултат: **32 PASS / 0 FAIL**, пълни данни в `cache-check.json`.
+  Резултат: **35 PASS / 0 FAIL** (след D1 fix), пълни данни в `cache-check.json`.
 - Скрийншоти: deviceScaleFactor 2; телефон 390×844 (Android UA и iOS Safari UA), десктоп 1366×820.
 
 ```
@@ -54,10 +54,14 @@ node docs/evidence/PWA-01/e2e/run.js http://localhost:4173 docs/evidence/PWA-01
 - [ ] **Реално устройство** (Android Chrome „Инсталирай“, iOS Safari „Добави към началния екран“) — за Крум
 
 ## Дългове (не са поправени — изискват решение на Крум)
-- **D1 — офлайн презареждане губи сесията (съществуващо поведение).** `AuthContext.fetchUser` трие
-  `bw_token` при *всяка* грешка, включително липса на мрежа. Затова офлайн обвивката показва вход, а
-  не таблото (`cache-check.json → debt_d1_offline_reload_token: "dropped"`). Предложение: трий токена
-  само при 401. Предпоставка за PWA-02.
+- **D1 — ПОПРАВЕН (одобрено от Крум, commit `e571b06`).** Преди: `AuthContext.fetchUser` триеше
+  `bw_token` при всяка грешка → офлайн презареждане изхвърляше потребителя. Сега сесията се прекратява
+  само при 401 (и 403 от `/auth/me`); при мрежова грешка/5xx токенът остава, потребителят се възстановява
+  от `bw_user` (без кеширане на `/api`), показва се лентата „Без връзка“. `logout()` изчаква изчистването
+  на кешовете. Доказателство red → green в `d1/`:
+  `jest-red-a05167a.log` (5 ✕), `playwright-red-a05167a.log` (3 FAIL) → `jest-green.log`,
+  `playwright-green.log` (35/35). Остатък: `PlatformAuthProvider` (платформен админ) има същия catch-all —
+  извън обхвата, не е пипан.
 - **D2 — няма UI за смяна на tenant.** Смяната се засича по `organization.id` при вход/зареждане на
   сесия (маркер `bw_pwa_tenant`). Бъдещият превключвател трябва да вика `noteActiveTenant` /
   `clearTenantLocalData` от `src/lib/pwa/clearLocalData.js`.
