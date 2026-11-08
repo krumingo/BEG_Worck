@@ -120,7 +120,11 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
                 project("draft_phase", "Draft"), project("draft_client", "Draft",
                                                           owner_type="company",
                                                           owner_id=t.get("company1_id")),
-                project("draft_team", "Draft")]
+                project("draft_team", "Draft"),
+                # R60: a legacy warranty project filed under a SUB-PROJECT of P1
+                project("sub_orig", "Completed", parent_project_id=t["project_id"]),
+                project("warr_sub", "Completed", "Warranty",
+                        parent_project_id=pid(tkey, "sub_orig"))]
         for kind in LINKS:
             docs.append(project("link_" + kind, "Draft"))
         await op_db.projects.insert_many(docs)
@@ -131,6 +135,12 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
             else:
                 row[LINK_FIELD.get(kind, "project_id")] = pid(tkey, "link_" + kind)
             await op_db[coll].insert_one(row)
+        for name, cost in (("sub_orig", 100), ("warr_sub", 40)):
+            await op_db.work_sessions.insert_one({
+                "id": pid(tkey, "ws_" + name), "org_id": org, "site_id": pid(tkey, name),
+                "worker_id": t["users"]["technician"]["id"], "started_at": "2026-11-02T07:00:00",
+                "ended_at": "2026-11-02T15:00:00", "duration_hours": 8, "labor_cost": cost,
+                "created_at": NOW})
         await op_db.project_phases.insert_one({"id": pid(tkey, "phase1"), "org_id": org,
                                                "project_id": pid(tkey, "draft_phase"),
                                                "name": "Етап 1", "created_at": NOW})
@@ -512,6 +522,24 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             # FG-273: create-sub-project on the original renames the linked child's legacy
             # code — never silently: one AuditEvent project.code_change per renamed child.
             projects_after_migration = q(lambda: op_db.projects.count_documents({}))
+            # R60: linked to the SUB-PROJECT (second level, warranty only); code unchanged;
+            # costs roll up warranty -> sub-project -> whole project
+            ws = project_doc("warr_sub") or {}
+            agg = call("GET", "/api/projects/%s/pnl/aggregated" % A["project_id"], key=None)["body"]
+            sub_entry = next((c for c in (agg or {}).get("children", [])
+                              if c.get("id") == pid("A", "sub_orig")), {}) if isinstance(agg, dict) else {}
+            r60 = {"warr_sub_parent": ws.get("parent_project_id"),
+                   "warr_sub_of": ws.get("warranty_of_project_id"),
+                   "warr_sub_code": ws.get("code"),
+                   "link_events": len(events(pid("A", "warr_sub"), "project.warranty_link")),
+                   "sub_entry_expense": (sub_entry.get("pnl") or {}).get("total_expense"),
+                   "sub_entry_warranty_children": [w.get("id") for w in sub_entry.get("warranty_children", [])],
+                   "agg_minus_parent": round(((agg or {}).get("aggregated") or {}).get("total_expense", 0)
+                                             - ((agg or {}).get("parent") or {}).get("total_expense", 0), 2)
+                   if isinstance(agg, dict) else None,
+                   "second_level_non_warranty": call(
+                       "POST", "/api/projects/%s/create-sub-project" % pid("A", "sub_orig"),
+                       json={"name": "трето ниво"})["status"]}
             code_before = wp.get("code")
             r = call("POST", "/api/projects/%s/create-sub-project" % A["project_id"],
                      json={"name": "Нов етап"})
@@ -539,6 +567,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 "dq_resolve_events": q(lambda: op_db.audit_events.count_documents(
                     {"action": "dq.issue.resolve"})),
                 "parent_after_link": wp.get("parent_project_id"),
+                "r60": r60,
                 "sub_after_link": r["status"],
                 "code_renamed": renamed.get("code") != code_before,
                 "code_events": [(e["diff"]["before"]["code"], e["diff"]["after"]["code"])
@@ -844,7 +873,7 @@ def test_fg236_no_new_warranty_project_and_the_type_is_locked_after_the_first_re
     assert d["type_empty"] == {"status": 200, "type": "Overhead"}
     sp = d["sub_paths"]
     assert sp["create_sub"] == sp["wrap"] == sp["add_sub"] == "WARRANTY_IN_ORIGINAL_PROJECT", sp
-    assert sp["new_projects"] == 0 and sp["warranty_projects"] == 2
+    assert sp["new_projects"] == 0 and sp["warranty_projects"] == 3   # 3 legacy, none new
 
 
 @real
@@ -852,22 +881,30 @@ def test_fg236_the_warranty_migration_links_dry_run_first_idempotent_never_delet
     m = obs["fg236"]["migration"]
     assert m["available"] is True, m
     assert m["dry_wrote"] == 0
-    assert m["dry_counts"] == {"link": 2, "dq": 2, "already": 0, "dq_open": 0}
+    assert m["dry_counts"] == {"link": 4, "dq": 2, "already": 0, "dq_open": 0}
     assert m["wrong_plan_refused"] == "PlanMismatch"
-    assert m["first_counts"] == {"link": 2, "dq": 2, "already": 0, "dq_open": 0}
-    assert m["second_counts"] == {"link": 0, "dq": 0, "already": 2, "dq_open": 2}
+    assert m["first_counts"] == {"link": 4, "dq": 2, "already": 0, "dq_open": 0}
+    assert m["second_counts"] == {"link": 0, "dq": 0, "already": 4, "dq_open": 2}
     assert m["projects_after"] == m["projects_before"]
     assert m["parent_linked_to"] == m["parent_expected"] and m["parent_type"] == "Warranty"
     assert m["b_linked_to_own"] is True
     assert m["orphan_linked"] is None
     assert m["orphan_dq"] == [{"type": "PROJECT_WARRANTY_ORIGINAL_UNKNOWN", "status": "open"}]
     assert m["link_events"] == 1
-    assert m["audit_new"] == 4          # 2 links + 2 DQ issues, tenants A and B; none twice
-    assert m["map_counts"] == {"link": 1, "dq": 0, "already": 2, "dq_open": 1}
+    assert m["audit_new"] == 6          # 4 links + 2 DQ issues, tenants A and B; none twice
+    assert m["map_counts"] == {"link": 1, "dq": 0, "already": 4, "dq_open": 1}
     assert m["orphan_after_map"] == "prj01-A-completed2"
     assert m["orphan_dq_after_map"] == ["resolved"] and m["dq_resolve_events"] == 1
     # R56(4): the link makes it a sub-project; the DQ goes to the SiteManager, 7 days, Owner
     assert m["parent_after_link"] == m["parent_expected"]
+    # R60: the original is a sub-project → the warranty project is its (second-level) child,
+    # its code is not changed by the link, and its costs roll up to the sub-project and P1
+    r60 = m["r60"]
+    assert r60["warr_sub_parent"] == r60["warr_sub_of"] == "prj01-A-sub_orig"
+    assert r60["warr_sub_code"] == "PRB-A-warr_sub" and r60["link_events"] == 1
+    assert r60["sub_entry_expense"] == 140 and r60["sub_entry_warranty_children"] == ["prj01-A-warr_sub"]
+    assert r60["agg_minus_parent"] == 140
+    assert r60["second_level_non_warranty"] == 400
     # FG-273: the rename after linking writes its AuditEvent
     assert m["sub_after_link"] == 201 and m["code_renamed"] is True
     assert m["code_events"] == [[m["code_before"], m["code_after"]]]

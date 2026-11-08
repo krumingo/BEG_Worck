@@ -13,7 +13,10 @@ How the original is determined — and nothing else is guessed:
 * otherwise the project's own ``parent_project_id``: the warranty project was filed UNDER
   that project, so that project is its original;
 * in both cases the original must exist in the SAME tenant and must not be a Warranty
-  project itself. Anything else → a Data Quality issue (``dq_issues``,
+  project itself. R60: the original may be a SUB-PROJECT — the warranty project then becomes
+  a second-level sub-project (allowed only for warranty); its costs roll up to the
+  sub-project, then to the whole project (``services/pnl_aggregator``). Linking never
+  changes a code (a code change elsewhere writes ``project.code_change``). Anything else → a Data Quality issue (``dq_issues``,
   ``PROJECT_WARRANTY_ORIGINAL_UNKNOWN``), never a link. Same client + same address is NOT
   used: FLOW-001 P-15 says that is often a NEW project.
 
@@ -95,7 +98,16 @@ async def build_plan(db, mapping: Optional[Dict[str, str]] = None) -> List[Dict[
             original = await db.projects.find_one({"id": candidate, "org_id": org},
                                                   {"_id": 0, "id": 1, "type": 1,
                                                    "parent_project_id": 1})
-        if original and original.get("type") != WARRANTY and not original.get("parent_project_id"):
+        # R60 (Krum, FG-273): the original may be a ROOT project or a SUB-PROJECT; a warranty
+        # project under a sub-project is the only second level allowed. An original that is
+        # itself a second-level project (its parent has a parent) cannot get a third level.
+        if original and original.get("type") != WARRANTY and original.get("parent_project_id"):
+            grand = await db.projects.find_one(
+                {"id": original["parent_project_id"], "org_id": org},
+                {"_id": 0, "parent_project_id": 1})
+            if (grand or {}).get("parent_project_id"):
+                original = None
+        if original and original.get("type") != WARRANTY:
             rows.append({**base, "action": "link", "original": original["id"], "source": source,
                          "previous_parent": p.get("parent_project_id")})
             continue
