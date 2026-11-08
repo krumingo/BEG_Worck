@@ -78,6 +78,7 @@ class InvoiceCreate(BaseModel):
     counterparty_phone: Optional[str] = None  # Phone
     supplier_counterparty_id: Optional[str] = None  # Reference to counterparties collection
     scan_doc_id: Optional[str] = None  # Reference to scanned document
+    act_id: Optional[str] = None  # INV-CN-01 / Р49.5: outgoing invoice from an approved client act
     issue_date: str
     due_date: str
     currency: str = "EUR"

@@ -90,6 +90,10 @@ ORG_KEYED: Dict[str, str] = {
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
               "change_orders", "client_acts", "contract_payments", "invoices",
               "invoice_lines", "invoice_versions", "invoice_settings", "supplier_invoices",
+              # INV-CN-01 / Р49: credit / debit notes and offsets (FLOW-006);
+              # expected_credit_notes is also added by PR #82 (WH-REV-01, Р47) —
+              # whichever merges second keeps one entry.
+              "credit_debit_notes", "invoice_offsets", "expected_credit_notes",
               "ocr_invoice_intake", "historical_offer_rows", "historical_import_batches",
               "sales"),
     **_family(FAMILY_PAYMENTS,

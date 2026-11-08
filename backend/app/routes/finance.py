@@ -199,7 +199,13 @@ async def update_invoice_status(tenant: TenantData, invoice_id: str, *, session=
 
     5C-C26l Addendum N (FG-140): called with the caller's ``session`` — the
     payment / allocation write and the derived paid / remaining / status are
-    one transaction (no stale total or paid amount)."""
+    one transaction (no stale total or paid amount).
+
+    INV-CN-01 (Р49): the open amount is the invoice's own total adjusted by the
+    approved credit / debit notes, approved offsets and refunds (their sums are
+    recomputed here from the source rows, never incremented). A credit on a paid
+    invoice leaves ``credit_balance`` (owed back) — never netted automatically."""
+    from app.services.invoice_corrections import (ISSUED, derived_sums, open_amounts)
     invoice = await tenant.invoices.get(invoice_id, session=session)
     if not invoice or invoice["status"] == "Cancelled":
         return
@@ -208,26 +214,36 @@ async def update_invoice_status(tenant: TenantData, invoice_id: str, *, session=
     allocations = await tenant.payment_allocations.find(active_allocations({"invoice_id": invoice_id}),
                                                         session=session).to_list(100)
     paid_amount = sum(a.get("amount_allocated", 0) for a in allocations)
-    remaining = round(invoice["total"] - paid_amount, 2)
+    derived = await derived_sums(tenant, invoice_id, session=session)
+    amounts = open_amounts({**invoice, **derived}, paid_amount)
+    remaining = amounts["remaining_amount"]
+    settled_by_credit = derived["credited_amount"] > 0 and paid_amount <= 0
     
     # Determine status
-    if remaining <= 0:
+    if remaining <= 0 and not settled_by_credit:
         new_status = "Paid"
-    elif paid_amount > 0:
+    elif paid_amount > 0 and remaining > 0:
         new_status = "PartiallyPaid"
-    elif invoice["status"] in ["Sent", "PartiallyPaid", "Overdue"] and invoice.get("due_date"):
-        # When all payments removed, go back to Sent or Overdue based on due date
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        if invoice["due_date"] < today:
-            new_status = "Overdue"
+    elif invoice["status"] in ["Issued", "Sent", "PartiallyPaid", "Overdue"] or settled_by_credit:
+        if invoice.get("issued_at") and not invoice.get("sent_at"):
+            new_status = ISSUED          # Р49.1: issued, not yet sent
+        elif invoice["status"] in ["Sent", "PartiallyPaid", "Overdue", "Paid"] and invoice.get("due_date"):
+            # When all payments removed, go back to Sent or Overdue based on due date
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            if invoice["due_date"] < today:
+                new_status = "Overdue"
+            else:
+                new_status = "Sent"
         else:
-            new_status = "Sent"
+            new_status = invoice["status"]
     else:
         new_status = invoice["status"]
     
     await tenant.invoices.update_one({"id": invoice_id, "status": {"$ne": "Cancelled"}}, {"$set": {
         "paid_amount": round(paid_amount, 2),
         "remaining_amount": max(0, remaining),
+        "credit_balance": amounts["credit_balance"],
+        **derived,
         "status": new_status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }}, session=session)
@@ -415,7 +431,14 @@ async def update_settings(data: dict, user: dict = Depends(require_m5)):
         {"$set": update},
         upsert=True
     )
-    
+    if "issued_next_number" in update:
+        # INV-CN-01 / Р49.3: the shared counter may only move FORWARD (never re-issue a
+        # number); if it does not exist yet, it is seeded from these settings at first use.
+        from app.services.invoice_corrections import NUMBER_COUNTER
+        await tenant.org_counters.update_one(
+            {"org_id": org_id, "counter_type": NUMBER_COUNTER},
+            {"$max": {"value": int(update["issued_next_number"]) - 1}})
+
     return await get_settings(user)
 
 
@@ -439,6 +462,15 @@ async def get_next_number(
         num = int(next_number.replace(f"{prefix}-", "").lstrip("0") or "0")
     except ValueError:
         num = 0
+    if direction == "Issued":
+        # INV-CN-01 / Р49.3: once the shared counter exists, it is the source of the next
+        # number (a preview only — the number is taken at issue). Read-only here.
+        from app.services.invoice_corrections import NUMBER_COUNTER, format_number
+        counter = await _tenant(user).org_counters.find_one(
+            {"org_id": user["org_id"], "counter_type": NUMBER_COUNTER}, {"_id": 0, "value": 1})
+        if counter:
+            num = int(counter.get("value") or 0) + 1
+            next_number = format_number(prefix, num)
 
     return {
         "auto_numbering": True,
@@ -857,9 +889,21 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     if not vat_check["valid"]:
         raise HTTPException(status_code=400, detail=vat_check["message"])
 
-    # Generate or validate invoice number
-    invoice_no = data.invoice_no
-    if not invoice_no or invoice_no.strip() == "":
+    # INV-CN-01 / Р49.1: an outgoing invoice gets its number only when it is ISSUED
+    # (POST /finance/invoices/{id}/issue, one sequence shared with the notes). The draft
+    # has none; a number typed while auto-numbering is OFF is kept for the issue step.
+    manual_number = None
+    if data.direction == "Issued":
+        settings = await get_invoice_settings(user["org_id"])
+        typed = (data.invoice_no or "").strip()
+        if typed and not settings.get("issued_auto_numbering", True):
+            manual_number = typed
+        invoice_no = None
+    else:
+        invoice_no = data.invoice_no
+    if data.direction == "Issued":
+        pass                                  # numbered at issue (Р49.1)
+    elif not invoice_no or invoice_no.strip() == "":
         # Auto-generate number
         invoice_no = await get_next_invoice_no(_tenant(user), data.direction)
         if not invoice_no:
@@ -910,6 +954,22 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         "created_at": now,
         "updated_at": now,
     }
+    if manual_number:
+        invoice["manual_number"] = manual_number
+    if data.act_id:
+        # Р49.5 / FLOW-025 L124: an invoice from an approved act of THIS tenant; the cap
+        # (never above the act's value) is enforced when the invoice is issued.
+        from app.services.invoice_corrections import check_act_approved
+        if data.direction != "Issued":
+            raise HTTPException(status_code=422, detail={
+                "error_code": "ACT_NOT_APPROVED", "message": "Само изходяща фактура се издава по акт"})
+        act = await _tenant(user).client_acts.find_one({"id": data.act_id}, {"_id": 0})
+        check_act_approved(act)
+        if data.project_id and act.get("project_id") != data.project_id:
+            raise HTTPException(status_code=422, detail={
+                "error_code": "ACT_NOT_APPROVED", "message": "Актът е от друг обект"})
+        invoice["act_id"] = data.act_id
+        invoice["project_id"] = invoice.get("project_id") or act.get("project_id")
     invoice = compute_invoice_totals(invoice)
     invoice["remaining_amount"] = invoice["total"]
     
@@ -980,11 +1040,16 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    # Editing rules by status
-    if invoice["status"] == "Cancelled":
-        raise HTTPException(status_code=400, detail="Анулирани фактури не могат да се редактират")
-    if invoice["status"] == "Paid":
-        raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират. Премахнете плащанията първо.")
+    # INV-CN-01 / Р49.1: an issued invoice is LOCKED — an amount, line, VAT,
+    # counterparty, number, date or project change → 409 INVOICE_LOCKED, nothing
+    # written. Only notes / due date stay editable; correction is a credit/debit note.
+    from app.services.invoice_corrections import (EDITABLE_AFTER_ISSUE, is_locked,
+                                                  locked_fields, locked_refusal)
+    requested = {k: v for k, v in data.model_dump().items() if v is not None}
+    if is_locked(invoice):
+        changed = [k for k in locked_fields(requested) if requested[k] != invoice.get(k)]
+        if invoice["status"] == "Cancelled" or changed:
+            raise locked_refusal(invoice, changed)
 
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
@@ -1005,17 +1070,29 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         if existing:
             raise HTTPException(status_code=400, detail="Invoice number already exists")
     
-    update = {k: v for k, v in data.model_dump().items() if v is not None}
+    update = dict(requested)
+    if is_locked(invoice):
+        update = {k: v for k, v in update.items() if k in EDITABLE_AFTER_ISSUE}
+    elif invoice.get("direction") == "Issued" and "invoice_no" in update:
+        # Р49.1: a draft has no number; a typed one is kept only for manual numbering
+        typed = (update.pop("invoice_no") or "").strip()
+        settings = await get_invoice_settings(user["org_id"])
+        if typed and not settings.get("issued_auto_numbering", True):
+            update["manual_number"] = typed
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     version_id = str(uuid.uuid4())
 
     async def _body(session):
         # FG-140: the editable status is decided in the transaction (CAS on
         # the invoice); the version snapshot is of the CURRENT document.
+        # INV-CN-01: a locked invoice may change only the non-money fields.
         current = await claim_invoice(tenant, invoice_id, session=session,
-                                      forbidden=("Cancelled", "Paid"), code=STATUS_CHANGED)
+                                      forbidden=("Cancelled",), code=STATUS_CHANGED)
         if current is None:
             raise HTTPException(status_code=404, detail="Invoice not found")
+        if is_locked(current) and any(k not in EDITABLE_AFTER_ISSUE and k != "updated_at"
+                                      for k in update):
+            raise locked_refusal(current, locked_fields(update))
         # Keep a snapshot (version copy) before editing an already-issued document
         if current.get("status") != "Draft":
             prior = {k: v for k, v in current.items() if k != "_id"}
@@ -1058,12 +1135,11 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    # Editing rules by status
-    if invoice["status"] in ["Cancelled"]:
-        raise HTTPException(status_code=400, detail="Анулирани фактури не могат да се редактират")
-    if invoice["status"] == "Paid":
-        raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират")
-    # Draft, Sent, PartiallyPaid, Overdue → allowed
+    # INV-CN-01 / Р49.1: only a Draft's lines are edited; an issued invoice → 409
+    # INVOICE_LOCKED (correction = credit / debit note), nothing written.
+    from app.services.invoice_corrections import DRAFT, INVOICE_LOCKED, is_locked, locked_refusal
+    if is_locked(invoice):
+        raise locked_refusal(invoice, ["lines"])
     
     lines = []
     for i, line in enumerate(data.lines):
@@ -1085,7 +1161,7 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
         # FG-140: status decided in the transaction (CAS on the invoice);
         # totals and remaining computed from the CURRENT paid amount.
         current = await claim_invoice(tenant, invoice_id, session=session,
-                                      forbidden=("Cancelled", "Paid"), code=STATUS_CHANGED)
+                                      allowed=(DRAFT,), code=INVOICE_LOCKED)
         if current is None:
             raise HTTPException(status_code=404, detail="Invoice not found")
         computed = compute_invoice_totals({**{k: v for k, v in current.items() if k != "_id"},
@@ -1107,6 +1183,118 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
+async def _issue_in_tx(tenant: TenantData, user: dict, invoice_id: str, session,
+                       prefix: str, settings: dict, *, idem_key: Optional[str]) -> dict:
+    """INV-CN-01 / Р49.1 — Draft → Issued in ONE transaction: claim the Draft (CAS),
+    for an act invoice claim the act and check the cap (Р49.5), take the next number of
+    the shared sequence (or the manual one), lock the document, AuditEvent."""
+    from app.services import invoice_corrections as ic
+    current = await claim_invoice(tenant, invoice_id, session=session, allowed=(ic.DRAFT,),
+                                  code=NOT_DRAFT)
+    if current is None:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if not current.get("lines"):
+        raise HTTPException(status_code=400, detail="Invoice must have at least one line")
+    if current.get("act_id"):
+        act = await ic.claim_act(tenant, current["act_id"], session=session)
+        ic.check_act_approved(act)
+        await ic.check_act_cap(tenant, act, ic.cents(current.get("subtotal")), session=session,
+                               exclude_invoice_id=invoice_id)
+    if current.get("direction") != "Issued":
+        number = current.get("invoice_no")
+    elif current.get("invoice_no"):
+        number = current["invoice_no"]          # a legacy draft numbered before INV-CN-01
+    elif settings.get("issued_auto_numbering", True):
+        number = await ic.take_number(tenant, prefix, session=session)
+    else:
+        number = (current.get("manual_number") or "").strip()
+        if not number:
+            raise HTTPException(status_code=400, detail="Номерът на фактурата е задължителен")
+    if current.get("direction") == "Issued":
+        clash = await tenant.invoices.find_one({"direction": "Issued", "invoice_no": number,
+                                                "id": {"$ne": invoice_id}}, {"_id": 0, "id": 1},
+                                               session=session)
+        clash = clash or await tenant.credit_debit_notes.find_one(
+            {"direction": ic.OUTGOING, "number": number}, {"_id": 0, "id": 1}, session=session)
+        if clash:
+            raise ic.conflict("INVOICE_NUMBER_TAKEN", f"Номер {number} вече е използван", number=number)
+    now = ic.now_iso()
+    fields = {"status": ic.ISSUED, "invoice_no": number, "issued_at": now,
+              "issued_by": user["id"], "updated_at": now}
+    if current.get("direction") == "Issued":
+        fields["issued_number"] = number         # unique index: one document per number
+    await tenant.invoices.update_one({"id": invoice_id, "status": ic.DRAFT}, {"$set": fields},
+                                     session=session)
+    await _audit_tx(user, "finance.invoice.issued", "finance.invoice", invoice_id, "",
+                    {"status": {"before": ic.DRAFT, "after": ic.ISSUED}, "invoice_no": number,
+                     "total": current.get("total"), "act_id": current.get("act_id")},
+                    idem_key, session)
+    return {**{k: v for k, v in current.items() if k != "_id"}, **fields}
+
+
+async def _issue(user: dict, invoice_id: str, idem_key: Optional[str]) -> dict:
+    from app.services import invoice_corrections as ic
+    from app.services.auth_tx import run_in_transaction
+    tenant = _tenant(user)
+    settings = await get_invoice_settings(user["org_id"])
+    prefix = ic.number_prefix(settings)
+    await ic.ensure_indexes(db)
+    await ic.seed_number_counter(tenant, prefix, settings)
+
+    async def body(session):
+        return await _issue_in_tx(tenant, user, invoice_id, session, prefix, settings,
+                                  idem_key=idem_key)
+    return await _tx(run_in_transaction, body)
+
+
+async def _tx(run, body):
+    """auth_tx.run_in_transaction over the tenant database; a duplicate number (the
+    unique index) is a 409, never a 500."""
+    from pymongo.errors import DuplicateKeyError
+    from app.services.auth_tx import TransactionsUnavailable
+    try:
+        return await run(db, body)
+    except TransactionsUnavailable:
+        raise HTTPException(status_code=503, detail={
+            "error_code": "TRANSACTIONS_UNAVAILABLE",
+            "message": "Базата данни не поддържа транзакции — нищо не е записано"})
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "INVOICE_NUMBER_TAKEN",
+            "message": "Номерът вече е използван — опитайте отново"})
+
+
+async def _audit_tx(user: dict, action: str, entity_type: str, entity_id: str, reason: str,
+                    diff: dict, idem_key: Optional[str], session) -> None:
+    """Canonical W0-04 AuditEvent written IN the business transaction (record_event with
+    the session): the event exists exactly when the write committed."""
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    event = build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action=action, source_flow="FLOW-006", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        entity_type=entity_type, entity_id=entity_id, reason=reason or None, structured_diff=diff,
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=idem_key,
+        source_channel="api",
+    )
+    await record_event(db, event, session=session)
+
+
+@router.post("/finance/invoices/{invoice_id}/issue")
+async def issue_invoice(invoice_id: str, user: dict = Depends(require_m5),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """INV-CN-01 / Р49.1: Draft → Issued. The invoice gets its number (one sequence with
+    the credit / debit notes) and is locked from now on."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    key = _require_key(idempotency_key)
+
+    async def work():
+        await _issue(user, invoice_id, key)
+        return await _tenant(user).invoices.get(invoice_id, {"_id": 0})
+    return await _once(user, key, "finance.invoice.issue", {"invoice_id": invoice_id}, work)
+
+
 @router.post("/finance/invoices/{invoice_id}/send")
 async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if not finance_permission(user):
@@ -1116,10 +1304,14 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if invoice["status"] != "Draft":
-        raise HTTPException(status_code=400, detail="Only Draft invoices can be sent")
+    # INV-CN-01 / Р49.1: Issued → Sent; a Draft is issued first (it gets its number in
+    # the same step, exactly as POST …/issue would give it).
+    if invoice["status"] not in ("Draft", "Issued"):
+        raise HTTPException(status_code=400, detail="Only Draft or Issued invoices can be sent")
     if len(invoice.get("lines", [])) == 0:
         raise HTTPException(status_code=400, detail="Invoice must have at least one line")
+    if invoice["status"] == "Draft":
+        invoice = await _issue(user, invoice_id, None)
     
     now = datetime.now(timezone.utc).isoformat()
     
@@ -1127,10 +1319,10 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     new_status = "Overdue" if invoice.get("due_date", "") < today else "Sent"
     
-    # FG-140: Draft → Sent only as a CAS on the Draft status (a concurrent
+    # FG-140: Issued → Sent only as a CAS on the Issued status (a concurrent
     # line edit holds the invoice document in its transaction until it
     # commits; a lost race → 409, nothing written).
-    res = await tenant.invoices.update_one({"id": invoice_id, "status": "Draft"}, {"$set": {
+    res = await tenant.invoices.update_one({"id": invoice_id, "status": "Issued"}, {"$set": {
         "status": new_status,
         "sent_at": now,
         "updated_at": now,
@@ -1145,7 +1337,15 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
 
 
 @router.post("/finance/invoices/{invoice_id}/cancel")
-async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
+async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
+                         reason: Optional[str] = Query(None),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                         user: dict = Depends(require_m5)):
+    """INV-CN-01 / Р49.2: cancellation (анулиране) with a reason. An outgoing invoice is
+    cancelled only while Issued — not sent, not paid, no note on it; the number stays,
+    with status Cancelled. After sending / payment → 409 USE_CREDIT_NOTE."""
+    from app.services import invoice_corrections as ic
+    from app.services.auth_tx import run_in_transaction
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -1153,31 +1353,57 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    if invoice["status"] == "Paid":
-        raise HTTPException(status_code=400, detail="Cannot cancel paid invoices")
-    
-    now = datetime.now(timezone.utc).isoformat()
+    req = _Request(body, reason, idempotency_key)      # reason (400) + key (428)
 
-    async def _body(session):
-        # FG-140: status + allocations decided in the transaction; a payment
-        # racing the cancel writes the same invoice document → serialized.
-        await claim_invoice(tenant, invoice_id, session=session,
-                            forbidden=("Paid", "Cancelled"), code=STATUS_CHANGED)
-        # Check for allocations
-        alloc_count = await tenant.payment_allocations.count(
-            active_allocations({"invoice_id": invoice_id}), session=session)
-        if alloc_count > 0:
-            raise HTTPException(status_code=400, detail="Cannot cancel invoice with payment allocations")
-        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
-            "status": "Cancelled",
-            "updated_at": now,
-        }}, session=session)
-    await run_transaction(tenant, _body)
-    
-    await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
-                    {"invoice_no": invoice["invoice_no"]})
-    
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    def refusal(inv: dict) -> Optional[HTTPException]:
+        status = inv.get("status")
+        if status == "Cancelled":
+            return ic.conflict(STATUS_CHANGED, "Фактурата вече е анулирана")
+        if inv.get("direction") == "Issued":
+            if status == ic.DRAFT:
+                return ic.conflict(ic.INVOICE_NOT_ISSUED,
+                                   "Черновата няма номер — изтрийте я или я поправете")
+            if status != ic.ISSUED or inv.get("sent_at") or inv.get("vat_ledger_period"):
+                return ic.conflict(ic.USE_CREDIT_NOTE,
+                                   "Фактурата е изпратена или платена — анулиране не е позволено; "
+                                   "издайте кредитно известие", status=status)
+        elif status == "Paid":
+            return ic.conflict(ic.USE_CREDIT_NOTE, "Платена фактура не се анулира — кредитно известие",
+                               status=status)
+        return None
+
+    first = refusal(invoice)
+    if first is not None:
+        raise first
+    action = "finance.invoice.cancel"
+
+    async def work():
+        async def tx_body(session):
+            current = await claim_invoice(tenant, invoice_id, session=session,
+                                          forbidden=("Cancelled",), code=STATUS_CHANGED)
+            again = refusal(current)
+            if again is not None:
+                raise again
+            if await tenant.payment_allocations.count(
+                    active_allocations({"invoice_id": invoice_id}), session=session) > 0:
+                raise ic.conflict(ic.USE_CREDIT_NOTE, "Фактурата има плащане — кредитно известие")
+            if await tenant.credit_debit_notes.count({"original_invoice_id": invoice_id},
+                                                     session=session) > 0:
+                raise ic.conflict(ic.USE_CREDIT_NOTE, "По фактурата има известие — не се анулира")
+            now = ic.now_iso()
+            await tenant.invoices.update_one({"id": invoice_id, "status": current["status"]}, {"$set": {
+                "status": "Cancelled", "cancelled_at": now, "cancelled_by": user["id"],
+                "cancel_reason": req.reason, "updated_at": now}}, session=session)
+            await _audit_tx(user, "finance.invoice.cancelled", "finance.invoice", invoice_id,
+                            req.reason, {"status": {"before": current["status"], "after": "Cancelled"},
+                                         "invoice_no": current.get("invoice_no"),
+                                         "total": current.get("total")}, req.key, session)
+        await _tx(run_in_transaction, tx_body)
+        await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice",
+                        invoice_id, {"invoice_no": invoice["invoice_no"], "reason": req.reason})
+        return await tenant.invoices.get(invoice_id, {"_id": 0})
+
+    return await _once(user, req.key, action, {"invoice_id": invoice_id, "reason": req.reason}, work)
 
 
 @router.delete("/finance/invoices/{invoice_id}")
@@ -1193,11 +1419,19 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     # ever had a payment allocation (cancelled ones included), is used → 409.
     if invoice["status"] != "Draft":
         raise HTTPException(status_code=409, detail="Can only delete Draft invoices")
+    # INV-CN-01 (CLAUDE.md §2.9, Р49): an outgoing invoice that carries a number is never
+    # hard-deleted (a legacy draft numbered before INV-CN-01 is issued and cancelled).
+    if invoice.get("direction") == "Issued" and invoice.get("invoice_no"):
+        from app.services.invoice_corrections import INVOICE_NUMBERED, conflict
+        raise conflict(INVOICE_NUMBERED, "Фактура с номер не се изтрива — анулирайте я с причина",
+                       invoice_no=invoice.get("invoice_no"))
     if await tenant.payment_allocations.count({"invoice_id": invoice_id}) > 0:
         raise HTTPException(status_code=409, detail="Invoice has payment allocations — cancel it instead")
     
     # FG-140: only while still Draft (CAS) — a concurrent send wins → 409.
-    res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft"})
+    res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft",
+                                            "$or": [{"direction": {"$ne": "Issued"}},
+                                                    {"invoice_no": {"$in": [None, ""]}}]})
     if res.deleted_count == 0:
         raise status_conflict(NOT_DRAFT, invoice_id, (await tenant.invoices.get(invoice_id) or {}).get("status"))
     return {"ok": True}
@@ -1490,7 +1724,9 @@ async def _invoice_remaining(tenant: TenantData, invoice: dict, exclude_ids=()) 
     if exclude_ids:
         flt["id"] = {"$nin": list(exclude_ids)}
     paid = await tenant.payment_allocations.find(active_allocations(flt)).to_list(1000)
-    return round(invoice["total"] - sum(a.get("amount_allocated", 0) for a in paid), 2)
+    # INV-CN-01: the invoice's own total adjusted by approved notes / offsets / refunds
+    from app.services.invoice_corrections import adjusted_total
+    return round(float(adjusted_total(invoice)) - sum(a.get("amount_allocated", 0) for a in paid), 2)
 
 
 async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: str,
@@ -2163,9 +2399,9 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
         [Paragraph(f"<b>{org_name}</b>", style_bold), Paragraph(f"<b>{direction_label}</b>", ParagraphStyle('Right', parent=style_title, alignment=2, fontSize=14))],
     ]
     if org_address:
-        header_data.append([Paragraph(org_address, style_small), Paragraph(f"<b>№ {invoice.get('invoice_no', '')}</b>", ParagraphStyle('Right', parent=style_bold, alignment=2, fontSize=14))])
+        header_data.append([Paragraph(org_address, style_small), Paragraph(f"<b>№ {invoice.get('invoice_no') or 'ЧЕРНОВА'}</b>", ParagraphStyle('Right', parent=style_bold, alignment=2, fontSize=14))])
     else:
-        header_data.append(["", Paragraph(f"<b>№ {invoice.get('invoice_no', '')}</b>", ParagraphStyle('Right', parent=style_bold, alignment=2, fontSize=14))])
+        header_data.append(["", Paragraph(f"<b>№ {invoice.get('invoice_no') or 'ЧЕРНОВА'}</b>", ParagraphStyle('Right', parent=style_bold, alignment=2, fontSize=14))])
     
     header_table = RLTable(header_data, colWidths=[300, 230])
     header_table.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP'), ('TOPPADDING', (0,0), (-1,-1), 2), ('BOTTOMPADDING', (0,0), (-1,-1), 2)]))
@@ -2270,7 +2506,7 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     doc.build(elements)
     buffer.seek(0)
     
-    filename = f"invoice_{invoice.get('invoice_no', invoice_id)}.pdf"
+    filename = f"invoice_{invoice.get('invoice_no') or invoice_id}.pdf"
     return StreamingResponse(
         buffer,
         media_type="application/pdf",

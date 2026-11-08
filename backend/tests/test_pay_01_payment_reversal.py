@@ -342,9 +342,12 @@ def test_04_cancel_allocation_keeps_rows_and_balances(monkeypatch, backend, mode
         inv = await op.invoices.find_one({"id": "inv-a1"})
         assert (inv["paid_amount"], inv["remaining_amount"], inv["status"]) == (0, 100.0, "Sent")
         assert (await balances(c))[BANK_A] == 5000.0
-        # the invoice can be cancelled now (no ACTIVE allocation)
-        r4 = await c.post("/api/finance/invoices/inv-a1/cancel", headers=hdr("acct-a"))
-        assert r4.status_code == 200, r4.text
+        # INV-CN-01 / Р49.2 (Krum 08.11.2026): a SENT invoice is no longer cancelled — even
+        # with no active allocation the correction is a credit note (409 USE_CREDIT_NOTE)
+        r4 = await c.post("/api/finance/invoices/inv-a1/cancel", headers=hdr("acct-a"),
+                          json={"reason": "върнато"})
+        assert r4.status_code == 409, r4.text
+        assert r4.json()["detail"]["error_code"] == "USE_CREDIT_NOTE"
     run(monkeypatch, backend, mode, scenario)
 
 
@@ -397,7 +400,13 @@ def test_06_used_invoice_cannot_be_deleted(monkeypatch, backend, mode):
         r = await c.delete("/api/finance/invoices/inv-draft2", headers=hdr("acct-a"))
         assert r.status_code == 409, r.text
         assert await op.invoices.find_one({"id": "inv-draft2"})
-        r = await c.delete("/api/finance/invoices/inv-draft", headers=hdr("acct-a"))   # unused draft
+        # INV-CN-01 / Р49 + CLAUDE.md §2.9: a draft that carries a number is never deleted …
+        r = await c.delete("/api/finance/invoices/inv-draft", headers=hdr("acct-a"))
+        assert r.status_code == 409, r.text
+        # … an unused draft without a number (Р49.1: numbered only at issue) still is
+        await op.invoices.insert_one({"id": "inv-draft3", "org_id": ORG_A, "invoice_no": None,
+                                      "direction": "Issued", "status": "Draft", "total": 10.0})
+        r = await c.delete("/api/finance/invoices/inv-draft3", headers=hdr("acct-a"))   # unused draft
         assert r.status_code == 200, r.text
     run(monkeypatch, backend, mode, scenario)
 

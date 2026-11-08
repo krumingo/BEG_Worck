@@ -106,6 +106,9 @@ api_router.include_router(hr_router)
 # Import finance router - includes accounts, invoices, payments, finance stats/enums
 from app.routes.finance import router as finance_router
 api_router.include_router(finance_router)
+# INV-CN-01: credit / debit notes, refunds and offsets (FLOW-006 §Корекции, Р49)
+from app.routes.invoice_corrections import router as invoice_corrections_router
+api_router.include_router(invoice_corrections_router)
 
 # Import overhead router - includes dashboard/stats, overhead categories/costs/assets/snapshots/allocations
 from app.routes.overhead import router as overhead_router
