@@ -25,22 +25,50 @@ from fastapi import HTTPException
 from app.db import db
 from app.tenancy.ownership import ORG_KEYED
 
-#: Named fields through which a tenant-owned record names a project (top level or nested).
+#: Named paths through which a tenant-owned record names a project — queried first, one
+#: exists-query per path (an index on the path serves it). Nested array-of-refs shapes of the
+#: codebase (FG-272): invoice-line ``allocations[].ref_id`` / ``refId`` (``POST
+#: /invoice-lines``, ``models/invoice_lines.AllocationItem``), invoice ``lines[]`` with
+#: ``project_id`` / ``allocation_ref_id`` / ``allocations[].ref_id``, worker-calendar
+#: ``day_entries[].project_id``, warehouse ``transit_origin.project_id``, file
+#: ``context.entity_id``.
 PROJECT_LINK_FIELDS = ("project_id", "site_id", "subproject_id", "parent_project_id",
                        "warranty_of_project_id", "context_id", "entity_id",
+                       "allocation_ref_id", "allocations.ref_id", "allocations.refId",
+                       "lines.project_id", "lines.allocation_ref_id",
+                       "lines.allocations.ref_id", "lines.allocations.refId",
                        "day_entries.project_id", "transit_origin.project_id",
-                       "context.entity_id", "lines.project_id")
+                       "context.entity_id")
+
+#: How deep the generic scan looks below the top level (FG-272): array → object → array →
+#: value covers ``lines[].allocations[].ref_id`` and any other shape of that depth.
+GENERIC_DEPTH = 4
 
 
-def _any_top_level_value(project_id: str) -> Dict[str, Any]:
-    """PRJ-01 / FG-254: a reference in ANY top-level field — ``context_type/context_id``
-    (media files), ``entity_type/entity_id`` (QR codes), or any other name — and inside a
-    top-level array of ids. Ids are UUIDs, so an equal value is a reference."""
-    values = {"$map": {"input": {"$objectToArray": "$$ROOT"}, "as": "kv", "in": "$$kv.v"}}
-    return {"$expr": {"$anyElementTrue": [{"$map": {
-        "input": values, "as": "v",
-        "in": {"$cond": [{"$isArray": "$$v"}, {"$in": [project_id, "$$v"]},
-                         {"$eq": ["$$v", project_id]}]}}}]}}
+def _contains(value: str, project_id: str, depth: int) -> Dict[str, Any]:
+    """Aggregation expression: ``value`` is ``project_id`` or holds it at most ``depth``
+    levels down (inside arrays and sub-documents)."""
+    if depth <= 0:
+        return {"$eq": [value, project_id]}
+    elem, kv = "e%d" % depth, "kv%d" % depth
+    return {"$switch": {"branches": [
+        {"case": {"$isArray": value},
+         "then": {"$anyElementTrue": [{"$map": {
+             "input": value, "as": elem,
+             "in": _contains("$$" + elem, project_id, depth - 1)}}]}},
+        {"case": {"$eq": [{"$type": value}, "object"]},
+         "then": {"$anyElementTrue": [{"$map": {
+             "input": {"$objectToArray": value}, "as": kv,
+             "in": _contains("$$%s.v" % kv, project_id, depth - 1)}}]}}],
+        "default": {"$eq": [value, project_id]}}}
+
+
+def _any_reference(project_id: str) -> Dict[str, Any]:
+    """PRJ-01 / FG-254 + FG-272: a reference under ANY field name — top level
+    (``context_id``, ``entity_id``, …) and inside arrays / sub-documents down to
+    ``GENERIC_DEPTH`` (``allocations[].ref_id``, ``lines[].allocations[].ref_id``, …). Ids are
+    UUIDs, so an equal value is a reference."""
+    return {"$expr": _contains("$$ROOT", project_id, GENERIC_DEPTH)}
 
 
 #: Records that are the project's own structure, not business history: the team
@@ -96,25 +124,44 @@ def require_reason(value: Any) -> str:
     return reason
 
 
-async def business_links(tenant, project_id: str, session=None) -> Dict[str, int]:
-    """``{collection: count}`` of the tenant's records that name ``project_id``.
+async def business_links(tenant, project_id: str, session=None,
+                         first_only: bool = True) -> Dict[str, str]:
+    """``{collection: how}`` for the tenant's records that name ``project_id``.
 
     Every ``org_id``-keyed collection of the tenancy model (``ORG_KEYED``) except the
-    project's own structure. A child project (``parent_project_id``) and a legacy warranty
-    project linked to it (``warranty_of_project_id``) count too.
+    project's own structure. FG-274: first ONE exists-query per collection over the named
+    paths (``find_one`` on ``$or`` of ``{path: id}`` — an index on a path serves its
+    branch), then the generic
+    any-field / nested scan per collection; with ``first_only`` it stops at the first hit.
+    ``how`` is the path that matched, or ``"nested"`` for the generic scan.
     """
-    flt = {"$or": [{f: project_id} for f in PROJECT_LINK_FIELDS]
-           + [_any_top_level_value(project_id)]}
     kw = {} if session is None else {"session": session}
-    out: Dict[str, int] = {}
-    for name in sorted(ORG_KEYED):
-        if name in STRUCTURAL:
-            continue
+    names = [n for n in sorted(ORG_KEYED) if n not in STRUCTURAL]
+    out: Dict[str, str] = {}
+
+    def scoped(name: str, flt: Dict[str, Any]) -> Dict[str, Any]:
         # the project's own document carries its id; it is not a reference to itself
-        q = {"$and": [flt, {"id": {"$ne": project_id}}]} if name == "projects" else flt
-        n = await tenant.collection(name).count_documents(q, **kw)
-        if n:
-            out[name] = n
+        return {"$and": [flt, {"id": {"$ne": project_id}}]} if name == "projects" else flt
+
+    named = {"$or": [{path: project_id} for path in PROJECT_LINK_FIELDS]}
+    for name in names:
+        # one exists-query per collection; each $or branch can use an index on its path
+        doc = await tenant.collection(name).find_one(
+            scoped(name, named), {"_id": 0, **{p.split(".")[0]: 1 for p in PROJECT_LINK_FIELDS}},
+            **kw)
+        if doc is not None:
+            out[name] = next((p for p in PROJECT_LINK_FIELDS if p.split(".")[0] in doc),
+                             "named")
+            if first_only:
+                return out
+    generic = _any_reference(project_id)
+    for name in names:
+        if name in out:
+            continue
+        if await tenant.collection(name).find_one(scoped(name, generic), {"_id": 1}, **kw):
+            out[name] = "nested"
+            if first_only:
+                return out
     return out
 
 
@@ -135,7 +182,9 @@ async def audit(session, user: Dict[str, Any], *, action: str, entity_type: str,
 
 async def keyed_transaction(user: Dict[str, Any], key: str, action: str,
                             fingerprint: Dict[str, Any],
-                            work: Callable[[Any], Awaitable[Dict[str, Any]]]) -> Dict[str, Any]:
+                            work: Callable[[Any], Awaitable[Dict[str, Any]]],
+                            precheck: Optional[Callable[[], Awaitable[Any]]] = None
+                            ) -> Dict[str, Any]:
     """Run ``work(session)`` once per (tenant, action, key), inside one transaction.
 
     * new key → ``work`` runs in ``run_in_transaction``; its result is stored with the key;
@@ -166,6 +215,10 @@ async def keyed_transaction(user: Dict[str, Any], key: str, action: str,
     if state["status"] != IDEMPOTENCY_STARTED:
         raise refuse(409, "IDEMPOTENCY_IN_PROGRESS", "Заявка с този Idempotency-Key още се обработва")
     try:
+        if precheck is not None:
+            # FG-274: a long read (e.g. the history scan) runs BEFORE the transaction; the
+            # transaction then compare-and-sets on what the check saw.
+            await precheck()
         result = await run_in_transaction(db, work)
     except HTTPException as exc:
         await fail_idempotent(db, tenant_id=tenant_id, key=scoped_key, action=action,

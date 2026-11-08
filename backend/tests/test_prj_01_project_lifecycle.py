@@ -61,6 +61,18 @@ LINKS = {
     # FG-254: references that are not a *_id field
     "media_context": ("media_files", {"filename": "m.jpg", "context_type": "project"}),
     "qr_entity": ("asset_qr_codes", {"entity_type": "project", "qr_id": "QR-PRB"}),
+    # FG-272: nested array-of-refs shapes
+    "invoice_line_alloc": ("invoice_lines", {"invoice_id": "inv-x", "description": "Цимент"}),
+    "invoice_nested_alloc": ("invoices", {"status": "Draft", "direction": "Received",
+                                          "invoice_no": "PRB-NEST"}),
+    "unknown_nested_key": ("material_requests", {"status": "draft"}),
+}
+#: FG-272: link rows whose reference sits inside arrays / sub-documents
+NESTED_LINK = {
+    "invoice_line_alloc": lambda p: {"allocations": [{"type": "project", "ref_id": p, "qty": 1}]},
+    "invoice_nested_alloc": lambda p: {"lines": [{"description": "Арматура", "allocations": [
+        {"type": "project", "refId": p, "qty": 2}]}]},
+    "unknown_nested_key": lambda p: {"items": [{"name": "x", "target": {"site": p}}]},
 }
 #: the field each link row uses for the project (default ``project_id``)
 LINK_FIELD = {"child_project": "parent_project_id", "media_context": "context_id",
@@ -114,7 +126,10 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
         await op_db.projects.insert_many(docs)
         for kind, (coll, extra) in LINKS.items():
             row = {"id": pid(tkey, "row_" + kind), "org_id": org, "created_at": NOW, **extra}
-            row[LINK_FIELD.get(kind, "project_id")] = pid(tkey, "link_" + kind)
+            if kind in NESTED_LINK:
+                row.update(NESTED_LINK[kind](pid(tkey, "link_" + kind)))
+            else:
+                row[LINK_FIELD.get(kind, "project_id")] = pid(tkey, "link_" + kind)
             await op_db[coll].insert_one(row)
         await op_db.project_phases.insert_one({"id": pid(tkey, "phase1"), "org_id": org,
                                                "project_id": pid(tkey, "draft_phase"),
@@ -494,13 +509,21 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                           plan_sha=dry3["plan_sha"], mapping=mapping))
             wp = project_doc("warr_parent") or {}
             wpb = project_doc("warr_parent", "B") or {}
+            # FG-273: create-sub-project on the original renames the linked child's legacy
+            # code — never silently: one AuditEvent project.code_change per renamed child.
+            projects_after_migration = q(lambda: op_db.projects.count_documents({}))
+            code_before = wp.get("code")
+            r = call("POST", "/api/projects/%s/create-sub-project" % A["project_id"],
+                     json={"name": "Нов етап"})
+            renamed = project_doc("warr_parent") or {}
+            code_events = events(pid("A", "warr_parent"), "project.code_change")
             d["migration"] = {
                 "available": True,
                 "dry_counts": dry["counts"], "dry_wrote": after_dry,
                 "wrong_plan_refused": refused,
                 "first_counts": first["counts"], "second_counts": second["counts"],
                 "projects_before": before,
-                "projects_after": q(lambda: op_db.projects.count_documents({})),
+                "projects_after": projects_after_migration,
                 "parent_linked_to": wp.get("warranty_of_project_id"),
                 "parent_expected": A["project_id"],
                 "parent_type": wp.get("type"),
@@ -516,6 +539,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 "dq_resolve_events": q(lambda: op_db.audit_events.count_documents(
                     {"action": "dq.issue.resolve"})),
                 "parent_after_link": wp.get("parent_project_id"),
+                "sub_after_link": r["status"],
+                "code_renamed": renamed.get("code") != code_before,
+                "code_events": [(e["diff"]["before"]["code"], e["diff"]["after"]["code"])
+                                for e in code_events],
+                "code_before": code_before, "code_after": renamed.get("code"),
                 "orphan_parent_after_map": (project_doc("warr_orphan") or {}).get("parent_project_id"),
                 "dq_routing": [{k: x.get(k) for k in ("owner_role", "escalate_to_role")}
                                | {"has_due": bool(x.get("due_at")),
@@ -840,6 +868,9 @@ def test_fg236_the_warranty_migration_links_dry_run_first_idempotent_never_delet
     assert m["orphan_dq_after_map"] == ["resolved"] and m["dq_resolve_events"] == 1
     # R56(4): the link makes it a sub-project; the DQ goes to the SiteManager, 7 days, Owner
     assert m["parent_after_link"] == m["parent_expected"]
+    # FG-273: the rename after linking writes its AuditEvent
+    assert m["sub_after_link"] == 201 and m["code_renamed"] is True
+    assert m["code_events"] == [[m["code_before"], m["code_after"]]]
     assert m["orphan_parent_after_map"] == "prj01-A-completed2"
     assert m["dq_routing"] == [{"owner_role": "site_manager", "escalate_to_role": "owner",
                                 "has_due": True, "assignee_is_sm": True}]
