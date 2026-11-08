@@ -5274,3 +5274,39 @@ SEC71-M1 resolved. No blocking finding remains.
 - **Parents:** `8c52e92` + `021a078` (the audited head).
 - **Byte check:** the tree `74c823f` equals `git merge-tree --write-tree 8c52e92 021a078`.
 - **Next:** #81, #83 and #84 must merge main `0750d75` before their own merge; each such merge gets a full re-audit.
+
+## 2026-11-08 15:20 UTC: #83 `7e0b914` (FG-225..230 on top of `fe13c43`; merge `63b6635` unchanged): FAIL, 2 blocking
+
+- **Merge `63b6635`:** the byte check and the resolutions from the `fe13c43` round still hold; `7e0b914` is one commit with no new merge.
+- **K1:** entrant + verifier → 409 SAME_PERSON_APPROVAL (66 passed with K2).
+- **ЕГН:** one mask `******1234`; readers mask `invoice_details`; ЕГН search only for roles that may see it.
+- **FG-229:** the ЕИК check spans counterparties and subcontractors, under one claim row.
+
+**CP83-02 (BLOCKING), probe K3:**
+- **Cause:** FG-225 (c) pasted the Outflow guard into `create_other_income`.
+- **Enforce:** income into a Bank account → 409 NO_VERIFIED_BANK_ACCOUNT. The UI sends `method: "Cash"` with a bank `account_id`, and the account decides the method.
+- **All modes:** cash income with a counterparty → 422 CASH_RECEIPT_REQUIRED.
+- **K3:** 5 of the 9 mongomock cases fail.
+
+**CP83-04 (BLOCKING): warehouse canonical 1088 / 1121.**
+- **Where:** all 33 failures are in `c26l_n_invoice_status` (`edit_racing_send_and_pay` ×30, `paused_edit_after_payment_is_409` ×3).
+- **Cause:** the quick payment of the Received fixture invoice (BankTransfer, no verified IBAN) → 409 BANK_ACCOUNT_NOT_VERIFIED in enforce. The same file had 72 passed at `ea51030`.
+- **Behaviour:** correct (Addendum A D1: enforce outside staging, development and test).
+- **Fix:** the test fixture seeds a verified supplier bank account (preferred) or sets ENV=test with the guard off; list it in the HANDOFF.
+
+**CP83-03 (minor):**
+- The migration masks `invoice_details` with no AuditEvent per project.
+- This is irreversible for a typed value with no matching `persons` record.
+- A 10-digit `tax_id` is masked for companies too.
+
+| Gate | Result |
+|---|---|
+| probe K1/K2 | 66 |
+| cp_01 | 482 (+3 mongomock-only skips) |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | 9 failed, all also on main (NEW_FAILS 0) |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1088 / 1121** |
