@@ -5,11 +5,17 @@ Tests for overhead categories, costs, assets, snapshots, allocations, and permis
 import pytest
 import requests
 import os
+import uuid
 from datetime import datetime
 
 from tests.test_utils import VALID_ADMIN_PASSWORD, VALID_TECH_PASSWORD
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
+
+
+def keyed(headers):
+    """OH-01 / R29: an overhead delete (archive) and an allocation need an Idempotency-Key."""
+    return {**headers, "Idempotency-Key": str(uuid.uuid4())}
 
 class TestOverheadAuth:
     """Test authentication and permission scenarios"""
@@ -126,7 +132,7 @@ class TestOverheadCategories:
         print(f"✓ Updated category: {updated['name']} (active: {updated['active']})")
         
         # Clean up
-        requests.delete(f"{BASE_URL}/api/overhead/categories/{cat_id}", headers=admin_headers)
+        requests.delete(f"{BASE_URL}/api/overhead/categories/{cat_id}", headers=keyed(admin_headers))
     
     def test_delete_category(self, admin_headers):
         """Delete a category"""
@@ -139,7 +145,7 @@ class TestOverheadCategories:
         cat_id = create_resp.json()["id"]
         
         # Delete it
-        delete_resp = requests.delete(f"{BASE_URL}/api/overhead/categories/{cat_id}", headers=admin_headers)
+        delete_resp = requests.delete(f"{BASE_URL}/api/overhead/categories/{cat_id}", headers=keyed(admin_headers))
         assert delete_resp.status_code == 200, f"Delete failed: {delete_resp.text}"
         
         # Verify deletion
@@ -236,7 +242,7 @@ class TestOverheadCosts:
             assert resp.status_code == 200, f"Create {freq} cost failed: {resp.text}"
             print(f"✓ Created {freq} cost")
             # Clean up
-            requests.delete(f"{BASE_URL}/api/overhead/costs/{resp.json()['id']}", headers=admin_headers)
+            requests.delete(f"{BASE_URL}/api/overhead/costs/{resp.json()['id']}", headers=keyed(admin_headers))
     
     def test_create_cost_all_allocation_types(self, admin_headers, category_id):
         """Test creating costs with different allocation types"""
@@ -254,7 +260,7 @@ class TestOverheadCosts:
             assert resp.status_code == 200, f"Create {alloc_type} cost failed: {resp.text}"
             print(f"✓ Created {alloc_type} cost")
             # Clean up
-            requests.delete(f"{BASE_URL}/api/overhead/costs/{resp.json()['id']}", headers=admin_headers)
+            requests.delete(f"{BASE_URL}/api/overhead/costs/{resp.json()['id']}", headers=keyed(admin_headers))
     
     def test_update_cost(self, admin_headers, category_id):
         """Update an existing cost"""
@@ -282,7 +288,7 @@ class TestOverheadCosts:
         print(f"✓ Updated cost: {updated['name']} - €{updated['amount']}")
         
         # Clean up
-        requests.delete(f"{BASE_URL}/api/overhead/costs/{cost_id}", headers=admin_headers)
+        requests.delete(f"{BASE_URL}/api/overhead/costs/{cost_id}", headers=keyed(admin_headers))
     
     def test_delete_cost(self, admin_headers, category_id):
         """Delete a cost"""
@@ -299,7 +305,7 @@ class TestOverheadCosts:
         cost_id = create_resp.json()["id"]
         
         # Delete it
-        delete_resp = requests.delete(f"{BASE_URL}/api/overhead/costs/{cost_id}", headers=admin_headers)
+        delete_resp = requests.delete(f"{BASE_URL}/api/overhead/costs/{cost_id}", headers=keyed(admin_headers))
         assert delete_resp.status_code == 200, f"Delete failed: {delete_resp.text}"
         print(f"✓ Deleted cost successfully")
 
@@ -375,7 +381,7 @@ class TestOverheadAssets:
         print(f"✓ Updated asset: {updated['name']} (active: {updated['active']})")
         
         # Clean up
-        requests.delete(f"{BASE_URL}/api/overhead/assets/{asset_id}", headers=admin_headers)
+        requests.delete(f"{BASE_URL}/api/overhead/assets/{asset_id}", headers=keyed(admin_headers))
     
     def test_delete_asset(self, admin_headers):
         """Delete an asset"""
@@ -391,7 +397,7 @@ class TestOverheadAssets:
         asset_id = create_resp.json()["id"]
         
         # Delete it
-        delete_resp = requests.delete(f"{BASE_URL}/api/overhead/assets/{asset_id}", headers=admin_headers)
+        delete_resp = requests.delete(f"{BASE_URL}/api/overhead/assets/{asset_id}", headers=keyed(admin_headers))
         assert delete_resp.status_code == 200, f"Delete failed: {delete_resp.text}"
         print(f"✓ Deleted asset successfully")
 
@@ -514,7 +520,7 @@ class TestOverheadAllocation:
             return
         
         # Allocate using PersonDays method
-        alloc_resp = requests.post(f"{BASE_URL}/api/overhead/snapshots/{snap_id}/allocate", headers=admin_headers, json={
+        alloc_resp = requests.post(f"{BASE_URL}/api/overhead/snapshots/{snap_id}/allocate", headers=keyed(admin_headers), json={
             "method": "PersonDays"
         })
         assert alloc_resp.status_code == 200, f"Allocation failed: {alloc_resp.text}"
@@ -584,21 +590,21 @@ class TestCleanup:
         cat_resp = requests.get(f"{BASE_URL}/api/overhead/categories", headers=admin_headers)
         for cat in cat_resp.json():
             if cat["name"].startswith("TEST_"):
-                requests.delete(f"{BASE_URL}/api/overhead/categories/{cat['id']}", headers=admin_headers)
+                requests.delete(f"{BASE_URL}/api/overhead/categories/{cat['id']}", headers=keyed(admin_headers))
                 print(f"  Cleaned up category: {cat['name']}")
         
         # Clean up costs
         cost_resp = requests.get(f"{BASE_URL}/api/overhead/costs", headers=admin_headers)
         for cost in cost_resp.json():
             if cost["name"].startswith("TEST_"):
-                requests.delete(f"{BASE_URL}/api/overhead/costs/{cost['id']}", headers=admin_headers)
+                requests.delete(f"{BASE_URL}/api/overhead/costs/{cost['id']}", headers=keyed(admin_headers))
                 print(f"  Cleaned up cost: {cost['name']}")
         
         # Clean up assets
         asset_resp = requests.get(f"{BASE_URL}/api/overhead/assets?active_only=false", headers=admin_headers)
         for asset in asset_resp.json():
             if asset["name"].startswith("TEST_"):
-                requests.delete(f"{BASE_URL}/api/overhead/assets/{asset['id']}", headers=admin_headers)
+                requests.delete(f"{BASE_URL}/api/overhead/assets/{asset['id']}", headers=keyed(admin_headers))
                 print(f"  Cleaned up asset: {asset['name']}")
         
         print("✓ Cleanup completed")

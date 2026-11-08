@@ -20,6 +20,7 @@ import MorningBriefingPanel from "@/components/MorningBriefingPanel";
 import CashflowForecastPanel from "@/components/CashflowForecastPanel";
 import PersonnelTodayCard from "@/components/PersonnelTodayCard";
 import PendingPaymentsCard from "@/components/PendingPaymentsCard";
+import { canReadFinance } from "@/lib/financeAccess";
 import UnclearStatusCard from "@/components/UnclearStatusCard";
 import FinancePulseCard from "@/components/FinancePulseCard";
 import ProfitAttributionWidget from "@/components/ProfitAttributionWidget";
@@ -46,6 +47,8 @@ export default function DashboardPage() {
   const [overhead, setOverhead] = useState(null);
 
   const isManager = ["Admin", "Owner", "SiteManager"].includes(user?.role);
+  // SEC-02 (R20): company finance widgets for Owner/Admin/Accountant only.
+  const seesFinance = canReadFinance(user?.role);
 
   useEffect(() => {
     const load = async () => {
@@ -71,8 +74,8 @@ export default function DashboardPage() {
         Promise.all([
           API.get("/alarms/count").catch(() => ({ data: null })),
           API.get("/pulse/today").catch(() => ({ data: null })),
-          API.get("/org/pnl-overview").catch(() => ({ data: null })),
-          API.get("/overhead/realtime").catch(() => ({ data: null })),
+          seesFinance ? API.get("/org/pnl-overview").catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+          seesFinance ? API.get("/overhead/realtime").catch(() => ({ data: null })) : Promise.resolve({ data: null }),
         ]).then(([aR, pR, plR, oR]) => {
           setAlarms(aR.data);
           setPulses(pR.data);
@@ -83,7 +86,7 @@ export default function DashboardPage() {
       finally { setLoading(false); }
     };
     load();
-  }, [isManager]);
+  }, [isManager, seesFinance]);
 
   const loadMoreActivity = async () => {
     setLoadingMore(true);
@@ -141,14 +144,14 @@ export default function DashboardPage() {
       </div>
 
       {/* FINANCE PULSE */}
-      {isManager && <FinancePulseCard />}
-      {isManager && <ProfitAttributionWidget />}
+      {seesFinance && <FinancePulseCard />}
+      {seesFinance && <ProfitAttributionWidget />}
 
       {/* MORNING BRIEFING */}
       {isManager && <MorningBriefingPanel />}
 
       {/* CASH FLOW FORECAST */}
-      {isManager && <CashflowForecastPanel />}
+      {seesFinance && <CashflowForecastPanel />}
 
       {/* SECTION 2: Alarms Banner */}
       {isManager && alarms && (
@@ -178,7 +181,7 @@ export default function DashboardPage() {
       )}
 
       {/* SECTION 3: Overhead Snapshot */}
-      {isManager && overhead && overhead.fixed_total > 0 && (
+      {seesFinance && overhead && overhead.fixed_total > 0 && (
         <div className="rounded-xl border border-border bg-card p-4 mb-6 flex items-center gap-6" data-testid="overhead-snapshot">
           <div className="flex items-center gap-2">
             <DollarSign className="w-5 h-5 text-cyan-400" />
@@ -217,7 +220,7 @@ export default function DashboardPage() {
       {isManager && <PersonnelTodayCard />}
 
       {/* PENDING PAYMENTS */}
-      {isManager && <PendingPaymentsCard />}
+      {seesFinance && <PendingPaymentsCard />}
 
       {/* Projects summary row */}
       <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="projects-summary">
@@ -231,7 +234,7 @@ export default function DashboardPage() {
       </div>
 
       {/* SECTION 5: P&L Overview */}
-      {isManager && pnlOverview && pnlOverview.projects?.length > 0 && (
+      {seesFinance && pnlOverview && pnlOverview.projects?.length > 0 && (
         <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="pnl-overview-section">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-400" /><h2 className="text-sm font-semibold">{t("dashboard.pnlOverview")}</h2></div>
@@ -323,7 +326,7 @@ export default function DashboardPage() {
       )}
 
       {/* Finance Summary */}
-      {isManager && (
+      {seesFinance && (
         <div className="rounded-xl border border-border bg-card p-5 mb-6" data-testid="finance-summary-section"><FinanceSummaryWidget /></div>
       )}
 

@@ -1,0 +1,11 @@
+# at c0247e8 (before SEC71-03 fix)
+GET /sites/{P}/pulse — Technical Manager (member): {"alerts": [{"type": "budget_warning", "message": "Надхвърлен бюджет! (900.0%)", "severity": "critical"}], "budget_snapshot": {"total_budget": 10.0, "status": "over_budget"}}
+GET /sites/{P}/pulse — other non-finance role: {"alerts": [{"type": "budget_warning", "message": "Надхвърлен бюджет! (900.0%)", "severity": "critical"}], "budget_snapshot": null}
+labor-/material-warnings text after strip_money: {"warnings": [{"type": "over_labor_budget", "message": "Мазилка: 90 EUR / 10 EUR budget (80 EUR over)"}, {"type": "over_material_budget", "message": "Мазилка: 12 EUR / 10 EUR бюджет (+2 EUR)"}]}
+GET /material-warnings strips money for non-finance: False
+
+# SEC-02-G (SEC71-03)
+GET /sites/{P}/pulse — Technical Manager (member): {"alerts": [{"type": "budget_attention", "severity": "warning", "message": "Бюджетът изисква внимание — подробности при финансите"}], "budget_snapshot": {"total_budget": 10.0, "status": "over_budget"}}
+GET /sites/{P}/pulse — other non-finance role: {"alerts": [{"type": "budget_attention", "severity": "warning", "message": "Бюджетът изисква внимание — подробности при финансите"}], "budget_snapshot": null}
+labor-/material-warnings text after strip_money: {"warnings": [{"type": "budget_attention", "severity": "warning", "message": "Бюджетът изисква внимание — подробности при финансите"}, {"type": "budget_attention", "severity": "warning", "message": "Бюджетът изисква внимание — подробности при финансите"}]}
+GET /material-warnings strips money for non-finance: True

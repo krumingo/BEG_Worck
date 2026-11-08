@@ -1,0 +1,9 @@
+# at dee0610 (before SEC-02-G)
+SEC71-01 POST /budget-freezes decorated with the budget view: False
+SEC71-01 Technical Manager answer: {"packages": [{"activity_name": "Мазилка", "sale_total": 12345.0, "labor_budget_total": 500.0, "budget_total": 600.0, "planned_margin": 77.0}], "totals": {"labor_budget": 500.0, "total_budget": 600.0, "total_sale": 12345.0}}
+SEC71-02 GET /sites/{id}/pulse, workers t=160, d=0 — Technical Manager answer: {"site_id": "P1", "smr_summary": [{"smr_type": "Мазилка", "total_hours": 16, "total_cost": 160.0}], "total_labor_cost": 160.0}
+
+# SEC-02-G
+SEC71-01 POST /budget-freezes decorated with the budget view: True
+SEC71-01 Technical Manager answer: {"packages": [{"activity_name": "Мазилка", "labor_budget_total": 500.0, "budget_total": 600.0}], "totals": {"labor_budget": 500.0, "total_budget": 600.0}}
+SEC71-02 GET /sites/{id}/pulse, workers t=160, d=0 — Technical Manager answer: {"site_id": "P1", "smr_summary": [{"smr_type": "Мазилка", "total_hours": 16}]}

@@ -40,6 +40,7 @@ from app.core.stripe_config import (
 
 from app.db import db
 from app.deps.auth import get_current_user, require_admin, require_platform_admin, hash_password, create_token
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import SUBSCRIPTION_PLANS, LIMIT_WARNING_THRESHOLD
 from app.utils.audit import log_audit, log_security_event
 from app.constants import MODULES
@@ -763,7 +764,10 @@ async def stripe_webhook(request: Request):
 # ── Subscription Info ──────────────────────────────────────────────
 
 @router.get("/billing/subscription")
-async def get_billing_subscription(user: dict = Depends(get_current_user)):
+async def get_billing_subscription(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.billing_subscription.read", module=None, resource_type="billing_subscription")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     """Get current subscription details with plan info and trial status"""
     tenant = _tenant(user)
     sub = await tenant.subscriptions.find_one({"org_id": user["org_id"]}, {"_id": 0})
@@ -948,7 +952,10 @@ async def enforce_limit(org_id: str, resource: str, increment: int = 1):
 
 
 @router.get("/billing/usage")
-async def get_billing_usage(user: dict = Depends(get_current_user)):
+async def get_billing_usage(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.billing_usage.read", module=None, resource_type="billing_usage")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     """Get current usage vs plan limits with percentages and warnings"""
     tenant = _tenant(user)
     org_id = user["org_id"]

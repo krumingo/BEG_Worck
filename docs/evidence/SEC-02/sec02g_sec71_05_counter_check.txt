@@ -1,0 +1,27 @@
+# audit probe probe_sec71_d1_band_bisect.py (ce2f93c) at e90aa5f (before SEC71-05 fix)
+off: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+shadow: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+enforce: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+off /alarms: first (201, 200, 200, 'threshold visible to TM') | steps 21 | derived spent 0.02 vs actual 6200.00
+shadow /alarms: first (201, 200, 200, 'threshold visible to TM') | steps 21 | derived spent 0.02 vs actual 6200.00
+enforce /alarms: first (201, 200, 200, 'threshold visible to TM') | steps 21 | derived spent 0.02 vs actual 6200.00
+e90 404-oracle GET /api/alarms/%s: hidden 404 vs none 404 same=True
+e90 404-oracle PUT /api/alarms/%s/acknowledge: hidden 404 vs none 404 same=True
+e90 404-oracle PUT /api/alarms/%s/resolve: hidden 404 vs none 404 same=True
+e90 auto_resolve oracle: rule 201 | steps 21 | derived 6196.90 vs actual 6200.00
+e90 known-pay variant (2 paid: TM 500 + technician): statuses ['on_track', 'over_budget', 'warning'] steps 21 | derived other worker 6196.63 vs actual 6200.00
+FAILS: ['auto_resolve oracle: TM derives 6196.90 (actual 6200.00) from evaluate.resolved_events', "known-pay variant: TM derives the other worker's pay 6196.63 (actual 6200.00)"]
+
+# same probe, SEC-02-G (SEC71-05)
+off: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+shadow: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+enforce: first answer (201, 200, {'total_budget': 50000.0}) | steps 21 statuses ['None'] | derived spent 0.02 vs actual 6200.00 (paid workers on P1: 1)
+off /alarms: first (201, 403, 200, 'threshold visible to TM') | steps 0 | derived spent 50000.00 vs actual 6200.00
+shadow /alarms: first (201, 403, 200, 'threshold visible to TM') | steps 0 | derived spent 50000.00 vs actual 6200.00
+enforce /alarms: first (201, 403, 200, 'threshold visible to TM') | steps 0 | derived spent 50000.00 vs actual 6200.00
+e90 404-oracle GET /api/alarms/%s: hidden 404 vs none 404 same=True
+e90 404-oracle PUT /api/alarms/%s/acknowledge: hidden 404 vs none 404 same=True
+e90 404-oracle PUT /api/alarms/%s/resolve: hidden 404 vs none 404 same=True
+e90 auto_resolve oracle: rule 201 | steps 0 | derived 50000.00 vs actual 6200.00
+e90 known-pay variant (2 paid: TM 500 + technician): statuses ['on_track', 'over_budget', 'warning'] steps 21 | derived other worker 6196.63 vs actual 6200.00
+FAILS: ["known-pay variant: TM derives the other worker's pay 6196.63 (actual 6200.00)"]
