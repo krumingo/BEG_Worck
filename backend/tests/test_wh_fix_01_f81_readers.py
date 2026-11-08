@@ -204,3 +204,59 @@ def test_f81_02_received_by_project_still_reads_the_line_share(monkeypatch, back
         assert {r["project_id"]: r["total_expenses"] for r in out["items"]} == {"prj-1": 720.0}
         assert [u["invoice_id"] for u in out["to_allocate"]] == [INV]
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════ WH81-03 — a SUPPLIER invoice is never project REVENUE ═══════════
+# Probe X8 (orchestrator audit): a Received invoice 1000 + VAT with header
+# prj-1 was read as revenue 1000 / invoiced 1200 by the project P&L readers
+# (no direction filter). Revenue / "invoiced" come from Issued invoices only;
+# the supplier cost stays in these readers through materials / subcontracts.
+
+OWNER = {"id": "owner-a", "org_id": ORG_A, "role": "Owner", "email": "o@a"}
+
+
+@pytest.mark.parametrize("with_sale", [False, True])
+def test_wh81_03_supplier_invoice_is_not_project_revenue(monkeypatch, backend, mode, with_sale):
+    async def scenario(c, op):
+        from app.services import (project_pnl, centralized_reports, project_financial_results,
+                                  cashflow_forecast)
+        from app.routes import clients, projects
+        for mod in (project_pnl, centralized_reports, project_financial_results,
+                    cashflow_forecast, clients, projects):
+            monkeypatch.setattr(mod, "db", op)
+        now = TODAY.isoformat()
+        await op.invoices.insert_one({
+            "id": "inv-x8", "org_id": ORG_A, "invoice_no": "R-X8", "direction": "Received",
+            "kind": "Invoice", "status": "Sent", "issue_date": DAY, "due_date": "2099-12-31",
+            "subtotal": 1000.0, "vat_amount": 200.0, "total": 1200.0, "paid_amount": 0,
+            "remaining_amount": 1200.0, "project_id": "prj-1", "created_at": now})
+        sale = 0.0
+        if with_sale:                       # control: a sale on the same project is revenue
+            sale = 500.0
+            await op.invoices.insert_one({
+                "id": "iss-x8", "org_id": ORG_A, "invoice_no": "I-X8", "direction": "Issued",
+                "kind": "Invoice", "status": "Sent", "issue_date": DAY, "due_date": "2099-12-31",
+                "subtotal": 500.0, "vat_amount": 100.0, "total": 600.0, "paid_amount": 0,
+                "remaining_amount": 600.0, "project_id": "prj-1", "created_at": now})
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"owner_id": "cl-x8"}})
+        await op.clients.insert_one({"id": "cl-x8", "org_id": ORG_A, "name": "Клиент"})
+
+        pnl = await project_pnl.compute_project_pnl(ORG_A, "prj-1")
+        assert pnl["revenue"]["invoiced_net"] == sale
+        assert pnl["revenue"]["invoiced_total"] == sale * 1.2
+        trend = await project_pnl.compute_pnl_trend(ORG_A, "prj-1", 1)
+        assert sum(m["revenue"] for m in trend) == sale
+        cent = await centralized_reports.build_centralized_reports(ORG_A, "prj-1")
+        assert cent["finance"]["total_revenue"] == sale
+        fin = await project_financial_results.compute_financial_results(ORG_A, "prj-1")
+        assert fin["cash"]["invoices"]["invoiced"] == sale * 1.2
+        flow = await cashflow_forecast.build_cashflow_forecast(ORG_A, 30)
+        ids = [i["source_id"] for i in flow["incoming"] + flow["overdue"]]
+        assert "inv-x8" not in ids and ("iss-x8" in ids) == with_sale
+        summ = await clients.get_client_summary("cl-x8", user=OWNER)
+        assert summ["totals"]["total_revenue"] == sale * 1.2
+        await op.projects.insert_one({"id": "prj-1-c", "org_id": ORG_A, "code": "C", "name": "C",
+                                      "parent_project_id": "prj-1", "status": "Active"})
+        agg = await projects.get_project_aggregate("prj-1", user=OWNER)
+        assert agg["invoices"]["own"]["invoiced"] == sale * 1.2
+    run(monkeypatch, backend, mode, scenario)

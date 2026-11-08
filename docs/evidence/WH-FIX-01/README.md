@@ -166,3 +166,17 @@ Decisions inside the finding (recorded, not new rules):
 Gates @ `c3257a6` (real Mongo rs0, `-rs`, baseline main `4bca18a`): R0 814 / 0 skipped · W0 the
 same 15 (identical set) · PAY-01 630 · SEC-01 30/30 · PM-01 6 / 0 skipped · A2C 237/0 · A1 478/0 ·
 warehouse 4 failed + 16 errors (identical to main) · WH-FIX-01 suites 287 passed (185 + 102 new).
+
+## WH81-03 (orchestrator audit, probe X8) — a supplier invoice is never project revenue
+
+Red run: `09_wh81_03_red_on_20b1663.txt` (12 failed on `20b1663`; e.g. P&L revenue 1000 instead of 0).
+Revenue / "invoiced" / expected incoming money now read `direction: "Issued"` only in:
+`project_pnl.compute_project_pnl` + `compute_pnl_trend`, `centralized_reports`,
+`project_financial_results`, and the same pattern found in the sweep: client summary
+(`clients.py` total_revenue), project aggregate `count_invoices` (`projects.py`), cash-flow
+forecast incoming (`cashflow_forecast.py`). Supplier cost stays in these readers through
+materials / subcontracts. Test `test_wh81_03_*` (with / without a sale on the same project,
+off / shadow / enforce × mongomock + real).
+Not changed (document lists, by design or not revenue): project card 5 (a per-invoice list that
+carries `direction`), the morning-briefing payment reminders, client recent-invoice lists,
+by-counterparty turnover, the transactions list.

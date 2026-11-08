@@ -18,7 +18,8 @@ async def build_cashflow_forecast(org_id: str, days: int = 30, start_date: str =
 
     # ── A. Incoming (unpaid invoices) ───────────────────────────
     invoices = await tenant.invoices.find(
-        {"org_id": org_id, "status": {"$in": ["Sent", "PartiallyPaid"]}},
+        {"org_id": org_id, "status": {"$in": ["Sent", "PartiallyPaid"]}, "direction": "Issued"},
+        # WH81-03: incoming money = sales (Issued) invoices only
         {"_id": 0, "id": 1, "invoice_number": 1, "counterparty_name": 1,
          "project_id": 1, "due_date": 1, "total": 1, "paid_amount": 1},
     ).to_list(500)

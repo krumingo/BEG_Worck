@@ -2096,7 +2096,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     # ── Invoices ──
     async def count_invoices(pids):
         invs = await tenant.invoices.find(
-            {"org_id": org_id, "project_id": {"$in": pids}},
+            {"org_id": org_id, "project_id": {"$in": pids}, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
             {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
         ).to_list(500)
         # Proformas are future receivables, not P&L revenue — kept out of invoiced/paid
