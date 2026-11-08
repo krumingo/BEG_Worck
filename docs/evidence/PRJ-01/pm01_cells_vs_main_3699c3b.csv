@@ -143,6 +143,15 @@ POST,/api/projects/{project_id}/reopen-request,viewer,shadow,,,,403,no,
 POST,/api/projects/{project_id}/reopen-request,warehousekeeper,enforce,,,,403,no,
 POST,/api/projects/{project_id}/reopen-request,warehousekeeper,off,,,,403,no,
 POST,/api/projects/{project_id}/reopen-request,warehousekeeper,shadow,,,,403,no,
+POST,/api/projects/{project_id}/wrap-in-group,admin,enforce,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,admin,off,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,admin,shadow,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,owner,enforce,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,owner,off,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,owner,shadow,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,requester,enforce,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,requester,off,201,yes,op.projects,201,yes,op.audit_events;op.projects
+POST,/api/projects/{project_id}/wrap-in-group,requester,shadow,201,yes,op.projects,201,yes,op.audit_events;op.projects
 POST,/api/subcontractor-performance,accountant,enforce,201,yes,op.subcontractor_performance,422,no,
 POST,/api/subcontractor-performance,accountant,off,201,yes,op.subcontractor_performance,422,no,
 POST,/api/subcontractor-performance,accountant,shadow,201,yes,op.subcontractor_performance,422,no,
