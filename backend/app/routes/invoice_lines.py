@@ -193,7 +193,8 @@ async def _apply_header(tenant: TenantData, user: dict, invoice_id: str, session
     transaction as the line write."""
     from app.services.invoice_allocation import apply_header_destination
     invoice = await tenant.invoices.find_one({"id": invoice_id},
-                                             {"_id": 0, "id": 1, "allocations": 1},
+                                             {"_id": 0, "id": 1, "allocations": 1,
+                                              "direction": 1, "project_id": 1},
                                              session=session)
     if invoice:
         await apply_header_destination(tenant, user, invoice, session=session)

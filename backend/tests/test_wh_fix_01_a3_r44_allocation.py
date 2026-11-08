@@ -418,3 +418,20 @@ def test_whfix81_06_embedded_lines_of_a_paid_invoice_change_only_by_correction(
         assert ver["reason"] == "друг обект"
         assert ver["snapshot"]["lines"][0]["project_id"] == "prj-1"   # the previous version
     run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg215_new_line_of_an_issued_invoice_is_not_stamped(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.invoices.insert_one({
+            "id": "inv-iss-draft", "org_id": ORG_A, "invoice_no": "I-215", "direction": "Issued",
+            "kind": "Invoice", "status": "Draft", "issue_date": "2026-11-01",
+            "due_date": "2099-12-31", "currency": "EUR", "subtotal": 0, "total": 0,
+            "allocations": [{"type": "project", "ref_id": "prj-1"}]})
+        r = await c.post("/api/invoice-lines", headers=hdr("acct-a"), json={
+            "invoice_id": "inv-iss-draft", "line_no": 1, "description": "Услуга", "unit": "бр",
+            "qty": 1, "unit_price": 100})
+        assert r.status_code == 201, r.text
+        line = await op.invoice_lines.find_one({"invoice_id": "inv-iss-draft"})
+        assert line["allocations"] == []
+        assert await op.dq_issues.count_documents({}) == 0
+    run(monkeypatch, backend, mode, scenario)

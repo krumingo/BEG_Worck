@@ -282,16 +282,11 @@ def test_finance_detail_drilldowns_name_only_tenant_a_records(monkeypatch, mode)
     assert names == {"cp1": "Baumit Bulgaria", "cp-only-b": "Unknown"}
     assert sum(r["total"] for r in by_cp["items"]) == 15       # A's 10 + 5; B's 999999 never
     by_project = c.get("/api/reports/finance-details/by-project?" + PERIOD).json()
-    # WH-FIX-01 A4 (Р45, oracle Q002 — FLOW-020 L54/L73 "the allocation unit is the
-    # invoice line"; FLOW-008 L142 unallocated is not in the project P&L; FLOW-009 L84
-    # "Остатъкът не изчезва"): these invoices carry only a HEADER allocation, so they
-    # are counted on no project and are listed in „фактури за разпределяне"
-    # (`to_allocate`) — the tenant check reads the names there.
-    assert by_project["items"] == []
-    projects = {d["ref_id"]: (d["project_code"], d["project_name"])
-                for u in by_project["to_allocate"] for d in u["header_destinations"]}
-    # inv-shared's line is fully allocated to warehouses (the line wins over its
-    # header pr-x): final, on no project, not in the bucket.
+    # WH-FIX-01 A4 (Р45, oracle Q002) + FG-215: Р45 is for SUPPLIER invoices —
+    # inv-shared (Received) is counted by its LINE (FLOW-020 L54/L73: the line is
+    # the unit), which is allocated to warehouses → on no project; the INCOME
+    # invoice inv-a-foreign (Issued) keeps main's header counting.
+    projects = {r["project_id"]: (r["project_code"], r["project_name"]) for r in by_project["items"]}
     assert projects == {"pr-only-b": ("", "Unknown")}
 
     # WHFIX81 (restored check): once A's line on the SHARED invoice id is
@@ -301,7 +296,7 @@ def test_finance_detail_drilldowns_name_only_tenant_a_records(monkeypatch, mode)
         "allocations": [{"type": "project", "ref_id": "pr-x"}]}}))
     shared = c.get("/api/reports/finance-details/by-project?" + PERIOD).json()
     assert {r["project_id"]: (r["project_code"], r["project_name"]) for r in shared["items"]} == {
-        "pr-x": ("A-CODE-PRX", "A-OWN-PROJECT")}
+        "pr-x": ("A-CODE-PRX", "A-OWN-PROJECT"), "pr-only-b": ("", "Unknown")}
     assert_no_b(db, shared)
     top = {}
     for direction in ("expense", "income"):

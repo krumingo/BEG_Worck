@@ -747,3 +747,35 @@ async def test_whfix81_line_unit_price_is_used_exactly(canonical_mongo_db, allow
     res = await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
                     quantity=Decimal("3"), invoice_id="inv-x", invoice_line_id="line-x")
     assert Decimal(str(res.envelope["unit_value"])) * 3 == Decimal("0.99999")
+
+
+# ═══════════ FG-215 — Р44/Р45 are for SUPPLIER invoices; income keeps main's behaviour ═══════════
+
+async def test_fg215_issued_invoice_with_header_project_counts_as_income_like_main(
+        canonical_mongo_db, monkeypatch):
+    _client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await db["projects"].insert_one({"id": "p-1", "org_id": T, "code": "p-1", "name": "p-1"})
+    await db["invoices"].insert_one({
+        "id": "iss-1", "org_id": T, "invoice_no": "ISS-1", "direction": "Issued", "total": 500.0,
+        "issue_date": "2026-11-01", "status": "Sent", "project_id": "p-1",
+        "allocations": [{"type": "project", "ref_id": "p-1"}]})
+    await db["invoice_lines"].insert_one({          # a line WITHOUT an allocation
+        "id": "l-iss-1", "org_id": T, "invoice_id": "iss-1", "qty": 1, "unit_price": 500,
+        "line_total_inc_vat": 500.0, "allocations": []})
+    from app.routes import dashboard
+    out = await dashboard.get_finance_by_project(
+        user=_user(), date_from="2026-10-01", date_to="2026-11-30", preset=None,
+        page=1, page_size=20)
+    assert {r["project_id"]: r["total_income"] for r in out["items"]} == {"p-1": 500.0}
+    assert out["to_allocate"] == []
+    tenant = TenantData.for_resolved_org(db, T)
+    from app.services.invoice_allocation import (
+        ensure_payable, invoices_to_allocate, migrate_header_allocations,
+    )
+    assert await invoices_to_allocate(tenant, T) == []
+    await ensure_payable(tenant, await db["invoices"].find_one({"id": "iss-1"}))   # no 409
+    rep = await migrate_header_allocations(tenant, T, _user(), dry_run=False)
+    assert rep == {"tenant": T, "dry_run": False, "written": [], "pending": [], "skipped": []}
+    assert (await db["invoice_lines"].find_one({"id": "l-iss-1"}))["allocations"] == []
+    assert await db["dq_issues"].count_documents({}) == 0

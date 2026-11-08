@@ -136,6 +136,14 @@ def is_supplier_invoice(invoice: Optional[dict]) -> bool:
 HEADER_NOTE = "от заглавието на фактурата (Р45)"
 
 
+def under_r45(invoice: Optional[dict]) -> bool:
+    """FG-215 — Р44 / Р45 (pending, header stamping, 409, migration, DQ) are
+    decided for SUPPLIER (Received) invoices only (the question to Крум was
+    „фактура на доставчик"; FLOW-020 / FLOW-009 are purchases). Issued
+    (income) invoices keep the behaviour of main."""
+    return bool(invoice) and invoice.get("direction") == "Received"
+
+
 def header_destinations(invoice: Optional[dict]) -> List[dict]:
     """The header's destinations: ``allocations[]``; for a SUPPLIER invoice
     without it, its header ``project_id`` (FG-200 — the finance UI's one
@@ -152,6 +160,8 @@ def stamp_embedded_lines(invoice: dict) -> List[dict]:
     """FG-200 / A4 #9 — write the ONE header destination on every embedded
     line that has none (in place); returns [{line_id, before, after}] for the
     AuditEvents the caller records in the same transaction."""
+    if not under_r45(invoice):
+        return []                                    # FG-215
     dest = single_header_destination(invoice)
     if dest is None:
         return []
@@ -183,6 +193,8 @@ async def invoice_final_state(tenant, invoice: dict, *, session=None) -> Dict[st
     """The invoice's state: pending when a line is pending, or when it carries a
     header allocation that no line carries yet (A4 #8/#9: never dropped)."""
     state = await invoice_allocation_state(tenant, invoice["id"], session=session)
+    if not under_r45(invoice):
+        return {**state, "status": ALLOCATED}       # FG-215: income invoices unchanged
     if state["status"] == ALLOCATED and header_destinations(invoice) and not state["line_count"]:
         state = {**state, "status": PENDING}
     return state
@@ -191,7 +203,10 @@ async def invoice_final_state(tenant, invoice: dict, *, session=None) -> Dict[st
 async def apply_header_destination(tenant, user: dict, invoice: dict, *, session=None) -> int:
     """A4 #9 — write the single header destination on every line without an
     allocation (qty = the line's qty), each with an AuditEvent, in the caller's
-    transaction. Idempotent: allocated lines are never touched. → lines written."""
+    transaction. Idempotent: allocated lines are never touched. → lines written.
+    FG-215: supplier invoices only."""
+    if not under_r45(invoice):
+        return 0
     dest = single_header_destination(invoice)
     if dest is None:
         return 0
@@ -264,8 +279,9 @@ async def migrate_header_allocations(tenant, org_id: str, actor: dict, *, dry_ru
         await ensure_chain_index(tenant._db)          # pylint: disable=protected-access
     invs = [i async for i in tenant.invoices.find(
         {"org_id": org_id, "status": {"$ne": "Cancelled"},
+         "direction": "Received",                    # FG-215: supplier invoices only
          "$or": [{"allocations.0": {"$exists": True}},
-                 {"direction": "Received", "project_id": {"$nin": [None, ""]}}]},
+                 {"project_id": {"$nin": [None, ""]}}]},
         {"_id": 0, "id": 1, "invoice_no": 1, "allocations": 1, "direction": 1,
          "project_id": 1, "total": 1, "status": 1})]
     for inv in invs:
@@ -425,8 +441,8 @@ async def refresh_invoice_dq(tenant, invoice_id: str, *, actor: Optional[dict] =
                              "allocations": 1, "project_id": 1, "status": 1}, session=session)
     if not inv or inv.get("status") == "Cancelled":
         return
-    if inv.get("direction") != "Received" and not header_destinations(inv):
-        return
+    if not under_r45(inv):
+        return                                       # FG-215
     state = await invoice_final_state(tenant, inv, session=session)
     await sync_invoice_issue(tenant, tenant.org_id, inv, state, actor=actor, session=session,
                              now=now)
@@ -444,12 +460,10 @@ async def invoices_to_allocate(tenant, org_id: str, *, now: Optional[datetime] =
     out = []
     async for inv in tenant.invoices.find(
             {"org_id": org_id, "status": {"$ne": "Cancelled"},
-             "$or": [{"direction": "Received"}, {"allocations.0": {"$exists": True}}]},
+             "direction": "Received"},                 # FG-215: supplier invoices only
             {"_id": 0, "id": 1, "invoice_no": 1, "issue_date": 1, "counterparty_name": 1,
              "total": 1, "status": 1, "direction": 1, "allocations": 1, "project_id": 1,
              "created_at": 1}):
-        if inv.get("direction") != "Received" and not header_destinations(inv):
-            continue
         state = await invoice_final_state(tenant, inv)
         if state["status"] == ALLOCATED:
             continue

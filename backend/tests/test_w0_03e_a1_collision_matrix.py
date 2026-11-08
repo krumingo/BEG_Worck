@@ -353,23 +353,17 @@ async def _matrix(monkeypatch, db, mode):
         assert {r["counterparty_id"]: r["counterparty_name"] for r in by_cp["items"]}["cp-only-b"] \
             == "Unknown"
         by_pr = await get(c, "/api/reports/finance-details/by-project?" + PERIOD)
-        # WH-FIX-01 A4 (Р45, oracle Q002 — FLOW-020 L54/L73 "the allocation unit is the
-        # invoice line"; FLOW-008 L142 unallocated is not in the project P&L; FLOW-009 L84
-        # "Остатъкът не изчезва"): these invoices carry only a HEADER allocation, so they
-        # are counted on no project and are listed in „фактури за разпределяне"
-        # (`to_allocate`) — the tenant check reads the names there.
-        assert by_pr["items"] == []
-        assert {d["ref_id"]: d["project_name"] for u in by_pr["to_allocate"]
-                for d in u["header_destinations"]} == {"pr-only-b": "Unknown"}
-        # inv-shared's line is fully allocated to warehouses (the line wins over
-        # its header pr-x): final, on no project, not in the bucket.
+        # WH-FIX-01 A4 (Р45) + FG-215: inv-shared (Received) counts by its LINE,
+        # allocated to warehouses → on no project; the INCOME invoice inv-a-foreign
+        # (Issued) keeps main's header counting.
+        assert {r["project_id"]: r["project_name"] for r in by_pr["items"]} == {"pr-only-b": "Unknown"}
         # WHFIX81 (restored check): A's line on the shared invoice id, allocated
         # to the shared project id pr-x → the report names A's own project.
         await db["invoice_lines"].update_one({"id": "line-a", "org_id": ORG_A}, {"$set": {
             "allocations": [{"type": "project", "ref_id": "pr-x"}]}})
         shared = await get(c, "/api/reports/finance-details/by-project?" + PERIOD)
         assert {r["project_id"]: r["project_name"] for r in shared["items"]} == {
-            "pr-x": "A-OWN-PROJECT"}
+            "pr-x": "A-OWN-PROJECT", "pr-only-b": "Unknown"}
         await get(c, "/api/reports/finance-details/transactions?" + PERIOD)
         await get(c, "/api/reports/finance-details/top-counterparties?direction=income&" + PERIOD)
         await get(c, "/api/reports/finance-details/top-counterparties?direction=expense&" + PERIOD)
