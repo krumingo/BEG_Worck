@@ -5338,3 +5338,32 @@ SEC71-M1 resolved. No blocking finding remains.
 | A2C / A1 | 0 / 0 |
 | R0 | 814 |
 | PM-01 | 6 |
+
+## 2026-11-08 15:50 UTC: #84 `081f35b` (Addenda B+C: Р52 D7/D8/D12, Р53 FG-231..235): PASS, no blocking finding
+
+- **D8, on my own trial merge of `081f35b` + #82 `1622f62`:**
+  - conflicts resolved as in the evidence: `finance.py` keeps both the Р51(2) and the Р47 checks; `ownership.py` keeps one entry;
+  - inv_cn_01 + wh_rev_01 + the trial D8 test: **215 passed** on real Mongo;
+  - a credit linked to a #82 reversal has no second cost effect; a defect credit lowers the project material cost once (10.00).
+- **accept-difference:** Owner only (`APPROVER_ROLES = ("Owner",)`, Accountant → 403 tested). Reason, key, conditional write and an AuditEvent, all in one transaction.
+- **FG-231 migration:**
+  - `plan` only reads;
+  - `apply` refuses (nothing changed) while supplier+number conflicts exist;
+  - the `supplier_key` backfill is conditional on direction.
+
+**Non-blocking notes:**
+- **FG-233 residual:** a ledger movement linked only by `invoice_id` writes no shared lock document. The receipt command also never reads the invoice's status, so even sequentially it can name a cancelled supplier invoice. The effect is data quality (a stale reference; the goods and the cost are real; nothing is payable on a cancelled invoice); no money moves. Recommendation: debt. A receipt with `invoice_id` should bump a per-invoice lock or check the status in its transaction.
+- **INV84-02:** the Р52(1) note effect is applied only in `project_pnl.compute_project_pnl`. The other project cost readers (centralized_reports, project-profit, financial-results) do not apply it, so readers disagree after a defect credit.
+- **Indexes:** the migration still drops the legacy index before creating the new ones. `server.py` creates both indexes in one `try`, so if the first fails the second is skipped.
+
+| Gate | Result |
+|---|---|
+| probe invcn01 V1–V5 | 99 |
+| inv_cn_01 | 111 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
