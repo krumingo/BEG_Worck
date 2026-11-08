@@ -7,9 +7,18 @@
    "written": 0
   },
   "migration": {
-   "audit_new": 4,
+   "audit_new": 6,
    "available": true,
    "b_linked_to_own": true,
+   "code_after": "ST01-A-001-А",
+   "code_before": "PRB-A-warr_parent",
+   "code_events": [
+    [
+     "PRB-A-warr_parent",
+     "ST01-A-001-А"
+    ]
+   ],
+   "code_renamed": true,
    "dq_resolve_events": 1,
    "dq_routing": [
     {
@@ -23,7 +32,7 @@
     "already": 0,
     "dq": 2,
     "dq_open": 0,
-    "link": 2
+    "link": 4
    },
    "dry_wrote": 0,
    "escalate_again": 0,
@@ -36,11 +45,11 @@
     "already": 0,
     "dq": 2,
     "dq_open": 0,
-    "link": 2
+    "link": 4
    },
    "link_events": 1,
    "map_counts": {
-    "already": 2,
+    "already": 4,
     "dq": 0,
     "dq_open": 1,
     "link": 1
@@ -61,21 +70,34 @@
    "parent_expected": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "parent_linked_to": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "parent_type": "Warranty",
-   "projects_after": 62,
-   "projects_before": 62,
+   "projects_after": 72,
+   "projects_before": 72,
+   "r60": {
+    "agg_minus_parent": 140.0,
+    "link_events": 1,
+    "second_level_non_warranty": 400,
+    "sub_entry_expense": 140.0,
+    "sub_entry_warranty_children": [
+     "prj01-A-warr_sub"
+    ],
+    "warr_sub_code": "PRB-A-warr_sub",
+    "warr_sub_of": "prj01-A-sub_orig",
+    "warr_sub_parent": "prj01-A-sub_orig"
+   },
    "second_counts": {
-    "already": 2,
+    "already": 4,
     "dq": 0,
     "dq_open": 2,
     "link": 0
    },
+   "sub_after_link": 201,
    "wrong_plan_refused": "PlanMismatch"
   },
   "sub_paths": {
    "add_sub": "WARRANTY_IN_ORIGINAL_PROJECT",
    "create_sub": "WARRANTY_IN_ORIGINAL_PROJECT",
    "new_projects": 0,
-   "warranty_projects": 2,
+   "warranty_projects": 3,
    "wrap": "WARRANTY_IN_ORIGINAL_PROJECT"
   },
   "to_warranty": {
@@ -120,17 +142,17 @@
     "diff": {
      "after": {
       "kind": "warranty",
-      "reopen_id": "b6912260-74ff-5c63-9dbf-73b31043d2e6",
+      "reopen_id": "28b1f3b5-f571-5ec4-9dde-d6064417d67f",
       "status": "Active"
      },
      "before": {
       "status": "Completed"
      }
     },
-    "idempotency_key": "ac1827c7417443ec8262b3c923564e4c",
+    "idempotency_key": "1b5d5241419445fbaebd7c82eb70b1c1",
     "reason": "теч в банята след приемане",
     "source_flow": "FLOW-001",
-    "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
+    "tenant_id": "4531c159-e08e-44d5-a80d-e36fed83a205"
    }
   ],
   "no_key": 428,
@@ -184,10 +206,10 @@
      },
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
     },
-    "idempotency_key": "a79cdac4a4704b79a0de9a19c37df8b2",
+    "idempotency_key": "eec9a3c7c768436bb63a74a736b490c1",
     "reason": "грешна снимка",
     "source_flow": "FLOW-029",
-    "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
+    "tenant_id": "4531c159-e08e-44d5-a80d-e36fed83a205"
    }
   ],
   "file_kept": true,
@@ -222,10 +244,10 @@
        "status": "Completed"
       }
      },
-     "idempotency_key": "eb73fd0219784cd58fb444190c98ac1a",
+     "idempotency_key": "090145386ffa4419817e3f896bedde62",
      "reason": "приключен и платен",
      "source_flow": "FLOW-001",
-     "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
+     "tenant_id": "4531c159-e08e-44d5-a80d-e36fed83a205"
     }
    ],
    "from_active": 409,
@@ -251,10 +273,10 @@
        "status": "Draft"
       }
      },
-     "idempotency_key": "cf495ae70aa844d2b5b3c33c6de366f5",
+     "idempotency_key": "deca39d77c85466e80b4d65bc41301e0",
      "reason": "клиентът се отказа",
      "source_flow": "FLOW-001",
-     "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
+     "tenant_id": "4531c159-e08e-44d5-a80d-e36fed83a205"
     }
    ],
    "project_status": "Cancelled",
@@ -302,10 +324,10 @@
        "type": "Billable"
       }
      },
-     "idempotency_key": "c3faee5e311e48c6a4d98b50bdbf4d17",
+     "idempotency_key": "fe4c41ea40794f4f9e8440fe4a56c1e9",
      "reason": "празна чернова",
      "source_flow": "FLOW-001",
-     "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
+     "tenant_id": "4531c159-e08e-44d5-a80d-e36fed83a205"
     }
    ],
    "project_kept": false,
@@ -316,7 +338,7 @@
   "link_attendance": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "attendance_entries": 1
+    "attendance_entries": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -325,7 +347,7 @@
   "link_child_project": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "projects": 1
+    "projects": "parent_project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -334,7 +356,7 @@
   "link_client_act": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "client_acts": 1
+    "client_acts": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -343,7 +365,7 @@
   "link_file": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "media_files": 1
+    "media_files": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -352,7 +374,25 @@
   "link_invoice": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "invoices": 1
+    "invoices": "project_id"
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_invoice_line_alloc": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "invoice_lines": "allocations.ref_id"
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_invoice_nested_alloc": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "invoices": "lines.project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -361,7 +401,7 @@
   "link_labor": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "labor_entries": 1
+    "labor_entries": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -370,7 +410,7 @@
   "link_material_waste": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "material_waste_entries": 1
+    "material_waste_entries": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -379,7 +419,7 @@
   "link_media_context": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "media_files": 1
+    "media_files": "context_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -388,7 +428,7 @@
   "link_offer": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "offers": 1
+    "offers": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -397,7 +437,7 @@
   "link_payment": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "finance_payments": 1
+    "finance_payments": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -406,7 +446,7 @@
   "link_photo": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "project_photos": 1
+    "project_photos": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -415,7 +455,7 @@
   "link_qr_entity": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "asset_qr_codes": 1
+    "asset_qr_codes": "entity_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -424,7 +464,16 @@
   "link_subcontract": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "subcontractor_packages": 1
+    "subcontractor_packages": "project_id"
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_unknown_nested_key": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "material_requests": "nested"
    },
    "project_kept": true,
    "row_kept": true,
@@ -433,7 +482,7 @@
   "link_warehouse": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "warehouse_transactions": 1
+    "warehouse_transactions": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -442,7 +491,7 @@
   "link_work_report": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
-    "work_reports": 1
+    "work_reports": "project_id"
    },
    "project_kept": true,
    "row_kept": true,
@@ -532,13 +581,36 @@
   "log_site_manager": 200,
   "log_technician": 403,
   "log_viewer": 403,
-  "score_invalid": [
-   422,
-   422,
-   422,
-   422,
-   422
-  ],
+  "score_post_bad": {
+   "'4'": 422,
+   "'x'": 422,
+   "-3": 422,
+   "0": 422,
+   "2.5": 422,
+   "6": 422,
+   "99": 422,
+   "True": 422
+  },
+  "score_post_ok": {
+   "1": 201,
+   "5": 201
+  },
+  "score_put_bad": {
+   "'4'": 422,
+   "'x'": 422,
+   "-3": 422,
+   "0": 422,
+   "2.5": 422,
+   "6": 422,
+   "99": 422,
+   "True": 422
+  },
+  "score_put_ok": {
+   "1": 200,
+   "5": 200
+  },
+  "score_stored": 1,
+  "score_versions": 3,
   "update_nothing": 422,
   "update_owner": 200,
   "update_paid_field": 422,
