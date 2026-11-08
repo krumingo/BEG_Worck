@@ -5604,3 +5604,26 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 | **warehouse** | **1121 (44 files, 0 bad)** |
 
 Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt) and INV84-02 (other project cost readers) — re-check whether FG-246..271 changed them is left to Codex.
+
+## 2026-11-08 20:01 UTC: #86 `6479cf1` (merge `0fe133db` of main `3699c3b` + `quality_score` 1–5): PASS, no blocking finding
+
+- **Merge checks:** see the 19:16 entry (only `run_meta` differs from merge-tree; role-union 0; PM-01 168/168).
+- **`quality_score`:** 1–5 is enforced on POST and PUT (0, 6, 99, -3, 2.5, "x", "4", true → 422); my minor note is resolved.
+
+| Gate | Result |
+|---|---|
+| prj_01 | 9 |
+| SEC-01 | 30 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+**#76 `aa369d8`** (SUB-ADV-01 + merge `8780cfb` of main `1ea98fe` + direct-call fix): merge checks done ahead of its run.
+- **Byte check:** only the conflict files (`catalog`, `revenue_expense`, `subcontractors`, PM-01 test, frontend idempotency, generated files) differ from merge-tree.
+- **Role-union:** 0 differences.
+- **PM-01:** 503 own cells all keep the PR's value (main already had most via #69/#71; merge delta 48); 0 extra.
+- **`aa369d8` fix:** the Request param defaults to None on 5 finance-only reads, and `advance_visible` returns False with no request in enforce (fail closed; off/shadow by role). The money decorators already strip with no request.
+- **SEC-02 flake:** `row["leaks_7777"] = "7777" in resp.text` (main's `test_sec_02_finance_read.py` L496) is a raw substring match, so an id or timestamp containing "7777" gives a false positive. It never hides a leak. Debt: match `\b7777(\.0)?\b` or check parsed values.
