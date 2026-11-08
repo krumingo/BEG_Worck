@@ -1,0 +1,11 @@
+# SEC-02-D counter-check: the audit probe docs/audit/probes/sec02/probe_sec02_c_pulse_derive.py
+# (claude/audit-log; vendored unchanged as backend/tools/audit_probe_sec02_c_pulse_derive.py),
+# local MongoDB 7.0 replica set, PERMISSION_SERVICE_MODE=off.
+## at f17f7e5 (before SEC-02-D)
+DERIVED per-worker (pay, rate/h): {technician: (200.0, 25.0), driver: (210.0, 35.0)}
+FAILS: per-worker pay derivable from the SM budget view
+## at SEC-02-D
+smr_summary: [{"smr_type": "Мазилка", "total_hours": 8}, {"smr_type": "Шпакловка", "total_hours": 6}]
+workers: (absent)   total_labor_cost: 410.0 (2 workers)
+DERIVED per-worker (pay, rate/h): {}
+FAILS: none

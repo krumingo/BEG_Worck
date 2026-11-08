@@ -1,0 +1,13 @@
+# at 5af530e (before FG-111 fix)
+GET /api/alarms — in FINANCE_READS: False, strips money: False
+GET /api/alarms/{event_id} — in FINANCE_READS: False, strips money: False
+GET /api/alarms/dashboard — in FINANCE_READS: False, strips money: False
+POST /api/alarms/evaluate — in FINANCE_READS: False, strips money: False
+non-finance answer of GET /api/alarms: {"items": [{"id": "e", "rule_id": "r", "rule_name": "Бюджет над 80%", "severity": "critical", "type": "budget", "site_id": "P1", "site_name": "P1", "triggered_at": "2026-11-03T08:00:00", "status": "active", "message": "P1: бюджет 900.0% изхарчен", "context": {"metric_value": 900.0, "threshold": 80, "entity_id": "P1", "entity_type": "project", "details": {}}}], "total": 1, "page": 1, "page_size": 50}
+
+# SEC-02-G (FG-111)
+GET /api/alarms — in FINANCE_READS: True, strips money: True
+GET /api/alarms/{event_id} — in FINANCE_READS: True, strips money: True
+GET /api/alarms/dashboard — in FINANCE_READS: True, strips money: True
+POST /api/alarms/evaluate — in FINANCE_READS: True, strips money: True
+non-finance answer of GET /api/alarms: {"items": [{"id": "e", "rule_id": "r", "rule_name": "Бюджетна аларма", "severity": "warning", "type": "budget", "site_id": "P1", "site_name": "P1", "triggered_at": "2026-11-03T08:00:00", "status": "active", "message": "Бюджетът изисква внимание — подробности при финансите", "context": {"entity_id": "P1", "entity_type": "project"}}], "total": 1, "page": 1, "page_size": 50}

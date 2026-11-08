@@ -2,7 +2,7 @@
 Routes - Price Modifiers (Ценови модификатори).
 Cascade: org_default → project override → line override.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -11,7 +11,8 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import require_money_write, OWNER_ADMIN_ROLES
+from app.permissions.money_write import require_money_write, OWNER_ADMIN_ROLES, require_finance_read
+from app.permissions.money_write import audit_money_write  # SEC-02-F (FG-75)
 from app.permissions.money_input import project_in_tenant  # SEC-01-C03-B (FG-29)
 from app.services.price_modifiers import (
     get_effective_modifiers, apply_modifiers_to_price,
@@ -25,6 +26,13 @@ def _tenant(user: dict) -> TenantData:
     return TenantData.for_user(db, user)
 
 router = APIRouter(tags=["Price Modifiers"])
+
+# SEC-02-F (FG-75): the fields a PUT may change — the before/after of the AuditEvent.
+_AUDITED = ("modifiers", "auto_rules")
+
+
+def _audited(doc):
+    return {k: (doc or {}).get(k) for k in _AUDITED} if doc else None
 
 
 class ModifiersUpdate(BaseModel):
@@ -40,7 +48,10 @@ class CalculateRequest(BaseModel):
 # ── Org Defaults ───────────────────────────────────────────────────
 
 @router.get("/price-modifiers/org")
-async def get_org_modifiers(user: dict = Depends(require_m2)):
+async def get_org_modifiers(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.org_price_modifier.read", module="M2", resource_type="org_price_modifier")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     doc = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0}
@@ -53,6 +64,7 @@ async def get_org_modifiers(user: dict = Depends(require_m2)):
 @router.put("/price-modifiers/org")
 async def update_org_modifiers(
     data: ModifiersUpdate,
+    request: Request,
     _sec01: dict = Depends(require_money_write(
         "pricing.org_modifier.update", module="M2", resource_type="price_modifiers_config",
         roles=OWNER_ADMIN_ROLES)),  # SEC-01-C01: the existing Owner/Admin rule, all modes
@@ -73,6 +85,7 @@ async def update_org_modifiers(
             if k in data.auto_rules:
                 update[f"auto_rules.{k}"] = data.auto_rules[k]
 
+    before = await tenant.price_modifiers_config.find_one({"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0})
     await tenant.price_modifiers_config.update_one(
         {"org_id": user["org_id"], "scope": "org_default"},
         {"$set": update, "$setOnInsert": {
@@ -81,15 +94,25 @@ async def update_org_modifiers(
         }},
         upsert=True,
     )
-    return await tenant.price_modifiers_config.find_one(
+    after = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "org_default"}, {"_id": 0}
     )
+    await audit_money_write(  # SEC-02-F (FG-75; CLAUDE.md §14): canonical AuditEvent
+        request, user, action="pricing.org_modifier.updated", source_flow="FLOW-023",
+        entity_type="price_modifiers_config", entity_id=after.get("id"),
+        scope_type="company", scope_id=user["org_id"], before=_audited(before), after=_audited(after),
+        reason="price modifiers org_default updated")
+    return after
 
 
 # ── Project Override ───────────────────────────────────────────────
 
 @router.get("/price-modifiers/project/{project_id}")
-async def get_project_modifiers(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_modifiers(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_price_modifier.read", module="M2", resource_type="project_price_modifier")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     doc = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0}
@@ -101,6 +124,7 @@ async def get_project_modifiers(project_id: str, user: dict = Depends(require_m2
 async def update_project_modifiers(
     project_id: str,
     data: ModifiersUpdate,
+    request: Request,
     _sec01: dict = Depends(require_money_write(
         "pricing.project_modifier.update", module="M2", resource_type="price_modifiers_config")),  # SEC-01: before any read/write
     user: dict = Depends(require_m2),
@@ -118,6 +142,7 @@ async def update_project_modifiers(
             if k in data.auto_rules:
                 update[f"auto_rules.{k}"] = data.auto_rules[k]
 
+    before = await tenant.price_modifiers_config.find_one({"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0})
     await tenant.price_modifiers_config.update_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id},
         {"$set": update, "$setOnInsert": {
@@ -126,9 +151,15 @@ async def update_project_modifiers(
         }},
         upsert=True,
     )
-    return await tenant.price_modifiers_config.find_one(
+    after = await tenant.price_modifiers_config.find_one(
         {"org_id": user["org_id"], "scope": "project", "project_id": project_id}, {"_id": 0}
     )
+    await audit_money_write(  # SEC-02-F (FG-75; CLAUDE.md §14): canonical AuditEvent
+        request, user, action="pricing.project_modifier.updated", source_flow="FLOW-023",
+        entity_type="price_modifiers_config", entity_id=after.get("id"),
+        scope_type="project", scope_id=project_id, before=_audited(before), after=_audited(after),
+        reason="price modifiers project updated")
+    return after
 
 
 @router.delete("/price-modifiers/project/{project_id}")
@@ -156,7 +187,11 @@ async def delete_project_modifiers(
 # ── Effective (merged with auto-rules) ─────────────────────────────
 
 @router.get("/price-modifiers/effective/{project_id}")
-async def get_effective(project_id: str, user: dict = Depends(require_m2)):
+async def get_effective(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.effective_price_modifier.read", module="M2", resource_type="effective_price_modifier")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     result = await get_effective_modifiers(user["org_id"], project_id)
     return {"project_id": project_id, **result}
 
@@ -164,7 +199,11 @@ async def get_effective(project_id: str, user: dict = Depends(require_m2)):
 # ── Calculate ──────────────────────────────────────────────────────
 
 @router.post("/price-modifiers/calculate")
-async def calculate_price(data: CalculateRequest, user: dict = Depends(require_m2)):
+async def calculate_price(
+    data: CalculateRequest,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.price_modifier_calculation.execute", module="M2", resource_type="price_modifier_calculation")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     eff = await get_effective_modifiers(user["org_id"], data.project_id)
     result = apply_modifiers_to_price(data.base_cost, eff["modifiers"])
     return result
@@ -173,7 +212,11 @@ async def calculate_price(data: CalculateRequest, user: dict = Depends(require_m
 # ── SMR Analysis Integration ──────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/recalculate-with-modifiers")
-async def recalculate_with_modifiers(analysis_id: str, user: dict = Depends(require_m2)):
+async def recalculate_with_modifiers(
+    analysis_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.smr_analysis_modifier_recalculation.execute", module="M2", resource_type="smr_analysis_modifier_recalculation")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Recalculate all lines using project-level price modifiers."""
     tenant = _tenant(user)
     from app.routes.smr_analysis import calc_line, calc_totals
@@ -221,7 +264,11 @@ async def recalculate_with_modifiers(analysis_id: str, user: dict = Depends(requ
 
 
 @router.get("/smr-analyses/{analysis_id}/lines/{line_id}/modifier-breakdown")
-async def get_line_modifier_breakdown(analysis_id: str, line_id: str, user: dict = Depends(require_m2)):
+async def get_line_modifier_breakdown(
+    analysis_id: str, line_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.smr_modifier_breakdown.read", module="M2", resource_type="smr_modifier_breakdown")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Show step-by-step modifier breakdown for a specific line."""
     tenant = _tenant(user)
     doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})

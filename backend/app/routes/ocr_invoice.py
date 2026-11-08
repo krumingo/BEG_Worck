@@ -15,7 +15,7 @@ from app.services.ocr_invoice import create_ocr_intake
 from app.master_data.intake_hooks import observe_ocr_supplier
 from pathlib import Path
 from app.tenancy.data_access import TenantData
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import (require_money_write, strip_money_for_non_finance)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -119,6 +119,7 @@ async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
 # ── List / Detail ──────────────────────────────────────────────────
 
 @router.get("/ocr-invoice")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def list_intakes(
     status: Optional[str] = None,
     project_id: Optional[str] = None,
