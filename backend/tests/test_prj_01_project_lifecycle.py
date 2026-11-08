@@ -542,9 +542,26 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                       json={**body, "actual_paid_amount": 5})["status"]
         d["create_no_key"] = call("POST", "/api/subcontractor-performance", key=None,
                                   json=body)["status"]
-        d["score_invalid"] = [call("POST", "/api/subcontractor-performance",
-                                   json={**body, "quality_score": v})["status"]
-                              for v in (0, 6, 4.5, "4", -1)]
+        # R56(3) (audit on 28fb230): an integer 1–5 on EVERY write path, else 422
+        bad_scores = (0, 6, 99, -3, 2.5, "x", "4", True)
+        d["score_post_bad"] = {repr(v): call("POST", "/api/subcontractor-performance",
+                                             json={**body, "quality_score": v})["status"]
+                               for v in bad_scores}
+        d["score_post_ok"] = {}
+        score_ids = {}
+        for v in (1, 5):
+            r = call("POST", "/api/subcontractor-performance", json={**body, "quality_score": v})
+            d["score_post_ok"][repr(v)] = r["status"]
+            score_ids[v] = (r["body"] or {}).get("id") if isinstance(r["body"], dict) else None
+        surl = "/api/subcontractor-performance/%s" % score_ids.get(1)
+        d["score_put_bad"] = {repr(v): call("PUT", surl, json={"quality_score": v})["status"]
+                              for v in bad_scores}
+        d["score_put_ok"] = {repr(v): call("PUT", surl, json={"quality_score": v})["status"]
+                             for v in (5, 1)}
+        d["score_stored"] = (q(lambda: op_db.subcontractor_performance.find_one(
+            {"id": score_ids.get(1)}, {"_id": 0})) or {}).get("quality_score")
+        d["score_versions"] = q(lambda: op_db.subcontractor_performance_versions.count_documents(
+            {"record_id": score_ids.get(1)}))
         d["create_unknown_sub"] = call("POST", "/api/subcontractor-performance",
                                        json={**body, "subcontractor_id": "nope"})["status"]
         r = call("POST", "/api/subcontractor-performance", role="requester", json=body)
@@ -845,7 +862,12 @@ def test_fg240_rating_rights_versions_audit_and_paid_from_the_ledger(obs):
     assert d["update_owner"] == 200 and d["update_replay_same"]
     assert d["version_after"] == 2 and d["versions"] == [1, 2]
     assert d["events"] == ["subcontractor_performance.create", "subcontractor_performance.update"]
-    assert d["score_invalid"] == [422, 422, 422, 422, 422]      # R56(3): an integer 1–5
+    # R56(3): an integer 1–5 on POST and PUT; 0, 6, 99, −3, 2.5, "x", "4", true → 422
+    assert set(d["score_post_bad"].values()) == {422}, d["score_post_bad"]
+    assert set(d["score_put_bad"].values()) == {422}, d["score_put_bad"]
+    assert d["score_post_ok"] == {"1": 201, "5": 201}
+    assert d["score_put_ok"] == {"5": 200, "1": 200}
+    assert d["score_stored"] == 1 and d["score_versions"] == 3   # v1 + the two accepted PUTs
     assert d["legacy_paid_shown"] == 180          # 150 + advance 30 (R39); 50 reversed
     assert d["legacy_manual_kept"] == 999         # history kept, not used
     assert d["legacy_manual_exposed"] == 999
