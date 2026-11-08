@@ -41,6 +41,17 @@ from app.services.warehouse_movements import CanonicalAction, LocationKey, Locat
 from app.services.warehouse_movements.service import CommandInput, CommandService
 from app.tenancy.data_access import TenantData
 
+
+def _sec02_req(path="/api/sec02-direct-call"):
+    """SEC-02-G (audit SEC71-M1): a real Request for a direct call of an R20-decorated
+    handler — the role is the ``user=`` the test already passes (FastAPI injects this
+    request in production; without one the decorator fails closed and strips money)."""
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "GET", "path": path, "headers": [],
+                    "query_string": b"", "root_path": "", "scheme": "http",
+                    "server": ("testserver", 80), "client": ("testclient", 50000)})
+
+
 pytest_plugins = ["tests.warehouse_canonical_conftest"]
 
 T = "org_c22"
@@ -92,6 +103,8 @@ _DB_MODULES = (
 def _patch_dbs(monkeypatch, db):
     # The write-off needs evidence file_ids → File Registry on (as in C21).
     monkeypatch.setenv("FILE_REGISTRY_ENABLED", "1")
+    from tests.warehouse_canonical_conftest import sec02_owner_in_enforce
+    sec02_owner_in_enforce(monkeypatch, T, T2)        # SEC-02-G (SEC71-M1): R20 reads
     for name in _DB_MODULES:
         mod = importlib.import_module(name)
         if hasattr(mod, "db"):
@@ -217,10 +230,10 @@ async def _all_reports(tenant=T) -> dict:
               + pbp["material_undated"] + pbp["waste_undated"], 2),
         round(sum(p["waste"] for p in pbp["periods"]) + pbp["waste_undated"], 2))
 
-    mb = await materials_baseline.get_project_material_summary(PROJECT, user=u)
+    mb = await materials_baseline.get_project_material_summary(PROJECT, user=u, _sec02_request=_sec02_req())
     out["materials_baseline"] = (mb["actual"]["net_material_cost"], mb["actual"]["waste_value"])
 
-    cmp_ = await budget_progress.get_progress_vs_cost(PKG, user=u)
+    cmp_ = await budget_progress.get_progress_vs_cost(PKG, user=u, _sec02_request=_sec02_req())
     out["progress_vs_cost"] = (cmp_["raw"]["material_actual"], None)
     return out
 

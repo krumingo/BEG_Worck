@@ -13,7 +13,7 @@ from app.master_data.legacy_adapter import annotate_refs, require_tenant_identit
 from app.services.paid_labor import paid_labor_v3
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, require_finance_read
 from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
 
 router = APIRouter(tags=["Reports"])
@@ -28,6 +28,8 @@ def _tenant(user: dict) -> TenantData:
 
 @router.get("/prices")
 async def get_price_history(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.purchase_price_history.read", module="M5", resource_type="purchase_price_history")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -160,6 +162,8 @@ async def get_price_history(
 
 @router.get("/reports/turnover-by-counterparty")
 async def get_turnover_by_counterparty(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.turnover_by_counterparty.read", module="M5", resource_type="turnover_by_counterparty")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -296,6 +300,8 @@ async def get_turnover_by_counterparty(
 @router.get("/reports/turnover-by-counterparty/{counterparty_id}/invoices")
 async def get_counterparty_invoices(
     counterparty_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.turnover_counterparty_invoices.read", module="M5", resource_type="turnover_counterparty_invoices")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -347,6 +353,8 @@ async def get_counterparty_invoices(
 
 @router.get("/reports/turnover-by-client")
 async def get_turnover_by_client(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.turnover_by_client.read", module="M5", resource_type="turnover_by_client")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -523,6 +531,8 @@ def get_week_ranges(year: int, month: int) -> list:
 
 @router.get("/reports/company-finance-summary")
 async def get_company_finance_summary(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance_summary.read", module="M5", resource_type="company_finance_summary")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),
@@ -807,6 +817,8 @@ async def get_month_finance_totals(tenant: TenantData, year: int, month: int) ->
 
 @router.get("/reports/company-finance-compare")
 async def compare_company_finance(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance_compare.read", module="M5", resource_type="company_finance_compare")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     year: Optional[int] = None,
     months: Optional[str] = None,  # comma-separated: "01,02,03"
@@ -909,6 +921,8 @@ async def compare_company_finance(
 
 @router.get("/finance/cash-transactions")
 async def list_cash_transactions(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.cash_transaction.read", module="M5", resource_type="cash_transaction")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -976,6 +990,8 @@ async def create_cash_transaction(
 
 @router.get("/finance/overhead-transactions")
 async def list_overhead_transactions(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_transaction.read", module="M5", resource_type="overhead_transaction")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -1039,6 +1055,8 @@ async def create_overhead_transaction(
 
 @router.get("/finance/bonus-payments")
 async def list_bonus_payments(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.bonus_payment.read", module="M5", resource_type="bonus_payment")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -1111,6 +1129,8 @@ MONTH_NAMES_BG = [
 
 @router.get("/reports/company-finance-export")
 async def export_company_finance(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance.export", module="M5", resource_type="company_finance")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     year: int = Query(...),
     month: int = Query(..., ge=1, le=12),

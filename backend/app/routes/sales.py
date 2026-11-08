@@ -13,7 +13,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.services.fifo_service import consume_fifo, get_current_stock, InsufficientStockError
 from app.tenancy.data_access import TenantData
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, require_finance_read
 
 
 def _tenant(user: dict) -> TenantData:
@@ -169,7 +169,10 @@ async def historical_context(item_id: str, months: int = 12, user: dict = Depend
 
 
 @router.get("/settings/sales-margins")
-async def get_sales_margins(user: dict = Depends(get_current_user)):
+async def get_sales_margins(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.sales_margin.read", module=None, resource_type="sales_margin")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     return await _get_margins(user["org_id"])
 
 
@@ -293,6 +296,8 @@ async def commit_sale(
 
 @router.get("/sales/history")
 async def sales_history(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.sales_history.read", module=None, resource_type="sales_history")),  # SEC-02 (R20-1): before any read
     page: int = 1, page_size: int = 25,
     from_date: str = "", to_date: str = "",
     item_id: str = "", client_id: str = "", project_id: str = "", warehouse_id: str = "",

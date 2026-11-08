@@ -11,7 +11,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, require_finance_read
 from app.utils.audit import log_audit
 from app.services import counterparty_rules as cr
 from app.services import master_records as mr
@@ -832,7 +832,11 @@ async def get_client_projects(client_id: str, user: dict = Depends(require_m5)):
 
 
 @router.get("/clients/{client_id}/invoices")
-async def get_client_invoices(client_id: str, user: dict = Depends(require_m5)):
+async def get_client_invoices(
+    client_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_invoice.read", module="M5", resource_type="client_invoice")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m5)):
     tenant = _tenant(user)
     org_id = user["org_id"]
     projects = await tenant.projects.find(

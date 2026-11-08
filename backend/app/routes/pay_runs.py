@@ -13,6 +13,7 @@ from pymongo import ReturnDocument
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
 from app.services.slip_payment_state import effective_slip, effective_slip_one, effective_slips, slip_status_clause
@@ -1059,6 +1060,8 @@ async def create_pay_run(data: PayRunCreateInput, user: dict = Depends(get_curre
 
 @router.get("/pay-runs")
 async def list_pay_runs(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pay_run.read", module=None, resource_type="pay_run")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(get_current_user),
     status: Optional[str] = None,
     page: int = Query(1, ge=1),
@@ -1082,7 +1085,10 @@ async def list_pay_runs(
 # ── Payroll Audit Check (must be before /{run_id} parametric route) ──
 
 @router.get("/pay-runs/audit-check")
-async def audit_check(user: dict = Depends(get_current_user)):
+async def audit_check(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pay_run_audit_check.read", module=None, resource_type="pay_run_audit_check")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     """Automated payroll data integrity check."""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -1156,7 +1162,11 @@ async def audit_check(user: dict = Depends(get_current_user)):
 
 
 @router.get("/pay-runs/{run_id}")
-async def get_pay_run(run_id: str, user: dict = Depends(get_current_user)):
+async def get_pay_run(
+    run_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pay_run_detail.read", module=None, resource_type="pay_run_detail")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     run = await tenant.pay_runs.find_one({"id": run_id, "org_id": user["org_id"]},
                                          {"_id": 0, "op_lock.token": 0})
@@ -1620,7 +1630,11 @@ async def reopen_pay_run(run_id: str, data: PayRunReopenInput, user: dict = Depe
 # ── History ────────────────────────────────────────────────────────
 
 @router.get("/pay-runs/{run_id}/history")
-async def get_pay_run_history(run_id: str, user: dict = Depends(get_current_user)):
+async def get_pay_run_history(
+    run_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pay_run_history.read", module=None, resource_type="pay_run_history")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     run = await tenant.pay_runs.find_one(
         {"id": run_id, "org_id": user["org_id"]},
@@ -1636,7 +1650,11 @@ async def get_pay_run_history(run_id: str, user: dict = Depends(get_current_user
 # ── Allocations ────────────────────────────────────────────────────
 
 @router.get("/pay-runs/{run_id}/allocations")
-async def get_pay_run_allocations(run_id: str, user: dict = Depends(get_current_user)):
+async def get_pay_run_allocations(
+    run_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pay_run_allocation.read", module=None, resource_type="pay_run_allocation")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     """Get allocation breakdown for a pay run — by employee, day, site."""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -1851,6 +1869,8 @@ async def export_slip_pdf(slip_id: str, user: dict = Depends(get_current_user)):
 
 @router.get("/payroll-weeks")
 async def get_payroll_weeks(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.payroll_week.read", module=None, resource_type="payroll_week")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(get_current_user),
     employee_id: Optional[str] = None,
     month: Optional[str] = None,

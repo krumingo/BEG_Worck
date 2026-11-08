@@ -293,9 +293,11 @@ class TestPR01Migration:
                        "u_tech": "LEGACY_TECHNICIAN", "u_sm": "site_manager"}
         # SEC-01-C01 (R16): a SiteManager member also gets the field cost writes of
         # that project; a Viewer member does not.
-        from app.permissions.catalog import FIELD_COST_WRITE_ACTIONS
+        # SEC-02 (R20-2B): and the budget view of that project (the Technical Manager only).
+        from app.permissions.catalog import FIELD_COST_WRITE_ACTIONS, PROJECT_BUDGET_READ_ACTIONS
         assert perms == {"u_view": {"budget.read"},
-                         "u_sm": {"budget.read", "budget.write", *FIELD_COST_WRITE_ACTIONS}}
+                         "u_sm": {"budget.read", "budget.write", *FIELD_COST_WRITE_ACTIONS,
+                                  *PROJECT_BUDGET_READ_ACTIONS}}
         assert sentinel == self.SENTINEL           # app-owned record byte-identical
         assert op_same and journal == 4 + 2 + 4    # 4 upgrades, 2 creates, 4 indexes
 

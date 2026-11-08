@@ -19,7 +19,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, require_finance_read
 
 
 def _tenant(user: dict) -> TenantData:
@@ -119,7 +119,10 @@ async def create_client_act(data: ClientActCreate, user: dict = Depends(require_
 
 
 @router.get("/client-acts")
-async def list_client_acts(project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_client_acts(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.read", module="M2", resource_type="client_act")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
@@ -129,7 +132,11 @@ async def list_client_acts(project_id: Optional[str] = None, user: dict = Depend
 
 
 @router.get("/client-acts/{act_id}")
-async def get_client_act(act_id: str, user: dict = Depends(require_m2)):
+async def get_client_act(
+    act_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_detail.read", module="M2", resource_type="client_act_detail")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]}, {"_id": 0})
     if not act:
@@ -138,7 +145,11 @@ async def get_client_act(act_id: str, user: dict = Depends(require_m2)):
 
 
 @router.put("/client-acts/{act_id}")
-async def update_client_act(act_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_client_act(
+    act_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.update", module="M2", resource_type="client_act")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
     if not act:
@@ -193,7 +204,11 @@ async def confirm_client_act(
 
 
 @router.post("/client-acts/from-offer/{offer_id}", status_code=201)
-async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(require_m2)):
+async def create_act_from_offer(
+    offer_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_from_offer.execute", module="M2", resource_type="client_act_from_offer")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Generate client act lines from accepted offer"""
     tenant = _tenant(user)
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
@@ -254,7 +269,11 @@ async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-cost/by-project/{project_id}")
-async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
+async def get_labor_cost_by_project(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_labor_cost.read", module="M2", resource_type="project_labor_cost")),  # SEC-02 (R20-2): before any read
+    date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate labor cost by project from work reports × employee rates"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -393,7 +412,10 @@ async def generate_execution_packages(offer_id: str, user: dict = Depends(requir
 
 
 @router.get("/execution-packages")
-async def list_execution_packages(project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_execution_packages(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.read", module="M2", resource_type="execution_package")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
@@ -405,7 +427,11 @@ async def list_execution_packages(project_id: Optional[str] = None, offer_id: Op
 
 
 @router.put("/execution-packages/{pkg_id}")
-async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_execution_package(
+    pkg_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.update", module="M2", resource_type="execution_package")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:
@@ -433,7 +459,11 @@ async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-profit/{project_id}")
-async def get_project_profit_summary(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_profit_summary(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_profit.read", module="M2", resource_type="project_profit")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Comprehensive project financial summary — revenue, costs, profit"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -614,7 +644,11 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-smr-view/{project_id}")
-async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_smr_view(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_smr_view.read", module="M2", resource_type="project_smr_view")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Operational SMR view for project — main offer + execution packages with labor focus"""
     tenant = _tenant(user)
     org_id = user["org_id"]

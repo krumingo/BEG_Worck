@@ -60,7 +60,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 12.1,
+ "seconds": 11.9,
  "rows": [
   {
    "mode": "off",
@@ -480,6 +480,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -494,6 +495,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -532,6 +534,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -786,7 +789,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -801,7 +803,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -840,7 +841,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -1299,6 +1299,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -1313,6 +1314,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -1351,6 +1353,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -1605,7 +1608,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -1620,7 +1622,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -1659,7 +1660,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -2190,6 +2190,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -2204,6 +2205,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -2242,6 +2244,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -2496,7 +2499,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -2511,7 +2513,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -2550,7 +2551,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -3009,6 +3009,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -3023,6 +3024,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -3061,6 +3063,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -3315,7 +3318,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -3330,7 +3332,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -3369,7 +3370,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -3940,6 +3940,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -3954,6 +3955,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -3996,6 +3998,7 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -4276,7 +4279,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -4291,7 +4293,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -4334,7 +4335,6 @@
    "target_project_tenant": "A",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -4839,6 +4839,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -4853,6 +4854,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -4895,6 +4897,7 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "record_org_is_caller_tenant": true
@@ -5175,7 +5178,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -5190,7 +5192,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true
@@ -5233,7 +5234,6 @@
    "target_project_tenant": "B",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "record_org_is_caller_tenant": true

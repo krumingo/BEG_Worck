@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.9,
+ "seconds": 25.5,
  "rows": [
   {
    "mode": "off",
@@ -753,6 +753,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -770,6 +771,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -865,6 +867,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -882,6 +885,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -925,6 +929,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -981,6 +986,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -998,6 +1004,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -1041,6 +1048,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -1305,7 +1313,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1323,7 +1330,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1367,7 +1373,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1424,7 +1429,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1442,7 +1446,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1486,7 +1489,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -3736,6 +3738,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3753,6 +3756,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3848,6 +3852,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3865,6 +3870,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3908,6 +3914,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3964,6 +3971,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3981,6 +3989,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -4024,6 +4033,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -4288,7 +4298,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4306,7 +4315,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4350,7 +4358,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4407,7 +4414,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4425,7 +4431,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4469,7 +4474,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7304,6 +7308,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7321,6 +7326,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7416,6 +7422,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7433,6 +7440,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7476,6 +7484,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7532,6 +7541,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7549,6 +7559,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7592,6 +7603,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7856,7 +7868,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7874,7 +7885,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7918,7 +7928,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7975,7 +7984,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7993,7 +8001,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -8037,7 +8044,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10287,6 +10293,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10304,6 +10311,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10399,6 +10407,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10416,6 +10425,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10459,6 +10469,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10515,6 +10526,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10532,6 +10544,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10575,6 +10588,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10839,7 +10853,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10857,7 +10870,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10901,7 +10913,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10958,7 +10969,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10976,7 +10986,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -11020,7 +11029,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -13905,6 +13913,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -13922,6 +13931,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14029,6 +14039,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14046,6 +14057,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14093,6 +14105,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14155,6 +14168,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14172,6 +14186,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14219,6 +14234,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14509,7 +14525,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14527,7 +14542,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14575,7 +14589,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14638,7 +14651,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14656,7 +14668,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14704,7 +14715,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17078,6 +17088,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17095,6 +17106,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17202,6 +17214,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17219,6 +17232,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17266,6 +17280,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17328,6 +17343,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17345,6 +17361,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17392,6 +17409,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17682,7 +17700,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17700,7 +17717,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17748,7 +17764,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17811,7 +17826,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17829,7 +17843,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17877,7 +17890,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [

@@ -47,6 +47,17 @@ from app.services.warehouse_movements.errors import InvariantViolationError
 from app.services.warehouse_movements.service import CommandInput, CommandService
 from app.tenancy.data_access import TenantData
 
+
+def _sec02_req(path="/api/sec02-direct-call"):
+    """SEC-02-G (audit SEC71-M1): a real Request for a direct call of an R20-decorated
+    handler — the role is the ``user=`` the test already passes (FastAPI injects this
+    request in production; without one the decorator fails closed and strips money)."""
+    from starlette.requests import Request
+    return Request({"type": "http", "method": "GET", "path": path, "headers": [],
+                    "query_string": b"", "root_path": "", "scheme": "http",
+                    "server": ("testserver", 80), "client": ("testclient", 50000)})
+
+
 pytest_plugins = ["tests.warehouse_canonical_conftest"]
 
 T = "org_c19"
@@ -522,6 +533,8 @@ def _patch_route_dbs(monkeypatch, db):
                  "subcontractors"):
         mod = importlib.import_module(f"app.routes.{name}")
         monkeypatch.setattr(mod, "db", db)
+    from tests.warehouse_canonical_conftest import sec02_owner_in_enforce
+    sec02_owner_in_enforce(monkeypatch, T)            # SEC-02-G (SEC71-M1): R20 reads
 
 
 async def _receive_accept5_consume3(client, gate, db):
@@ -642,12 +655,12 @@ async def test_f7_f8_every_report_shows_exactly_30(
     assert [p["material_actual"] for p in brk["packages"]] == [pytest.approx(30.0)]
     assert brk["packages"][0]["gross_margin"] == pytest.approx(70.0)
 
-    warn = await material_smr.get_material_warnings(PROJECT, user=_user())
+    warn = await material_smr.get_material_warnings(PROJECT, user=_user(), _sec02_request=_sec02_req())
     assert warn["total_entries"] == 2 and warn["unmapped_entries"] == 0
     over = [w for w in warn["warnings"] if w["type"] == "over_material_budget"]
     assert len(over) == 1 and "30" in over[0]["message"]
 
-    listed = await material_smr.list_material_entries(project_id=PROJECT, user=_user())
+    listed = await material_smr.list_material_entries(project_id=PROJECT, user=_user(), _sec02_request=_sec02_req())
     assert len(listed) == 2
 
     # 5C-C25 (Р17): project reports — the accepted lot, 50.
@@ -673,7 +686,7 @@ async def test_f7_unmapped_consumption_is_still_cost_once(
     summary = await material_smr.get_material_summary_for_project(T, PROJECT)
     assert summary["total_cost"] == pytest.approx(50.0)
     assert summary["unmapped_cost"] == pytest.approx(50.0)
-    warn = await material_smr.get_material_warnings(PROJECT, user=_user())
+    warn = await material_smr.get_material_warnings(PROJECT, user=_user(), _sec02_request=_sec02_req())
     assert warn["unmapped_entries"] == 2
 
 

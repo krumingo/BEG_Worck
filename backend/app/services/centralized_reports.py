@@ -22,7 +22,8 @@ async def get_overhead_rate(org_id: str) -> float:
         return 0
 
 
-async def build_centralized_reports(org_id: str, project_id: str) -> dict:
+async def build_centralized_reports(org_id: str, project_id: str, *,
+                                    with_entries: bool = False) -> dict:
     """
     Build unified reports from:
     - employee_daily_reports (Draft/Submitted entries)
@@ -348,7 +349,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "missing_rate_count": sum(1 for e in entries if e.get("missing_rate")),
     }
 
-    return {
+    out = {
         "project_id": project_id,
         "entries_count": len(entries),
         "overhead_hourly_rate": overhead_hourly,
@@ -356,3 +357,9 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "personnel": personnel,
         "finance": finance,
     }
+    if with_entries:
+        # SEC-02-F (FG-74): the per-worker pay behind the "spent" figures, for the R31
+        # count of paid workers (app.permissions.money_write.project_labor_workers).
+        # Never part of an API response.
+        out["entries"] = entries
+    return out
