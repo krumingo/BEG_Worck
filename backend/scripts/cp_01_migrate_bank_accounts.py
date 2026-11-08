@@ -11,8 +11,8 @@ VerifiedBankAccount rows in status „за проверка“ (pending_verifica
   written with ``$setOnInsert`` — a second run adds nothing;
 * an invalid IBAN is not migrated; it is listed in the report (masked) for a human;
 * the report never prints a full IBAN or ЕГН;
-* also reported (read-only): project ``invoice_details`` that still hold a person's full
-  ЕГН copied before CP-01 (they are masked on read; nothing is rewritten here).
+* FG-226: project ``invoice_details`` that still hold a full ЕГН copied before CP-01 are
+  reported, and with ``--apply`` masked (``******1234``) — the original stays in ``persons``.
 
 Rollback: the rows carry ``source: "cp01_migration"``; deleting them is a separate,
 approved operator decision (CLAUDE.md §2.9) — this script never deletes anything.
@@ -62,11 +62,30 @@ async def plan(db):
                     continue
                 report["to_create"].append({"id": rid, "org_id": org, "party_type": party_type,
                                             "counterparty_id": doc["id"], "iban": iban, "field": f})
-    async for p in db.projects.find({"owner_type": "person", "invoice_details.eik": {"$nin": [None, ""]}},
-                                    {"_id": 0, "invoice_details": 1}):
-        if not str(p["invoice_details"]["eik"]).startswith(cr.EGN_MASK_PREFIX):
+    report["projects_to_mask"] = []
+    async for p in db.projects.find({"invoice_details": {"$type": "object"}},
+                                    {"_id": 0, "id": 1, "org_id": 1, "owner_type": 1, "invoice_details": 1}):
+        masked = mask_invoice_details(p["invoice_details"], p.get("owner_type"))
+        if masked != p["invoice_details"]:
             report["projects_with_full_egn"] += 1
+            report["projects_to_mask"].append({"id": p["id"], "org_id": p.get("org_id"),
+                                               "before": p["invoice_details"], "after": masked})
     return report
+
+
+def mask_invoice_details(details, owner_type):
+    """The same rule as the project readers/writers (FG-226): a person's ЕГН in
+    ``invoice_details`` is a copy — the original stays in ``persons``."""
+    import re
+    out = dict(details)
+    for field in ("eik", "egn", "tax_id"):
+        value = out.get(field)
+        if not value or str(value).startswith(cr.EGN_MASK_PREFIX):
+            continue
+        digits = re.sub(r"\D", "", str(value))
+        if field == "egn" or owner_type == "person" or len(digits) == 10:
+            out[field] = cr.mask_egn(value)
+    return out
 
 
 async def apply(db, report):
@@ -82,6 +101,12 @@ async def apply(db, report):
         res = await db.verified_bank_accounts.update_one({"id": r["id"], "org_id": r["org_id"]},
                                                          {"$setOnInsert": doc}, upsert=True)
         written += 1 if res.upserted_id is not None else 0
+    for p in report.get("projects_to_mask", []):
+        # compare-and-set on the value read: a project edited meanwhile is left for the next run
+        res = await db.projects.update_one(
+            {"id": p["id"], "org_id": p["org_id"], "invoice_details": p["before"]},
+            {"$set": {"invoice_details": p["after"], "egn_masked_by": "cp01_migration"}})
+        written += res.modified_count
     return written
 
 
@@ -89,6 +114,8 @@ def printable(report):
     out = dict(report)
     out["to_create"] = [dict({k: v for k, v in r.items() if k != "iban"},
                              iban_masked=cr.mask_iban(r["iban"])) for r in report["to_create"]]
+    out["projects_to_mask"] = [{"id": p["id"], "org_id": p["org_id"]}
+                               for p in report.get("projects_to_mask", [])]
     return out
 
 

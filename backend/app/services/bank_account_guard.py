@@ -79,6 +79,36 @@ async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient
     return {"cash_receipt_file_id": fid, "cash_recipient_name": name}
 
 
+def is_cash_account(account: Optional[Dict[str, Any]]) -> bool:
+    """FG-225: the account decides — a Cash (Каса) account is cash, anything else is bank."""
+    t = str((account or {}).get("type") or (account or {}).get("account_type") or "").strip().lower()
+    return t in ("cash", "каса")
+
+
+async def check_allocation(tenant, user: Dict[str, Any], payment: Dict[str, Any],
+                           invoice: Dict[str, Any], *, path: str = "/finance/payments/{id}/allocate"):
+    """FG-225 (a): allocating an EXISTING outgoing payment to a received invoice is a payment
+    to that invoice's counterparty — the same rules, against what the payment really did:
+    a payment of another counterparty → 409; a bank payment must have gone to a verified
+    account of THIS counterparty (and match the invoice IBAN); a cash payment needs its
+    receipt and is blocked while the counterparty's IBAN is unverified."""
+    if payment.get("direction") != "Outflow" or invoice.get("direction") == "Issued":
+        return None
+    party_type, party_id = await resolve_invoice_party(tenant, invoice)
+    if payment.get("counterparty_id") and party_id and payment["counterparty_id"] != party_id:
+        raise _refuse("PAYEE_MISMATCH", "Плащането е към друг контрагент — не се разпределя по "
+                                        "тази фактура")
+    account = await tenant.financial_accounts.get(payment.get("account_id"), {"_id": 0})
+    return await check_payment_target(
+        tenant, user, direction="Outflow", method=payment.get("method"),
+        account=account or {"type": "Bank"}, party_type=party_type, party_id=party_id,
+        bank_account_id=payment.get("bank_account_id"),
+        invoice_iban=invoice.get("counterparty_iban"),
+        cash_receipt_file_id=payment.get("cash_receipt_file_id"),
+        cash_recipient_name=payment.get("cash_recipient_name"),
+        auto_resolve=False, path=path)
+
+
 async def resolve_invoice_party(tenant, invoice: Dict[str, Any]):
     """(party_type, party_id) of a received invoice: its ``supplier_counterparty_id``, else the
     counterparty with the invoice's ЕИК. (None, None) when neither identifies one."""
@@ -117,10 +147,19 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
                                invoice_iban: Optional[str] = None,
                                cash_receipt_file_id: Any = None,
                                cash_recipient_name: Any = None,
+                               account: Optional[Dict[str, Any]] = None,
+                               auto_resolve: bool = True,
                                path: str = "") -> Optional[Dict[str, Any]]:
+    """``account`` (FG-225): the cash/bank account the money ACTUALLY leaves. When given, it
+    decides the method — a Cash account is cash (receipt + payee block, R50.1), any other is
+    a bank transfer (IBAN check) — whatever the request's ``method`` says. ``auto_resolve``:
+    with no ``bank_account_id``, route to the payee's one verified account (a new payment);
+    False for an existing payment (allocate), whose target cannot be chosen afterwards."""
     if direction != "Outflow":
         return None
     accounts = tenant.verified_bank_accounts
+    if account is not None:
+        method = "cash" if is_cash_account(account) else "bank"
 
     if bank_account_id:
         acc = await accounts.get(bank_account_id, {"_id": 0}) if isinstance(bank_account_id, str) else None
@@ -133,6 +172,8 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
                           "Банковата сметка не е проверена (%s) — плащането може да е само чернова"
                           % cr.BA_LABELS.get(acc.get("status"), acc.get("status")),
                           bank_account_status=acc.get("status"))
+        if invoice_iban and cr.normalize_iban(invoice_iban) != acc.get("iban"):
+            await _iban_mismatch(tenant, user, party_type, party_id, invoice_iban, path)
         return _stamp(acc)
 
     if invoice_iban:
@@ -142,14 +183,14 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
             match = await accounts.find_one({"party_type": party_type, "counterparty_id": party_id,
                                              "iban": iban, "status": cr.BA_VERIFIED}, {"_id": 0})
         if match is None:
-            await dq_issue(tenant, None, code="INVOICE_IBAN_MISMATCH", severity="critical",
-                           entity_type=party_type or "invoice", entity_id=party_id,
-                           message="IBAN във фактурата не съвпада с проверена сметка — плащането е блокирано",
-                           data={"iban_masked": cr.mask_iban(iban), "path": path},
-                           created_by=user.get("id"))
-            raise _refuse("INVOICE_IBAN_MISMATCH",
-                          "IBAN във фактурата не съвпада с проверена сметка на контрагента — "
-                          "плащането е блокирано до проверка", iban_masked=cr.mask_iban(iban))
+            await _iban_mismatch(tenant, user, party_type, party_id, iban, path)
+        if cr.is_cash_method(method):          # cash: the receipt rule still applies (R50.1)
+            return await _check_cash(accounts, party_type, party_id, cash_receipt_file_id,
+                                     cash_recipient_name)
+        if not auto_resolve:
+            # an existing payment whose account was never recorded: the money's target is
+            # unknown — it cannot be proved to be this verified account (legacy, by mode)
+            return await _legacy(tenant, user, party_type, party_id, path)
         return _stamp(match)
 
     if cr.is_cash_method(method):
@@ -159,7 +200,7 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
     if party_id:
         verified = await accounts.find({"party_type": party_type, "counterparty_id": party_id,
                                         "status": cr.BA_VERIFIED}, {"_id": 0}).to_list(10)
-        if len(verified) == 1:
+        if len(verified) == 1 and auto_resolve:
             return _stamp(verified[0])
         if len(verified) > 1:          # never expected: the change flow keeps one current account
             raise _refuse("BANK_ACCOUNT_AMBIGUOUS",
@@ -170,6 +211,23 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
             raise _refuse("BANK_ACCOUNT_PENDING",
                           "Сметката на контрагента е „за проверка“ — плащането може да е само чернова")
 
+    return await _legacy(tenant, user, party_type, party_id, path)
+
+
+async def _iban_mismatch(tenant, user, party_type, party_id, iban, path):
+    """FG-175 / FLOW-010 L254: a critical DQ row (written outside any transaction, so it
+    survives the refusal) + 409. Nothing unlocks it (FLOW-025 L187)."""
+    await dq_issue(tenant, None, code="INVOICE_IBAN_MISMATCH", severity="critical",
+                   entity_type=party_type or "invoice", entity_id=party_id,
+                   message="IBAN във фактурата не съвпада с проверена сметка — плащането е блокирано",
+                   data={"iban_masked": cr.mask_iban(iban), "path": path},
+                   created_by=user.get("id"))
+    raise _refuse("INVOICE_IBAN_MISMATCH",
+                  "IBAN във фактурата не съвпада с проверена сметка на контрагента — "
+                  "плащането е блокирано до проверка", iban_masked=cr.mask_iban(iban))
+
+
+async def _legacy(tenant, user, party_type, party_id, path):
     mode = cr.bank_guard_mode()
     if mode == cr.GUARD_ENFORCE:
         raise _refuse("NO_VERIFIED_BANK_ACCOUNT",

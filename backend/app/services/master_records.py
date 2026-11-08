@@ -264,6 +264,32 @@ async def _reverify_bank_accounts(db, tenant, session, user, collection, record_
                           "iban_masked": cr.mask_iban(acc.get("iban"))})
 
 
+#: FG-229 (R48.6, FLOW-010 §12 L379-380): one organisation = one ЕИК across the counterparty
+#: roles — a subcontractor is a counterparty role, so the two collections share one check.
+EIK_COLLECTIONS = ("counterparties", "subcontractors")
+
+
+async def eik_holder(tenant, eik: str, *, exclude: Optional[tuple] = None, session=None):
+    """(collection, record) already holding this ЕИК (normalised) in this tenant, or None."""
+    if not eik:
+        return None
+    for coll in EIK_COLLECTIONS:
+        for doc in await tenant.collection(coll).find(
+                {"eik": {"$exists": True, "$nin": [None, ""]}}, {"_id": 0, "id": 1, "eik": 1, "name": 1},
+                **kw(session)).to_list(10000):
+            if cr.normalize_eik(doc.get("eik")) == eik and (coll, doc["id"]) != exclude:
+                return coll, doc
+    return None
+
+
+async def claim_eik(tenant, session, eik: str) -> None:
+    """Two concurrent writes of the same ЕИК (in either collection) write the same claim row
+    in their transactions, so one conflicts, is retried and then sees the other's record."""
+    if eik:
+        await tenant.counterparty_eik_claims.update_one(
+            {"id": "eik:" + eik}, {"$set": {"touched_at": _now()}}, upsert=True, **kw(session))
+
+
 def hide_archived(query: Dict[str, Any], include_archived: bool = False) -> Dict[str, Any]:
     """Lists hide archived records unless asked (R48.4: „скрит“)."""
     if not include_archived:

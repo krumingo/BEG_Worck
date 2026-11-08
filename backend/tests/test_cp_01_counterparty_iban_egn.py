@@ -141,7 +141,8 @@ async def _seed(op, sysdb):
     await op.companies.insert_one({"id": "co1", "org_id": ORG_A, "name": "Фирма", "eik": "333333333",
                                    "is_active": True})
     await op.projects.insert_one({"id": "prj-1", "org_id": ORG_A, "code": "P1", "name": "P1",
-                                  "status": "Active", "owner_type": "person", "owner_id": "pe1"})
+                                  "status": "Active", "owner_type": "person", "owner_id": "pe1",
+                                  "invoice_details": {"company_name": "Мария П", "eik": EGN}})
     await op.subcontractors.insert_one({"id": "sub1", "org_id": ORG_A, "name": "Бригада", "active": True})
     await op.subcontractor_packages.insert_one({
         "id": "pkg1", "org_id": ORG_A, "project_id": "prj-1", "subcontractor_id": "sub1",
@@ -375,7 +376,8 @@ def test_red_other_roles_cannot_create_or_edit(monkeypatch, backend, mode, who, 
 # ═══════════════════════════════════════════════ RED on main: ЕГН
 READERS = ["/api/persons", "/api/persons/pe1", "/api/persons/find-by-phone?phone=0888333444",
            "/api/clients/search/unified?query=Мария", "/api/clients/search/unified?query=" + EGN,
-           "/api/projects/prj-1/client-info", "/api/projects/prj-1/invoice-context"]
+           "/api/projects/prj-1/client-info", "/api/projects/prj-1/invoice-context",
+           "/api/projects/prj-1/invoice-details", "/api/projects", "/api/projects/prj-1"]   # FG-226
 
 
 @pytest.mark.parametrize("who", ["owner-a", "admin-a", "acct-a", "viewer-a", "site-a", "tech-a"])
@@ -391,8 +393,9 @@ def test_red_no_reader_returns_the_full_egn(monkeypatch, backend, mode, who):
             assert no_full(body, EGN), (who, url, r.text)
         # a project import copies no full ЕГН (it may be refused for this role — then nothing)
         r = await c.post("/api/projects/prj-1/import-client-invoice", headers=hdr(who))
-        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
-        assert no_full(prj, EGN), prj
+        if r.status_code == 200:
+            prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+            assert no_full(prj["invoice_details"], EGN), prj
         r = await c.get("/api/persons/pe1", headers=hdr(who))
         assert r.json()["egn"] == EGN_MASKED
     run(monkeypatch, backend, mode, scenario)
@@ -762,7 +765,8 @@ def test_migration_dry_run_then_apply_is_pending_and_idempotent(backend):
             assert report["projects_with_full_egn"] == 1
             assert no_full(mig.printable(report), IBAN_OLD) and no_full(mig.printable(report), IBAN_NEW)
             assert await rows(op, "verified_bank_accounts") == []          # dry run writes nothing
-            assert await mig.apply(op, report) == 2
+            assert await mig.apply(op, report) == 3                  # 2 accounts + 1 project
+            assert no_full(await rows(op, "projects"), EGN)
             accs = await rows(op, "verified_bank_accounts")
             assert {a["status"] for a in accs} == {"pending_verification"}  # never verified
             assert await mig.apply(op, await mig.plan(op)) == 0             # idempotent
@@ -913,4 +917,157 @@ def test_a8_unarchive_sends_the_iban_back_to_verification(monkeypatch, backend, 
         assert "bank_account.reverification_required" in ev and "counterparty.reactivated" in ev
         assert (await verify(c, stored, who="owner-a")).json()["status"] == "verified"
         assert (await manual_pay(c, counterparty_id="cp1")).status_code == 201
+    run(monkeypatch, backend, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 23 / audit (#83 @ ea51030)
+async def _verified(op, acc_id, iban, party="cp1", party_type="counterparty"):
+    await seed_account(op, acc_id, iban, "verified", party=party, party_type=party_type)
+
+
+def test_fg225a_allocate_checks_the_payee_and_its_account(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await _verified(op, "ba-cp1", IBAN_OLD)
+        await _verified(op, "ba-cp2", IBAN_NEW, party="cp2")
+        await op.invoices.update_one({"id": "inv-r1"}, {"$set": {"counterparty_iban": IBAN_OLD}})
+        url = "/api/finance/payments/%s/allocate"
+        alloc = {"allocations": [{"invoice_id": "inv-r1", "amount": 50.0}]}
+        # a payment to cp2 (its own verified account) is never allocated to cp1's invoice
+        p2 = (await manual_pay(c, counterparty_id="cp2")).json()
+        assert p2["bank_account_id"] == "ba-cp2"
+        r = await c.post(url % p2["id"], headers=hdr("acct-a"), json=alloc)
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "PAYEE_MISMATCH", r.text
+        # a payment of no counterparty that went to cp2's account → not this payee
+        await op.finance_payments.update_one({"id": p2["id"]}, {"$unset": {"counterparty_id": ""}})
+        r = await c.post(url % p2["id"], headers=hdr("acct-a"), json=alloc)
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "BANK_ACCOUNT_NOT_VERIFIED"
+        assert await rows(op, "payment_allocations") == []
+        # an invoice IBAN that differs from the account the payment went to → DQ + 409
+        p1 = (await manual_pay(c, counterparty_id="cp1")).json()
+        await op.invoices.update_one({"id": "inv-r1"}, {"$set": {"counterparty_iban": IBAN_OTHER}})
+        r = await c.post(url % p1["id"], headers=hdr("acct-a"), json=alloc)
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "INVOICE_IBAN_MISMATCH"
+        assert await rows(op, "payment_allocations") == []
+        # the right payee, its verified account, the invoice IBAN equal → allocated
+        await op.invoices.update_one({"id": "inv-r1"}, {"$set": {"counterparty_iban": IBAN_OLD}})
+        r = await c.post(url % p1["id"], headers=hdr("acct-a"), json=alloc)
+        assert r.status_code == 200, r.text
+        # a legacy payment that recorded no account → by mode (enforce refuses)
+        await op.finance_payments.insert_one({
+            "id": "pay-legacy", "org_id": ORG_A, "direction": "Outflow", "amount": 10.0,
+            "currency": "EUR", "date": "2026-11-01", "method": "BankTransfer", "account_id": BANK_A})
+        await op.invoices.update_one({"id": "inv-r1"}, {"$unset": {"counterparty_iban": ""}})
+        r = await c.post(url % "pay-legacy", headers=hdr("acct-a"),
+                         json={"allocations": [{"invoice_id": "inv-r1", "amount": 10.0}]})
+        assert r.status_code == (409 if mode == "enforce" else 200), r.text
+        # a cash payment without a receipt is not allocated to a counterparty's invoice
+        await op.finance_payments.insert_one({
+            "id": "pay-cash", "org_id": ORG_A, "direction": "Outflow", "amount": 10.0,
+            "currency": "EUR", "date": "2026-11-01", "method": "Cash", "account_id": CASH_A})
+        r = await c.post(url % "pay-cash", headers=hdr("acct-a"),
+                         json={"allocations": [{"invoice_id": "inv-r1", "amount": 10.0}]})
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg225b_the_account_decides_the_method(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        # manual payment: "Cash" requested is routed to the Cash account → cash rules
+        r = await manual_pay(c, counterparty_id="cp1", method="Cash", account_id=BANK_A)
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+        # "BankTransfer" on the Cash account is cash too (the account decides)
+        r = await manual_pay(c, counterparty_id="cp1", method="BankTransfer", account_id=CASH_A)
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+        if backend != "real":       # #69's subcontractor cap reservation uses $round: real only
+            return
+        # subcontractor: payment_method "cash" on a BANK account is a bank transfer
+        body = {"package_id": "pkg1", "amount": 30.0, "payment_method": "cash", "account_id": BANK_A,
+                "cash_receipt_file_id": "file_r", "cash_recipient_name": "X"}
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json=body)
+        assert r.status_code == (409 if mode == "enforce" else 201), r.text
+        await seed_account(op, "ba-sub-p", IBAN_NEW, "pending_verification", party="sub1",
+                           party_type="subcontractor")
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json=body)
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "BANK_ACCOUNT_PENDING", r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg225c_other_expense_by_bank_is_guarded(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        base = {"amount": 40.0, "project_id": "prj-1", "method": "BankTransfer", "account_id": BANK_A}
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=base)
+        assert r.status_code == (409 if mode == "enforce" else 201), r.text
+        await seed_account(op, "ba-p", IBAN_NEW, "pending_verification")
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=dict(base, counterparty_id="cp1"))
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "BANK_ACCOUNT_PENDING"
+        await _verified(op, "ba-v", IBAN_OLD, party="cp2")
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=dict(base, counterparty_id="cp2"))
+        assert r.status_code == 201, r.text
+        row = [p for p in await rows(op, "finance_payments") if p["id"] == r.json()["id"]][0]
+        assert row["bank_account_id"] == "ba-v" and row["counterparty_id"] == "cp2"
+        # in cash to a named counterparty: the receipt (R50.1)
+        cash = {"amount": 5.0, "project_id": "prj-1", "method": "Cash", "counterparty_id": "cp2"}
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=cash)
+        assert r.status_code == 422
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"),
+                         json=dict(cash, cash_receipt_file_id="file_x", cash_recipient_name="Y"))
+        assert r.status_code == 201
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg226_a_stored_project_never_holds_a_full_egn(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": {"company_name": "Мария П", "eik": EGN}})
+        assert r.status_code == 200, r.text
+        assert no_full(r.json(), EGN)
+        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+        assert prj["invoice_details"]["eik"] == EGN_MASKED
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg227_search_by_full_egn_only_for_owner_and_accountant(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        url = "/api/clients/search/unified?type=person&query=" + EGN
+        for who in ("viewer-a", "site-a", "tech-a", "admin-a"):
+            r = await c.get(url, headers=hdr(who))
+            assert r.status_code == 200 and r.json()["total"] == 0, (who, r.text)
+        for who in ("owner-a", "acct-a"):
+            r = await c.get(url, headers=hdr(who))
+            assert r.json()["total"] == 1 and r.json()["items"][0]["identifier"] == EGN_MASKED
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg227_master_data_report_uses_the_one_egn_mask():
+    from app.master_data.uniqueness import mask_value
+    assert mask_value("egn", "egn:8001011234") == "egn:******1234"
+    assert mask_value("egn", "8001011234") == "******1234"
+
+
+def test_fg229_subcontractor_eik_is_one_per_organisation(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        before = await rows(op, "subcontractors")
+        r = await c.post("/api/subcontractors", headers=hdr("acct-a"), json={"name": "S", "eik": "111111111"})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "EIK_ALREADY_EXISTS", r.text
+        assert await rows(op, "subcontractors") == before        # the ЕИК of counterparty cp1
+        dq = await rows(op, "dq_issues", {"type": "DUPLICATE_EIK"})
+        assert len(dq) == 1 and dq[0]["entity_id"] == "cp1"
+        r = await c.post("/api/subcontractors", headers=hdr("acct-a"), json={"name": "S2", "eik": "565656565"})
+        assert r.status_code == 201, r.text
+        r = await c.post("/api/subcontractors", headers=hdr("acct-a"), json={"name": "S3", "eik": "565 656 565"})
+        assert r.status_code == 409
+        r = await c.post("/api/counterparties", headers=hdr("acct-a"), json={"name": "C", "eik": "565656565"})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "EIK_ALREADY_EXISTS"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg230_dq_rows_have_the_one_schema_of_81(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await c.post("/api/counterparties", headers=hdr("acct-a"), json={"name": "Д", "eik": "111111111"})
+        row = (await rows(op, "dq_issues"))[0]
+        for field in ("id", "org_id", "type", "title", "entity_type", "entity_id", "status",
+                      "owner_role", "opened_at", "updated_at"):
+            assert row.get(field) is not None, (field, row)
+        assert row["status"] == "open" and row["owner_role"] == "accountant" and row["org_id"] == ORG_A
     run(monkeypatch, backend, mode, scenario)

@@ -164,6 +164,7 @@ async def list_projects(
         else:
             p["site_manager_name"] = ""
         p["team_count"] = await project_team.active_member_count(_team(user), p["id"])
+        _mask_owner_egn(p)                                   # FG-226
     return projects
 
 @router.post("/projects", status_code=201)
@@ -229,7 +230,7 @@ async def create_project(data: ProjectCreate, request: Request,
         "object_type": data.object_type,
         "structured_address": data.structured_address,
         "contacts": data.contacts,
-        "invoice_details": data.invoice_details,
+        "invoice_details": _mask_invoice_details(data.invoice_details, data.owner_type),  # FG-226
         "object_details": data.object_details,
         "created_at": now,
         "updated_at": now,
@@ -263,12 +264,28 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     return project
 
 
+def _mask_invoice_details(details, owner_type):
+    """R48.3 / FG-226: ``invoice_details`` never carries a full ЕГН. For a person owner the
+    ``eik`` field holds the person's ЕГН (import-client-invoice, or typed); any 10-digit value
+    there is an ЕГН (an ЕИК has 9 or 13 digits). ``egn`` keys are masked as well."""
+    if not isinstance(details, dict):
+        return details
+    out = dict(details)
+    for field in ("eik", "egn", "tax_id"):
+        value = out.get(field)
+        if not value or str(value).startswith(cr.EGN_MASK_PREFIX):
+            continue
+        digits = re.sub(r"\D", "", str(value))
+        if field == "egn" or owner_type == "person" or len(digits) == 10:
+            out[field] = cr.mask_egn(value)
+    return out
+
+
 def _mask_owner_egn(project: dict) -> dict:
-    """R48.3: a person's ЕГН copied into ``invoice_details`` before CP-01 is shown masked."""
-    inv = project.get("invoice_details")
-    if project.get("owner_type") == "person" and isinstance(inv, dict) and inv.get("eik") \
-            and not str(inv["eik"]).startswith(cr.EGN_MASK_PREFIX):
-        project["invoice_details"] = dict(inv, eik=cr.mask_egn(inv["eik"]))
+    """R48.3: every project reader shows ``invoice_details`` with the ЕГН masked."""
+    if isinstance(project, dict) and isinstance(project.get("invoice_details"), dict):
+        project["invoice_details"] = _mask_invoice_details(project["invoice_details"],
+                                                           project.get("owner_type"))
     return project
 
 
@@ -333,6 +350,9 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
                 )
     if "type" in update and update["type"] not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail="Invalid type")
+    if "invoice_details" in update:        # FG-226: no full ЕГН is ever stored in a project
+        update["invoice_details"] = _mask_invoice_details(
+            update["invoice_details"], update.get("owner_type", project.get("owner_type")))
     # Auto-generate address_text from structured_address
     sa = update.get("structured_address")
     if sa and "address_text" not in update:
@@ -350,7 +370,7 @@ async def update_project(project_id: str, data: ProjectUpdate, request: Request,
     # W0-03E-A2B: write and re-read THIS tenant's project only (ids collide across tenants).
     await tenant.projects.update_one({"id": project_id, "org_id": user["org_id"]}, {"$set": update})
     await log_audit(user["org_id"], user["id"], user["email"], "updated", "project", project_id, update)
-    return await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0})
+    return _mask_owner_egn(await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0}))
 
 @router.delete("/projects/{project_id}")
 async def delete_project(project_id: str, user: dict = Depends(require_admin)):
@@ -378,10 +398,11 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin)):
 @router.get("/projects/{project_id}/invoice-details")
 async def get_invoice_details(project_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1})
+    project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]}, {"_id": 0, "invoice_details": 1, "id": 1, "owner_type": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    return {"project_id": project_id, "invoice_details": project.get("invoice_details") or {}}
+    return {"project_id": project_id, "invoice_details": _mask_invoice_details(  # FG-226
+        project.get("invoice_details") or {}, project.get("owner_type"))}
 
 
 @router.post("/projects/{project_id}/import-client-invoice")

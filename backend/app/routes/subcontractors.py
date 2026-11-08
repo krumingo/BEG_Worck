@@ -62,15 +62,41 @@ PKG_STATUSES = ["draft", "confirmed", "in_progress", "partially_certified", "com
 @router.post("/subcontractors", status_code=201)
 async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(require_m2),
                                idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
-    """CP-01 (R48.5): a subcontractor is a counterparty — Accountant/Admin/Owner, key, AuditEvent."""
+    """CP-01 (R48.5): a subcontractor is a counterparty — Accountant/Admin/Owner, key, AuditEvent.
+    FG-229 (R48.6): an ЕИК already held by a subcontractor OR a counterparty → 409 + DQ."""
+    from app.services import counterparty_rules as cr
+    from app.services.master_write import conflict, dq_issue
+    mr.require_writer(user)
+    eik = cr.normalize_eik(data.eik) if data.eik and data.eik.strip() else None
+    if data.eik and data.eik.strip() and not eik:
+        raise HTTPException(status_code=422, detail={"error_code": "EIK_INVALID",
+                                                     "message": "ЕИК съдържа само цифри"})
     sub = {
-        "name": data.name, "eik": data.eik, "vat_number": data.vat_number,
+        "name": data.name, "eik": eik, "vat_number": data.vat_number,
         "contact_person": data.contact_person, "phone": data.phone,
         "email": data.email, "address": data.address, "notes": data.notes,
         "active": True,
     }
-    return await mr.create(db, user, idempotency_key, collection="subcontractors", doc=sub,
-                           fingerprint=data.model_dump())
+    tenant = _tenant(user)
+
+    async def check(tenant_, session):
+        await mr.claim_eik(tenant_, session, eik)
+        if await mr.eik_holder(tenant_, eik, session=session):
+            raise conflict("EIK_ALREADY_EXISTS", "Контрагент/подизпълнител с този ЕИК вече съществува")
+
+    try:
+        return await mr.create(db, user, idempotency_key, collection="subcontractors", doc=sub,
+                               fingerprint=data.model_dump(), check=check)
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        if exc.status_code == 409 and detail.get("error_code") == "EIK_ALREADY_EXISTS":
+            holder = await mr.eik_holder(tenant, eik)
+            await dq_issue(tenant, None, code="DUPLICATE_EIK", severity="critical",
+                           entity_type=mr.ENTITIES[holder[0]][0] if holder else "subcontractor",
+                           entity_id=holder[1]["id"] if holder else None,
+                           message="Опит за втори запис със същия ЕИК (подизпълнител)",
+                           data={"eik": eik}, created_by=user["id"])
+        raise
 
 
 @router.get("/subcontractors")
@@ -570,12 +596,12 @@ async def create_subcontractor_payment(
     # CP-01 §1 (FLOW-006 / FLOW-010 §8.1): executed only to a verified bank account of the
     # subcontractor; an inactive / archived subcontractor is not paid (422). Checked before the key is
     # reserved, so a refusal writes nothing (no row, no key).
-    method = data.get("payment_method", "bank")
-    if account and account.get("account_type", account.get("type")) == "Cash":
-        method = "cash"
+    # FG-225 (b): the ACCOUNT decides the method — "cash" on a Bank account is a bank
+    # transfer (IBAN check); only a real Cash account is cash (receipt, R50.1).
     await require_selectable_party(tenant, "subcontractor", pkg["subcontractor_id"])
     bank_stamp = await check_payment_target(
-        tenant, user, direction="Outflow", method=method, party_type="subcontractor",
+        tenant, user, direction="Outflow", method=data.get("payment_method", "bank"),
+        account=account, party_type="subcontractor",
         party_id=pkg["subcontractor_id"], bank_account_id=data.get("bank_account_id"),
         cash_receipt_file_id=data.get("cash_receipt_file_id"),
         cash_recipient_name=data.get("cash_recipient_name"),

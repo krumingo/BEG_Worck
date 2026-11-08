@@ -15,6 +15,9 @@
 | path | route | entity (collection) | access (lookup key) | tenant predicate | risk | action |
 |---|---|---|---|---|---|---|
 | app/routes/finance.py:_require_tenant_project | (helper) | projects | get(id = project_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_peek_payment_account | (helper) | financial_accounts | find_one(is_default) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_peek_payment_account | (helper) | financial_accounts | find_one(type) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_peek_payment_account | (helper) | financial_accounts | get(id = account_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | find_one(is_default) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | find_one(type) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | insert_one(default) | TenantData org_id (session) | scoped@base | SAFE |
@@ -379,4 +382,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 364 accesses — FIXED 123, SAFE 241
+Totals: 367 accesses — FIXED 123, SAFE 244

@@ -194,3 +194,37 @@ The Addendum A tests fail on the previous head `ea51030`: 23 red (`addendum_a_re
 Two tests changed because the rules changed:
 - `test_sec_01_money_write_permissions.KEY_REQUIRED` now also lists client-link. PM-01 shows 428 there because the harness sends no key.
 - `test_w0_03e_a1_collision_matrix.set_mode` sets `ENV=test` and the IBAN guard to `off`. This tenant-isolation fixture has no verified accounts, and the IBAN rule itself is proved in the CP-01 tests.
+
+## 9. FLOW Guard pass 23 / audit of `ea51030`
+
+Every item below has its own test in `test_cp_01_counterparty_iban_egn.py`. Each test runs in off / shadow / enforce, on mongomock and on real Mongo. On the previous head `fe13c43` they are **40 red** on real Mongo (`fg_pass23_red_on_fe13c43_real_mongo.txt`).
+
+| Finding | Fix | Test |
+|---|---|---|
+| **FG-225 (a)**: allocate had no guard | `bank_account_guard.check_allocation`, called for each invoice before any allocation is written. A payment to another counterparty → 409 `PAYEE_MISMATCH`. A bank payment to an account that is not this counterparty's verified one → 409. An invoice IBAN that differs from that account → critical DQ row + 409. A legacy payment with no account recorded → by mode. Cash without a receipt → 422. | `test_fg225a_allocate_checks_the_payee_and_its_account` |
+| **FG-225 (b)**: the method comes from the account | `check_payment_target(account=…)`: a Cash account means cash; any other account means a bank transfer, whatever `method` / `payment_method` says. Manual payment and quick-pay use `_peek_payment_account`, which reads the account the payment will use without creating anything; the subcontractor payment uses its resolved account. | `test_fg225b_the_account_decides_the_method` |
+| **FG-225 (c)**: other-expense had no guard | Guarded. It takes an optional `counterparty_id`, `bank_account_id` and cash receipt. Bank with no payee → legacy rule (enforce → 409). | `test_fg225c_other_expense_by_bank_is_guarded` |
+| **CP83-01 / FG-228**: the entrant could approve | The entrant ≠ any approver, and approver 2 ≠ approver 1 → 409 `SAME_PERSON_APPROVAL` (already in `fe13c43`). | `test_a7_entrant_verifier_approvers_are_three_people` (probe K1 = the entrant approves → 409) |
+| **FG-226**: full ЕГН in invoice-details, `/projects`, `/projects/{id}` | `_mask_invoice_details`: a person owner's `eik`, any 10-digit value, and `egn` / `tax_id` are masked on create/update of a project (**never stored in full**) and in every project reader. The migration masks existing copies (`--apply`); the original stays in `persons`. | `test_red_no_reader_returns_the_full_egn` (6 roles × 10 readers), `test_fg226_a_stored_project_never_holds_a_full_egn`, migration test |
+| **FG-227**: mask format and search | One mask, `******1234`, now also in the Master Data reports (`uniqueness.mask_value`; W0-03C assertion updated). `/clients/search/unified` matches on ЕГН only for Owner / Accountant. | `test_fg227_search_by_full_egn_only_for_owner_and_accountant`, `test_fg227_master_data_report_uses_the_one_egn_mask` |
+| **FG-229**: subcontractor ЕИК duplicates | `master_records.eik_holder` / `claim_eik`: one ЕИК check across counterparties **and** subcontractors, in both directions, with the shared claim row → 409 `EIK_ALREADY_EXISTS` + DQ. Subcontractor create is office-only, with a key and AuditEvent. | `test_fg229_subcontractor_eik_is_one_per_organisation` |
+| **FG-230**: one DQ schema | `dq_issues` rows now use #81's schema: `id, org_id, type, title, entity_type, entity_id, status (open/resolved), owner_role ("accountant"), opened_at, updated_at`, plus the CP-01 fields `code, severity, message, data, occurrences`. **After #81 merges:** a single shared writer (#81's `sync_invoice_issue` and CP-01's `dq_issue`) and the resolve path → CP-01-D21. | `test_fg230_dq_rows_have_the_one_schema_of_81` |
+| **FG-175 (FLOW-010 §8.4)**: our own IBAN on outgoing invoices | **Debt CP-01-D20.** Main has no field that carries our own IBAN on an outgoing invoice: not the invoice model, invoice settings, organization profile or PDF. The project's `invoice_details.iban` is the *client's* IBAN. There is nothing to check yet. When one is added, it must be chosen from `verified_bank_accounts` (party_type `own`), and sending must be blocked with a critical DQ row on a mismatch. | — |
+
+**Every outflow path** (FG-225: "list EVERY path"):
+
+| Path | Payee | Guard |
+|---|---|---|
+| `POST /finance/payments` (manual / advance) | `counterparty_id` | yes |
+| `POST /finance/invoices/{id}/payments` (quick-pay) | invoice → counterparty | yes |
+| `POST /finance/payments/{id}/allocate` | invoice → counterparty | yes (new) |
+| `POST /finance/other-expense` | optional `counterparty_id` | yes (new) |
+| `POST /subcontractor-payments` | subcontractor | yes; method from the account (fixed) |
+| `POST /finance/transfers`, `/finance/account-funding` | own accounts only | not a counterparty payment |
+| pay runs (`pay_runs._write_salary_outflows`), HR advances / loans / repayments | employees (FLOW-028) | not a counterparty; HR guest loans → debt CP-01-D22 |
+
+**New debts:**
+- **CP-01-D19:** `invoices.counterparty_eik` of a *person* buyer is a full ЕГН typed into an ЕИК field. Masking it in the invoice JSON would break invoice editing (the masked value fails validation on PUT), so it needs a separate buyer-ЕГН field with a reveal step.
+- **CP-01-D20:** FG-175 / §8.4, our own IBAN (above).
+- **CP-01-D21:** after #81 merges, one shared DQ writer and resolve path.
+- **CP-01-D22:** an HR loan to a guest (`guest_name`) is an outflow to a person who is outside the counterparty register.

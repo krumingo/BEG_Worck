@@ -143,23 +143,34 @@ def kw(session) -> Dict[str, Any]:
     return {} if session is None else {"session": session}
 
 
+#: FG-230: the ONE ``dq_issues`` row shape, the same as #81 (WH-FIX-01,
+#: ``invoice_allocation.sync_invoice_issue``): ``id, org_id, type, title, entity_type,
+#: entity_id, status ("open" / "resolved"), owner_role, opened_at, updated_at``. CP-01 adds
+#: ``severity``, ``message``, ``data``, ``created_by``, ``occurrences``, ``last_seen_at``.
+DQ_OWNER_ROLE = "accountant"        # the office maps and corrects (FLOW-032 L110), as #81
+
+
 async def dq_issue(tenant, session, *, code: str, severity: str, entity_type: str,
                    entity_id: Optional[str], message: str, data: Optional[Dict[str, Any]] = None,
-                   created_by: Optional[str] = None) -> Dict[str, Any]:
-    """A Data Quality row (``dq_issues``) — the minimal DQ record until the canonical
-    DQ/Approval runtime (W0-07) exists (debt CP-01-D3). One open row per (code, entity)."""
+                   created_by: Optional[str] = None, owner_role: str = DQ_OWNER_ROLE) -> Dict[str, Any]:
+    """A Data Quality row (``dq_issues``) — until the canonical DQ/Approval runtime (W0-07)
+    exists (debt CP-01-D3). One OPEN row per (type, entity): a repeat counts an occurrence."""
     import uuid
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
     row_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-dq:%s:%s:%s:%s" % (
         tenant.org_id, code, entity_type, entity_id or "-")))
-    doc = {"id": row_id, "org_id": tenant.org_id, "code": code, "severity": severity,
-           "entity_type": entity_type, "entity_id": entity_id, "message": message,
-           "data": data or {}, "status": "open", "created_by": created_by, "created_at": now}
+    doc = {"id": row_id, "org_id": tenant.org_id, "type": code, "title": message,
+           "entity_type": entity_type, "entity_id": entity_id, "status": "open",
+           "owner_role": owner_role, "opened_at": now,
+           # CP-01 fields
+           "code": code, "severity": severity, "message": message, "data": data or {},
+           "created_by": created_by, "created_at": now}
     await tenant.dq_issues.update_one({"id": row_id},
-                                     {"$setOnInsert": doc, "$set": {"last_seen_at": now},
-                                      "$inc": {"occurrences": 1}},
-                                     upsert=True, **kw(session))
+                                      {"$setOnInsert": doc,
+                                       "$set": {"last_seen_at": now, "updated_at": now},
+                                       "$inc": {"occurrences": 1}},
+                                      upsert=True, **kw(session))
     return doc
 
 

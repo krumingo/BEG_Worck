@@ -424,7 +424,10 @@ async def unified_client_search(
             
             if q:
                 name_match = q_lower in full_name.lower()
-                egn_match = normalize_egn(q) and normalize_egn(q) in normalize_egn(p.get("egn") or "")
+                # FG-227 (R48.3): searching by ЕГН would confirm a person's ЕГН — only the roles
+                # that may see it in full (Owner / Accountant) may search by it
+                egn_match = cr.can_reveal_egn(user) and normalize_egn(q) and \
+                    normalize_egn(q) in normalize_egn(p.get("egn") or "")
                 phone_match = q_normalized and q_normalized in normalize_phone(p.get("phone") or "")
                 
                 if not (name_match or egn_match or phone_match):

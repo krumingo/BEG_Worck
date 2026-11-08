@@ -32,8 +32,8 @@ from ..models.finance import (
     PaymentCreate, AllocatePaymentRequest
 )
 
-from app.services.bank_account_guard import (check_payment_target, require_selectable_party,
-                                             resolve_invoice_party)
+from app.services.bank_account_guard import (check_allocation, check_payment_target,
+                                             require_selectable_party, resolve_invoice_party)
 
 router = APIRouter(tags=["Finance"])
 
@@ -157,6 +157,21 @@ def compute_invoice_totals(invoice: dict) -> dict:
 
 def _is_cash_method(method: str) -> bool:
     return str(method or "").strip().lower() in ("cash", "в брой", "вброй", "каса")
+
+
+async def _peek_payment_account(tenant: TenantData, method: str, account_id: Optional[str]) -> dict:
+    """FG-225: the account ``_resolve_payment_account`` WOULD pick, read-only (it may create a
+    default account; the IBAN guard must decide before anything is written)."""
+    if _is_cash_method(method):
+        if account_id:
+            acc = await tenant.financial_accounts.get(account_id)
+            if acc and acc.get("type") == "Cash":
+                return acc
+        return await tenant.financial_accounts.find_one({"type": "Cash"}) or {"type": "Cash"}
+    if account_id:
+        return await tenant.financial_accounts.get(account_id) or {"type": "Bank"}
+    return (await tenant.financial_accounts.find_one({"is_default": True})
+            or await tenant.financial_accounts.find_one({"type": "Bank"}) or {"type": "Bank"})
 
 
 async def _resolve_payment_account(tenant: TenantData, method: str, account_id: Optional[str]) -> str:
@@ -596,6 +611,20 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
             raise HTTPException(status_code=400, detail="Изберете обект")
         method = data.get("method") or "Cash"
         tenant = _tenant(user)
+        # CP-01 / FG-225 (c): a documentless expense paid by bank transfer is an outflow to a
+        # payee too — verified account (or, with no payee, the legacy mode: enforce → 409);
+        # in cash to a named counterparty: receipt + recipient (R50.1). Before any write.
+        cp_id = data.get("counterparty_id") if isinstance(data.get("counterparty_id"), str) else None
+        if cp_id:
+            await require_selectable_party(tenant, "counterparty", cp_id)
+        bank_stamp = await check_payment_target(
+            tenant, user, direction="Outflow", method=method,
+            account=await _peek_payment_account(tenant, method, data.get("account_id")),
+            party_type="counterparty" if cp_id else None, party_id=cp_id,
+            bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
+            cash_receipt_file_id=data.get("cash_receipt_file_id"),
+            cash_recipient_name=data.get("cash_recipient_name"),
+            path="/finance/other-expense") or {}
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
         if not account:
@@ -610,6 +639,9 @@ async def create_other_expense(data: dict, user: dict = Depends(require_m5),
             "project_id": project_id, "category": "Други", "is_expense": True,
             "created_at": now, "updated_at": now,
         }
+        if cp_id:
+            payment["counterparty_id"] = cp_id
+        payment.update(bank_stamp)
         await tenant.finance_payments.insert_one(payment)
         await log_audit(org, user["id"], user["email"], "other_expense_created", "payment", payment["id"],
                         {"amount": amount, "project_id": project_id})
@@ -635,6 +667,20 @@ async def create_other_income(data: dict, user: dict = Depends(require_m5),
         project_id = data.get("project_id")
         method = data.get("method") or "Cash"
         tenant = _tenant(user)
+        # CP-01 / FG-225 (c): a documentless expense paid by bank transfer is an outflow to a
+        # payee too — verified account (or, with no payee, the legacy mode: enforce → 409);
+        # in cash to a named counterparty: receipt + recipient (R50.1). Before any write.
+        cp_id = data.get("counterparty_id") if isinstance(data.get("counterparty_id"), str) else None
+        if cp_id:
+            await require_selectable_party(tenant, "counterparty", cp_id)
+        bank_stamp = await check_payment_target(
+            tenant, user, direction="Outflow", method=method,
+            account=await _peek_payment_account(tenant, method, data.get("account_id")),
+            party_type="counterparty" if cp_id else None, party_id=cp_id,
+            bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
+            cash_receipt_file_id=data.get("cash_receipt_file_id"),
+            cash_recipient_name=data.get("cash_recipient_name"),
+            path="/finance/other-expense") or {}
         account_id = await _resolve_payment_account(tenant, method, data.get("account_id"))
         account = await tenant.financial_accounts.get(account_id)
         if not account:
@@ -1309,7 +1355,9 @@ async def _quick_pay_bank_target(tenant: TenantData, user: dict, invoice_id: str
     if party_id:
         await require_selectable_party(tenant, party_type, party_id)
     return await check_payment_target(
-        tenant, user, direction="Outflow", method=method, party_type=party_type, party_id=party_id,
+        tenant, user, direction="Outflow", method=method,
+        account=await _peek_payment_account(tenant, method, data.get("account_id")),
+        party_type=party_type, party_id=party_id,
         bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
         invoice_iban=invoice.get("counterparty_iban"),
         cash_receipt_file_id=data.get("cash_receipt_file_id"),
@@ -1793,6 +1841,7 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
             await require_selectable_party(tenant, "counterparty", data.counterparty_id)
         bank_stamp = await check_payment_target(
             tenant, user, direction=data.direction, method=data.method,
+            account=await _peek_payment_account(tenant, data.method, data.account_id),
             party_type="counterparty" if data.counterparty_id else None,
             party_id=data.counterparty_id, bank_account_id=data.bank_account_id,
             cash_receipt_file_id=data.cash_receipt_file_id, cash_recipient_name=data.cash_recipient_name,
@@ -1916,6 +1965,9 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                 if payment["direction"] != expected_dir:
                     raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
                 if alloc.invoice_id not in invoices:
+                    # CP-01 / FG-225 (a): the payment must have gone to THIS counterparty's
+                    # verified account (or be a receipted cash payment) — before any write
+                    await check_allocation(tenant, user, payment, invoice)
                     invoices[alloc.invoice_id] = invoice
                     invoice["_remaining"] = await _invoice_remaining(tenant, invoice, own_ids)
                 remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)

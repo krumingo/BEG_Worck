@@ -71,12 +71,13 @@ def collection_for(entity_type: str) -> str:
 
 
 def mask_value(kind: Optional[str], value: Any) -> Any:
-    """Personal identifiers are shown as ``12****90`` — enough for a human to find the
-    record, not enough to leak it through a report."""
+    """Personal identifiers are shown as ``******1234`` (R48.3) — enough for a human to find
+    the record, not enough to leak it through a report."""
     if kind not in SENSITIVE_KINDS or not isinstance(value, str):
         return value
     raw = value.split(":", 1)[1] if value.startswith(kind + ":") else value
-    shown = raw[:2] + "****" + raw[-2:] if len(raw) > 4 else "****"
+    # CP-01 R48.3 / FG-227: one ЕГН mask everywhere — ``******`` + the last 4 digits
+    shown = "******" + raw[-4:] if len(raw) > 4 else "****"
     return "%s:%s" % (kind, shown) if value.startswith(kind + ":") else shown
 
 

@@ -93,25 +93,13 @@ EIK_ALREADY_EXISTS = "EIK_ALREADY_EXISTS"
 
 
 async def _eik_owner(tenant, eik: str, exclude_id: Optional[str] = None, session=None):
-    """The counterparty of this tenant that already has this ЕИК (normalised), if any."""
-    if not eik:
-        return None
-    for cp in await tenant.counterparties.find({"eik": {"$exists": True}}, {"_id": 0, "id": 1, "eik": 1,
-                                                                           "name": 1},
-                                               **kw(session)).to_list(10000):
-        if cr.normalize_eik(cp.get("eik")) == eik and cp["id"] != exclude_id:
-            return cp
-    return None
+    """The counterparty OR subcontractor of this tenant that already has this ЕИК (FG-229)."""
+    found = await mr.eik_holder(tenant, eik, exclude=("counterparties", exclude_id), session=session)
+    return found[1] if found else None
 
 
 async def _claim_eik(tenant, session, eik: str) -> None:
-    """Serialise two concurrent writes of the same ЕИК: both transactions write the same
-    claim row, so one of them conflicts, is retried and then sees the other's record."""
-    if not eik:
-        return
-    await tenant.counterparty_eik_claims.update_one(
-        {"id": "eik:" + eik}, {"$set": {"touched_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=True, **kw(session))
+    await mr.claim_eik(tenant, session, eik)
 
 
 async def _with_duplicate_dq(tenant, user, eik: str, attempted_for: Optional[str], work):
