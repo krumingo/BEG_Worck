@@ -5152,3 +5152,35 @@ Verified:
 - 0 files changed outside `docs/` vs `4bca18a`.
 
 So gates run on heads containing `4bca18a` stay valid. New canon: Р51 (invoice cancellation approval, incoming debit note, wrong incoming invoice, every offset two people) plus INV-CN-01 addendum A. #84 must follow it on its next head.
+
+## 2026-11-08 13:45 UTC: #84 `7446d85` INV-CN-01 (credit / debit notes, Р49): BLOCKING, INV84-01 (red gate; behaviour correct)
+
+Probe `invcn01` V1–V5 (99 passed on the head and on the trial merge with `4bca18a`, `3cca911`):
+
+| Probe | Result |
+|---|---|
+| V1 lock matrix | every InvoiceUpdate field + `/lines` + DELETE → 409 on issued and sent. `total` / `subtotal` are not model fields (ignored); my first V1 flagged them falsely. |
+| V2 ×10, cancel ∥ send | never both |
+| V3 ×10, cancel ∥ payment | never cancelled with a payment |
+| V4 ×10, refund ∥ offset approval (balance 36) | exactly one wins |
+| V5, 6 × the same incoming number | 1 row |
+
+Other checks:
+- The 2 PAY-01 asserts are canon tightenings (Р49.2; §2.9 numbered draft), and the positive path is kept.
+- Approve claims the invoice and re-runs the credit cap; the act cap claims the act; numbering is an atomic `$inc` in the transaction.
+- Same-person approval → 409; exact version.
+
+| Gate | Head | Trial merge |
+|---|---|---|
+| inv_cn_01 | 57 | 57 |
+| PAY | 630 | 630 |
+| W0 | same 15 | same 15 |
+| A2C / A1 | 0 / 0 | 0 / 0 |
+| R0 | 814 | 814 |
+| PM-01 | 6 | 6 |
+| SEC-01 | n/a (no SEC-01 on the base) | **30** |
+| **warehouse** | **1118 / 1121** | **1118 / 1121** |
+
+**INV84-01:** `test_warehouse_canonical_c26l_n_invoice_status.py::test_fg140_claim_honours_the_pay01_invoice_lock[×3]`. #55's test cancels under the PAY-01 lock without a reason, and Р49.2 now refuses with 400 REASON_REQUIRED first. Re-run with a reason: locked → 409 INVOICE_BUSY, released → Cancelled (3 modes). Behaviour OK; the test needs the reason; the gate is red until then.
+
+Main `8c52e92` added Р51 (affects INV-CN-01). PR comment posted.
