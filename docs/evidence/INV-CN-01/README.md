@@ -113,37 +113,56 @@ Invoices issued meanwhile have status `Issued`, which the previous code does not
 
 `test_r47_registration_releases_the_pr82_cap` checks this. On a local trial merge with #82 @ 1622f62: **161 passed, 0 skipped** (`r47_coupling_pr82.txt`).
 
-## Debts: business decisions not in the package or the canon (nothing invented)
+## Addendum A (FLOW Guard pass on 7446d85 + Р51): point → code → test
 
-| # | Debt | What was done instead |
+Every test below runs on real Mongo in off / shadow / enforce. The same test file run against the previous head 3893b9f fails all of them (`addendum_a_red_on_3893b9f.txt`).
+
+| Point | Fix | Test |
 |---|---|---|
-| D1 | No contract model on invoices, so "the same contract" for an offset is undefined. | The strictest scope available: same direction + same project + same counterparty ЕИК, all present. Anything else → 409. |
-| D2 | No annex model. | A debit note to a client accepts only an approved act of the same project as its basis. |
-| D3 | The threshold for a "large" offset (FLOW-034 L72) is not decided by Krum. | **Every** offset needs the Owner's second approval. No amount was invented. |
-| D4 | No VAT ledger and no period close in main. | Cancellation checks `vat_ledger_period`, which nothing sets yet. "A closed period is not touched" cannot be enforced; notes are dated by their own `issue_date`. |
-| D5 | The File Registry (PR #44) is not in main. | `file_id` is stored but not validated. |
-| D6 | Р49 covers outgoing invoices only. Cancelling or deleting **supplier** invoices is not decided. | Main's rule is kept (not Paid, no allocations), now with reason + key. A supplier draft that carries the supplier's number can still be deleted. |
-| D7 | Incoming note with a difference: there is no decision or endpoint for resolving the DQ (accept the difference / reject the note). | The note stays registered and not applied. |
-| D8 | The P&L **cost** side for incoming notes is not done: material cost path B (`canonical_material_cost`) does not yet reduce. | Only the revenue side is done. |
-| D9 | Reversing a refund payment through PAY-01 `DELETE /finance/payments/{id}` does not recompute the invoice's derived sums until its next write. | A reversal path through the invoice is needed. |
-| D10 | No reject/withdraw for pending notes and offsets, and no Approval Center (out of scope). | A pending row has no effect. |
-| D11 | Legacy outgoing **drafts already numbered** before INV-CN-01: they keep their number at issue and cannot be deleted (409). How many exist in production is unknown (no production access). | A read-only report is needed before deploy. |
-| D12 | A prefix change continues the one shared counter. | Whether the number resets with a new prefix is not decided. |
-| D13 | FLOW-025 L124 (every client invoice from an approved act or contract stage) is enforced only when `act_id` is given. | There is no contract-stage model. |
-| D14 | Act correction (t24), VAT ledger/export, e-invoice/SAF-T, partial release of retentions, full Approval Center. | Out of scope per the package. |
-| D15 | Pre-existing, not changed here: `Overdue` invoices are not counted in project P&L revenue; a `Paid` invoice whose payments are all cancelled stays `Paid`. | — |
-| D16 | Who may approve. | The approver is the **Owner** only (Р49.4 "Собственик одобрява"). Whether an Admin may also approve is not decided. |
+| **FG-217** second draft → 500 | A draft stores **no** `invoice_no` field. The number index is partial (`invoice_no > ""`) and keyed by `direction`, so a supplier number never blocks our series. On a tenant still on the legacy unique+sparse index, a clash is 409 `INVOICE_NUMBER_TAKEN`, never 500. `scripts/inv_cn_01_migrate.py` (dry run by default, `--apply --actor`) drops the legacy index. | `test_fg217_many_drafts_and_supplier_numbers_never_block_our_series` |
+| **FG-218** manual number blocks the series | `take_number` skips a number already used by our series, inside the same transaction, so the series never blocks. | `test_fg218_a_manual_number_inside_the_series_is_skipped_never_blocks` |
+| **FG-219** "до стотинка" | Exact equality after rounding to cents. A 1-cent difference is a mismatch (DQ, not applied). | `test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit` (35.99 vs 36.00) |
+| **FG-220** linked by the Accountant | `expected_credit_note_ids` is required when the invoice has an open awaited credit (422 `EXPECTED_CREDIT_LINK_REQUIRED`); a wrong or closed id → 422 `EXPECTED_CREDIT_LINK_INVALID`. Nothing is ever linked by amount. | same test; `test_r47_registration_releases_the_pr82_cap` |
+| **FG-222** offset basis | `legal_basis` + `file_id` + `source_credit_note_id` (an applied credit note on the source invoice) are required (422 `OFFSET_BASIS_REQUIRED`). The amount must be ≤ the unused part of that note. | `test_offset_same_contract_needs_a_second_person` |
+| **Р49(1)** legacy numbered drafts | Treated as issued (locked) right away (`is_locked`). The migration makes them `Issued` with `issued_number` and one AuditEvent each (`finance.invoice.issued_by_migration`). It is idempotent, with a dry-run report. | `test_r49_1_legacy_numbered_draft_is_locked_and_migrated_to_issued` |
+| **Р49(1)** due date after issue | Needs a `reason` (400 `DUE_DATE_REASON_REQUIRED`) and writes an AuditEvent `finance.invoice.due_date_changed`. | `test_r49_1_due_date_after_issue_needs_a_reason_and_an_audit_event` |
+| **Р51(1)** cancellation approval | `POST …/cancel` is the proposal (reason, key). `…/cancel/approve` is by the Owner, another person, on the exact version (409 `SAME_PERSON_APPROVAL` / `VERSION_MISMATCH`). `…/cancel/reject` is by the Owner or the proposer. Every condition is re-checked at approval. | `test_cancel_issued_unsent_invoice_keeps_its_number`, `test_r51_1_the_proposer_cannot_approve_and_a_proposal_can_be_rejected` |
+| **Р51(2)** supplier debit note | Basis (`order` / `additional_delivery` / `annex` + ref) and `file_id` are required (422). The note stays `pending_approval` until the Owner approves; until then a payment above the open amount → 409 `DEBIT_NOTE_NOT_APPROVED`. | `test_r51_2_supplier_debit_note_needs_basis_file_and_owner_before_it_is_payable` |
+| **Р51(3)** supplier invoice entered by mistake | The Accountant cancels it with a reason, if it is not paid and not linked to a warehouse receipt; otherwise 409 `USE_CORRECTION`. An invoice with any number is never deleted. | `test_r51_3_supplier_invoice_entered_by_mistake_is_cancelled_not_deleted` |
+| **Р51(4)** / D3 | Every offset needs a second person (the Owner). | `test_offset_same_contract_needs_a_second_person` |
 
-## Gates (`gates.txt`; real Mongo = disposable local mongo:7.0, replica set rs0)
+## Debts after Addendum A
+
+| # | Status |
+|---|---|
+| D1 contract model | **Open (needs the model).** No contract on invoices: an offset's "same contract" stays direction + project + counterparty ЕИК, all present. |
+| D2 annex model | **Open (needs the model).** An outgoing debit note's basis is an approved act. A supplier debit note's basis `annex` is a reference plus `file_id`, not a record. |
+| D3 offset threshold | **Closed by Р51(4).** Every offset needs a second person. |
+| D4 VAT ledger / period close | **Open (needs the model).** Cancellation checks `vat_ledger_period`, which nothing sets yet. |
+| D5 File Registry | **Open (needs #44).** `file_id` is now **required** for offsets and supplier debit notes, but is not validated against a registry. |
+| D6 supplier invoice cancel / delete | **Closed by Р51(3).** |
+| D7 resolving a supplier-note mismatch | **Open (for Krum).** |
+| D8 P&L cost side of supplier notes | **Open.** A credit for a reversed receipt is already removed from cost by #82 at the warehouse; reducing cost path B again would count it twice. The rule for which credit reduces which cost is not in the canon. |
+| D9 refund reversal | **Fixed.** A reversed refund recomputes its invoice (`test_d9_…`). |
+| D10 reject / withdraw | **Fixed** for notes, offsets and cancellation proposals (`test_d10_…`, `test_r51_1_…`, the offset test). A full Approval Center is out of scope. |
+| D11 legacy numbered drafts | **Fixed** by the migration with a dry-run report (run on production only after the Owner approves the report). |
+| D12 prefix change | **Open (Krum: the counter is NOT reset).** This is the current behaviour. |
+| D13 every client invoice from an act or contract stage | **Open (needs the contract-stage model).** |
+| D14 out of scope | Act correction (t24), VAT ledger/export, e-invoice/SAF-T, partial release of retentions, full Approval Center. |
+| D15 Overdue in P&L; Paid stays Paid | **Fixed** (`test_d15_…`). Overdue now counts as issued revenue. |
+| D16 approver | **Closed.** The Owner approves (Р49.4, Р51). |
+| SEC-01 (#69, now in main) | **Open.** `finance.py` routes, old and new, still use `finance_permission` (Owner/Admin/Accountant); #69 did not migrate `finance.py`. Moving the whole module to `require_money_write` plus catalog actions is one follow-up, so the module keeps a single rule. |
+
+## Gates (`gates.txt`; after Addendum A and the merge of main 8c52e92; real Mongo = disposable local mongo:7.0, replica set rs0)
 
 | Gate | Result |
 |---|---|
-| INV-CN-01 (`tests/test_inv_cn_01_credit_notes.py`, off/shadow/enforce) | **57 passed**, 0 skipped; 60 with the R47 coupling test added afterwards |
-| The same file on main cd03324 | **57 failed** (`main_cd03324_red.txt`) |
-| PAY-01 family + 5C-C26l invoice suites | 630 passed, 0 failed |
+| INV-CN-01 (30 scenarios × off/shadow/enforce) | **90 passed**, 0 skipped |
+| The same file on main cd03324 / on 3893b9f | first version: 57/57 failed on main (`main_cd03324_red.txt`); Addendum A tests failed on 3893b9f (`addendum_a_red_on_3893b9f.txt`) |
+| PAY-01 family + 5C-C26l invoice suites | 630 passed, 0 failed. The 299 skipped are the warehouse real-Mongo cases, which run only with `WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1`. They were not run here: the local Mongo hits its 20000 open-files cap. |
 | R0 (real) | **814 passed** |
-| W0 (real) | 15 failed (all in `test_w0_03e_legacy_routes.py`, the known baseline), 1177 passed |
-| W0 (DB-free) | the same 15 failed, 1094 passed |
-| A2C / A1 guards | 236 modules / 476 units, **0 violations** |
-| PM-01 (real, `-rs`) | 6 passed, **0 skipped**. The matrix was regenerated **by the harness**: +10 routes (+240 cells), 0 existing cells changed. |
-| Frontend `yarn test` | 17 suites, 170 passed |
+| W0 real / DB-free | the same **15** failures (all in `test_w0_03e_legacy_routes.py`), 1177 / 1094 passed |
+| A2C / A1 guards | 239 modules / 482 units, **0 violations**; A1/A2B inventories regenerated by their scripts |
+| PM-01 (real, `-rs`) | 6 passed, **0 skipped**. The matrix was regenerated by the harness: +4 routes / +96 cells (cancel approve/reject, note reject, offset reject), 0 existing cells changed. |
+| Frontend `yarn test` | 17 suites, 173 passed |
+| Trial merge with #82 @ 1622f62 (before Addendum A) | 161 passed, 0 skipped (`r47_coupling_pr82.txt`) |

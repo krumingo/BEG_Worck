@@ -1,0 +1,22 @@
+# INV-CN-01 Addendum A: the current test file run against the previous head 3893b9f (before the Addendum A fixes), real Mongo, -k off (also matches 'offset' tests in all modes)
+# test_act_cannot_be_over_invoiced_concurrently / test_six_concurrent_numbers: on 3893b9f the drafts are saved with invoice_no: null and the harness builds the production (org_id, invoice_no) unique+sparse index (server.py on that head) -> DuplicateKeyError 500 = FG-217 itself
+            assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+        assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
+FAILED tests/test_inv_cn_01_credit_notes.py::test_cancel_issued_unsent_invoice_keeps_its_number[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r51_1_the_proposer_cannot_approve_and_a_proposal_can_be_rejected[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_offset_same_contract_needs_a_second_person[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_offset_same_contract_needs_a_second_person[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_offset_same_contract_needs_a_second_person[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_act_cannot_be_over_invoiced_concurrently[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_six_concurrent_numbers_are_unique_one_sequence[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg217_many_drafts_and_supplier_numbers_never_block_our_series[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg218_a_manual_number_inside_the_series_is_skipped_never_blocks[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r49_1_legacy_numbered_draft_is_locked_and_migrated_to_issued[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r49_1_due_date_after_issue_needs_a_reason_and_an_audit_event[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r51_2_supplier_debit_note_needs_basis_file_and_owner_before_it_is_payable[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r51_3_supplier_invoice_entered_by_mistake_is_cancelled_not_deleted[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_d9_reversing_a_refund_gives_the_credit_balance_back[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_d10_a_pending_note_is_rejected_or_withdrawn[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_d15_paid_invoice_with_every_payment_cancelled_is_open_again[off]
+17 failed, 15 passed, 58 deselected, 1 warning in 21.30s
