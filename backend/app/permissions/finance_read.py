@@ -154,6 +154,9 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/revenue-snapshots/{snapshot_id}", "finance.revenue_snapshot_detail.read", R20_1, CANON_PROJECT),
     _E("GET", "/api/client-acts", "finance.client_act.read", R20_1, CANON_PROJECT),
     _E("GET", "/api/client-acts/{act_id}", "finance.client_act_detail.read", R20_1, CANON_PROJECT),
+    # ACT-01: contracted / acted / remaining per offer line, with client prices (R20-1)
+    _E("GET", "/api/client-acts/remaining/{project_id}", "finance.client_act_remaining.read", R20_1,
+       CANON_PROJECT + "; ACT-01 (FLOW-004 остатък)"),
     _E("GET", "/api/execution-packages", "finance.execution_package.read", R20_1, CANON_PROJECT),
     _E("GET", "/api/subcontractor-payments", "finance.subcontractor_payment.read", R20_1, CANON_SUBCONTRACT),
     _E("GET", "/api/warehouse/value", "finance.warehouse_value.read", R20_1, CANON_WAREHOUSE),

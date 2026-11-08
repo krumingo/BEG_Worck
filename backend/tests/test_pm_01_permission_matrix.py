@@ -649,6 +649,9 @@ ENFORCE_EXTRA_WRITES = {
     # LIVE-OPS-01 / TASK 5C (#55, Р28): the refused migration execute writes the
     # enforce "access denied" AuditEvent — 403 in every mode, nothing else written.
     ("POST", "/api/warehouse/migration-readiness/execute"): "denial",
+    # ACT-01 (#77, R14): creating a client act is a money write (require_money_write);
+    # confirm / PUT / from-offer are listed above under SEC-01-C02 / SEC-02-E.
+    ("POST", "/api/client-acts"): "denial",
 }
 
 

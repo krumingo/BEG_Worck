@@ -1,0 +1,10 @@
+module,method,path,role,legacy_role,mode,before_status,before_wrote,before_written,after_status,after_wrote,after_written
+overhead,POST,/api/overhead/snapshots/compute,owner,Owner,off,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,admin,Admin,off,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,accountant,Accountant,off,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,owner,Owner,shadow,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,admin,Admin,shadow,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,accountant,Accountant,shadow,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,owner,Owner,enforce,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,admin,Admin,enforce,200,yes,op.audit_logs;op.overhead_snapshots,428,no,
+overhead,POST,/api/overhead/snapshots/compute,accountant,Accountant,enforce,200,yes,op.audit_logs;op.overhead_snapshots,428,no,

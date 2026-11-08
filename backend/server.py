@@ -425,12 +425,21 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # OH-01 (OH01-3): the overhead unique indexes (one allocation version, one active
+    # snapshot per period) at startup, never on a request path.
+    # FG-98: every database of the Tenant Registry too, not only the default one.
+    from app.services.overhead_lifecycle import ensure_overhead_indexes_for_installation
+    from app.tenancy import registry as _oh01_registry
+    await ensure_overhead_indexes_for_installation(db, _oh01_registry.system_db)
     # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
     # shared rate-limit counters and durable auth security events (both TTL).
     from app.services import auth_events, password_reset, rate_limit
     await password_reset.ensure_indexes(db)
     await rate_limit.ensure_indexes(db)
     await auth_events.ensure_indexes(db)
+    # ACT-01: unique act number per tenant (counter-numbered acts) + offer-line lookup.
+    from app.services import client_acts as client_acts_service
+    await client_acts_service.ensure_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

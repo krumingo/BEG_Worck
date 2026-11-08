@@ -150,8 +150,10 @@ async def seed_c02_records(op_db, fx: Dict[str, Any]) -> None:
     # Collections first written by a probe are created here, so a probe's first call
     # does not show the (org-less) collection-create entry of the oplog.
     existing = set(await op_db.list_collection_names())
+    # ACT-01: the client-act confirm also writes the offer-line totals (and appends audit).
     for name in ("finance_payments", "subcontractor_payments", "audit_logs",
-                 "project_overhead_alloc", "pending_expenses", "sales", "material_prices"):
+                 "project_overhead_alloc", "pending_expenses", "sales", "material_prices",
+                 "client_act_line_totals", "org_counters", "audit_events"):
         if name not in existing:
             await op_db.create_collection(name)
     for tkey, t in fx.items():
@@ -172,11 +174,27 @@ async def seed_c02_records(op_db, fx: Dict[str, Any]) -> None:
             "id": rid(tkey, "sact"), "org_id": org, "project_id": p1,
             "package_id": rid(tkey, "pkg"), "status": "draft", "lines": [],
             "created_at": now})
+        # ACT-01 (merge with #77): a confirmable act is acted on a line of an ACCEPTED offer
+        # of the project at the offer's price (FLOW-004); the probe confirms the values
+        # shown (FG-142), so the act is the one ACT-01 itself would have created.
+        await op_db.offers.insert_one({
+            "id": rid(tkey, "coffer"), "org_id": org, "project_id": p1, "offer_no": "PRB-OFF",
+            "title": "Probe offer", "status": "Accepted", "version": 1, "offer_type": "main",
+            "currency": "EUR", "vat_percent": 20,
+            "lines": [{"id": rid(tkey, "coline"), "activity_name": "Probe", "unit": "m2",
+                       "qty": 1, "material_unit_cost": 4, "labor_unit_cost": 6,
+                       "line_total": 10}],
+            "subtotal": 10, "vat_amount": 2, "total": 12, "created_at": now})
         await op_db.client_acts.insert_one({
             "id": rid(tkey, "cact"), "org_id": org, "project_id": p1, "act_number": "PRB-1",
-            "status": "Draft", "lines": [{"activity_name": "Probe", "qty": 1,
-                                          "unit_price": 10, "line_total": 10}],
-            "subtotal": 10, "total": 10, "created_at": now})
+            "status": "Draft", "source_offer_id": rid(tkey, "coffer"),
+            "lines": [{"id": rid(tkey, "cline"), "offer_id": rid(tkey, "coffer"),
+                       "offer_line_id": rid(tkey, "coline"), "activity_name": "Probe",
+                       "unit": "m2", "contracted_qty": 1, "executed_qty": 1,
+                       "unit_price": 10.0, "line_total": 10.0, "vat_percent": 20.0,
+                       "currency": "EUR"}],
+            "subtotal": 10.0, "vat_percent": 20.0, "vat_amount": 2.0, "total": 12.0,
+            "currency": "EUR", "created_at": now})
         await op_db.supplier_invoices.insert_one({
             "id": rid(tkey, "sinv"), "org_id": org, "project_id": p1, "status": "uploaded",
             "invoice_number": "PRB-INV", "lines": [], "subtotal": 0, "total": 0,
@@ -223,7 +241,10 @@ def body_for(key: str, t: Dict[str, Any], rec_tkey: str, project_id: Optional[st
     if key == "subpay_unknown_account":
         return {"package_id": rid(rec_tkey, "pkg"), "amount": 10,
                 "account_id": rid(rec_tkey, "no-such-account")}
-    if key in ("client_act_confirm", "sub_act_confirm", "ocr_approve", "wcal_sync",
+    if key == "client_act_confirm":                       # ACT-01 FG-142: the values seen
+        return {"expected_total": 12.0,
+                "expected_line_values": {rid(rec_tkey, "cline"): 10.0}}
+    if key in ("sub_act_confirm", "ocr_approve", "wcal_sync",
                "oh_alloc", "pricing_refresh"):
         return {"period_key": "2026-11"} if key == "oh_alloc" else None
     if key == "supinv_put":
@@ -275,6 +296,11 @@ def expected(key: str, legacy_role: str, tenant: str, target: Optional[str]) -> 
         return {"status": ok, "writes": True}
     if rule == "finance_404":
         return {"status": 404, "writes": False}
+    if key == "oh_alloc":
+        # OH-01 (#74) FG-89: /overhead-allocation/compute is a READ-ONLY projection of the
+        # published OH-01 allocation (one overhead source) — the money gate stays, and a
+        # finance role gets 200 with nothing written.
+        return {"status": ok, "writes": False}
     if rule == "finance_reached":
         return {"status": None, "writes": None}
     return {"status": ok, "writes": True}
