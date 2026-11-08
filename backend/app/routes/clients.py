@@ -11,6 +11,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
+from app.permissions.money_write import require_money_write
 from app.utils.audit import log_audit
 from app.services import counterparty_rules as cr
 from app.services import master_records as mr
@@ -660,7 +661,8 @@ async def get_project_client_info(
 async def update_project_client_link(
     project_id: str,
     data: dict,
-    user: dict = Depends(get_current_user),
+    user: dict = Depends(require_money_write(
+        "project.client_link.update", module="M5", resource_type="project")),  # SEC-01
     idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
 ):
     """Link or unlink a client to/from a project.

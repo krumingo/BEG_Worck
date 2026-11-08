@@ -168,9 +168,10 @@ def test_an_authorization_question_missing_a_key_is_refused():
 
 
 def test_the_membership_filter_always_names_user_and_project():
-    flt = pt.membership_filter("u1", "p1", ROLE)
+    flt = pt.membership_filter("u1", "p1", ROLE, today="2026-11-06")
+    # SEC-R1 (SEC-01-C02 addendum A): an active membership also has to cover today.
     assert flt == {"project_id": "p1", "user_id": "u1", "active": True,
-                   "role_in_project": ROLE}
+                   "role_in_project": ROLE, **pt.membership_date_window("2026-11-06")}
     # the tenant key is NOT here: TenantData.scoped() appends it last, so a
     # caller can neither forget it nor override it
     assert "org_id" not in flt and "tenant_id" not in flt

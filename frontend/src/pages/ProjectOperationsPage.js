@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "@/lib/api";
-import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
+import { apiErrorText, createIdempotencyHolder, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,11 @@ import {
   Shield, AlertTriangle, DollarSign, Building2,
 } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
+
+// SEC-01-C03: the money POSTs of this page carry an Idempotency-Key (a retry or a
+// double click never writes a second payment).
+const MONEY_POSTS = new Set(["/subcontractor-payments", "/overhead-snapshots"]);
+const moneyKeys = createIdempotencyHolder();
 
 export default function ProjectOperationsPage() {
   const { projectId } = useParams();
@@ -90,8 +95,11 @@ export default function ProjectOperationsPage() {
   const handleSave = async (endpoint, payload, method = "post") => {
     setSaving(true);
     try {
-      // R29 / CP-01: every write carries an Idempotency-Key (subcontractor create needs it)
-      if (method === "post") await API.post(endpoint, payload, idempotencyHeaders(newIdempotencyKey()));
+      if (method === "post" && MONEY_POSTS.has(endpoint)) {
+        await API.post(endpoint, payload, idempotencyHeaders(moneyKeys.keyFor(endpoint, payload)));
+        moneyKeys.done();
+      // R29 / CP-01: every other write carries an Idempotency-Key too (subcontractor create needs it)
+      } else if (method === "post") await API.post(endpoint, payload, idempotencyHeaders(newIdempotencyKey()));
       else await API.put(endpoint, payload, idempotencyHeaders(newIdempotencyKey()));
       setDialog(null);
       setConfirmDialog(null);
@@ -321,7 +329,7 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", form))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
+            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", { ...form, amount: Number(form.amount) }))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -159,6 +159,11 @@ def _app(monkeypatch, op, sysdb, mode):
     from app.tenancy import guard, registry, resolver
     from app.utils import audit as u_audit
     mods = [appdb, deps_auth, deps_modules, r_finance, r_cp, r_clients, r_projects, r_subs, u_audit]
+    for name in ("app.permissions.money_write", "app.permissions.money_input"):   # #69 SEC-01
+        try:
+            mods.append(__import__(name, fromlist=["db"]))
+        except ImportError:
+            pass
     try:
         from app.routes import bank_accounts as r_bank
         mods.append(r_bank)
