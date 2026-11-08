@@ -889,6 +889,12 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     vat_check = validate_vat_number(data.counterparty_vat_no or "")
     if not vat_check["valid"]:
         raise HTTPException(status_code=400, detail=vat_check["message"])
+    if data.direction == "Received":
+        # Р55(1) / FG-249: the supplier's ЕИК (a foreign supplier: its tax number) is mandatory
+        from app.services.invoice_corrections import supplier_tax_id_refusal
+        refusal = supplier_tax_id_refusal(data.model_dump())
+        if refusal is not None:
+            raise refusal
 
     # INV-CN-01 / Р49.1: an outgoing invoice gets its number only when it is ISSUED
     # (POST /finance/invoices/{id}/issue, one sequence shared with the notes). The draft
@@ -964,6 +970,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     if data.direction == "Received":
         from app.services.invoice_corrections import supplier_key
         invoice["supplier_counterparty_id"] = data.supplier_counterparty_id
+        invoice["counterparty_foreign_tax_no"] = data.counterparty_foreign_tax_no
         invoice["supplier_key"] = supplier_key(invoice)          # FG-231 / Р53(1)
     if not invoice.get("invoice_no"):
         # FG-217: a draft has NO number field at all (not null) — a unique number index
@@ -1085,12 +1092,23 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
 
     # Check invoice_no uniqueness if changed
     # FG-232: a draft has no invoice_no field — .get, never a KeyError (500)
-    if (data.invoice_no and data.invoice_no != invoice.get("invoice_no")
-            and invoice.get("direction") == "Received"):
-        # FG-231 / Р53(1): unique per supplier (with the supplier as it will be after the edit)
+    identity = ("invoice_no", "counterparty_eik", "counterparty_foreign_tax_no",
+                "supplier_counterparty_id", "counterparty_name")
+    merged = {**invoice, **{k: v for k, v in data.model_dump().items() if v is not None}}
+    if (invoice.get("direction") == "Received" and not is_locked(invoice)
+            and any(k in requested and requested[k] != invoice.get(k) for k in identity)):
+        # Р55(1) / FG-249: the supplier stays identified by ЕИК / foreign tax number
+        from app.services.invoice_corrections import supplier_tax_id_refusal
+        refusal = supplier_tax_id_refusal(merged)
+        if refusal is not None:
+            raise refusal
+    if (invoice.get("direction") == "Received" and not is_locked(invoice)
+            and merged.get("invoice_no")
+            and any(k in requested and requested[k] != invoice.get(k) for k in identity)):
+        # FG-231 / Р53(1) + FG-249: unique per supplier (as it will be after the edit) — a
+        # changed number OR a changed supplier identity is checked → 409, never a 500
         from app.services.invoice_corrections import supplier_number_taken
-        merged = {**invoice, **{k: v for k, v in data.model_dump().items() if v is not None}}
-        if await supplier_number_taken(tenant, merged, data.invoice_no, exclude_invoice_id=invoice_id):
+        if await supplier_number_taken(tenant, merged, merged["invoice_no"], exclude_invoice_id=invoice_id):
             raise HTTPException(status_code=409, detail={
                 "error_code": "DUPLICATE_SUPPLIER_INVOICE",
                 "message": "Фактура с този номер от този доставчик вече е въведена"})
@@ -1173,7 +1191,13 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             }}, session=session)
             # Recalculate status
             await update_invoice_status(tenant, invoice_id, session=session)
-    await run_transaction(tenant, _body)
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await run_transaction(tenant, _body)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=409, detail={            # FG-249: never a 500
+            "error_code": "DUPLICATE_SUPPLIER_INVOICE",
+            "message": "Фактура с този номер от този доставчик вече е въведена"})
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 

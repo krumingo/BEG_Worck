@@ -72,6 +72,7 @@ class InvoiceCreate(BaseModel):
     counterparty_name: Optional[str] = None
     counterparty_eik: Optional[str] = None  # Bulgarian company ID (ЕИК)
     counterparty_vat_no: Optional[str] = None  # VAT number (ДДС номер)
+    counterparty_foreign_tax_no: Optional[str] = None  # INV-CN-01 Р55(1): a foreign supplier's tax number
     counterparty_address: Optional[str] = None  # Address
     counterparty_mol: Optional[str] = None  # Contact person (МОЛ)
     counterparty_email: Optional[str] = None  # Email
@@ -93,6 +94,7 @@ class InvoiceUpdate(BaseModel):
     counterparty_name: Optional[str] = None
     counterparty_eik: Optional[str] = None
     counterparty_vat_no: Optional[str] = None
+    counterparty_foreign_tax_no: Optional[str] = None  # INV-CN-01 Р55(1): a foreign supplier's tax number
     counterparty_address: Optional[str] = None
     counterparty_mol: Optional[str] = None
     counterparty_email: Optional[str] = None

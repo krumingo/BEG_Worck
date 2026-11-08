@@ -53,6 +53,20 @@ DUPLICATE_CREDIT_NOTE = "DUPLICATE_CREDIT_NOTE"
 NOTE_INVALID = "NOTE_INVALID"
 INVOICE_NOT_CORRECTABLE = "INVOICE_NOT_CORRECTABLE"
 USE_CORRECTION = "USE_CORRECTION"
+SUPPLIER_TAX_ID_REQUIRED = "SUPPLIER_TAX_ID_REQUIRED"
+
+
+def supplier_tax_id_refusal(invoice: dict):
+    """Р55(1) / FG-249: an incoming invoice names its supplier by ЕИК, or — a foreign
+    supplier — by its tax number; otherwise 422 (nothing written)."""
+    inv = invoice or {}
+    eik = (inv.get("counterparty_eik") or "").strip()
+    foreign = (inv.get("counterparty_foreign_tax_no") or "").strip() if isinstance(
+        inv.get("counterparty_foreign_tax_no"), str) else ""
+    if eik or foreign:
+        return None
+    return unprocessable(SUPPLIER_TAX_ID_REQUIRED,
+                         "ЕИК на доставчика е задължителен (за чуждестранен доставчик — данъчният му номер)")
 CANCELLATION_PENDING = "CANCELLATION_PENDING"
 DEBIT_NOTE_NOT_APPROVED = "DEBIT_NOTE_NOT_APPROVED"
 OFFSET_BASIS_REQUIRED = "OFFSET_BASIS_REQUIRED"
@@ -189,12 +203,17 @@ MAX_NUMBER_SKIPS = 10000
 
 
 def supplier_key(invoice: dict) -> Optional[str]:
-    """Р53(1): the supplier identity of an incoming invoice / note — the ЕИК, else the
-    counterparty record, else the normalised name. None when nothing identifies it."""
+    """Р53(1): the supplier identity of an incoming invoice / note — the ЕИК, else (Р55(1))
+    a foreign supplier's tax number, else the counterparty record, else the normalised
+    name (legacy rows only — Р55(1) makes the ЕИК / tax number mandatory)."""
     inv = invoice or {}
     eik = (inv.get("counterparty_eik") or "").strip()
     if eik:
         return "eik:" + eik
+    foreign = (inv.get("counterparty_foreign_tax_no") or "").strip().upper() if isinstance(
+        inv.get("counterparty_foreign_tax_no"), str) else ""
+    if foreign:
+        return "tax:" + foreign
     cp = (inv.get("supplier_counterparty_id") or "").strip() if isinstance(
         inv.get("supplier_counterparty_id"), str) else ""
     if cp:
@@ -212,8 +231,13 @@ async def supplier_number_taken(tenant, invoice: dict, number: str, *, exclude_i
     eik = (invoice.get("counterparty_eik") or "").strip()
     cp = invoice.get("supplier_counterparty_id") if isinstance(invoice.get("supplier_counterparty_id"), str) else ""
     legacy = {"supplier_key": {"$exists": False}}
+    foreign = (invoice.get("counterparty_foreign_tax_no") or "").strip() if isinstance(
+        invoice.get("counterparty_foreign_tax_no"), str) else ""
     if eik:
         alternatives.append({**legacy, "counterparty_eik": eik})
+    elif foreign:
+        alternatives.append({**legacy, "counterparty_foreign_tax_no": {
+            "$regex": "^\\s*%s\\s*$" % re.escape(foreign), "$options": "i"}})
     elif cp:
         alternatives.append({**legacy, "counterparty_eik": {"$in": [None, ""]}, "supplier_counterparty_id": cp})
     elif key and key.startswith("name:"):
@@ -774,6 +798,7 @@ async def supplier_note_cost_lines(tenant, project_id: str, counted_by_line: Dic
     notes.sort(key=lambda n: (str(n.get("issue_date") or ""), str(n.get("created_at") or "")))
     for n in notes:
         if (n.get("expected_link") or {}).get("rows"):
+            out.extend(await _accepted_difference_lines(tenant, project_id, n, counted_by_line))
             continue
         credit = n.get("kind") == KIND_CREDIT
         at = _moment(n.get("issue_date") or n.get("created_at"))
@@ -800,6 +825,41 @@ async def supplier_note_cost_lines(tenant, project_id: str, counted_by_line: Dic
                         "unit": None, "material_name": l.get("description") or "",
                         "package_id": None, "at": at, "period": period_of(at), "ref": n.get("id"),
                         "invoice_line_id": line_id, "note_number": n.get("number")})
+    return out
+
+
+async def _accepted_difference_lines(tenant, project_id: str, note: dict,
+                                     counted_by_line: Dict[str, float]) -> List[dict]:
+    """Р55(3) / FG-251: when the Owner ACCEPTED a difference between a supplier credit
+    note linked to a receipt reversal and the credit it awaited, the part the supplier
+    did not credit stays a cost of the ORIGINAL line's project / SMR, in the period of
+    the acceptance (not of the invoice, not of the note). Net of VAT, by the line's
+    direct project share; split over the note's lines by their net."""
+    from app.services.canonical_material_cost import _moment, period_of
+    acc = note.get("difference_accepted") or {}
+    if not acc:
+        return []
+    diff_gross = cents(acc.get("expected")) - cents(acc.get("registered"))
+    note_gross, note_net = cents(note.get("gross")), cents(note.get("net"))
+    if diff_gross <= 0 or note_gross <= 0:
+        return []
+    diff_net = cents(diff_gross * note_net / note_gross)       # the note's own VAT ratio
+    at = _moment(acc.get("at"))
+    out: List[dict] = []
+    for l in note.get("lines") or []:
+        line_id = l.get("original_line_id")
+        if line_id not in counted_by_line or note_net <= 0:
+            continue                                   # not a line of THIS project
+        row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
+        share = _project_share(row or {}, project_id)
+        value = cents(diff_net * cents(l.get("net")) / note_net * share)
+        if value <= 0:
+            continue
+        out.append({"source": "supplier_note", "kind": "accepted_difference", "waste": False,
+                    "value": float(value), "qty": 0.0, "item_id": None, "unit": None,
+                    "material_name": l.get("description") or "", "package_id": None, "at": at,
+                    "period": period_of(at), "ref": note.get("id"), "invoice_line_id": line_id,
+                    "note_number": note.get("number")})
     return out
 
 

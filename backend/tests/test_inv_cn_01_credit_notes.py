@@ -1145,9 +1145,10 @@ def test_fg248_before_the_migration_a_legacy_supplier_number_still_blocks_a_dupl
         r = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
                          json={**body, "invoice_no": "F-7", "counterparty_eik": EIK})
         assert r.status_code == 409 and code(r) == "DUPLICATE_SUPPLIER_INVOICE", r.text
+        # Р55(1): a new supplier invoice must name the ЕИК / foreign tax number at all
         r = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
                          json={**body, "invoice_no": "F-8", "supplier_counterparty_id": "cp-1"})
-        assert r.status_code == 409 and code(r) == "DUPLICATE_SUPPLIER_INVOICE", r.text
+        assert r.status_code == 422 and code(r) == "SUPPLIER_TAX_ID_REQUIRED", r.text
         r = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
                          json={**body, "invoice_no": "F-7", "counterparty_eik": "831826092"})
         assert r.status_code == 201, r.text                         # another supplier
@@ -1185,4 +1186,106 @@ def test_fg246_an_invoice_in_an_offset_is_not_cancelled_and_the_offset_supersede
         assert (await offset(c, a2, c2, 10, n2["id"])).status_code == 201
         r = await c.post("/api/finance/invoices/%s/cancel" % c2["id"], headers=hdr("acct-a"), json={"reason": "x"})
         assert r.status_code == 409 and code(r) == "USE_CREDIT_NOTE"
+    run(monkeypatch, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════════ Addendum D (Р55)
+def test_fg249_supplier_tax_id_is_mandatory_duplicates_by_put_are_409_legacy_gets_dq(monkeypatch, mode):
+    async def scenario(c, op):
+        body = {"direction": "Received", "invoice_no": "S-1", "issue_date": "2026-11-08",
+                "due_date": "2099-12-31", "counterparty_name": "Доставчик", "lines": LINES}
+        r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=body)
+        assert r.status_code == 422 and code(r) == "SUPPLIER_TAX_ID_REQUIRED", r.text
+        assert await op.invoices.count_documents({"invoice_no": "S-1"}) == 0
+        r = await c.post("/api/finance/invoices", headers=hdr("acct-a"),
+                         json={**body, "counterparty_foreign_tax_no": "DE123456789"})       # foreign
+        assert r.status_code == 201 and r.json()["supplier_key"] == "tax:DE123456789", r.text
+        a = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json={**body, "invoice_no": "S-2",
+                                                                              "counterparty_eik": EIK})
+        b = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json={**body, "invoice_no": "S-2",
+                                                                              "counterparty_eik": "831826092"})
+        assert (a.status_code, b.status_code) == (201, 201)
+        # a PUT that would make b a duplicate of a (same supplier + number) → 409, never 500
+        r = await c.put("/api/finance/invoices/" + b.json()["id"], headers=hdr("acct-a"),
+                        json={"counterparty_eik": EIK})
+        assert r.status_code == 409 and code(r) == "DUPLICATE_SUPPLIER_INVOICE", r.text
+        r = await c.put("/api/finance/invoices/" + b.json()["id"], headers=hdr("acct-a"),
+                        json={"counterparty_eik": ""})
+        assert r.status_code == 422 and code(r) == "SUPPLIER_TAX_ID_REQUIRED", r.text
+        # a legacy supplier invoice without ЕИК / tax number → a DQ task for the Accountant
+        await op.invoices.insert_one({"id": "leg-noeik", "org_id": ORG_A, "direction": "Received",
+                                      "status": "Sent", "invoice_no": "OLD-1", "counterparty_name": "Стар"})
+        from app.services import invoice_corrections_migration as mig
+        plan = await mig.plan(op)
+        assert [i for t in plan["tenants"] for i in t["supplier_tax_id_missing"]] == ["leg-noeik"]
+        await mig.apply(op, actor_id="owner-a")
+        dq = (await op.invoices.find_one({"id": "leg-noeik"}))["dq_tasks"]["supplier_tax_id_missing"]
+        assert (dq["assignee_role"], dq["status"]) == ("accountant", "open")
+        assert (await mig.plan(op))["changes"] == 0
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg250_accountant_registers_owner_accepts_never_the_same_person(monkeypatch, mode):
+    async def scenario(c, op):
+        bill = await sent(c, direction="Received")
+        for who in ("owner-a", "admin-a"):
+            r = await note(c, bill, number="CN-X", who=who)
+            assert r.status_code == 403 and code(r) == "REGISTRAR_ROLE_REQUIRED", (who, r.text)
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_250", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat(), "dq_task": {"status": "open"}})
+        n = (await note(c, bill, number="CN-250", expected_credit_note_ids=["ecn_250"],
+                        lines=[{"original_line_id": bill["lines"][0]["id"], "amount": 25.0}])).json()
+        # a registrant who is (also) the acceptor → 409 (two different people, Р55(2))
+        await op.credit_debit_notes.update_one({"id": n["id"]}, {"$set": {"created_by": "owner-a"}})
+        r = await c.post("/api/finance/credit-notes/%s/accept-difference" % n["id"], headers=hdr("owner-a"),
+                         json={"reason": "приемам"})
+        assert r.status_code == 409 and code(r) == "SAME_PERSON_APPROVAL", r.text
+        assert (await op.credit_debit_notes.find_one({"id": n["id"]}))["applied"] is False
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg251_an_accepted_difference_after_a_reversal_is_project_cost_in_the_acceptance_period(monkeypatch, mode):
+    async def scenario(c, op):
+        import importlib
+        from app.services.canonical_material_cost import cost_by_period, project_material_cost
+        from app.services.project_pnl import compute_project_pnl
+        from app.tenancy.data_access import TenantData
+        from tests.test_warehouse_canonical_c22_all_reports_cutover import _DB_MODULES
+        for name in _DB_MODULES:
+            module = importlib.import_module(name)
+            if hasattr(module, "db"):
+                monkeypatch.setattr(module, "db", op)
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        bill = await sent(c, direction="Received", project="prj-1")
+        await op.invoice_lines.insert_one({
+            "id": "il-251", "org_id": ORG_A, "invoice_id": bill["id"], "description": "Лепило",
+            "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+            "created_at": "2026-10-02T08:00:00+00:00",
+            "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 10}]})
+        # the reversal (#82) awaits 36.00 (3 × 10 + VAT); the supplier credits only 30.00
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_251", "org_id": ORG_A, "invoice_id": bill["id"], "invoice_line_id": "il-251",
+            "amount": 36.0, "status": "open", "created_at": "2026-10-05T08:00:00+00:00",
+            "dq_task": {"status": "open"}})
+        n = (await note(c, bill, number="CN-251", expected_credit_note_ids=["ecn_251"],
+                        lines=[{"original_line_id": "il-251", "amount": 25.0}])).json()
+        assert (n["gross"], n["applied"]) == (30.0, False)
+        before = await project_material_cost(tenant, ORG_A, "prj-1")
+        pnl_before = await compute_project_pnl(ORG_A, "prj-1")
+        r = await c.post("/api/finance/credit-notes/%s/accept-difference" % n["id"], headers=hdr("owner-a"),
+                         json={"reason": "доставчикът не коригира"})
+        assert r.status_code == 200, r.text
+        accepted_at = r.json()["difference_accepted"]["at"]
+        after = await project_material_cost(tenant, ORG_A, "prj-1")
+        pnl_after = await compute_project_pnl(ORG_A, "prj-1")
+        assert round(after["total_cost"] - before["total_cost"], 2) == 5.0           # 6.00 gross → 5.00 net
+        assert round(pnl_after["expense"]["material_cost"] - pnl_before["expense"]["material_cost"], 2) == 5.0
+        period = accepted_at[:7]
+        diff_lines = [ln for ln in after["lines"] if ln.get("kind") == "accepted_difference"]
+        assert [(ln["value"], ln["period"]) for ln in diff_lines] == [(5.0, period)]
+        assert cost_by_period(after)[period]["total"] - cost_by_period(before).get(period, {}).get("total", 0) == 5.0
+        ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_accepted"})
+        assert ev["structured_diff"]["difference_gross"] == 6.0 and ev["structured_diff"]["cost_period"] == period
     run(monkeypatch, mode, scenario)

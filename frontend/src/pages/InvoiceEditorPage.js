@@ -109,6 +109,7 @@ export default function InvoiceEditorPage() {
   const [projectId, setProjectId] = useState(projectIdParam);
   const [counterpartyName, setCounterpartyName] = useState("");
   const [counterpartyEik, setCounterpartyEik] = useState("");
+  const [foreignTaxNo, setForeignTaxNo] = useState("");   // Р55(1): a foreign supplier's tax number
   const [counterpartyVatNo, setCounterpartyVatNo] = useState("");
   const [counterpartyAddress, setCounterpartyAddress] = useState("");
   const [counterpartyMol, setCounterpartyMol] = useState("");
@@ -194,6 +195,7 @@ export default function InvoiceEditorPage() {
         setProjectId(inv.project_id || "");
         setCounterpartyName(inv.counterparty_name || "");
         setCounterpartyEik(inv.counterparty_eik || "");
+        setForeignTaxNo(inv.counterparty_foreign_tax_no || "");
         setCounterpartyVatNo(inv.counterparty_vat_no || "");
         setCounterpartyAddress(inv.counterparty_address || "");
         setCounterpartyMol(inv.counterparty_mol || "");
@@ -290,6 +292,9 @@ export default function InvoiceEditorPage() {
   const handleSave = async () => {
     // INV-CN-01 / Р49.1: an outgoing invoice gets its number when it is issued
     if (direction !== "Issued" && !invoiceNo.trim()) { alert(t("validation.required")); return; }
+    if (direction === "Received" && !counterpartyEik.trim() && !foreignTaxNo.trim()) {
+      alert("ЕИК на доставчика е задължителен (за чуждестранен — данъчният му номер)"); return;
+    }
     if (!issueDate || !dueDate) { alert(t("validation.required")); return; }
     if (dueDate < issueDate) { alert("Падежът не може да бъде преди датата на издаване"); return; }
     setSaving(true);
@@ -297,6 +302,7 @@ export default function InvoiceEditorPage() {
       const payload = {
         direction, kind, invoice_no: invoiceNo, project_id: projectId || null,
         counterparty_name: counterpartyName || null, counterparty_eik: counterpartyEik || null,
+        counterparty_foreign_tax_no: foreignTaxNo || null,
         counterparty_vat_no: counterpartyVatNo || null, counterparty_address: counterpartyAddress || null,
         counterparty_mol: counterpartyMol || null, counterparty_email: counterpartyEmail || null,
         counterparty_phone: counterpartyPhone || null, issue_date: issueDate, due_date: dueDate,
@@ -313,6 +319,7 @@ export default function InvoiceEditorPage() {
         await API.put(`/finance/invoices/${invoiceId}`, {
           invoice_no: invoiceNo, kind, counterparty_name: counterpartyName || null,
           counterparty_eik: counterpartyEik || null, counterparty_vat_no: counterpartyVatNo || null,
+          counterparty_foreign_tax_no: foreignTaxNo || null,
           counterparty_address: counterpartyAddress || null, counterparty_mol: counterpartyMol || null,
           counterparty_email: counterpartyEmail || null, counterparty_phone: counterpartyPhone || null,
           project_id: projectId || null, issue_date: issueDate, due_date: dueDate,
@@ -684,6 +691,14 @@ export default function InvoiceEditorPage() {
                       placeholder="ЕИК на фирмата" disabled={locked}
                       className="bg-background font-mono placeholder:text-muted-foreground/50" data-testid="counterparty-eik-input" />
                   </div>
+                  {direction === "Received" && (
+                    <div className="space-y-2">
+                      <Label>Данъчен номер (чуждестранен доставчик)</Label>
+                      <Input value={foreignTaxNo} onChange={(e) => setForeignTaxNo(e.target.value)}
+                        placeholder="Ако доставчикът няма ЕИК" disabled={locked}
+                        className="bg-background font-mono placeholder:text-muted-foreground/50" data-testid="counterparty-foreign-tax-input" />
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label>ДДС номер</Label>
                     <Input value={counterpartyVatNo} onChange={(e) => setCounterpartyVatNo(e.target.value)}

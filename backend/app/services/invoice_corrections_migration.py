@@ -51,12 +51,16 @@ async def plan(database) -> Dict:
         numbered = await tenant.invoices.find(
             {"status": ic.DRAFT, "direction": "Issued", "invoice_no": {"$gt": ""}},
             {"_id": 0, "id": 1, "invoice_no": 1, "total": 1, "created_at": 1}).to_list(None)
-        keys, seen, conflicts = [], {}, []
+        keys, seen, conflicts, no_tax_id = [], {}, [], []
         async for inv in tenant.invoices.find({"direction": "Received"},
                                               {"_id": 0, "id": 1, "invoice_no": 1, "supplier_key": 1,
                                                "counterparty_eik": 1, "counterparty_name": 1,
-                                               "supplier_counterparty_id": 1}):
+                                               "supplier_counterparty_id": 1,
+                                               "counterparty_foreign_tax_no": 1, "dq_tasks": 1}):
             key = ic.supplier_key(inv)
+            if (ic.supplier_tax_id_refusal(inv) is not None
+                    and not (inv.get("dq_tasks") or {}).get("supplier_tax_id_missing")):
+                no_tax_id.append(inv["id"])                       # Р55(1): DQ to the Accountant
             if inv.get("supplier_key") != key:
                 keys.append({"id": inv["id"], "supplier_key": key})
             if isinstance(inv.get("invoice_no"), str) and inv["invoice_no"].strip():
@@ -65,17 +69,19 @@ async def plan(database) -> Dict:
                     conflicts.append({"supplier_key": key, "invoice_no": inv["invoice_no"],
                                       "ids": [seen[ident], inv["id"]]})
                 seen.setdefault(ident, inv["id"])
-        if empty or numbered or keys or conflicts:
+        if empty or numbered or keys or conflicts or no_tax_id:
             tenants.append({"org_id": org_id,
                             "drafts_number_removed": [d["id"] for d in empty],
                             "legacy_numbered_drafts_to_issue": numbered,
-                            "supplier_keys_to_set": keys, "supplier_conflicts": conflicts})
+                            "supplier_keys_to_set": keys, "supplier_conflicts": conflicts,
+                            "supplier_tax_id_missing": no_tax_id})
     missing = [n for n in targets if n not in indexes]
     return {"legacy_index": legacy, "target_indexes": targets, "missing_indexes": missing,
             "tenants": tenants,
             "supplier_conflicts": sum(len(t["supplier_conflicts"]) for t in tenants),
             "changes": sum(len(t["drafts_number_removed"]) + len(t["legacy_numbered_drafts_to_issue"])
-                           + len(t["supplier_keys_to_set"]) for t in tenants)
+                           + len(t["supplier_keys_to_set"]) + len(t["supplier_tax_id_missing"])
+                           for t in tenants)
             + len(legacy) + len(missing)}
 
 
@@ -94,6 +100,14 @@ async def apply(database, *, actor_id: str) -> Dict:
             await tenant.invoices.update_many(
                 {"id": {"$in": t["drafts_number_removed"]}, "status": ic.DRAFT,
                  "invoice_no": {"$exists": True, "$in": [None, ""]}}, {"$unset": {"invoice_no": ""}})
+        if t["supplier_tax_id_missing"]:
+            # Р55(1) / FG-249: a legacy supplier invoice without ЕИК / tax number → a DQ task
+            await tenant.invoices.update_many(
+                {"id": {"$in": t["supplier_tax_id_missing"]}, "direction": "Received",
+                 "dq_tasks.supplier_tax_id_missing": {"$exists": False}},
+                {"$set": {"dq_tasks.supplier_tax_id_missing": {
+                    "assignee_role": "accountant", "status": "open", "created_at": now,
+                    "title": "липсва ЕИК / данъчен номер на доставчика"}}})
         for row in t["supplier_keys_to_set"]:
             await tenant.invoices.update_one({"id": row["id"], "direction": "Received"},
                                              {"$set": {"supplier_key": row["supplier_key"]}})

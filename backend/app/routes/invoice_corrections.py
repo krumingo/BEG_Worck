@@ -124,6 +124,11 @@ async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
         tenant, prefix = await _prepare(user)
         invoice = _correctable(await tenant.invoices.get(invoice_id, {"_id": 0}))
         direction = ic.OUTGOING if invoice.get("direction") == "Issued" else ic.INCOMING
+        if direction == ic.INCOMING and user.get("role") != "Accountant":
+            # Р55(2) / FG-250: a supplier note is registered by the Accountant
+            raise HTTPException(status_code=403, detail={
+                "error_code": "REGISTRAR_ROLE_REQUIRED",
+                "message": "Входящо известие регистрира Счетоводителят"})
         lines = await ic.build_note_lines(tenant, invoice, body.get("lines"))
         totals = ic.note_totals(lines)
         basis = None
@@ -383,6 +388,10 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
             if (note.get("direction") != ic.INCOMING or note.get("applied") or link.get("matched") is not False
                     or note.get("superseded_by")):
                 raise ic.conflict(ic.NOT_PENDING, "Няма отворена разлика за приемане по това известие")
+            if note.get("created_by") == user["id"]:
+                # Р55(2) / FG-250: the registrant and the acceptor are two different people
+                raise ic.conflict(ic.SAME_PERSON_APPROVAL,
+                                  "Регистрирал известието не може да приеме разликата — нужен е друг човек")
             rows = link.get("rows") or []
             await _claim(tenant, note["original_invoice_id"], session)
             open_rows = await tenant.expected_credit_notes.count_documents(
@@ -411,7 +420,13 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
             await fin._audit_tx(user, "finance.credit_note.difference_accepted", "finance.credit_note",
                                 note_id, reason, {"expected": link.get("expected"),
                                                   "registered": note.get("gross"), "rows": rows,
-                                                  "original_invoice_id": note["original_invoice_id"]},
+                                                  "original_invoice_id": note["original_invoice_id"],
+                                                  # Р55(3) / FG-251: the uncredited part stays a
+                                                  # cost of the original line's project, dated now
+                                                  "difference_gross": ic.money(
+                                                      ic.cents(link.get("expected"))
+                                                      - ic.cents(note.get("gross"))),
+                                                  "cost_period": at[:7]},
                                 key, session)
         await fin._tx(run_in_transaction, tx_body)
         return _public(await tenant.credit_debit_notes.find_one({"id": note_id}, {"_id": 0}))
