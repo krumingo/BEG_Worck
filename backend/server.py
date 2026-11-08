@@ -428,6 +428,12 @@ async def startup():
     # owns its own indexes, so this bootstrap does not reach the collection
     # directly (rule A2-TEAM).
     await project_team.ensure_indexes(db)
+    # OH-01 (OH01-3): the overhead unique indexes (one allocation version, one active
+    # snapshot per period) at startup, never on a request path.
+    # FG-98: every database of the Tenant Registry too, not only the default one.
+    from app.services.overhead_lifecycle import ensure_overhead_indexes_for_installation
+    from app.tenancy import registry as _oh01_registry
+    await ensure_overhead_indexes_for_installation(db, _oh01_registry.system_db)
     # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
     # shared rate-limit counters and durable auth security events (both TTL).
     from app.services import auth_events, password_reset, rate_limit
