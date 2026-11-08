@@ -4844,3 +4844,23 @@ Gates:
 | PM-01 | 6 |
 
 **Merge with main conflicts only in generated files:** `docs/architecture/W0-03E-A1_INVENTORY.md`, `W0-03E-A2B_INVENTORY.md` and `docs/evidence/PM-01/run_meta.json`. In the trial tree the two inventories were regenerated with their scripts (`w0_03e_a1_inventory.py`, `w0_03e_a2b_inventory.py`), and the static guard plus W0 pass. At merge time: regenerate those, and PM-01 `--harness`.
+
+## 2026-11-08 09:00 UTC: #81 `de0698d` WH-FIX-01 (new PR, periodic pass): 2 BLOCKING
+
+Package: WH-FIX-01 (`claude/happy-meitner-bmcnel` @ `2a52fc4`, which also adds decision R44; #80 docs-only). Diff read for all 11 items. Probe: `docs/audit/probes/whfix01/test_probe_whfix01.py`.
+
+**WHFIX81-01 (blocking): the FG-157 lock is check-then-act.** `_supplier_invoice_link()` runs outside `run_in_transaction`, and the write only CASes the invoice's own `updated_at`. X1a, deterministic (a linked receipt commits between the check and the write): **PUT 200, linked receipts 1, line unit_price 10 → 7.** The free race X1b ×10 was always ordered PUT first (audit seq put 1 < receipt 2, a legal order), so the window is narrow but real.
+- Fix: a shared lock document written by both the PUT and the linked receipt, the same pattern as #55's per-line lock (Addendum K). Moving the check into the transaction alone does not help under snapshot isolation.
+
+**WHFIX81-02 (blocking): the waste UI regresses.** `MaterialWastePanel.js:63` posts `{material_name, qty, unit, waste_type, notes}`. The new canonical waste route answers **422 MASTER_IDENTITY_MISSING** (X4), so no waste can be recorded from the UI. A frontend change is missing.
+
+Non-blocking:
+- D-WHFIX-03: FG-191 stores an unquantized line price: `unit_value '33.33333333333333333333333333'` for 100 / 3. The `material_entries` value is 100.0000 and total_cost is 100.0.
+- #81 × #82: `service.py` conflicts. Semantically, `_supplier_invoice_link` does not skip reversed receipts, so after a WH-REV-01 reversal the supplier invoice stays locked. Whichever merges second must handle both.
+- FG-192: the conftest lowers `STRICT_MASTER_IDENTITY_DEFAULT` only for the old fixtures (before the PR the default was env "0" everywhere, so this is not a weakening). The production `_service()` passes strict=True.
+- FG-193: create-sub-project no longer rewrites the ledger; the scanner catches indirect handles (PR tests).
+- FG-161: the masking reuses the canonical value rules from the session role in every mode. `project_remainders` on the dashboard is quantity only.
+
+PR comment 6719287307. Gates batch `b81` is running on rs0.
+
+#82 `ed8f9e7` WH-REV-01 (new, assigned): probe `whrev01` R1–R7 **111 passed** (details with the gates). #82's own suite: 76. Warehouse gates batch `b82` running on rs3.
