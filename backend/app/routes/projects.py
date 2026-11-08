@@ -397,9 +397,26 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
     tenant = _tenant(user)
     seen: dict = {}
 
+    async def links_of(project, session=None):
+        """R56(2) + FG-272: client → team → phases → any record (cheapest first)."""
+        if project.get("owner_id") or project.get("client_id"):
+            return {"client": "owner_id"}
+        if await project_team.any_row_count(_team(user), project_id, session=session):
+            return {"team_members": "project_id"}
+        kw = {} if session is None else {"session": session}
+        if await tenant.project_phases.find_one({"project_id": project_id}, {"_id": 1}, **kw):
+            return {"project_phases": "project_id"}
+        return await lifecycle.business_links(tenant, project_id, session=session)
+
+    def has_history(links):
+        return lifecycle.refuse(
+            409, "PROJECT_HAS_HISTORY",
+            "Обектът има история и не се изтрива — архивирайте го "
+            "(POST /projects/{id}/archive) или го откажете (POST /projects/{id}/cancel)",
+            links=links)
+
     async def check():
-        """FG-274: the history scan runs BEFORE the transaction (cheap checks first, exists-
-        queries per path, early exit); the transaction compare-and-sets on what it saw."""
+        """FG-274: the scan runs first, outside the transaction (a fast refusal)."""
         project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]},
                                                  {"_id": 0})
         if not project:
@@ -408,39 +425,39 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
             raise lifecycle.refuse(
                 409, "PROJECT_NOT_DRAFT",
                 "Изтрива се само празна чернова — архивирайте или откажете обекта")
-        # R56(2): a Draft with a client, a team, phases or an offer is USED — archived, not
-        # deleted (the offer is found by the history scan).
-        links: dict = {}
-        if project.get("owner_id") or project.get("client_id"):
-            links["client"] = "owner_id"
-        elif await project_team.any_row_count(_team(user), project_id):
-            links["team_members"] = "project_id"
-        elif await tenant.project_phases.find_one({"project_id": project_id}, {"_id": 1}):
-            links["project_phases"] = "project_id"
-        else:
-            links = await lifecycle.business_links(tenant, project_id)
+        links = await links_of(project)
         if links:
-            raise lifecycle.refuse(
-                409, "PROJECT_HAS_HISTORY",
-                "Обектът има история и не се изтрива — архивирайте го "
-                "(POST /projects/{id}/archive) или го откажете (POST /projects/{id}/cancel)",
-                links=links)
+            raise has_history(links)
         seen["project"] = project
 
     async def work(session):
         project = seen["project"]
-        # CAS: still the same empty Draft the check saw (status and updated_at unchanged).
-        res = await tenant.projects.delete_one(
+        # D14: the SAME checks again inside the transaction, right before the CAS — a record
+        # that arrived after the first scan is seen here (→ 409, nothing changed).
+        links = await links_of(project, session=session)
+        if links:
+            raise has_history(links)
+        now = lifecycle.now_iso()
+        # D14 (CLAUDE.md §2 rule 9): no delete_one — the empty Draft becomes a TOMBSTONE,
+        # invisible to every list/search/selector (data_access.TOMBSTONED); a writer that
+        # names it later gets 409 PROJECT_DELETED. The code is freed for reuse (unique per
+        # tenant) and the original kept. CAS: still the same Draft the check saw.
+        freed_code = "%s~deleted~%s" % (project.get("code") or "", project_id[:8])
+        res = await tenant.projects.update_one(
             {"id": project_id, "status": "Draft", "updated_at": project.get("updated_at")},
+            {"$set": {"status": "deleted", "deleted_at": now, "deleted_by": user["id"],
+                      "deleted_reason": "празна чернова", "original_code": project.get("code"),
+                      "code": freed_code, "status_before_delete": "Draft", "updated_at": now}},
             session=session)
-        if res.deleted_count != 1:
+        if res.modified_count != 1:
             raise lifecycle.refuse(409, "PROJECT_CHANGED",
                                    "Обектът току-що се промени — опитайте отново")
         await lifecycle.audit(session, user, action="project.delete", entity_type="project",
                               entity_id=project_id, reason="празна чернова", key=key,
                               diff={"before": {k: project.get(k) for k in
                                                ("code", "name", "status", "type")},
-                                    "after": None})
+                                    "after": {"status": "deleted", "code": freed_code,
+                                              "tombstone": True}})
         return {"ok": True, "deleted": project_id}
 
     return await lifecycle.keyed_transaction(user, key, "project.delete",

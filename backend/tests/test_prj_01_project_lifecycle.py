@@ -120,7 +120,7 @@ async def seed(op_db, fx: Dict[str, Any]) -> None:
                 project("draft_phase", "Draft"), project("draft_client", "Draft",
                                                           owner_type="company",
                                                           owner_id=t.get("company1_id")),
-                project("draft_team", "Draft"),
+                project("draft_team", "Draft"), project("draft_race", "Draft"),
                 # R60: a legacy warranty project filed under a SUB-PROJECT of P1
                 project("sub_orig", "Completed", parent_project_id=t["project_id"]),
                 project("warr_sub", "Completed", "Warranty",
@@ -291,6 +291,49 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                             "replay_same": r2["body"] == r["body"],
                             "project_kept": project_doc("draft_empty") is not None,
                             "events": events(pid("A", "draft_empty"), "project.")}
+        # D14: the deleted empty Draft is a TOMBSTONE — kept, invisible, refused as a reference
+        tomb = project_doc("draft_empty") or {}
+        listed = call("GET", "/api/projects", key=None)["body"]
+        searched = call("GET", "/api/projects?search=draft_empty", key=None)["body"]
+        d["tombstone"] = {
+            "status": tomb.get("status"), "deleted_by_owner": tomb.get("deleted_by") == A["users"]["owner"]["id"],
+            "original_code": tomb.get("original_code"), "code_freed": tomb.get("code") != tomb.get("original_code"),
+            "in_list": any(p.get("id") == pid("A", "draft_empty") for p in listed) if isinstance(listed, list) else None,
+            "in_search": any(p.get("id") == pid("A", "draft_empty") for p in searched) if isinstance(searched, list) else None,
+            "get": call("GET", "/api/projects/" + pid("A", "draft_empty"), key=None)["status"],
+            "reopen": call("POST", "/api/projects/%s/archive" % pid("A", "draft_empty"),
+                           json={"reason": "x"})["status"],
+            "code_reused": call("POST", "/api/projects", json={"code": tomb.get("original_code"),
+                                                                 "name": "Нов със същия код"})["status"],
+            "extra_work": call("POST", "/api/extra-works", key=None,
+                               json={"project_id": pid("A", "draft_empty"), "title": "x"}),
+            "waste": call("POST", "/api/projects/%s/material-waste" % pid("A", "draft_empty"),
+                          json={"material_name": "Цимент", "qty": 1}),
+        }
+        for k2 in ("extra_work", "waste"):
+            d["tombstone"][k2] = (d["tombstone"][k2]["status"], d["tombstone"][k2]["error_code"])
+        # D14 race: a record arrives AFTER the first scan and BEFORE the transaction's CAS
+        from app.services import project_lifecycle as lc
+        real_links = lc.business_links
+        state = {"calls": 0}
+
+        async def racing_links(tenant, project_id, session=None, first_only=True):
+            out = await real_links(tenant, project_id, session=session, first_only=first_only)
+            if project_id == pid("A", "draft_race") and session is None and state["calls"] == 0:
+                state["calls"] += 1
+                await op_db.offers.insert_one({"id": pid("A", "race_offer"), "org_id": A["tenant_id"],
+                                               "project_id": project_id, "status": "Draft",
+                                               "created_at": NOW})
+            return out
+        lc.business_links = racing_links
+        try:
+            r = call("DELETE", "/api/projects/" + pid("A", "draft_race"))
+        finally:
+            lc.business_links = real_links
+        d["race"] = {"status": r["status"], "error_code": r["error_code"],
+                     "concurrent_insert_happened": state["calls"] == 1,
+                     "project_status": (project_doc("draft_race") or {}).get("status"),
+                     "offer_kept": q(lambda: op_db.offers.count_documents({"id": pid("A", "race_offer")})) == 1}
         # archive / cancel instead of delete
         r_noreason = call("POST", "/api/projects/%s/archive" % pid("A", "completed2"), json={})
         r_sm = call("POST", "/api/projects/%s/archive" % pid("A", "completed2"),
@@ -778,7 +821,16 @@ def test_fg239_only_an_empty_draft_may_be_deleted_by_owner_admin_with_a_key(obs)
         assert d["role_" + role] == {"status": 403, "project_kept": True}, role
     assert d["cross_tenant"] == {"status": 404, "project_kept": True}
     e = d["empty_draft"]
-    assert e["status"] == 200 and not e["project_kept"]
+    assert e["status"] == 200 and e["project_kept"]          # D14: a tombstone, not erased
+    t = d["tombstone"]
+    assert t["status"] == "deleted" and t["deleted_by_owner"] and t["code_freed"]
+    assert t["in_list"] is False and t["in_search"] is False and t["get"] == 404 and t["reopen"] == 404
+    assert t["code_reused"] == 201
+    assert t["extra_work"] == [409, "PROJECT_DELETED"] and t["waste"] == [409, "PROJECT_DELETED"]
+    rc = d["race"]
+    assert rc["concurrent_insert_happened"] and rc["offer_kept"]
+    assert rc["status"] == 409 and rc["error_code"] == "PROJECT_HAS_HISTORY"
+    assert rc["project_status"] == "Draft"
     assert e["replay_status"] == 200 and e["replay_same"]
     assert _actions(e["events"]) == ["project.delete"]
 
