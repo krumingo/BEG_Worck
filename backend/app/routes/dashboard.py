@@ -707,6 +707,18 @@ async def get_finance_by_project(
         proj = proj_map.get(r["project_id"], {})
         r["project_code"] = proj.get("code", "")
         r["project_name"] = proj.get("name", "Unknown")
+    # the bucket's header destinations get this tenant's names only
+    dest_ids = sorted({d["ref_id"] for u in unsplit for d in u["header_destinations"]
+                       if d["type"] == "project" and d["ref_id"]})
+    if dest_ids:
+        dest_map = {p["id"]: p async for p in _tenant(user).projects.find(
+            {"id": {"$in": dest_ids}, "org_id": org_id}, {"_id": 0, "id": 1, "code": 1, "name": 1})}
+        for u in unsplit:
+            for d in u["header_destinations"]:
+                if d["type"] == "project":
+                    proj = dest_map.get(d["ref_id"], {})
+                    d["project_code"] = proj.get("code", "")
+                    d["project_name"] = proj.get("name", "Unknown")
     
     return {
         "items": results,
@@ -715,9 +727,9 @@ async def get_finance_by_project(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
         "period": {"date_from": date_from, "date_to": date_to},
-        # Invoices allocated to several projects with no line to split them
-        # by — counted on no project (Data Quality), never in full on each.
-        "unsplit_invoices": unsplit,
+        # A4 #8 — „фактури за разпределяне": every invoice of the period that
+        # is not finally allocated by lines (counted on no project, never dropped).
+        "to_allocate": unsplit,
     }
 
 
@@ -743,7 +755,7 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
     async for inv in tenant.invoices.find(
             {"org_id": org_id, "issue_date": {"$gte": date_from, "$lte": date_to}},
             {"_id": 0, "id": 1, "direction": 1, "total": 1, "allocations": 1,
-             "invoice_no": 1}):
+             "invoice_no": 1, "status": 1}):
         invoices[inv["id"]] = inv
     agg: dict = {}
     unsplit = []
@@ -757,13 +769,14 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
             row["total_income"] += amount
         row["_invoices"].add(inv["id"])
 
-    # Invoices whose LINES carry a project allocation are split per line
-    # (FG-154). Every other invoice keeps its HEADER allocation, as before
-    # (WHFIX81-03: no invoice may disappear): one header project → the whole
-    # total; several with amounts → those amounts; several without → not
-    # classifiable → listed in `unsplit_invoices` and in „фактури за
-    # разпределяне" (DQ), never silently dropped.
-    line_split = set()
+    # A4 / Р45 (oracle Q002): the allocation unit is the invoice LINE. Only
+    # line allocations reach a project (FG-154: allocated qty / line qty × the
+    # line amount). No provisional split by header / percentage (A4 #12). An
+    # invoice that is not finally allocated by lines is NEVER dropped: it is
+    # listed in `to_allocate` („фактури за разпределяне", A4 #8).
+    from app.services.invoice_allocation import (
+        ALLOCATED, header_destinations, invoice_final_state,
+    )
     if invoices:
         async for line in tenant.invoice_lines.find(
                 {"org_id": org_id, "invoice_id": {"$in": list(invoices)}},
@@ -773,34 +786,31 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
             inv = invoices.get(line.get("invoice_id"))
             if inv is None:
                 continue
-            project_allocs = [a for a in effective_allocations(line)
-                              if a["type"] == "project" and a["ref_id"]]
-            if not project_allocs:
-                continue
-            line_split.add(inv["id"])
             amount = _line_amount(line)
             qty = line.get("qty")
             qty = float(qty) if qty not in (None, "") else None
-            for a in project_allocs:
+            for a in effective_allocations(line):
+                if a["type"] != "project" or not a["ref_id"]:
+                    continue
                 if a["qty"] is not None and qty and qty > 0:
                     share = min(a["qty"], qty) / qty
                 else:
                     share = 1.0
                 _add(a["ref_id"], inv, amount * share)
     for inv in invoices.values():
-        if inv["id"] in line_split:
+        if inv.get("direction") != "Received" and not header_destinations(inv):
             continue
-        header = [a for a in (inv.get("allocations") or [])
-                  if isinstance(a, dict) and a.get("type") == "project" and a.get("ref_id")]
-        projects = sorted({a["ref_id"] for a in header})
-        if len(projects) == 1:
-            _add(projects[0], inv, float(inv.get("total") or 0))
-        elif len(projects) > 1 and all(a.get("amount") is not None for a in header):
-            for a in header:
-                _add(a["ref_id"], inv, float(a.get("amount") or 0))
-        elif len(projects) > 1:
+        state = await invoice_final_state(tenant, inv)
+        if state["status"] != ALLOCATED:
             unsplit.append({"invoice_id": inv["id"], "invoice_no": inv.get("invoice_no"),
-                            "project_ids": projects})
+                            "direction": inv.get("direction"), "total": inv.get("total"),
+                            "allocation_status": state["status"],
+                            "header_destinations": [
+                                {"type": d.get("type"), "ref_id": d.get("ref_id") or d.get("refId")}
+                                for d in header_destinations(inv)],
+                            "pending_lines": [{"line_id": p["line_id"],
+                                               "unallocated_qty": p["unallocated_qty"]}
+                                              for p in state["pending_lines"]]})
     results = []
     for row in agg.values():
         exp, inc = round(row["total_expenses"], 2), round(row["total_income"], 2)

@@ -282,8 +282,17 @@ def test_finance_detail_drilldowns_name_only_tenant_a_records(monkeypatch, mode)
     assert names == {"cp1": "Baumit Bulgaria", "cp-only-b": "Unknown"}
     assert sum(r["total"] for r in by_cp["items"]) == 15       # A's 10 + 5; B's 999999 never
     by_project = c.get("/api/reports/finance-details/by-project?" + PERIOD).json()
-    projects = {r["project_id"]: (r["project_code"], r["project_name"]) for r in by_project["items"]}
-    assert projects == {"pr-x": ("A-CODE-PRX", "A-OWN-PROJECT"), "pr-only-b": ("", "Unknown")}
+    # WH-FIX-01 A4 (Р45, oracle Q002 — FLOW-020 L54/L73 "the allocation unit is the
+    # invoice line"; FLOW-008 L142 unallocated is not in the project P&L; FLOW-009 L84
+    # "Остатъкът не изчезва"): these invoices carry only a HEADER allocation, so they
+    # are counted on no project and are listed in „фактури за разпределяне"
+    # (`to_allocate`) — the tenant check reads the names there.
+    assert by_project["items"] == []
+    projects = {d["ref_id"]: (d["project_code"], d["project_name"])
+                for u in by_project["to_allocate"] for d in u["header_destinations"]}
+    # inv-shared's line is fully allocated to warehouses (the line wins over its
+    # header pr-x): final, on no project, not in the bucket.
+    assert projects == {"pr-only-b": ("", "Unknown")}
     top = {}
     for direction in ("expense", "income"):
         body = c.get("/api/reports/finance-details/top-counterparties?direction=%s&%s"

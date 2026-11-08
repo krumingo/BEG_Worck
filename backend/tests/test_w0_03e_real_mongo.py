@@ -400,8 +400,14 @@ def test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server(monkeyp
                 assert {r["counterparty_id"]: r["counterparty_name"] for r in by_cp["items"]} == {
                     "cp1": "Baumit Bulgaria", "cp-only-b": "Unknown"}
                 by_pr = (await c.get("/api/reports/finance-details/by-project?" + PERIOD)).json()
-                assert {r["project_id"]: r["project_name"] for r in by_pr["items"]} == {
-                    "pr-x": "A-OWN-PROJECT", "pr-only-b": "Unknown"}
+                # WH-FIX-01 A4 (Р45, oracle Q002 — FLOW-020 L54/L73 "the allocation unit is the
+                # invoice line"; FLOW-008 L142 unallocated is not in the project P&L; FLOW-009 L84
+                # "Остатъкът не изчезва"): these invoices carry only a HEADER allocation, so they
+                # are counted on no project and are listed in „фактури за разпределяне"
+                # (`to_allocate`) — the tenant check reads the names there.
+                assert by_pr["items"] == []
+                assert {d["ref_id"]: d["project_name"] for u in by_pr["to_allocate"]
+                        for d in u["header_destinations"]} == {"pr-only-b": "Unknown"}
                 top = (await c.get("/api/reports/finance-details/top-counterparties?direction=income&"
                                    + PERIOD)).json()
                 assert [r["counterparty_name"] for r in top["items"]] == ["Unknown"]

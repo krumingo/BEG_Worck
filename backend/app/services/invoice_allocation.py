@@ -80,11 +80,13 @@ def line_allocation_state(line: Dict[str, Any]) -> Dict[str, Any]:
 async def invoice_allocation_state(tenant, invoice_id: str, *, session=None) -> Dict[str, Any]:
     """{status, pending_lines} of an invoice from its lines."""
     pending: List[dict] = []
+    count = 0
     async for line in tenant.invoice_lines.find(
             {"invoice_id": invoice_id},
             {"_id": 0, "id": 1, "line_no": 1, "description": 1, "unit": 1, "qty": 1,
              "line_total_ex_vat": 1, "allocations": 1, "allocation_type": 1,
              "allocation_ref_id": 1}, session=session):
+        count += 1
         st = line_allocation_state(line)
         if st["status"] != ALLOCATED:
             pending.append({"line_id": line.get("id"), "line_no": line.get("line_no"),
@@ -92,30 +94,129 @@ async def invoice_allocation_state(tenant, invoice_id: str, *, session=None) -> 
                             "qty": st["qty"], "allocated_qty": st["allocated"],
                             "unallocated_qty": st["unallocated"],
                             "allocations": line.get("allocations") or []})
-    return {"status": PENDING if pending else ALLOCATED, "pending_lines": pending}
+    return {"status": PENDING if pending else ALLOCATED, "pending_lines": pending,
+            "line_count": count}
 
 
 def is_supplier_invoice(invoice: Optional[dict]) -> bool:
     return bool(invoice) and invoice.get("direction") == "Received"
 
 
-def header_allocated_only(invoice: dict, state: Dict[str, Any], lines_with_allocations: int) -> bool:
-    """WHFIX81-03 — an invoice allocated at HEADER level only (its lines carry
-    no allocation). Whether that counts as 100 % for Р44 is open (FLOW Guard);
-    until it answers its payment behaviour is unchanged (not refused)."""
-    header = [a for a in (invoice.get("allocations") or []) if isinstance(a, dict) and a.get("ref_id")]
-    return bool(header) and lines_with_allocations == 0
+# ─────────────── A4 / Р45 — header-level allocation (oracle Q002) ───────────────
+# The allocation unit is the invoice LINE (FLOW-020 L54/L73). A header
+# allocation is not final (A4 #9 „Само заглавен флаг ≠ окончателно"): with ONE
+# destination the system writes it explicitly on every line (AuditEvent, same
+# transaction); a split / percentage header stays „чака разпределение".
+HEADER_NOTE = "от заглавието на фактурата (Р45)"
 
 
-async def _lines_with_allocations(tenant, invoice_id: str, *, session=None) -> int:
-    n = 0
-    async for line in tenant.invoice_lines.find(
-            {"invoice_id": invoice_id},
-            {"_id": 0, "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1},
-            session=session):
-        if line.get("allocations") or (line.get("allocation_type") and line.get("allocation_ref_id")):
-            n += 1
-    return n
+def header_destinations(invoice: Optional[dict]) -> List[dict]:
+    return [a for a in ((invoice or {}).get("allocations") or [])
+            if isinstance(a, dict) and a.get("type") and (a.get("ref_id") or a.get("refId"))]
+
+
+def single_header_destination(invoice: Optional[dict]) -> Optional[dict]:
+    """The one header destination (no percentage / split), else None."""
+    dests = header_destinations(invoice)
+    if len(dests) != 1:
+        return None
+    d = dests[0]
+    if d.get("percent") is not None or d.get("amount") is not None:
+        return None
+    return {"type": d["type"], "ref_id": d.get("ref_id") or d.get("refId")}
+
+
+async def invoice_final_state(tenant, invoice: dict, *, session=None) -> Dict[str, Any]:
+    """The invoice's state: pending when a line is pending, or when it carries a
+    header allocation that no line carries yet (A4 #8/#9: never dropped)."""
+    state = await invoice_allocation_state(tenant, invoice["id"], session=session)
+    if state["status"] == ALLOCATED and header_destinations(invoice) and not state["line_count"]:
+        state = {**state, "status": PENDING}
+    return state
+
+
+async def apply_header_destination(tenant, user: dict, invoice: dict, *, session=None) -> int:
+    """A4 #9 — write the single header destination on every line without an
+    allocation (qty = the line's qty), each with an AuditEvent, in the caller's
+    transaction. Idempotent: allocated lines are never touched. → lines written."""
+    dest = single_header_destination(invoice)
+    if dest is None:
+        return 0
+    written = 0
+    rows = [ln async for ln in tenant.invoice_lines.find(
+        {"invoice_id": invoice["id"]},
+        {"_id": 0, "id": 1, "qty": 1, "allocations": 1, "allocation_type": 1,
+         "allocation_ref_id": 1}, session=session)]
+    for ln in rows:
+        if ln.get("allocations") or (ln.get("allocation_type") and ln.get("allocation_ref_id")):
+            continue
+        qty = _f(ln.get("qty"))
+        alloc = [{"type": dest["type"], "ref_id": dest["ref_id"],
+                  "qty": qty if qty is not None else 0, "note": HEADER_NOTE}]
+        await audit_allocation_change(tenant, user, ln["id"], [], alloc, session=session,
+                                      reason="Р45: заглавната дестинация е записана на реда")
+        await tenant.invoice_lines.update_one(
+            {"id": ln["id"]},
+            {"$set": {"allocations": alloc, "qty_allocated": qty or 0, "qty_unallocated": 0,
+                      "is_fully_allocated": True,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+            session=session)
+        written += 1
+    return written
+
+
+def split_percentages(total: float, qty: Optional[float], percents: List[float]) -> List[dict]:
+    """A4 #10 — a percentage is only an input aid: converted AT ONCE into an
+    exact amount (and qty share) per allocation with cumulative rounding, so
+    Σ amount = the line value and Σ qty = the line qty."""
+    out, cum_pct, done_amt, done_qty = [], 0.0, 0.0, 0.0
+    for pct in percents:
+        cum_pct += pct
+        amt = round(round(total * cum_pct / 100.0, 2) - done_amt, 2)
+        q = None if qty is None else round(round(qty * cum_pct / 100.0, 4) - done_qty, 4)
+        out.append({"amount": amt, "qty": q})
+        done_amt = round(done_amt + amt, 2)
+        done_qty = round(done_qty + (q or 0), 4)
+    return out
+
+
+async def migrate_header_allocations(tenant, org_id: str, actor: dict, *, dry_run: bool = True,
+                                     now: Optional[datetime] = None) -> Dict[str, Any]:
+    """A4 #11 — legacy header-allocated invoices of ONE tenant (idempotent):
+    one destination → written on every line (AuditEvent, one transaction per
+    invoice); a split / percentage → „чака разпределение" + the DQ issue to the
+    Accountant. Never deletes. Rollback = the reverse correction by the
+    AuditEvents (before = [] on each line). ``dry_run`` reports only."""
+    from app.services.invoice_line_lock import run_transaction
+    from app.audit.store import ensure_chain_index
+    report = {"tenant": org_id, "dry_run": dry_run, "written": [], "pending": [], "skipped": []}
+    if not dry_run:
+        await ensure_chain_index(tenant._db)          # pylint: disable=protected-access
+    invs = [i async for i in tenant.invoices.find(
+        {"org_id": org_id, "allocations.0": {"$exists": True}},
+        {"_id": 0, "id": 1, "invoice_no": 1, "allocations": 1, "direction": 1,
+         "total": 1, "status": 1})]
+    for inv in invs:
+        state = await invoice_final_state(tenant, inv)
+        if state["status"] == ALLOCATED:
+            report["skipped"].append(inv["id"])
+            continue
+        if single_header_destination(inv) is not None and state["pending_lines"]:
+            if dry_run:
+                report["written"].append({"invoice_id": inv["id"], "lines": sorted(
+                    p["line_id"] for p in state["pending_lines"])})
+                continue
+            box: Dict[str, int] = {}
+
+            async def _body(session, inv=inv, box=box):
+                box["n"] = await apply_header_destination(tenant, actor, inv, session=session)
+            await run_transaction(tenant, _body)
+            report["written"].append({"invoice_id": inv["id"], "lines_written": box.get("n", 0)})
+        else:
+            report["pending"].append(inv["id"])
+            if not dry_run:
+                await sync_invoice_issue(tenant, org_id, inv, state, now=now)
+    return report
 
 
 async def ensure_payable(tenant, invoice: dict, *, session=None) -> None:
@@ -123,10 +224,7 @@ async def ensure_payable(tenant, invoice: dict, *, session=None) -> None:
     without final (100 %) allocation."""
     if not is_supplier_invoice(invoice):
         return
-    if invoice.get("allocations") and header_allocated_only(
-            invoice, {}, await _lines_with_allocations(tenant, invoice["id"], session=session)):
-        return        # WHFIX81-03: unchanged until the FLOW Guard rules (debt)
-    state = await invoice_allocation_state(tenant, invoice["id"], session=session)
+    state = await invoice_final_state(tenant, invoice, session=session)
     if state["status"] != ALLOCATED:
         raise HTTPException(status_code=409, detail={
             "error_code": INVOICE_NOT_FULLY_ALLOCATED, "invoice_id": invoice["id"],
@@ -207,37 +305,31 @@ async def sync_invoice_issue(tenant, org_id: str, invoice: dict, state: Dict[str
 async def invoices_to_allocate(tenant, org_id: str, *, now: Optional[datetime] = None) -> List[dict]:
     """„фактури за разпределяне" — every non-cancelled supplier invoice with a
     line in interim state, with drill-down to the lines; syncs the DQ issue /
-    alarm of every supplier invoice it reads (opens, escalates, resolves)."""
+    alarm of every supplier invoice it reads (opens, escalates, resolves).
+    A4 #8: also every invoice (any direction) with a header allocation that no
+    line carries yet — never dropped from the reports."""
     days = await deadline_days(tenant)
     out = []
     async for inv in tenant.invoices.find(
             {"org_id": org_id, "status": {"$ne": "Cancelled"},
-             "$or": [{"direction": "Received"}, {"allocations.1": {"$exists": True}}]},
+             "$or": [{"direction": "Received"}, {"allocations.0": {"$exists": True}}]},
             {"_id": 0, "id": 1, "invoice_no": 1, "issue_date": 1, "counterparty_name": 1,
              "total": 1, "status": 1, "direction": 1, "allocations": 1}):
-        state = await invoice_allocation_state(tenant, inv["id"])
-        if header_allocated_only(inv, state, await _lines_with_allocations(tenant, inv["id"])):
-            projects = {a.get("ref_id") for a in inv.get("allocations") or []
-                        if isinstance(a, dict) and a.get("type") == "project" and a.get("ref_id")}
-            header = [a for a in inv.get("allocations") or [] if isinstance(a, dict)]
-            if len(projects) > 1 and not all(a.get("amount") is not None for a in header):
-                # WHFIX81-03: a header split to several projects that no line
-                # or amount classifies — not counted on any project → DQ.
-                state = {"status": "header_unsplit", "pending_lines": state["pending_lines"]}
-            else:
-                state = {"status": ALLOCATED, "pending_lines": []}   # counted by its header
-        elif inv.get("direction") != "Received":
+        if inv.get("direction") != "Received" and not header_destinations(inv):
             continue
+        state = await invoice_final_state(tenant, inv)
         issue = await sync_invoice_issue(tenant, org_id, inv, state, now=now, days=days)
         if state["status"] != ALLOCATED:
+            dests = header_destinations(inv)
             inv.pop("allocations", None)
             out.append({**inv, "allocation_status": state["status"],
+                        "header_destinations": dests,
                         "pending_lines": state["pending_lines"], "dq_issue": issue})
     return out
 
 
 async def audit_allocation_change(tenant, user: dict, line_id: str, before: list, after: list,
-                                  *, session=None) -> None:
+                                  *, session=None, reason: Optional[str] = None) -> None:
     """A2 #4 — an allocation change is a correction in the source with a
     canonical AuditEvent (in the caller's transaction when it has one)."""
     from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
@@ -247,5 +339,6 @@ async def audit_allocation_change(tenant, user: dict, line_id: str, before: list
         action="finance.invoice_line.allocation_corrected", source_flow="FLOW-020",
         retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="invoice_line",
         entity_id=line_id, structured_diff={"allocations": {"before": before, "after": after}},
+        reason=reason,
         effective_role_assignments=[user.get("role") or ""], source_channel="api")
     await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access

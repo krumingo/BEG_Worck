@@ -174,14 +174,78 @@ def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mo
     run(monkeypatch, backend, mode, scenario)
 
 
-def test_whfix81_03_header_allocated_supplier_invoice_payment_is_unchanged(monkeypatch, backend, mode):
-    """Open with the FLOW Guard: does a header-level allocation count as 100 %
-    for Р44? Until it answers, such an invoice is paid as before (not refused)."""
+def test_a4_header_only_supplier_invoice_is_not_payable_until_written_on_lines(
+        monkeypatch, backend, mode):
+    """A4 #9 (Р45): a header flag is not final — 409 until the destination is
+    written on every line (here by the A4 #11 migration); then payable."""
     async def scenario(c, op):
         await op.invoices.update_one({"id": INV}, {"$set": {
             "allocations": [{"type": "project", "ref_id": "prj-1"}]}})
         await op.invoice_lines.update_one({"id": LINE}, {"$set": {"allocations": []}})
-        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
-                         json={"amount": 100.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        pay_body = {"amount": 100.0, "method": "BankTransfer", "account_id": h.BANK_A}
+        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"), json=pay_body)
+        assert r.status_code == 409, r.text
+        from app.services.invoice_allocation import migrate_header_allocations
+        rep = await migrate_header_allocations(_tenant(op), ORG_A, {"id": "acct-a", "org_id": ORG_A,
+                                                                    "role": "Accountant"},
+                                               dry_run=False)
+        assert rep["written"] == [{"invoice_id": INV, "lines_written": 1}]
+        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"), json=pay_body)
         assert r.status_code == 201, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_a4_percentage_header_is_pending_and_not_payable(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.invoices.update_one({"id": INV}, {"$set": {"allocations": [
+            {"type": "project", "ref_id": "prj-1", "percent": 40},
+            {"type": "project", "ref_id": "prj-a", "percent": 60}]}})
+        await op.invoice_lines.update_one({"id": LINE}, {"$set": {"allocations": []}})
+        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
+                         json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "INVOICE_NOT_FULLY_ALLOCATED"
+        listed = (await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))).json()
+        [inv] = listed["invoices"]
+        assert inv["id"] == INV and len(inv["header_destinations"]) == 2
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_a4_line_percentage_becomes_exact_amounts(monkeypatch, backend, mode):
+    """A4 #10: a percentage on the line is converted at once — cumulative
+    rounding, Σ amount = the line value, Σ qty = the line qty; then payable."""
+    async def scenario(c, op):
+        r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
+            "allocations": [{"type": "project", "ref_id": "prj-1", "percent": 33.33},
+                            {"type": "project", "ref_id": "prj-a", "percent": 33.33},
+                            {"type": "project", "ref_id": "prj-1", "percent": 33.34}]})
+        assert r.status_code == 200, r.text
+        allocs = (await op.invoice_lines.find_one({"id": LINE}))["allocations"]
+        assert [a["amount"] for a in allocs] == [333.3, 333.3, 333.4]
+        assert round(sum(a["amount"] for a in allocs), 2) == 1000.0
+        assert round(sum(a["qty"] for a in allocs), 4) == 100.0
+        assert all("percent" not in a for a in allocs)
+        assert r.json()["allocation_status"] == "allocated"
+        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
+                         json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 201, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_a4_new_line_gets_the_single_header_destination(monkeypatch, backend, mode):
+    """A4 #9: writing a line on a Draft invoice with ONE header destination
+    writes it on the line, with an AuditEvent, in the same transaction."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({
+            "id": "inv-draft-r45", "org_id": ORG_A, "invoice_no": "D-45", "direction": "Received",
+            "kind": "Invoice", "status": "Draft", "issue_date": "2026-11-01",
+            "due_date": "2099-12-31", "currency": "EUR", "subtotal": 0, "total": 0,
+            "allocations": [{"type": "project", "ref_id": "prj-1"}]})
+        r = await c.post("/api/invoice-lines", headers=hdr("acct-a"), json={
+            "invoice_id": "inv-draft-r45", "line_no": 1, "description": "Пясък", "unit": "t",
+            "qty": 4, "unit_price": 25})
+        assert r.status_code == 201, r.text
+        line = await op.invoice_lines.find_one({"invoice_id": "inv-draft-r45"})
+        assert [(a["type"], a["ref_id"], a["qty"]) for a in line["allocations"]] == [("project", "prj-1", 4)]
+        assert await op.audit_events.count_documents(
+            {"action": "finance.invoice_line.allocation_corrected", "entity_id": line["id"]}) == 1
     run(monkeypatch, backend, mode, scenario)

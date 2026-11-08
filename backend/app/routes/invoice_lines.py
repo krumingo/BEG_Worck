@@ -182,6 +182,18 @@ async def validate_allocation_refs(tenant: TenantData, allocations: List[dict]):
                 raise HTTPException(status_code=404, detail=f"Client {ref_id} not found")
 
 
+async def _apply_header(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
+    """A4 #9 (Р45): an invoice with ONE header destination gets it written
+    explicitly on every new unallocated line, with an AuditEvent, in the same
+    transaction as the line write."""
+    from app.services.invoice_allocation import apply_header_destination
+    invoice = await tenant.invoices.find_one({"id": invoice_id},
+                                             {"_id": 0, "id": 1, "allocations": 1},
+                                             session=session)
+    if invoice:
+        await apply_header_destination(tenant, user, invoice, session=session)
+
+
 async def get_org_require_full_allocation(tenant: TenantData) -> bool:
     """Get THIS tenant's requireFullAllocation setting (its own organization row)."""
     org = await tenant.own_organization({"_id": 0, "require_full_allocation": 1})
@@ -442,8 +454,12 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
         await claim_invoice(tenant, data.invoice_id, session=session, allowed=("Draft",),
                             code=NOT_DRAFT)
         await tenant.invoice_lines.insert_one(dict(line), session=session)
+        await _apply_header(tenant, user, data.invoice_id, session)
         await recalculate_invoice_totals(tenant, data.invoice_id, session=session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
+    line = await tenant.invoice_lines.find_one({"id": line["id"]}, {"_id": 0}) or line
     
     return {k: v for k, v in line.items() if k != "_id"}
 
@@ -528,7 +544,10 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
                                 code=NOT_DRAFT)
             await tenant.invoice_lines.insert_many([dict(l) for l in created_lines],
                                                    session=session)
+            await _apply_header(tenant, user, invoice_id, session)
             await recalculate_invoice_totals(tenant, invoice_id, session=session)
+        from app.audit.store import ensure_chain_index
+        await ensure_chain_index(tenant._db)
         await run_transaction(tenant, _body)
     
     return {"ok": True, "count": len(created_lines), "lines": [{k: v for k, v in l.items() if k != "_id"} for l in created_lines]}
@@ -664,7 +683,28 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
     
     # Validate allocations
     allocs = [a.model_dump() for a in data.allocations]
-    total_allocated = sum(a["qty"] for a in allocs)
+    # A4 #10 (Р45): a percentage is converted AT ONCE into an exact amount and
+    # qty share of THIS line (cumulative rounding: Σ amount = the line value,
+    # Σ qty = the line qty); the stored allocation carries the amount / qty.
+    pct_items = [a for a in allocs if a.get("percent") is not None]
+    if pct_items and len(pct_items) != len(allocs):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ALLOCATION_MIXED_INPUT",
+            "message": "use either quantities or percentages for one line"})
+    if pct_items:
+        from app.services.invoice_allocation import split_percentages
+        total = float(line.get("line_total_ex_vat") or
+                      float(line.get("qty") or 0) * float(line.get("unit_price") or 0))
+        parts = split_percentages(total, float(line.get("qty") or 0) or None,
+                                  [a["percent"] for a in allocs])
+        for a, part in zip(allocs, parts):
+            a["input_percent"] = a.pop("percent")
+            a["amount"] = part["amount"]
+            a["qty"] = part["qty"]
+    else:
+        for a in allocs:
+            a.pop("percent", None)
+    total_allocated = round(sum(a["qty"] or 0 for a in allocs), 4)
 
     # Check if full allocation required
     require_full = await get_org_require_full_allocation(tenant)

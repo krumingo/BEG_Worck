@@ -122,7 +122,9 @@ ORG_KEYED: Dict[str, str] = {
               "asset_movements", "asset_repairs", "asset_qr_codes", "asset_intake_pending",
               "asset_counters"),
     **_family(FAMILY_TASKS,
-              "worker_calendar", "alarm_rules", "alarm_events"),
+              "worker_calendar", "alarm_rules", "alarm_events",
+              # WH-FIX-01 A2/A3: the deduplicated DQ issues (per tenant, org_id).
+              "dq_issues"),
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),
     **_family(FAMILY_AUDIT,

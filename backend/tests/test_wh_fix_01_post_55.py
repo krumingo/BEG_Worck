@@ -644,38 +644,61 @@ async def test_fg191_line_price_is_stored_quantized(canonical_mongo_db, allow_al
     assert str(res.envelope["unit_value"]) == "33.3333"
 
 
-# ═══════════ WHFIX81-03 — no invoice disappears from finance-by-project ═══════════
+# ═══════════ WHFIX81-03 / A4 (Р45) — no invoice disappears; line is the unit ═══════════
 
-async def test_whfix81_03_header_allocated_invoices_are_counted_or_flagged(
+async def test_whfix81_03_header_only_invoices_are_in_the_bucket_never_dropped(
         canonical_mongo_db, monkeypatch):
+    """A4 #8/#12: a header allocation is not counted on a project (no
+    provisional split); the invoice is listed in „фактури за разпределяне"."""
     _client, db = canonical_mongo_db
     _patch_all(monkeypatch, db)
     for pid in ("p-1", "p-2"):
         await db["projects"].insert_one({"id": pid, "org_id": T, "code": pid, "name": pid})
 
-    async def _inv(inv_id, total, header, line_allocs=None):
+    async def _inv(inv_id, total, header):
         await db["invoices"].insert_one({
             "id": inv_id, "org_id": T, "invoice_no": inv_id, "direction": "Received",
             "total": total, "issue_date": "2026-11-01", "status": "Sent", "allocations": header})
         await db["invoice_lines"].insert_one({          # a line WITHOUT a project allocation
             "id": "l-" + inv_id, "org_id": T, "invoice_id": inv_id, "qty": 1,
             "unit_price": total, "line_total_ex_vat": total, "line_total_inc_vat": total,
-            "allocations": line_allocs or []})
+            "allocations": []})
     await _inv("h-single", 100.0, [{"type": "project", "ref_id": "p-1"}])
-    await _inv("h-amounts", 90.0, [{"type": "project", "ref_id": "p-1", "amount": 30},
-                                   {"type": "project", "ref_id": "p-2", "amount": 60}])
-    await _inv("h-unsplit", 50.0, [{"type": "project", "ref_id": "p-1"},
-                                   {"type": "project", "ref_id": "p-2"}])
+    await _inv("h-percent", 90.0, [{"type": "project", "ref_id": "p-1", "percent": 30},
+                                   {"type": "project", "ref_id": "p-2", "percent": 70}])
+    await _inv("h-split", 50.0, [{"type": "project", "ref_id": "p-1"},
+                                 {"type": "project", "ref_id": "p-2"}])
     from app.routes import dashboard
-    out = await dashboard.get_finance_by_project(
-        user=_user(), date_from="2026-10-01", date_to="2026-11-30", preset=None,
-        page=1, page_size=20)
-    by = {r["project_id"]: r["total_expenses"] for r in out["items"]}
-    assert by == {"p-1": 130.0, "p-2": 60.0}            # header single + header amounts
-    assert [u["invoice_id"] for u in out["unsplit_invoices"]] == ["h-unsplit"]
-    # the unclassifiable one is in „фактури за разпределяне" (DQ), never dropped
-    from app.services.invoice_allocation import invoices_to_allocate
-    listed = {i["id"]: i["allocation_status"] for i in
-              await invoices_to_allocate(TenantData.for_resolved_org(db, T), T)}
-    assert listed == {"h-unsplit": "header_unsplit"}
-    assert await db["dq_issues"].count_documents({"entity_id": "h-unsplit", "status": "open"}) == 1
+
+    async def _report():
+        return await dashboard.get_finance_by_project(
+            user=_user(), date_from="2026-10-01", date_to="2026-11-30", preset=None,
+            page=1, page_size=20)
+    out = await _report()
+    assert out["items"] == []                           # nothing counted from a header
+    bucket = {u["invoice_id"]: u for u in out["to_allocate"]}
+    assert set(bucket) == {"h-single", "h-percent", "h-split"}
+    assert bucket["h-single"]["header_destinations"][0]["project_name"] == "p-1"
+    tenant = TenantData.for_resolved_org(db, T)
+    from app.services.invoice_allocation import invoices_to_allocate, migrate_header_allocations
+    assert {i["id"] for i in await invoices_to_allocate(tenant, T)} == set(bucket)
+    # A4 #11: the migration — dry run writes nothing; apply writes the single one
+    dry = await migrate_header_allocations(tenant, T, _user(), dry_run=True)
+    assert [w["invoice_id"] for w in dry["written"]] == ["h-single"]
+    assert sorted(dry["pending"]) == ["h-percent", "h-split"]
+    assert (await db["invoice_lines"].find_one({"id": "l-h-single"}))["allocations"] == []
+    done = await migrate_header_allocations(tenant, T, _user(), dry_run=False)
+    assert done["written"] == [{"invoice_id": "h-single", "lines_written": 1}]
+    line = await db["invoice_lines"].find_one({"id": "l-h-single"})
+    assert [(a["type"], a["ref_id"], a["qty"]) for a in line["allocations"]] == [("project", "p-1", 1)]
+    from app.audit.store import AUDIT_COLLECTION
+    assert await db[AUDIT_COLLECTION].count_documents(
+        {"action": "finance.invoice_line.allocation_corrected", "entity_id": "l-h-single"}) == 1
+    again = await migrate_header_allocations(tenant, T, _user(), dry_run=False)   # idempotent
+    assert again["written"] == [] and "h-single" in again["skipped"]
+    assert await db[AUDIT_COLLECTION].count_documents(
+        {"action": "finance.invoice_line.allocation_corrected", "entity_id": "l-h-single"}) == 1
+    out = await _report()
+    assert {r["project_id"]: r["total_expenses"] for r in out["items"]} == {"p-1": 100.0}
+    assert {u["invoice_id"] for u in out["to_allocate"]} == {"h-percent", "h-split"}
+    assert await db["dq_issues"].count_documents({"entity_id": "h-percent", "status": "open"}) == 1
