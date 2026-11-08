@@ -395,8 +395,6 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
     Owner/Admin (``require_admin``); Idempotency-Key required (428)."""
     key = lifecycle.require_key(idempotency_key)
     tenant = _tenant(user)
-    team = _team(user).collection("project_team")
-
     async def work(session):
         project = await tenant.projects.find_one({"id": project_id, "org_id": user["org_id"]},
                                                  {"_id": 0}, session=session)
@@ -405,9 +403,9 @@ async def delete_project(project_id: str, user: dict = Depends(require_admin),
         links = await lifecycle.business_links(tenant, project_id, session=session)
         # R56(2): a Draft with a team, phases, an offer or a client is USED — archived, not
         # deleted (the offer is in ``links`` already).
-        n_team = await team.count_documents({"project_id": project_id}, session=session)
+        n_team = await project_team.any_row_count(_team(user), project_id, session=session)
         if n_team:
-            links["project_team"] = n_team
+            links["team_members"] = n_team
         n_phases = await tenant.project_phases.count_documents({"project_id": project_id},
                                                                session=session)
         if n_phases:

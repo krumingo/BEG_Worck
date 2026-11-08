@@ -693,7 +693,7 @@ def test_fg239_a_project_with_any_business_link_is_never_deleted(obs):
 @real
 def test_fg239_only_an_empty_draft_may_be_deleted_by_owner_admin_with_a_key(obs):
     d = obs["fg239"]
-    for name, link in (("draft_team", "project_team"), ("draft_phase", "project_phases"),
+    for name, link in (("draft_team", "team_members"), ("draft_phase", "project_phases"),
                        ("draft_client", "client")):
         assert d[name]["status"] == 409 and d[name]["error_code"] == "PROJECT_HAS_HISTORY", (name, d[name])
         assert link in d[name]["links"] and d[name]["project_kept"], (name, d[name])
