@@ -4981,3 +4981,38 @@ Gates on `20bd36c` (rs0, after the machine restart):
 | warehouse canonical | **44 files / 1121**, 0 bad |
 
 #82 `e9633aa` (blank reason → 422): the run was void (machine restart; docker down). Diff reviewed and correct. The orchestrator asked for the audit after the FG-195 head.
+
+## 2026-11-08 11:05 UTC: #81 `d2d0ba2` WH-FIX-01 (code = `78c249d`; `d2d0ba2` changes only `03_gates.txt`): PASS, with non-blocking notes
+
+WHFIX81-01..05 re-checked:
+
+| Finding | Status | Evidence |
+|---|---|---|
+| WHFIX81-01 | **fixed** | A per-supplier-invoice lock (`warehouse_ledger_counters`, `supplier_invoice_lock:<org>:<id>`) is bumped by the PUT and by every linking receipt, inside the transaction. Probe X1a: **PUT 409, price stays 10.** X1b ×10: legal order only. |
+| WHFIX81-02 | **fixed** | `MaterialWastePanel` picks a Master item from the project ledger, uploads evidence (`/media/upload` → `file_ids`) and sends an `Idempotency-Key` (createKeyHolder) |
+| WHFIX81-03 | **fixed (by Р45)** | No invoice disappears: a header-only allocation goes to `to_allocate`. The three W0 test expectation changes (collision matrix, r1_exports, real_mongo) are authorized by Р45 / A4 #13, with citations. |
+| WHFIX81-04 | **fixed** | A1 inventory regenerated; `03_gates.txt` committed |
+| WHFIX81-05 | **fixed** | PM-01 regenerated, real run 6 / 0 skipped |
+
+Р44 / Р45 checks:
+- Р44 409 on every payment path is covered by the PR tests (`test_wh_fix_01_a3_r44_allocation.py`).
+- X7: `GET /invoice-lines/invoices-to-allocate` ×2 changes **no collection**, 3 modes, mongomock and real; the partly allocated invoice is listed.
+- The migration script defaults to a dry run (`--apply` writes), is idempotent, has a finance actor, writes an AuditEvent per line and never deletes.
+
+Gates on `78c249d` (rs1):
+
+| Gate | Result |
+|---|---|
+| wh_fix_01 + a3_r44 | 134 |
+| warehouse canonical | 44 files / 1121, 0 bad |
+| PAY | 630 |
+| W0 | **same 15** |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+Non-blocking:
+- **WHFIX81-06 (decision for Krum):** Р44 blocks payment until 100% allocated, but the allocation of a **Paid** supplier invoice can still be reduced afterwards (X5: 100% → 60%, 200, invoice stays Paid, AuditEvent written, DQ reopens). The race payment ∥ reallocation (X6, `ensure_payable` runs without the transaction's session) reaches the same state. Whether a paid invoice's allocation may be reduced, or only corrected through a versioned correction like FG-195 in #82, is for Krum.
+- D-WHFIX-03b: the FG-191 quantize stores unit 33.3333, so the `material_entries` value is 99.9999 against an invoice line of 100.00 (0.0001 residue; total_cost rounds to 100.0). Storing the lot value, not only the unit, would be exact.
+- The W0 isolation coverage is thinner: with the Р45 expectations, the colliding project id `pr-x` no longer shows A's name anywhere, so "colliding id → A's name, not B's" is no longer asserted for finance-by-project. Suggestion: add an A line allocated to `pr-x` in the fixture.
+- #82 interaction: `_supplier_invoice_link` still does not skip reversed receipts. This is recorded as debt in the code; whichever PR merges second carries it.

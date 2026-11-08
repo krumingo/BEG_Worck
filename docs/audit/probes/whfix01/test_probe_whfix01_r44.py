@@ -55,3 +55,21 @@ def test_x6_payment_decided_on_a_stale_allocation(monkeypatch, backend, mode):
         paid_partial = p.status_code == 201 and box["r"].status_code == 200
         assert not paid_partial, "payment committed against an allocation that was no longer 100 %"
     run(monkeypatch, backend, mode, scenario, allocated=100)
+
+
+def test_x7_list_gets_write_nothing(monkeypatch, backend, mode):
+    """R45 / FG-201: GET „фактури за разпределяне" (×2) changes no collection; the partly
+    allocated invoice is listed with its pending line."""
+    async def scenario(c, op):
+        async def counts():
+            return {n: await op[n].count_documents({}) for n in await op.list_collection_names()}
+        before = await counts()
+        r1 = await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
+        r2 = await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
+        after = await counts()
+        diff = {k: (before.get(k), after.get(k)) for k in set(before) | set(after) if before.get(k) != after.get(k)}
+        ids = [i.get("invoice_id") or i.get("id") for i in r1.json().get("invoices", [])]
+        print("X7 %s: GET %s/%s | listed %s | collections changed %s" % (
+            mode, r1.status_code, r2.status_code, ids, diff or "none"))
+        assert r1.status_code == 200 and not diff and INV in ids
+    run(monkeypatch, backend, mode, scenario, allocated=60)
