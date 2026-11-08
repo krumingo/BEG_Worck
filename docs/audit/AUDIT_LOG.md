@@ -5142,7 +5142,9 @@ PR comment 6695992847 updated.
 - **K2 ×10, activation ∥ payment:** the payment always goes to the old or the new **verified** account. OK.
 - **Payment guard:** a named unverified account, an invoice-IBAN mismatch or a pending-only counterparty → 409 in every mode. The legacy case with no account and no counterparty follows `BANK_ACCOUNT_GUARD_MODE`; the default shadow lets the payment through with a DQ row (debt D1, for Krum).
 - **W0 test edit** (4 collections → `test_cp01_counterparty_identities_are_never_deleted`): stricter, not a weakening; the generic delete paths are still covered via `location_nodes`.
-- PR comment 6721864098. Gates pending.
+- PR comment 6721864098.
+- Gates (rs2): cp_01 401 (+3 mongomock skips of the real-only concurrency tests); PAY 630; **W0 9 failed, all within main's 15 (NEW_FAILS=0)**; A2C / A1 0 / 0; R0 814; PM-01 6; warehouse 44 files / 1121. SEC-01 not present on its base cd03324.
+- Rebase needed: merging with main conflicts in clients.py, projects.py, subcontractors.py, ProjectOperationsPage.js plus generated files. #69's money-write guards meet CP-01's rewrites there, so re-audit the merge (SEC-01 30).
 
 ## 2026-11-08 13:30 UTC: main → `8c52e92` (Merge PR #80, docs only)
 
