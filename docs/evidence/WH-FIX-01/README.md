@@ -102,10 +102,33 @@ Debt / still open (A2/A3 "ЧАКА решение на Крум" — not program
   views, `reports.py`, `revenue_expense.py` subcontract fallback by header `project_id`) were not
   re-cut to allocated shares — FG-155 #2 "not in the company result" needs a separate pass over
   those reports (listed, not changed here).
-* An invoice with NO lines (header only) has no line to allocate; Р44 is literal ("a line not 100 %
-  allocated") so it is not blocked — open for Крум.
+* An invoice with NO lines and NO header allocation has nothing to allocate; Р44 is literal ("a
+  line not 100 % allocated") so it is not blocked — open for Крум. (With a header allocation it is
+  pending, A4 #8.)
 * Sending (finalizing) a Received invoice with pending lines is not blocked (only payment, Р44).
 
 ## Not in scope (package)
 
 FG-153, FG-162 — untouched. FG-155 — done per Addenda A2/A3 above.
+
+## Audit fixes (PR comment 6719287307) and Addendum A4 (Р45)
+
+| Finding | Fix | Test |
+|---|---|---|
+| WHFIX81-01 FG-157 check-then-act | per-supplier-invoice lock document (`warehouse_ledger_counters`, `supplier_invoice_lock:<org>:<invoice>`) written in the PUT transaction AND in every linking receipt's movement transaction (by `invoice_id` or a line id of the invoice); the link decision is taken inside the PUT transaction | `test_whfix81_01_*` — the receipt commits between the pre-check and the write → 409, nothing written |
+| WHFIX81-02 UI waste form | `MaterialWastePanel.js`: Master items with stock on the project (`/project-material-ledger`), photo uploaded first (`/media/upload` → `file_ids`), `Idempotency-Key`, errors in Bulgarian | `MaterialWastePanel.whfix01.test.js` (red on the old panel) + `test_whfix81_02_the_ui_payload_is_a_canonical_write_off` |
+| WHFIX81-03 / A4 | the line is the allocation unit (Q002); header-only / percentage invoices → `to_allocate`; single header destination written on lines (AuditEvent, same tx); line percentages → exact amounts (cumulative rounding); migration script (dry-run, idempotent, per tenant) | `test_whfix81_03_*`, `test_a4_*` (3 modes × mongomock + real) |
+| WHFIX81-04 | A1 inventory regenerated with `scripts/w0_03e_a1_inventory.py`; `03_gates.txt` added | `test_w0_03e_a1_static_guard`, `test_w0_03e_a2b_static_guard` |
+| WHFIX81-05 | POST material-waste decides Р27 first (403 before any 422/428); PM-01 harness seeds a Master item and sends a valid body + key; matrix regenerated with `--harness` on real Mongo | `test_pm_01_permission_matrix.py` (real Mongo, 0 skipped) |
+| non-blocking | FG-191 line price stored with 4 decimals | `test_fg191_line_price_is_stored_quantized` |
+
+W0 expectations changed (A4 #13), each quoted in the test:
+`test_w0_03e_a1_collision_matrix.py` (×3 modes), `test_w0_03e_a1_real_mongo.py` (×3, same body),
+`test_w0_03e_r1_exports.py` (×3), `test_w0_03e_real_mongo.py` (×1) — the finance-by-project report
+no longer counts the header-only invoices: `items == []`, `pr-only-b` is read from the bucket's
+header destinations, and `inv-shared` (its line is fully allocated to warehouses, so the line wins
+over its header `pr-x`) is final and on no project. Canon: FLOW-020 L54/L73 (the line is the
+unit), FLOW-008 L142 (unallocated not in project P&L), FLOW-009 L84 („Остатъкът не изчезва").
+
+Debt: a REVERSED receipt (WH-REV-01 / #82) should not lock a supplier invoice — the reversal field
+is not on this base; whichever PR merges second carries that rule.
