@@ -5105,3 +5105,20 @@ Merge queue (orchestrator): #71 (merging main) → #77 → #74 → #76 → #73 +
 | PM-01 | 6 |
 
 #80 `344c197`: docs only (decisions Р48 / Р49, packages CP-01 and INV-CN-01).
+
+## 2026-11-08 13:05 UTC: #71 `eff56bf` (merge `c6e3e06` of main `4bca18a`): BLOCKING, SEC71-M1
+
+| Check | Result |
+|---|---|
+| Byte check | the tree of `c6e3e06` vs `merge-tree(4bca18a, b1ab349)` differs only in the three conflict resolutions (catalog.py, test_pm_01, DashboardLayout.js) and generated / evidence files (A2B inventory, PM-01 matrix / run_meta, SEC-02 results / scans, SEC-02-MAIN-MERGE). `eff56bf` adds only `test_summary.txt`. |
+| No weakening | for every canonical role, the merged action set = the **exact union** of `b1ab349` and `4bca18a`. ACTIONS: 0 missing, 0 extra. |
+| PM-01 delta | merged vs main = **1614 cells / 120 routes** = #71's own delta (merge-base `7300864` → `b1ab349`); 0 cells in one set but not the other |
+| Gates | sec01 probe G/H none; sec02 bisect only the known-pay variant (R42); SEC-02 + SEC-01 60; PAY 630; W0 same 15; A2C / A1 0 / 0; R0 814; PM-01 6 |
+| **Warehouse canonical** | **44 files, 1084 passed, 37 FAILED** (main `4bca18a` alone: 1121) |
+
+**SEC71-M1 (blocking).** #71's `strip_money_for_non_finance` wrapper pops a keyword-only `_sec02_request` that FastAPI injects. #55's warehouse report tests call the decorated handlers directly (`project_pnl.get_project_pnl(PROJECT, user=u)` and others), so they get `KeyError: '_sec02_request'` (`money_write.py:309`).
+- Failing files: c19 ×2, c20 ×1, c22 ×8, c23 ×1, c24 ×2, c25 ×7, c26 ×10, c26k ×6.
+- Production over HTTP is unaffected, but the merge turns main's warehouse gate red. The merge evidence did not run the warehouse suite.
+- Fix: pass a Request in those direct calls, or make the wrapper fail closed (strip) when no request is present, never "visible". Then re-run warehouse.
+
+PR comment 6695992847 updated.
