@@ -105,6 +105,14 @@ Invoices issued meanwhile have status `Issued`, which the previous code does not
 | #82 WH-REV-01 | The PM-01 matrix and the A1/A2B inventories must be regenerated with the harness/scripts on the merge, never hand-merged. | Whichever merges second. |
 | #69 SEC-01 | New endpoints use `finance_permission` (Owner/Admin/Accountant), like the rest of `finance.py` on main. Moving issue/cancel/notes/refund/offset to `require_money_write(...)` plus catalog actions belongs to whichever merges second. The 1-cent quick-pay tolerance is main's rule (#69 makes it whole cents). | Whichever merges second. |
 
+**FG-196 coupling with #82 (orchestrator request):** registering the incoming credit note through `POST /finance/credit-notes` is the step that lifts #82's 409 `INVOICE_AWAITS_CREDIT_NOTE`.
+
+- It reads #82's `expected_credit_notes` rows (`invoice_id`, `amount`, `status: open`, `dq_task`).
+- When they match to the cent, it sets them `fulfilled` and closes `dq_task`.
+- It also sets `awaiting_credit_note: false` on the invoice, so `_awaited_credit` returns 0 and the cap becomes the net payable.
+
+`test_r47_registration_releases_the_pr82_cap` checks this. On a local trial merge with #82 @ 1622f62: **161 passed, 0 skipped** (`r47_coupling_pr82.txt`).
+
 ## Debts: business decisions not in the package or the canon (nothing invented)
 
 | # | Debt | What was done instead |
@@ -130,7 +138,7 @@ Invoices issued meanwhile have status `Issued`, which the previous code does not
 
 | Gate | Result |
 |---|---|
-| INV-CN-01 (`tests/test_inv_cn_01_credit_notes.py`, off/shadow/enforce) | **57 passed**, 0 skipped |
+| INV-CN-01 (`tests/test_inv_cn_01_credit_notes.py`, off/shadow/enforce) | **57 passed**, 0 skipped; 60 with the R47 coupling test added afterwards |
 | The same file on main cd03324 | **57 failed** (`main_cd03324_red.txt`) |
 | PAY-01 family + 5C-C26l invoice suites | 630 passed, 0 failed |
 | R0 (real) | **814 passed** |

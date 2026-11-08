@@ -585,3 +585,39 @@ def test_pnl_takes_the_note_in_its_own_period_on_the_original_project(monkeypatc
         assert saved["issue_date"] == datetime.now(timezone.utc).date().isoformat()
         assert saved["project_id"] == "prj-1"
     run(monkeypatch, mode, scenario)
+
+
+def test_r47_registration_releases_the_pr82_cap(monkeypatch, mode):
+    """FG-196 coupling with PR #82 (WH-REV-01): a receipt reversal leaves an open
+    ``expected_credit_notes`` row (exactly #82's shape) and blocks paying above the net
+    received (409 INVOICE_AWAITS_CREDIT_NOTE). Registering the supplier's credit note
+    that matches to the cent closes the row, so the block is lifted and the net payable
+    is what can be paid. The cap itself exists only once #82 is merged: the "refused
+    before" part runs only where ``finance._awaited_credit`` exists."""
+    from app.routes import finance as r_finance
+    pr82 = hasattr(r_finance, "_awaited_credit")
+
+    async def scenario(c, op):
+        bill = await sent(c, direction="Received")                    # 240 gross
+        await op.invoices.update_one({"id": bill["id"]}, {"$set": {"awaiting_credit_note": True}})
+        await op.expected_credit_notes.insert_one({                 # as #82 _expect_credit_note writes it
+            "id": "ecn_mv-1", "org_id": ORG_A, "invoice_id": bill["id"],
+            "invoice_line_id": bill["lines"][0]["id"], "reversal_movement_id": "mv-1",
+            "receipt_movement_id": "mv-0", "quantity": "3", "unit": "m2", "amount": 36.0,
+            "currency": "EUR", "status": "open", "reason": "сторно",
+            "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "acct-a",
+            "dq_task": {"assignee_role": "accountant", "title": "очаква кредитно известие",
+                        "status": "open"}})
+        if pr82:
+            r = await quick_pay(c, bill["id"], 205.0)
+            assert r.status_code == 409 and code(r) == "INVOICE_AWAITS_CREDIT_NOTE", r.text
+        r = await note(c, bill, number="CN-R47")                      # line 1, qty 3 → 36.00
+        assert r.status_code == 201 and r.json()["applied"] is True, r.text
+        ecn = await op.expected_credit_notes.find_one({"id": "ecn_mv-1"})
+        assert (ecn["status"], ecn["dq_task"]["status"], ecn["credit_note_id"]) == (
+            "fulfilled", "closed", r.json()["id"])
+        inv = await get_inv(c, bill["id"])
+        assert (inv["remaining_amount"], inv["awaiting_credit_note"]) == (204.0, False)
+        assert (await quick_pay(c, bill["id"], 204.0)).status_code == 201
+        assert (await get_inv(c, bill["id"]))["status"] == "Paid"
+    run(monkeypatch, mode, scenario)
