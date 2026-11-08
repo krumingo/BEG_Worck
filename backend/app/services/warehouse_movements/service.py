@@ -793,6 +793,17 @@ class CommandService:
                 CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT):
             from app.services.invoice_line_lock import ensure_line_lock
             await ensure_line_lock(tenant_collection.tenant, inp.invoice_line_id)
+        # WH-FIX-01 (WHFIX81-01): the supplier-invoice lock document(s) of a
+        # receipt that links a supplier invoice — created before the tx.
+        if (inp.invoice_id or inp.invoice_line_id) and inp.action in (
+                CanonicalAction.RECEIVE_FROM_SUPPLIER,
+                CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT):
+            from app.services.invoice_line_lock import (
+                ensure_supplier_invoice_lock, supplier_invoices_of_receipt,
+            )
+            for si in await supplier_invoices_of_receipt(
+                    tenant_collection.tenant, inp.invoice_id, inp.invoice_line_id):
+                await ensure_supplier_invoice_lock(tenant_collection.tenant, si)
 
         # CODEX C14.1 — audit serialization under concurrent writes.
         # The previous service-level `_MAX_RETRIES=5` manual retry
@@ -1064,6 +1075,18 @@ class CommandService:
         # 5C-C26l Addendum L (FG-108): EVERY linked supplier receipt —
         # warehouse or direct — takes the same line lock, and the line's
         # covered quantity counts all linked paths.
+        # WH-FIX-01 (WHFIX81-01): a receipt linking a supplier invoice writes
+        # that invoice's lock in THIS transaction (serializes with its PUT).
+        if action in (CanonicalAction.RECEIVE_FROM_SUPPLIER,
+                      CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT) \
+                and (inp.invoice_id or inp.invoice_line_id):
+            from app.services.invoice_line_lock import (
+                bump_supplier_invoice_lock, supplier_invoices_of_receipt,
+            )
+            for si in sorted(await supplier_invoices_of_receipt(
+                    tenant_collection.tenant, inp.invoice_id, inp.invoice_line_id,
+                    session=session)):
+                await bump_supplier_invoice_lock(tenant_collection.tenant, si, session=session)
         if action in (CanonicalAction.RECEIVE_FROM_SUPPLIER,
                       CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT) \
                 and inp.invoice_line_id:
@@ -1881,7 +1904,9 @@ class CommandService:
                 context={"invoice_line_id": inp.invoice_line_id,
                          "line_unit_price": str(line_price),
                          "supplied_unit_value": str(inp.unit_value)})
-        inp.unit_value = line_price
+        # Stored like the other server-derived unit values (4 decimals) —
+        # the line's division can carry 28 digits (WHFIX81 non-blocking).
+        inp.unit_value = line_price.quantize(q)
 
     @staticmethod
     async def _lock_invoice_line(tenant_collection, *, session, invoice_line_id: str) -> None:

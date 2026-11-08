@@ -557,3 +557,88 @@ async def test_fg164_stock_screen_shows_the_canonical_warehouses(
     assert {s["material_name"] for s in stock} == {"Лепило"}
     dash = await procurement.get_inventory_dashboard(user=_user())
     assert dash["overview"]["total_value"] == 120.0
+
+
+# ═════════════════════ WHFIX81-01 — FG-157 lock is decided in the tx ═════════════════════
+
+async def test_whfix81_01_receipt_committing_between_check_and_write_is_409(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """Deterministic: the linked receipt commits right after the PUT's pre-check
+    (which saw no link) and before its write → the PUT must answer 409 and write
+    nothing (before: 200 and the linked line price changed 10 → 7)."""
+    client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await _supplier_invoice(db)
+    run = _Run(client, allow_always_gate, db)
+    from app.routes import procurement
+    original = procurement._supplier_invoice_link
+    calls = []
+
+    async def _racing_link(tenant, org_id, inv, **kw):
+        found = await original(tenant, org_id, inv, **kw)
+        if not calls:                             # the pre-check: no link yet …
+            await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
+                      quantity=Decimal("10"), unit_value=Decimal("10"), invoice_id="si-157")
+        calls.append(kw.get("session") is not None)
+        return found
+    monkeypatch.setattr(procurement, "_supplier_invoice_link", _racing_link)
+    with pytest.raises(HTTPException) as exc:
+        await procurement.update_supplier_invoice("si-157", {"lines": [
+            {"id": "sl-1", "material_name": "Лепило", "qty": 10, "unit_price": 7}]},
+            user=_user())
+    assert exc.value.status_code == 409
+    assert exc.value.detail["error_code"] == "SUPPLIER_INVOICE_LINKED"
+    assert True in calls                          # decided inside the transaction
+    inv = await db["supplier_invoices"].find_one({"id": "si-157"})
+    assert inv["lines"][0]["unit_price"] == 10 and inv["subtotal"] == 100   # nothing written
+    lock = await db["warehouse_ledger_counters"].find_one(
+        {"_id": f"supplier_invoice_lock:{T}:si-157"})
+    assert lock and lock["value"] >= 1            # the receipt wrote the shared lock
+
+
+async def test_whfix81_01_receipt_linked_by_line_id_locks_the_invoice(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await _supplier_invoice(db)
+    run = _Run(client, allow_always_gate, db)
+    await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
+              quantity=Decimal("10"), unit_value=Decimal("10"), invoice_line_id="sl-1")
+    assert await db["warehouse_ledger_counters"].find_one(
+        {"_id": f"supplier_invoice_lock:{T}:si-157"})
+    from app.routes import procurement
+    with pytest.raises(HTTPException) as exc:
+        await procurement.update_supplier_invoice("si-157", {"total": 1}, user=_user())
+    assert exc.value.status_code == 409
+
+
+# ═════════════════ WHFIX81-02 — the UI payload goes through (probe) ═════════════════
+
+async def test_whfix81_02_the_ui_payload_is_a_canonical_write_off(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """The exact body MaterialWastePanel.js now sends (see its jest test)."""
+    client, db = canonical_mongo_db
+    mw = await _waste_scene(client, allow_always_gate, db, monkeypatch)
+    ui_body = {"item_id": ITEM, "material_name": "Лепило", "qty": 2.0, "unit": "bag",
+               "waste_type": "damaged", "notes": "", "reason": "Повреден",
+               "file_ids": ["media-1"]}
+    res = await _waste(mw, mw.WasteEntryCreate(**ui_body), _user("Owner"), "ui-key-1")
+    row = await db["warehouse_transactions"].find_one({"movement_id": res["movement_id"]})
+    assert row["action"] == "write_off" and row["file_ids"] == ["media-1"]
+    assert row["reason"] == "Повреден"
+
+
+# ═══════════════════ FG-191 — the line price is stored with 4 decimals ═══════════════════
+
+async def test_fg191_line_price_is_stored_quantized(canonical_mongo_db, allow_always_gate,
+                                                    monkeypatch):
+    client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await db["invoice_lines"].insert_one({
+        "id": "line-q", "org_id": T, "invoice_id": "inv-q", "qty": 3, "unit": "bag",
+        "line_total_ex_vat": 100.0,
+        "allocations": [{"type": "warehouse", "ref_id": "wh_1", "qty": 3}]})
+    run = _Run(client, allow_always_gate, db)
+    res = await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
+                    quantity=Decimal("3"), invoice_id="inv-q", invoice_line_id="line-q")
+    assert str(res.envelope["unit_value"]) == "33.3333"

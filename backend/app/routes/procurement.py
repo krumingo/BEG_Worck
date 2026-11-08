@@ -476,7 +476,24 @@ async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(
         tool_or_endpoint="PUT /supplier-invoices/{inv_id}")
     tdb = tenant._db                                   # pylint: disable=protected-access
 
+    from app.services.invoice_line_lock import (
+        bump_supplier_invoice_lock, ensure_supplier_invoice_lock,
+    )
+    await ensure_supplier_invoice_lock(tenant, inv_id)
+
     async def _body(session):
+        # WH-FIX-01 (WHFIX81-01): the decision is taken HERE, under the
+        # supplier-invoice lock that every linking receipt also writes in its
+        # transaction — a receipt committed after the pre-check makes this
+        # transaction conflict and re-run, and then it is seen → 409.
+        await bump_supplier_invoice_lock(tenant, inv_id, session=session)
+        if locked:
+            movement = await _supplier_invoice_link(tenant, user["org_id"], inv, session=session)
+            if movement:
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "SUPPLIER_INVOICE_LINKED",
+                    "message": "a canonical warehouse movement links this invoice",
+                    "movement_id": movement, "locked_fields": sorted(locked)})
         current = await tenant.supplier_invoices.find_one(
             {"id": inv_id, "org_id": user["org_id"]}, {"_id": 0, "updated_at": 1},
             session=session)
@@ -507,15 +524,18 @@ def _audit_value(v):
     return v
 
 
-async def _supplier_invoice_link(tenant, org_id: str, inv: dict):
-    """The id of a canonical movement linked to the invoice or a line, else None."""
+async def _supplier_invoice_link(tenant, org_id: str, inv: dict, *, session=None):
+    """The id of a canonical movement linked to the invoice or a line, else None.
+    Debt (WH-REV-01 / #82): a REVERSED receipt should not lock the invoice —
+    the reversal field is not on this base; whichever PR merges second carries
+    that rule."""
     line_ids = [l.get("id") for l in inv.get("lines") or [] if isinstance(l, dict) and l.get("id")]
     ors = [{"invoice_id": inv["id"]}]
     if line_ids:
         ors.append({"invoice_line_id": {"$in": line_ids}})
     row = await tenant.warehouse_transactions.find_one(
         {"org_id": org_id, "action": {"$exists": True}, "$or": ors},
-        {"_id": 0, "movement_id": 1})
+        {"_id": 0, "movement_id": 1}, session=session)
     return (row or {}).get("movement_id")
 
 
