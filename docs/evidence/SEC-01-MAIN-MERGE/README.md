@@ -48,3 +48,19 @@ Merge commit (без rebase) на `origin/main` @ `cd03324` в `claude/sec-01-mo
 
 ## Доказателство на SEC-01-C02
 `results.json` регенериран с harness-а: точно **18** реда променени = `sales_commit` × 3 финансови роли × 2 фирми × 3 режима, 201 (пише) → **410, нищо**. Тестът на C02 следва #55 (финансова роля → 410).
+
+## Проверки на сливането с `cd03324` (реален Mongo 7.0 replica set, `-rs`)
+| Набор | Резултат |
+|---|---|
+| SEC-01-C03 / SEC-01 / C01 / C02 / PM-01 | 6 / 8 / 7 / 9 / 6 — **36 passed, 0 skipped**; PM-01 възпроизведен клетка по клетка |
+| R0 + PAY-01 + W0-04-C01 + AUTH + ST-02 | **1770 passed** (R0 сам: **814 passed**) |
+| W0 (DB-free) | **1094 passed / 15 failed / 83 skipped** — същите 15 `test_w0_03e_legacy_routes` |
+| Guards | A1 476 / 0, A2C 236 / 0 |
+| Frontend | `yarn test` 17 suites / **173 passed**; `yarn build` — Compiled |
+| #55 `test_warehouse_canonical_*` (44 файла, `WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1`) | **1117 passed, 4 failed** (на 4 партиди) |
+
+**4-те неуспешни теста на #55 са съществуващи в main:** `test_warehouse_canonical_c13_mongo.py` — `test_c13_1_cross_item_audit_chain_no_fork_under_ten_concurrent_writes`, `test_c13_1_audit_failure_rolls_back_movement_and_counters`, `test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close`, `test_c13_4_material_entries_rebuild_twice_byte_parity`. Пуснати върху **самия main `cd03324`** (отделен worktree) → **същите 4 failed, 2 passed**. Причина в теста: `PermissionDeniedError: Р28: no session identity` (тестът вика услугата без сесийна идентичност). Не са причинени от сливането; не са пипани (обхват на #55) — за оркестратора / #55.
+
+**Бележки за средата:**
+- `pytest-asyncio` (нужен на `tests/warehouse_canonical_conftest.py`) **не е** в `requirements*.txt` — инсталиран ръчно тук; без него 29 файла на #55 не се събират. Предложение за дълг на #55.
+- Целият warehouse набор наведнъж изчерпва `nofile` (20 000) в локалния Mongo контейнер (WiredTiger „Too many open files“ → panic) — затова е пуснат на 4 партиди с нов контейнер. Не е грешка на кода.
