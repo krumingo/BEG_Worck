@@ -1,0 +1,5362 @@
+{
+ "schema": "beg.sec-01-money-write/v1",
+ "fixture": "ST-01 synthetic tenants A and B",
+ "roles": {
+  "owner": "Owner",
+  "admin": "Admin",
+  "requester": "SiteManager",
+  "technician": "Technician",
+  "accountant": "Accountant",
+  "warehousekeeper": "Warehousekeeper",
+  "driver": "Driver",
+  "viewer": "Viewer"
+ },
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "endpoints": [
+  [
+   "POST",
+   "/api/finance/cash-transactions",
+   "finance.cash_transaction.create"
+  ],
+  [
+   "POST",
+   "/api/finance/bonus-payments",
+   "finance.bonus_payment.create"
+  ],
+  [
+   "POST",
+   "/api/finance/overhead-transactions",
+   "finance.overhead_transaction.create"
+  ],
+  [
+   "POST",
+   "/api/overhead-snapshots",
+   "finance.overhead_snapshot.create"
+  ],
+  [
+   "PUT",
+   "/api/price-modifiers/project/{project_id}",
+   "pricing.project_modifier.update"
+  ],
+  [
+   "POST",
+   "/api/labor-entries",
+   "labor.entry.create"
+  ],
+  [
+   "POST",
+   "/api/projects/{project_id}/material-waste",
+   "material_waste.entry.create"
+  ],
+  [
+   "PATCH",
+   "/api/projects/{project_id}/client-link",
+   "project.client_link.update"
+  ]
+ ],
+ "mongo": "local replica set (oplog)",
+ "outbound_http": "closed local port",
+ "seconds": 11.9,
+ "rows": [
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.cash_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/cash-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.bonus_payments"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/bonus-payments",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_transactions"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/finance/overhead-transactions",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.overhead_snapshots"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/overhead-snapshots",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.audit_events",
+    "op.price_modifiers_config"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.labor_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/labor-entries",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 201,
+   "written": [
+    "op.material_waste_entries"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 200,
+   "written": [
+    "op.projects"
+   ],
+   "record_org_is_caller_tenant": true
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "B",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PUT",
+   "path": "/api/price-modifiers/project/{project_id}",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "POST",
+   "path": "/api/projects/{project_id}/material-waste",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 404,
+   "written": [],
+   "record_org_is_caller_tenant": null
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "method": "PATCH",
+   "path": "/api/projects/{project_id}/client-link",
+   "target_project_tenant": "A",
+   "status": 403,
+   "written": [
+    "op.audit_events"
+   ],
+   "record_org_is_caller_tenant": null
+  }
+ ]
+}

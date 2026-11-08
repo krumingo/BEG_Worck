@@ -20,7 +20,9 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
-from app.permissions.client_act_write import client_act_money_visible, require_client_act_right
+from app.permissions.money_write import (
+    money_values_visible, require_finance_read, require_money_write,
+)
 from app.services import client_acts as ca
 
 
@@ -54,7 +56,8 @@ def _body_dict(data: Any) -> Dict[str, Any]:
 async def create_client_act(
     data: Dict[str, Any] = Body(...),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-    _act01: dict = Depends(require_client_act_right(ca.ACTION_CREATE)),  # before any read
+    _sec01: dict = Depends(require_money_write(
+        ca.ACTION_CREATE, module="M2", resource_type="client_act")),  # ACT-01 (R14): before any read
     user: dict = Depends(require_m2),
 ):
     """Create a draft client act; every line is an offer line of an accepted offer."""
@@ -82,13 +85,17 @@ async def create_client_act(
 
 
 @router.get("/client-acts")
-async def list_client_acts(request: Request, project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_client_acts(
+    request: Request,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.read", module="M2", resource_type="client_act")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     acts = await tenant.client_acts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
-    if not await client_act_money_visible(request, user):            # FG-122 (R20)
+    if not await money_values_visible(request, user):                 # FG-122 (R20-5)
         return [ca.strip_money(a) for a in acts]
     return acts
 
@@ -96,8 +103,8 @@ async def list_client_acts(request: Request, project_id: Optional[str] = None, u
 @router.get("/client-acts/remaining/{project_id}")
 async def client_act_remaining(
     project_id: str,
-    _act01: dict = Depends(require_client_act_right(
-        ca.ACTION_REMAINING_READ, resource_type="client_act_remaining")),  # R20: client prices
+    _sec02: dict = Depends(require_finance_read(
+        ca.ACTION_REMAINING_READ, module="M2", resource_type="client_act_remaining")),  # R20-1: client prices
     user: dict = Depends(require_m2),
 ):
     """FLOW-004 "Какво трябва да вижда Крум": contracted / acted / remaining per offer line."""
@@ -108,13 +115,18 @@ async def client_act_remaining(
 
 
 @router.get("/client-acts/{act_id}")
-async def get_client_act(act_id: str, request: Request, user: dict = Depends(require_m2)):
+async def get_client_act(
+    act_id: str,
+    request: Request,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_detail.read", module="M2", resource_type="client_act_detail")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]}, {"_id": 0})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
     view = await ca.act_view(tenant, act)
-    if not await client_act_money_visible(request, user):            # FG-122 (R20)
+    if not await money_values_visible(request, user):                 # FG-122 (R20-5)
         return ca.strip_money(view)
     return view
 
@@ -124,11 +136,12 @@ async def update_client_act(
     act_id: str,
     data: Dict[str, Any] = Body(...),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-    _act01: dict = Depends(require_client_act_right(ca.ACTION_UPDATE)),  # before any read
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.update", module="M2", resource_type="client_act")),  # SEC-02 (R20-2): before any read
     user: dict = Depends(require_m2),
 ):
-    """Edit a Draft. Lines are re-checked against the offer and the reservation moves by
-    the difference; an accepted act is never edited (correction/reversal is debt)."""
+    """Edit a Draft (ACT-01). Lines are re-checked against the offer and the reservation
+    moves by the difference; an accepted act is never edited (correction/reversal is debt)."""
     data = _body_dict(data)
     key = ca.KeyedWrite(db, user, ca.ACTION_UPDATE, idempotency_key)        # 428 without
     tenant = _tenant(user)
@@ -150,13 +163,15 @@ async def confirm_client_act(
     act_id: str,
     data: Dict[str, Any] = Body(default_factory=dict),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-    _act01: dict = Depends(require_client_act_right(ca.ACTION_CONFIRM)),  # FG-119: before any read
+    _sec01: dict = Depends(require_money_write(
+        "revenue.client_act_confirm.execute", module='M2',
+        resource_type="client_act")),  # SEC-01-C02 (R14, FG-30, ACT-01 FG-119): before any read
     user: dict = Depends(require_m2),
 ):
-    """Confirm act → status=Accepted → earned revenue (FG-119: finance roles, Idempotency-Key,
-    one transaction with the offer/version/cap re-check and the canonical AuditEvent;
-    FG-142: body ``expected_total`` + ``expected_line_values`` — the values the confirmer
-    saw; a recomputed difference -> 409 ACT_VALUE_CHANGED, nothing written)."""
+    """Confirm act → status=Accepted → earned revenue (ACT-01 FG-119: finance roles,
+    Idempotency-Key, one transaction with the offer/version/cap re-check and the canonical
+    AuditEvent; FG-142: body ``expected_total`` + ``expected_line_values`` — the values the
+    confirmer saw, in whole cents; a recomputed difference -> 409 ACT_VALUE_CHANGED)."""
     key = ca.KeyedWrite(db, user, ca.ACTION_CONFIRM, idempotency_key)       # 428 without
     tenant = _tenant(user)
     if not await tenant.client_acts.find_one({"id": act_id}, {"_id": 0, "id": 1}):
@@ -174,7 +189,8 @@ async def create_act_from_offer(
     offer_id: str,
     data: Dict[str, Any] = Body(default_factory=dict),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
-    _act01: dict = Depends(require_client_act_right(ca.ACTION_FROM_OFFER)),  # before any read
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_from_offer.execute", module="M2", resource_type="client_act_from_offer")),  # SEC-02 (R20-2): before any read
     user: dict = Depends(require_m2),
 ):
     """A draft act with ``percent`` of every line of an ACCEPTED offer — through the same
@@ -218,7 +234,11 @@ async def create_act_from_offer(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-cost/by-project/{project_id}")
-async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
+async def get_labor_cost_by_project(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_labor_cost.read", module="M2", resource_type="project_labor_cost")),  # SEC-02 (R20-2): before any read
+    date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate labor cost by project from work reports × employee rates"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -357,7 +377,10 @@ async def generate_execution_packages(offer_id: str, user: dict = Depends(requir
 
 
 @router.get("/execution-packages")
-async def list_execution_packages(project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_execution_packages(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.read", module="M2", resource_type="execution_package")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
@@ -369,7 +392,11 @@ async def list_execution_packages(project_id: Optional[str] = None, offer_id: Op
 
 
 @router.put("/execution-packages/{pkg_id}")
-async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_execution_package(
+    pkg_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.update", module="M2", resource_type="execution_package")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:
@@ -397,7 +424,11 @@ async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-profit/{project_id}")
-async def get_project_profit_summary(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_profit_summary(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_profit.read", module="M2", resource_type="project_profit")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Comprehensive project financial summary — revenue, costs, profit"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -431,26 +462,16 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     collected_revenue = sum(i.get("paid_amount", 0) for i in issued_invoices)
 
     # ── EXPENSES ──
-    # Material cost: from warehouse issues to this project
-    wh_issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "total": 1, "lines": 1}
-    ).to_list(100)
-    material_cost = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
-
-    # Returns reduce material cost
-    wh_returns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "return"},
-        {"_id": 0, "lines": 1}
-    ).to_list(100)
-    material_returns = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
-    net_material_cost = round(material_cost - material_returns, 2)
-
-    # Enhanced material from material_entries if available
+    # Material cost — 5C-C22: the ONE shared helper (canonical consumption
+    # + „фира" + legacy issues dated before the tenant cutover, Р13). The
+    # former private legacy issue/return sum is gone: legacy return rows
+    # never carried a price, so they never changed the figure.
     from app.routes.material_smr import get_material_summary_for_project
     material_summary = await get_material_summary_for_project(org_id, project_id)
-    if material_summary["has_data"]:
-        net_material_cost = material_summary["total_cost"]
+    net_material_cost = material_summary["total_cost"]
+    # 5C-C21 F-12 — the „фира" share of that total, shown as its own line;
+    # the total is still counted once.
+    material_waste_cost = material_summary.get("waste_cost", 0.0) or 0.0
 
     # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -533,7 +554,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         "contracted_revenue": len(accepted_offers) > 0,
         "earned_revenue": len(accepted_acts) > 0,
         "billed_revenue": len(issued_invoices) > 0,
-        "material_cost": len(wh_issues) > 0,
+        "material_cost": material_summary["has_data"],
         "labor_cost": labor_summary["has_data"] if labor_summary else len(reports) > 0,
         "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
@@ -555,8 +576,13 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         },
 
         "expenses": {
-            "material": net_material_cost,
+            "material": round(net_material_cost - material_waste_cost, 2),
+            "waste": round(material_waste_cost, 2),          # „фира" (5C-C21 F-12)
             "material_detail": material_summary if material_summary["has_data"] else None,
+            # 5C-C22 / Р13 — the cutover split behind the material figure.
+            "material_cost_basis": {k: material_summary.get(k) for k in (
+                "source", "canonical_cost", "legacy_cost",
+                "legacy_excluded_cost", "cutover_at")},
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
             "labor_detail": labor_summary if labor_summary else None,
@@ -583,7 +609,11 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-smr-view/{project_id}")
-async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_smr_view(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_smr_view.read", module="M2", resource_type="project_smr_view")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Operational SMR view for project — main offer + execution packages with labor focus"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -624,10 +654,16 @@ async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)
             sub_by_pkg[ep_id]["contract"] += sl.get("subcontract_total", 0)
             sub_by_pkg[ep_id]["certified"] += sl.get("certified_total", 0)
 
+    # 5C-C22 — package material actual from the ONE shared helper (read
+    # time), not the `actual_material_cost` cache that only a recompute fills.
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+
     rows = []
     for pkg in pkgs:
         pid = pkg["id"]
         sale = pkg.get("sale_total", 0)
+        mat_split = split_for_package(mat_cost, pid)
         lab_budget = pkg.get("labor_budget_total", 0)
         lab_actual = pkg.get("actual_labor_cost", 0) or 0
         lab_remaining = round(lab_budget - lab_actual, 2) if lab_budget > 0 else None
@@ -678,9 +714,10 @@ async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)
             "remaining_hours": round(planned_h - used_h, 1) if planned_h else None,
             "progress_percent": progress,
             "has_progress": has_progress,
-            "material_actual": pkg.get("actual_material_cost", 0) or 0,
+            "material_actual": mat_split["material"],
+            "material_waste": mat_split["waste"],          # „фира"
             "subcontract": round(sub["certified"], 2) if sub else 0,
-            "total_actual": round(lab_actual + (pkg.get("actual_material_cost", 0) or 0) + (sub["certified"] if sub else 0), 2),
+            "total_actual": round(lab_actual + mat_split["total"] + (sub["certified"] if sub else 0), 2),
             "flags": flags,
             "status": pkg.get("status", ""),
         })

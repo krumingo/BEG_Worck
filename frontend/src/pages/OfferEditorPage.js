@@ -74,7 +74,10 @@ export default function OfferEditorPage() {
   const projectIdParam = searchParams.get("projectId") || "";
 
   const isNew = !offerId || offerId === "new";
-  const canManage = ["Admin", "Owner", "SiteManager"].includes(user?.role);
+  // SEC-02-A (R20): the backend strips client prices for roles without the finance right;
+  // editing an offer whose prices you cannot see would save it without them. So only
+  // Admin/Owner manage offers here (SiteManager reads quantities/statuses).
+  const canManage = ["Admin", "Owner"].includes(user?.role);
   const canAcceptReject = ["Admin", "Owner"].includes(user?.role);
 
   const [offer, setOffer] = useState(null);
@@ -508,6 +511,7 @@ export default function OfferEditorPage() {
   };
 
   const formatCurrency = (amount) => {
+    if (amount === undefined || Number.isNaN(amount)) return "—";   // SEC-02-A: hidden money
     return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "EUR" }).format(amount || 0);
   };
 

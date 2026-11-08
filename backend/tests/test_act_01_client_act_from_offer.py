@@ -1097,23 +1097,26 @@ def test_the_exact_offer_unit_price_is_used(r):
 
 
 def test_readers_without_the_money_right_see_quantities_only(r):
-    """FG-122 (R20)."""
+    """FG-122 (R20) after the merge with #71 (SEC-02, R20-1): the act readers
+    ``GET /client-acts[/{id}]`` are company finance — the finance roles read prices and
+    sums; every other role is refused (403) and receives no money at all (stricter than
+    the quantities-only answer ACT-01 gave before #71; ``strip_money`` stays as the R20-5
+    fallback for a caller that passes the read but lacks the money-values right)."""
     for role in FINANCE + NON_FINANCE:
         for op in ("list", "detail"):
             cell = r["readers"][role][op]
-            assert cell["status"] == 200, (role, op, cell)
-            acts = cell["body"] if op == "list" else [cell["body"]]
-            assert acts, (role, op)
-            for act in acts:
-                money_keys = {"subtotal", "vat_amount", "total"} & set(act)
-                line_money = {k for ln in act["lines"] for k in ln
-                              if k in ("unit_price", "line_total", "contracted_value",
-                                       "acted_value_total", "remaining_value")}
-                if role in FINANCE:
-                    assert money_keys == {"subtotal", "vat_amount", "total"}, (role, act)
-                else:
-                    assert not money_keys and not line_money, (role, op, money_keys, line_money)
-                    assert all("executed_qty" in ln for ln in act["lines"]), act
+            if role in FINANCE:
+                assert cell["status"] == 200, (role, op, cell)
+                acts = cell["body"] if op == "list" else [cell["body"]]
+                assert acts, (role, op)
+                for act in acts:
+                    assert {"subtotal", "vat_amount", "total"} <= set(act), (role, act)
+                    assert all("unit_price" in ln for ln in act["lines"]), act
+            else:
+                assert cell["status"] == 403, (role, op, cell)
+                nothing(cell)
+                text = json.dumps(cell["body"])
+                assert "unit_price" not in text and "subtotal" not in text, (role, op, cell)
 
 
 def test_a_version_accepted_during_the_act_transaction_blocks_the_act(r):

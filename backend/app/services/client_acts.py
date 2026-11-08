@@ -86,7 +86,6 @@ ACTION_UPDATE = "finance.client_act.update"
 ACTION_FROM_OFFER = "finance.client_act_from_offer.execute"
 ACTION_REMAINING_READ = "finance.client_act_remaining.read"
 ACTION_CONFIRM = "revenue.client_act_confirm.execute"     # the name SEC-01-C02 (#69) gives it
-ACTION_MONEY_READ = "finance.client_act_money.read"       # R20: prices / sums of an act
 # FG-122 (R20): the keys of an act that are money — removed for a reader without the right.
 ACT_MONEY_KEYS = frozenset({"subtotal", "vat_amount", "total"})
 LINE_MONEY_KEYS = frozenset({"unit_price", "line_total", "contracted_value", "acted_value_total",
@@ -949,6 +948,11 @@ def validate_expected(body: Any) -> Tuple[Decimal, Dict[str, Decimal]]:
         raise _err(422, "EXPECTED_VALUES_REQUIRED",
                    "Потвърждението трябва да посочи сумата (expected_total) и стойностите по "
                    "редове (expected_line_values), които потвърждаващият е видял")
+    # #69 (SEC-01-C03-H, F-69-04): a money value is in whole cents — never rounded silently
+    from app.permissions.money_input import money_value
+    money_value(total, "expected_total", allow_zero=True)
+    for v in lines.values():
+        money_value(v, "expected_line_values", allow_zero=True)
     return _dec(total), {str(k): _dec(v) for k, v in lines.items()}
 
 

@@ -102,7 +102,14 @@ ORG_KEYED: Dict[str, str] = {
               "overhead_snapshots", "overhead_transactions", "revenue_snapshots"),
     **_family(FAMILY_WAREHOUSE,
               "warehouses", "location_nodes", "warehouse_transactions", "warehouse_batches",
-              "stock_thresholds", "deliveries"),
+              "stock_thresholds", "deliveries",
+              # LIVE-OPS-01 / TASK 5C
+              #   • warehouse_in_transit — Rule B transit-lot projection written
+              #     by the canonical movement projector.
+              #   • warehouse_ledger_counters — tenant-scoped atomic counter for
+              #     canonical ledger sequence allocation (C12.3, under
+              #     `_next_ledger_sequence`); never read by business code.
+              "warehouse_in_transit", "warehouse_ledger_counters"),
     **_family(FAMILY_MATERIALS,
               "items", "material_requests", "material_entries", "material_prices",
               "material_waste_entries", "material_consumption_log", "planned_materials",
@@ -139,6 +146,13 @@ AUTHORIZATION_COLLECTIONS: FrozenSet[str] = frozenset({"project_team", "users"})
 TENANT_ID_KEYED_PREFIXES: Tuple[str, ...] = ("md_",)
 TENANT_ID_KEYED: FrozenSet[str] = frozenset({
     "audit_events", "audit_idempotency", "audit_counters",
+    # LIVE-OPS-01 / TASK 5C — CODEX C13.1, reclassified in 5C-C18:
+    # "audit_chain_head" is the per-tenant pivot of the canonical audit
+    # chain (one document per tenant, keyed and uniquely indexed by
+    # ``tenant_id``, written only in the same transaction as the
+    # ``audit_events`` row it chains). It belongs to the W0-03 audit store
+    # like ``audit_counters``, not to the org_id-keyed warehouse family.
+    "audit_chain_head",
 })
 
 #: The tenant root: one document per organization; its ``id`` is the tenant key.

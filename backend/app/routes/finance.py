@@ -13,6 +13,8 @@ import logging
 logger = logging.getLogger(__name__)
 
 from app.db import db
+from app.services.invoice_line_lock import run_transaction
+from app.services.invoice_state import NOT_DRAFT, STATUS_CHANGED, claim_invoice, status_conflict
 from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData, assigned_project_ids
 from app.deps.modules import require_m5, enforce_limit
@@ -192,14 +194,19 @@ async def _resolve_payment_account(tenant: TenantData, method: str, account_id: 
     return default["id"]
 
 
-async def update_invoice_status(tenant: TenantData, invoice_id: str):
-    """Auto-update invoice status based on allocations and due date"""
-    invoice = await tenant.invoices.get(invoice_id)
+async def update_invoice_status(tenant: TenantData, invoice_id: str, *, session=None):
+    """Auto-update invoice status based on allocations and due date.
+
+    5C-C26l Addendum N (FG-140): called with the caller's ``session`` — the
+    payment / allocation write and the derived paid / remaining / status are
+    one transaction (no stale total or paid amount)."""
+    invoice = await tenant.invoices.get(invoice_id, session=session)
     if not invoice or invoice["status"] == "Cancelled":
         return
     
     # Calculate paid amount from allocations
-    allocations = await tenant.payment_allocations.find(active_allocations({"invoice_id": invoice_id})).to_list(100)
+    allocations = await tenant.payment_allocations.find(active_allocations({"invoice_id": invoice_id}),
+                                                        session=session).to_list(100)
     paid_amount = sum(a.get("amount_allocated", 0) for a in allocations)
     remaining = round(invoice["total"] - paid_amount, 2)
     
@@ -218,12 +225,12 @@ async def update_invoice_status(tenant: TenantData, invoice_id: str):
     else:
         new_status = invoice["status"]
     
-    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+    await tenant.invoices.update_one({"id": invoice_id, "status": {"$ne": "Cancelled"}}, {"$set": {
         "paid_amount": round(paid_amount, 2),
         "remaining_amount": max(0, remaining),
         "status": new_status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
-    }})
+    }}, session=session)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1000,33 +1007,43 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    version_id = str(uuid.uuid4())
 
-    # Keep a snapshot (version copy) before editing an already-issued document
-    if invoice.get("status") != "Draft":
-        prior = {k: v for k, v in invoice.items() if k != "_id"}
-        vcount = await tenant.invoice_versions.count({"invoice_id": invoice_id})
-        await tenant.invoice_versions.insert_one({
-            "id": str(uuid.uuid4()), "org_id": user["org_id"], "invoice_id": invoice_id,
-            "version_no": vcount + 1, "snapshot": prior,
-            "edited_by": user.get("id"), "edited_by_name": user.get("name") or user.get("email"),
-            "edited_at": update["updated_at"],
-        })
+    async def _body(session):
+        # FG-140: the editable status is decided in the transaction (CAS on
+        # the invoice); the version snapshot is of the CURRENT document.
+        current = await claim_invoice(tenant, invoice_id, session=session,
+                                      forbidden=("Cancelled", "Paid"), code=STATUS_CHANGED)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        # Keep a snapshot (version copy) before editing an already-issued document
+        if current.get("status") != "Draft":
+            prior = {k: v for k, v in current.items() if k != "_id"}
+            vcount = await tenant.invoice_versions.count({"invoice_id": invoice_id},
+                                                         session=session)
+            await tenant.invoice_versions.insert_one({
+                "id": version_id, "org_id": user["org_id"], "invoice_id": invoice_id,
+                "version_no": vcount + 1, "snapshot": prior,
+                "edited_by": user.get("id"), "edited_by_name": user.get("name") or user.get("email"),
+                "edited_at": update["updated_at"],
+            }, session=session)
 
-    await tenant.invoices.update_one({"id": invoice_id}, {"$set": update})
-    
-    # Recompute if vat changed
-    if "vat_percent" in update:
-        updated = await tenant.invoices.get(invoice_id)
-        updated = compute_invoice_totals({k: v for k, v in updated.items() if k != "_id"})
-        paid = updated.get("paid_amount", 0) or 0
-        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
-            "subtotal": updated["subtotal"],
-            "vat_amount": updated["vat_amount"],
-            "total": updated["total"],
-            "remaining_amount": max(0, updated["total"] - paid),
-        }})
-        # Recalculate status
-        await update_invoice_status(tenant, invoice_id)
+        await tenant.invoices.update_one({"id": invoice_id}, {"$set": update}, session=session)
+
+        # Recompute if vat changed
+        if "vat_percent" in update:
+            updated = await tenant.invoices.get(invoice_id, session=session)
+            updated = compute_invoice_totals({k: v for k, v in updated.items() if k != "_id"})
+            paid = updated.get("paid_amount", 0) or 0
+            await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+                "subtotal": updated["subtotal"],
+                "vat_amount": updated["vat_amount"],
+                "total": updated["total"],
+                "remaining_amount": max(0, updated["total"] - paid),
+            }}, session=session)
+            # Recalculate status
+            await update_invoice_status(tenant, invoice_id, session=session)
+    await run_transaction(tenant, _body)
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
@@ -1063,22 +1080,29 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
         lines.append(compute_invoice_line(l))
     
     now = datetime.now(timezone.utc).isoformat()
-    invoice["lines"] = lines
-    invoice = compute_invoice_totals(invoice)
-    paid = invoice.get("paid_amount", 0) or 0
-    new_remaining = max(0, invoice["total"] - paid)
-    
-    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
-        "lines": lines,
-        "subtotal": invoice["subtotal"],
-        "vat_amount": invoice["vat_amount"],
-        "total": invoice["total"],
-        "remaining_amount": new_remaining,
-        "updated_at": now,
-    }})
-    
-    # Recalculate status after total changes
-    await update_invoice_status(tenant, invoice_id)
+
+    async def _body(session):
+        # FG-140: status decided in the transaction (CAS on the invoice);
+        # totals and remaining computed from the CURRENT paid amount.
+        current = await claim_invoice(tenant, invoice_id, session=session,
+                                      forbidden=("Cancelled", "Paid"), code=STATUS_CHANGED)
+        if current is None:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        computed = compute_invoice_totals({**{k: v for k, v in current.items() if k != "_id"},
+                                           "lines": lines})
+        paid = computed.get("paid_amount", 0) or 0
+        new_remaining = max(0, computed["total"] - paid)
+        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+            "lines": lines,
+            "subtotal": computed["subtotal"],
+            "vat_amount": computed["vat_amount"],
+            "total": computed["total"],
+            "remaining_amount": new_remaining,
+            "updated_at": now,
+        }}, session=session)
+        # Recalculate status after total changes
+        await update_invoice_status(tenant, invoice_id, session=session)
+    await run_transaction(tenant, _body)
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
@@ -1103,11 +1127,16 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     new_status = "Overdue" if invoice.get("due_date", "") < today else "Sent"
     
-    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+    # FG-140: Draft → Sent only as a CAS on the Draft status (a concurrent
+    # line edit holds the invoice document in its transaction until it
+    # commits; a lost race → 409, nothing written).
+    res = await tenant.invoices.update_one({"id": invoice_id, "status": "Draft"}, {"$set": {
         "status": new_status,
         "sent_at": now,
         "updated_at": now,
     }})
+    if res.matched_count == 0:
+        raise status_conflict(NOT_DRAFT, invoice_id, (await tenant.invoices.get(invoice_id) or {}).get("status"))
     
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_sent", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
@@ -1127,16 +1156,23 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if invoice["status"] == "Paid":
         raise HTTPException(status_code=400, detail="Cannot cancel paid invoices")
     
-    # Check for allocations
-    alloc_count = await tenant.payment_allocations.count(active_allocations({"invoice_id": invoice_id}))
-    if alloc_count > 0:
-        raise HTTPException(status_code=400, detail="Cannot cancel invoice with payment allocations")
-    
     now = datetime.now(timezone.utc).isoformat()
-    await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
-        "status": "Cancelled",
-        "updated_at": now,
-    }})
+
+    async def _body(session):
+        # FG-140: status + allocations decided in the transaction; a payment
+        # racing the cancel writes the same invoice document → serialized.
+        await claim_invoice(tenant, invoice_id, session=session,
+                            forbidden=("Paid", "Cancelled"), code=STATUS_CHANGED)
+        # Check for allocations
+        alloc_count = await tenant.payment_allocations.count(
+            active_allocations({"invoice_id": invoice_id}), session=session)
+        if alloc_count > 0:
+            raise HTTPException(status_code=400, detail="Cannot cancel invoice with payment allocations")
+        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+            "status": "Cancelled",
+            "updated_at": now,
+        }}, session=session)
+    await run_transaction(tenant, _body)
     
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
@@ -1160,7 +1196,10 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     if await tenant.payment_allocations.count({"invoice_id": invoice_id}) > 0:
         raise HTTPException(status_code=409, detail="Invoice has payment allocations — cancel it instead")
     
-    await tenant.invoices.delete_one({"id": invoice_id})
+    # FG-140: only while still Draft (CAS) — a concurrent send wins → 409.
+    res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft"})
+    if res.deleted_count == 0:
+        raise status_conflict(NOT_DRAFT, invoice_id, (await tenant.invoices.get(invoice_id) or {}).get("status"))
     return {"ok": True}
 
 
@@ -1400,8 +1439,8 @@ async def _ensure_reversal_row(tenant: TenantData, user: dict, original: dict, n
     return rev_id
 
 
-PAYMENT_LOCK_STALE_SECONDS = 30
-ROW_LOCK_FIELD = "allocation_lock"
+# One definition with app.services.invoice_state (claim_invoice honours the same lock).
+from app.services.invoice_state import PAYMENT_LOCK_STALE_SECONDS, ROW_LOCK_FIELD  # noqa: E402
 
 
 @asynccontextmanager

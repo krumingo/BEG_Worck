@@ -1,0 +1,5659 @@
+{
+ "schema": "beg.sec-01-c03-payment-amount-idempotency/v1",
+ "fixture": "ST-01 synthetic tenant A + PM-01 and C02 existing records; actor Accountant",
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "endpoints": [
+  [
+   "cash",
+   "/api/finance/cash-transactions",
+   "amount",
+   [
+    "cash_transactions"
+   ]
+  ],
+  [
+   "bonus",
+   "/api/finance/bonus-payments",
+   "amount",
+   [
+    "bonus_payments"
+   ]
+  ],
+  [
+   "ohtx",
+   "/api/finance/overhead-transactions",
+   "amount",
+   [
+    "overhead_transactions"
+   ]
+  ],
+  [
+   "ohsnap",
+   "/api/overhead-snapshots",
+   "amount",
+   [
+    "overhead_snapshots"
+   ]
+  ],
+  [
+   "subpay",
+   "/api/subcontractor-payments",
+   "amount",
+   [
+    "finance_payments",
+    "subcontractor_payments",
+    "subcontractor_packages"
+   ]
+  ],
+  [
+   "subpay_vat",
+   "/api/subcontractor-payments",
+   "vat_amount",
+   [
+    "finance_payments",
+    "subcontractor_payments",
+    "subcontractor_packages"
+   ]
+  ],
+  [
+   "labor",
+   "/api/labor-entries",
+   "hours",
+   [
+    "labor_entries"
+   ]
+  ],
+  [
+   "waste",
+   "/api/projects/{project_id}/material-waste",
+   "qty",
+   [
+    "material_waste_entries"
+   ]
+  ]
+ ],
+ "invalid_values": [
+  "nan",
+  "inf",
+  "-inf",
+  "1e309",
+  "",
+  "abc",
+  "10",
+  true,
+  [
+   10
+  ],
+  -1,
+  0,
+  "<missing>"
+ ],
+ "mongo": "local replica set (oplog)",
+ "outbound_http": "closed local port",
+ "seconds": 34.0,
+ "amount_rows": [
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "cash",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "field": "hours",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "field": "qty",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "field": "hours",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "field": "qty",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "field": "amount",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "field": "vat_amount",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "field": "hours",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "nan",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "-inf",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "1e309",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "abc",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "10",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": true,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": [
+    10
+   ],
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": -1,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": 0,
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "field": "qty",
+   "value": "<missing>",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  }
+ ],
+ "idempotency_sequences": [
+  {
+   "mode": "off",
+   "probe": "cash",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.cash_transactions"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "off",
+   "probe": "bonus",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.bonus_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "off",
+   "probe": "ohtx",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.overhead_transactions"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "off",
+   "probe": "ohsnap",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "off",
+   "probe": "subpay",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 1
+  },
+  {
+   "mode": "off",
+   "probe": "subpay_vat",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 1
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "shadow",
+   "probe": "cash",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.cash_transactions"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "shadow",
+   "probe": "bonus",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.bonus_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohtx",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.overhead_transactions"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "shadow",
+   "probe": "ohsnap",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 1
+  },
+  {
+   "mode": "shadow",
+   "probe": "subpay_vat",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 1
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "enforce",
+   "probe": "cash",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.cash_transactions"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "enforce",
+   "probe": "bonus",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.bonus_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohtx",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.overhead_transactions"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "enforce",
+   "probe": "ohsnap",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 1
+  },
+  {
+   "mode": "enforce",
+   "probe": "subpay_vat",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 1
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "valid_no_key": {
+    "status": 428,
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+    "business_written": []
+   },
+   "rows_added_no_key": 0,
+   "same_key_first": {
+    "status": 201,
+    "business_written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "same_key_replay": {
+    "status": 201,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "same_key_other_body": {
+    "status": 409,
+    "error_code": "IDEMPOTENCY_CONFLICT",
+    "business_written": []
+   },
+   "rows_added_with_key": 1,
+   "ledger_rows_after_keyed_sequence": 0
+  }
+ ],
+ "sec_r1": [
+  {
+   "mode": "off",
+   "user": "technician",
+   "project": "P1",
+   "probe": "labor",
+   "status": 201,
+   "business_written": [
+    "op.labor_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.labor_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "technician",
+   "project": "P1",
+   "probe": "waste",
+   "status": 201,
+   "business_written": [
+    "op.material_waste_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.material_waste_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "technician",
+   "project": "P2",
+   "probe": "labor",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "technician",
+   "project": "P2",
+   "probe": "waste",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "requester",
+   "project": "P1",
+   "probe": "labor",
+   "status": 201,
+   "business_written": [
+    "op.labor_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.labor_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "requester",
+   "project": "P1",
+   "probe": "waste",
+   "status": 201,
+   "business_written": [
+    "op.material_waste_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.material_waste_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "requester",
+   "project": "P2",
+   "probe": "labor",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "user": "requester",
+   "project": "P2",
+   "probe": "waste",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "technician",
+   "project": "P1",
+   "probe": "labor",
+   "status": 201,
+   "business_written": [
+    "op.labor_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.labor_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "technician",
+   "project": "P1",
+   "probe": "waste",
+   "status": 201,
+   "business_written": [
+    "op.material_waste_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.material_waste_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "technician",
+   "project": "P2",
+   "probe": "labor",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "technician",
+   "project": "P2",
+   "probe": "waste",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "requester",
+   "project": "P1",
+   "probe": "labor",
+   "status": 201,
+   "business_written": [
+    "op.labor_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.labor_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "requester",
+   "project": "P1",
+   "probe": "waste",
+   "status": 201,
+   "business_written": [
+    "op.material_waste_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.material_waste_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "requester",
+   "project": "P2",
+   "probe": "labor",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "user": "requester",
+   "project": "P2",
+   "probe": "waste",
+   "status": 403,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "user": "technician",
+   "project": "P1",
+   "probe": "labor",
+   "status": 201,
+   "business_written": [
+    "op.labor_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.labor_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "user": "technician",
+   "project": "P1",
+   "probe": "waste",
+   "status": 201,
+   "business_written": [
+    "op.material_waste_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.material_waste_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "user": "technician",
+   "project": "P2",
+   "probe": "labor",
+   "status": 403,
+   "business_written": [],
+   "written": [
+    "op.audit_events"
+   ],
+   "error_code": "PERMISSION_DENIED"
+  },
+  {
+   "mode": "enforce",
+   "user": "technician",
+   "project": "P2",
+   "probe": "waste",
+   "status": 403,
+   "business_written": [],
+   "written": [
+    "op.audit_events"
+   ],
+   "error_code": "PERMISSION_DENIED"
+  },
+  {
+   "mode": "enforce",
+   "user": "requester",
+   "project": "P1",
+   "probe": "labor",
+   "status": 201,
+   "business_written": [
+    "op.labor_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.labor_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "user": "requester",
+   "project": "P1",
+   "probe": "waste",
+   "status": 201,
+   "business_written": [
+    "op.material_waste_entries"
+   ],
+   "written": [
+    "op.audit_idempotency",
+    "op.material_waste_entries"
+   ],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "user": "requester",
+   "project": "P2",
+   "probe": "labor",
+   "status": 403,
+   "business_written": [],
+   "written": [
+    "op.audit_events"
+   ],
+   "error_code": "PERMISSION_DENIED"
+  },
+  {
+   "mode": "enforce",
+   "user": "requester",
+   "project": "P2",
+   "probe": "waste",
+   "status": 403,
+   "business_written": [],
+   "written": [
+    "op.audit_events"
+   ],
+   "error_code": "PERMISSION_DENIED"
+  }
+ ],
+ "fg29_project_in_tenant": [
+  {
+   "mode": "off",
+   "probe": "labor",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "labor",
+   "project": "missing",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "PROJECT_REQUIRED"
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "waste",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "off",
+   "probe": "pm_put",
+   "project": "B's project",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "off",
+   "probe": "pm_put",
+   "project": "unknown",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "labor",
+   "project": "missing",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "PROJECT_REQUIRED"
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "waste",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "shadow",
+   "probe": "pm_put",
+   "project": "B's project",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "shadow",
+   "probe": "pm_put",
+   "project": "unknown",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "labor",
+   "project": "missing",
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "PROJECT_REQUIRED"
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "project": "B's project",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "waste",
+   "project": "unknown",
+   "status": 404,
+   "business_written": [],
+   "written": [],
+   "error_code": null
+  },
+  {
+   "mode": "enforce",
+   "probe": "pm_put",
+   "project": "B's project",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  },
+  {
+   "mode": "enforce",
+   "probe": "pm_put",
+   "project": "unknown",
+   "status": 404,
+   "written": [],
+   "business_written": []
+  }
+ ],
+ "fg15_labor_money": [
+  {
+   "mode": "off",
+   "user": "technician",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [],
+   "replay_money_keys": [],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "off",
+   "user": "accountant",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "replay_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "user": "technician",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [],
+   "replay_money_keys": [],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "shadow",
+   "user": "accountant",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "replay_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "user": "technician",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [],
+   "replay_money_keys": [],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  },
+  {
+   "mode": "enforce",
+   "user": "accountant",
+   "status": [
+    201,
+    201
+   ],
+   "response_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "replay_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ],
+   "stored_money_keys": [
+    "hourly_rate",
+    "labor_cost"
+   ]
+  }
+ ],
+ "f69_02_computed_routes": [
+  {
+   "mode": "off",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "off",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "off",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  },
+  {
+   "mode": "shadow",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "shadow",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "shadow",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  },
+  {
+   "mode": "enforce",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "enforce",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "enforce",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  }
+ ],
+ "f69_01_interrupted_payment_race": [
+  {
+   "mode": "off",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "0c5349ac-da4b-5779-8e07-ce016280c75f"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  },
+  {
+   "mode": "shadow",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "2cb03f73-1e1b-5d7c-9715-0a16de0cf51f"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  },
+  {
+   "mode": "enforce",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "b78e7d4a-b986-5426-bec3-139c026e633e"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  }
+ ],
+ "fg90_certified_cap": [
+  {
+   "mode": "off",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  },
+  {
+   "mode": "shadow",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  },
+  {
+   "mode": "enforce",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  }
+ ],
+ "fg105_many_payments": [
+  {
+   "mode": "off",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "shadow",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "enforce",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  }
+ ],
+ "f69_03_reserve_crash": [
+  {
+   "mode": "off",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  },
+  {
+   "mode": "shadow",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  },
+  {
+   "mode": "enforce",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  }
+ ],
+ "audit_crash_retry": [
+  {
+   "mode": "off",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  },
+  {
+   "mode": "shadow",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  },
+  {
+   "mode": "enforce",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  }
+ ],
+ "f69_04_subcent": [
+  {
+   "mode": "off",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     201
+    ],
+    "state": {
+     "committed": 0.0,
+     "paid": 0.02,
+     "completed_sum": 0.024,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     201
+    ],
+    "state": {
+     "committed": 0.0,
+     "paid": 0.05,
+     "completed_sum": 0.048,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.06,
+     "completed_sum": 0.058,
+     "certified": 0.01
+    }
+   }
+  },
+  {
+   "mode": "shadow",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     201
+    ],
+    "state": {
+     "committed": 0.0,
+     "paid": 0.02,
+     "completed_sum": 0.024,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     201
+    ],
+    "state": {
+     "committed": 0.0,
+     "paid": 0.05,
+     "completed_sum": 0.048,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.06,
+     "completed_sum": 0.058,
+     "certified": 0.01
+    }
+   }
+  },
+  {
+   "mode": "enforce",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.cash_transactions"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.bonus_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_transactions"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.overhead_snapshots"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "10.125": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "0.001": {
+      "status": 201,
+      "business_written": [
+       "op.finance_payments",
+       "op.subcontractor_packages",
+       "op.subcontractor_payments"
+      ]
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     201
+    ],
+    "state": {
+     "committed": 0.0,
+     "paid": 0.02,
+     "completed_sum": 0.024,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     201,
+     201,
+     201,
+     201,
+     201,
+     201
+    ],
+    "state": {
+     "committed": 0.0,
+     "paid": 0.05,
+     "completed_sum": 0.048,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.06,
+     "completed_sum": 0.058,
+     "certified": 0.01
+    }
+   }
+  }
+ ]
+}
