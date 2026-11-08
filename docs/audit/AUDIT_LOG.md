@@ -4934,3 +4934,21 @@ Minor (D-WHREV-01): R6, `reason` = "   " (blank) is accepted and stored, because
 Interaction with #81 (see WHFIX81): `service.py` conflicts, and #81's `_supplier_invoice_link` must skip reversed receipts.
 
 Audit hygiene: one #81 probe run overlapped the b82 batch on rs3, against my own rule. b82 shows no failed file, so no re-run was needed.
+
+### #81 `de0698d` gates: 2 more BLOCKING (WHFIX81-03, WHFIX81-04)
+
+| Gate | Result |
+|---|---|
+| wh_fix_01 | 35 |
+| warehouse canonical | 44 files / 1121, 0 bad |
+| PAY | 630 |
+| **W0** | **23 failed** (main's same 15 + 8 new) |
+| A2C / A1 guards | 0 / 0 |
+
+**WHFIX81-03 (FG-154): header-allocated invoices that have lines silently leave finance-by-project.** In `dashboard._finance_by_project_rows`, `with_lines.add(inv_id)` runs for every invoice that has any line, before the line's own allocations are checked. A header allocation is then never used, and the invoice is not reported in `unsplit_invoices` either. New W0 failures:
+- `test_w0_03e_a1_collision_matrix::test_a1_collision_matrix_over_http[off|shadow|enforce]`: A's `pr-x` is missing.
+- `test_w0_03e_r1_exports::test_finance_detail_drilldowns_name_only_tenant_a_records[×3]` and `::test_finance_drilldowns_keep_same_tenant_names_when_b_has_none`.
+
+**WHFIX81-04: stale A1 inventory.** `test_the_committed_inventory_is_the_generated_one` fails: generated 376 / FIXED 130, committed 377 / 131. The README references a `03_gates.txt` that is not committed.
+
+PR comment 6719287307 updated (four blocking findings). R0 and PM-01 still running.
