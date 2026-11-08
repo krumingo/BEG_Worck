@@ -5268,3 +5268,9 @@ INV84-01 resolved. Remaining minor note (non-blocking): the migration drops the 
 | **warehouse** | **1121 (44 files, 0 bad)** |
 
 SEC71-M1 resolved. No blocking finding remains.
+
+## 2026-11-08 14:56 UTC: main `0750d75` (merge of #71): verified
+
+- **Parents:** `8c52e92` + `021a078` (the audited head).
+- **Byte check:** the tree `74c823f` equals `git merge-tree --write-tree 8c52e92 021a078`.
+- **Next:** #81, #83 and #84 must merge main `0750d75` before their own merge; each such merge gets a full re-audit.
