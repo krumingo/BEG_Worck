@@ -54,6 +54,10 @@ LABOR_INDEXES = (
      {"unique": True, "partialFilterExpression": {"status": "approved"}, "name": "one_approved_per_line"}),
     ("labor_line_classifications", LINE_KEY,
      {"unique": True, "partialFilterExpression": {"status": "active"}, "name": "one_active_per_line"}),
+    # LAB-02-D (F-75-01): one history row per (tenant, package, version) — two concurrent
+    # piece-rate changes can never both become the same version
+    ("labor_terms_history", [("org_id", 1), ("package_id", 1), ("version", 1)],
+     {"unique": True, "name": "one_terms_version_per_package"}),
 )
 _indexed = set()
 
@@ -102,7 +106,7 @@ def _finite(value, what: str, minimum: float = 0.0) -> float:
 
 async def _audit(user: dict, *, action: str, entity_type: str, entity_id: str, version,
                  before: Optional[dict], after: Optional[dict], reason: str, endpoint: str,
-                 idempotency_key: Optional[str] = None):
+                 idempotency_key: Optional[str] = None, session=None):
     from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
     from app.audit.store import record_event
     event = build_event(
@@ -111,7 +115,19 @@ async def _audit(user: dict, *, action: str, entity_type: str, entity_id: str, v
         entity_type=entity_type, entity_id=entity_id, entity_version=str(version),
         structured_diff={"before": before, "after": after}, reason=reason,
         tool_or_endpoint=endpoint, idempotency_key=idempotency_key)
-    return await record_event(db, event)
+    return await record_event(db, event, session=session)
+
+
+async def _run_tx(body):
+    """LAB-02-D: ONE MongoDB transaction (auth_tx.run_in_transaction). A deployment without
+    transactions is refused (503, nothing written) — no non-transactional path. (The DB-free
+    tests replace this function explicitly: tests/test_lab_02_quantity_approval.py.)"""
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        return await run_in_transaction(db, body)
+    except TransactionsUnavailable:
+        raise HTTPException(status_code=503, detail=(
+            "Базата данни не поддържа транзакции — промяната не е изпълнена"))
 
 
 async def _idempotent(user: dict, key: Optional[str], action: str, payload: dict, perform, replay):
@@ -243,25 +259,51 @@ async def set_labor_terms(package_id: str, data: LaborTermsInput, user: dict = D
     org_id = user["org_id"]
 
     async def perform(key):
-        pkg = await tenant.execution_packages.find_one({"org_id": org_id, "id": package_id}, {"_id": 0})
-        if not pkg:
+        if not await tenant.execution_packages.find_one({"org_id": org_id, "id": package_id}, {"_id": 0, "id": 1}):
             raise HTTPException(status_code=404, detail="СМР пакетът не е намерен")
-        before = {"labor_pay_type": pkg.get("labor_pay_type"), "labor_piece_rate": pkg.get("labor_piece_rate")}
+        await ensure_labor_indexes(db)   # indexes cannot be created inside a transaction
         after = {"labor_pay_type": pay_type, "labor_piece_rate": rate}
-        version = int(pkg.get("labor_terms_version") or 0) + 1
-        now = _now()
-        hist = {"id": str(uuid.uuid4()), "org_id": org_id, "package_id": package_id,
-                "project_id": pkg.get("project_id"), "version": version, "before": before, "after": after,
-                "reason": data.reason, "changed_by": user["id"], "changed_at": now}
-        await tenant.labor_terms_history.insert_one(dict(hist))
-        await tenant.execution_packages.update_one(
-            {"org_id": org_id, "id": package_id},
-            {"$set": {**after, "labor_terms_version": version, "labor_terms_updated_at": now,
-                      "labor_terms_updated_by": user["id"]}})
-        await _audit(user, action="labor_terms.set", entity_type="execution_package", entity_id=package_id,
-                     version=version, before=before, after=after,
-                     reason=data.reason or "piece rate / pay type of the SMR (LAB-02)",
-                     endpoint="PUT /labor-terms/{id}", idempotency_key=key)
+
+        async def body(session):
+            # LAB-02-D (F-75-01): ONE transaction — read the committed terms, take version+1 by a
+            # compare-and-set on the package's current version, write the history row and the
+            # chained AuditEvent. The driver retries the body on a write conflict, so a
+            # concurrent change gets the NEXT version against the committed one (1, 2, … in the
+            # real order); a lost compare-and-set without a retry is 409, nothing written.
+            pkg = await tenant.execution_packages.find_one(
+                {"org_id": org_id, "id": package_id}, {"_id": 0}, session=session)
+            if not pkg:
+                raise HTTPException(status_code=404, detail="СМР пакетът не е намерен")
+            current = pkg.get("labor_terms_version")
+            before = {"labor_pay_type": pkg.get("labor_pay_type"), "labor_piece_rate": pkg.get("labor_piece_rate")}
+            version = int(current or 0) + 1
+            now = _now()
+            version_filter = ({"labor_terms_version": current} if current
+                              else {"labor_terms_version": {"$in": [None, 0]}})
+            res = await tenant.execution_packages.update_one(
+                {"org_id": org_id, "id": package_id, **version_filter},
+                {"$set": {**after, "labor_terms_version": version, "labor_terms_updated_at": now,
+                          "labor_terms_updated_by": user["id"]}}, session=session)
+            if not getattr(res, "modified_count", 0):
+                raise HTTPException(status_code=409, detail=(
+                    "Акордната цена току-що беше променена от друг човек — презаредете и опитайте пак"))
+            hist = {"id": str(uuid.uuid4()), "org_id": org_id, "package_id": package_id,
+                    "project_id": pkg.get("project_id"), "version": version, "before": before, "after": after,
+                    "reason": data.reason, "changed_by": user["id"], "changed_at": now}
+            try:
+                await tenant.labor_terms_history.insert_one(dict(hist), session=session)
+            except Exception as exc:
+                if type(exc).__name__ == "DuplicateKeyError" or "duplicate key" in str(exc).lower():
+                    raise HTTPException(status_code=409, detail=(
+                        "Акордната цена току-що беше променена от друг човек — презаредете и опитайте пак"))
+                raise
+            await _audit(user, action="labor_terms.set", entity_type="execution_package", entity_id=package_id,
+                         version=version, before=before, after=after,
+                         reason=data.reason or "piece rate / pay type of the SMR (LAB-02)",
+                         endpoint="PUT /labor-terms/{id}", idempotency_key=key, session=session)
+            return version
+
+        version = await _run_tx(body)
         out = await tenant.execution_packages.find_one({"org_id": org_id, "id": package_id}, {"_id": 0})
         return out, f"{package_id}:{version}"
 

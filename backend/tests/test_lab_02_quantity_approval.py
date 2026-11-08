@@ -121,6 +121,17 @@ class _Db:
             self.client.close()
 
 
+def _mongomock_has_no_transactions(monkeypatch):
+    """EXPLICIT, test backend only: mongomock cannot run MongoDB transactions, so the DB-free
+    runs execute the transaction body without a session. Production refuses that (503) — see
+    test_f75_01_without_transactions_the_piece_rate_is_refused_and_writes_nothing."""
+    from app.routes import labor_quantities
+
+    async def no_tx(body):
+        return await body(None)
+    monkeypatch.setattr(labor_quantities, "_run_tx", no_tx, raising=False)
+
+
 def run(monkeypatch, scenario, backend="mongomock", mode="off"):
     import httpx
 
@@ -128,6 +139,8 @@ def run(monkeypatch, scenario, backend="mongomock", mode="off"):
         async with _Db(backend) as op:
             await _seed(op)
             app = _app(monkeypatch, op, mode)
+            if backend == "mongomock":
+                _mongomock_has_no_transactions(monkeypatch)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://lab02",
                                          event_hooks=EVENT_HOOKS) as c:
                 return await scenario(c, op)
@@ -534,4 +547,66 @@ def test_fg101_a_correction_of_a_line_without_an_active_approval_is_409(monkeypa
             "execution_package_id": "pkg-sh", "replaces_approval_id": "gone"}, headers=H("sm"))
         assert r.status_code == 409, r.text
         assert await op.labor_quantity_approvals.count_documents({}) == 0
+    run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════ LAB-02-D (Codex F-75-01)
+@pytest.mark.parametrize("mode", ["off", "shadow", "enforce"])
+def test_f75_01_ten_concurrent_piece_rate_changes_get_versions_in_order(monkeypatch, backend, mode):
+    """10 concurrent PUT /labor-terms with DIFFERENT keys on a package without a version:
+    every success gets its own version 1..k in the real order (history, package and AuditEvent
+    agree; each before = the previous after), any other answer is 409 with nothing written;
+    an approved quantity's rate snapshot is untouched."""
+    async def scenario(c, op):
+        await op.labor_quantity_approvals.insert_one({
+            "id": "snap", "org_id": ORG, "report_id": "R-AK", "entry_id": None, "report_version": 0,
+            "status": "approved", "approved_quantity": 120, "piece_rate": 3, "labor_pay_type": "Akord",
+            "labor_terms_version": 0})
+        whos = ("acct", "admin", "owner")
+        rs = await asyncio.gather(*[
+            c.put("/api/labor-terms/pkg-sh", json={"labor_pay_type": "Akord", "labor_piece_rate": r, "reason": "x"},
+                  headers=H(whos[r % 3])) for r in range(1, 11)])
+        codes = [r.status_code for r in rs]
+        assert set(codes) <= {200, 409}, [r.text for r in rs]
+        k = codes.count(200)
+        assert k >= 1
+        hist = await op.labor_terms_history.find({"package_id": "pkg-sh"}, {"_id": 0}).sort("version", 1).to_list(50)
+        assert [h["version"] for h in hist] == list(range(1, k + 1)), hist
+        assert hist[0]["before"] == {"labor_pay_type": None, "labor_piece_rate": None}
+        for prev, cur in zip(hist, hist[1:]):
+            assert cur["before"] == prev["after"], (prev, cur)
+        pkg = await op.execution_packages.find_one({"id": "pkg-sh"})
+        assert pkg["labor_terms_version"] == k and pkg["labor_piece_rate"] == hist[-1]["after"]["labor_piece_rate"]
+        ev = [e async for e in op.audit_events.find({"action": "labor_terms.set", "entity_id": "pkg-sh"})]
+        assert sorted(int(e["entity_version"]) for e in ev) == list(range(1, k + 1))
+        assert {r.json()["labor_terms_version"] for r in rs if r.status_code == 200} == set(range(1, k + 1))
+        snap = await op.labor_quantity_approvals.find_one({"id": "snap"})
+        assert (snap["piece_rate"], snap["labor_terms_version"], snap["status"]) == (3, 0, "approved")
+        assert "one_terms_version_per_package" in (await op.labor_terms_history.index_information())
+    run(monkeypatch, scenario, backend, mode)
+
+
+def test_f75_01_a_second_history_row_of_the_same_version_is_refused(monkeypatch, backend):
+    async def scenario(c, op):
+        from app.routes.labor_quantities import ensure_labor_indexes
+        await ensure_labor_indexes(op)
+        await op.labor_terms_history.insert_one({"id": "h1", "org_id": ORG, "package_id": "pkg-sh", "version": 1})
+        with pytest.raises(Exception) as ex:
+            await op.labor_terms_history.insert_one({"id": "h2", "org_id": ORG, "package_id": "pkg-sh", "version": 1})
+        assert "duplicate" in str(ex.value).lower() or type(ex.value).__name__ == "DuplicateKeyError"
+    run(monkeypatch, scenario, backend)
+
+
+def test_f75_01_without_transactions_the_piece_rate_is_refused_and_writes_nothing(monkeypatch):
+    """the production runner on a backend without transactions (mongomock): 503, nothing written."""
+    async def scenario(c, op):
+        from app.routes import labor_quantities
+        monkeypatch.setattr(labor_quantities, "_run_tx", production_run_tx)
+        r = await _set_rate(c)
+        assert r.status_code == 503, r.text
+        assert await op.labor_terms_history.count_documents({}) == 0
+        assert (await op.execution_packages.find_one({"id": "pkg-sh"})).get("labor_terms_version") is None
+        assert await op.audit_events.count_documents({"action": "labor_terms.set"}) == 0
+    from app.routes import labor_quantities as _lq
+    production_run_tx = _lq._run_tx
     run(monkeypatch, scenario)
