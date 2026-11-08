@@ -54,7 +54,7 @@
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | projects | get(id = proj_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_subcontractor_documents | GET /finance/subcontractor-documents | subcontractor_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:create_invoice | POST /finance/invoices | invoices | insert_one(invoice) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:create_invoice | POST /finance/invoices | invoices | insert_one(dict(invoice)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | projects | get(id = invoice['project_id']) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | finance_payments | get(id = alloc.get('payment_id')) | TenantData org_id (session) | BARE@base | FIXED |
@@ -66,6 +66,7 @@
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoice_versions | count(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoice_versions | insert_one(id, invoice_id, version_no, snapshot, edited_by, edited_by_n) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:_stamp_and_refresh | (helper) | invoices | find_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:update_invoice_lines | PUT /finance/invoices/{invoice_id}/lines | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice_lines | PUT /finance/invoices/{invoice_id}/lines | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:send_invoice | POST /finance/invoices/{invoice_id}/send | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
@@ -391,4 +392,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 376 accesses — FIXED 130, SAFE 246
+Totals: 377 accesses — FIXED 130, SAFE 247

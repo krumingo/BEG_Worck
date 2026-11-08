@@ -1195,3 +1195,27 @@ async def canonical_movement_lines(tenant, org_id: str, *, since_iso: Optional[s
                     "lines": [{"material_name": names.get(r.get("item_id")) or r.get("item_id") or "",
                                "unit": r.get("unit") or "", field: qty}]})
     return out
+
+
+async def canonical_trail_index(tenant, org_id: str, project_id: str) -> Dict[str, Dict[str, dict]]:
+    """FG-202 — the canonical trail keyed by ITEM_ID (``by_item``); rows with
+    no item id (none from the canonical writer) fall back to the name."""
+    by_item: Dict[str, dict] = {}
+    by_name: Dict[str, dict] = {}
+    for c in (await canonical_project_trail(tenant, org_id, project_id)).values():
+        if c.get("item_id"):
+            by_item[c["item_id"]] = c
+        else:
+            by_name[c.get("material_name") or ""] = c
+    return {"by_item": by_item, "by_name": by_name}
+
+
+def canonical_qty(index: Dict[str, Dict[str, dict]], item_id: Optional[str], name: str,
+                  key: str) -> float:
+    """The canonical quantity of one planned material: joined by its item_id;
+    only a planned row WITHOUT an item id is joined by name (FG-202)."""
+    if item_id:
+        row = index["by_item"].get(item_id)
+    else:
+        row = index["by_name"].get(name)
+    return float((row or {}).get(key) or 0)

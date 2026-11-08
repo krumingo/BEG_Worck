@@ -338,11 +338,10 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
         for wl in wt.get("lines", []):
             name = wl.get("material_name", "")
             issued_by_name[name] = issued_by_name.get(name, 0) + float(wl.get("qty_issued", 0))
-    # WH-FIX-01 (FG-190): canonical issues (accepted on / delivered into the
-    # project, Р17) through the shared helper — canonical rows carry no `type`.
-    from app.services.canonical_material_cost import canonical_trail_by_name
-    for name, c in (await canonical_trail_by_name(tenant, org_id, project_id)).items():
-        issued_by_name[name] = issued_by_name.get(name, 0) + c["issued_to_project"]
+    # WH-FIX-01 (FG-190 / FG-202): canonical issues (accepted on / delivered
+    # into the project, Р17) joined to each planned row by its ITEM_ID.
+    from app.services.canonical_material_cost import canonical_qty, canonical_trail_index
+    canon = await canonical_trail_index(tenant, org_id, project_id)
 
     for pm in planned:
         name = pm.get("material_name", "")
@@ -352,7 +351,8 @@ async def get_procurement_alerts(project_id: str, user: dict = Depends(require_m
 
         req_qty = requested_by_name.get(name, 0)
         pur_qty = purchased_by_name.get(name, 0)
-        iss_qty = issued_by_name.get(name, 0)
+        iss_qty = issued_by_name.get(name, 0) + canonical_qty(
+            canon, pm.get("item_id"), name, "issued_to_project")
 
         # Not requested
         if req_qty == 0:

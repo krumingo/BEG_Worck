@@ -194,6 +194,13 @@ async def _apply_header(tenant: TenantData, user: dict, invoice_id: str, session
         await apply_header_destination(tenant, user, invoice, session=session)
 
 
+async def _refresh_dq(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
+    """FG-201: the DQ issue / alarm of the invoice are opened / resolved by the
+    WRITE (AuditEvent, same transaction) — the list GET never writes."""
+    from app.services.invoice_allocation import refresh_invoice_dq
+    await refresh_invoice_dq(tenant, invoice_id, actor=user, session=session)
+
+
 async def get_org_require_full_allocation(tenant: TenantData) -> bool:
     """Get THIS tenant's requireFullAllocation setting (its own organization row)."""
     org = await tenant.own_organization({"_id": 0, "require_full_allocation": 1})
@@ -456,6 +463,7 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
         await tenant.invoice_lines.insert_one(dict(line), session=session)
         await _apply_header(tenant, user, data.invoice_id, session)
         await recalculate_invoice_totals(tenant, data.invoice_id, session=session)
+        await _refresh_dq(tenant, user, data.invoice_id, session)
     from app.audit.store import ensure_chain_index
     await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
@@ -546,6 +554,7 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
                                                    session=session)
             await _apply_header(tenant, user, invoice_id, session)
             await recalculate_invoice_totals(tenant, invoice_id, session=session)
+            await _refresh_dq(tenant, user, invoice_id, session)
         from app.audit.store import ensure_chain_index
         await ensure_chain_index(tenant._db)
         await run_transaction(tenant, _body)
@@ -653,6 +662,7 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
             await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},
                                                   session=session)
             await recalculate_invoice_totals(tenant, line["invoice_id"], session=session)
+            await _refresh_dq(tenant, user, line["invoice_id"], session)
         # FG-109 / FG-124: the costing inputs are refused (409) on a linked
         # line; vat_percent alone is not costing but still derives totals.
         from app.audit.store import ensure_chain_index
@@ -746,6 +756,7 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
             "is_fully_allocated": abs(total_allocated - qty_purchased) <= 0.0001,
             "updated_at": now,
         }}, session=session)
+        await _refresh_dq(tenant, user, line["invoice_id"], session)
     from app.audit.store import ensure_chain_index
     await ensure_chain_index(tenant._db)     # WH-FIX-01 A2 #4: record_event runs in the tx
     await _unless_linked(tenant, line_id, _write)                # FG-109
@@ -785,6 +796,9 @@ async def delete_invoice_line(line_id: str, user: dict = Depends(require_m5)):
                             code=NOT_DRAFT)
         await tenant.invoice_lines.delete_one({"id": line_id}, session=session)
         await recalculate_invoice_totals(tenant, invoice_id, session=session)
+        await _refresh_dq(tenant, user, invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await _unless_linked(tenant, line_id, _write)    # FG-109: a linked line is never deleted
     
     return {"ok": True}

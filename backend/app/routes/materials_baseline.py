@@ -219,12 +219,10 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
                 issued_by_name[name] = issued_by_name.get(name, 0) + float(wl.get("qty_issued", 0))
             elif wt["type"] == "return":
                 returned_by_name[name] = returned_by_name.get(name, 0) + float(wl.get("qty_returned", 0))
-    # WH-FIX-01 (FG-190): the canonical ledger through the shared helper —
-    # canonical rows carry `action`, not the legacy `type` + `lines` above.
-    from app.services.canonical_material_cost import canonical_trail_by_name
-    for name, c in (await canonical_trail_by_name(tenant, org_id, project_id)).items():
-        issued_by_name[name] = issued_by_name.get(name, 0) + c["issued_to_project"]
-        returned_by_name[name] = returned_by_name.get(name, 0) + c["returned"]
+    # WH-FIX-01 (FG-190 / FG-202): the canonical ledger through the shared
+    # helper, joined to each planned row by its ITEM_ID (below).
+    from app.services.canonical_material_cost import canonical_qty, canonical_trail_index
+    canon = await canonical_trail_index(tenant, org_id, project_id)
 
     # Load consumption
     consumptions = await tenant.project_material_ops.find(
@@ -237,8 +235,6 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
         for cl in co.get("lines", []):
             name = cl.get("material_name", "")
             consumed_by_name[name] = consumed_by_name.get(name, 0) + float(cl.get("qty_consumed", 0))
-    for name, c in (await canonical_trail_by_name(tenant, org_id, project_id)).items():
-        consumed_by_name[name] = consumed_by_name.get(name, 0) + c["consumed"]   # WH-FIX-01 FG-190
 
     # Enrich planned rows
     enriched = []
@@ -251,9 +247,11 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
         req_qty = round(requested_by_name.get(name, 0), 2)
         pur_qty = round(purchased_by_name.get(name, 0), 2)
         stk_qty = round(stocked_by_name.get(name, 0), 2)
-        iss_qty = round(issued_by_name.get(name, 0), 2)
-        ret_qty = round(returned_by_name.get(name, 0), 2)
-        con_qty = round(consumed_by_name.get(name, 0), 2)
+        iid = pm.get("item_id")
+        iss_qty = round(issued_by_name.get(name, 0)
+                        + canonical_qty(canon, iid, name, "issued_to_project"), 2)
+        ret_qty = round(returned_by_name.get(name, 0) + canonical_qty(canon, iid, name, "returned"), 2)
+        con_qty = round(consumed_by_name.get(name, 0) + canonical_qty(canon, iid, name, "consumed"), 2)
 
         remaining_to_request = round(max(0, planned_qty - req_qty), 2)
         remaining_to_purchase = round(max(0, req_qty - pur_qty), 2)

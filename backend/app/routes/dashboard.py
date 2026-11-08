@@ -733,6 +733,13 @@ async def get_finance_by_project(
     }
 
 
+def _f_or_none(v):
+    try:
+        return None if v in (None, "") else float(v)
+    except (TypeError, ValueError):
+        return None
+
+
 def _line_amount(line: dict) -> float:
     """A line's amount incl. VAT (stored total, else ex VAT + VAT)."""
     if line.get("line_total_inc_vat") is not None:
@@ -755,7 +762,7 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
     async for inv in tenant.invoices.find(
             {"org_id": org_id, "issue_date": {"$gte": date_from, "$lte": date_to}},
             {"_id": 0, "id": 1, "direction": 1, "total": 1, "allocations": 1,
-             "invoice_no": 1, "status": 1}):
+             "invoice_no": 1, "status": 1, "project_id": 1, "lines": 1, "vat_percent": 1}):
         invoices[inv["id"]] = inv
     agg: dict = {}
     unsplit = []
@@ -777,6 +784,7 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
     from app.services.invoice_allocation import (
         ALLOCATED, header_destinations, invoice_final_state,
     )
+    with_line_docs = set()
     if invoices:
         async for line in tenant.invoice_lines.find(
                 {"org_id": org_id, "invoice_id": {"$in": list(invoices)}},
@@ -786,6 +794,7 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
             inv = invoices.get(line.get("invoice_id"))
             if inv is None:
                 continue
+            with_line_docs.add(inv["id"])
             amount = _line_amount(line)
             qty = line.get("qty")
             qty = float(qty) if qty not in (None, "") else None
@@ -796,6 +805,26 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
                     share = min(a["qty"], qty) / qty
                 else:
                     share = 1.0
+                _add(a["ref_id"], inv, amount * share)
+    # FG-200: an invoice of the finance UI keeps its lines EMBEDDED — the same
+    # per-line rule on them (a line's `allocations[]`, or its `project_id`).
+    from app.services.invoice_allocation import embedded_as_line
+    for inv in invoices.values():
+        if inv["id"] in with_line_docs:
+            continue
+        vat = float(inv.get("vat_percent") or 0)
+        for el in inv.get("lines") or []:
+            if not isinstance(el, dict):
+                continue
+            line = embedded_as_line(el)
+            ex = float(el.get("line_total") if el.get("line_total") is not None
+                       else float(el.get("qty") or 0) * float(el.get("unit_price") or 0))
+            amount = ex * (1 + vat / 100)
+            qty = _f_or_none(line.get("qty"))
+            for a in effective_allocations(line):
+                if a["type"] != "project" or not a["ref_id"]:
+                    continue
+                share = (min(a["qty"], qty) / qty) if (a["qty"] is not None and qty) else 1.0
                 _add(a["ref_id"], inv, amount * share)
     for inv in invoices.values():
         if inv.get("direction") != "Received" and not header_destinations(inv):

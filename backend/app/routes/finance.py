@@ -880,8 +880,12 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
             "unit": line.unit,
             "qty": line.qty,
             "unit_price": line.unit_price,
+            # FG-200: the line's own destination is kept (it was dropped).
+            "project_id": getattr(line, "project_id", None),
             "sort_order": i,
         }
+        if not l["project_id"]:
+            l.pop("project_id")
         lines.append(compute_invoice_line(l))
     
     invoice = {
@@ -913,7 +917,25 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     invoice = compute_invoice_totals(invoice)
     invoice["remaining_amount"] = invoice["total"]
     
-    await _tenant(user).invoices.insert_one(invoice)
+    # FG-200 / A4 #9 (Р45): ONE header destination of a supplier invoice is
+    # written on every embedded line (AuditEvent per line), and its DQ issue
+    # (FG-201) is opened when it is pending — one transaction with the insert.
+    from app.audit.store import ensure_chain_index
+    from app.services.invoice_allocation import (
+        audit_allocation_change, refresh_invoice_dq, stamp_embedded_lines,
+    )
+    tenant = _tenant(user)
+    stamped = stamp_embedded_lines(invoice) if invoice.get("direction") == "Received" else []
+    await ensure_chain_index(tenant._db)
+
+    async def _create(session):
+        await tenant.invoices.insert_one(dict(invoice), session=session)
+        for ch in stamped:
+            await audit_allocation_change(tenant, user, ch["line_id"], ch["before"], ch["after"],
+                                          session=session,
+                                          reason="Р45: заглавната дестинация е записана на реда")
+        await refresh_invoice_dq(tenant, invoice["id"], actor=user, session=session)
+    await run_transaction(tenant, _create)
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
                     {"invoice_no": data.invoice_no, "direction": data.direction})
     
@@ -1043,9 +1065,26 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             }}, session=session)
             # Recalculate status
             await update_invoice_status(tenant, invoice_id, session=session)
+        await _stamp_and_refresh(tenant, user, invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
+
+
+async def _stamp_and_refresh(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
+    """FG-200 / FG-201 (A4 #9, Р45): after a write of a supplier invoice's
+    header or embedded lines — its ONE header destination on every embedded
+    line without one (AuditEvent per line), then its DQ issue opened / resolved
+    (AuditEvent), all in the caller's transaction."""
+    from app.services.invoice_allocation import apply_header_destination, refresh_invoice_dq
+    inv = await tenant.invoices.find_one({"id": invoice_id},
+                                         {"_id": 0, "id": 1, "direction": 1, "allocations": 1,
+                                          "project_id": 1}, session=session)
+    if inv and inv.get("direction") == "Received":
+        await apply_header_destination(tenant, user, inv, session=session)
+    await refresh_invoice_dq(tenant, invoice_id, actor=user, session=session)
 
 
 @router.put("/finance/invoices/{invoice_id}/lines")
@@ -1102,6 +1141,9 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
         }}, session=session)
         # Recalculate status after total changes
         await update_invoice_status(tenant, invoice_id, session=session)
+        await _stamp_and_refresh(tenant, user, invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})

@@ -32,7 +32,7 @@ async def _seed_supplier_invoice(op, allocated=60):
         "kind": "Invoice", "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31",
         "currency": "EUR", "subtotal": 1000.0, "vat_percent": 20, "vat_amount": 200.0,
         "total": 1200.0, "paid_amount": 0, "remaining_amount": 1200.0,
-        "counterparty_name": "Доставчик"})
+        "counterparty_name": "Доставчик", "created_at": "2026-11-08T09:00:00+00:00"})
     await op.invoice_lines.insert_one({
         "id": LINE, "org_id": ORG_A, "invoice_id": INV, "line_no": 1, "description": "Лепило",
         "unit": "bag", "qty": 100, "unit_price": 10, "vat_percent": 20,
@@ -107,8 +107,24 @@ def test_r44_issued_invoices_are_not_affected(monkeypatch, backend, mode):
 
 def test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes(monkeypatch, backend, mode):
     async def scenario(c, op):
+        # FG-201: the DQ issue / alarm are opened by a WRITE (with an AuditEvent)
+        r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
+            "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 60}]})
+        assert r.status_code == 200, r.text
+        assert r.json()["allocation_status"] == "pending_allocation"
+        assert await op.dq_issues.count_documents({"entity_id": INV, "status": "open"}) == 1
+        assert await op.audit_events.count_documents(
+            {"action": "dq.invoice_allocation.opened"}) == 1
+        [alarm] = await op.alarm_events.find({"context.entity_id": INV}).to_list(None)
+        assert alarm["status"] == "active" and alarm["rule_id"] == "INVOICE_NOT_FULLY_ALLOCATED"
+        # … and the list GET writes NOTHING (FG-201)
+        before = await snap(op, ("dq_issues", "alarm_events", "audit_events", "invoices",
+                                 "invoice_lines"))
         r = await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
         assert r.status_code == 200, r.text
+        await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
+        assert await snap(op, ("dq_issues", "alarm_events", "audit_events", "invoices",
+                               "invoice_lines")) == before
         [inv] = r.json()["invoices"]
         assert inv["id"] == INV and inv["allocation_status"] == "pending_allocation"
         [line] = inv["pending_lines"]
@@ -116,27 +132,24 @@ def test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes(monkeyp
         issue = inv["dq_issue"]
         assert issue["owner_role"] == "accountant" and issue["deadline_days"] == 3
         assert issue["escalated"] is False and issue["status"] == "open"
-        # read again → still ONE issue and ONE alarm (deduplicated)
-        await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
-        assert await op.dq_issues.count_documents({"entity_id": INV}) == 1
-        [alarm] = await op.alarm_events.find({"context.entity_id": INV}).to_list(None)
-        assert alarm["status"] == "active" and alarm["rule_id"] == "INVOICE_NOT_FULLY_ALLOCATED"
         # P&L(P): only the allocated 60 × 10
         from app.services.canonical_material_cost import project_material_cost
         cost = await project_material_cost(_tenant(op), ORG_A, "prj-1")
         assert cost["invoice_cost"] == 600.0
-        # allocate the remaining 40 (a correction with a canonical AuditEvent)
+        # allocate the remaining 40 → the write resolves issue + alarm (AuditEvent)
         r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
             "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 60},
                             {"type": "project", "ref_id": "prj-a", "qty": 40}]})
         assert r.status_code == 200, r.text
         assert r.json()["allocation_status"] == "allocated"
         assert await op.audit_events.count_documents(
-            {"action": "finance.invoice_line.allocation_corrected", "entity_id": LINE}) == 1
-        r = await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
-        assert r.json()["count"] == 0
+            {"action": "finance.invoice_line.allocation_corrected", "entity_id": LINE}) == 2
         assert (await op.dq_issues.find_one({"entity_id": INV}))["status"] == "resolved"
         assert (await op.alarm_events.find_one({"context.entity_id": INV}))["status"] == "resolved"
+        assert await op.audit_events.count_documents(
+            {"action": "dq.invoice_allocation.resolved"}) == 1
+        r = await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))
+        assert r.json()["count"] == 0
         r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
                          json={"amount": 100.0, "method": "BankTransfer", "account_id": h.BANK_A})
         assert r.status_code == 201, r.text
@@ -155,12 +168,15 @@ def test_a2_pending_list_is_for_finance_roles_only(monkeypatch, backend, mode, w
 
 @pytest.mark.parametrize("setting,days", [(None, 3), (5, 5)])
 def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mode, setting, days):
+    """A3 #7 + FG-201: the escalation is COMPUTED when read (opened + deadline
+    < now → Owner); the read writes nothing."""
     async def scenario(c, op):
         from app.services.invoice_allocation import invoices_to_allocate
         if setting is not None:
             await op.organizations.update_one({"id": ORG_A},
                                               {"$set": {"allocation_dq_deadline_days": setting}})
-        t0 = datetime(2026, 11, 8, 9, 0, tzinfo=timezone.utc)
+        t0 = datetime(2026, 11, 8, 9, 0, tzinfo=timezone.utc)      # the invoice's created_at
+        before = await snap(op, ("dq_issues", "alarm_events", "audit_events"))
         [inv] = await invoices_to_allocate(_tenant(op), ORG_A, now=t0)
         issue = inv["dq_issue"]
         assert issue["due_at"] == (t0 + timedelta(days=days)).isoformat()
@@ -168,9 +184,63 @@ def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mo
         [inv] = await invoices_to_allocate(_tenant(op), ORG_A, now=t0 + timedelta(days=days, hours=1))
         issue = inv["dq_issue"]
         assert issue["escalated"] is True and issue["escalated_to_role"] == "owner"
-        assert issue["severity"] == "high" and issue["opened_at"] == t0.isoformat()
-        alarm = await op.alarm_events.find_one({"context.entity_id": INV})
-        assert alarm["severity"] == "critical" and alarm["context"]["escalated_to_role"] == "owner"
+        assert issue["severity"] == "high" and issue["owner_role"] == "accountant"
+        assert await snap(op, ("dq_issues", "alarm_events", "audit_events")) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ───────────────── FG-200 — finance UI invoices (embedded lines) ─────────────────
+
+def _ui_invoice(project_id=None):
+    body = {"direction": "Received", "invoice_no": "UI-1", "issue_date": "2026-11-05",
+            "due_date": "2099-12-31", "counterparty_name": "Доставчик", "currency": "EUR",
+            "vat_percent": 20, "lines": [{"description": "Пясък", "unit": "t", "qty": 4,
+                                          "unit_price": 25}]}
+    if project_id:
+        body["project_id"] = project_id
+    return body
+
+
+def test_fg200_ui_invoice_with_one_header_project_is_stamped_and_payable(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=_ui_invoice("prj-1"))
+        assert r.status_code == 201, r.text
+        inv_id = r.json()["id"]
+        doc = await op.invoices.find_one({"id": inv_id})
+        [line] = doc["lines"]
+        assert [(a["type"], a["ref_id"], a["qty"]) for a in line["allocations"]] == [("project", "prj-1", 4)]
+        assert await op.audit_events.count_documents(
+            {"action": "finance.invoice_line.allocation_corrected", "entity_id": line["id"]}) == 1
+        assert await op.dq_issues.count_documents({"entity_id": inv_id}) == 0
+        assert (await c.post(f"/api/finance/invoices/{inv_id}/send", headers=hdr("acct-a"))).status_code == 200
+        r = await c.post(f"/api/finance/invoices/{inv_id}/payments", headers=hdr("acct-a"),
+                         json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 201, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg200_ui_invoice_without_destination_is_pending_and_not_payable(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=_ui_invoice())
+        assert r.status_code == 201, r.text
+        inv_id = r.json()["id"]
+        assert await op.dq_issues.count_documents({"entity_id": inv_id, "status": "open"}) == 1
+        assert await op.audit_events.count_documents({"action": "dq.invoice_allocation.opened"}) == 1
+        assert (await c.post(f"/api/finance/invoices/{inv_id}/send", headers=hdr("acct-a"))).status_code == 200
+        r = await c.post(f"/api/finance/invoices/{inv_id}/payments", headers=hdr("acct-a"),
+                         json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "INVOICE_NOT_FULLY_ALLOCATED"
+        listed = (await c.get("/api/invoice-lines/invoices-to-allocate", headers=hdr("acct-a"))).json()
+        assert inv_id in {i["id"] for i in listed["invoices"]}
+        # a line destination given in the UI makes it final
+        r = await c.put(f"/api/finance/invoices/{inv_id}/lines", headers=hdr("acct-a"), json={
+            "lines": [{"description": "Пясък", "unit": "t", "qty": 4, "unit_price": 25,
+                       "project_id": "prj-1"}]})
+        assert r.status_code == 200, r.text
+        assert (await op.dq_issues.find_one({"entity_id": inv_id}))["status"] == "resolved"
+        r = await c.post(f"/api/finance/invoices/{inv_id}/payments", headers=hdr("acct-a"),
+                         json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 201, r.text
     run(monkeypatch, backend, mode, scenario)
 
 

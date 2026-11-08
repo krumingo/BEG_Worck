@@ -94,8 +94,34 @@ async def invoice_allocation_state(tenant, invoice_id: str, *, session=None) -> 
                             "qty": st["qty"], "allocated_qty": st["allocated"],
                             "unallocated_qty": st["unallocated"],
                             "allocations": line.get("allocations") or []})
+    if count == 0:
+        # FG-200: an invoice made in the finance UI keeps its lines EMBEDDED
+        # (`invoices.lines[]`); a line's destination there is its
+        # `allocations[]` or its `project_id` (the whole line).
+        inv = await tenant.invoices.find_one({"id": invoice_id}, {"_id": 0, "lines": 1},
+                                             session=session)
+        for i, el in enumerate((inv or {}).get("lines") or []):
+            if not isinstance(el, dict):
+                continue
+            count += 1
+            st = line_allocation_state(embedded_as_line(el))
+            if st["status"] != ALLOCATED:
+                pending.append({"line_id": el.get("id") or f"embedded-{i}", "embedded": True,
+                                "line_no": el.get("sort_order", i), "description": el.get("description"),
+                                "unit": el.get("unit"), "qty": st["qty"],
+                                "allocated_qty": st["allocated"],
+                                "unallocated_qty": st["unallocated"],
+                                "allocations": el.get("allocations") or []})
     return {"status": PENDING if pending else ALLOCATED, "pending_lines": pending,
             "line_count": count}
+
+
+def embedded_as_line(el: dict) -> dict:
+    """An embedded invoice line read with the invoice-line rule."""
+    allocs = el.get("allocations") or []
+    if not allocs and el.get("project_id"):
+        allocs = [{"type": "project", "ref_id": el["project_id"], "qty": None}]
+    return {"qty": el.get("qty"), "allocations": allocs}
 
 
 def is_supplier_invoice(invoice: Optional[dict]) -> bool:
@@ -111,8 +137,35 @@ HEADER_NOTE = "от заглавието на фактурата (Р45)"
 
 
 def header_destinations(invoice: Optional[dict]) -> List[dict]:
-    return [a for a in ((invoice or {}).get("allocations") or [])
-            if isinstance(a, dict) and a.get("type") and (a.get("ref_id") or a.get("refId"))]
+    """The header's destinations: ``allocations[]``; for a SUPPLIER invoice
+    without it, its header ``project_id`` (FG-200 — the finance UI's one
+    destination field) counts as one header destination."""
+    inv = invoice or {}
+    dests = [a for a in (inv.get("allocations") or [])
+             if isinstance(a, dict) and a.get("type") and (a.get("ref_id") or a.get("refId"))]
+    if not dests and inv.get("direction") == "Received" and inv.get("project_id"):
+        dests = [{"type": "project", "ref_id": inv["project_id"]}]
+    return dests
+
+
+def stamp_embedded_lines(invoice: dict) -> List[dict]:
+    """FG-200 / A4 #9 — write the ONE header destination on every embedded
+    line that has none (in place); returns [{line_id, before, after}] for the
+    AuditEvents the caller records in the same transaction."""
+    dest = single_header_destination(invoice)
+    if dest is None:
+        return []
+    changes = []
+    for el in invoice.get("lines") or []:
+        if not isinstance(el, dict) or el.get("allocations") or el.get("project_id"):
+            continue
+        after = [{"type": dest["type"], "ref_id": dest["ref_id"], "qty": el.get("qty"),
+                  "note": HEADER_NOTE}]
+        el["allocations"] = after
+        if dest["type"] == "project":
+            el["project_id"] = dest["ref_id"]
+        changes.append({"line_id": el.get("id"), "before": [], "after": after})
+    return changes
 
 
 def single_header_destination(invoice: Optional[dict]) -> Optional[dict]:
@@ -143,6 +196,23 @@ async def apply_header_destination(tenant, user: dict, invoice: dict, *, session
     if dest is None:
         return 0
     written = 0
+    if not await tenant.invoice_lines.find_one({"invoice_id": invoice["id"]}, {"_id": 0, "id": 1},
+                                               session=session):
+        # FG-200: embedded lines (finance UI invoice) — stamped in the document.
+        doc = await tenant.invoices.find_one({"id": invoice["id"]}, {"_id": 0},
+                                             session=session)
+        if not doc:
+            return 0
+        changes = stamp_embedded_lines(doc)
+        if changes:
+            for ch in changes:
+                await audit_allocation_change(tenant, user, ch["line_id"] or invoice["id"],
+                                              ch["before"], ch["after"], session=session,
+                                              reason="Р45: заглавната дестинация е записана на реда")
+            await tenant.invoices.update_one({"id": invoice["id"]}, {"$set": {
+                "lines": doc["lines"], "updated_at": datetime.now(timezone.utc).isoformat()}},
+                session=session)
+        return len(changes)
     rows = [ln async for ln in tenant.invoice_lines.find(
         {"invoice_id": invoice["id"]},
         {"_id": 0, "id": 1, "qty": 1, "allocations": 1, "allocation_type": 1,
@@ -193,9 +263,11 @@ async def migrate_header_allocations(tenant, org_id: str, actor: dict, *, dry_ru
     if not dry_run:
         await ensure_chain_index(tenant._db)          # pylint: disable=protected-access
     invs = [i async for i in tenant.invoices.find(
-        {"org_id": org_id, "allocations.0": {"$exists": True}},
+        {"org_id": org_id, "status": {"$ne": "Cancelled"},
+         "$or": [{"allocations.0": {"$exists": True}},
+                 {"direction": "Received", "project_id": {"$nin": [None, ""]}}]},
         {"_id": 0, "id": 1, "invoice_no": 1, "allocations": 1, "direction": 1,
-         "total": 1, "status": 1})]
+         "project_id": 1, "total": 1, "status": 1})]
     for inv in invs:
         state = await invoice_final_state(tenant, inv)
         if state["status"] == ALLOCATED:
@@ -210,12 +282,17 @@ async def migrate_header_allocations(tenant, org_id: str, actor: dict, *, dry_ru
 
             async def _body(session, inv=inv, box=box):
                 box["n"] = await apply_header_destination(tenant, actor, inv, session=session)
+                await refresh_invoice_dq(tenant, inv["id"], actor=actor, session=session,
+                                         now=now)
             await run_transaction(tenant, _body)
             report["written"].append({"invoice_id": inv["id"], "lines_written": box.get("n", 0)})
         else:
             report["pending"].append(inv["id"])
             if not dry_run:
-                await sync_invoice_issue(tenant, org_id, inv, state, now=now)
+                async def _open(session, inv=inv, state=state):
+                    await sync_invoice_issue(tenant, org_id, inv, state, now=now, actor=actor,
+                                             session=session)
+                await run_transaction(tenant, _open)
     return report
 
 
@@ -246,85 +323,147 @@ def _iso(dt: datetime) -> str:
     return dt.isoformat()
 
 
+def _escalation(opened_at: Optional[str], days: int, now: datetime) -> Dict[str, Any]:
+    """Computed at READ time (FG-201): overdue = opened + deadline < now."""
+    try:
+        opened = datetime.fromisoformat(opened_at) if opened_at else None
+    except ValueError:
+        opened = None
+    if opened is None:
+        return {"due_at": None, "escalated": False, "escalated_to_role": None,
+                "severity": "warning"}
+    if opened.tzinfo is None:
+        opened = opened.replace(tzinfo=timezone.utc)
+    due = opened + timedelta(days=days)
+    esc = now > due
+    return {"due_at": _iso(due), "escalated": esc,
+            "escalated_to_role": DQ_ESCALATE_ROLE if esc else None,
+            "severity": "high" if esc else "warning"}
+
+
+async def _dq_event(tenant, actor: Optional[dict], action: str, invoice_id: str,
+                    diff: dict, *, session=None) -> None:
+    from app.audit.envelope import (
+        ACTOR_HUMAN, ACTOR_SYSTEM, RETENTION_R1_CRITICAL_BUSINESS, build_event,
+    )
+    from app.audit.store import record_event
+    actor = actor or {}
+    event = build_event(
+        tenant_id=tenant.org_id,
+        actor_type=ACTOR_HUMAN if actor.get("id") else ACTOR_SYSTEM,
+        actor_id=actor.get("id") or "system", action=action, source_flow="FLOW-033",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="dq_issue",
+        entity_id=f"dq-invoice-allocation-{invoice_id}", structured_diff=diff,
+        effective_role_assignments=[actor.get("role") or ""], source_channel="api")
+    await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access
+
+
 async def sync_invoice_issue(tenant, org_id: str, invoice: dict, state: Dict[str, Any], *,
-                             now: Optional[datetime] = None, days: Optional[int] = None) -> Optional[dict]:
-    """Open / refresh / resolve the ONE DQ issue and the ONE alarm of an invoice.
-    Deterministic ids → deduplicated; never deleted."""
+                             now: Optional[datetime] = None, days: Optional[int] = None,
+                             actor: Optional[dict] = None, session=None) -> Optional[dict]:
+    """FG-201 — called by the WRITES (invoice / line / allocation / migration),
+    never by a read: opens the ONE DQ issue + alarm of a pending invoice, or
+    resolves them when it is final, each with an AuditEvent in the caller's
+    transaction. Deterministic ids → deduplicated; nothing is deleted. The
+    deadline / escalation is NOT stored — it is computed when read."""
     now = now or datetime.now(timezone.utc)
     issue_id = f"dq-invoice-allocation-{invoice['id']}"
     alarm_id = f"alarm-invoice-allocation-{invoice['id']}"
+    existing = await tenant.dq_issues.find_one({"id": issue_id}, {"_id": 0}, session=session)
+    is_open = bool(existing) and existing.get("status") == "open"
     if state["status"] == ALLOCATED:
-        await tenant.dq_issues.update_one(
-            {"id": issue_id, "status": "open"},
-            {"$set": {"status": "resolved", "resolved_at": _iso(now)}})
-        await tenant.alarm_events.update_one(
-            {"id": alarm_id, "status": {"$in": ["active", "acknowledged"]}},
-            {"$set": {"status": "resolved", "resolved_at": _iso(now),
-                      "resolve_notes": "invoice fully allocated"}})
+        if is_open:
+            await tenant.dq_issues.update_one(
+                {"id": issue_id}, {"$set": {"status": "resolved", "resolved_at": _iso(now)}},
+                session=session)
+            await tenant.alarm_events.update_one(
+                {"id": alarm_id}, {"$set": {"status": "resolved", "resolved_at": _iso(now),
+                                            "resolve_notes": "invoice fully allocated"}},
+                session=session)
+            await _dq_event(tenant, actor, "dq.invoice_allocation.resolved", invoice["id"],
+                            {"status": {"before": "open", "after": "resolved"}}, session=session)
         return None
-    days = days or await deadline_days(tenant)
-    existing = await tenant.dq_issues.find_one({"id": issue_id}, {"_id": 0})
-    if existing and existing.get("status") == "open":
-        opened = datetime.fromisoformat(existing["opened_at"])
-    else:
-        opened = now
-    due = opened + timedelta(days=days)
-    escalated = now > due
     pending = [{"line_id": p["line_id"], "unallocated_qty": p["unallocated_qty"]}
                for p in state["pending_lines"]]
+    if is_open:
+        if existing.get("pending_lines") != pending:
+            await tenant.dq_issues.update_one(
+                {"id": issue_id}, {"$set": {"pending_lines": pending, "updated_at": _iso(now)}},
+                session=session)
+        return {**existing, "pending_lines": pending}
+    days = days or await deadline_days(tenant)
     issue = {
         "id": issue_id, "org_id": org_id, "type": DQ_TYPE, "title": DQ_TITLE,
         "entity_type": "invoice", "entity_id": invoice["id"],
         "invoice_no": invoice.get("invoice_no"), "status": "open",
-        "owner_role": DQ_OWNER_ROLE, "opened_at": _iso(opened), "due_at": _iso(due),
-        "deadline_days": days, "escalated": escalated,
-        "escalated_to_role": DQ_ESCALATE_ROLE if escalated else None,
-        "severity": "high" if escalated else "warning",
+        "owner_role": DQ_OWNER_ROLE, "opened_at": _iso(now), "deadline_days": days,
         "pending_lines": pending, "updated_at": _iso(now),
     }
-    await tenant.dq_issues.update_one({"id": issue_id}, {"$set": issue}, upsert=True)
-    alarm = {
+    await tenant.dq_issues.update_one({"id": issue_id}, {"$set": issue}, upsert=True,
+                                      session=session)
+    await tenant.alarm_events.update_one({"id": alarm_id}, {"$set": {
         "id": alarm_id, "org_id": org_id, "rule_id": ALARM_RULE, "rule_name": ALARM_TITLE,
-        "type": "data_quality", "severity": "critical" if escalated else "warning",
-        "status": "active", "message": f"{ALARM_TITLE}: {invoice.get('invoice_no') or invoice['id']}",
+        "type": "data_quality", "severity": "warning", "status": "active",
+        "triggered_at": _iso(now),
+        "message": f"{ALARM_TITLE}: {invoice.get('invoice_no') or invoice['id']}",
         "context": {"entity_id": invoice["id"], "entity_type": "invoice",
-                    "dq_issue_id": issue_id, "escalated_to_role": issue["escalated_to_role"],
-                    "details": {"pending_lines": pending}},
-    }
-    prior = await tenant.alarm_events.find_one({"id": alarm_id}, {"_id": 0, "status": 1})
-    if not prior or prior.get("status") == "resolved":
-        alarm["triggered_at"] = _iso(now)
-        alarm.update(acknowledged_by=None, acknowledged_at=None, resolved_by=None,
-                     resolved_at=None, resolve_notes=None)
-    elif prior.get("status") == "acknowledged":
-        alarm["status"] = "acknowledged"
-    await tenant.alarm_events.update_one({"id": alarm_id}, {"$set": alarm}, upsert=True)
+                    "dq_issue_id": issue_id, "details": {"pending_lines": pending}},
+        "acknowledged_by": None, "acknowledged_at": None, "resolved_by": None,
+        "resolved_at": None, "resolve_notes": None}}, upsert=True, session=session)
+    await _dq_event(tenant, actor, "dq.invoice_allocation.opened", invoice["id"],
+                    {"status": {"before": existing.get("status") if existing else None,
+                                "after": "open"},
+                     "owner_role": DQ_OWNER_ROLE, "pending_lines": pending}, session=session)
     return issue
 
 
+async def refresh_invoice_dq(tenant, invoice_id: str, *, actor: Optional[dict] = None,
+                             session=None, now: Optional[datetime] = None) -> None:
+    """The write-side hook: re-evaluate one invoice after a write touched it."""
+    inv = await tenant.invoices.find_one(
+        {"id": invoice_id}, {"_id": 0, "id": 1, "invoice_no": 1, "direction": 1,
+                             "allocations": 1, "project_id": 1, "status": 1}, session=session)
+    if not inv or inv.get("status") == "Cancelled":
+        return
+    if inv.get("direction") != "Received" and not header_destinations(inv):
+        return
+    state = await invoice_final_state(tenant, inv, session=session)
+    await sync_invoice_issue(tenant, tenant.org_id, inv, state, actor=actor, session=session,
+                             now=now)
+
+
 async def invoices_to_allocate(tenant, org_id: str, *, now: Optional[datetime] = None) -> List[dict]:
-    """„фактури за разпределяне" — every non-cancelled supplier invoice with a
-    line in interim state, with drill-down to the lines; syncs the DQ issue /
-    alarm of every supplier invoice it reads (opens, escalates, resolves).
-    A4 #8: also every invoice (any direction) with a header allocation that no
-    line carries yet — never dropped from the reports."""
+    """„фактури за разпределяне" — READ ONLY (FG-201): every non-cancelled
+    supplier invoice with a line in the interim state, and every invoice with
+    a header allocation no line carries yet (A4 #8), drill-down to the lines,
+    with its DQ issue (stored by the writes) and the escalation computed now
+    (opened + deadline < now → Owner). A pending invoice whose issue was never
+    written (legacy data) shows a computed issue from its created_at."""
+    now = now or datetime.now(timezone.utc)
     days = await deadline_days(tenant)
     out = []
     async for inv in tenant.invoices.find(
             {"org_id": org_id, "status": {"$ne": "Cancelled"},
              "$or": [{"direction": "Received"}, {"allocations.0": {"$exists": True}}]},
             {"_id": 0, "id": 1, "invoice_no": 1, "issue_date": 1, "counterparty_name": 1,
-             "total": 1, "status": 1, "direction": 1, "allocations": 1}):
+             "total": 1, "status": 1, "direction": 1, "allocations": 1, "project_id": 1,
+             "created_at": 1}):
         if inv.get("direction") != "Received" and not header_destinations(inv):
             continue
         state = await invoice_final_state(tenant, inv)
-        issue = await sync_invoice_issue(tenant, org_id, inv, state, now=now, days=days)
-        if state["status"] != ALLOCATED:
-            dests = header_destinations(inv)
-            inv.pop("allocations", None)
-            out.append({**inv, "allocation_status": state["status"],
-                        "header_destinations": dests,
-                        "pending_lines": state["pending_lines"], "dq_issue": issue})
+        if state["status"] == ALLOCATED:
+            continue
+        stored = await tenant.dq_issues.find_one(
+            {"id": f"dq-invoice-allocation-{inv['id']}", "status": "open"}, {"_id": 0})
+        issue = stored or {"id": None, "type": DQ_TYPE, "title": DQ_TITLE, "status": "open",
+                           "owner_role": DQ_OWNER_ROLE, "opened_at": inv.get("created_at"),
+                           "deadline_days": days, "stored": False}
+        issue = {**issue, "deadline_days": days,
+                 **_escalation(issue.get("opened_at"), days, now)}
+        dests = header_destinations(inv)
+        inv.pop("allocations", None)
+        out.append({**inv, "allocation_status": state["status"], "header_destinations": dests,
+                    "pending_lines": state["pending_lines"], "dq_issue": issue})
     return out
 
 

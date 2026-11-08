@@ -135,6 +135,12 @@ _DIRECT_HANDLE_WRITE_RE = re.compile(
 _HANDLE_ASSIGN_RE = re.compile(
     r"^\s*(?P<var>\w+)\s*=\s*(?:await\s+)?[\w\.]+\s*"
     r"(?:\[\s*(?P<a1>[^\]]+?)\s*\]|\.(?:collection|get_collection)\(\s*(?P<a2>[^)]+?)\s*\))\s*$")
+_ATTR_ALIAS_RE = re.compile(
+    r"^\s*(?P<var>\w+)\s*=\s*[\w\.]+\.(?P<coll>\w+)\s*$")
+_GETATTR_ALIAS_RE = re.compile(
+    r"^\s*(?P<var>\w+)\s*=\s*getattr\(\s*[\w\.]+\s*,\s*['\"](?P<coll>\w+)['\"]\s*\)\s*$")
+_GETATTR_WRITE_RE = re.compile(
+    r"getattr\(\s*[\w\.]+\s*,\s*['\"](?P<coll>\w+)['\"]\s*\)\s*\.\s*" + _WRITE_METHODS + r"\s*\(")
 _CONST_RE = re.compile(r"^(?P<name>[A-Z][A-Z0-9_]*)\s*=\s*['\"](?P<val>\w+)['\"]\s*$")
 
 
@@ -153,6 +159,20 @@ def _indirect_canonical_writes(lines: List[str], collections: Set[str]) -> List[
             coll = m.group("c1") or m.group("c2")
             if coll in collections:
                 out.append((idx + 1, coll, line.strip()))
+        # FG-203: `x = tenant.warehouse_transactions` (attribute alias) and
+        # `x = getattr(tenant, "warehouse_transactions")`, then `x.update_one(...)`;
+        # also a direct `getattr(tenant, "<coll>").update_one(...)`.
+        g = _GETATTR_WRITE_RE.search(line)
+        if g and g.group("coll") in collections:
+            out.append((idx + 1, g.group("coll"), line.strip()))
+        al = _ATTR_ALIAS_RE.match(line) or _GETATTR_ALIAS_RE.match(line)
+        if al and al.group("coll") in collections:
+            write_re = re.compile(r"\b" + re.escape(al.group("var")) + r"\s*\.\s*"
+                                  + _WRITE_METHODS + r"\s*\(")
+            for j in range(idx + 1, min(idx + 26, len(lines))):
+                if write_re.search(lines[j]):
+                    out.append((j + 1, al.group("coll"), lines[j].strip()))
+            continue
         a = _HANDLE_ASSIGN_RE.match(line)
         if not a:
             continue

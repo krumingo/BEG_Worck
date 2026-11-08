@@ -96,6 +96,10 @@ def test_fg193_scanner_catches_the_main_create_sub_project_rewrite(tmp_path):
     ('c = db["warehouse_batches"]\nawait c.replace_one({}, {})\n', "warehouse_batches"),
     ('NAME = "warehouse_in_transit"\nc = tenant.collection(NAME)\nc.update_many({}, {})\n',
      "warehouse_in_transit"),
+    # FG-203: attribute alias and getattr
+    ('c = tenant.warehouse_transactions\nawait c.update_one({}, {})\n', "warehouse_transactions"),
+    ('c = getattr(tenant, "material_entries")\nc.insert_one({})\n', "material_entries"),
+    ('getattr(tenant, "warehouse_batches").delete_many({})\n', "warehouse_batches"),
 ])
 def test_fg193_scanner_catches_indirect_handles(tmp_path, snippet, coll):
     hits = _scan_tree(tmp_path, "backend/app/routes/x_fixture.py", snippet)
@@ -702,3 +706,28 @@ async def test_whfix81_03_header_only_invoices_are_in_the_bucket_never_dropped(
     assert {r["project_id"]: r["total_expenses"] for r in out["items"]} == {"p-1": 100.0}
     assert {u["invoice_id"] for u in out["to_allocate"]} == {"h-percent", "h-split"}
     assert await db["dq_issues"].count_documents({"entity_id": "h-percent", "status": "open"}) == 1
+
+
+
+# ═══════════════════ FG-202 — canonical quantities join by item_id ═══════════════════
+
+async def test_fg202_planned_rows_join_canonical_quantities_by_item_id(
+        canonical_mongo_db, allow_always_gate, monkeypatch):
+    """Two planned rows with the SAME name, only one is the canonical item:
+    the canonical 10 is credited to that row only (by name it was credited
+    to both)."""
+    client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await _seed(db)
+    await db["planned_materials"].update_one({"id": "pm-c22"}, {"$set": {
+        "planned_qty": 20, "planned_qty_with_waste": 20, "unit": "bag"}})
+    await db["planned_materials"].insert_one({
+        "id": "pm-other", "org_id": T, "project_id": PROJECT, "status": "active",
+        "item_id": "item-other", "material_name": "Лепило", "planned_qty": 5,
+        "planned_qty_with_waste": 5, "unit": "bag", "planned_total_cost": 5.0})
+    run = _Run(client, allow_always_gate, db)
+    await _accepted(run)
+    from app.routes import materials_baseline
+    cov = await materials_baseline.get_material_coverage(PROJECT, user=_user())
+    issued = {r["id"]: r["issued_qty"] for r in cov["rows"]}
+    assert issued == {"pm-c22": 10, "pm-other": 0}
