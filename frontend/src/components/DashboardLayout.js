@@ -14,6 +14,7 @@ import {
   User, Package, Truck, RotateCcw, Settings, HelpCircle, Info,
   Menu, X, Lock, Archive, Warehouse, TrendingUp, BarChart3,
   FilePlus2, ClipboardPen, Sparkles, AlertTriangle, Briefcase, ScanLine, ShoppingCart, QrCode, Camera, Inbox } from "lucide-react";
+import InstallAppButton from "@/components/pwa/InstallAppButton";
 import NotificationBell from "@/components/NotificationBell";
 import LanguageSwitcher from "@/components/LanguageSwitcher";
 import ChangePasswordModal from "@/components/ChangePasswordModal";
@@ -198,6 +199,7 @@ function MobileProfileMenu({ user, onLogout, onClose, onChangePassword }) {
           <div><p className="font-semibold">{user?.first_name} {user?.last_name}</p><p className="text-sm text-muted-foreground">{user?.email}</p></div>
         </div>
       </div>
+      <InstallAppButton className="py-2.5" testId="pwa-install-profile" />
       {PROFILE_MENU.filter((item) => item.to !== "/my-payslips" || ["Admin", "Owner", "SiteManager", "Accountant"].includes(user?.role)).map((item, i) => (
         <button key={i} onClick={() => handleAction(item)} className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm ${item.action === "logout" ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-muted"}`}>
           <item.icon className="w-4 h-4" /><span>{t(item.labelKey)}</span>
@@ -351,6 +353,7 @@ export default function DashboardLayout({ children }) {
             </div>
             <LanguageSwitcher />
           </div>
+          <InstallAppButton className="mb-1 px-2" testId="pwa-install-sidebar" />
           <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-foreground" onClick={() => setChangePasswordOpen(true)} data-testid="change-password-button">
             <Lock className="w-4 h-4 mr-2" />{t("auth.changePassword")}
           </Button>
@@ -415,6 +418,7 @@ export default function DashboardLayout({ children }) {
                     <p className="text-[11px] text-muted-foreground truncate">{user?.role || ""}</p>
                   </div>
                 </div>
+                <InstallAppButton className="py-2.5" testId="pwa-install-menu" />
                 <SheetClose asChild>
                   <button onClick={() => setChangePasswordOpen(true)} className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:bg-muted">
                     <KeyRound className="w-4 h-4 shrink-0" /><span>{t("auth.changePassword")}</span>

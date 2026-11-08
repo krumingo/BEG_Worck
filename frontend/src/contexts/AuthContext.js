@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import API from "@/lib/api";
+import { clearTenantLocalData, noteActiveTenant } from "@/lib/pwa/clearLocalData";
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Company Auth Context - uses bw_token / bw_user
@@ -23,6 +24,7 @@ export function AuthProvider({ children }) {
         API.get("/auth/me"),
         API.get("/organization"),
       ]);
+      await noteActiveTenant(orgRes.data?.id);
       setUser(meRes.data);
       setOrg(orgRes.data);
     } catch {
@@ -45,6 +47,8 @@ export function AuthProvider({ children }) {
     localStorage.setItem("bw_user", JSON.stringify(res.data.user));
     setUser(res.data.user);
     const orgRes = await API.get("/organization");
+    // PWA-01: another tenant than the one this device held → clear that tenant's data.
+    await noteActiveTenant(orgRes.data?.id);
     setOrg(orgRes.data);
     return res.data;
   };
@@ -52,6 +56,8 @@ export function AuthProvider({ children }) {
   const logout = () => {
     localStorage.removeItem("bw_token");
     localStorage.removeItem("bw_user");
+    // PWA-01: no tenant data stays on the device after logout (storage + caches).
+    clearTenantLocalData();
     setUser(null);
     setOrg(null);
   };
