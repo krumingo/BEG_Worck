@@ -1,12 +1,12 @@
 # FLOW GUARD — състояние
 
-Последен проход: **19** — 08.11.2026 04:50 UTC (периодичен).
+Последен проход: **20** — 08.11.2026 06:50 UTC (периодичен).
 
 ## Последно проверен SHA по клон
 
 | Клон / PR | Проверен SHA | Проход | Бележка |
 |---|---|---|---|
-| `main` | `2ec61f3` | 19 | merge PM-01 (#68), ST-02 (#67), AUTH-01/02 (#56), W0-04-C01 (#72), PAY-01 (#70), W0-04-C02 (#78). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7), FLOW-020 (8), FLOW-021 (9), FLOW-005 (10), FLOW-004 (11), FLOW-007 (12), FLOW-003 (13), FLOW-013 (14), FLOW-014 (15), FLOW-016 (16), FLOW-009 (17), FLOW-010 (18), FLOW-011 (19) |
+| `main` | `2ec61f3` | 20 | merge PM-01 (#68), ST-02 (#67), AUTH-01/02 (#56), W0-04-C01 (#72), PAY-01 (#70), W0-04-C02 (#78). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7), FLOW-020 (8), FLOW-021 (9), FLOW-005 (10), FLOW-004 (11), FLOW-007 (12), FLOW-003 (13), FLOW-013 (14), FLOW-014 (15), FLOW-016 (16), FLOW-009 (17), FLOW-010 (18), FLOW-011 (19), FLOW-012 (20) |
 | #55 `task5c/live-ops-01-canonical-stock-core` | `ed48595` | 15 | склад: FLOW-009/020/008, Р10/Р11/Р13 |
 | #56 `claude/auth-owner-recovery-forgot-password-sfv359` | `3234446` | 9 | слят в main (`0f870c3`); auth: FLOW-002/040, Р6, Р19 (D-16) |
 | #67 `claude/st-02-staging-stack` | `675faba` | 4 | слят в main (`35ae10b`) |
@@ -56,4 +56,5 @@
 | FLOW-009 | 17 | `COVERAGE.md` |
 | FLOW-010 | 18 | `COVERAGE.md` |
 | FLOW-011 | 19 | `COVERAGE.md` |
-| следващ: FLOW-012 (main) | — | — |
+| FLOW-012 | 20 | `COVERAGE.md` |
+| следващ: FLOW-015 (main) | — | — |
