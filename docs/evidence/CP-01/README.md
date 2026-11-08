@@ -105,6 +105,7 @@ All runs: this container, MongoDB 7.0 replica set `rs0` in Docker, `W0_03_REAL_M
 | A1 guard | 472 units, 0 violations | 482 units, **0 violations** |
 | A2C guard | 234 modules, 0 violations | 239 modules, **0 violations** |
 | frontend `yarn test` | — | 17 suites, 170 passed |
+| full DB-free suite (`tests/`, no real Mongo) | 166 failed, 2337 passed, 996 errors (live-API tests without a server) | 160 failed, 2527 passed, 993 errors — the FAILED/ERROR set is a **strict subset** of main's, nothing new |
 
 **W0, honestly:** the known 15 failures are all in `test_w0_03e_legacy_routes.py`; the `TENANT_NOT_REGISTERED` ones come from the order of modules in the full run. Six of them were the persons/companies cells of the "an unused identity may still be hard-deleted" matrix. R48.4 removes that contract for counterparties, clients, companies and persons, so those four collections moved out of `DELETE_PATHS` into a new test, `test_cp01_counterparty_identities_are_never_deleted` (409, both tenants' rows intact, no AuditEvent, foreign id → 404). That is why the count went from 15 to 9 and not to 15. No test that passed on main fails on the branch.
 

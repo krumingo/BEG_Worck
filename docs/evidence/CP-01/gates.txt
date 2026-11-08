@@ -38,3 +38,17 @@ tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_neve
 tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
 tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
 tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+
+## Full DB-free suite (PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider tests, no W0_03_REAL_MONGO_URL, REACT_APP_BACKEND_URL → closed port)
+main:   166 failed, 2337 passed, 1773 skipped, 11 warnings, 996 errors in 443.21s (0:07:23)
+branch: 160 failed, 2527 passed, 1978 skipped, 11 warnings, 993 errors in 464.40s (0:07:44)
+FAILED/ERROR set: branch ⊂ main (diff below: lines only on main, none only on the branch)
+< ERROR tests/test_st_02_staging_stack.py::test_c03_r26_manifest_mode_mismatch_is_refused_before_any_change
+< ERROR tests/test_st_02_staging_stack.py::test_c03_r26_manifest_records_the_staging_mode
+< ERROR tests/test_st_02_staging_stack.py::test_c03_r26_matching_manifest_passes_the_r26_precheck
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+< FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
