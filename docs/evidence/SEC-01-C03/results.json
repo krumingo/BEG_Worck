@@ -4497,7 +4497,7 @@
     409
    ],
    "retry_payment_ids": [
-    "53864131-e655-5ef8-9fbf-4f750e678161"
+    "489be3eb-8f47-5914-9199-6146dc71d813"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4521,7 +4521,7 @@
     409
    ],
    "retry_payment_ids": [
-    "48cb174d-db2f-5fab-8bd5-afa08a0cfc7a"
+    "a9158d40-131d-53b5-b3f8-6d988b62c331"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4545,7 +4545,7 @@
     409
    ],
    "retry_payment_ids": [
-    "596b5311-9c02-56cd-8cd5-471dcfd497a3"
+    "2eec705e-98c5-5940-9e84-b5a67b17f6dd"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -5002,7 +5002,9 @@
      200,
      200
     ],
-    "audit_rows_after_retries": 1
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
    }
   },
   {
@@ -5023,7 +5025,9 @@
      200,
      200
     ],
-    "audit_rows_after_retries": 1
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
    }
   },
   {
@@ -5044,7 +5048,9 @@
      200,
      200
     ],
-    "audit_rows_after_retries": 1
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
    }
   }
  ],

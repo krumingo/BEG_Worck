@@ -309,14 +309,20 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             cases = (
                 ("subcontractor_payment", "/api/subcontractor-payments", "accountant",
                  {**body_for("subpay", fx["A"], c02), "amount": 10},
-                 {"action": "subcontractor_payment_created"}),
+                 {"action": "subcontractor_payment_created"}, None),
+                # OH-01 (#74): compute's step "audit" is the canonical AuditEvent; the legacy
+                # audit_logs row is its own step "legacy_audit" (OH74-04) — both counted
                 ("overhead_compute", "/api/overhead/snapshots/compute", "admin",
                  {"period_start": "2026-10-01", "period_end": "2026-10-07", "method": "Hours"},
-                 {"action": "computed", "entity_type": "overhead_snapshot"}),
+                 {"action": "computed", "entity_type": "overhead_snapshot"},
+                 {"action": "overhead.snapshot.computed"}),
             )
-            for name, url, role, body, audit_q in cases:
+            for name, url, role, body, audit_q, canon_q in cases:
                 hdr = {"Authorization": "Bearer " + tokens[role]}
                 before = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                canon = (lambda: tc.portal.call(lambda: op_db.audit_events.count_documents(canon_q))) \
+                    if canon_q else (lambda: 0)
+                canon_before = canon()
                 state = {"armed": True}
 
                 async def failing(db_, *, step, **kw):
@@ -331,6 +337,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 finally:
                     workflow.mark_idempotent_step = original
                 after_crash = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                canon_after_crash = canon()
                 retries = [tc.post(url, json=body, headers={**hdr, "Idempotency-Key": idem})
                            for _ in range(2)]
                 final = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
@@ -338,6 +345,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                              "audit_rows_after_crash": after_crash - before,
                              "retry_statuses": [r.status_code for r in retries],
                              "audit_rows_after_retries": final - before}
+                if canon_q:
+                    out[name]["canonical_events_after_crash"] = canon_after_crash - canon_before
+                    out[name]["canonical_events_after_retries"] = canon() - canon_before
                 restore_all()
             return out
 
@@ -816,7 +826,14 @@ def check_result(result: Dict[str, Any]) -> None:
         for name in ("subcontractor_payment", "overhead_compute"):
             c = r[name]
             assert c["first_status"] == 500, (name, r)
-            assert c["audit_rows_after_crash"] == 1, (name, r)
+            if name == "overhead_compute":
+                # OH-01 (#74): the crash hit the canonical-event step ("audit"); the legacy
+                # row is the later "legacy_audit" step — exactly one of each in the end
+                assert c["canonical_events_after_crash"] == 1, (name, r)
+                assert c["audit_rows_after_crash"] == 0, (name, r)
+                assert c["canonical_events_after_retries"] == 1, (name, r)
+            else:
+                assert c["audit_rows_after_crash"] == 1, (name, r)
             assert all(st in (200, 201) for st in c["retry_statuses"]), (name, r)
             assert c["audit_rows_after_retries"] == 1, (name, r)   # exactly one audit row
     rows = result["f69_04_subcent"]
