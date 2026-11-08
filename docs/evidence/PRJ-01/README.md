@@ -38,7 +38,24 @@ Main `ec7ddd8` е слят в клона с merge commit (`5a80d22`, без ко
 
 Бележка към D5: тъй като екранът генерира QR код при всеки нов обект, на практика почти всяка чернова вече има връзка и не се изтрива (409) — остава отказ (cancel).
 
-Чака решение на Крум (адендум от оркестратора): D1, D5, D7, D9 и каноничният ключ за „платено“.
+## Кръг 3 — Р56 (Крум, 08.11) и „платено“ от всички плащания и аванси (Р39)
+Разширеният тест върху head-а на кръг 2 `718bac7` дава **4 failed** (`red_round3_on_718bac7.txt`); след поправката — 9 passed.
+
+| | Поправка |
+|---|---|
+| Р56(1) | Отваряне — само Owner/Admin (SiteManager → 403). Нов `POST /projects/{id}/reopen-request`: само SiteManager на обекта, вид + причина + ключ; искането се пази в `reopen_requests`, всеки активен Owner/Admin получава известие, AuditEvent `project.reopen_request`; отварянето от Owner/Admin маркира отворените искания `done`. UI: бутон „Поискай отваряне“ за SiteManager. |
+| Р56(2) | Чернова с екип, етапи, оферта или клиент → 409 `PROJECT_HAS_HISTORY` (`team_members`, `project_phases`, `offers`, `client`), архив вместо изтриване. Изтрива се само наистина празна чернова (без триене на екип/етапи). |
+| Р56(3) | `quality_score` — само цяло число 1–5 (0, 6, 4.5, „4“, −1 → 422). |
+| Р56(4) | Неопределим оригинал → DQ към техническия ръководител (`owner_role=site_manager`, `assignee_user_id` = ръководителят на обекта), `due_at` = +7 дни; `escalate_overdue()` (`--escalate`) прехвърля просрочената задача към Собственика веднъж (известие + AuditEvent `dq.issue.escalate`). Връзката прави гаранционния проект **подобект** на оригинала (`parent_project_id` = оригинала; предишният родител се пази в `warranty_link`). Оригинал, който сам е подобект → DQ (две нива). |
+| „Платено“ | Сбор от редовете в `finance_payments` (единният ledger, FLOW-006): `direction=Outflow`, без сторнирани двойки (`status ∉ {reversed, reversal}`), чийто `subcontractor_payment_id` е ред в `subcontractor_payments` със същия `subcontractor_id` + `project_id` (+ `package_id`, ако записът има). Така влизат **и плащанията, и авансите** (Р39 — SUB-ADV-01 #76 пише аванса като `subcontractor_payments` ред `kind="advance"` + ledger ред със `subcontractor_advance=True` и същия ключ). Тест: 150 плащане + 30 аванс − 50 сторно = 180. |
+
+Колекции и ключове за „платено“ (за HANDOFF):
+* `finance_payments` — `subcontractor_payment_id`, `direction`, `status`, `amount`;
+* `subcontractor_payments` — `id`, `subcontractor_id`, `project_id`, `package_id` (плащания и аванси).
+* Извън обхвата (няма каноничен ключ към подизпълнител): плащания по входящи фактури (`payment_allocations` → `invoices` с `supplier_counterparty_id` към `counterparties`, не към `subcontractors`) и „други разходи“ само с `counterparty_name` → **PRJ-01-D13**.
+
+Нови дългове: **PRJ-01-D12** — ескалацията на DQ няма планировчик; `--escalate` трябва да се пуска ежедневно (или да влезе в W0-07). **PRJ-01-D13** — виж по-горе. D1, D5, D7, D9 са решени с Р56.
+
 
 ## Gates
 Виж `test_summary.txt`.
