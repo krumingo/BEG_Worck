@@ -1220,9 +1220,12 @@ def test_fg249_supplier_tax_id_is_mandatory_duplicates_by_put_are_409_legacy_get
         plan = await mig.plan(op)
         assert [i for t in plan["tenants"] for i in t["supplier_tax_id_missing"]] == ["leg-noeik"]
         await mig.apply(op, actor_id="owner-a")
-        dq = (await op.invoices.find_one({"id": "leg-noeik"}))["dq_tasks"]["supplier_tax_id_missing"]
-        assert (dq["assignee_role"], dq["status"]) == ("accountant", "open")
+        dq = await op.dq_issues.find({"entity_id": "leg-noeik"}, {"_id": 0}).to_list(None)
+        assert [(d["kind"], d["assignee_role"], d["status"], d["entity_type"]) for d in dq] == [
+            ("supplier_tax_id_missing", "accountant", "open", "finance.invoice")]
         assert (await mig.plan(op))["changes"] == 0
+        await mig.apply(op, actor_id="owner-a")                                  # idempotent
+        assert await op.dq_issues.count_documents({"entity_id": "leg-noeik"}) == 1
     run(monkeypatch, mode, scenario)
 
 
@@ -1288,4 +1291,36 @@ def test_fg251_an_accepted_difference_after_a_reversal_is_project_cost_in_the_ac
         assert cost_by_period(after)[period]["total"] - cost_by_period(before).get(period, {}).get("total", 0) == 5.0
         ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_accepted"})
         assert ev["structured_diff"]["difference_gross"] == 6.0 and ev["structured_diff"]["cost_period"] == period
+    run(monkeypatch, mode, scenario)
+
+
+
+def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
+    async def scenario(c, op):
+        body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",
+                "counterparty_eik": EIK, "counterparty_name": "Доставчик", "lines": LINES}
+
+        async def burst(number):
+            results = await asyncio.gather(*(
+                c.post("/api/finance/invoices", headers=hdr("acct-a"), json={**body, "invoice_no": number})
+                for _ in range(6)))
+            return sorted(r.status_code for r in results), results
+
+        # (a) a fresh tenant, no migration run: the index is built on first use + the lock
+        codes, results = await burst("P-1")
+        assert codes == [201, 409, 409, 409, 409, 409], [r.text for r in results]
+        assert {code(r) for r in results if r.status_code == 409} == {"DUPLICATE_SUPPLIER_INVOICE"}
+        assert await op.invoices.count_documents({"invoice_no": "P-1"}) == 1
+        # (b) a legacy database whose rows collide: the unique index CANNOT be built, so the
+        # (supplier, number) lock alone serialises the decision
+        await op.invoices.drop_index("inv_cn_02_supplier_invoice_no")
+        for i, eik in enumerate(("111111111", "222222222")):
+            await op.invoices.insert_one({"id": "legacy-%d" % i, "org_id": ORG_A, "direction": "Received",
+                                          "status": "Sent", "invoice_no": "L-1", "counterparty_eik": eik})
+        from app.services import invoice_corrections as ic
+        ic._ensured.clear()                                          # a fresh process on that database
+        codes, results = await burst("P-2")
+        assert codes == [201, 409, 409, 409, 409, 409], [r.text for r in results]
+        assert "inv_cn_02_supplier_invoice_no" not in await op.invoices.index_information()
+        assert await op.invoices.count_documents({"invoice_no": "P-2"}) == 1
     run(monkeypatch, mode, scenario)

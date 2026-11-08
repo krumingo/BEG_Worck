@@ -872,6 +872,27 @@ async def list_subcontractor_documents(
     return docs
 
 
+async def _insert_supplier_invoice(user: dict, invoice: dict) -> None:
+    """INV-CN-01 FG-264: the per-supplier duplicate decision and the insert in ONE
+    transaction under the (supplier, number) lock document — concurrent creates of the same
+    supplier + number are serialised (one 201, the rest 409), with or without the unique
+    index (built at startup / first use where the data allows, else by the migration)."""
+    from app.services import invoice_corrections as ic
+    from app.services.auth_tx import run_in_transaction
+    tenant = _tenant(user)
+    await ic.ensure_indexes(db)
+    await ic.ensure_supplier_lock(tenant, invoice, invoice["invoice_no"])
+
+    async def body(session):
+        await ic.lock_supplier_number(tenant, invoice, invoice["invoice_no"], session=session)
+        if await ic.supplier_number_taken(tenant, invoice, invoice["invoice_no"], session=session):
+            raise HTTPException(status_code=409, detail={
+                "error_code": "DUPLICATE_SUPPLIER_INVOICE",
+                "message": "Фактура с номер %s от този доставчик вече е въведена" % invoice["invoice_no"]})
+        await tenant.invoices.insert_one(dict(invoice), session=session)
+    await _tx(run_in_transaction, body)
+
+
 @router.post("/finance/invoices", status_code=201)
 async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     if not finance_permission(user):
@@ -918,6 +939,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     else:
         # Check uniqueness for provided number
         # FG-231 / Р53(1): a supplier number is a duplicate only for the SAME supplier
+        # (a fast pre-check; the decision is taken again under the FG-264 lock below)
         from app.services.invoice_corrections import supplier_number_taken
         if await supplier_number_taken(_tenant(user), data.model_dump(), invoice_no):
             raise HTTPException(status_code=409, detail={
@@ -995,7 +1017,10 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     
     from pymongo.errors import DuplicateKeyError
     try:
-        await _tenant(user).invoices.insert_one(invoice)
+        if invoice.get("direction") == "Received" and invoice.get("invoice_no"):
+            await _insert_supplier_invoice(user, invoice)              # FG-264
+        else:
+            await _tenant(user).invoices.insert_one(invoice)
     except DuplicateKeyError:
         # FG-217: never a 500 — a number clash, or the legacy (org_id, invoice_no) index that
         # scripts/inv_cn_01_migrate.py replaces, is answered with a reason; nothing written.
@@ -1091,6 +1116,7 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         raise HTTPException(status_code=400, detail=vat_check["message"])
 
     # Check invoice_no uniqueness if changed
+    supplier_lock = None
     # FG-232: a draft has no invoice_no field — .get, never a KeyError (500)
     identity = ("invoice_no", "counterparty_eik", "counterparty_foreign_tax_no",
                 "supplier_counterparty_id", "counterparty_name")
@@ -1108,6 +1134,9 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         # FG-231 / Р53(1) + FG-249: unique per supplier (as it will be after the edit) — a
         # changed number OR a changed supplier identity is checked → 409, never a 500
         from app.services.invoice_corrections import supplier_number_taken
+        from app.services.invoice_corrections import ensure_supplier_lock
+        await ensure_supplier_lock(tenant, merged, merged["invoice_no"])      # FG-264 (outside tx)
+        supplier_lock = (merged, merged["invoice_no"])
         if await supplier_number_taken(tenant, merged, merged["invoice_no"], exclude_invoice_id=invoice_id):
             raise HTTPException(status_code=409, detail={
                 "error_code": "DUPLICATE_SUPPLIER_INVOICE",
@@ -1155,6 +1184,16 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         if is_locked(current) and any(k not in EDITABLE_AFTER_ISSUE and k != "updated_at"
                                       for k in update):
             raise locked_refusal(current, locked_fields(update))
+        if supplier_lock is not None:
+            # FG-264: the duplicate decision again, under the (supplier, number) lock
+            from app.services.invoice_corrections import lock_supplier_number, supplier_number_taken
+            if session is not None:
+                await lock_supplier_number(tenant, supplier_lock[0], supplier_lock[1], session=session)
+            if await supplier_number_taken(tenant, supplier_lock[0], supplier_lock[1],
+                                           exclude_invoice_id=invoice_id, session=session):
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "DUPLICATE_SUPPLIER_INVOICE",
+                    "message": "Фактура с този номер от този доставчик вече е въведена"})
         # Keep a snapshot (version copy) before editing an already-issued document
         if current.get("status") != "Draft":
             prior = {k: v for k, v in current.items() if k != "_id"}

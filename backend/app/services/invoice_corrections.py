@@ -222,7 +222,8 @@ def supplier_key(invoice: dict) -> Optional[str]:
     return ("name:" + name) if name else None
 
 
-async def supplier_number_taken(tenant, invoice: dict, number: str, *, exclude_invoice_id=None) -> bool:
+async def supplier_number_taken(tenant, invoice: dict, number: str, *, exclude_invoice_id=None,
+                                session=None) -> bool:
     """Р53(1): the same supplier + number already exists. FG-248: a LEGACY row written
     before the ``supplier_key`` backfill is matched by its ЕИК or counterparty record too,
     so a duplicate cannot be created before the migration (and break its apply)."""
@@ -247,7 +248,55 @@ async def supplier_number_taken(tenant, invoice: dict, number: str, *, exclude_i
     flt = {"direction": "Received", "invoice_no": number, "$or": alternatives}
     if exclude_invoice_id:
         flt["id"] = {"$ne": exclude_invoice_id}
-    return bool(await tenant.invoices.find_one(flt, {"_id": 0, "id": 1}))
+    return bool(await tenant.invoices.find_one(flt, {"_id": 0, "id": 1}, session=session))
+
+
+# ── FG-264: one supplier + number is decided under ONE lock document ─────────────
+def supplier_lock_id(org_id: str, invoice: dict, number: str) -> str:
+    return "supplier_invoice_lock:%s:%s:%s" % (org_id, supplier_key(invoice) or "-", number)
+
+
+async def ensure_supplier_lock(tenant, invoice: dict, number: str) -> None:
+    """Create the lock document OUTSIDE any transaction (idempotent; deterministic _id)."""
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await tenant.org_counters.update_one(
+            {"_id": supplier_lock_id(tenant.org_id, invoice, number)},
+            {"$setOnInsert": {"counter_type": "supplier_invoice_lock", "value": 0}}, upsert=True)
+    except DuplicateKeyError:
+        pass
+
+
+async def lock_supplier_number(tenant, invoice: dict, number: str, *, session) -> None:
+    """FG-264: write the (supplier, number) lock document in the caller's transaction —
+    two creates / edits of the same supplier + number write-conflict and are serialised,
+    so the duplicate check that follows always sees the committed row, with or without
+    the unique index (which a legacy database only gets from the migration)."""
+    await tenant.org_counters.update_one(
+        {"_id": supplier_lock_id(tenant.org_id, invoice, number)}, {"$inc": {"value": 1}},
+        session=session)
+
+
+# ── FG-249 note: the canonical data-quality issue record ─────────────────────────
+DQ_SUPPLIER_TAX_ID_MISSING = "supplier_tax_id_missing"
+
+
+def dq_issue_id(org_id: str, kind: str, entity_id: str) -> str:
+    return "dq:%s:%s:%s" % (org_id, kind, entity_id)
+
+
+async def open_dq_issue(tenant, *, kind: str, entity_type: str, entity_id: str, title: str,
+                        assignee_role: str, source: str, session=None) -> bool:
+    """One OPEN ``dq_issues`` record per (kind, entity) — deterministic id, upsert, so a
+    re-run never duplicates it. Returns True when it was created now."""
+    res = await tenant.dq_issues.update_one(
+        {"id": dq_issue_id(tenant.org_id, kind, entity_id)},
+        {"$setOnInsert": {"id": dq_issue_id(tenant.org_id, kind, entity_id), "kind": kind,
+                          "entity_type": entity_type, "entity_id": entity_id, "title": title,
+                          "assignee_role": assignee_role, "status": "open", "source": source,
+                          "created_at": now_iso()}},
+        upsert=True, session=session)
+    return bool(getattr(res, "upserted_id", None))
 
 
 async def number_taken(tenant, number: str, *, session=None, exclude_invoice_id=None) -> bool:
@@ -611,8 +660,15 @@ async def ensure_indexes(database) -> None:
     for coll, keys, opts in PLANNED_INDEXES:
         plan.setdefault(coll, []).append((keys, opts))
     for keys, opts in plan["invoices"]:
-        if opts["name"] in (INVOICE_NO_INDEX[2]["name"], SUPPLIER_NO_INDEX[2]["name"]):
-            continue    # built at startup and by the migration (after the supplier_key backfill)
+        if opts["name"] in (SUPPLIER_NO_INDEX[2]["name"], INVOICE_NO_INDEX[2]["name"]):
+            # FG-264: build it wherever the data allows (a fresh tenant, a migrated one); a
+            # legacy database whose rows collide keeps the lock-serialised check until the
+            # migration's backfill + build. Never fatal here.
+            try:
+                await database.invoices.create_index(keys, **opts)
+            except Exception:
+                pass
+            continue
         await database.invoices.create_index(keys, **opts)
     for keys, opts in plan["credit_debit_notes"]:
         await database.credit_debit_notes.create_index(keys, **opts)

@@ -573,11 +573,16 @@ async def startup():
     # number never blocks our own series. The legacy unique+sparse (org_id, invoice_no)
     # index is dropped only by scripts/inv_cn_01_migrate.py (dry run, then --apply).
     try:
-        from app.services.invoice_corrections import INVOICE_NO_INDEX
+        from app.services.invoice_corrections import INVOICE_NO_INDEX, SUPPLIER_NO_INDEX
         await db.invoices.create_index(INVOICE_NO_INDEX[1], **INVOICE_NO_INDEX[2])
-        # FG-231 / Р53(1) + FG-248: the per-supplier index is built ONLY by
-        # scripts/inv_cn_01_migrate.py, after its supplier_key backfill (until then the
-        # runtime check, incl. the legacy ЕИК / counterparty fallback, refuses duplicates).
+    except Exception:
+        pass
+    try:
+        # FG-231 / Р53(1), FG-248, FG-264: the per-supplier index is built here wherever the
+        # data allows (a fresh / new tenant, a migrated one). A legacy database whose rows
+        # collide refuses the build: there the create / edit check runs under the
+        # (supplier, number) lock until scripts/inv_cn_01_migrate.py backfills and builds it.
+        await db.invoices.create_index(SUPPLIER_NO_INDEX[1], **SUPPLIER_NO_INDEX[2])
     except Exception:
         pass  # Index may already exist or have conflicts with existing data
 

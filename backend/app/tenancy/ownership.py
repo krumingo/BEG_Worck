@@ -126,7 +126,9 @@ ORG_KEYED: Dict[str, str] = {
               "asset_movements", "asset_repairs", "asset_qr_codes", "asset_intake_pending",
               "asset_counters"),
     **_family(FAMILY_TASKS,
-              "worker_calendar", "alarm_rules", "alarm_events"),
+              "worker_calendar", "alarm_rules", "alarm_events",
+              # INV-CN-01 FG-249 / Р55(1): canonical data-quality issues (one per kind + entity)
+              "dq_issues"),
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),
     **_family(FAMILY_AUDIT,
