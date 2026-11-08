@@ -60,3 +60,23 @@ def test_k2_activation_races_payment(monkeypatch, backend, mode, rep):
             accs[new["id"]]["status"]))
         assert pay.status_code == 201 and target in (old["id"], new["id"]), pay.text
     run(monkeypatch, backend, mode, scenario)
+
+
+# ── 7e0b914 (FG-225 c): the outflow guard was pasted into /finance/other-income as well ──
+from tests.test_cp_01_counterparty_iban_egn import BANK_A  # noqa: E402
+
+
+@pytest.mark.parametrize("body", [
+    {"amount": 50, "method": "BankTransfer", "account_id": BANK_A},                     # bank, no payer
+    {"amount": 50, "method": "BankTransfer", "account_id": BANK_A, "counterparty_id": "cp1"},
+    {"amount": 50, "method": "Cash", "counterparty_id": "cp1"},                         # cash, no receipt
+], ids=["bank-no-payer", "bank-cp1-unverified", "cash-cp1-no-receipt"])
+def test_k3_other_income_is_an_inflow(monkeypatch, backend, mode, body):
+    """K3 — recording INCOME is not a payment to a payee: no IBAN / receipt guard may refuse it."""
+    async def scenario(c, op):
+        r = await c.post("/api/finance/other-income", headers=hdr("acct-a"), json=dict(body))
+        print("K3 %s/%s %s -> %s %s" % (backend, mode, body, r.status_code, r.text[:160]))
+        assert r.status_code == 201, r.text
+        row = await op.finance_payments.find_one({"id": r.json()["id"]}, {"_id": 0})
+        assert row["direction"] == "Inflow"
+    run(monkeypatch, backend, mode, scenario)
