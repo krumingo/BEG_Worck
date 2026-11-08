@@ -5781,3 +5781,16 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | A2C / A1 | 0 / 0 |
 | R0 | 814 |
 | PM-01 | 6 |
+
+## 2026-11-08 22:46 UTC: #86 `8e8be48` run STOPPED (disk). Audit paused
+
+- **Partial results:** prj_01 9, SEC-01 30. The warehouse suite was stopped at `c26l_l`: free disk fell from 889 to 454 MB at ~1 MB/s (the audit mongod json logs grow; auditmongo2's log is 3.4 GB), and a full disk would crash Mongo and void the run.
+- **After the stop and dropping the test DBs:** ~0.7 GB free.
+- **Blocked until Krum approves a cleanup directly in this session (or by a Bash permission rule):**
+  - #86 `8e8be48` gates;
+  - #73 `e802e6f` gates;
+  - #75 (needs a regenerated PM-01 matrix first);
+  - #88 frontend checks.
+- **The two cleanups the permission check refused:**
+  1. `docker volume prune -f` (~20 GB of dangling audit volumes);
+  2. `truncate -s 0` of the audit containers' json logs (~5.7 GB of log text).
