@@ -5708,3 +5708,21 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | A2C / A1 | 0 / 0 |
 | R0 | 814 |
 | PM-01 | 6 |
+
+## 2026-11-08 21:45 UTC: #84 `cdd3dc8` (FG-276..278 cost journal + FG-271 UI + merge `6730fc2` of main `3699c3b` + evidence): PASS, no blocking finding
+
+- **Merge checks:** see the 20:27 entry (merge identical to merge-tree; role-union 0; PM-01 384/384, 0 extra). `cdd3dc8` adds evidence only on top of `6730fc2`.
+
+| Gate | Result |
+|---|---|
+| probe invcn01 | 99 |
+| inv_cn_01 | 138 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+
+- **Disk:** at 597 MB free during this run. I freed ~0.5 GB (worktrees, idle test DBs, pip/uv caches). `docker volume prune` and truncating the audit mongod json logs (~5.3 GB) were refused by the permission check; Krum is asked to approve either directly.
