@@ -1290,6 +1290,10 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_list = []
     totals_paid = 0
     totals_unpaid = 0
+    # F-81-03: client money in (Issued) vs money paid to suppliers (Received) —
+    # the card keeps both as document turnover; only the Issued part is income.
+    totals_paid_issued = 0
+    totals_paid_received = 0
     totals_proforma_future = 0
     totals_subtotal = 0
     totals_vat = 0
@@ -1344,6 +1348,10 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 totals_proforma_future += remaining_amount
             else:
                 totals_paid += paid_amount
+                if inv.get("direction") == "Issued":
+                    totals_paid_issued += paid_amount
+                elif inv.get("direction") == "Received":
+                    totals_paid_received += paid_amount
                 totals_unpaid += remaining_amount
                 totals_subtotal += subtotal
                 totals_vat += vat_amount
@@ -1378,6 +1386,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             "vat": round(totals_vat, 2),
             "total": round(totals_total, 2),
             "paid": round(totals_paid, 2),
+            "paid_issued": round(totals_paid_issued, 2),       # F-81-03: client money in
+            "paid_received": round(totals_paid_received, 2),   # F-81-03: paid to suppliers
             "unpaid": round(totals_unpaid, 2),
             "proforma_future": round(totals_proforma_future, 2),
         },
@@ -1443,8 +1453,10 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     }
     
     # ── Card 8: Balance ─────────────────────────────────────────────────────
-    # Income = actual paid amounts from invoices (source of truth: paid_amount)
-    income = totals_paid
+    # Income = actual paid amounts of SALES invoices (source of truth: paid_amount).
+    # F-81-03: a payment TO a supplier (Received) is cash out, never income; the
+    # supplier cost reaches this card through materials, not through income.
+    income = totals_paid_issued
     
     # Check for project payments (additional income)
     try:

@@ -185,3 +185,29 @@ Gates @ `9ddab66` code / `c2c7f53` tests (real Mongo rs0, `-rs`, baseline main `
 skipped · W0 the same 15 (identical set) · PAY-01 630 · SEC-01 30/30 · PM-01 6 / 0 skipped · A2C
 237/0 · A1 478/0 (inventory unchanged) · warehouse 4 failed + 16 errors (identical to main) ·
 WH-FIX-01 suites 299 passed, 0 skipped.
+
+## F-81-03 (Codex 6724832092) — a payment TO a supplier is never project income
+
+Red run: `10_f81_03_red_on_5b08e59.txt` (12 failed on `5b08e59`: income 1200 instead of 0).
+`GET /projects/{id}/dashboard` took `balance.income` from the paid amount of every project
+invoice. Income is now the paid amount of Issued invoices only (client money in), plus the
+explicit `project_payments` of type `incoming`. The invoice card keeps both kinds as document
+turnover (`paid`) and shows them apart (`paid_issued`, `paid_received`). Cost is unchanged.
+Test `test_f81_03_*`: a fully allocated supplier invoice paid via quick-pay; with and without a
+paid sale as control; off / shadow / enforce × mongomock + real.
+
+Sweep — every reader that sums paid amounts / payments by project:
+* now Issued only:
+  * `projects.py` dashboard (this fix) and aggregate `count_invoices` (WH81-03);
+  * `project_pnl`, `project_financial_results` (`cash_in`), `centralized_reports` (WH81-03);
+  * `clients.py` summary (WH81-03).
+* already Issued:
+  * `revenue_expense` collected;
+  * `full_cost` collected;
+  * `revenue_snapshot` (both readers);
+  * dashboard pending payments.
+* by direction: `project_pnl` "other" cost reads `finance_payments` Outflow (a cost, correct).
+* not a project sum:
+  * `reports.py` counterparty turnover (`sum_paid` by counterparty, document view);
+  * `cashflow_forecast` incoming (Issued since WH81-03);
+  * morning briefing reminders.

@@ -263,3 +263,55 @@ def test_wh81_03_supplier_invoice_is_not_project_revenue(monkeypatch, backend, m
         agg = await projects.get_project_aggregate("prj-1", user=OWNER)
         assert agg["invoices"]["own"]["invoiced"] == sale * 1.2
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════ F-81-03 — a payment TO a supplier is never project income ═══════════
+# Codex 6724832092: GET /projects/{id}/dashboard took `balance.income` from the
+# paid amount of EVERY project invoice — paying a supplier invoice of 1200 turned
+# the project's -1200 balance into 0. Only client money in (Issued) is income;
+# the card keeps both kinds as document turnover (paid_issued / paid_received).
+
+@pytest.mark.parametrize("with_sale", [False, True])
+def test_f81_03_paying_a_supplier_is_not_project_income(monkeypatch, backend, mode, with_sale):
+    async def scenario(c, op):
+        import sys
+        from app.routes import projects
+        app_ = c._transport.app
+        app_.include_router(projects.router, prefix="/api")
+        for name, mod in list(sys.modules.items()):
+            if name.startswith("app.") and getattr(mod, "db", None) not in (None, op):
+                monkeypatch.setattr(mod, "db", op)
+        await op.invoices.delete_many({"project_id": "prj-1"})   # fixture rows of other tests
+        await _supplier_invoice(op, 100)                          # fully allocated (Р44)
+        await op.invoices.update_one({"id": INV}, {"$set": {"project_id": "prj-1"}})
+
+        async def dashboard():
+            r = await c.get("/api/projects/prj-1/dashboard", headers=hdr("owner-a"))
+            assert r.status_code == 200, r.text
+            return r.json()
+
+        before = await dashboard()
+        r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
+                         json={"amount": 1200.0, "method": "BankTransfer",
+                               "account_id": h.BANK_A})
+        assert r.status_code == 201, r.text
+        sale = 0.0
+        if with_sale:                       # control: client money in IS income
+            sale = 600.0
+            await op.invoices.insert_one({
+                "id": "iss-f813", "org_id": ORG_A, "invoice_no": "I-813", "direction": "Issued",
+                "kind": "Invoice", "status": "Sent", "issue_date": DAY, "due_date": "2099-12-31",
+                "subtotal": 500.0, "vat_percent": 20, "vat_amount": 100.0, "total": 600.0,
+                "paid_amount": 0, "remaining_amount": 600.0, "project_id": "prj-1",
+                "counterparty_name": "Клиент", "created_at": TODAY.isoformat()})
+            r = await c.post("/api/finance/invoices/iss-f813/payments", headers=hdr("acct-a"),
+                             json={"amount": 600.0, "method": "BankTransfer",
+                                   "account_id": h.BANK_A})
+            assert r.status_code == 201, r.text
+        after = await dashboard()
+        assert after["balance"]["income"] == before["balance"]["income"] + sale
+        assert after["balance"]["expenses"] == before["balance"]["expenses"]   # cost untouched
+        totals = after["invoices"]["totals"]
+        assert totals["paid_received"] == 1200.0 and totals["paid_issued"] == sale
+        assert totals["paid"] == 1200.0 + sale                    # document turnover kept
+    run(monkeypatch, backend, mode, scenario)
