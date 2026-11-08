@@ -4788,3 +4788,27 @@ main `cd03324` sanity — **PASS**.
 | PM-01 | 6 |
 
 Identical to #55 `ed48595`'s gates, so the merge introduced nothing.
+
+## 2026-11-08 08:40 UTC: #75 `388b81c` (F-75-01 fix) and #73 `ef8661c`, against main `cd03324`: PASS
+
+**#75 F-75-01:** `set_labor_terms` now runs in one transaction: read → CAS on `labor_terms_version` → history insert (unique `one_terms_version_per_package`, a duplicate gives 409) → audit in the same session.
+
+Probe `docs/audit/probes/lab02/test_probe_f75_01.py` (real Mongo, 3 modes): **51 passed**.
+
+| Case | Result |
+|---|---|
+| L1: 10 concurrent PUT /labor-terms (×10 per mode) | all 200; versions 1..10 gap-free; AuditEvent chain 1..10; package v10 |
+| L2: same key ×6 | 200, then 409 ×5; one version, one event |
+| L3: starting from v3 | v1..v9 contiguous |
+| L4: rate change ∥ quantity approval | the approval's (rate, version) = (5.0, 1); history {1: 5.0, 2: 9.0}; consistent |
+
+Gates:
+
+| Tree | lab | PAY | W0 | A2C / A1 | R0 | PM-01 |
+|---|---|---|---|---|---|---|
+| #75 head | 167 (real) | – | – | – | – | – |
+| #75 + main (`52f0289`) | 167 | 630 | same 15 | 0 / 0 | 814 | 6 |
+| #73 head | lab_01 117 | – | – | – | – | – |
+| #73 + main (`2670a53`) | lab_01 117 | 630 | same 15 | 0 / 0 | 814 | 6 |
+
+#73 has no `test_lab_02*`. The batch's combined lab_01 + lab_02 glob made pytest refuse the whole command line, so lab_01 was re-run on its own.
