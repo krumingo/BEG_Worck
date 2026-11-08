@@ -8,7 +8,7 @@ Phase 5: Profit by period + expected vs actual
 Phase 6: Core financial alerts
 Phase 7: Project risk summary
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -18,6 +18,9 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write, require_finance_read
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.routes.labor_smr import ACTIVE_LABOR_ROW
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 
@@ -32,7 +35,11 @@ def _tenant(user: dict) -> TenantData:
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/employee-cost/{user_id}")
-async def get_employee_cost_basis(user_id: str, user: dict = Depends(require_m2)):
+async def get_employee_cost_basis(
+    user_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.employee_cost.read", module="M2", resource_type="employee_cost")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     """Employee full cost model — net salary untouched, additional layers separate"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -103,17 +110,27 @@ async def update_employee_cost_config(data: dict, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-snapshots", status_code=201)
-async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2)):
+async def create_overhead_snapshot(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot.create", module="M2", resource_type="overhead_snapshot")),  # SEC-01: before any read/write
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
     """Create an overhead period snapshot entry"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.overhead_snapshot.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.overhead_snapshots.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     entry = {
-        "id": str(uuid.uuid4()),
+        "id": mw.new_id("overhead_snapshot"),
         "org_id": user["org_id"],
         "category_code": data.get("category_code", "general"),
         "category_name": data.get("category_name", ""),
         "period_key": data.get("period_key", datetime.now().strftime("%Y-%m")),
-        "amount": float(data.get("amount", 0)),
+        "amount": amount,
         "currency": "EUR",
         "allocation_basis": data.get("allocation_basis", "labor_hours"),
         "notes": data.get("notes", ""),
@@ -121,12 +138,18 @@ async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2))
         "created_at": now,
         "created_by": user["id"],
     }
-    await tenant.overhead_snapshots.insert_one(entry)
+    async with mw:
+        async with mw.insert_once():
+            await tenant.overhead_snapshots.insert_one(mw.unique(entry))
+        mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
 @router.get("/overhead-snapshots")
-async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_overhead_snapshots(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_snapshot.read", module="M2", resource_type="overhead_snapshot")),  # SEC-02 (R20-1): before any read
+    period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if period_key: q["period_key"] = period_key
@@ -134,7 +157,10 @@ async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict =
 
 
 @router.get("/overhead-snapshots/aggregate")
-async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+async def aggregate_overhead(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_snapshot_aggregate.read", module="M2", resource_type="overhead_snapshot_aggregate")),  # SEC-02 (R20-1): before any read
+    period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate overhead by period and category"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -183,7 +209,14 @@ async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depe
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-allocation/compute/{project_id}")
-async def compute_overhead_allocation(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
+async def compute_overhead_allocation(
+    project_id: str,
+    data: dict = {},
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_allocation.execute", module='M2',
+        resource_type="project_overhead_alloc")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     """Compute overhead allocation for a project based on labor hours share"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -208,7 +241,11 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/execution-packages/{pkg_id}/net-financial")
-async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2)):
+async def get_package_net_financial(
+    pkg_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_net_financial.read", module="M2", resource_type="package_net_financial")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Package net financial with overhead and net margin"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -217,7 +254,10 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         raise HTTPException(status_code=404, detail="Package not found")
 
     sale = pkg.get("sale_total", 0)
-    mat = pkg.get("actual_material_cost", 0)
+    # 5C-C20 F-10 — canonical material actual at read time (no recompute).
+    from app.services.canonical_material_cost import package_material_split
+    split = await package_material_split(tenant, org_id, pkg)
+    mat = split["total"]          # consumption + фира, once
     lab = pkg.get("actual_labor_cost", 0)
     # FG-89: the package's share of the project's CURRENT OH-01 allocation, by used hours,
     # computed on read (no stored second figure)
@@ -253,7 +293,8 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         "currency": "EUR",
         "sale_total": sale,
         "costs": {
-            "material": mat, "labor": lab, "subcontract": round(sub, 2),
+            "material": split["material"], "waste": split["waste"],
+            "labor": lab, "subcontract": round(sub, 2),
             "gross_cost": gross_cost, "overhead": overhead, "total_cost": total_cost,
             **recalculating_fields(_cur["recalculating"]),  # FG-116 (R38)
         },
@@ -272,7 +313,11 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-net-profit/{project_id}")
-async def get_project_net_profit(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_net_profit(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_net_profit.read", module="M2", resource_type="project_net_profit")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Extended project profit with overhead, gross vs net margin, expected vs actual"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -294,7 +339,8 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
     # Material
     from app.routes.material_smr import get_material_summary_for_project
     mat_summary = await get_material_summary_for_project(org_id, project_id)
-    mat_cost = mat_summary["total_cost"]
+    mat_cost = mat_summary["total_cost"]                 # consumption + фира, once
+    mat_waste = mat_summary.get("waste_cost", 0.0) or 0.0  # 5C-C21 F-12
 
     # Labor
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -336,7 +382,7 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
         "project_code": project.get("code", ""), "project_name": project.get("name", ""),
         "currency": "EUR",
         "revenue": {"contracted": round(contracted, 2), "earned": round(earned, 2), "billed": round(billed, 2), "collected": round(collected, 2), "receivables": round(billed - collected, 2), "basis": basis_label},
-        "costs": {"material": mat_cost, "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost,
+        "costs": {"material": round(mat_cost - mat_waste, 2), "waste": round(mat_waste, 2), "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost,
                   **recalculating_fields(_oh["recalculating"])},  # FG-116 (R38)
         "profit": {
             "gross_profit": gross_profit, "gross_margin_percent": gross_pct,
@@ -358,7 +404,11 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/financial-alerts/{project_id}")
-async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)):
+async def get_financial_alerts(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_financial_alert.read", module="M2", resource_type="project_financial_alert")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Core financial alerts for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -393,15 +443,19 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "unmapped_material", "severity": "warning", "count": mat_warn, "message": f"{mat_warn} материални записа без връзка към СМР"})
 
     # Labor warnings
-    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW})
     if lab_unmapped > 0:
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 
     # Margin drop check
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_material_cost": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
+    # 5C-C22 — package material actual from the ONE shared helper (read
+    # time), not the `actual_material_cost` cache.
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
     for pkg in pkgs:
         sale = pkg.get("sale_total", 0)
-        actual = (pkg.get("actual_material_cost", 0) or 0) + (pkg.get("actual_labor_cost", 0) or 0)
+        actual = split_for_package(mat_cost, pkg["id"])["total"] + (pkg.get("actual_labor_cost", 0) or 0)
         if sale > 0 and actual > sale * 0.9:
             alerts.append({"type": "margin_drop", "severity": "critical", "package_id": pkg["id"], "message": f"{pkg.get('activity_name', '')}: разходи {round(actual, 2)} / продажба {sale} EUR"})
 
@@ -413,7 +467,11 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-risk/{project_id}")
-async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_risk(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_risk.read", module="M2", resource_type="project_risk")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Consolidated project risk summary"""
     tenant = _tenant(user)
     org_id = user["org_id"]

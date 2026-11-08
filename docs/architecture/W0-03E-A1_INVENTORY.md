@@ -14,14 +14,15 @@
 
 | path | route | entity (collection) | access (lookup key) | tenant predicate | risk | action |
 |---|---|---|---|---|---|---|
+| app/routes/finance.py:_require_tenant_project | (helper) | projects | get(id = project_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | find_one(is_default) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | find_one(type) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | insert_one(default) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | get(id = account_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:_resolve_payment_account | (helper) | financial_accounts | insert_one(cash) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:update_invoice_status | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:update_invoice_status | (helper) | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:update_invoice_status | (helper) | payment_allocations | find(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:update_invoice_status | (helper) | invoices | update_one(id, status) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:update_invoice_status | (helper) | payment_allocations | find(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_invoice_settings | (helper) | invoice_settings | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_invoice_settings | (helper) | invoice_settings | insert_one(settings) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_next_invoice_no | (helper) | invoices | find_one(invoice_no) | TenantData org_id (session) | scoped@base | SAFE |
@@ -58,52 +59,66 @@
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | projects | get(id = invoice['project_id']) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | finance_payments | get(id = alloc.get('payment_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | project_team→projects | assigned_project_ids(org_id+user_id → tenant projects) | data_access helper | new read | SAFE |
-| app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | payment_allocations | find(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | payment_allocations | find(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_invoice_versions | GET /finance/invoices/{invoice_id}/versions | invoice_versions | find(invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | find_one(direction, invoice_no, id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoice_versions | count(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoice_versions | insert_one(id, invoice_id, version_no, snapshot, edited_by, edited_by_n) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice_lines | PUT /finance/invoices/{invoice_id}/lines | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice_lines | PUT /finance/invoices/{invoice_id}/lines | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:send_invoice | POST /finance/invoices/{invoice_id}/send | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:send_invoice | POST /finance/invoices/{invoice_id}/send | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:send_invoice | POST /finance/invoices/{invoice_id}/send | invoices | update_one(id, status) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:cancel_invoice | POST /finance/invoices/{invoice_id}/cancel | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:cancel_invoice | POST /finance/invoices/{invoice_id}/cancel | payment_allocations | count(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:cancel_invoice | POST /finance/invoices/{invoice_id}/cancel | payment_allocations | count(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:cancel_invoice | POST /finance/invoices/{invoice_id}/cancel | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:delete_invoice | DELETE /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:delete_invoice | DELETE /finance/invoices/{invoice_id} | invoices | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:delete_invoice | DELETE /finance/invoices/{invoice_id} | invoices | delete_one(id, status) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:delete_invoice | DELETE /finance/invoices/{invoice_id} | payment_allocations | count(invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | finance_payments | get(id = alloc.get('payment_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | financial_accounts | get(id = payment.get('account_id')) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | payment_allocations | find(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | payment_allocations | find(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:add_invoice_payment | POST /finance/invoices/{invoice_id}/payments | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:add_invoice_payment | POST /finance/invoices/{invoice_id}/payments | financial_accounts | get(id = account_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:add_invoice_payment | POST /finance/invoices/{invoice_id}/payments | finance_payments | insert_one(payment) | TenantData org_id (session) | new read | SAFE |
-| app/routes/finance.py:add_invoice_payment | POST /finance/invoices/{invoice_id}/payments | payment_allocations | insert_one(allocation) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_quick_pay_locked | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_quick_pay_locked | (helper) | financial_accounts | get(id = account_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_quick_pay_locked | (helper) | finance_payments | update_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_quick_pay_locked | (helper) | payment_allocations | update_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_ensure_reversal_row | (helper) | finance_payments | update_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_payment_lock | (helper) | finance_payments | update_one(flt) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_payment_lock | (helper) | finance_payments | get(id = payment_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_invoice_lock | (helper) | invoices | update_one(flt) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_invoice_lock | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_invoice_remaining | (helper) | payment_allocations | find(active_allocations(flt)) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_reverse_one | (helper) | finance_payments | find_one_and_update(active_payments({'id': payment_id})) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_reverse_one | (helper) | finance_payments | get(id = payment_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | find_one(id, invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | count(payment_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | finance_payments | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | finance_payments | get(id = alloc['payment_id']) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:remove_invoice_payment | DELETE /finance/invoices/{invoice_id}/payments/{allocation_id} | payment_allocations | count(active_allocations({'payment_id': alloc[) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:_cancel_allocation | (helper) | payment_allocations | update_one(active_allocations({'id': allocation_id,) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_cancel_allocation | (helper) | payment_allocations | count(active_allocations({'payment_id': alloc[) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_cancel_allocation | (helper) | finance_payments | get(id = alloc['payment_id']) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:list_payments | GET /finance/payments | financial_accounts | get(id = pay.get('account_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_payments | GET /finance/payments | invoices | get(id = a.get('invoice_id')) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:list_payments | GET /finance/payments | payment_allocations | find(payment_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:list_payments | GET /finance/payments | payment_allocations | find(active_allocations({'payment_id': pay['i) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_payments | GET /finance/payments | finance_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:create_payment | POST /finance/payments | financial_accounts | get(id = account_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:create_payment | POST /finance/payments | finance_payments | insert_one(payment) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | finance_payments | get(id = payment_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | financial_accounts | get(id = payment.get('account_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | invoices | get(id = alloc.get('invoice_id')) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | payment_allocations | find(payment_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:get_payment | GET /finance/payments/{payment_id} | payment_allocations | find(active_allocations({'payment_id': paymen) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | finance_payments | get(id = payment_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | find(active_allocations({'payment_id': paymen) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | invoices | get(id = alloc.invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | insert_one(allocation) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:allocate_payment | POST /finance/payments/{payment_id}/allocate | payment_allocations | find(payment_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | get(id = payment_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | payment_allocations | count(payment_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | payment_allocations | count(active_allocations({'payment_id': leg['i) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | find(transfer_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | get(id = leg['id']) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:delete_payment | DELETE /finance/payments/{payment_id} | finance_payments | find(transfer_id, status) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:get_finance_stats | GET /finance/stats | invoices | aggregate(pipeline) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_finance_stats | GET /finance/stats | financial_accounts | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_finance_stats | GET /finance/stats | invoices | find(direction, status) | TenantData org_id (session) | scoped@base | SAFE |
@@ -187,13 +202,16 @@
 | app/routes/reports.py:get_month_finance_totals | (helper) | bonus_payments | find(date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:list_cash_transactions | GET /finance/cash-transactions | cash_transactions | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_cash_transactions | GET /finance/cash-transactions | cash_transactions | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | insert_one(txn) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_cash_transaction | POST /finance/cash-transactions | cash_transactions | insert_one(mw.unique(txn)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:list_overhead_transactions | GET /finance/overhead-transactions | overhead_transactions | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_overhead_transactions | GET /finance/overhead-transactions | overhead_transactions | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | insert_one(txn) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_overhead_transaction | POST /finance/overhead-transactions | overhead_transactions | insert_one(mw.unique(txn)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:list_bonus_payments | GET /finance/bonus-payments | bonus_payments | count(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/reports.py:list_bonus_payments | GET /finance/bonus-payments | bonus_payments | find(query) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | insert_one(payment) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | find_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/reports.py:create_bonus_payment | POST /finance/bonus-payments | bonus_payments | insert_one(mw.unique(payment)) | TenantData org_id (session) | new read | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | organizations | own_organization(id = tenant org_id) | TenantData | scoped@base | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | invoices | find(direction, issue_date) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:export_company_finance | GET /reports/company-finance-export | cash_transactions | find(date) | TenantData org_id (session) | scoped@base | SAFE |
@@ -370,8 +388,11 @@
 | app/routes/items.py:get_item | GET /items/{item_id} | items | require(id = item_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/subcontractors.py:get_subcontractor | GET /subcontractors/{sub_id} | subcontractors | get(id = sub_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | get(id = warehouse_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouse_transactions | distinct('item_id') | TenantData org_id (session) | new read | SAFE |
+| app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouse_transactions | find_one($or) | TenantData org_id (session) | new read | SAFE |
 | app/routes/warehouses.py:delete_warehouse | DELETE /warehouses/{warehouse_id} | warehouses | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouse_transactions | count_documents(ledger_sequence) | TenantData org_id (session) | new read | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 359 accesses — FIXED 130, SAFE 229
+Totals: 380 accesses — FIXED 131, SAFE 249

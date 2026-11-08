@@ -1,0 +1,28 @@
+# SEC-01-C02 test summaries (branch claude/sec-01-money-write-permissions, local real MongoDB 7.0 replica set)
+## SEC-01-C02 + SEC-01-C01 + SEC-01 + PM-01, real Mongo (W0_03_REAL_MONGO_URL set)
+30 passed in 305.59s (0:05:05)
+## tests/test_r0_0*.py (real Mongo)
+814 passed in 169.51s (0:02:49)
+## W0 DB-free (tests/test_w0_*.py --noconftest)
+15 failed, 1085 passed, 50 skipped in 72.45s (0:01:12)
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+(the same 15 failures as main, SEC-01 and SEC-01-C01, docs/evidence/SEC-01-C01/test_summary.txt)
+## Guards
+W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
+## PM-01 matrix re-run: 180 cells changed (12 routes x 5 non-finance roles x 3 modes), all to 403 with no business write
+## Addendum A (SEC-R1) counter-check: docs/evidence/SEC-01-C02/sec_r1_counter_check.json — 36 cells 200/201 without the fix, 403 with it, all three modes

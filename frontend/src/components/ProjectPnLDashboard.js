@@ -94,6 +94,7 @@ export default function ProjectPnLDashboard({ projectId }) {
             {[
               { icon: Hammer, label: t("pnl.laborCost"), val: expense.labor_cost, sub: `${expense.labor_hours.toFixed(0)}ч (OT: ${expense.overtime_cost.toFixed(0)})` },
               { icon: Package, label: t("pnl.materialCost"), val: expense.material_cost },
+              { icon: Package, label: t("pnl.materialWasteCost"), val: expense.material_waste_cost },
               { icon: Users, label: t("pnl.subcontractorCost"), val: expense.subcontractor_cost },
               { icon: Building2, label: t("pnl.contractCost"), val: expense.contract_cost },
               // R38: the previous allocation is shown while the period is recomputed

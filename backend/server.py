@@ -128,6 +128,17 @@ from app.routes.warehouses import router as warehouses_router
 api_router.include_router(warehouses_router)
 from app.routes.warehouse_batches import router as warehouse_batches_router
 api_router.include_router(warehouse_batches_router)
+# LIVE-OPS-01 / TASK 5C — Canonical warehouse / stock core.
+# The three routers below are the only writers / readers on the canonical
+# ledger; the legacy routes above remain mounted so historical data is still
+# readable, but their writer bodies are retired (fail-close) when
+# LEGACY_WAREHOUSE_WRITERS_ENABLED is not set.
+from app.routes.warehouse_canonical import router as warehouse_canonical_router
+from app.routes.warehouse_canonical_queries import router as warehouse_canonical_queries_router
+from app.routes.warehouse_migration import router as warehouse_migration_router
+api_router.include_router(warehouse_canonical_router)
+api_router.include_router(warehouse_canonical_queries_router)
+api_router.include_router(warehouse_migration_router)
 from app.routes.sales import router as sales_router
 api_router.include_router(sales_router)
 
@@ -379,11 +390,29 @@ app.add_middleware(ErrorHandlerMiddleware)
 
 @app.on_event("startup")
 async def startup():
+    # W0-04-C01: every tenant database gets the unique audit / idempotency
+    # indexes before anything is written; a conflict or duplicate stops the
+    # start with a clear error instead of running unprotected.
+    from app.audit.indexes import describe_report, ensure_audit_indexes_for_installation
+    from app.tenancy import registry as _tenant_registry
+    for _rep in await ensure_audit_indexes_for_installation(db, _tenant_registry.system_db):
+        if _rep["created"]:
+            # FG-117: an opaque database ref, never the tenant database name.
+            logger.info("W0-04-C01 audit indexes %s", describe_report(_rep))
+
     await seed_data()
 
     # FIFO indexes (warehouse_batches)
     from app.services.fifo_service import ensure_indexes as ensure_fifo_indexes
     await ensure_fifo_indexes()
+
+    # 5C-C19 F-1b: canonical warehouse ledger / idempotency / AuditEvent
+    # indexes (TASK 5C). Idempotent; failure is logged and the command
+    # service stays fail-closed (INDEX_MISSING).
+    from app.services.warehouse_movements.indexes import (
+        ensure_required_indexes_at_startup as ensure_warehouse_canonical_indexes,
+    )
+    await ensure_warehouse_canonical_indexes(db)
 
     await db.users.create_index("email")
     await db.users.create_index("org_id")
@@ -402,6 +431,15 @@ async def startup():
     from app.services.overhead_lifecycle import ensure_overhead_indexes_for_installation
     from app.tenancy import registry as _oh01_registry
     await ensure_overhead_indexes_for_installation(db, _oh01_registry.system_db)
+    # AUTH-01: one-time password reset tokens (unique hash, TTL, user/used),
+    # shared rate-limit counters and durable auth security events (both TTL).
+    from app.services import auth_events, password_reset, rate_limit
+    await password_reset.ensure_indexes(db)
+    await rate_limit.ensure_indexes(db)
+    await auth_events.ensure_indexes(db)
+    # ACT-01: unique act number per tenant (counter-numbered acts) + offer-line lookup.
+    from app.services import client_acts as client_acts_service
+    await client_acts_service.ensure_indexes(db)
     await db.project_phases.create_index("project_id")
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1), ("user_id", 1)], unique=True)
     await db.attendance_entries.create_index([("org_id", 1), ("date", 1)])

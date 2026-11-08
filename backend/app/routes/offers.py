@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.tenancy.data_access import (
     TenantData, assigned_project_ids, is_project_member, resolve_review_token,
 )
@@ -161,6 +162,7 @@ async def create_offer(data: OfferCreate, user: dict = Depends(require_m2)):
 
 
 @router.get("/offers")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_offers(
     user: dict = Depends(require_m2),
     project_id: Optional[str] = None,
@@ -201,6 +203,7 @@ async def list_offers(
 
 
 @router.get("/offers/{offer_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_offer(offer_id: str, user: dict = Depends(require_m2)):
     offer = await _tenant(user).offers.get(offer_id, {"_id": 0})
     if not offer:
@@ -217,6 +220,7 @@ async def get_offer(offer_id: str, user: dict = Depends(require_m2)):
 
 
 @router.put("/offers/{offer_id}")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(require_m2)):
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
@@ -291,6 +295,7 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
 
 
 @router.post("/offers/{offer_id}/send")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     offer = await _tenant(user).offers.get(offer_id)
@@ -554,7 +559,11 @@ UNIT_LABELS_BG = {"m2": "м2", "m": "м", "pcs": "бр", "hours": "часа", "l
 STATUS_LABELS_BG = {"Draft": "Чернова", "Sent": "Изпратена", "Accepted": "Одобрена", "Rejected": "Отказана", "NeedsRevision": "Корекция", "Archived": "Архивирана"}
 
 @router.get("/offers/{offer_id}/pdf")
-async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
+async def export_offer_pdf(
+    offer_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.offer_document.export", module="M2", resource_type="offer_document")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Export offer as PDF"""
     offer = await _tenant(user).offers.get(offer_id, {"_id": 0})
     if not offer:
@@ -667,7 +676,11 @@ async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
 
 
 @router.get("/offers/{offer_id}/xlsx")
-async def export_offer_xlsx(offer_id: str, user: dict = Depends(require_m2)):
+async def export_offer_xlsx(
+    offer_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.offer_spreadsheet.export", module="M2", resource_type="offer_spreadsheet")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Export offer as XLSX"""
     offer = await _tenant(user).offers.get(offer_id, {"_id": 0})
     if not offer:
@@ -1181,6 +1194,7 @@ async def respond_to_offer(review_token: str, data: dict):
 # ── Offer Events History ───────────────────────────────────────────
 
 @router.get("/offers/{offer_id}/events")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_offer_events(offer_id: str, user: dict = Depends(require_m2)):
     """Get event history for an offer"""
     tenant = _tenant(user)

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { canReadFinance } from "@/lib/financeAccess";
 import AssetQrBlock from "@/components/AssetQrBlock";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
@@ -33,7 +34,9 @@ import { toast } from "sonner";
 // "Изработено" = approved only. "Всички въведени" = all statuses (bAll), never labeled just "Общо".
 function bucketsFrom(rpt) {
   const r = rpt || {};
-  const b = r.buckets || {};
+  // SEC-02-A (D9): the no-money file has no "value" and no pay buckets — default them.
+  const raw = r.buckets || {};
+  const b = Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, { value: 0, ...v }]));
   return {
     bAll: b.all || { count: r.count || 0, hours: r.total_hours || 0, value: r.total_value || 0 },
     bApproved: b.approved || { count: 0, hours: 0, value: 0 },
@@ -196,11 +199,18 @@ export default function EmployeeDetailPage() {
   }, [periodFrom]);
 
   // Load dossier data with period
+  // SEC-02 (R20) + SEC-02-A (D9): finance roles get the full file (pay, payroll,
+  // advances); the Technical Manager gets the file WITHOUT money, own projects only
+  // (the backend sends money_hidden); every other role is refused, so the UI does not ask.
+  const seesFinance = canReadFinance(user?.role);
+  const canOpenFile = seesFinance || user?.role === "SiteManager";
+  const moneyHidden = !seesFinance || !!dossier?.money_hidden;
   useEffect(() => {
+    if (!canOpenFile) return;
     API.get(`/employee-dossier/${userId}?date_from=${periodFrom}&date_to=${periodTo}`)
       .then(r => setDossier(r.data))
       .catch(() => {});
-  }, [userId, periodFrom, periodTo]);
+  }, [userId, periodFrom, periodTo, canOpenFile]);
 
   // Auto-calculation
   const updatePayField = (field, value) => {
@@ -512,8 +522,8 @@ export default function EmployeeDetailPage() {
         </div>
       )}
 
-      {/* Dossier summary cards */}
-      {dossier && (() => {
+      {/* Dossier summary cards (money — finance roles only) */}
+      {dossier && !moneyHidden && (() => {
         const rpt = dossier.reports || {};
         const pay = dossier.payroll || {};
         // P1-0.3: status-aware buckets via shared helper (same source as header + footer)
@@ -596,7 +606,7 @@ export default function EmployeeDetailPage() {
             const { bApproved, bAll } = bucketsFrom(dossier?.reports);
             return (
               <>
-                Изработено: <strong className="text-foreground font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} €</strong>
+                Изработено: <strong className="text-foreground font-mono">{bApproved.count} отч · {bApproved.hours}ч{moneyHidden ? "" : ` · ${bApproved.value.toFixed(0)} €`}</strong>
                 <span className="text-muted-foreground/50"> · </span>
                 Всички въведени: <strong className="text-foreground font-mono">{bAll.count}</strong>
               </>
@@ -609,11 +619,11 @@ export default function EmployeeDetailPage() {
         <TabsList className="mb-4 flex-wrap">
           <TabsTrigger value="calendar" data-testid="tab-calendar"><Calendar className="w-4 h-4 mr-1" /> Календар</TabsTrigger>
           <TabsTrigger value="reports" data-testid="tab-reports"><FileText className="w-4 h-4 mr-1" /> Отчети</TabsTrigger>
-          <TabsTrigger value="payroll-weeks" data-testid="tab-payroll-weeks"><DollarSign className="w-4 h-4 mr-1" /> Заплати</TabsTrigger>
+          {seesFinance && <TabsTrigger value="payroll-weeks" data-testid="tab-payroll-weeks"><DollarSign className="w-4 h-4 mr-1" /> Заплати</TabsTrigger>}
           <TabsTrigger value="projects" data-testid="tab-projects"><MapPin className="w-4 h-4 mr-1" /> Обекти</TabsTrigger>
-          <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Аванси и заеми</TabsTrigger>
+          {seesFinance && <TabsTrigger value="advances" data-testid="tab-advances"><Banknote className="w-4 h-4 mr-1" /> Аванси и заеми</TabsTrigger>}
           <TabsTrigger value="attendance" data-testid="tab-attendance"><Clock className="w-4 h-4 mr-1" /> Присъствия</TabsTrigger>
-          <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Фишове</TabsTrigger>
+          {seesFinance && <TabsTrigger value="payroll" data-testid="tab-payroll"><CreditCard className="w-4 h-4 mr-1" /> Фишове</TabsTrigger>}
           <TabsTrigger value="assets" data-testid="tab-assets"><Wrench className="w-4 h-4 mr-1" /> Активи</TabsTrigger>
         </TabsList>
 
@@ -701,14 +711,14 @@ export default function EmployeeDetailPage() {
                 <div className="flex items-center gap-4 p-3 border-b border-border text-xs text-muted-foreground">
                   <span>Обекти: <strong className="text-foreground">{projects.length}</strong></span>
                   <span>Часове: <strong className="text-foreground font-mono">{totalH.toFixed(0)}ч</strong></span>
-                  <span>Стойност: <strong className="text-primary font-mono">{totalV.toFixed(0)} €</strong></span>
+                  {!moneyHidden && <span>Стойност: <strong className="text-primary font-mono">{totalV.toFixed(0)} €</strong></span>}
                 </div>
                 <Table>
                   <TableHeader><TableRow>
                     <TableHead className="text-[10px]">Обект</TableHead>
                     <TableHead className="text-[10px] text-center">Дни</TableHead>
                     <TableHead className="text-[10px] text-center">Часове</TableHead>
-                    <TableHead className="text-[10px] text-center">Стойност, €</TableHead>
+                    {!moneyHidden && <TableHead className="text-[10px] text-center">Стойност, €</TableHead>}
                   </TableRow></TableHeader>
                   <TableBody>
                     {projects.map(p => (
@@ -716,14 +726,14 @@ export default function EmployeeDetailPage() {
                         <TableCell className="text-sm"><MapPin className="w-3 h-3 inline mr-1 text-primary" /><span className="text-primary">{p.project_name}</span></TableCell>
                         <TableCell className="text-center font-mono text-sm">{p.days}</TableCell>
                         <TableCell className="text-center font-mono text-sm font-bold">{p.hours.toFixed(0)}</TableCell>
-                        <TableCell className="text-center font-mono text-sm text-primary">{p.value.toFixed(0)} €</TableCell>
+                        {!moneyHidden && <TableCell className="text-center font-mono text-sm text-primary">{p.value.toFixed(0)} €</TableCell>}
                       </TableRow>
                     ))}
                     <TableRow className="border-t-2 border-border font-bold">
                       <TableCell className="text-xs">ОБЩО</TableCell>
                       <TableCell />
                       <TableCell className="text-center font-mono text-xs">{totalH.toFixed(0)}</TableCell>
-                      <TableCell className="text-center font-mono text-xs text-primary">{totalV.toFixed(0)} €</TableCell>
+                      {!moneyHidden && <TableCell className="text-center font-mono text-xs text-primary">{totalV.toFixed(0)} €</TableCell>}
                     </TableRow>
                   </TableBody>
                 </Table>
@@ -801,9 +811,9 @@ export default function EmployeeDetailPage() {
                     const { bAll, bApproved, bUnpaidApproved, bPaid, bDraftSub, bRejected } = bucketsFrom(dossier?.reports);
                     return (
                       <>
-                        <span>Одобрени: <strong className="text-emerald-400 font-mono">{bApproved.count} отч · {bApproved.hours}ч · {bApproved.value.toFixed(0)} €</strong></span>
-                        <span>За плащане: <strong className="text-amber-400 font-mono">{bUnpaidApproved.count} отч · {bUnpaidApproved.hours}ч · {bUnpaidApproved.value.toFixed(0)} €</strong></span>
-                        <span>Платени: <strong className="text-emerald-400 font-mono">{bPaid.count} отч · {bPaid.hours}ч · {bPaid.value.toFixed(0)} €</strong></span>
+                        <span>Одобрени: <strong className="text-emerald-400 font-mono">{bApproved.count} отч · {bApproved.hours}ч{moneyHidden ? "" : ` · ${bApproved.value.toFixed(0)} €`}</strong></span>
+                        {!moneyHidden && <span>За плащане: <strong className="text-amber-400 font-mono">{bUnpaidApproved.count} отч · {bUnpaidApproved.hours}ч · {bUnpaidApproved.value.toFixed(0)} €</strong></span>}
+                        {!moneyHidden && <span>Платени: <strong className="text-emerald-400 font-mono">{bPaid.count} отч · {bPaid.hours}ч · {bPaid.value.toFixed(0)} €</strong></span>}
                         <span>Чернови/подадени: <strong className="text-gray-400 font-mono">{bDraftSub.count}</strong></span>
                         {bRejected.count > 0 && <span>Отхвърлени: <strong className="text-red-400 font-mono">{bRejected.count}</strong></span>}
                         <span className="text-muted-foreground/70">Всички въведени: <strong className="text-foreground font-mono">{bAll.count}</strong></span>
@@ -818,9 +828,9 @@ export default function EmployeeDetailPage() {
                     <TableHead className="text-[10px]">СМР</TableHead>
                     <TableHead className="text-[10px] text-center">Часове</TableHead>
                     <TableHead className="text-[10px] text-center">Извънр.</TableHead>
-                    <TableHead className="text-[10px] text-center">Стойност, €</TableHead>
+                    {!moneyHidden && <TableHead className="text-[10px] text-center">Стойност, €</TableHead>}
                     <TableHead className="text-[10px]">Статус</TableHead>
-                    <TableHead className="text-[10px]">Заплата</TableHead>
+                    {!moneyHidden && <TableHead className="text-[10px]">Заплата</TableHead>}
                   </TableRow></TableHeader>
                   <TableBody>
                     {dossier.reports.lines.map((r, i) => (
@@ -830,9 +840,9 @@ export default function EmployeeDetailPage() {
                         <TableCell className="text-xs truncate max-w-[120px]">{r.smr || "—"}</TableCell>
                         <TableCell className="text-center text-xs font-mono font-bold">{r.hours}</TableCell>
                         <TableCell className={`text-center text-xs font-mono ${r.overtime > 0 ? "text-amber-400 font-bold" : "text-muted-foreground"}`}>{r.overtime > 0 ? `+${r.overtime}` : "—"}</TableCell>
-                        <TableCell className="text-center text-xs font-mono text-primary">{r.value > 0 ? r.value.toFixed(0) : "—"}</TableCell>
+                        {!moneyHidden && <TableCell className="text-center text-xs font-mono text-primary">{r.value > 0 ? r.value.toFixed(0) : "—"}</TableCell>}
                         <TableCell><Badge variant="outline" className={`text-[9px] ${r.status === "APPROVED" ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" : r.status === "DRAFT" ? "bg-gray-500/15 text-gray-400 border-gray-500/30" : r.status === "SUBMITTED" ? "bg-blue-500/15 text-blue-400 border-blue-500/30" : "bg-red-500/15 text-red-400 border-red-500/30"}`}>{r.status === "APPROVED" ? "Одобрен" : r.status === "DRAFT" ? "Чернова" : r.status === "SUBMITTED" ? "Подаден" : r.status}</Badge></TableCell>
-                        <TableCell>{r.payroll_status === "paid" ? <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Платен</Badge> : r.payroll_status === "batched" ? <Badge variant="outline" className="text-[9px] bg-violet-500/15 text-violet-400 border-violet-500/30">В пакет</Badge> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>
+                        {!moneyHidden && <TableCell>{r.payroll_status === "paid" ? <Badge variant="outline" className="text-[9px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30">Платен</Badge> : r.payroll_status === "batched" ? <Badge variant="outline" className="text-[9px] bg-violet-500/15 text-violet-400 border-violet-500/30">В пакет</Badge> : <span className="text-[10px] text-muted-foreground">—</span>}</TableCell>}
                       </TableRow>
                     ))}
                   </TableBody>

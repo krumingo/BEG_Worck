@@ -10,6 +10,7 @@ from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m9
 from app.utils.audit import log_audit
+from app.permissions.money_write import require_money_write
 from ..models.overhead import (
     OVERHEAD_FREQUENCIES, OVERHEAD_ALLOCATION_TYPES, OVERHEAD_METHODS,
     OverheadCategoryCreate, OverheadCategoryUpdate,
@@ -39,12 +40,12 @@ def today_str():
 
 
 def check_overhead_access(user: dict, write: bool = False) -> bool:
-    """Check if user has access to overhead cost system"""
-    if user["role"] in ["Admin", "Owner", "Accountant"]:
-        return True
-    if user["role"] == "SiteManager" and not write:
-        return True
-    return False
+    """Check if user has access to overhead cost system.
+
+    SEC-02 (R20-1, Krum 06.11.2026): overhead is company finance — Owner/Admin/Accountant
+    only, for reads too. The former SiteManager read is removed; ``write`` is kept for the
+    callers' signature (the write rule was already the same three roles)."""
+    return user["role"] in ["Admin", "Owner", "Accountant"]
 
 
 # ── OH-01: archive instead of delete (CLAUDE.md §2.9, FLOW-024) ────
@@ -487,11 +488,15 @@ async def _refuse_overlap(tenant: TenantData, period_start: str, period_end: str
 @router.post("/overhead/snapshots/compute")
 async def compute_overhead_snapshot(
     data: OverheadSnapshotCompute,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot_compute.execute", module="M9",
+        resource_type="overhead_snapshot")),  # SEC-01-C01: before any read/write
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
     user: dict = Depends(require_m9),
 ):
     """FG-86/FG-88: R29 key required; a new snapshot of a period SUPERSEDES the active one
-    (and its allocations) — one active snapshot per period, versioned, never two."""
+    (and its allocations) — one active snapshot per period, versioned, never two.
+    #69 x OH-01 merge: the permission gate is #69's; the ONE key path is OH-01's KeyedWrite."""
     tenant = _tenant(user)
     if not check_overhead_access(user, write=True):
         raise HTTPException(status_code=403, detail="Access denied")

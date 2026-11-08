@@ -1,6 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import { createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,13 @@ import {
 } from "lucide-react";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 
+// SEC-01-C03: the money POSTs of this page carry an Idempotency-Key (a retry or a
+// double click never writes a second payment).
+const MONEY_POSTS = new Set(["/subcontractor-payments", "/overhead-snapshots"]);
+const moneyKeys = createIdempotencyHolder();
+
 export default function ProjectOperationsPage() {
+  const clientActKey = useRef(null); // ACT-01 (R29): Idempotency-Key of the pending act
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [project, setProject] = useState(null);
@@ -89,19 +96,66 @@ export default function ProjectOperationsPage() {
   const handleSave = async (endpoint, payload, method = "post") => {
     setSaving(true);
     try {
-      if (method === "post") await API.post(endpoint, payload);
+      if (method === "post" && MONEY_POSTS.has(endpoint)) {
+        await API.post(endpoint, payload, idempotencyHeaders(moneyKeys.keyFor(endpoint, payload)));
+        moneyKeys.done();
+      } else if (method === "post") await API.post(endpoint, payload);
       else await API.put(endpoint, payload);
       setDialog(null);
       setConfirmDialog(null);
       fetchAll();
     } catch (err) {
-      alert(err.response?.data?.detail || "Грешка");
+      const detail = err.response?.data?.detail;
+      alert(detail?.message || detail || "Грешка");
     } finally { setSaving(false); }
   };
 
   // Confirm wrapper
   const showConfirm = (action, label, onConfirm) => {
     setConfirmDialog({ action, label, onConfirm });
+  };
+
+  // ACT-01: a client act is a money write — one Idempotency-Key per submission (R29), kept
+  // for a retry only while the server has not answered; the 409/422 reason is shown in
+  // Bulgarian (e.g. "над остатъка", "различна цена от офертата").
+  const createClientActFromOffer = (offerId, payload) =>
+    postClientActWrite(`/client-acts/from-offer/${offerId}`, payload);
+  // FG-119: confirming an act is a money write too (finance roles, key, Bulgarian reason).
+  // FG-142: the confirmation names the values shown; if the server recomputes a different
+  // value (409 ACT_VALUE_CHANGED) the new total is shown and confirmed again (new key).
+  const confirmClientAct = async (act) => {
+    const shown = {
+      expected_total: act.total,
+      expected_line_values: Object.fromEntries((act.lines || []).map(l => [l.id, l.line_total])),
+    };
+    const changed = await postClientActWrite(`/client-acts/${act.id}/confirm`, shown, true);
+    if (changed && window.confirm(`${changed.message}\nНова сума: ${Number(changed.total).toFixed(2)} € с ДДС. Потвърждавате ли тази сума?`)) {
+      await postClientActWrite(`/client-acts/${act.id}/confirm`,
+        { expected_total: changed.total, expected_line_values: changed.line_values });
+    }
+  };
+  const postClientActWrite = async (endpoint, payload, returnValueChanged = false) => {
+    setSaving(true);
+    if (!clientActKey.current) {
+      clientActKey.current = window.crypto?.randomUUID ? window.crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    }
+    try {
+      await API.post(endpoint, payload,
+        { headers: { "Idempotency-Key": clientActKey.current } });
+      clientActKey.current = null;
+      setDialog(null);
+      setConfirmDialog(null);
+      fetchAll();
+    } catch (err) {
+      if (err.response) clientActKey.current = null;
+      const detail = err.response?.data?.detail;
+      if (returnValueChanged && detail?.error_code === "ACT_VALUE_CHANGED") {
+        setSaving(false);
+        return detail;
+      }
+      alert((detail && typeof detail === "object" ? detail.message : detail) || "Грешка");
+    } finally { setSaving(false); }
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -200,10 +254,10 @@ export default function ProjectOperationsPage() {
                   <TableRow key={i}>
                     <TableCell className="font-mono text-sm text-primary">{act.act_number}</TableCell>
                     <TableCell className="text-sm">{formatDate(act.act_date)}</TableCell>
-                    <TableCell className="text-right font-mono text-sm">{act.subtotal?.toFixed(2)} €</TableCell>
+                    <TableCell className="text-right font-mono text-sm">{act.subtotal != null ? `${act.subtotal.toFixed(2)} €` : "—"}</TableCell>
                     <TableCell><Badge variant="outline" className={`text-[9px] ${act.status === "Accepted" ? "bg-emerald-500/15 text-emerald-400" : ""}`}>{act.status === "Draft" ? "Чернова" : act.status === "Accepted" ? "Приет" : act.status}</Badge></TableCell>
                     <TableCell>
-                      {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => handleSave(`/client-acts/${act.id}/confirm`, {}))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
+                      {act.status === "Draft" && <Button size="sm" variant="outline" className="h-6 text-[10px] px-2" onClick={() => showConfirm("confirm-act", `Потвърди акт ${act.act_number}?`, () => confirmClientAct(act))} data-testid={`confirm-ca-${i}`}><Check className="w-3 h-3 mr-0.5" />Потвърди</Button>}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -319,7 +373,7 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", form))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
+            <Button onClick={() => showConfirm("pay", `Потвърди плащане ${form.amount} €?`, () => handleSave("/subcontractor-payments", { ...form, amount: Number(form.amount) }))} disabled={saving || !form.amount} className="bg-emerald-600 hover:bg-emerald-700" data-testid="save-pay-btn"><CreditCard className="w-4 h-4 mr-1" />Плати</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -340,7 +394,7 @@ export default function ProjectOperationsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialog(null)}>Отказ</Button>
-            <Button onClick={() => handleSave(`/client-acts/from-offer/${form.source_offer_id}`, { percent: parseFloat(form.percent) || 100, act_date: form.act_date })} disabled={saving || !form.source_offer_id} data-testid="save-ca-btn"><Check className="w-4 h-4 mr-1" />Създай</Button>
+            <Button onClick={() => createClientActFromOffer(form.source_offer_id, { percent: parseFloat(form.percent) || 100, act_date: form.act_date })} disabled={saving || !form.source_offer_id} data-testid="save-ca-btn"><Check className="w-4 h-4 mr-1" />Създай</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

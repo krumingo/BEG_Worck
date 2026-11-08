@@ -7,16 +7,25 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 
 
-async def build_morning_briefing(org_id: str, date: str = None) -> dict:
+async def build_morning_briefing(org_id: str, date: str = None, *,
+                                 band_user: dict = None) -> dict:
+    """``band_user`` (SEC-02-G, audit SEC71-05; R31): the session user of a caller WITHOUT
+    the finance right. For him, a site whose cumulative labor cost comes from fewer than
+    2 paid workers has no budget band here — no burn reason / severity, and its money
+    alarms are not counted or listed (the same rule as the pulse and /alarms)."""
     tenant = TenantData.for_resolved_org(db, org_id)
     now = datetime.now(timezone.utc)
     today = date or now.strftime("%Y-%m-%d")
+    excl, hidden_sites = {}, set()
+    if band_user is not None:
+        from app.permissions.money_write import money_alarm_exclusion
+        excl = await money_alarm_exclusion(band_user)
 
     # ── A. Critical Alarms ──────────────────────────────────────
-    critical = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical"})
-    warning = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning"})
+    critical = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical", **excl})
+    warning = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning", **excl})
     top_alarms = await tenant.alarm_events.find(
-        {"org_id": org_id, "status": "active"},
+        {"org_id": org_id, "status": "active", **excl},
         {"_id": 0, "id": 1, "message": 1, "severity": 1, "site_name": 1, "triggered_at": 1},
     ).sort([("severity", -1), ("triggered_at", -1)]).limit(3).to_list(3)
 
@@ -25,6 +34,9 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
         {"org_id": org_id, "status": {"$in": ["Active", "Draft"]}},
         {"_id": 0, "id": 1, "name": 1},
     ).to_list(100)
+    if band_user is not None:
+        from app.permissions.money_write import single_paid_sites
+        hidden_sites = await single_paid_sites(band_user, [p["id"] for p in projects])
 
     top_risks = []
     for p in projects:
@@ -35,7 +47,7 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
         # Budget burn
         budgets = await tenant.activity_budgets.find({"org_id": org_id, "project_id": pid}, {"_id": 0, "labor_budget": 1}).to_list(50)
         total_budget = sum(b.get("labor_budget", 0) for b in budgets)
-        if total_budget > 0:
+        if total_budget > 0 and pid not in hidden_sites:   # SEC-02-G (SEC71-05): no band
             sessions_cost = 0
             async for s in tenant.work_sessions.find({"org_id": org_id, "site_id": pid, "ended_at": {"$ne": None}}, {"_id": 0, "labor_cost": 1}):
                 sessions_cost += s.get("labor_cost", 0)
@@ -59,7 +71,7 @@ async def build_morning_briefing(org_id: str, date: str = None) -> dict:
                 reasons.append("Липсва отчет")
 
         # Site alarms
-        site_critical = await tenant.alarm_events.count_documents({"org_id": org_id, "site_id": pid, "status": "active", "severity": "critical"})
+        site_critical = await tenant.alarm_events.count_documents({"org_id": org_id, "site_id": pid, "status": "active", "severity": "critical", **excl})
         if site_critical > 0:
             reasons.append(f"{site_critical} критични аларми")
             severity = "critical"

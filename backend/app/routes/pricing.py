@@ -12,6 +12,7 @@ from app.deps.modules import require_m2
 from app.services.pricing_engine import get_material_price, batch_get_prices
 from app.routes.smr_analysis import calc_line, calc_totals
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write, require_finance_read
 
 
 def _tenant(user: dict) -> TenantData:
@@ -28,7 +29,11 @@ class BatchRequest(BaseModel):
 # ── Endpoints ──────────────────────────────────────────────────────
 
 @router.get("/pricing/material")
-async def get_single_price(name: str, force: bool = False, user: dict = Depends(require_m2)):
+async def get_single_price(
+    name: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.material_price.read", module="M2", resource_type="material_price")),  # SEC-02 (R20-1): before any read
+    force: bool = False, user: dict = Depends(require_m2)):
     result = await get_material_price(name, user["org_id"], force_refresh=force)
     return result
 
@@ -42,13 +47,23 @@ async def get_batch_prices(data: BatchRequest, user: dict = Depends(require_m2))
 
 
 @router.post("/pricing/refresh")
-async def refresh_price(name: str, user: dict = Depends(require_m2)):
+async def refresh_price(
+    name: str,
+    _sec01: dict = Depends(require_money_write(
+        "pricing.material_price_refresh.execute", module='M2',
+        resource_type="material_price")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     result = await get_material_price(name, user["org_id"], force_refresh=True)
     return result
 
 
 @router.get("/pricing/history")
-async def get_price_history(name: str, user: dict = Depends(require_m2)):
+async def get_price_history(
+    name: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.material_price_history.read", module="M2", resource_type="material_price_history")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     norm = name.lower().strip()
     doc = await tenant.material_prices.find_one(
@@ -67,6 +82,8 @@ async def get_price_history(name: str, user: dict = Depends(require_m2)):
 
 @router.get("/pricing/catalog")
 async def get_catalog(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.material_price_catalog.read", module="M2", resource_type="material_price_catalog")),  # SEC-02 (R20-1): before any read
     category: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):

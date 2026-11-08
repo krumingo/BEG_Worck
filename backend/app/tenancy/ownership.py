@@ -81,14 +81,15 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_PEOPLE,
               "users", "persons", "employee_profiles", "brigades", "attendance_entries",
               "work_sessions", "employee_daily_reports", "daily_work_logs", "work_reports",
-              "labor_entries", "reminder_logs", "notifications"),
+              "labor_entries", "reminder_logs", "notifications", "password_reset_tokens"),
     **_family(FAMILY_PARTIES,
               "companies", "clients", "counterparties", "subcontractors",
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",
               "subcontractor_payments", "subcontractor_performance"),
     **_family(FAMILY_COMMERCIAL,
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
-              "change_orders", "client_acts", "contract_payments", "invoices",
+              "change_orders", "client_acts", "client_act_line_totals", "contract_payments",
+              "invoices",
               "invoice_lines", "invoice_versions", "invoice_settings", "supplier_invoices",
               "ocr_invoice_intake", "historical_offer_rows", "historical_import_batches",
               "sales"),
@@ -102,7 +103,14 @@ ORG_KEYED: Dict[str, str] = {
               "overhead_period_locks"),
     **_family(FAMILY_WAREHOUSE,
               "warehouses", "location_nodes", "warehouse_transactions", "warehouse_batches",
-              "stock_thresholds", "deliveries"),
+              "stock_thresholds", "deliveries",
+              # LIVE-OPS-01 / TASK 5C
+              #   • warehouse_in_transit — Rule B transit-lot projection written
+              #     by the canonical movement projector.
+              #   • warehouse_ledger_counters — tenant-scoped atomic counter for
+              #     canonical ledger sequence allocation (C12.3, under
+              #     `_next_ledger_sequence`); never read by business code.
+              "warehouse_in_transit", "warehouse_ledger_counters"),
     **_family(FAMILY_MATERIALS,
               "items", "material_requests", "material_entries", "material_prices",
               "material_waste_entries", "material_consumption_log", "planned_materials",
@@ -139,6 +147,13 @@ AUTHORIZATION_COLLECTIONS: FrozenSet[str] = frozenset({"project_team", "users"})
 TENANT_ID_KEYED_PREFIXES: Tuple[str, ...] = ("md_",)
 TENANT_ID_KEYED: FrozenSet[str] = frozenset({
     "audit_events", "audit_idempotency", "audit_counters",
+    # LIVE-OPS-01 / TASK 5C — CODEX C13.1, reclassified in 5C-C18:
+    # "audit_chain_head" is the per-tenant pivot of the canonical audit
+    # chain (one document per tenant, keyed and uniquely indexed by
+    # ``tenant_id``, written only in the same transaction as the
+    # ``audit_events`` row it chains). It belongs to the W0-03 audit store
+    # like ``audit_counters``, not to the org_id-keyed warehouse family.
+    "audit_chain_head",
 })
 
 #: The tenant root: one document per organization; its ``id`` is the tenant key.
@@ -153,7 +168,14 @@ TENANT_ROOT = "organizations"
 #: without trusting the event: it is keyed by the Stripe event id alone, holds
 #: ids/class/reason only (no payload, e-mail or amount) and is never read back
 #: into any tenant's view. It must not be backfilled to a tenant either.
-TECHNICAL: FrozenSet[str] = frozenset({"md_uniqueness_runs", "billing_webhook_rejections"})
+#:
+#: ``auth_rate_limits`` / ``auth_security_events`` (AUTH-01 C01): pre-session
+#: rate-limit counters and security events — an unknown email or a throttled IP
+#: belongs to no tenant, and neither collection holds a business record, a raw
+#: email, a token or a password.
+TECHNICAL: FrozenSet[str] = frozenset({
+    "md_uniqueness_runs", "billing_webhook_rejections",
+    "auth_rate_limits", "auth_security_events"})
 
 #: Collections a PLATFORM principal (not a tenant) legitimately writes rows to:
 #: the platform administrator's own user record and its security log

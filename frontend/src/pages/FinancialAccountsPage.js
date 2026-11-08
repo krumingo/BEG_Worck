@@ -1,8 +1,9 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ import {
 } from "lucide-react";
 
 export default function FinancialAccountsPage() {
+  const movementKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -142,17 +144,19 @@ export default function FinancialAccountsPage() {
           from_account_id: movement.from_account_id,
           to_account_id: movement.to_account_id,
           amount: amt, date: movement.date, note: movement.note,
-        });
+        }, idempotencyHeaders(movementKey.get()));
       } else {
         if (!movement.to_account_id) { alert("Изберете сметка"); setSaving(false); return; }
         await API.post("/finance/account-funding", {
           account_id: movement.to_account_id, amount: amt, date: movement.date, note: movement.note,
-        });
+        }, idempotencyHeaders(movementKey.get()));
       }
+      movementKey.settle();
       setMovementOpen(false);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      movementKey.settle(err);
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally {
       setSaving(false);
     }
