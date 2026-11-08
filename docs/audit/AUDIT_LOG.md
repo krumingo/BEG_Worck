@@ -5498,3 +5498,28 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 - **#84 `b99c0eb`** (FG-264 on top of `2c2e75f`, code): the run on `2c2e75f` was stopped (stale) and re-queued on the new head.
 - **#86 `19d77cf`** (PRJ-01 rounds 2–3: FG-252..256, R56, "paid" from all ledger payments and advances): queued.
 - **Serial order:** #74 → #84 → #86.
+
+## 2026-11-08 18:25 UTC: #74 `4c8b313` (OH-01 + merge `182ea574` of main `fddb018`): PASS, no blocking finding
+
+- **Merge checks:** see the previous entry (resolutions; the #69 gate is kept on the snapshot route; role-union 0; PM-01 45/45, 0 extra).
+
+| Gate | Result |
+|---|---|
+| oh01 | 231 |
+| probes oh01 + Codex OH74 interruptions | 27 |
+| probe f6903 | FAILS none |
+| SEC-01 | 30 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+**#84 `d5d3089`** (FG-264 + Р58/FG-265 + merge `142d2720` of main `fddb018`): merge checks done ahead of its run.
+- **Byte check:** the merge differs from `merge-tree(158ae878, fddb018)` only in the generated `run_meta.json`.
+- **Role-union:** 0 differences.
+- **PM-01:** 360/360, 0 extra.
+- **Р58 reader** `GET /finance/company-costs/accepted-differences`: finance roles only, read-only, derived from the accepted notes.
+  - Observation (non-blocking): the company-cost part is not in the company finance summaries.
+- **#86:** skipped at the orchestrator's request until its final head (it will merge `fddb018`).
