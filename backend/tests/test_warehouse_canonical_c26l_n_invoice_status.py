@@ -51,11 +51,44 @@ async def _invoice(canonical_mongo_db, allow_always_gate, monkeypatch, mode):
         "currency": "EUR", "lines": [{"description": "Лепило", "line_total": 100}]}})
     await db["financial_accounts"].insert_one({"id": "acc-c26", "org_id": T, "type": "Bank",
                                                "name": "Банка", "is_default": True})
+    await _verified_supplier(db, monkeypatch)
     from app.tenancy.data_access import TenantData
     await lines.recalculate_invoice_totals(TenantData.for_resolved_org(db, T), INV)
     inv = await db["invoices"].find_one({"id": INV})
     assert (inv["status"], inv["total"]) == ("Draft", 120.0)
     return db, lines, finance
+
+
+SUPPLIER = "cp-c26-supplier"
+ACCOUNTANT = {"id": "u-c26l-acct", "org_id": T, "role": "Accountant", "email": "a@x"}
+
+
+def _iban(bban: str) -> str:
+    digits = "".join(str(int(ch, 36)) for ch in bban + "BG00")
+    return "BG%02d%s" % (98 - int(digits) % 97, bban)
+
+
+async def _verified_supplier(db, monkeypatch):
+    """CP-01 (FLOW-006 / FLOW-010 §8, R48.1; audit CP83-04): a bank quick-pay of a received
+    invoice goes only to a VERIFIED account of its supplier. The fixture's supplier gets one
+    through the real register — entered by the Accountant, verified by the Owner (a different
+    person) from two independent sources — and the invoice names that supplier. The guard
+    itself stays on (production = enforce)."""
+    from app.routes import bank_accounts
+    monkeypatch.setattr(bank_accounts, "db", db)
+    await db["counterparties"].insert_one({"id": SUPPLIER, "org_id": T, "name": "Доставчик C26",
+                                           "type": "supplier", "eik": "260260260", "active": True})
+    await db["invoices"].update_one({"id": INV}, {"$set": {"supplier_counterparty_id": SUPPLIER}})
+    acc = await bank_accounts.register_counterparty_bank_account(
+        SUPPLIER, {"iban": _iban("UNCR70001522260260")}, user=ACCOUNTANT,
+        idempotency_key="c26-register")
+    verified = await bank_accounts.verify_bank_account(acc["id"], {
+        "version": acc["version"], "counterparty_confirmed_by": "управител на доставчика",
+        "sources": [{"kind": "contract", "description": "договор за доставка",
+                     "source_origin": "contract"},
+                    {"kind": "phone_known", "description": "обаждане на записания телефон",
+                     "source_origin": "known_contact"}]}, user=OWNER, idempotency_key="c26-verify")
+    assert verified["status"] == "verified"
 
 
 def _edit(lines, price=20):
