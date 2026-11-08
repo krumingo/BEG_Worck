@@ -5,8 +5,8 @@ This PR has a **data and index migration**. It is a critical migration (CLAUDE.m
 ## Steps per tenant operational database (Staging first, then Production)
 
 1. **Deploy the build.**
-   - At startup the application builds the partial index for our outgoing series (`inv_cn_02_outgoing_invoice_no`) and the per-supplier index (`inv_cn_02_supplier_invoice_no`).
-   - On legacy data, building the supplier index may fail: startup tolerates that, and the migration below reports why.
+   - At startup the application builds the partial index for our outgoing series (`inv_cn_02_outgoing_invoice_no`).
+   - The per-supplier index (`inv_cn_02_supplier_invoice_no`) is built **only by the migration**, after its `supplier_key` backfill (FG-248). Until then the runtime check refuses duplicates, including legacy rows matched by ЕИК / counterparty.
    - Until the migration has run, any create that hits the legacy index answers **409**, never a 500.
 2. **Dry run (read only):** `python scripts/inv_cn_01_migrate.py`, with `MONGO_URL` / `DB_NAME` of the target. It prints a JSON report:
    - `legacy_index`: the legacy unique+sparse `(org_id, invoice_no)` index and the superseded `inv_cn_01_invoice_no_by_direction`, both to be dropped;
@@ -15,7 +15,8 @@ This PR has a **data and index migration**. It is a critical migration (CLAUDE.m
      - `drafts_number_removed`: drafts whose `invoice_no` is null or "", which lose the field;
      - `legacy_numbered_drafts_to_issue`: outgoing drafts numbered before INV-CN-01; Р49(1) makes them `Issued`;
      - `supplier_keys_to_set`: the `supplier_key` backfill (ЕИК, else counterparty record, else name);
-     - `supplier_conflicts`: the same supplier + number twice. `apply` refuses while any exist; each must be resolved first (cancel the wrong one, Р51(3)).
+     - `supplier_conflicts`: the same supplier + number twice. `apply` refuses while any exist; each must be resolved first (cancel the wrong one, Р51(3));
+     - `supplier_tax_id_missing`: legacy supplier invoices without ЕИК / foreign tax number. `apply` gives each a DQ task for the Accountant (Р55(1)).
    - `changes`: the total. 0 means nothing to do.
 3. **Owner approval of that exact report**, recorded with the deployment (approver, report hash, time).
 4. **Apply:** `python scripts/inv_cn_01_migrate.py --apply --actor <approved operator id>`. It is idempotent: a second run finds `changes: 0`. Each legacy draft that becomes `Issued` gets one AuditEvent, `finance.invoice.issued_by_migration`.

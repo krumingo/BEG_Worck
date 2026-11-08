@@ -1,0 +1,6 @@
+# INV-CN-01 Addendum D (Р55): the current test file run against the previous head d32a33f, real Mongo, -k enforce
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg248_before_the_migration_a_legacy_supplier_number_still_blocks_a_duplicate[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg249_supplier_tax_id_is_mandatory_duplicates_by_put_are_409_legacy_gets_dq[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg250_accountant_registers_owner_accepts_never_the_same_person[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg251_an_accepted_difference_after_a_reversal_is_project_cost_in_the_acceptance_period[enforce]
+4 failed, 38 passed, 84 deselected, 1 warning in 29.98s
