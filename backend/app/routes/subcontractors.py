@@ -558,6 +558,19 @@ async def create_subcontractor_payment(
                        "сметка (Каса/Банка)"})
     account_id = account["id"]
 
+    # SEC-01-C03-D (FG-90, FLOW-021 "плащане над измереното без Approval"): a named act must
+    # be a CONFIRMED act of this package; the cap itself is reserved atomically below.
+    act_id = data.get("act_id")
+    if act_id is not None:
+        act = await tenant.subcontractor_acts.find_one({"id": act_id, "package_id": pkg_id},
+                                                       {"_id": 0, "id": 1, "status": 1})
+        if not act:
+            raise HTTPException(status_code=404, detail="Act not found in this package")
+        if act.get("status") != "confirmed":
+            raise HTTPException(status_code=409, detail={
+                "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+                "message": "Плаща се само по потвърден акт"})
+
     mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
     if mw.replay_id:            # the same request again: the original payment, no new row
         return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
@@ -584,15 +597,55 @@ async def create_subcontractor_payment(
     async with mw:
         await _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now)
         mw.result_id = payment["id"]
-    return {k: v for k, v in payment.items() if k != "_id"}
+    # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost the
+    # insert answers with the same payment (same payment_no) as the one that won it.
+    return await tenant.subcontractor_payments.find_one({"id": payment["id"]}, {"_id": 0})
+
+
+_COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
+_RESERVED_IDS = {"$ifNull": ["$cap_reservations", []]}
+
+
+async def _reserve_within_certified(tenant, pkg_id: str, amount: float, reservation_id: str) -> None:
+    """Reserve ``amount`` of the package's ``certified_total`` for ONE payment, atomically.
+
+    SEC-01-C03 addendum C (Codex F-69-03): the reservation carries the payment's key-derived
+    id (``cap_reservations``). A retry of the same key after a crash between this update and
+    the step bookkeeping finds its own id and changes nothing — it never reserves twice and is
+    never refused by its own earlier reservation. One conditional update on one document: it
+    matches when the id is already reserved, or when ``committed + amount <= certified``
+    (cent tolerance). Otherwise 409 PAYMENT_EXCEEDS_CERTIFIED, nothing written."""
+    already = {"$in": [reservation_id, _RESERVED_IDS]}
+    res = await tenant.subcontractor_packages.update_one(
+        {"id": pkg_id, "$or": [
+            {"cap_reservations": reservation_id},
+            {"$expr": {"$lte": [{"$add": [_COMMITTED, amount]},
+                                {"$add": [{"$ifNull": ["$certified_total", 0]}, 0.005]}]}}]},
+        [{"$set": {
+            "committed_paid_total": {"$cond": [already, _COMMITTED,
+                                               {"$round": [{"$add": [_COMMITTED, amount]}, 2]}]},
+            "cap_reservations": {"$cond": [already, _RESERVED_IDS,
+                                           {"$concatArrays": [_RESERVED_IDS, [reservation_id]]}]},
+        }}])
+    if res.matched_count == 0:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+            "message": "Плащането надвишава актуваното (сертифицираното) по пакета; "
+                       "над измереното се плаща само с одобрение (FLOW-021)"})
 
 
 async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now):
     """The writes of one subcontractor payment; each one done once per Idempotency-Key."""
     org_id, pkg_id, amount = user["org_id"], payment["package_id"], payment["amount"]
     account_id = account["id"]
-    if await mw.needs_insert(tenant.finance_payments, ledger_id):
-        await tenant.finance_payments.insert_one({
+    # SEC-01-C03-D (FG-90): the FIRST write reserves the amount against the package's
+    # certified total, atomically (one conditional update: two payments under different keys
+    # cannot both pass). Over the cap -> 409, nothing written. FLOW-021 allows more only with
+    # an Approval (W0-07), which does not exist yet -> refused. Done once per key.
+    await mw.step("reserve", lambda: _reserve_within_certified(tenant, pkg_id, amount,
+                                                             payment["id"]))
+    async with mw.insert_once():   # SEC-01-C03-C (F-69-01): atomic, _id = key-derived id
+        await tenant.finance_payments.insert_one(mw.unique({
             "id": ledger_id, "org_id": org_id,
             "direction": "Outflow", "amount": amount,
             "currency": pkg.get("currency", "EUR"),
@@ -605,18 +658,23 @@ async def _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, 
             "project_id": pkg["project_id"],
             "subcontractor_payment_id": payment["id"],
             "created_at": now, "updated_at": now,
-        })
-    if await mw.needs_insert(tenant.subcontractor_payments, payment["id"]):
-        await tenant.subcontractor_payments.insert_one(payment)
+        }))
+    async with mw.insert_once():
+        await tenant.subcontractor_payments.insert_one(mw.unique(payment))
     await mw.step("audit", lambda: log_audit(
         org_id, user["id"], user.get("email", ""), "subcontractor_payment_created",
         "payment", ledger_id, {"amount": amount, "package_id": pkg_id,
                                "subcontractor_payment_id": payment["id"],
-                               "account_id": account_id}))
+                               "account_id": account_id},
+        entry_id=mw.new_id("audit_payment")))   # one audit row per payment, even after a crash
 
     # Update package paid totals
-    all_pays = await tenant.subcontractor_payments.find({"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1}).to_list(200)
-    total_paid = sum(p["amount"] for p in all_pays)
+    # FG-105: summed in the database — a package with more than 200 payments is counted fully.
+    paid = await tenant.subcontractor_payments.aggregate([
+        {"$match": {"package_id": pkg_id, "status": "completed"}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+    ]).to_list(1)
+    total_paid = paid[0]["total"] if paid else 0
     certified = pkg.get("certified_total", 0)
     payable = round(certified - total_paid, 2)
 

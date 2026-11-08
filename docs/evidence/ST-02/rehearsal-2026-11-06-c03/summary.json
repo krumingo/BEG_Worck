@@ -1,0 +1,325 @@
+{
+  "bundles": {
+    "X": {
+      "artifact_sha256": "8f7d71e248adfe1d63fbab5690d4115fdadc7a5fe078b5ddbd7f7f29562f8a5d",
+      "commit": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "feature_flags": {
+        "PERMISSION_SERVICE_MODE": {
+          "expected": "shadow",
+          "source": "deployment parameter (staging): R15 staging default; layout default off; set by the deployment overlay, not .env"
+        }
+      },
+      "files": 1282,
+      "previous": null,
+      "release_id": "rel-20261106T203417Z-07da9aba0711",
+      "release_sha256": "c3fb6f37321b4296197434b8841d13a4a25d9b3f68c81b8ed12c352f123fe0a3",
+      "services_to_rebuild": [
+        "backend",
+        "frontend"
+      ],
+      "tree": "f08e24cc5c2fc628416bdb17934f9139c44184c2"
+    },
+    "X+1": {
+      "artifact_sha256": "37c5a64574032c3e87ec03c546d30def8cfb8e697d6650c0c33e2c4f23f8a91c",
+      "commit": "8e3b1901938dd4f96b792cd9234b8763f6feefc5",
+      "feature_flags": {
+        "PERMISSION_SERVICE_MODE": {
+          "expected": "shadow",
+          "source": "deployment parameter (staging): R15 staging default; layout default off; set by the deployment overlay, not .env"
+        }
+      },
+      "files": 1286,
+      "previous": "rel-20261106T203417Z-07da9aba0711",
+      "release_id": "rel-20261106T203722Z-8e3b1901938d",
+      "release_sha256": "edda0055ba9528261669e18833ce65621522934822b74d221d3f33b78b044bff",
+      "services_to_rebuild": [
+        "backend"
+      ],
+      "tree": "560f7ad48b3dbef87898cdfb97a3dd91c78de973"
+    }
+  },
+  "checks": [
+    {
+      "check": "X+1 is a descendant of X",
+      "detail": "07da9aba0711c0b0784bee8e58c5669ce81a93c1 -> 8e3b1901938dd4f96b792cd9234b8763f6feefc5",
+      "result": "PASS"
+    },
+    {
+      "check": "X Release Manifest feature_flags records PERMISSION_SERVICE_MODE=shadow (R26)",
+      "detail": "deployment parameter (staging): R15 staging default; layout default off; set by the deployment overlay, not .env",
+      "result": "PASS"
+    },
+    {
+      "check": "X initial deploy exit 0 (DEPLOYED)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "X record is a valid beg.deployment-record/v1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X record actor == --deployed-by",
+      "detail": "claude-st02-c03",
+      "result": "PASS"
+    },
+    {
+      "check": "X staging record names deployer and approver",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X PERMISSION_SERVICE_MODE observed in backend == staging parameter (shadow)",
+      "detail": "observed shadow, manifest expectation shadow",
+      "result": "PASS"
+    },
+    {
+      "check": "X R26 Release Manifest == staging parameter == backend (shadow)",
+      "detail": "live release rel-20261106T203417Z-07da9aba0711 manifest {'PERMISSION_SERVICE_MODE': 'shadow'}",
+      "result": "PASS"
+    },
+    {
+      "check": "X /api/version build_sha == bundle commit",
+      "detail": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "result": "PASS"
+    },
+    {
+      "check": "X environment_label == staging",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X UI bundle embeds the bundle SHA",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "ST-01 seed of tenants A/B exit 0",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "ST-01 scenarios ran with evidence (exit 0 or 1, not 2/3)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 Release Manifest feature_flags records PERMISSION_SERVICE_MODE=shadow (R26)",
+      "detail": "deployment parameter (staging): R15 staging default; layout default off; set by the deployment overlay, not .env",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 forced-failure deploy exit 1 (auto rollback)",
+      "detail": "exit 1",
+      "result": "PASS"
+    },
+    {
+      "check": "record ROLLED_BACK with runtime_rollback EXACT_IMAGE",
+      "detail": "ROLLED_BACK / EXACT_IMAGE",
+      "result": "PASS"
+    },
+    {
+      "check": "rollback record is a valid beg.deployment-record/v1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "rolled-back X record actor == --deployed-by",
+      "detail": "claude-st02-c03",
+      "result": "PASS"
+    },
+    {
+      "check": "rolled-back X staging record names deployer and approver",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "rolled-back X PERMISSION_SERVICE_MODE observed in backend == staging parameter (shadow)",
+      "detail": "observed shadow, manifest expectation shadow",
+      "result": "PASS"
+    },
+    {
+      "check": "rolled-back X R26 Release Manifest == staging parameter == backend (shadow)",
+      "detail": "live release rel-20261106T203417Z-07da9aba0711 manifest {'PERMISSION_SERVICE_MODE': 'shadow'}",
+      "result": "PASS"
+    },
+    {
+      "check": "rollback reason is the controlled smoke failure",
+      "detail": "GET /api/st02-forced-smoke-failure returned 404",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 images were really built and started before the failure",
+      "detail": "backend frontend",
+      "result": "PASS"
+    },
+    {
+      "check": "the failed attempt really served X+1 (/api/version during the failed smoke)",
+      "detail": "8e3b1901938dd4f96b792cd9234b8763f6feefc5",
+      "result": "PASS"
+    },
+    {
+      "check": "the failed attempt ran image IDs different from X",
+      "detail": "backend=sha256:9d4b4ee738c66e5461173fa7e90b8ab73e6f8991f00c27fd86a4c44547491a01,frontend=sha256:4990d2f0edda85e6e642db898d14ac6de9996bb5d7ce4e35b2e875b48ef8fc20",
+      "result": "PASS"
+    },
+    {
+      "check": "current release is still X",
+      "detail": "rel-20261106T203417Z-07da9aba0711",
+      "result": "PASS"
+    },
+    {
+      "check": "running image IDs == recorded image IDs of X",
+      "detail": "backend=sha256:4bc881d7d5598bff68229d81f0162f29ad211ab9b334fa17f861caf0ef24e1b5,frontend=sha256:831a8debb4970b090825678fea1ec763f8ff002256eff041f86a2def76ecedf8",
+      "result": "PASS"
+    },
+    {
+      "check": "after rollback /api/version == X",
+      "detail": "07da9aba0711c0b0784bee8e58c5669ce81a93c1",
+      "result": "PASS"
+    },
+    {
+      "check": "synthetic data kept (per-collection counts equal)",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "MongoDB container not recreated",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "R26 manifest PERMISSION_SERVICE_MODE=enforce != staging shadow -> precheck refused (exit 2, PRECHECK_FAILED)",
+      "detail": "exit 2: Release Manifest records PERMISSION_SERVICE_MODE=enforce, staging parameter is shadow _R26: build the staging bundle with the staging mode_",
+      "result": "PASS"
+    },
+    {
+      "check": "R26 refusal changed nothing (state and running image IDs equal)",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 deploy exit 0 (DEPLOYED)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 record is a valid beg.deployment-record/v1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 record actor == --deployed-by",
+      "detail": "claude-st02-c03",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 staging record names deployer and approver",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 PERMISSION_SERVICE_MODE observed in backend == staging parameter (shadow)",
+      "detail": "observed shadow, manifest expectation shadow",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 R26 Release Manifest == staging parameter == backend (shadow)",
+      "detail": "live release rel-20261106T203722Z-8e3b1901938d manifest {'PERMISSION_SERVICE_MODE': 'shadow'}",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 runtime image IDs differ from X",
+      "detail": "backend=sha256:34fa907cfdd830a58124338284ef5849dfaf925ba7911175a407c173bcc82fc1,frontend=sha256:9fe29efb61e346b2a6c279f5966f7e2247fe8c15699f135a186cb1c89d8e7bf0",
+      "result": "PASS"
+    },
+    {
+      "check": "rollback target recorded = X with its image IDs",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 /api/version build_sha == bundle commit",
+      "detail": "8e3b1901938dd4f96b792cd9234b8763f6feefc5",
+      "result": "PASS"
+    },
+    {
+      "check": "X+1 UI bundle embeds the bundle SHA",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "synthetic data kept across X -> X+1",
+      "detail": "",
+      "result": "PASS"
+    },
+    {
+      "check": "ST-01 scenarios on X+1 ran with evidence (exit 0 or 1)",
+      "detail": "exit 0",
+      "result": "PASS"
+    },
+    {
+      "check": "no secret value (JWT secret, seed password) in evidence",
+      "detail": {
+        "hits": [],
+        "scanned_files": 47,
+        "secret_values_checked": 2
+      },
+      "result": "PASS"
+    }
+  ],
+  "generated_at": "2026-11-06T20:41:53Z",
+  "project": "begwork-staging",
+  "result": "PASS",
+  "runtime_images": {
+    "X": "backend=sha256:4bc881d7d5598bff68229d81f0162f29ad211ab9b334fa17f861caf0ef24e1b5,frontend=sha256:831a8debb4970b090825678fea1ec763f8ff002256eff041f86a2def76ecedf8",
+    "X+1": "backend=sha256:34fa907cfdd830a58124338284ef5849dfaf925ba7911175a407c173bcc82fc1,frontend=sha256:9fe29efb61e346b2a6c279f5966f7e2247fe8c15699f135a186cb1c89d8e7bf0",
+    "X+1 failed attempt (rolled back)": "backend=sha256:9d4b4ee738c66e5461173fa7e90b8ab73e6f8991f00c27fd86a4c44547491a01,frontend=sha256:4990d2f0edda85e6e642db898d14ac6de9996bb5d7ce4e35b2e875b48ef8fc20",
+    "after rollback": "backend=sha256:4bc881d7d5598bff68229d81f0162f29ad211ab9b334fa17f861caf0ef24e1b5,frontend=sha256:831a8debb4970b090825678fea1ec763f8ff002256eff041f86a2def76ecedf8"
+  },
+  "scenario_results": {
+    "1-X/scenarios.json": {
+      "outcome": {
+        "exit_code": 0,
+        "reasons": [],
+        "status": "ok"
+      },
+      "scenarios": {
+        "blocked": 12,
+        "fail": 0,
+        "pass": 0
+      },
+      "steps": {
+        "blocked": 30,
+        "fail": 0,
+        "pass": 10
+      }
+    },
+    "3-X+1-deploy/scenarios.json": {
+      "outcome": {
+        "exit_code": 0,
+        "reasons": [],
+        "status": "ok"
+      },
+      "scenarios": {
+        "blocked": 12,
+        "fail": 0,
+        "pass": 0
+      },
+      "steps": {
+        "blocked": 30,
+        "fail": 0,
+        "pass": 10
+      }
+    }
+  },
+  "schema": "beg.st02-rehearsal/v1",
+  "staging_parameters": {
+    "ST02_HTTP_PORT": "18080",
+    "ST02_PERMISSION_SERVICE_MODE": "shadow",
+    "ST02_PROJECT": "begwork-staging"
+  },
+  "staging_root": "/tmp/claude-0/-home-user-BEG-Worck/aa21524c-c5e4-5ce0-984f-6c1cec35b2fb/scratchpad/st02c03/run",
+  "url": "http://127.0.0.1:18080"
+}

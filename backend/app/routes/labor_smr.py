@@ -62,7 +62,7 @@ async def create_labor_entry(
     """Create a labor time entry linked to an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    hours = money_value(data.get("hours"), "hours")  # SEC-01-C03: finite > 0, else 422 before any write
+    hours = money_value(data.get("hours"), "hours", places=None)  # SEC-01-C03: finite > 0, else 422 before any write
     await project_in_tenant(tenant, data.get("project_id"))  # SEC-01-C03-B (FG-29)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -99,8 +99,8 @@ async def create_labor_entry(
         return replay if show_money else without_labor_money(replay)
     entry["id"] = mw.new_id("labor_entry")
     async with mw:
-        if await mw.needs_insert(tenant.labor_entries, entry["id"]):
-            await tenant.labor_entries.insert_one(entry)
+        async with mw.insert_once():
+            await tenant.labor_entries.insert_one(mw.unique(entry))
         mw.result_id = entry["id"]
     out = {k: v for k, v in entry.items() if k != "_id"}
     return out if show_money else without_labor_money(out)
@@ -113,7 +113,19 @@ async def sync_labor_entries_from_work_reports(
         "labor.work_report_sync.execute", module="M2", resource_type="labor_entry",
         project_from="body")),  # SEC-01-C01 (R16): before any read/write
     user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
+    """SEC-01-C03-C (F-69-02, R29): key required (428); the inputs are fingerprinted and a
+    repeat of the key returns the stored answer, without running the sync again."""
+    mw = await MoneyWrite.begin(user, "labor.work_report_sync.execute", idempotency_key, data)
+    if mw.replay_id:
+        return mw.replay_payload()
+    async with mw:
+        mw.result_payload = await _sync_labor_entries(data, user)
+    return mw.result_payload
+
+
+async def _sync_labor_entries(data: dict, user: dict) -> dict:
     """Sync labor entries from existing work reports for a project, with optional execution package mapping"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -284,7 +296,19 @@ async def recompute_execution_package_labor(
         "labor.package_recompute.execute", module="M2", resource_type="execution_package",
         project_from="path")),  # SEC-01-C01 (R16): before any read/write
     user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
+    """SEC-01-C03-C (F-69-02, R29): key required (428); a repeat returns the stored answer."""
+    mw = await MoneyWrite.begin(user, "labor.package_recompute.execute", idempotency_key,
+                                {"project_id": project_id})
+    if mw.replay_id:
+        return mw.replay_payload()
+    async with mw:
+        mw.result_payload = await _recompute_package_labor(project_id, user)
+    return mw.result_payload
+
+
+async def _recompute_package_labor(project_id: str, user: dict) -> dict:
     """Recompute planned hours and labor budget for execution packages"""
     tenant = _tenant(user)
     org_id = user["org_id"]

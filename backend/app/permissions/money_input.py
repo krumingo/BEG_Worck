@@ -32,10 +32,14 @@ upper limit, so only finiteness is required.
 The key is scoped per tenant, per action and per user: another user's key never
 replays (or reveals) someone else's response.
 """
+import contextlib
+import json
 import uuid
+from decimal import Decimal
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 from app.audit.idempotency import (
     IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_STARTED, request_fingerprint,
@@ -46,22 +50,35 @@ from app.services.money_amount import is_number, positive_amount
 
 ERROR_IDEMPOTENCY_IN_PROGRESS = "IDEMPOTENCY_IN_PROGRESS"
 ERROR_MONEY_WRITE_FAILED = "MONEY_WRITE_FAILED"
+_PAYLOAD_PREFIX = "json:"   # a result_reference that carries the whole replay response
 ERROR_KEY_REQUIRED = "IDEMPOTENCY_KEY_REQUIRED"
 MAX_KEY_LENGTH = 200
 
 _NS = uuid.UUID("7d6c3f0e-5c1a-4f43-9a51-5ec01c03a001")
 
 
-def money_value(value: Any, field: str = "amount", *, allow_zero: bool = False) -> float:
+def money_value(value: Any, field: str = "amount", *, allow_zero: bool = False,
+                places: Optional[int] = 2) -> float:
     """``value`` as a finite float > 0 (``>= 0`` with ``allow_zero``), else 422.
 
     SEC-01-C03-B (FG-47): the SAME rule as PR #70 (``app/services/money_amount.py``, copied
     byte for byte so the two PRs merge without conflict): only a JSON number — a string
     (numeric text too), a boolean, None, a list, NaN, ±Infinity and 1e309 are refused.
+
+    SEC-01-C03-H (Codex F-69-04): a MONEY value has at most ``places`` (2) decimal places —
+    one canonical amount in whole cents for validation, the certified-cap reservation, the
+    allocation and the ledger. A finer amount (``0.004``, ``10.125``) is refused with 422
+    before any write — never rounded silently (rounding each sub-cent increment to 0 let
+    many of them pass a cap). ``places=None`` for quantities that are not money (hours, qty).
     """
     if allow_zero and is_number(value) and value == 0:
         return 0.0
-    return positive_amount(value, field)
+    amount = positive_amount(value, field)
+    if places is not None and Decimal(str(value)).as_tuple().exponent < -places:
+        raise HTTPException(status_code=422, detail=(
+            "Сумата може да има най-много %d знака след десетичната запетая" % places
+            + ("" if field == "amount" else " (%s)" % field)))
+    return amount
 
 
 async def project_in_tenant(tenant, project_id: Any) -> None:
@@ -117,10 +134,13 @@ class MoneyWrite:
             return await tenant.x.find_one({"id": mw.replay_id}, {"_id": 0})
         async with mw:
             doc = {"id": mw.new_id("row"), ...}
-            if await mw.needs_insert(tenant.x, doc["id"]):
-                await tenant.x.insert_one(doc)
+            async with mw.insert_once():
+                await tenant.x.insert_one(mw.unique(doc))
             mw.result_id = doc["id"]
         return doc
+
+    A route whose answer is computed (sync / recompute / compute) sets ``mw.result_payload``
+    instead and replays it with ``mw.replay_payload()``.
     """
 
     def __init__(self, user: Dict[str, Any], action: str, key: Optional[str]):
@@ -130,6 +150,7 @@ class MoneyWrite:
         self.wf: Optional[RecoverableWrite] = None
         self.replay_id: Optional[str] = None
         self.result_id: Optional[str] = None
+        self.result_payload: Any = None
 
     @classmethod
     async def begin(cls, user: Dict[str, Any], action: str, raw_key: Optional[str],
@@ -167,17 +188,33 @@ class MoneyWrite:
         return str(uuid.uuid5(_NS, "%s\x1f%s\x1f%s\x1f%s" % (
             self.user["org_id"], self.action, self.key, name)))
 
-    async def needs_insert(self, collection, record_id: str) -> bool:
-        """False when a resumed attempt of the same key already inserted ``record_id``.
+    def unique(self, doc: Dict[str, Any]) -> Dict[str, Any]:
+        """SEC-01-C03-C (F-69-01): the key-derived ``id`` becomes the document's ``_id``.
 
-        The route keeps its own ``insert_one`` (visible to the W0-03E-A1 guard)::
+        ``_id`` is unique in every MongoDB collection, so two attempts of the same key —
+        a resumed FAILED one, or several concurrent retries — can never both insert the
+        row. No separate "does it exist?" read (that read raced: Codex F-69-01)."""
+        doc["_id"] = doc["id"]
+        return doc
 
-            if await mw.needs_insert(tenant.x, doc["id"]):
-                await tenant.x.insert_one(doc)
-        """
-        if self.key is None:
-            return True
-        return not await collection.find_one({"id": record_id}, {"_id": 0, "id": 1})
+    @contextlib.asynccontextmanager
+    async def insert_once(self):
+        """Wrap ONE ``insert_one(mw.unique(doc))``: a duplicate ``_id`` means this key's row
+        is already there (an earlier or concurrent attempt) — not an error. Any other
+        duplicate (another unique index) is re-raised."""
+        try:
+            yield
+        except DuplicateKeyError as exc:
+            pattern = (getattr(exc, "details", None) or {}).get("keyPattern") or {}
+            if set(pattern) != {"_id"}:
+                raise
+
+    def replay_payload(self) -> Any:
+        """The stored response of a completed computed write (``result_payload``)."""
+        ref = self.replay_id or ""
+        if not ref.startswith(_PAYLOAD_PREFIX):
+            return None
+        return json.loads(ref[len(_PAYLOAD_PREFIX):])
 
     async def step(self, name: str, fn: Callable[[], Awaitable[Any]]) -> None:
         """A non-insert side effect (audit row, totals) done once per key."""
@@ -193,7 +230,11 @@ class MoneyWrite:
         if self.wf is None:
             return False
         if exc is None:
-            await self.wf.complete(self.result_id)
+            reference = self.result_id
+            if self.result_payload is not None:
+                reference = _PAYLOAD_PREFIX + json.dumps(self.result_payload, default=str,
+                                                         ensure_ascii=False, sort_keys=True)
+            await self.wf.complete(reference)
             return False
         await self.wf.fail(ERROR_MONEY_WRITE_FAILED)     # the same request may finish it
         return False

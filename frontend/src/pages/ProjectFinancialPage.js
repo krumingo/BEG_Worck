@@ -120,6 +120,7 @@ export default function ProjectFinancialPage() {
           <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center gap-1"><Package className="w-3.5 h-3.5" /> Разходи (EUR)<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></h3>
           <div className="grid grid-cols-6 gap-4">
             <Metric label="Материали" value={c.material} partial={!ma.material} />
+            <Metric label="Фира" value={c.waste || 0} />
             <Metric label="Труд" value={c.labor} partial={!ma.labor} />
             <Metric label="Подизпълнители" value={c.subcontract} partial={!ma.subcontract} />
             <Metric label="Режийни" value={c.overhead} partial={!ma.overhead} />
@@ -269,6 +270,8 @@ export default function ProjectFinancialPage() {
                 <div className="p-3 rounded-lg border border-border">
                   <p className="text-[10px] text-muted-foreground">Материали</p>
                   <p className="font-mono text-sm">{detailData.costs?.material?.toFixed(2)} €</p>
+                  <p className="text-[10px] text-muted-foreground">Фира</p>
+                  <p className="font-mono text-sm">{(detailData.costs?.waste || 0).toFixed(2)} €</p>
                 </div>
                 <div className="p-3 rounded-lg border border-border">
                   <p className="text-[10px] text-muted-foreground">Труд</p>

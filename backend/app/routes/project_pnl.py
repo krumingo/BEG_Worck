@@ -49,6 +49,9 @@ async def get_pnl_summary(
         "input_vat": pnl["vat"]["input_vat"],
         "vat_payable": pnl["vat"]["vat_payable"],
         "total_expense": pnl["expense"]["total_expense"],
+        "material_cost": pnl["expense"]["material_cost"],
+        # 5C-C21 F-12 — project write-off, its own „фира" line (in total_expense once).
+        "material_waste_cost": pnl["expense"]["material_waste_cost"],
         "gross_profit": pnl["profit"]["gross_profit"],
         "margin_pct": pnl["profit"]["margin_pct"],
         "status": pnl["profit"]["status"],
@@ -64,7 +67,8 @@ async def get_pnl_breakdown(
     # SEC-02 (R20-2): the finance roles read every project; the former project_team
     # check (can_access_project) only ever let a MEMBER of any role through.
     pnl = await compute_project_pnl(user["org_id"], project_id)
-    return {"budget": pnl["budget"], "revenue": pnl["revenue"], "expense": pnl["expense"], "profit": pnl["profit"]}
+    return {"budget": pnl["budget"], "revenue": pnl["revenue"], "expense": pnl["expense"],
+            "profit": pnl["profit"], "warehouse_cost_basis": pnl["warehouse_cost_basis"]}
 
 
 @router.get("/projects/{project_id}/pnl/trend")

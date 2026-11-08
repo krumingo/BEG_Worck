@@ -8,6 +8,8 @@ import { canReadFinance } from "@/lib/financeAccess";
 import PlatformLayout from "@/components/PlatformLayout";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
+import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
 import PlanSelectionPage from "@/pages/PlanSelectionPage";
 import BillingSettingsPage from "@/pages/BillingSettingsPage";
 import BillingSuccessPage from "@/pages/BillingSuccessPage";
@@ -70,6 +72,9 @@ import AICalibrationPage from "@/pages/AICalibrationPage";
 import OfferReviewPage from "@/pages/OfferReviewPage";
 import ProcurementPage from "@/pages/ProcurementPage";
 import InventoryDashboardPage from "@/pages/InventoryDashboardPage";
+// LIVE-OPS-01 / TASK 5C — Canonical warehouse page (FLOW-009).
+import CanonicalWarehousePage from "@/pages/CanonicalWarehousePage";
+import CanonicalWarehouseRoute from "@/components/CanonicalWarehouseRoute";
 import HistoricalOffersPage from "@/pages/HistoricalOffersPage";
 import EmployeeDetailPage from "@/pages/EmployeeDetailPage";
 import NovoSMRPage from "@/pages/NovoSMRPage";
@@ -215,6 +220,9 @@ function AppRoutes() {
       {/* Public company routes */}
       <Route path="/login" element={<CompanyPublicRoute><LoginPage /></CompanyPublicRoute>} />
       <Route path="/signup" element={<CompanyPublicRoute><SignupPage /></CompanyPublicRoute>} />
+      {/* AUTH-01: password recovery. The reset link works with or without a session. */}
+      <Route path="/forgot-password" element={<CompanyPublicRoute><ForgotPasswordPage /></CompanyPublicRoute>} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/billing/cancel" element={<BillingCancelPage />} />
       {/* Public offer review - no auth needed */}
       <Route path="/offers/review/:reviewToken" element={<OfferReviewPage />} />
@@ -248,6 +256,8 @@ function AppRoutes() {
       <Route path="/ai-calibration" element={<AdminRoute><AICalibrationPage /></AdminRoute>} />
       <Route path="/procurement" element={<AdminRoute><ProcurementPage /></AdminRoute>} />
       <Route path="/inventory" element={<AdminRoute><InventoryDashboardPage /></AdminRoute>} />
+      {/* LIVE-OPS-01 / TASK 5C — Canonical warehouse surface */}
+      <Route path="/warehouse/canonical" element={<CanonicalWarehouseRoute><CanonicalWarehousePage /></CanonicalWarehouseRoute>} />
       <Route path="/historical-offers" element={<AdminRoute><HistoricalOffersPage /></AdminRoute>} />
       <Route path="/employees" element={<AdminRoute><EmployeesPage /></AdminRoute>} />
       <Route path="/employees/:userId" element={<AdminRoute><EmployeeDetailPage /></AdminRoute>} />

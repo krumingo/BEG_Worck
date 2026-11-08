@@ -1,5 +1,10 @@
 /**
  * MaterialWastePanel — Material variance: planned vs issued vs waste.
+ *
+ * 5C-C23 F-15: the waste column and the summary include the canonical
+ * write-offs from the project (read by the backend through the shared
+ * material-cost helper, no second register). They are listed separately
+ * and marked „отписване от склада"; the manual register entries stay.
  */
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
@@ -77,6 +82,7 @@ export default function MaterialWastePanel({ projectId }) {
   if (!data) return null;
 
   const { summary, materials } = data;
+  const writeoffs = data.writeoffs || [];
 
   return (
     <div className="space-y-3" data-testid="material-waste-panel">
@@ -100,6 +106,12 @@ export default function MaterialWastePanel({ projectId }) {
             <div><p className="font-mono font-bold">{summary.total_waste_items}</p><p className="text-[9px] text-muted-foreground">{t("materialWaste.wasteEntries")}</p></div>
             <div><p className="font-mono font-bold">{summary.total_waste_qty}</p><p className="text-[9px] text-muted-foreground">{t("materialWaste.wasteQty")}</p></div>
             <div><p className={`font-mono font-bold ${summary.overuse_count > 0 ? "text-red-400" : "text-emerald-400"}`}>{summary.overuse_count}</p><p className="text-[9px] text-muted-foreground">{t("materialWaste.overuse")}</p></div>
+          </div>
+
+          {/* 5C-C23 F-15: manual entries vs canonical write-offs */}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-muted-foreground" data-testid="waste-sources">
+            <span data-testid="waste-manual-count">{t("materialWaste.manualEntries")}: <span className="font-mono">{summary.manual_waste_items ?? summary.total_waste_items}</span> · <span className="font-mono">{summary.manual_waste_qty ?? summary.total_waste_qty}</span></span>
+            <span data-testid="waste-writeoff-count">{t("materialWaste.writeOffs")}: <span className="font-mono">{summary.writeoff_items ?? 0}</span> · <span className="font-mono">{summary.writeoff_qty ?? 0}</span></span>
           </div>
 
           {/* Header */}
@@ -131,6 +143,20 @@ export default function MaterialWastePanel({ projectId }) {
               );
             })}
           </div>
+
+          {writeoffs.length > 0 && (
+            <div className="space-y-0.5" data-testid="waste-writeoffs">
+              <p className="text-[10px] font-semibold text-muted-foreground px-1">{t("materialWaste.writeOffsTitle")}</p>
+              {writeoffs.map((w) => (
+                <div key={w.id || w.movement_id} className="flex flex-wrap items-center gap-2 py-1 px-1 text-xs rounded hover:bg-muted/10" data-testid="waste-writeoff-row">
+                  <Badge className="bg-orange-500/20 text-orange-500 text-[9px]" data-testid="waste-writeoff-badge">{t("materialWaste.writeOffBadge")}</Badge>
+                  <span className="flex-1 min-w-0 truncate">{w.material_name}</span>
+                  <span className="font-mono text-right text-orange-400">{w.qty} {w.unit}</span>
+                  {w.date && <span className="font-mono text-[10px] text-muted-foreground">{w.date}</span>}
+                </div>
+              ))}
+            </div>
+          )}
         </>
       )}
 

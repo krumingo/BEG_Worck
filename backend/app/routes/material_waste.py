@@ -73,7 +73,7 @@ async def create_waste_entry(
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
     tenant = _tenant(user)
-    qty = money_value(data.qty, "qty")  # SEC-01-C03: finite > 0, else 422 before any write
+    qty = money_value(data.qty, "qty", places=None)  # SEC-01-C03: finite > 0, else 422 before any write
     await project_in_tenant(tenant, project_id)  # SEC-01-C03-B (FG-29)
     mw = await MoneyWrite.begin(user, "material_waste.entry.create", idempotency_key,
                                 {"project_id": project_id, **data.model_dump()})
@@ -99,8 +99,8 @@ async def create_waste_entry(
         "updated_at": now,
     }
     async with mw:
-        if await mw.needs_insert(tenant.material_waste_entries, entry["id"]):
-            await tenant.material_waste_entries.insert_one(entry)
+        async with mw.insert_once():
+            await tenant.material_waste_entries.insert_one(mw.unique(entry))
         mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 

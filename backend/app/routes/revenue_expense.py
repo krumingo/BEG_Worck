@@ -497,26 +497,16 @@ async def get_project_profit_summary(
     collected_revenue = sum(i.get("paid_amount", 0) for i in issued_invoices)
 
     # ── EXPENSES ──
-    # Material cost: from warehouse issues to this project
-    wh_issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "total": 1, "lines": 1}
-    ).to_list(100)
-    material_cost = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
-
-    # Returns reduce material cost
-    wh_returns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "return"},
-        {"_id": 0, "lines": 1}
-    ).to_list(100)
-    material_returns = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
-    net_material_cost = round(material_cost - material_returns, 2)
-
-    # Enhanced material from material_entries if available
+    # Material cost — 5C-C22: the ONE shared helper (canonical consumption
+    # + „фира" + legacy issues dated before the tenant cutover, Р13). The
+    # former private legacy issue/return sum is gone: legacy return rows
+    # never carried a price, so they never changed the figure.
     from app.routes.material_smr import get_material_summary_for_project
     material_summary = await get_material_summary_for_project(org_id, project_id)
-    if material_summary["has_data"]:
-        net_material_cost = material_summary["total_cost"]
+    net_material_cost = material_summary["total_cost"]
+    # 5C-C21 F-12 — the „фира" share of that total, shown as its own line;
+    # the total is still counted once.
+    material_waste_cost = material_summary.get("waste_cost", 0.0) or 0.0
 
     # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -599,7 +589,7 @@ async def get_project_profit_summary(
         "contracted_revenue": len(accepted_offers) > 0,
         "earned_revenue": len(accepted_acts) > 0,
         "billed_revenue": len(issued_invoices) > 0,
-        "material_cost": len(wh_issues) > 0,
+        "material_cost": material_summary["has_data"],
         "labor_cost": labor_summary["has_data"] if labor_summary else len(reports) > 0,
         "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
@@ -621,8 +611,13 @@ async def get_project_profit_summary(
         },
 
         "expenses": {
-            "material": net_material_cost,
+            "material": round(net_material_cost - material_waste_cost, 2),
+            "waste": round(material_waste_cost, 2),          # „фира" (5C-C21 F-12)
             "material_detail": material_summary if material_summary["has_data"] else None,
+            # 5C-C22 / Р13 — the cutover split behind the material figure.
+            "material_cost_basis": {k: material_summary.get(k) for k in (
+                "source", "canonical_cost", "legacy_cost",
+                "legacy_excluded_cost", "cutover_at")},
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
             "labor_detail": labor_summary if labor_summary else None,
@@ -694,10 +689,16 @@ async def get_project_smr_view(
             sub_by_pkg[ep_id]["contract"] += sl.get("subcontract_total", 0)
             sub_by_pkg[ep_id]["certified"] += sl.get("certified_total", 0)
 
+    # 5C-C22 — package material actual from the ONE shared helper (read
+    # time), not the `actual_material_cost` cache that only a recompute fills.
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+
     rows = []
     for pkg in pkgs:
         pid = pkg["id"]
         sale = pkg.get("sale_total", 0)
+        mat_split = split_for_package(mat_cost, pid)
         lab_budget = pkg.get("labor_budget_total", 0)
         lab_actual = pkg.get("actual_labor_cost", 0) or 0
         lab_remaining = round(lab_budget - lab_actual, 2) if lab_budget > 0 else None
@@ -748,9 +749,10 @@ async def get_project_smr_view(
             "remaining_hours": round(planned_h - used_h, 1) if planned_h else None,
             "progress_percent": progress,
             "has_progress": has_progress,
-            "material_actual": pkg.get("actual_material_cost", 0) or 0,
+            "material_actual": mat_split["material"],
+            "material_waste": mat_split["waste"],          # „фира"
             "subcontract": round(sub["certified"], 2) if sub else 0,
-            "total_actual": round(lab_actual + (pkg.get("actual_material_cost", 0) or 0) + (sub["certified"] if sub else 0), 2),
+            "total_actual": round(lab_actual + mat_split["total"] + (sub["certified"] if sub else 0), 2),
             "flags": flags,
             "status": pkg.get("status", ""),
         })

@@ -17,6 +17,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.tenancy import project_team
 from app.services.paid_labor import paid_labor_for_projects_v3
+from app.services.payment_state import active_allocations
 from app.deps.auth import (
     get_current_user, require_admin,
     can_access_project, can_manage_project, get_user_project_ids,
@@ -1288,8 +1289,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_ids = [inv.get("id") for inv in invoices if inv.get("id")]
     all_allocations = []
     if invoice_ids:
-        all_allocations = await tenant.payment_allocations.find(
-            {"invoice_id": {"$in": invoice_ids}},
+        all_allocations = await tenant.payment_allocations.find(  # PAY-01: cancelled ones are history
+            active_allocations({"invoice_id": {"$in": invoice_ids}}),
             {"_id": 0}
         ).sort("allocated_at", -1).to_list(2000)
     
@@ -1421,7 +1422,7 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
         warehouse_txns = await tenant.warehouse_transactions.find(
             {"project_id": project_id, "org_id": org_id},
             {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
-        ).to_list(1000)
+        ).to_list(None)
         materials_ex_vat = sum(t.get("total_ex_vat", 0) or 0 for t in warehouse_txns)
         materials_vat = sum(t.get("total_vat", 0) or 0 for t in warehouse_txns)
         materials_inc_vat = sum(t.get("total_inc_vat", 0) or 0 for t in warehouse_txns)
@@ -2149,7 +2150,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
         txns = await tenant.warehouse_transactions.find(
             {"org_id": org_id, "project_id": {"$in": pids}},
             {"_id": 0, "total_ex_vat": 1, "total_inc_vat": 1},
-        ).to_list(5000)
+        ).to_list(None)
         ex_vat = round(sum(t.get("total_ex_vat", 0) or 0 for t in txns), 2)
         inc_vat = round(sum(t.get("total_inc_vat", 0) or 0 for t in txns), 2)
         return {"ex_vat": ex_vat, "inc_vat": inc_vat, "count": len(txns)}

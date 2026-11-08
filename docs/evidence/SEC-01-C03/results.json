@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 15.0,
+ "seconds": 25.5,
  "amount_rows": [
   {
    "mode": "off",
@@ -4248,6 +4248,1268 @@
     "hourly_rate",
     "labor_cost"
    ]
+  }
+ ],
+ "f69_02_computed_routes": [
+  {
+   "mode": "off",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "off",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "off",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  },
+  {
+   "mode": "shadow",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "shadow",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "shadow",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  },
+  {
+   "mode": "enforce",
+   "route": "labor_sync",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.labor_entries"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "enforce",
+   "route": "recompute_labor",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.execution_packages"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 200,
+    "business_written": []
+   },
+   "admin_snapshots_after": 0
+  },
+  {
+   "mode": "enforce",
+   "route": "overhead_compute",
+   "no_key": {
+    "status": 428,
+    "business_written": [],
+    "error_code": "IDEMPOTENCY_KEY_REQUIRED"
+   },
+   "first": {
+    "status": 200,
+    "business_written": [
+     "op.overhead_snapshots"
+    ]
+   },
+   "replay": {
+    "status": 200,
+    "business_written": []
+   },
+   "replay_body_equals_first": true,
+   "other_body": {
+    "status": 409,
+    "business_written": []
+   },
+   "admin_snapshots_after": 1
+  }
+ ],
+ "f69_01_interrupted_payment_race": [
+  {
+   "mode": "off",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "085aef40-a922-5857-bd19-edbaee5b4cdb"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  },
+  {
+   "mode": "shadow",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "2d140ead-c168-52ef-9aaf-7e56781ec222"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  },
+  {
+   "mode": "enforce",
+   "first_status": 500,
+   "after_failure": {
+    "ledger": 1,
+    "allocations": 0
+   },
+   "retry_statuses": [
+    201,
+    409,
+    409,
+    409,
+    409,
+    409
+   ],
+   "retry_payment_ids": [
+    "7ae526d6-ae2e-5b5d-a11c-001abeccc1af"
+   ],
+   "ledger_rows_added": 1,
+   "allocations_added": 1,
+   "package_paid_total": 10.0,
+   "allocations_sum": 10.0,
+   "amount": 10
+  }
+ ],
+ "fg90_certified_cap": [
+  {
+   "mode": "off",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  },
+  {
+   "mode": "shadow",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  },
+  {
+   "mode": "enforce",
+   "certified_total": 100,
+   "paid_before": 0,
+   "over_101": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "pay_60": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_50": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "then_40_to_the_cap": {
+    "status": 201,
+    "error_code": null,
+    "business_written": [
+     "op.finance_payments",
+     "op.subcontractor_packages",
+     "op.subcontractor_payments"
+    ]
+   },
+   "then_0_01": {
+    "status": 409,
+    "error_code": "PAYMENT_EXCEEDS_CERTIFIED",
+    "business_written": []
+   },
+   "unknown_act": {
+    "status": 404,
+    "error_code": null,
+    "business_written": []
+   },
+   "draft_act": {
+    "status": 409,
+    "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+    "business_written": []
+   },
+   "paid_total_after": 100.0,
+   "committed_after": 100.0,
+   "concurrent_60_60": {
+    "statuses": [
+     201,
+     409
+    ],
+    "allocations_sum": 60.0
+   }
+  }
+ ],
+ "fg105_many_payments": [
+  {
+   "mode": "off",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "shadow",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  },
+  {
+   "mode": "enforce",
+   "earlier_payments": 250,
+   "status": 201,
+   "paid_total": 251.0,
+   "payable_total": 749.0
+  }
+ ],
+ "f69_03_reserve_crash": [
+  {
+   "mode": "off",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  },
+  {
+   "mode": "shadow",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  },
+  {
+   "mode": "enforce",
+   "cap_100_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_1000_sequential": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201
+    ],
+    "retry_error_codes": [],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   },
+   "cap_100_concurrent_x10": {
+    "first_status": 500,
+    "after_crash": {
+     "committed": 60.0,
+     "paid": 0,
+     "allocations": 0,
+     "allocations_sum": 0,
+     "ledger_rows": 0
+    },
+    "retry_statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "retry_error_codes": [
+     "IDEMPOTENCY_IN_PROGRESS"
+    ],
+    "final": {
+     "committed": 60.0,
+     "paid": 60.0,
+     "allocations": 1,
+     "allocations_sum": 60.0,
+     "ledger_rows": 1
+    }
+   }
+  }
+ ],
+ "audit_crash_retry": [
+  {
+   "mode": "off",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  },
+  {
+   "mode": "shadow",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  },
+  {
+   "mode": "enforce",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1
+   }
+  }
+ ],
+ "f69_04_subcent": [
+  {
+   "mode": "off",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.01,
+     "completed_sum": 0.01,
+     "certified": 0.01
+    }
+   }
+  },
+  {
+   "mode": "shadow",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.01,
+     "completed_sum": 0.01,
+     "certified": 0.01
+    }
+   }
+  },
+  {
+   "mode": "enforce",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.01,
+     "completed_sum": 0.01,
+     "certified": 0.01
+    }
+   }
   }
  ]
 }

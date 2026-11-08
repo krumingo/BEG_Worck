@@ -146,17 +146,19 @@ async def get_profit_by_period(
         {"_id": 0, "date": 1, "labor_cost": 1, "hours": 1}
     ).to_list(5000)
 
-    # Material by month (from material_entries issues + returns)
-    mat_entries = await tenant.material_entries.find(
-        {"org_id": org_id, "project_id": project_id, "movement_type": {"$in": ["issue", "return"]}},
-        {"_id": 0, "date": 1, "total_cost": 1}
-    ).to_list(5000)
+    # Material by month — 5C-C22: the ONE shared helper (canonical
+    # consumption + „фира" + legacy issues dated before the tenant cutover,
+    # Р13), split by the month of each counted cost line.
+    from app.services.canonical_material_cost import (
+        project_material_cost, cost_by_period, cost_basis)
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+    mat_by_period = cost_by_period(mat_cost)
 
     # Subcontract by month (from acts)
     sub_acts = await tenant.subcontractor_acts.find(
         {"org_id": org_id, "project_id": project_id, "status": "confirmed"},
         {"_id": 0, "act_date": 1, "certified_total": 1}
-    ).to_list(200)
+    ).to_list(None)
 
     # Overhead by month
     oh_allocs = await tenant.project_overhead_alloc.find(
@@ -193,11 +195,14 @@ async def get_profit_by_period(
                 periods[pk]["labor"] += le["labor_cost"]
             periods[pk]["labor_hours"] += float(le.get("hours", 0))
 
-    for me in mat_entries:
-        pk = (me.get("date") or "")[:7]
-        if pk and me.get("total_cost") is not None:
+    # 5C-C23 F-14: ``material`` = consumption (+ pre-cutover legacy) and
+    # ``waste`` = „фира", the same meaning as in every other report; the
+    # period cost counts both once (material + waste = material total).
+    for pk, mp in mat_by_period.items():
+        if pk:
             ensure_period(pk)
-            periods[pk]["material"] += me["total_cost"]
+            periods[pk]["material"] += mp["material"]
+            periods[pk]["waste"] = periods[pk].get("waste", 0) + mp["waste"]
 
     for sa in sub_acts:
         pk = (sa.get("act_date") or "")[:7]
@@ -213,9 +218,11 @@ async def get_profit_by_period(
 
     # Calculate profits per period
     for pk, p in periods.items():
-        for k in ["earned", "billed", "collected", "material", "labor", "subcontract", "overhead", "labor_hours"]:
+        p["waste"] = p.get("waste", 0)
+        for k in ["earned", "billed", "collected", "material", "waste", "labor", "subcontract", "overhead", "labor_hours"]:
             p[k] = round(p[k], 2) if k != "labor_hours" else round(p[k], 1)
-        gross_cost = p["material"] + p["labor"] + p["subcontract"]
+        p["material_total"] = round(p["material"] + p["waste"], 2)
+        gross_cost = p["material"] + p["waste"] + p["labor"] + p["subcontract"]
         p["gross_cost"] = round(gross_cost, 2)
         p["total_cost"] = round(gross_cost + p["overhead"], 2)
         rev = p["earned"] if p["earned"] > 0 else p["billed"]
@@ -223,7 +230,15 @@ async def get_profit_by_period(
         p["net_profit"] = round(rev - p["total_cost"], 2) if rev > 0 else None
 
     result = sorted(periods.values(), key=lambda x: x["period"], reverse=True)
-    return {"project_id": project_id, "currency": "EUR", "periods": result}
+    undated = mat_by_period.get(None) or {}
+    return {"project_id": project_id, "currency": "EUR", "periods": result,
+            # 5C-C23 F-14 — Σ periods.material + material_undated ==
+            # consumption_cost, Σ periods.waste + waste_undated == waste_cost,
+            # and the two together == the project material total every other
+            # report shows (material_cost_basis.total_cost).
+            "material_undated": undated.get("material", 0.0),
+            "waste_undated": undated.get("waste", 0.0),
+            "material_cost_basis": cost_basis(mat_cost)}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -341,7 +356,7 @@ async def get_procurement_alerts(
     issues = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"},
         {"_id": 0, "lines": 1}
-    ).to_list(200)
+    ).to_list(None)
     issued_by_name = {}
     for wt in issues:
         for wl in wt.get("lines", []):

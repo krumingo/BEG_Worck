@@ -1,0 +1,7 @@
+[PASS] sha256sums.match - 19 files
+[PASS] manifest.valid
+[PASS] tools.match_manifest - 16 tool files from 1c01f6721170
+[PASS] artifact.sha256 - 3561b9beeb630e22d3707ae38fc2a180c37a62e057a4080b5c0a389354b199d9
+[PASS] artifact.tree_identity - archive hashes to 4932685cd1492d4f04a91615e7cf1e8e60354b96, manifest tree 4932685cd1492d4f04a91615e7cf1e8e60354b96, 1276 files
+[PASS] artifact.no_env_files
+RESULT PASS

@@ -1,14 +1,14 @@
 # SEC-01-C03 test summaries (branch claude/sec-01-money-write-permissions, local real MongoDB 7.0 replica set)
 ## SEC-01-C03 + C02 + C01 + SEC-01 + PM-01, real Mongo (W0_03_REAL_MONGO_URL set)
-36 passed (file by file after addendum B: C03 6, SEC-01 8, C01 7, C02 9, PM-01 6)
+36 passed (file by file after addendum F: C03 6, SEC-01 8, C01 7, C02 9, PM-01 6)
 ## C03 harness (docs/evidence/SEC-01-C03/results.json)
 282 invalid-amount calls (nan, inf, -inf, 1e309, "", abc, "10", true, [10], -1, 0, missing) x 8 probes x 3 modes -> all 422, 0 business writes
 24 idempotency sequences (8 probes x 3 modes): no key -> 428 IDEMPOTENCY_KEY_REQUIRED, 0 rows (R29, addendum A); same key twice -> 1 row, identical replay, no write; same key + other body -> 409 IDEMPOTENCY_CONFLICT, no write
 24 SEC-R1 calls: P1 (member, no dates) -> 201; P2 (expired Technician / future SiteManager) -> 403, nothing written; off/shadow/enforce
 ## tests/test_r0_0*.py (real Mongo)
-814 passed in 157.45s (0:02:37)
+814 passed in 176.40s (0:02:56)
 ## W0 DB-free (tests/test_w0_*.py --noconftest)
-15 failed, 1085 passed, 50 skipped in 67.11s (0:01:07)
+15 failed, 1085 passed, 50 skipped in 76.98s (0:01:16)
 (the same 15 test_w0_03e_legacy_routes failures as main, SEC-01, C01 and C02)
 ## Guards
 W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
@@ -25,3 +25,32 @@ FG-15: Technician member -> 201, no hourly_rate/labor_cost in response or replay
 Regenerated SEC-01 / C01 / C02 results.json: only the B -> A project cells changed (6 / 18 / 12), all to 404, nothing written (closes SEC-01-D1)
 PM-01 matrix re-run: unchanged
 Frontend: yarn test 96 passed; yarn build compiled (no warning in changed files)
+## Addendum C (Codex F-69-01, F-69-02)
+F-69-01: interrupted payment (ledger written, allocation failed -> 500, key FAILED) + 6 concurrent retries (asyncio.gather via ASGI), W0-04 key indexes present: 1 ledger, 1 allocation, paid_total = allocations, x3 modes, 3 runs (9 races)
+F-69-01 counter-check on old code 7300864 (f69_counter_check_7300864.json): 1 ledger / 4 allocations / paid 40 (off), 1 / 2 / 20 (shadow)
+F-69-02: sync / recompute-labor / overhead compute x 3 modes: no key -> 428, 0 writes; same key twice -> 200, identical response, no 2nd write; other input -> 409; compute -> 1 snapshot (old code: 4)
+PM-01 matrix re-run: 27 cells changed (3 routes x Owner/Admin/Accountant x 3 modes) -> 428 (pm01_cells_changed_addendum_c.csv)
+A1 inventory regenerated: 3 rows' insert text (insert_one(mw.unique(...))), all SAFE
+## Addendum D (FG-90, FLOW-021) + check with #72 13dd8d7
+FG-90, 3 modes (package certified 100): 101 -> 409 PAYMENT_EXCEEDS_CERTIFIED, 0 writes; 60 -> 201; +50 -> 409; +40 -> 201 (cap); +0.01 -> 409; unknown act -> 404; draft act -> 409 PAYMENT_ACT_NOT_CONFIRMED; concurrent 60+60 (different keys) -> [201, 409], allocations 60
+PM-01 matrix: unchanged (reproduced cell for cell)
+Trial merge with #72 13dd8d7 (worktree, no commit): no conflicts; C03 harness all checks pass, race -> exactly one 201 + five 409 per mode; SEC-01/C02/C03 real Mongo 23 passed
+## Addendum E (FG-105; R39/R40 recorded)
+FG-105, 3 modes: 250 earlier payments of 1 + a new one -> paid_total 251, payable 749 (counter-check on ccab244: 200 / 800)
+PM-01 matrix: unchanged (reproduced cell for cell)
+## Addendum F (Codex F-69-03: crash after the cap reservation)
+3 modes, crash injected after the reservation, before its step: cap 100 retry -> 201; cap 1000 retry -> 201; 10 concurrent retries -> 201/409 only; every case ends with 1 ledger, 1 allocation 60, committed 60, paid 60
+Counter-check on c14fcda (f69_03_counter_check_c14fcda.json): cap 100 -> 409 PAYMENT_EXCEEDS_CERTIFIED, paid 0, committed 60; cap 1000 -> committed 120 for 60 paid; 10 retries -> all 409
+PM-01 matrix: unchanged (reproduced cell for cell)
+## Addendum G (audit of #69 @ da47777: one audit row per operation) — on top of the main merge d226c49
+Crash right after the audit row + 2 same-key retries, 3 modes: payment 201/201 and compute 200/200, exactly 1 audit row each (da47777: 2 rows — audit_crash_counter_check_da47777.json)
+Real Mongo: C03 6 / SEC-01 8 / C01 7 / C02 9 / PM-01 6 = 36 passed (PM-01 reproduced cell for cell); R0 814 passed
+W0: 1094 passed / 15 failed / 79 skipped after regenerating W0-03E-A2B inventory §1 (audit.py writer lines)
+Guards A1 436 / 0, A2C 216 / 0
+## Addendum H (Codex F-69-04: money in whole cents; UTC date fixture) — head ecd42d3
+C03 harness, 3 modes: 0.004 / 10.125 / 0.001 on every money route -> 422, 0 writes; cap 0.01: 6 sequential and 6 concurrent 0.004 -> all 422, nothing committed; 6 concurrent 0.01 -> one 201, committed = paid = 0.01; sum(completed) <= certified
+Counter-check on 25ffd9b (f69_04_counter_check_25ffd9b.json): 6 x 0.004 -> 6 x 201, committed 0.00, paid 0.02, sum 0.024
+Real Mongo (-rs): C03 6 / SEC-01 8 / C01 7 / C02 9 (UTC fixture) / PM-01 6 = 36 passed, 0 skipped; PM-01 reproduced cell for cell
+R0 + PAY-01 + W0-04-C01 + AUTH + ST-02: 1766 passed
+W0: 1094 passed / 15 failed / 79 skipped (same 15 test_w0_03e_legacy_routes); A1 436 / 0, A2C 216 / 0
+Frontend: yarn test 116 passed (unchanged in H)

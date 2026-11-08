@@ -1,0 +1,25 @@
+{
+  "schema": "beg.st02-staging-deployment/v1",
+  "status": "DEPLOYED",
+  "release_id": "rel-20261106T203722Z-8e3b1901938d",
+  "deployment_id": "staging-begwork",
+  "environment": "staging",
+  "project": "begwork-staging",
+  "deployed_by": "claude-st02-c03",
+  "approved_by": "krum",
+  "live_release_id": "rel-20261106T203722Z-8e3b1901938d",
+  "live_release_sha256": "edda0055ba9528261669e18833ce65621522934822b74d221d3f33b78b044bff",
+  "live_manifest_feature_flags": {"PERMISSION_SERVICE_MODE": "shadow"},
+  "feature_flags": {
+    "PERMISSION_SERVICE_MODE": {
+      "manifest_expected": "shadow",
+      "manifest_expected_scope": "Release Manifest of the live release (R26: release_build.py --flag-override)",
+      "staging_parameter": "shadow",
+      "staging_parameter_source": "explicit staging parameter",
+      "observed_in_backend": "shadow",
+      "observed_equals_parameter": true,
+      "observed_equals_manifest": true,
+      "manifest_equals_parameter": true
+    }
+  }
+}

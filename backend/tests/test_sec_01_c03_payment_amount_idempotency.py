@@ -78,6 +78,27 @@ ENDPOINTS = (
 EP = {e[0]: e for e in ENDPOINTS}
 
 
+def COMPUTED_ROUTES(fx_a: Dict[str, Any]):
+    """F-69-02: the money POSTs that compute rather than create (R29 applies to them too)."""
+    return (
+        ("labor_sync", "/api/labor-entries/sync-from-work-reports",
+         {"project_id": fx_a["project_id"]}),
+        ("recompute_labor", "/api/execution-packages/recompute-labor/%s" % fx_a["project_id"],
+         None),
+        ("overhead_compute", "/api/overhead/snapshots/compute",
+         {"period_start": "2026-11-01", "period_end": "2026-11-07", "method": "Hours"}),
+    )
+
+
+def OTHER_BODY(key: str, body: Optional[Dict[str, Any]]):
+    """The same route with different business inputs (same key -> 409)."""
+    if key == "labor_sync":
+        return {"project_id": body["project_id"] + "-other"}
+    if key == "overhead_compute":
+        return {**body, "method": "PersonDays"}
+    return None
+
+
 def body_for(key: str, fx_a: Dict[str, Any], c02) -> Dict[str, Any]:
     if key == "cash":
         return {"type": "expense", "amount": 10, "category": "c03", "description": "C03"}
@@ -180,6 +201,11 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                               "role_in_project": role_in_project, **c02.dated_window(kind)})
             assert r.status_code == 201, (ukey, kind, r.status_code, r.text[:300])
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        # The W0-04 unique indexes of the key registry (scripts/w0_04_bootstrap_audit_indexes
+        # .py, PLANNED_INDEXES), as in a bootstrapped tenant and in the Codex review of #69.
+        tc.portal.call(lambda: op_db.audit_idempotency.create_index([("id", 1)], unique=True))
+        tc.portal.call(lambda: op_db.audit_idempotency.create_index(
+            [("tenant_id", 1), ("action", 1), ("key", 1)], unique=True))
         snap = tc.portal.call(lambda: pm._snapshot(client, dbs))
 
         def post(role, key, body, idem=None, project_id=None):
@@ -212,6 +238,297 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         r1: List[Dict[str, Any]] = []
         fg29: List[Dict[str, Any]] = []
         fg15: List[Dict[str, Any]] = []
+        computed: List[Dict[str, Any]] = []
+        race: List[Dict[str, Any]] = []
+        fg90: List[Dict[str, Any]] = []
+        fg105: List[Dict[str, Any]] = []
+        f6903: List[Dict[str, Any]] = []
+        audit_crash: List[Dict[str, Any]] = []
+        subcent: List[Dict[str, Any]] = []
+
+        def subcent_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            out: Dict[str, Any] = {"mode": mode, "money_routes": {}}
+            # every MONEY field of #69: more than 2 decimals -> 422, nothing written
+            for key in ("cash", "bonus", "ohtx", "ohsnap", "subpay", "subpay_vat"):
+                field = EP[key][2]
+                base = body_for(key, fx["A"], c02)
+                cells = {}
+                for value in (0.004, 10.125, 0.001):
+                    res = post("accountant", key, with_value(base, field, value), uuid.uuid4().hex)
+                    cells[str(value)] = {"status": res["status"],
+                                         "business_written": res["business_written"]}
+                    if res["written"]:
+                        restore_all()
+                ok = post("accountant", key, with_value(base, field, 10.12 if field == "amount"
+                                                        else 1.25), uuid.uuid4().hex)
+                cells["two_decimals"] = {"status": ok["status"]}
+                restore_all()
+                out["money_routes"][key] = cells
+            # the cap in cents: certified 0.01
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                {"id": pkg_id}, {"$set": {"certified_total": 0.01, "paid_total": 0,
+                                          "committed_paid_total": 0}}))
+
+            async def six(amount):
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(
+                        "/api/subcontractor-payments", json={**base, "amount": amount},
+                        headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}) for _ in range(6)])
+
+            def state():
+                pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                    {"id": pkg_id}, {"_id": 0}))
+                allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                    {"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1})
+                    .to_list(100))
+                return {"committed": pkg.get("committed_paid_total"), "paid": pkg.get("paid_total"),
+                        "completed_sum": round(sum(float(a["amount"]) for a in allocs), 6),
+                        "certified": pkg.get("certified_total")}
+            seq = [tc.post("/api/subcontractor-payments", json={**base, "amount": 0.004},
+                           headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}).status_code
+                   for _ in range(6)]
+            out["cap_0_01_sequential_0_004"] = {"statuses": seq, "state": state()}
+            conc = tc.portal.call(lambda: six(0.004))
+            out["cap_0_01_concurrent_0_004"] = {"statuses": sorted(r.status_code for r in conc),
+                                                "state": state()}
+            whole = tc.portal.call(lambda: six(0.01))
+            out["cap_0_01_concurrent_0_01"] = {"statuses": sorted(r.status_code for r in whole),
+                                               "state": state()}
+            restore_all()
+            return out
+
+        def audit_crash_probe(mode: str) -> Dict[str, Any]:
+            from app.permissions import workflow
+            original = workflow.mark_idempotent_step
+            out: Dict[str, Any] = {"mode": mode}
+            cases = (
+                ("subcontractor_payment", "/api/subcontractor-payments", "accountant",
+                 {**body_for("subpay", fx["A"], c02), "amount": 10},
+                 {"action": "subcontractor_payment_created"}),
+                ("overhead_compute", "/api/overhead/snapshots/compute", "admin",
+                 {"period_start": "2026-10-01", "period_end": "2026-10-07", "method": "Hours"},
+                 {"action": "computed", "entity_type": "overhead_snapshot"}),
+            )
+            for name, url, role, body, audit_q in cases:
+                hdr = {"Authorization": "Bearer " + tokens[role]}
+                before = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                state = {"armed": True}
+
+                async def failing(db_, *, step, **kw):
+                    if step == "audit" and state["armed"]:
+                        state["armed"] = False      # the audit row is written; its step is not
+                        raise RuntimeError("injected crash after the audit row")
+                    return await original(db_, step=step, **kw)
+                idem = uuid.uuid4().hex
+                workflow.mark_idempotent_step = failing
+                try:
+                    first = tc.post(url, json=body, headers={**hdr, "Idempotency-Key": idem})
+                finally:
+                    workflow.mark_idempotent_step = original
+                after_crash = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                retries = [tc.post(url, json=body, headers={**hdr, "Idempotency-Key": idem})
+                           for _ in range(2)]
+                final = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                out[name] = {"first_status": first.status_code,
+                             "audit_rows_after_crash": after_crash - before,
+                             "retry_statuses": [r.status_code for r in retries],
+                             "audit_rows_after_retries": final - before}
+                restore_all()
+            return out
+
+        def reserve_crash_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            from app.permissions import workflow
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            original = workflow.mark_idempotent_step
+
+            def crash_once():
+                state = {"armed": True}
+
+                async def failing(db_, *, step, **kw):
+                    if step == "reserve" and state["armed"]:
+                        state["armed"] = False   # the reservation is committed; its step is not
+                        raise RuntimeError("injected crash after the cap reservation")
+                    return await original(db_, step=step, **kw)
+                return failing
+
+            def snapshot_pkg():
+                pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                    {"id": pkg_id}, {"_id": 0}))
+                allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                    {"package_id": pkg_id}, {"_id": 0, "amount": 1}).to_list(1000))
+                ledger = tc.portal.call(lambda: op_db.finance_payments.count_documents(
+                    {"subcontractor_payment_id": {"$exists": True}}))
+                return {"committed": pkg.get("committed_paid_total"), "paid": pkg.get("paid_total"),
+                        "allocations": len(allocs), "allocations_sum": round(
+                            sum(float(a["amount"]) for a in allocs), 2), "ledger_rows": ledger}
+
+            out: Dict[str, Any] = {"mode": mode}
+            for case, certified, retries in (("cap_100_sequential", 100, 1),
+                                             ("cap_1000_sequential", 1000, 1),
+                                             ("cap_100_concurrent_x10", 100, 10)):
+                tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                    {"id": pkg_id}, {"$set": {"certified_total": certified}}))
+                ledger0 = snapshot_pkg()["ledger_rows"]
+                idem = uuid.uuid4().hex
+                body = {**base, "amount": 60}
+                workflow.mark_idempotent_step = crash_once()
+                try:
+                    first = tc.post("/api/subcontractor-payments", json=body,
+                                    headers={**hdr, "Idempotency-Key": idem})
+                finally:
+                    workflow.mark_idempotent_step = original
+                after_crash = snapshot_pkg()
+
+                async def retry_n(n=retries):
+                    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                                 base_url="http://testserver") as ac:
+                        return await asyncio.gather(*[ac.post(
+                            "/api/subcontractor-payments", json=body,
+                            headers={**hdr, "Idempotency-Key": idem}) for _ in range(n)])
+                resps = tc.portal.call(retry_n)
+                final = snapshot_pkg()
+                final["ledger_rows"] -= ledger0
+                after_crash["ledger_rows"] -= ledger0
+                out[case] = {"first_status": first.status_code, "after_crash": after_crash,
+                             "retry_statuses": sorted(r.status_code for r in resps),
+                             "retry_error_codes": sorted({str(((r.json() or {}).get("detail") or {})
+                                                              .get("error_code"))
+                                                          for r in resps if r.status_code >= 400}),
+                             "final": final}
+                restore_all()
+            return out
+
+        def many_payments_probe(mode: str) -> Dict[str, Any]:
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            org = fx["A"]["tenant_id"]
+            tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                {"id": pkg_id}, {"$set": {"certified_total": 1000, "paid_total": 250,
+                                          "committed_paid_total": 250}}))
+            tc.portal.call(lambda: op_db.subcontractor_payments.insert_many([
+                {"id": "c03-fg105-%d" % i, "org_id": org, "package_id": pkg_id,
+                 "amount": 1.0, "status": "completed", "created_at": "2026-11-01T00:00:00"}
+                for i in range(250)]))
+            resp = tc.post("/api/subcontractor-payments", json={**base, "amount": 1},
+                           headers={"Authorization": "Bearer " + tokens["accountant"],
+                                    "Idempotency-Key": uuid.uuid4().hex})
+            pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                {"id": pkg_id}, {"_id": 0}))
+            restore_all()
+            return {"mode": mode, "earlier_payments": 250, "status": resp.status_code,
+                    "paid_total": pkg.get("paid_total"),
+                    "payable_total": pkg.get("payable_total")}
+
+        def certified_cap_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+
+            def pay(amount, **extra):
+                before = tc.portal.call(lambda: pm._last_ts(oplog))
+                resp = tc.post("/api/subcontractor-payments", json={**base, "amount": amount, **extra},
+                               headers={**hdr, "Idempotency-Key": uuid.uuid4().hex})
+                written = tc.portal.call(lambda: pm.writes_with_org(client, oplog, before, dbs, snap))
+                detail = resp.json().get("detail") if resp.status_code >= 400 else None
+                return {"status": resp.status_code,
+                        "error_code": detail.get("error_code") if isinstance(detail, dict) else None,
+                        "business_written": sorted({short(n) for n, _ in written
+                                                    if n.split(".", 1)[1] not in AUDIT})}
+            pkg0 = tc.portal.call(lambda: op_db.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0}))
+            out: Dict[str, Any] = {"mode": mode, "certified_total": pkg0.get("certified_total"),
+                                   "paid_before": pkg0.get("paid_total")}
+            out["over_101"] = pay(101)
+            out["pay_60"] = pay(60)
+            out["then_50"] = pay(50)
+            out["then_40_to_the_cap"] = pay(40)
+            out["then_0_01"] = pay(0.01)
+            out["unknown_act"] = pay(1, act_id="c03-no-such-act")
+            out["draft_act"] = pay(1, act_id=c02.rid("A", "sact"))
+            pkg1 = tc.portal.call(lambda: op_db.subcontractor_packages.find_one({"id": pkg_id}, {"_id": 0}))
+            out["paid_total_after"] = pkg1.get("paid_total")
+            out["committed_after"] = pkg1.get("committed_paid_total")
+            restore_all()
+
+            async def two_at_once():          # 60 + 60 > 100, two different keys, concurrent
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(
+                        "/api/subcontractor-payments", json={**base, "amount": 60},
+                        headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}) for _ in range(2)])
+            pair = tc.portal.call(two_at_once)
+            allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                {"package_id": pkg_id}, {"_id": 0, "amount": 1}).to_list(100))
+            out["concurrent_60_60"] = {
+                "statuses": sorted(r.status_code for r in pair),
+                "allocations_sum": round(sum(float(a["amount"]) for a in allocs), 2)}
+            restore_all()
+            return out
+
+        def interrupted_payment_race(mode: str) -> Dict[str, Any]:
+            from app.tenancy import data_access
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            body = body_for("subpay", fx["A"], c02)
+            pkg_id = body["package_id"]
+            led0 = tc.portal.call(lambda: op_db.finance_payments.count_documents({}))
+            alloc0 = tc.portal.call(lambda: op_db.subcontractor_payments.count_documents(
+                {"package_id": pkg_id}))
+            original = data_access.TenantCollection.insert_one
+            state = {"armed": True}
+
+            async def failing_insert(self, doc):
+                if self.name == "subcontractor_payments" and state["armed"]:
+                    state["armed"] = False          # once: after the ledger row is written
+                    raise RuntimeError("injected failure between ledger and allocation")
+                return await original(self, doc)
+            idem = uuid.uuid4().hex
+            data_access.TenantCollection.insert_one = failing_insert
+            try:
+                first = tc.post("/api/subcontractor-payments", json=body,
+                                headers={**hdr, "Idempotency-Key": idem})
+            finally:
+                data_access.TenantCollection.insert_one = original
+            after_fail = {
+                "ledger": tc.portal.call(lambda: op_db.finance_payments.count_documents({})) - led0,
+                "allocations": tc.portal.call(lambda: op_db.subcontractor_payments
+                                              .count_documents({"package_id": pkg_id})) - alloc0}
+            # Six retries truly concurrent in the app's own event loop (one ASGI transport,
+            # asyncio.gather): each interleaves at every await, so all of them can read the
+            # FAILED key before any of them writes — the interleaving of Codex F-69-01.
+            import httpx
+
+            async def six_retries():
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(
+                        "/api/subcontractor-payments", json=body,
+                        headers={**hdr, "Idempotency-Key": idem}) for _ in range(6)])
+            resps = tc.portal.call(six_retries)
+            allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                {"package_id": pkg_id}, {"_id": 0}).to_list(100))
+            pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                {"id": pkg_id}, {"_id": 0}))
+            out = {
+                "mode": mode, "first_status": first.status_code, "after_failure": after_fail,
+                "retry_statuses": sorted(r.status_code for r in resps),
+                "retry_payment_ids": sorted({(r.json() or {}).get("id") for r in resps
+                                             if r.status_code == 201}),
+                "ledger_rows_added": tc.portal.call(
+                    lambda: op_db.finance_payments.count_documents({})) - led0,
+                "allocations_added": len(allocs) - alloc0,
+                "package_paid_total": (pkg or {}).get("paid_total"),
+                "allocations_sum": round(sum(float(a["amount"]) for a in allocs), 2),
+                "amount": body["amount"]}
+            restore_all()
+            return out
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for key, _path, field, colls, _h in ENDPOINTS:
@@ -313,6 +630,46 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                              "stored_money_keys": sorted(
                                  k for k in ("hourly_rate", "labor_cost") if k in (stored or {}))})
                 restore_all()
+            # F-69-02 (R29): sync / recompute / compute need a key; a repeat replays.
+            for key3, url, body3 in COMPUTED_ROUTES(fx["A"]):
+                hdr = {"Authorization": "Bearer " + tokens["admin"]}
+
+                def call3(extra=None, body=body3):
+                    before = tc.portal.call(lambda: pm._last_ts(oplog))
+                    resp = tc.post(url, json=body, headers={**hdr, **(extra or {})})
+                    written = tc.portal.call(lambda: pm.writes_with_org(client, oplog, before,
+                                                                        dbs, snap))
+                    return resp, sorted({short(n) for n, _ in written
+                                         if n.split(".", 1)[1] not in AUDIT})
+                nokey, w_nokey = call3()
+                idem = uuid.uuid4().hex
+                k1, w1 = call3({"Idempotency-Key": idem})
+                k2, w2 = call3({"Idempotency-Key": idem})
+                k3, w3 = call3({"Idempotency-Key": idem}, body=OTHER_BODY(key3, body3))
+                snaps = tc.portal.call(lambda: op_db.overhead_snapshots.count_documents(
+                    {"computed_by_user_id": fx["A"]["users"]["admin"]["id"]}))
+                computed.append({
+                    "mode": mode, "route": key3,
+                    "no_key": {"status": nokey.status_code, "business_written": w_nokey,
+                               "error_code": (nokey.json().get("detail") or {}).get("error_code")},
+                    "first": {"status": k1.status_code, "business_written": w1},
+                    "replay": {"status": k2.status_code, "business_written": w2},
+                    "replay_body_equals_first": k1.json() == k2.json(),
+                    "other_body": {"status": k3.status_code, "business_written": w3},
+                    "admin_snapshots_after": snaps})
+                restore_all()
+            # F-69-01: a payment interrupted after the ledger row, then 6 CONCURRENT retries.
+            race.append(interrupted_payment_race(mode))
+            # FG-90 (FLOW-021): no payment above the certified total of the package (100).
+            fg90.append(certified_cap_probe(mode))
+            # FG-105: paid_total counts more than 200 earlier payments.
+            fg105.append(many_payments_probe(mode))
+            # F-69-03: crash right after the cap reservation; the same key must finish once.
+            f6903.append(reserve_crash_probe(mode))
+            # Audit of #69 @ da47777: crash right after the audit row; 2 same-key retries.
+            audit_crash.append(audit_crash_probe(mode))
+            # F-69-04: sub-cent amounts; the certified cap in whole cents.
+            subcent.append(subcent_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -324,6 +681,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "seconds": round(time.time() - started, 1),
         "amount_rows": rows, "idempotency_sequences": sequences, "sec_r1": r1,
         "fg29_project_in_tenant": fg29, "fg15_labor_money": fg15,
+        "f69_02_computed_routes": computed, "f69_01_interrupted_payment_race": race,
+        "fg90_certified_cap": fg90, "fg105_many_payments": fg105,
+        "f69_03_reserve_crash": f6903, "audit_crash_retry": audit_crash,
+        "f69_04_subcent": subcent,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -428,6 +789,102 @@ def check_result(result: Dict[str, Any]) -> None:
         visible = [] if r["user"] == "technician" else ["hourly_rate", "labor_cost"]
         assert r["response_money_keys"] == visible and r["replay_money_keys"] == visible, r
 
+    check_computed_and_race(result)
+    check_certified_cap(result)
+    rows = result["fg105_many_payments"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:   # 250 earlier payments of 1 + this one: all counted (before: only 200)
+        assert r == {"mode": r["mode"], "earlier_payments": 250, "status": 201,
+                     "paid_total": 251.0, "payable_total": 749.0}, r
+    rows = result["f69_03_reserve_crash"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for case in ("cap_100_sequential", "cap_1000_sequential", "cap_100_concurrent_x10"):
+            c = r[case]
+            assert c["first_status"] == 500, (case, r)
+            # the crash left the reservation and nothing else
+            assert c["after_crash"] == {"committed": 60.0, "paid": 0, "allocations": 0,
+                                        "allocations_sum": 0, "ledger_rows": 0}, (case, r)
+            assert 201 in c["retry_statuses"] and set(c["retry_statuses"]) <= {201, 409}, (case, r)
+            assert "PAYMENT_EXCEEDS_CERTIFIED" not in c["retry_error_codes"], (case, r)
+            # finished exactly once: 1 ledger row, 1 allocation of 60, committed 60 (no phantom)
+            assert c["final"] == {"committed": 60.0, "paid": 60.0, "allocations": 1,
+                                  "allocations_sum": 60.0, "ledger_rows": 1}, (case, r)
+    rows = result["audit_crash_retry"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for name in ("subcontractor_payment", "overhead_compute"):
+            c = r[name]
+            assert c["first_status"] == 500, (name, r)
+            assert c["audit_rows_after_crash"] == 1, (name, r)
+            assert all(st in (200, 201) for st in c["retry_statuses"]), (name, r)
+            assert c["audit_rows_after_retries"] == 1, (name, r)   # exactly one audit row
+    rows = result["f69_04_subcent"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for key, cells in r["money_routes"].items():
+            for value in ("0.004", "10.125", "0.001"):
+                assert cells[value] == {"status": 422, "business_written": []}, (key, r)
+            assert cells["two_decimals"]["status"] == 201, (key, r)
+        zero = {"committed": 0, "paid": 0, "completed_sum": 0, "certified": 0.01}
+        assert r["cap_0_01_sequential_0_004"] == {"statuses": [422] * 6, "state": zero}, r
+        assert r["cap_0_01_concurrent_0_004"] == {"statuses": [422] * 6, "state": zero}, r
+        c = r["cap_0_01_concurrent_0_01"]
+        assert c["statuses"] == [201, 409, 409, 409, 409, 409], r
+        assert c["state"] == {"committed": 0.01, "paid": 0.01, "completed_sum": 0.01,
+                              "certified": 0.01}, r
+        # the invariant: completed payments never exceed the certified total
+        for k in ("cap_0_01_sequential_0_004", "cap_0_01_concurrent_0_004",
+                  "cap_0_01_concurrent_0_01"):
+            st = r[k]["state"]
+            assert st["completed_sum"] <= st["certified"] + 1e-9, (k, r)
+
+
+def check_computed_and_race(result: Dict[str, Any]) -> None:
+    computed = result["f69_02_computed_routes"]
+    assert {(r["mode"], r["route"]) for r in computed} == {
+        (m, k) for m in MODES for k in ("labor_sync", "recompute_labor", "overhead_compute")}
+    for r in computed:
+        assert r["no_key"] == {"status": 428, "business_written": [],
+                               "error_code": "IDEMPOTENCY_KEY_REQUIRED"}, r
+        assert r["first"]["status"] == 200, r
+        assert r["replay"] == {"status": 200, "business_written": []}, r
+        assert r["replay_body_equals_first"] is True, r
+        if r["route"] == "recompute_labor":
+            # the route's key fingerprint is its path only: the same path is the same request
+            continue
+        assert r["other_body"] == {"status": 409, "business_written": []}, r
+        if r["route"] == "overhead_compute":
+            assert r["first"]["business_written"] == ["op.overhead_snapshots"], r
+            assert r["admin_snapshots_after"] == 1, r          # same key twice: 1 snapshot
+    race = result["f69_01_interrupted_payment_race"]
+    assert [r["mode"] for r in race] == list(MODES)
+    for r in race:
+        assert r["first_status"] == 500, r
+        assert r["after_failure"] == {"ledger": 1, "allocations": 0}, r
+        assert set(r["retry_statuses"]) <= {201, 409} and 201 in r["retry_statuses"], r
+        assert len(r["retry_payment_ids"]) == 1, r            # every 201 = the same payment
+        assert r["ledger_rows_added"] == 1 and r["allocations_added"] == 1, r
+        assert r["package_paid_total"] == r["allocations_sum"], r
+
+
+def check_certified_cap(result: Dict[str, Any]) -> None:
+    rows = result["fg90_certified_cap"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    nothing = {"status": 409, "error_code": "PAYMENT_EXCEEDS_CERTIFIED", "business_written": []}
+    for r in rows:
+        assert r["certified_total"] == 100 and r["paid_before"] == 0, r
+        assert r["over_101"] == nothing, r
+        assert r["pay_60"]["status"] == 201, r
+        assert r["then_50"] == nothing, r                  # 60 + 50 > 100
+        assert r["then_40_to_the_cap"]["status"] == 201, r  # exactly the cap
+        assert r["then_0_01"] == nothing, r
+        assert r["unknown_act"]["status"] == 404 and r["unknown_act"]["business_written"] == [], r
+        assert r["draft_act"] == {"status": 409, "error_code": "PAYMENT_ACT_NOT_CONFIRMED",
+                                  "business_written": []}, r
+        assert r["paid_total_after"] == 100 and r["committed_after"] == 100, r
+        assert r["concurrent_60_60"] == {"statuses": [201, 409], "allocations_sum": 60.0}, r
+
 
 # ═════════════════════════════════════════════════════════════════════ DB-free tests
 def test_money_value_accepts_only_finite_positive_numbers():
@@ -471,8 +928,11 @@ def test_every_money_post_validates_before_its_first_write_and_takes_the_key():
             if write in src:
                 assert check < src.index(write), (key, write)
         after = src.split("MoneyWrite.begin(", 1)[1]
-        # every insert after the reservation is guarded by needs_insert (once per key)
-        assert after.count(".insert_one(") == after.count("needs_insert(") >= 1, key
+        # F-69-01: every insert after the reservation is atomic once-per-key: inside
+        # ``mw.insert_once()`` with ``_id`` = the key-derived id (no separate read).
+        assert after.count(".insert_one(") == after.count(".insert_one(mw.unique(") >= 1, key
+        assert after.count(".insert_one(") == after.count("mw.insert_once()"), key
+        assert "needs_insert" not in src, key
 
 
 def test_the_forms_send_an_idempotency_key():
@@ -513,6 +973,17 @@ class _Coll:
                 return
 
 
+class _BusinessColl(_Coll):
+    """A business collection: ``_id`` is unique, a duplicate raises DuplicateKeyError."""
+
+    async def insert_one(self, doc):
+        from pymongo.errors import DuplicateKeyError
+        if any(r.get("_id") == doc.get("_id") for r in self.rows):
+            raise DuplicateKeyError("E11000 duplicate key", 11000,
+                                    {"keyPattern": {"_id": 1}, "keyValue": {"_id": doc["_id"]}})
+        self.rows.append(dict(doc))
+
+
 class _DB(dict):
     def __getitem__(self, name):
         if name not in self:
@@ -527,7 +998,7 @@ def test_money_write_replays_conflicts_refuses_in_progress_and_resumes(monkeypat
     monkeypatch.setattr(mi, "db", fake)
     user = {"id": "u1", "org_id": "t1"}
     other = {"id": "u2", "org_id": "t1"}
-    business = _Coll()
+    business = _BusinessColl()
 
     async def scenario():
         # no key (absent or blank): 428, before the registry (R29)
@@ -543,13 +1014,14 @@ def test_money_write_replays_conflicts_refuses_in_progress_and_resumes(monkeypat
         rid = mw.new_id("row")
         with pytest.raises(RuntimeError):
             async with mw:
-                if await mw.needs_insert(business, rid):
-                    await business.insert_one({"id": rid})
+                async with mw.insert_once():
+                    await business.insert_one(mw.unique({"id": rid}))
                 raise RuntimeError("crash after the insert")
         mw = await mi.MoneyWrite.begin(user, "a", "k1", {"amount": 1})
         assert mw.replay_id is None and mw.new_id("row") == rid
         async with mw:
-            assert not await mw.needs_insert(business, rid)       # already done: skipped
+            async with mw.insert_once():                          # already there: no 2nd row
+                await business.insert_one(mw.unique({"id": rid}))
             mw.result_id = rid
         assert len(business.rows) == 1
         # completed: the same key + body replays; a different body is a conflict

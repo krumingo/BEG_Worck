@@ -382,14 +382,18 @@ async def _matrix(monkeypatch, db, mode):
         assert r.status_code == 200, r.text
         no_b(r.json(), b_ids, "PUT invoice")
         assert r.json()["notes"] == "A edit"
-        r = await c.post("/api/finance/invoices/inv-shared/payments",
-                         json={"amount": 1, "method": "BankTransfer", "account_id": "acc-1"})
+        r = await c.post("/api/finance/invoices/inv-shared/payments",   # R29: key required
+                         json={"amount": 1, "method": "BankTransfer", "account_id": "acc-1"},
+                         headers={"Idempotency-Key": "a1-matrix-pay"})
         assert r.status_code == 201, r.text
         inv = r.json()["invoice"]
         no_b(inv, b_ids, "POST invoice payment")
         # paid = A's allocations only (3 + 1 + 1); B's 999999 allocations never count
         assert inv["paid_amount"] == 5 and inv["status"] == "PartiallyPaid"
-        r = await c.delete("/api/finance/invoices/inv-shared/payments/al-1")
+        # PAY-01 (R23): cancelling an allocation requires a reason; nothing is deleted
+        r = await c.request("DELETE", "/api/finance/invoices/inv-shared/payments/al-1",
+                            json={"reason": "A1 collision matrix"},
+                            headers={"Idempotency-Key": "a1-matrix-cancel"})
         assert r.status_code == 200, r.text
         r = await c.put("/api/finance/accounts/acc-1", json={"name": "A Основна 2"})
         assert r.status_code == 200 and r.json()["name"] == "A Основна 2", r.text

@@ -880,7 +880,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 173.4,
+ "seconds": 303.2,
  "rows": [
   {
    "mode": "off",
@@ -14753,11 +14753,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -14770,11 +14767,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -14815,11 +14809,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -14875,11 +14866,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -14895,11 +14904,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -14943,11 +14970,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -15005,11 +15050,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -15025,11 +15088,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -15073,11 +15154,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -39046,11 +39145,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -39063,11 +39159,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -39108,11 +39201,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "off",
@@ -39168,11 +39258,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -39188,11 +39296,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -39236,11 +39362,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -39298,11 +39442,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -39318,11 +39480,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -39366,11 +39546,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -66665,11 +66863,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -66682,11 +66877,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -66727,11 +66919,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -66787,11 +66976,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -66807,11 +67014,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -66855,11 +67080,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -66917,11 +67160,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -66937,11 +67198,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -66985,11 +67264,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -90958,11 +91255,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -90975,11 +91269,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -91020,11 +91311,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "shadow",
@@ -91080,11 +91368,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -91100,11 +91406,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -91148,11 +91472,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -91210,11 +91552,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -91230,11 +91590,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -91278,11 +91656,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -118617,11 +119013,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -118634,11 +119027,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -118679,11 +119069,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -118739,11 +119126,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -118759,11 +119164,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -118807,11 +119230,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -118869,11 +119310,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -118889,11 +119348,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -118937,11 +119414,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -143126,11 +143621,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -143143,11 +143635,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -143188,11 +143677,8 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "total_cost",
-    "unit_cost"
-   ],
-   "leaks_7777": true
+   "money_keys": [],
+   "leaks_7777": false
   },
   {
    "mode": "enforce",
@@ -143248,11 +143734,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -143268,11 +143772,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -143316,11 +143838,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -143378,11 +143918,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -143398,11 +143956,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -143446,11 +144022,29 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "accepted_cost",
+    "allocated_cost",
+    "canonical_cost",
+    "consumed_value",
+    "consumption_cost",
+    "cost_rule",
+    "invoice_cost",
+    "invoice_linked_excluded_cost",
+    "invoice_path_a_cost",
     "issued_value",
+    "legacy_cost",
+    "legacy_excluded_cost",
+    "legacy_undated_cost",
+    "material_cost_basis",
     "net_material_cost",
     "purchased_value",
+    "returned_cost",
     "returned_value",
-    "total_value"
+    "total_cost",
+    "total_value",
+    "unallocated_cost",
+    "waste_cost",
+    "waste_value"
    ],
    "leaks_7777": false
   },
@@ -157233,7 +157827,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -157242,13 +157836,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "scope_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -157264,7 +157858,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "6820b60752883bc583c30cdfe09c59b3e15cd6eb3df18446ccd15aa92533e384"
+     "integrity_hash": "f0fd32829a59df4cb6115a0bcc2a33248f30551d3ad46fc00fd60c87979d8cec"
     }
    ]
   },
@@ -157275,7 +157869,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -157284,7 +157878,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157309,7 +157903,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "c8af25efffb4e0c5643f315cd5a7e638a6c20285ffea1e833440661084f888c9"
+     "integrity_hash": "c771d472dffc8290ffcda1e5ac38df4ae7bf8d0b6d95b022654d289bb3153ec7"
     }
    ]
   },
@@ -157320,7 +157914,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -157332,7 +157926,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -157341,7 +157935,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157367,7 +157961,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "3417c808ace942e323130ee6ce65a13d241a97799ea94c2386c010534d08d927"
+     "integrity_hash": "a744241d790a46ccc5fb164b2c2c2c4e0d30145ad61872dee337e846d866d51c"
     }
    ]
   },
@@ -157378,7 +157972,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -157390,7 +157984,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -157402,7 +157996,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -157411,13 +158005,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "scope_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -157435,7 +158029,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "e73b9a76411a099276403c8665aa0839e8850520e34c679e8e5d368edfc84abb"
+     "integrity_hash": "2d7416e4a99a9e1b2fbc2d6464ea78eabf9d7e38c27e4682014bb553f7f18e11"
     }
    ]
   },
@@ -157446,7 +158040,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -157455,7 +158049,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157481,7 +158075,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "f3b50c7255bad2dd50b504c0e4e196f74f5c69cec0b1ab32ca890eea48ba3532"
+     "integrity_hash": "f815a2c7ba8c9c10229b10c4df50d49dd28c29ca06b9510bd8f96f6888073531"
     }
    ]
   },
@@ -157492,7 +158086,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -157504,7 +158098,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -157513,7 +158107,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157539,7 +158133,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "d1508f6042844459260d6852ef66ee0b29d6f293ffe5c9d8bcfdc92624b3211e"
+     "integrity_hash": "642d1a3bc84ec3db377dfaf5dd70480853117ea1f5ed32bda8ac3db29667bf99"
     }
    ]
   },
@@ -157550,7 +158144,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -157562,7 +158156,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -157574,7 +158168,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -157583,13 +158177,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "scope_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -157607,7 +158201,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "44d34b62e7086ff852cdd889b1e022f1176a9e10cd31bb63ac73a127eb320f6a"
+     "integrity_hash": "3f829c5f3ac32d8da4e257ad2b0b4513b731360ab5b36e3a672a26af6d2f73cd"
     }
    ]
   },
@@ -157618,7 +158212,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -157627,7 +158221,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157653,7 +158247,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "4b219796c41fd6408b81f8a127d9110bbe69144de6ee061b7eb5f8d4c4dfed0d"
+     "integrity_hash": "1341ba3dab58dc3e392c03308c1785149bd0d511f3134712579d2b44555ddb60"
     }
    ]
   },
@@ -157664,7 +158258,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -157676,7 +158270,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -157685,7 +158279,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157711,7 +158305,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "495f20eff9df4fac15f0fc89a1bb3a71a10814fd97cd285e1a90a2b5a8ab01ac"
+     "integrity_hash": "3ee7ad7d0f4e9698a859619f70317d4c51f9af6087988f417db1d06b9951cca4"
     }
    ]
   },
@@ -157722,7 +158316,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -157734,7 +158328,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "b55bde46-4a2a-4725-9596-f53c96bdb4c6",
+   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []

@@ -646,6 +646,9 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/smr-analyses/{analysis_id}/recalculate-with-modifiers"): "denial",
     ("PUT", "/api/client-acts/{act_id}"): "denial",
     ("PUT", "/api/execution-packages/{pkg_id}"): "denial",
+    # LIVE-OPS-01 / TASK 5C (#55, Р28): the refused migration execute writes the
+    # enforce "access denied" AuditEvent — 403 in every mode, nothing else written.
+    ("POST", "/api/warehouse/migration-readiness/execute"): "denial",
 }
 
 

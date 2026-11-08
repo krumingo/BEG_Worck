@@ -235,6 +235,20 @@
 3. **LIVE-OPS:** пуснете същия тест (`--harness`) върху точния RC artifact, преди да решите режима за него. На `main` изискването не съществува.
 4. **Списъкът в §5** е отделно решение за Крум: кои от тези достъпи „болят в реални данни“. По правилата на проекта той се записва като дълг и не се поправя без потвърждение. Нито един режим не го решава — трябва миграция на endpoint-ите към Permission Service, по модул.
 
+## 8а. Добавка — LIVE-OPS-01 / TASK 5C (#55), след сливане на `main` @ `d226c49`
+
+Матрицата е генерирана наново с harness-а на клона на #55: **767 endpoint-а**, 18 408 клетки (тези на `main` плюс каноничния склад).
+
+Първият прогон на клона показа разлики между режимите на складовите маршрути на #55:
+* `GET /api/warehouse/migration-readiness/*` (4 маршрута): `off`/`shadow` 200 за Accountant, Driver, SiteManager, Technician, Viewer и Warehousekeeper, а `enforce` 403. Това е реална разлика в достъпа, против Р28.
+* `POST /api/warehouse/canonical/movements` (422 срещу 403), `GET /api/warehouse/canonical/stock/{item_id}` (400 срещу 403) и `POST /api/warehouse/migration-readiness/execute` (405 срещу 403). Тук се различава само редът на проверките.
+
+Поправка (Р28): тези маршрути получиха `legacy_check`. В `off`/`shadow` старата роля, преведена през `LEGACY_ROLE_MAP`, трябва да има същото действие от каталога, което `enforce` изисква (`legacy_gate.catalog_legacy_check`). Сега трите режима дават еднакъв статус във всяка клетка.
+
+Единствената нова разлика в записите: отказаният `POST /api/warehouse/migration-readiness/execute` в `enforce` записва AuditEvent „отказан достъп“. Това е същата категория като `POST /api/users` и `PUT /api/users/{user_id}`.
+
+Отделно harness-ът намери **500** в `POST /api/warehouse/canonical/project-writeoff` при нечислово количество. Поправено е: стойността трябва да е крайно десетично число, иначе 422.
+
 ## 9. Как се повтаря
 
 ```bash
