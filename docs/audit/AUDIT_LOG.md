@@ -5643,3 +5643,21 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **#81 `a7166d4`:** its own test changes add the request / fixtures for SEC-02 only; 0 assertion lines changed. F-81-03: a payment to a supplier is never project income.
 - **#86 `dbb04ba`:** D14 closed. History is re-checked inside the transaction, and an empty Draft is tombstoned, never `delete_one`.
 - **Gates queue (serial):** #76 `aa369d8` (running) → #81 → #84 → #86 → #83.
+
+## 2026-11-08 20:49 UTC: #88 `a05167a` (PWA-01, frontend only; base main `3699c3b`): code review done, jest / build / Playwright re-run PENDING (disk)
+
+- **Backend diff:** empty.
+- **Service worker** (`frontend/src/service-worker.js`):
+  - precaches only the InjectManifest build list + public icons/manifest + `index.html`;
+  - `fetch` returns early (no `respondWith`) for non-GET, other origins and `/api`, `/uploads`, `/ws` (`isNeverCachedPath`);
+  - navigations are network-first with a fallback to the cached `index.html`, and navigation responses are never stored;
+  - no runtime caching of anything else;
+  - old `bw-shell-*` caches are dropped on activate.
+- **Registration:** only when `NODE_ENV === "production"`.
+- **Update:** no `skipWaiting` on install; it waits for `SKIP_WAITING` from the "Обнови" bar, so there is no silent reload.
+- **Logout / 401 / tenant change:** `clearTenantLocalData` deletes every non-shell cache, clears sessionStorage, and empties localStorage except an allow-list of device prefs + the separate platform-admin session; an event resets the in-memory active project. A tenant change is detected at login and `fetchUser` (`noteActiveTenant`). The frontend has no other tenant-switch path.
+- **Secrets / CSP:** no new secrets or env values beyond `REACT_APP_BUILD_SHA`. `index.html` has no CSP before or after (not weakened; there is none). The pre-existing `assets.emergent.sh` script is unchanged.
+- **D1 (offline reload drops the session):** PRE-EXISTING on main `3699c3b` (`AuthContext.fetchUser` `catch {}` removes `bw_token`/`bw_user` on any error, incl. network).
+  - Minimal fix: `catch (err)` and clear only on `err.response?.status === 401` (and 403 from `/auth/me`). On a network error or 5xx keep the token and, to stay usable offline, restore `user` from the cached `bw_user`. The API 401 interceptor still ends a really expired session.
+- **Minor:** `logout()` does not await `clearTenantLocalData()`; cache deletion continues in the background, and an immediate unload could leave non-shell caches (normally none exist).
+- **Pending:** the jest / `yarn build` / Playwright re-run needs a frontend `node_modules` (~1 GB); about 1.2 GB is free while the Mongo gates run.
