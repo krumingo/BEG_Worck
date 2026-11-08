@@ -4951,4 +4951,4 @@ Audit hygiene: one #81 probe run overlapped the b82 batch on rs3, against my own
 
 **WHFIX81-04: stale A1 inventory.** `test_the_committed_inventory_is_the_generated_one` fails: generated 376 / FIXED 130, committed 377 / 131. The README references a `03_gates.txt` that is not committed.
 
-PR comment 6719287307 updated (four blocking findings). R0 and PM-01 still running.
+PR comment 6719287307 updated (four blocking findings). R0 814, PM-01 6.
