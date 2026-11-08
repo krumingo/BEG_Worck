@@ -221,9 +221,12 @@ def test_wh81_03_supplier_invoice_is_not_project_revenue(monkeypatch, backend, m
         from app.services import (project_pnl, centralized_reports, project_financial_results,
                                   cashflow_forecast)
         from app.routes import clients, projects
-        for mod in (project_pnl, centralized_reports, project_financial_results,
-                    cashflow_forecast, clients, projects):
-            monkeypatch.setattr(mod, "db", op)
+        import sys
+        # these readers reach further app modules (resource_model, …) that hold
+        # the global `db` — bind every loaded one to this test's database
+        for name, mod in list(sys.modules.items()):
+            if name.startswith("app.") and getattr(mod, "db", None) not in (None, op):
+                monkeypatch.setattr(mod, "db", op)
         now = TODAY.isoformat()
         await op.invoices.insert_one({
             "id": "inv-x8", "org_id": ORG_A, "invoice_no": "R-X8", "direction": "Received",
