@@ -61,7 +61,7 @@ async def create_labor_entry(
     """Create a labor time entry linked to an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    hours = money_value(data.get("hours"), "hours")  # SEC-01-C03: finite > 0, else 422 before any write
+    hours = money_value(data.get("hours"), "hours", places=None)  # SEC-01-C03: finite > 0, else 422 before any write
     await project_in_tenant(tenant, data.get("project_id"))  # SEC-01-C03-B (FG-29)
     now = datetime.now(timezone.utc).isoformat()
 

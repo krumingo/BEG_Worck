@@ -75,8 +75,11 @@ P2_DATED = (("technician", "Technician", "expired"), ("requester", "SiteManager"
 
 
 def dated_window(kind: str, today: Optional[str] = None) -> Dict[str, Optional[str]]:
-    from datetime import date, timedelta
-    d = date.fromisoformat(today) if today else date.today()
+    from datetime import date, datetime, timedelta, timezone
+    # The app compares membership days by the UTC date (project_team.membership_date_window);
+    # "yesterday"/"tomorrow" are computed the same way, not in the machine's local time
+    # (Codex @ da47777: after local midnight the local date was a day ahead of UTC).
+    d = date.fromisoformat(today) if today else datetime.now(timezone.utc).date()
     if kind == "expired":
         return {"from_date": (d - timedelta(days=30)).isoformat(),
                 "to_date": (d - timedelta(days=1)).isoformat()}

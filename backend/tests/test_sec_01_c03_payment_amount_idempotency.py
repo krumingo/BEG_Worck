@@ -244,6 +244,63 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         fg105: List[Dict[str, Any]] = []
         f6903: List[Dict[str, Any]] = []
         audit_crash: List[Dict[str, Any]] = []
+        subcent: List[Dict[str, Any]] = []
+
+        def subcent_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            out: Dict[str, Any] = {"mode": mode, "money_routes": {}}
+            # every MONEY field of #69: more than 2 decimals -> 422, nothing written
+            for key in ("cash", "bonus", "ohtx", "ohsnap", "subpay", "subpay_vat"):
+                field = EP[key][2]
+                base = body_for(key, fx["A"], c02)
+                cells = {}
+                for value in (0.004, 10.125, 0.001):
+                    res = post("accountant", key, with_value(base, field, value), uuid.uuid4().hex)
+                    cells[str(value)] = {"status": res["status"],
+                                         "business_written": res["business_written"]}
+                    if res["written"]:
+                        restore_all()
+                ok = post("accountant", key, with_value(base, field, 10.12 if field == "amount"
+                                                        else 1.25), uuid.uuid4().hex)
+                cells["two_decimals"] = {"status": ok["status"]}
+                restore_all()
+                out["money_routes"][key] = cells
+            # the cap in cents: certified 0.01
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                {"id": pkg_id}, {"$set": {"certified_total": 0.01, "paid_total": 0,
+                                          "committed_paid_total": 0}}))
+
+            async def six(amount):
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(
+                        "/api/subcontractor-payments", json={**base, "amount": amount},
+                        headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}) for _ in range(6)])
+
+            def state():
+                pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                    {"id": pkg_id}, {"_id": 0}))
+                allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                    {"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1})
+                    .to_list(100))
+                return {"committed": pkg.get("committed_paid_total"), "paid": pkg.get("paid_total"),
+                        "completed_sum": round(sum(float(a["amount"]) for a in allocs), 6),
+                        "certified": pkg.get("certified_total")}
+            seq = [tc.post("/api/subcontractor-payments", json={**base, "amount": 0.004},
+                           headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}).status_code
+                   for _ in range(6)]
+            out["cap_0_01_sequential_0_004"] = {"statuses": seq, "state": state()}
+            conc = tc.portal.call(lambda: six(0.004))
+            out["cap_0_01_concurrent_0_004"] = {"statuses": sorted(r.status_code for r in conc),
+                                                "state": state()}
+            whole = tc.portal.call(lambda: six(0.01))
+            out["cap_0_01_concurrent_0_01"] = {"statuses": sorted(r.status_code for r in whole),
+                                               "state": state()}
+            restore_all()
+            return out
 
         def audit_crash_probe(mode: str) -> Dict[str, Any]:
             from app.permissions import workflow
@@ -611,6 +668,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             f6903.append(reserve_crash_probe(mode))
             # Audit of #69 @ da47777: crash right after the audit row; 2 same-key retries.
             audit_crash.append(audit_crash_probe(mode))
+            # F-69-04: sub-cent amounts; the certified cap in whole cents.
+            subcent.append(subcent_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -625,6 +684,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "f69_02_computed_routes": computed, "f69_01_interrupted_payment_race": race,
         "fg90_certified_cap": fg90, "fg105_many_payments": fg105,
         "f69_03_reserve_crash": f6903, "audit_crash_retry": audit_crash,
+        "f69_04_subcent": subcent,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -759,6 +819,25 @@ def check_result(result: Dict[str, Any]) -> None:
             assert c["audit_rows_after_crash"] == 1, (name, r)
             assert all(st in (200, 201) for st in c["retry_statuses"]), (name, r)
             assert c["audit_rows_after_retries"] == 1, (name, r)   # exactly one audit row
+    rows = result["f69_04_subcent"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for key, cells in r["money_routes"].items():
+            for value in ("0.004", "10.125", "0.001"):
+                assert cells[value] == {"status": 422, "business_written": []}, (key, r)
+            assert cells["two_decimals"]["status"] == 201, (key, r)
+        zero = {"committed": 0, "paid": 0, "completed_sum": 0, "certified": 0.01}
+        assert r["cap_0_01_sequential_0_004"] == {"statuses": [422] * 6, "state": zero}, r
+        assert r["cap_0_01_concurrent_0_004"] == {"statuses": [422] * 6, "state": zero}, r
+        c = r["cap_0_01_concurrent_0_01"]
+        assert c["statuses"] == [201, 409, 409, 409, 409, 409], r
+        assert c["state"] == {"committed": 0.01, "paid": 0.01, "completed_sum": 0.01,
+                              "certified": 0.01}, r
+        # the invariant: completed payments never exceed the certified total
+        for k in ("cap_0_01_sequential_0_004", "cap_0_01_concurrent_0_004",
+                  "cap_0_01_concurrent_0_01"):
+            st = r[k]["state"]
+            assert st["completed_sum"] <= st["certified"] + 1e-9, (k, r)
 
 
 def check_computed_and_race(result: Dict[str, Any]) -> None:
