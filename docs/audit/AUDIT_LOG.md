@@ -5432,3 +5432,26 @@ SEC71-M1 resolved. No blocking finding remains.
   - role-union: 0 differences;
   - PM-01 delta: 360 cells = the PR's own, 0 extra.
 - **Disk:** the space allowance hit 0 at ~16:36 and all 3 mongod crashed. I removed my old worktrees and an old venv; `docker volume prune` (~20 GB of dangling scratch volumes) was refused by the permission check and is asked of Krum. Runs are serial until then.
+
+## 2026-11-08 17:50 UTC: #83 `bc0d1c7` (CP83-02/03/04 + merge `616a66c` of main `0750d75` + FG-241..245): PASS, no blocking finding
+
+- **Merge and CP83 fixes:** see the 16:35 entry. CP83-02, CP83-03 and CP83-04 are resolved.
+- **FG-242..245 (`bc0d1c7`):**
+  - payee name / ЕИК are passed to the guard;
+  - `full_iban_allowed` moved into `counterparty_rules`;
+  - counterparty and invoice responses mask IBAN fields for roles without the full right.
+  - A masked `****1234` sent back is rejected by `_invoice_iban` (422) and never overwrites the stored IBAN; project `invoice_details` use `keep_stored_if_masked`.
+
+| Gate | Result |
+|---|---|
+| probe K1–K3 | 84 |
+| cp_01 | 548 (+3 mongomock-only skips) |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | 9 failed, all also on main (NEW_FAILS 0) |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+
+Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in the route but the project id in the migration.
