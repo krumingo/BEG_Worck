@@ -5134,7 +5134,7 @@ PR comment 6695992847 updated.
 - **Probes:** X1a 409 (the price stays 10); X5–X7 18.
 - **wh_fix_01 + a3_r44:** 185.
 - **WHFIX81-M1 (blocking): SEC-01 29 / 30.** `test_the_pm01_matrix_shows_the_money_write_cells_closed` fails: PM-01 has POST material-waste at **503** for Owner / Admin / Accountant in every mode; main has **428**. The key check now runs after `require_project_writeoff` / `_r27_first`, which do DB and index work (the canonical 503). Fix: key (428) before the R27 resolution; regenerate PM-01; SEC-01 must be 30.
-- PR comment 6719287307 updated. W0, R0, PM-01 and warehouse are still running (b81e).
+- PR comment 6719287307 updated. Rest of the gates on the merge: W0 same 15, A2C / A1 0 / 0, R0 814, PM-01 6, PAY 630, warehouse 1121. Only SEC-01 is red (WHFIX81-M1).
 
 ## 2026-11-08 13:20 UTC: #83 `ea51030` CP-01 (counterparties, Р48): BLOCKING, CP83-01
 
