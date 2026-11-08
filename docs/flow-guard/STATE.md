@@ -69,4 +69,5 @@
 | FLOW-018 | 24 | `COVERAGE.md` |
 | FLOW-001 | 26 | `COVERAGE.md` |
 | FLOW-022 | 31 | `COVERAGE.md` (FG-325..335) |
-| следващ: FLOW-023 (main) | — | — |
+| FLOW-023 | 32 | `COVERAGE.md` (FG-355..364) |
+| следващ: FLOW-024 (main, повторно след OH-01) | — | — |
