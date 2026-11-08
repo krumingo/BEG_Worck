@@ -5627,3 +5627,19 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **PM-01:** 503 own cells all keep the PR's value (main already had most via #69/#71; merge delta 48); 0 extra.
 - **`aa369d8` fix:** the Request param defaults to None on 5 finance-only reads, and `advance_visible` returns False with no request in enforce (fail closed; off/shadow by role). The money decorators already strip with no request.
 - **SEC-02 flake:** `row["leaks_7777"] = "7777" in resp.text` (main's `test_sec_02_finance_read.py` L496) is a raw substring match, so an id or timestamp containing "7777" gives a false positive. It never hides a leak. Debt: match `\b7777(\.0)?\b` or check parsed values.
+
+## 2026-11-08 20:27 UTC: periodic pass. New heads #81 `a7166d4`, #83 `464ce36`, #84 `6730fc2`, #86 `dbb04ba` (all include main `3699c3b`)
+
+- **Process failure:** the waiters for #76 / #86 (`while pgrep -f b86c.sh`) matched their own command line and never fired; #76's run started only at 20:26 (about 30 minutes lost). The chain now waits on the PID.
+- **Merge checks:**
+
+| PR | Merge | Merge vs merge-tree | Role-union | PM-01 own / extra |
+|---|---|---|---|---|
+| #81 `a7166d4` | `fdfad135` (`066c991` + `3699c3b`) | only generated evidence | 0 | 48/48, 0 |
+| #83 `464ce36` | `3143ade5` (`5ee1f23` + `3699c3b`) | identical | 0 | 864/864, 0 |
+| #84 `6730fc2` | `6730fc2b` (`569407c` + `3699c3b`) | identical | 0 | 384/384, 0 |
+| #86 `dbb04ba` | `0fe133db` (`28fb230` + `3699c3b`) | only `run_meta` | 0 | 168/168, 0 |
+
+- **#81 `a7166d4`:** its own test changes add the request / fixtures for SEC-02 only; 0 assertion lines changed. F-81-03: a payment to a supplier is never project income.
+- **#86 `dbb04ba`:** D14 closed. History is re-checked inside the transaction, and an empty Draft is tombstoned, never `delete_one`.
+- **Gates queue (serial):** #76 `aa369d8` (running) → #81 → #84 → #86 → #83.
