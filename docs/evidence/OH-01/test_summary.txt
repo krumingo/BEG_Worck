@@ -1,0 +1,83 @@
+# OH-01 test summaries (branch claude/oh-01-overhead from main 35ae10b, local real MongoDB 7.0.34 replica set rs0)
+## OH-01, real Mongo + mongomock (W0_03_REAL_MONGO_URL set), PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider
+tests/test_oh_01_overhead_no_hard_delete.py: 57 passed (9 tests x 2 backends x 3 modes off/shadow/enforce, test_04 x 3 non-finance roles, + static/index)
+## Audit of a3e0b91 (OH01-1, OH01-2, harness) — fix commit
+test_07 (4 parallel re-allocations x 3 rounds) + test_08 (6 parallel DELETEs of one cost): on a3e0b91 9 of 12 cases FAIL; after the fix 12/12 pass, 5 of 5 repeated runs on real Mongo
+merge check: OH-01 tests on (origin/claude/sec-01-money-write-permissions + this branch): 57 passed (registered tenant in the harness)
+## tests/test_r0_0*.py (real Mongo)
+main 35ae10b: 814 passed | OH-01: 814 passed
+## W0 DB-free (tests/test_w0_*.py --noconftest, no W0_03_REAL_MONGO_URL)
+main 35ae10b: 15 failed, 1085 passed, 50 skipped | OH-01: 15 failed, 1085 passed, 50 skipped (the same 15 test_w0_03e_legacy_routes failures, diffed by test id)
+## PM-01 permission matrix (real Mongo)
+before regeneration: 1 failed (36 cells differ) — expected; regenerated with `python tests/test_pm_01_permission_matrix.py --harness`
+36 cells changed (pm01_cells_changed.csv): 4 routes (DELETE overhead categories/costs/assets, POST allocate) x Owner/Admin/Accountant x 3 modes, 404 -> 428 IDEMPOTENCY_KEY_REQUIRED, wrote=no before and after (PM-01 sends no key)
+after: tests/test_pm_01_permission_matrix.py 6 passed
+## Guards
+W0-03E-A1 tenant access guard: 416 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 205 module(s) checked, 0 violation(s)
+## Frontend
+yarn test: 6 suites, 96 tests passed (src/lib/__tests__/idempotency.test.js is byte-identical to PR #69)
+yarn build: Compiled with warnings (no warning in the changed files)
+
+## FLOW Guard pass 8 on 09409f0 (FG-86, FG-87, FG-88) — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 87 passed (14 tests x 2 backends x 3 modes; new test_10..test_14)
+FG-86: two snapshots of one period -> the new one supersedes the old one and its allocations; P&L = one snapshot (not 2x); legacy snapshot of the period superseded too; 4 parallel computes x 3 rounds -> one active snapshot
+FG-87: PUT on a used cost/category/asset -> 409, nothing written; date move into a computed period -> 409; PUT on archived -> 409 RECORD_ARCHIVED; accepted PUT -> AuditEvent with before/after
+FG-88: compute without key -> 428, nothing written; replay -> same snapshot; other body -> 409
+R0 814 passed; W0 1085/15/50 same 15; A1/A2C 0/0; PM-01 6 passed after regeneration
+PM-01: 9 cells changed (pm01_cells_changed_fg86_88.csv): POST /overhead/snapshots/compute x Owner/Admin/Accountant x 3 modes, 200 wrote -> 428 nothing written
+yarn test 96 passed; yarn build compiles
+
+## D6 + OH01-3 (audit of 240cbcf) — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 102 passed (new test_15 overlap refused / nothing written, test_16 4 parallel overlapping computes -> one active, test_17 no createIndexes on a request path, test_18 startup + onboarding create the indexes)
+R0 814; W0 1085/15/50 same 15; PM-01 6 passed; A1/A2C 0/0
+merge with #69 (fresh worktree): see HANDOFF; SEC-01 30/30 and OH-01 102 passed on the merged tree after regenerating SEC-01-C01/results.json and PM-01 matrix (merge69_sec01_c01_results.diff: only the ohcompute rows gain op.audit_events + op.overhead_period_locks)
+
+## Codex CHANGES_REQUESTED on 6c5c5cf (OH74-01, OH74-02) — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 132 passed (new test_19 x2 methods, test_20, test_21, test_22; on 6c5c5cf these 30 cases FAIL, 30/30)
+OH74-01: allocation uses the snapshot's FROZEN per-project basis; late report/attendance -> total still exactly 100.00; legacy snapshot with changed source -> 409 SNAPSHOT_SOURCE_CHANGED, nothing written; cents by largest remainder; unallocated remainder explicit; allocated+unallocated == snapshot total asserted before any write
+OH74-02: interrupted archive (status set, AuditEvent failed) -> same-key retry resumes: 1 canonical event, 1 legacy row, no second status change; other key -> 409
+R0 814; W0 1085/15/50 same 15; PM-01 6 passed (matrix unchanged); A1/A2C 0/0
+
+## R38 (Krum 07.11.2026, FG-97) + FG-98 — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 140 passed (new test_23 R38, test_24 FG-98; test_10/11/18 updated; these 21 cases FAIL on cee2023)
+R38: compute marks the old allocation "recalculating" (P&L keeps it, overhead_label "преизчислява се"); the new allocation supersedes it at write: 400 -> 400 labelled -> 800, never 0 and never both
+FG-98: startup indexes the operational DB and every Tenant Registry database (unreadable registry fails the start)
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0; yarn test 96, build ok
+merge with #69 @ 6af0e98 (F-69-02 adds MoneyWrite on compute): one key path kept (OH-01 KeyedWrite; #69's own comment: "#74's version of this block wins"); SEC-01 30/30, OH-01 140, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0 — after the 6-step procedure in HANDOFF OH-01-C (diffs: merge69_sec01_c01_results.diff, merge69_sec01_c03_results.diff, merge69_sec01_c03_test.diff)
+
+## Codex CHANGES_REQUESTED on 26a135a (OH74-03, OH74-04) — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 194 passed (new test_25 x3 phases, test_26 x3 ops x2 steps; on 26a135a these 54 cases FAIL)
+OH74-03: new batch inserted STAGED, published by ONE pointer write (overhead_period_locks.current_allocation_batch_id); every reader (P&L, financial results, snapshot detail, /overhead/allocations) follows it via current_allocations(); during the switch and after a crash before publish the old batch is read (labelled, never 0/[]); after a crash past publish only the new one (never both); same-key retry completes
+OH74-04: canonical event and legacy audit row are written once per operation (looked up by the operation key) — a crash after the write but before the step is recorded never produces a second event; archive, compute, allocate
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
+
+## FG-89 (HIGH): one overhead source — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 201 passed (new test_27 x2 backends x3 modes, test_28 static; these 7 cases FAIL on 6a4ac5b)
+full_cost net profit, financial alerts, project risk, package net margin, revenue_expense profit summary and revenue_snapshot profit-by-period read overhead ONLY via current_allocations(); POST /overhead-allocation/compute is a read-only projection (writes nothing); project_overhead_alloc is no longer read or written by any code path (left in place, not deleted)
+every view == OH-01 allocation: 0 -> 300 -> recompute 300 (R38) -> 600
+R0 814; W0 1085/15/50 same 15; PM-01 6 (matrix unchanged); A1/A2C 0/0
+merge with #69 @ ccab244 after FG-89: SEC-01 30/30, OH-01 201, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0 — 7-step procedure in HANDOFF OH-01-E (test edits: merge69_sec01_tests.diff; regenerated evidence: merge69_sec01_c0{1,2,3}_results.diff)
+
+## OH74-05 (audit, PROVED): pointer-first read — fix commit 612d026
+tests/test_oh_01_overhead_no_hard_delete.py: 213 passed (new test_29 x2 starts {OH-01 batch, legacy rows} x2 backends x3 modes: a reader paused right after reading the pointers while a whole allocate publishes answers its consistent old version 225, then 450 — never 0, never both)
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
+merge with #69 @ c14fcda (7-step procedure, unchanged): SEC-01 30/30, OH-01 213, W0 same 15, PM-01 6, guards 0/0; R0: first run 1 failed / 813 passed (test id not captured), then 4 further runs on rebuilt merged trees (incl. the same SEC-01 -> OH-01 -> PM-01 -> R0 order) 814 passed each; #69 alone 814 — recorded as an unidentified, non-reproduced flake
+
+## FG-116 (OH-01 addendum 07.11 @ 0b754a7): R38 label in the FG-89 readers — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 219 passed (new test_30 x2 backends x3 modes; these 6 cases FAIL on 45178ac with KeyError overhead_recalculating)
+net profit, package net margin, profit summary, profit-by-period (per month) and the legacy compute projection carry the same overhead_recalculating / overhead_label as project P&L: (False, None) -> recompute (True, "преизчислява се") with the old figure 300 -> allocate (False, None), 600
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
+merge with #69 @ 3fb55f2 (7-step procedure, unchanged): SEC-01 30/30, OH-01 219, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0
+
+## OH-01 addendum 2 (07.11 @ 7ae56b9): legacy project_overhead_alloc stays visible — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 225 passed (new test_31 legacy-only project x2 backends x3 modes; test_27/28 updated; these 13 cases FAIL on 878628f)
+reader fallback (chosen over a backfill: read-only, no migration): project_overhead_current() counts a legacy row, labelled "преизчислява се", for every month without a current OH-01 allocation covering it; once OH-01 covers the month the legacy figure is out. Legacy-only project: 200 visible + labelled (not 0); after an OH-01 allocation for Oct: 300 (Oct) + 120 (Sep legacy, labelled) = 420. Nothing written, nothing deleted.
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0
+merge with #69 @ 3fb55f2 (7-step procedure, unchanged): SEC-01 30/30, OH-01 225, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0
+
+## OH-01 addendum 3 (07.11 @ a584206, FG-127): one project-overhead helper for every reader — fix commit
+tests/test_oh_01_overhead_no_hard_delete.py: 231 passed (new test_32 x2 backends x3 modes over 7 readers incl. project P&L and financial results; test_27/31 updated; these 18 cases FAIL on 997abdc)
+project_pnl and project_financial_results now read project_overhead_current() (same legacy fallback, same recalculating_fields label) like net profit / profit summary / profit by period / package / legacy projection: legacy only 523.25 labelled everywhere -> OH-01 Oct + legacy Aug 800 -> recompute 800 -> allocate 1100, one amount and one label in all 7
+R0 814; W0 1085/15/50 same 15; PM-01 6; A1/A2C 0/0; yarn test 96
+merge with #69 @ 3fb55f2 (7-step procedure, unchanged): SEC-01 30/30, OH-01 231, R0 814, W0 same 15, PM-01 6, A1/A2C 0/0

@@ -1,7 +1,7 @@
 """
 Routes - Centralized Alarm System.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
@@ -10,6 +10,17 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.alarm_engine import evaluate_all_rules
+from app.permissions.money_write import strip_money_for_non_finance  # SEC-02-G (FG-111)
+from app.permissions.money_write import money_values_visible, money_alarm_exclusion, require_finance_read
+
+
+async def _band_filter(request: Request, user: dict) -> dict:
+    """SEC-02-G (audit SEC71-04; R31): for a caller without the finance right, the money
+    alarms of a site whose labor cost comes from fewer than 2 paid workers do not exist —
+    not in the list, the ?severity= filter, the counts, the dashboard or one event."""
+    if await money_values_visible(request, user):
+        return {}
+    return await money_alarm_exclusion(user)
 from app.tenancy.data_access import TenantData
 
 
@@ -49,7 +60,9 @@ class AcknowledgeRequest(BaseModel):
 # ── Alarm Events ───────────────────────────────────────────────────
 
 @router.get("/alarms")
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
 async def list_alarms(
+    request: Request,
     severity: Optional[str] = None,
     type: Optional[str] = None,
     site_id: Optional[str] = None,
@@ -59,7 +72,7 @@ async def list_alarms(
     user: dict = Depends(get_current_user),
 ):
     from app.utils.pagination import paginate_query
-    query = {"org_id": user["org_id"]}
+    query = {"org_id": user["org_id"], **await _band_filter(request, user)}
     if status:
         query["status"] = status
     if severity:
@@ -73,20 +86,23 @@ async def list_alarms(
 
 
 @router.get("/alarms/count")
-async def alarm_count(user: dict = Depends(get_current_user)):
+async def alarm_count(request: Request, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     org_id = user["org_id"]
-    critical = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical"})
-    warning = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning"})
-    info = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "info"})
+    band = await _band_filter(request, user)   # SEC-02-G (SEC71-04)
+    critical = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "critical", **band})
+    warning = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "warning", **band})
+    info = await tenant.alarm_events.count_documents({"org_id": org_id, "status": "active", "severity": "info", **band})
     return {"critical": critical, "warning": warning, "info": info, "total": critical + warning + info}
 
 
 @router.get("/alarms/dashboard")
-async def alarm_dashboard(user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
+async def alarm_dashboard(request: Request, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     org_id = user["org_id"]
-    active = await tenant.alarm_events.find({"org_id": org_id, "status": "active"}, {"_id": 0}).to_list(500)
+    band = await _band_filter(request, user)   # SEC-02-G (SEC71-04)
+    active = await tenant.alarm_events.find({"org_id": org_id, "status": "active", **band}, {"_id": 0}).to_list(500)
 
     by_severity = {"critical": 0, "warning": 0, "info": 0}
     by_type = {}
@@ -102,7 +118,7 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
             by_site[sid]["count"] += 1
 
     recent = await tenant.alarm_events.find(
-        {"org_id": org_id}, {"_id": 0}
+        {"org_id": org_id, **band}, {"_id": 0}
     ).sort("triggered_at", -1).limit(10).to_list(10)
 
     # 7-day trend
@@ -111,7 +127,7 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
     for i in range(6, -1, -1):
         d = (now - timedelta(days=i)).strftime("%Y-%m-%d")
         count = await tenant.alarm_events.count_documents(
-            {"org_id": org_id, "triggered_at": {"$gte": f"{d}T00:00:00", "$lte": f"{d}T23:59:59"}}
+            {"org_id": org_id, "triggered_at": {"$gte": f"{d}T00:00:00", "$lte": f"{d}T23:59:59"}, **band}
         )
         trend.append({"date": d, "count": count})
 
@@ -125,18 +141,23 @@ async def alarm_dashboard(user: dict = Depends(get_current_user)):
 
 
 @router.get("/alarms/{event_id}")
-async def get_alarm(event_id: str, user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
+async def get_alarm(event_id: str, request: Request, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]}, {"_id": 0})
+    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"],
+                                             **await _band_filter(request, user)}, {"_id": 0})
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
     return ev
 
 
 @router.put("/alarms/{event_id}/acknowledge")
-async def acknowledge_alarm(event_id: str, data: AcknowledgeRequest, user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
+async def acknowledge_alarm(event_id: str, data: AcknowledgeRequest, request: Request,
+                    user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
+    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"],
+                                             **await _band_filter(request, user)})  # SEC71-04
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
     now = datetime.now(timezone.utc).isoformat()
@@ -147,9 +168,12 @@ async def acknowledge_alarm(event_id: str, data: AcknowledgeRequest, user: dict 
 
 
 @router.put("/alarms/{event_id}/resolve")
-async def resolve_alarm(event_id: str, data: AcknowledgeRequest, user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance   # SEC-02-G (FG-111; R20-5M): money in alarm text / metric
+async def resolve_alarm(event_id: str, data: AcknowledgeRequest, request: Request,
+                    user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"]})
+    ev = await tenant.alarm_events.find_one({"id": event_id, "org_id": user["org_id"],
+                                             **await _band_filter(request, user)})  # SEC71-04
     if not ev:
         raise HTTPException(status_code=404, detail="Alarm not found")
     now = datetime.now(timezone.utc).isoformat()
@@ -160,17 +184,38 @@ async def resolve_alarm(event_id: str, data: AcknowledgeRequest, user: dict = De
 
 
 @router.post("/alarms/evaluate")
-async def evaluate_alarms(user: dict = Depends(get_current_user)):
+async def evaluate_alarms(
+    request: Request,
+    # SEC-02-G (audit SEC71-05; R20): evaluating every rule (and auto-resolving) answers
+    # with counts over EVERY site's money alarms — finance roles only. The only caller is
+    # the Alarms page button (no cron). In enforce a denial writes the canonical
+    # "permission denied" AuditEvent (who called it).
+    _sec02: dict = Depends(require_finance_read(
+        "finance.alarm_evaluation.execute", module=None, resource_type="alarm_rules")),
+    user: dict = Depends(get_current_user)):
     result = await evaluate_all_rules(user["org_id"])
+    if not await money_values_visible(request, user):
+        # defence in depth (unreachable for a non-finance role): no counter / list from a
+        # money alarm of a single-paid-worker site; resolved_events is not attributable
+        from app.permissions.finance_read import MONEY_ALARM_TYPES, strip_money
+        from app.permissions.money_write import single_paid_sites
+        single = await single_paid_sites(user, [e.get("site_id") for e in result["events"]])
+        events = [e for e in result["events"]
+                  if not (e.get("type") in MONEY_ALARM_TYPES and e.get("site_id") in single)]
+        result = strip_money({"new_events": len(events), "events": events})
     return result
 
 
 # ── Alarm Rules ────────────────────────────────────────────────────
 
 @router.get("/alarm-rules")
-async def list_rules(user: dict = Depends(get_current_user)):
+async def list_rules(request: Request, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     items = await tenant.alarm_rules.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
+    if not await money_values_visible(request, user):
+        # SEC-02-G (FG-133): only the known non-money keys of a rule's condition
+        from app.permissions.finance_read import safe_alarm_rule
+        items = [safe_alarm_rule(r) for r in items]
     return {"items": items, "total": len(items)}
 
 

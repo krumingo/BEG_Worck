@@ -14,8 +14,15 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance, require_project_budget_read
+from app.permissions.money_write import strip_for_budget_view  # SEC-02-G (SEC71-01)
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
+# 5C-C22 — package material actual from the ONE shared helper at read time
+# (canonical consumption + „фира" + pre-cutover legacy, Р13), never the
+# `actual_material_cost` cache that only a recompute fills.
+from app.services.canonical_material_cost import (
+    package_material_split, project_material_cost, split_for_package)
 
 
 def _tenant(user: dict) -> TenantData:
@@ -30,7 +37,12 @@ router = APIRouter(tags=["Budget Freeze / Progress"])
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/budget-freezes/{project_id}", status_code=201)
-async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
+@strip_for_budget_view   # SEC-02-G (Codex SEC71-01; R20-5B): the answer is the R20 budget view
+async def create_budget_freeze(
+    project_id: str,
+    _sec02: dict = Depends(require_project_budget_read(
+        "finance.budget_freeze.execute", module="M2", resource_type="budget_freeze")),  # SEC-02 (R20-2B): before any read
+    data: dict = {}, user: dict = Depends(require_m2)):
     """Freeze current budget state for all execution packages in a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -105,6 +117,7 @@ async def create_budget_freeze(project_id: str, data: dict = {}, user: dict = De
 
 
 @router.get("/budget-freezes/{project_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_budget_freezes(project_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"], "project_id": project_id}
@@ -113,6 +126,7 @@ async def list_budget_freezes(project_id: str, user: dict = Depends(require_m2))
 
 
 @router.get("/budget-freezes/{project_id}/latest")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_latest_budget_freeze(project_id: str, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     freeze = await tenant.budget_freezes.find_one(
@@ -172,6 +186,7 @@ async def create_progress_update(data: dict, user: dict = Depends(require_m2)):
 
 
 @router.get("/progress-updates")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def list_progress_updates(
     project_id: Optional[str] = None,
     execution_package_id: Optional[str] = None,
@@ -189,6 +204,7 @@ async def list_progress_updates(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/progress-updates/{pkg_id}/latest")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_latest_progress(pkg_id: str, user: dict = Depends(require_m2)):
     """Get latest progress update for an execution package"""
     tenant = _tenant(user)
@@ -202,6 +218,7 @@ async def get_latest_progress(pkg_id: str, user: dict = Depends(require_m2)):
 
 
 @router.get("/progress-updates/{pkg_id}/history")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_progress_history(pkg_id: str, user: dict = Depends(require_m2)):
     """Get full progress history for an execution package"""
     tenant = _tenant(user)
@@ -226,6 +243,7 @@ async def get_progress_history(pkg_id: str, user: dict = Depends(require_m2)):
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/progress-comparison/{pkg_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
     """Compare physical progress vs cost usage for an execution package"""
     tenant = _tenant(user)
@@ -244,7 +262,7 @@ async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
 
     # Material usage %
     mat_budget = pkg.get("material_budget_total", 0)
-    mat_actual = pkg.get("actual_material_cost", 0)
+    mat_actual = (await package_material_split(tenant, org_id, pkg))["total"]
     material_usage_pct = round(mat_actual / mat_budget * 100, 1) if mat_budget > 0 else None
 
     # Subcontract progress proxy
@@ -298,6 +316,7 @@ async def get_progress_vs_cost(pkg_id: str, user: dict = Depends(require_m2)):
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/progress-warnings/{project_id}")
+@strip_money_for_non_finance(keep=("total", "packages_total"))   # SEC-02-A (R20-5M, D1): counts
 async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2)):
     """Progress deviation warnings for a project"""
     tenant = _tenant(user)
@@ -308,9 +327,11 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
 
     warnings = []
     missing_updates = 0
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
 
     for pkg in pkgs:
         name = pkg.get("activity_name", "")
+        mat_total = split_for_package(mat_cost, pkg["id"])["total"]
         progress = pkg.get("progress_percent", 0) or 0
         has_update = pkg.get("progress_last_updated_at") is not None
 
@@ -334,7 +355,7 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
 
         # Material ahead of progress
         mat_bud = pkg.get("material_budget_total", 0)
-        mat_act = pkg.get("actual_material_cost", 0)
+        mat_act = mat_total
         if mat_bud > 0:
             mat_pct = mat_act / mat_bud * 100
             if mat_pct > progress + 20:
@@ -349,7 +370,7 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
         # Progress lag (low progress with significant cost)
         total_cost_pct = 0
         if pkg.get("budget_total", 0) > 0:
-            actual_total = (pkg.get("actual_material_cost", 0) or 0) + (pkg.get("actual_labor_cost", 0) or 0)
+            actual_total = mat_total + (pkg.get("actual_labor_cost", 0) or 0)
             total_cost_pct = actual_total / pkg["budget_total"] * 100
         if progress < 20 and total_cost_pct > 40:
             warnings.append({
@@ -413,10 +434,11 @@ async def get_progress_risk(org_id: str, project_id: str) -> dict:
         flags.append("insufficient_progress_data")
 
     # Check for lag
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
     for pkg in pkgs:
         progress = pkg.get("progress_percent", 0) or 0
         budget = pkg.get("budget_total", 0)
-        actual = (pkg.get("actual_material_cost", 0) or 0) + (pkg.get("actual_labor_cost", 0) or 0)
+        actual = split_for_package(mat_cost, pkg["id"])["total"] + (pkg.get("actual_labor_cost", 0) or 0)
         if budget > 0 and progress < 20 and actual > budget * 0.4:
             flags.append("critical_progress_lag")
             break
@@ -429,6 +451,7 @@ async def get_progress_risk(org_id: str, project_id: str) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-progress-summary/{project_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_project_progress_summary(project_id: str, user: dict = Depends(require_m2)):
     """Project-level progress summary across all execution packages"""
     tenant = _tenant(user)

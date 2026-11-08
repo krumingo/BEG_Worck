@@ -22,7 +22,8 @@ async def get_overhead_rate(org_id: str) -> float:
         return 0
 
 
-async def build_centralized_reports(org_id: str, project_id: str) -> dict:
+async def build_centralized_reports(org_id: str, project_id: str, *,
+                                    with_entries: bool = False) -> dict:
     """
     Build unified reports from:
     - employee_daily_reports (Draft/Submitted entries)
@@ -314,15 +315,11 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
     draft_clean = round(sum(e["amount_clean_labor"] for e in entries if e["approval_status"] == "draft"), 2)
     draft_oh = round(sum(e["amount_overhead"] for e in entries if e["approval_status"] == "draft"), 2)
 
-    # Materials from warehouse
-    issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0, "lines": 1}
-    ).to_list(200)
-    total_materials = 0
-    for t in issues:
-        for ln in t.get("lines", []):
-            total_materials += float(ln.get("unit_cost", 0)) * float(ln.get("qty_issued", 0))
-    total_materials = round(total_materials, 2)
+    # Materials — 5C-C22: the ONE shared helper (canonical consumption +
+    # „фира" + legacy issues dated before the tenant cutover, Р13).
+    from app.services.canonical_material_cost import project_material_cost, cost_basis
+    _mat = await project_material_cost(tenant, org_id, project_id)
+    total_materials = _mat["total_cost"]
 
     # Revenue from invoices
     invoices = await tenant.invoices.find(
@@ -343,6 +340,8 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "draft_clean_labor": draft_clean,
         "draft_overhead": draft_oh,
         "total_materials": total_materials,
+        "material_waste": _mat["waste_cost"],         # „фира", part of total_materials
+        "material_cost_basis": cost_basis(_mat),
         "total_expense": total_expense,
         "total_revenue": total_revenue,
         "balance": balance,
@@ -350,7 +349,7 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "missing_rate_count": sum(1 for e in entries if e.get("missing_rate")),
     }
 
-    return {
+    out = {
         "project_id": project_id,
         "entries_count": len(entries),
         "overhead_hourly_rate": overhead_hourly,
@@ -358,3 +357,9 @@ async def build_centralized_reports(org_id: str, project_id: str) -> dict:
         "personnel": personnel,
         "finance": finance,
     }
+    if with_entries:
+        # SEC-02-F (FG-74): the per-worker pay behind the "spent" figures, for the R31
+        # count of paid workers (app.permissions.money_write.project_labor_workers).
+        # Never part of an API response.
+        out["entries"] = entries
+    return out

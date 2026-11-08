@@ -2,13 +2,15 @@
 Routes — All Reports (Central read-only table).
 Uses unified report normalizer.
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from typing import Optional
 from datetime import datetime, timezone, timedelta
 
 from app.db import db
 from app.deps.auth import get_current_user
 from app.services.labor_cost import compute_person_labor, load_smr_terms
+from app.permissions.money_write import money_values_visible, without_keys
+from app.permissions.finance_read import REPORT_LINE_MONEY_FIELDS
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours_batch, NORMAL_DAY
 from app.tenancy.data_access import TenantData
 
@@ -22,6 +24,7 @@ router = APIRouter(tags=["All Reports"])
 
 @router.get("/all-reports")
 async def get_all_reports(
+    request: Request,
     user: dict = Depends(get_current_user),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -157,6 +160,12 @@ async def get_all_reports(
         r["submitted_by_name"] = _user_name(r["submitted_by"]) if r["submitted_by"] else ""
         r["approved_by_name"] = _user_name(r["approved_by"]) if r["approved_by"] else ""
 
+    # SEC-02 (R20-5): a shared review screen — rates and money values only for the
+    # finance roles; sorting by value would leak the order, so it falls back to date.
+    show_money = await money_values_visible(request, user)
+    if not show_money and sort_by == "value":
+        sort_by = "date"
+
     # ── Sort ────────────────────────────────────────────────────
     rev = sort_dir == "desc"
     sort_keys = {
@@ -182,7 +191,7 @@ async def get_all_reports(
         s = r["status"] or "UNKNOWN"
         by_status[s] = by_status.get(s, 0) + 1
 
-    return {
+    result = {
         "items": page_rows,
         "total": total,
         "page": page,
@@ -196,3 +205,7 @@ async def get_all_reports(
             "by_status": by_status,
         },
     }
+    if not show_money:
+        result = without_keys(result, REPORT_LINE_MONEY_FIELDS)
+        result["money_hidden"] = True
+    return result

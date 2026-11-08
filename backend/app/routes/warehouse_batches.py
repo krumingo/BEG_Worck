@@ -8,16 +8,42 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.services.fifo_service import (
     add_batch, consume_fifo, get_current_stock, get_stock_value,
     InsufficientStockError,
 )
 from app.tenancy.data_access import TenantData
+# LIVE-OPS-01 / TASK 5C — Legacy warehouse writer fail-close guard.
+# `warehouse_batches` is a PROJECTION-ONLY collection; direct writes are
+# retired. Reads below remain operational.
+from app.services.warehouse_movements.legacy_inventory import (
+    refuse_if_disabled as _refuse_legacy_warehouse_writer,
+)
+from app.services.warehouse_movements.errors import (
+    LegacyWriterRetiredError as _LegacyWriterRetiredError,
+)
 
 
 def _tenant(user: dict) -> TenantData:
     """The request's tenant — from the server-loaded session user only (W0-03E-A2C)."""
     return TenantData.for_user(db, user)
+
+
+def _guard_legacy_warehouse_writer(route_id: str, canonical_action: str) -> None:
+    """Raise HTTP 410 Gone unless `LEGACY_WAREHOUSE_WRITERS_ENABLED` is set."""
+    try:
+        _refuse_legacy_warehouse_writer(route_id, canonical_action)
+    except _LegacyWriterRetiredError as exc:
+        raise HTTPException(
+            status_code=410,
+            detail={
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "context": exc.context,
+                "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+            },
+        ) from exc
 
 router = APIRouter(tags=["Warehouse Batches"])
 
@@ -45,6 +71,7 @@ class ConsumeRequest(BaseModel):
 # ── List batches ──
 
 @router.get("/warehouse/batches")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def list_batches(
     item_id: str = "", warehouse_id: str = "", status: str = "",
     page: int = 1, page_size: int = 50,
@@ -71,6 +98,7 @@ async def list_batches(
 
 
 @router.get("/warehouse/batches/{batch_id}")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     batch = await tenant.warehouse_batches.find_one(
@@ -84,95 +112,81 @@ async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
 # ── Item stock & batches ──
 
 @router.get("/warehouse/items/{item_id}/stock-summary")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def item_stock_summary(item_id: str, warehouse_id: str = "", user: dict = Depends(get_current_user)):
     return await get_current_stock(user["org_id"], item_id, warehouse_id or None)
 
 
 @router.get("/warehouse/items/{item_id}/batches")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
-    batches = await tenant.warehouse_batches.find(
+    cursor = tenant.warehouse_batches.find(
         {"org_id": user["org_id"], "item_id": item_id, "status": {"$in": ["active", "blocked"]}},
         {"_id": 0},
-    ).sort("received_at", 1).to_list(200)
+    ).sort("received_at", 1)
+    # CODEX C12.10 — no silent cap on canonical/projection reads.
+    batches = [row async for row in cursor]
     return {"batches": batches, "total": len(batches)}
 
 
 # ── Create batch ──
 
 @router.post("/warehouse/batches", status_code=201)
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)):
-    if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-
-    batch = await add_batch(
-        org_id=user["org_id"],
-        item_id=data.item_id,
-        warehouse_id=data.warehouse_id,
-        qty=data.qty,
-        unit_cost=data.unit_cost,
-        source_type=data.source_type,
-        supplier_id=data.supplier_id,
-        invoice_number=data.invoice_number,
-        invoice_date=data.invoice_date,
-        ordered_by=user["id"],
-        currency=data.currency,
-        expires_at=data.expires_at,
-        notes=data.notes,
+    """LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    ``warehouse_batches`` is a projector over the canonical ledger;
+    supplier receipts land as canonical ``receive_from_supplier``.
+    """
+    _guard_legacy_warehouse_writer(
+        "warehouse_batches.create_batch", "receive_from_supplier",
     )
-    return batch
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Consume (FIFO) ──
 
 @router.post("/warehouse/consume")
 async def consume_stock(data: ConsumeRequest, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "Warehousekeeper", "SiteManager", "Technician"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-    try:
-        rows = await consume_fifo(user["org_id"], data.item_id, data.warehouse_id, data.qty)
-        # Log consumption
-        await tenant.material_consumption_log.insert_one({
-            "id": str(__import__("uuid").uuid4()),
-            "org_id": user["org_id"],
-            "item_id": data.item_id,
-            "warehouse_id": data.warehouse_id,
-            "qty": data.qty,
-            "consumption_rows": rows,
-            "total_cost": round(sum(r["total_cost"] for r in rows), 2),
-            "consumed_by": user["id"],
-            "consumed_at": datetime.now(timezone.utc).isoformat(),
-        })
-        return {"rows": rows, "total_cost": round(sum(r["total_cost"] for r in rows), 2)}
-    except InsufficientStockError as e:
-        raise HTTPException(status_code=400, detail=f"Недостатъчна наличност: заявени {e.requested}, налични {e.available}")
+    """LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    Replaced by canonical ``consume_to_smr``.
+    """
+    _guard_legacy_warehouse_writer(
+        "warehouse_batches.consume", "consume_to_smr",
+    )
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Block/unblock batch ──
 
 @router.put("/warehouse/batches/{batch_id}/block")
 async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "Warehousekeeper"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-
-    batch = await tenant.warehouse_batches.find_one({"id": batch_id, "org_id": user["org_id"]})
-    if not batch:
-        raise HTTPException(status_code=404, detail="Batch not found")
-
-    new_status = "active" if batch["status"] == "blocked" else "blocked"
-    await tenant.warehouse_batches.update_one(
-        {"id": batch_id},
-        {"$set": {"status": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}},
+    """LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
+    Replaced by canonical ``quarantine_entry``.
+    """
+    _guard_legacy_warehouse_writer(
+        "warehouse_batches.block", "quarantine_entry",
     )
-    return {"id": batch_id, "status": new_status}
+    raise HTTPException(status_code=410, detail={
+        "error_code": "LEGACY_WRITER_RETIRED",
+        "canonical_endpoint": "POST /api/warehouse/canonical/movements",
+    })
 
 
 # ── Warehouse total value ──
 
 @router.get("/warehouse/value")
-async def warehouse_value(warehouse_id: str = "", user: dict = Depends(get_current_user)):
+async def warehouse_value(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.warehouse_value.read", module=None, resource_type="warehouse_value")),  # SEC-02 (R20-1): before any read
+    warehouse_id: str = "", user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     if not warehouse_id:
         # All warehouses

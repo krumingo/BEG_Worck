@@ -1,0 +1,10 @@
+method,path,role,legacy_role,mode,status_before,status_after,wrote_before,wrote_after,written_before,written_after
+POST,/api/projects/{project_id}/material-waste,accountant,Accountant,enforce,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,accountant,Accountant,off,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,accountant,Accountant,shadow,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,admin,Admin,enforce,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,admin,Admin,off,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,admin,Admin,shadow,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,owner,Owner,enforce,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,owner,Owner,off,201,428,yes,no,op.material_waste_entries,
+POST,/api/projects/{project_id}/material-waste,owner,Owner,shadow,201,428,yes,no,op.material_waste_entries,

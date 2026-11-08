@@ -5,6 +5,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance } from "@/lib/financeAccess";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,9 @@ const SEV_CFG = {
 
 export default function AlarmsDashboardPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  // SEC-02-G (SEC71-05; R20): evaluating every rule is finance-only on the backend
+  const canEvaluate = canReadFinance(user?.role);
   const [items, setItems] = useState([]);
   const [counts, setCounts] = useState({ critical: 0, warning: 0, info: 0, total: 0 });
   const [loading, setLoading] = useState(true);
@@ -90,10 +95,12 @@ export default function AlarmsDashboardPage() {
             <p className="text-sm text-muted-foreground">{t("alarms.subtitle")}</p>
           </div>
         </div>
-        <Button variant="outline" onClick={handleEvaluate} disabled={evaluating} data-testid="evaluate-btn">
-          {evaluating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCcw className="w-4 h-4 mr-1" />}
-          {t("alarms.evaluate")}
-        </Button>
+        {canEvaluate && (
+          <Button variant="outline" onClick={handleEvaluate} disabled={evaluating} data-testid="evaluate-btn">
+            {evaluating ? <Loader2 className="w-4 h-4 mr-1 animate-spin" /> : <RefreshCcw className="w-4 h-4 mr-1" />}
+            {t("alarms.evaluate")}
+          </Button>
+        )}
       </div>
 
       {/* Severity cards */}

@@ -236,10 +236,13 @@ export default function AllReportsPage() {
             <p className="text-xl font-bold font-mono text-amber-400">{s.overtime_hours}<span className="text-sm text-amber-400/60">ч</span></p>
             <p className="text-[10px] text-amber-400/70">{t("allReports.overtimeHours")}</p>
           </div>
+          {/* SEC-02 (R20-5): the backend omits money for non-finance roles */}
+          {s.total_value !== undefined && (
           <div className="rounded-lg bg-card border border-border p-3 text-center">
             <p className="text-xl font-bold font-mono text-primary">{s.total_value?.toFixed(0)}<span className="text-sm text-muted-foreground"> €</span></p>
             <p className="text-[10px] text-muted-foreground">{t("allReports.laborValue")}</p>
           </div>
+          )}
         </div>
       )}
 

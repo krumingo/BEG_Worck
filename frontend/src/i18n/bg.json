@@ -180,6 +180,7 @@
     "assetsBatchIntake": "Заскладяване",
     "assetsIntakeReview": "Чакащи за одобрение",
     "masterDataReview": "За мапване",
+    "warehouseCanonical": "Склад (каноничен)",
     "assetsItems": "Артикули",
     "assetsUnits": "Активи (QR)",
     "dashboard": "Табло",
@@ -1749,6 +1750,7 @@
     "revenueBreakdown": "Приходи",
     "laborCost": "Труд",
     "materialCost": "Материали",
+    "materialWasteCost": "Фира",
     "subcontractorCost": "Подизпълнители",
     "contractCost": "Външни плащания",
     "overhead": "Режийни",
@@ -2162,7 +2164,11 @@
     "notes": "Бележки",
     "fillRequired": "Попълнете материал и количество",
     "added": "Записът е добавен",
-    "noData": "Няма данни за материали"
+    "noData": "Няма данни за материали",
+    "manualEntries": "Ръчни записи",
+    "writeOffs": "Отписвания от склада",
+    "writeOffsTitle": "Отписвания от склада (фира)",
+    "writeOffBadge": "отписване от склада"
   },
   "excelImportV2": {
     "title": "Импорт от Excel",
