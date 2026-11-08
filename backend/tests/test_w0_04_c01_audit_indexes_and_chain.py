@@ -881,3 +881,55 @@ def test_fg117_only_the_dry_run_operator_report_shows_the_name_next_to_its_ref()
         assert "Database            : %s" % db.name in out.stdout
         assert "Database ref         : %s" % ix.database_ref(db.name) in out.stdout
     scratch_named(go)
+
+
+# ─────────────────────────────────────────────── FG-126 (W0-04-C02): the raw create_index error path
+
+@real_mongo
+@pytest.mark.parametrize("code", [85, 86, 67, None])
+def test_fg126_a_failed_index_build_names_no_database(caplog, code):
+    """Any create_index failure other than duplicates (IndexOptionsConflict 85,
+    IndexKeySpecsConflict 86, CannotCreateIndex 67, a plain error) is refused with
+    a typed AuditIndexError naming the database only by its ref — the driver's
+    errmsg ("<db>.<collection>") is neither in the message nor chained."""
+    import logging
+    from pymongo.errors import OperationFailure
+
+    class _FailingBuild:
+        def __init__(self, real, namespace):
+            self.real, self.namespace = real, namespace
+
+        def __getattr__(self, name):
+            return getattr(self.real, name)
+
+        async def create_index(self, keys, **kw):
+            msg = "Index build failed on namespace %s (%s)" % (self.namespace, SENTINEL_KEY)
+            if code is None:
+                raise RuntimeError(msg)
+            raise OperationFailure(msg, code, {"errmsg": msg, "code": code, "ns": self.namespace})
+
+    class _Db:
+        def __init__(self, real):
+            self.real, self.client, self.name = real, real.client, real.name
+
+        def __getitem__(self, coll):
+            return _FailingBuild(self.real[coll], "%s.%s" % (self.real.name, coll))
+
+    async def go(client, dbs):
+        db = dbs[0]
+        with pytest.raises(ix.AuditIndexError) as exc:
+            await ix.ensure_audit_indexes(_Db(db))
+        e = exc.value
+        assert type(e) is ix.AuditIndexError and e.code == "AUDIT_INDEX_UNAVAILABLE"
+        assert ix.database_ref(db.name) in str(e) and e.ref in str(e)
+        assert e.__cause__ is None and e.__suppress_context__
+        expected = {85: "a conflicting index with the same keys exists",
+                    86: "a conflicting index with the same keys exists",
+                    67: "OperationFailure (code 67)", None: "RuntimeError"}[code]
+        assert "(%s)" % expected in str(e)
+        logging.getLogger("w004c02").exception("startup refused", exc_info=e)
+        text = _everything_logged(e) + caplog.text
+        _assert_no_db_name(text, db)
+        assert SENTINEL_KEY not in text
+    with caplog.at_level(logging.DEBUG):
+        scratch_named(go)

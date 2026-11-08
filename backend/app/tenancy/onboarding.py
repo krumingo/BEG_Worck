@@ -149,6 +149,10 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
         "max_amount": None, "valid_from": now, "valid_to": None, "status": "active",
         "created_by": ONBOARDING_SOURCE, "approved_by": None, "revision": 1,
         "created_at": now, "updated_at": now})
+    # OH-01 (OH01-3): the overhead unique indexes in this tenant's database, before its
+    # first overhead record (placed after the writes so no inventoried line moves).
+    from app.services.overhead_lifecycle import ensure_overhead_indexes
+    await ensure_overhead_indexes(op_db)
     for doc in (organization, owner, tenant):
         doc.pop("_id", None)
     owner.pop("password_hash", None)

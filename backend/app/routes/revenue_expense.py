@@ -5,8 +5,9 @@ Phase 2: Labor Cost Aggregation
 Phase 3: Execution Packages
 Phase 4: Project Profit Summary
 """
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional, List
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
+from typing import Any, Dict, Optional, List
+import math
 from datetime import datetime, timezone
 import logging
 
@@ -19,6 +20,10 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import (
+    money_values_visible, require_finance_read, require_money_write,
+)
+from app.services import client_acts as ca
 
 
 def _tenant(user: dict) -> TenantData:
@@ -32,214 +37,196 @@ router = APIRouter(tags=["Revenue & Expense"])
 # PHASE 1 — CLIENT ACTS (EARNED REVENUE)
 # ═══════════════════════════════════════════════════════════════════
 
-class ActLineInput(BaseModel):
-    offer_line_id: Optional[str] = None
-    activity_name: str
-    unit: str = "m2"
-    contracted_qty: float = 0
-    executed_qty: float = 0
-    unit_price: float = 0
-    note: Optional[str] = None
+# ACT-01 (FLOW-004, FG-106): every write goes through app/services/client_acts.py —
+# price and contracted quantity from an offer line of an accepted offer of the same
+# project, the remainder reserved in the act's transaction, the number from a counter,
+# one canonical AuditEvent, an Idempotency-Key (R29) and the finance roles only (R14/R20).
 
-class ClientActCreate(BaseModel):
-    project_id: str
-    source_offer_id: Optional[str] = None
-    act_number: Optional[str] = None
-    act_date: Optional[str] = None
-    period_from: Optional[str] = None
-    period_to: Optional[str] = None
-    notes: Optional[str] = None
-    lines: List[ActLineInput] = []
+_HEADER_FIELDS = ("act_date", "period_from", "period_to", "notes")
 
 
-async def get_next_act_number(org_id: str) -> str:
-    tenant = TenantData.for_resolved_org(db, org_id)
-    last = await tenant.client_acts.find_one({"org_id": org_id}, {"_id": 0, "act_number": 1}, sort=[("created_at", -1)])
-    num = 1
-    if last and last.get("act_number"):
-        try: num = int(last["act_number"].split("-")[1]) + 1
-        except Exception as e: logger.warning(f"revenue_expense.py error: {e}")
-    return f"ACT-{num:04d}"
+def _body_dict(data: Any) -> Dict[str, Any]:
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "BODY_INVALID", "message": "Тялото на заявката трябва да е JSON обект"})
+    return data
 
 
 @router.post("/client-acts", status_code=201)
-async def create_client_act(data: ClientActCreate, user: dict = Depends(require_m2)):
-    """Create a draft client act for executed works"""
+async def create_client_act(
+    data: Dict[str, Any] = Body(...),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    _sec01: dict = Depends(require_money_write(
+        ca.ACTION_CREATE, module="M2", resource_type="client_act")),  # ACT-01 (R14): before any read
+    user: dict = Depends(require_m2),
+):
+    """Create a draft client act; every line is an offer line of an accepted offer."""
+    data = _body_dict(data)
+    key = ca.KeyedWrite(db, user, ca.ACTION_CREATE, idempotency_key)        # 428 without
+    if data.get("act_number") not in (None, ""):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ACT_NUMBER_SERVER_ASSIGNED",
+            "message": "Номерът на акта се дава от системата"})
+    project_id = data.get("project_id")
+    if not isinstance(project_id, str) or not project_id.strip():
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PROJECT_REQUIRED", "message": "Обектът (project_id) е задължителен"})
+    raw_lines = ca.validate_raw_lines(data.get("lines"))
+    source_offer_id = data.get("source_offer_id") or None
     tenant = _tenant(user)
-    org_id = user["org_id"]
-    project = await tenant.projects.find_one({"id": data.project_id, "org_id": org_id})
-    if not project:
+    if not await tenant.projects.find_one({"id": project_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Project not found")
-
-    now = datetime.now(timezone.utc).isoformat()
-    act_no = data.act_number or await get_next_act_number(org_id)
-
-    lines = []
-    for i, l in enumerate(data.lines):
-        executed_total = round(l.executed_qty * l.unit_price, 2)
-        lines.append({
-            "id": str(uuid.uuid4()),
-            "offer_line_id": l.offer_line_id,
-            "activity_name": l.activity_name,
-            "unit": l.unit,
-            "contracted_qty": l.contracted_qty,
-            "executed_qty": l.executed_qty,
-            "executed_percent": round(l.executed_qty / l.contracted_qty * 100, 1) if l.contracted_qty > 0 else 0,
-            "unit_price": l.unit_price,
-            "line_total": executed_total,
-            "note": l.note,
-            "sort_order": i,
-        })
-
-    subtotal = sum(l["line_total"] for l in lines)
-    act = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "project_id": data.project_id,
-        "source_offer_id": data.source_offer_id,
-        "act_number": act_no,
-        "act_date": data.act_date or now[:10],
-        "period_from": data.period_from,
-        "period_to": data.period_to,
-        "lines": lines,
-        "subtotal": round(subtotal, 2),
-        "vat_percent": 20,
-        "vat_amount": round(subtotal * 0.2, 2),
-        "total": round(subtotal * 1.2, 2),
-        "currency": "EUR",
-        "notes": data.notes,
-        "status": "Draft",
-        "created_at": now,
-        "updated_at": now,
-        "created_by": user["id"],
-    }
-    await tenant.client_acts.insert_one(act)
-    return {k: v for k, v in act.items() if k != "_id"}
+    header = {k: data.get(k) for k in _HEADER_FIELDS}
+    return await key.run(
+        {"route": "POST /client-acts", "body": data},
+        lambda: ca.create_act(db, user=user, project_id=project_id, raw_lines=raw_lines,
+                              header=header, key=key, endpoint="POST /api/client-acts",
+                              source_offer_id=source_offer_id))
 
 
 @router.get("/client-acts")
-async def list_client_acts(project_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_client_acts(
+    request: Request,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.read", module="M2", resource_type="client_act")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
         query["project_id"] = project_id
     acts = await tenant.client_acts.find(query, {"_id": 0}).sort("created_at", -1).to_list(200)
+    if not await money_values_visible(request, user):                 # FG-122 (R20-5)
+        return [ca.strip_money(a) for a in acts]
     return acts
 
 
+@router.get("/client-acts/remaining/{project_id}")
+async def client_act_remaining(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        ca.ACTION_REMAINING_READ, module="M2", resource_type="client_act_remaining")),  # R20-1: client prices
+    user: dict = Depends(require_m2),
+):
+    """FLOW-004 "Какво трябва да вижда Крум": contracted / acted / remaining per offer line."""
+    tenant = _tenant(user)
+    if not await tenant.projects.find_one({"id": project_id}, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return await ca.remaining_for_project(tenant, project_id)
+
+
 @router.get("/client-acts/{act_id}")
-async def get_client_act(act_id: str, user: dict = Depends(require_m2)):
+async def get_client_act(
+    act_id: str,
+    request: Request,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_detail.read", module="M2", resource_type="client_act_detail")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]}, {"_id": 0})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
-    return act
+    view = await ca.act_view(tenant, act)
+    if not await money_values_visible(request, user):                 # FG-122 (R20-5)
+        return ca.strip_money(view)
+    return view
 
 
 @router.put("/client-acts/{act_id}")
-async def update_client_act(act_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_client_act(
+    act_id: str,
+    data: Dict[str, Any] = Body(...),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act.update", module="M2", resource_type="client_act")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2),
+):
+    """Edit a Draft (ACT-01). Lines are re-checked against the offer and the reservation
+    moves by the difference; an accepted act is never edited (correction/reversal is debt)."""
+    data = _body_dict(data)
+    key = ca.KeyedWrite(db, user, ca.ACTION_UPDATE, idempotency_key)        # 428 without
     tenant = _tenant(user)
-    act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
+    act = await tenant.client_acts.find_one({"id": act_id}, {"_id": 0, "id": 1, "status": 1})
     if not act:
         raise HTTPException(status_code=404, detail="Act not found")
-    if act["status"] not in ["Draft"]:
-        raise HTTPException(status_code=400, detail="Only draft acts can be edited")
-
-    allowed = ["act_date", "period_from", "period_to", "notes", "lines"]
+    allowed = list(_HEADER_FIELDS) + ["lines"]
     update = {k: v for k, v in data.items() if k in allowed}
-
     if "lines" in update:
-        for l in update["lines"]:
-            if not l.get("id"):
-                l["id"] = str(uuid.uuid4())
-            l["line_total"] = round(float(l.get("executed_qty", 0)) * float(l.get("unit_price", 0)), 2)
-            l["executed_percent"] = round(float(l.get("executed_qty", 0)) / float(l.get("contracted_qty", 1)) * 100, 1) if float(l.get("contracted_qty", 0)) > 0 else 0
-        subtotal = sum(l["line_total"] for l in update["lines"])
-        update["subtotal"] = round(subtotal, 2)
-        update["vat_amount"] = round(subtotal * 0.2, 2)
-        update["total"] = round(subtotal * 1.2, 2)
-
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.client_acts.update_one({"id": act_id}, {"$set": update})
-    return await tenant.client_acts.find_one({"id": act_id}, {"_id": 0})
+        ca.validate_raw_lines(update["lines"])                          # 422 before the key
+    return await key.run(
+        {"route": "PUT /client-acts/{act_id}", "act_id": act_id, "body": update},
+        lambda: ca.update_act(db, user=user, act_id=act_id, update=update, key=key,
+                              endpoint="PUT /api/client-acts/{act_id}"))
 
 
 @router.post("/client-acts/{act_id}/confirm")
-async def confirm_client_act(act_id: str, user: dict = Depends(require_m2)):
-    """Confirm act → status=Accepted → earned revenue"""
+async def confirm_client_act(
+    act_id: str,
+    data: Dict[str, Any] = Body(default_factory=dict),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    _sec01: dict = Depends(require_money_write(
+        "revenue.client_act_confirm.execute", module='M2',
+        resource_type="client_act")),  # SEC-01-C02 (R14, FG-30, ACT-01 FG-119): before any read
+    user: dict = Depends(require_m2),
+):
+    """Confirm act → status=Accepted → earned revenue (ACT-01 FG-119: finance roles,
+    Idempotency-Key, one transaction with the offer/version/cap re-check and the canonical
+    AuditEvent; FG-142: body ``expected_total`` + ``expected_line_values`` — the values the
+    confirmer saw, in whole cents; a recomputed difference -> 409 ACT_VALUE_CHANGED)."""
+    key = ca.KeyedWrite(db, user, ca.ACTION_CONFIRM, idempotency_key)       # 428 without
     tenant = _tenant(user)
-    act = await tenant.client_acts.find_one({"id": act_id, "org_id": user["org_id"]})
-    if not act:
+    if not await tenant.client_acts.find_one({"id": act_id}, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=404, detail="Act not found")
-    if act["status"] != "Draft":
-        raise HTTPException(status_code=400, detail="Only draft acts can be confirmed")
-    if not act.get("lines"):
-        raise HTTPException(status_code=400, detail="Act has no lines")
-
-    now = datetime.now(timezone.utc).isoformat()
-    await tenant.client_acts.update_one({"id": act_id}, {"$set": {
-        "status": "Accepted", "accepted_at": now, "accepted_by": user["id"], "updated_at": now,
-    }})
-    await log_audit(user["org_id"], user["id"], user.get("email", ""), "client_act_confirmed", "client_act", act_id,
-                    {"act_number": act["act_number"], "total": act["total"]})
-    return await tenant.client_acts.find_one({"id": act_id}, {"_id": 0})
+    expected = ca.validate_expected(data)       # FG-142: the values the confirmer saw (422)
+    return await key.run(
+        {"route": "POST /client-acts/{act_id}/confirm", "act_id": act_id, "body": data},
+        lambda: ca.confirm_act(db, user=user, act_id=act_id, key=key,
+                               endpoint="POST /api/client-acts/{act_id}/confirm",
+                               expected=expected))
 
 
 @router.post("/client-acts/from-offer/{offer_id}", status_code=201)
-async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(require_m2)):
-    """Generate client act lines from accepted offer"""
+async def create_act_from_offer(
+    offer_id: str,
+    data: Dict[str, Any] = Body(default_factory=dict),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+    _sec02: dict = Depends(require_finance_read(
+        "finance.client_act_from_offer.execute", module="M2", resource_type="client_act_from_offer")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2),
+):
+    """A draft act with ``percent`` of every line of an ACCEPTED offer — through the same
+    checks as POST /client-acts (price from the offer, remainder, no double acting)."""
+    data = _body_dict(data if data is not None else {})
+    key = ca.KeyedWrite(db, user, ca.ACTION_FROM_OFFER, idempotency_key)    # 428 without
     tenant = _tenant(user)
-    offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
+    offer = await tenant.offers.find_one({"id": offer_id}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-
-    now = datetime.now(timezone.utc).isoformat()
-    act_no = await get_next_act_number(user["org_id"])
-    percent = float(data.get("percent", 100))
-
-    lines = []
-    for i, ol in enumerate(offer.get("lines", [])):
-        qty = ol.get("qty", 0)
-        price = round(ol.get("material_unit_cost", 0) + ol.get("labor_unit_cost", 0), 2)
-        exec_qty = round(qty * percent / 100, 2)
-        lines.append({
-            "id": str(uuid.uuid4()),
-            "offer_line_id": ol.get("id"),
-            "activity_name": ol.get("activity_name", ""),
-            "unit": ol.get("unit", "m2"),
-            "contracted_qty": qty,
-            "executed_qty": exec_qty,
-            "executed_percent": percent,
-            "unit_price": price,
-            "line_total": round(exec_qty * price, 2),
-            "note": None,
-            "sort_order": i,
-        })
-
-    subtotal = sum(l["line_total"] for l in lines)
-    act = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": offer["project_id"],
-        "source_offer_id": offer_id,
-        "act_number": act_no,
-        "act_date": now[:10],
-        "period_from": data.get("period_from"),
-        "period_to": data.get("period_to"),
-        "lines": lines,
-        "subtotal": round(subtotal, 2),
-        "vat_percent": 20,
-        "vat_amount": round(subtotal * 0.2, 2),
-        "total": round(subtotal * 1.2, 2),
-        "currency": offer.get("currency", "EUR"),
-        "notes": f"От оферта {offer.get('offer_no', '')}",
-        "status": "Draft",
-        "created_at": now,
-        "updated_at": now,
-        "created_by": user["id"],
-    }
-    await tenant.client_acts.insert_one(act)
-    return {k: v for k, v in act.items() if k != "_id"}
+    if offer.get("status") != ca.ACCEPTED:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "OFFER_NOT_ACCEPTED",
+            "message": "Акт се прави само по приета оферта (статусът е „%s“)" % offer.get("status")})
+    percent = data.get("percent", 100)
+    if (isinstance(percent, bool) or not isinstance(percent, (int, float))
+            or not math.isfinite(percent) or percent <= 0):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "PERCENT_INVALID", "message": "Процентът трябва да е число над 0"})
+    raw_lines = []
+    for ol in offer.get("lines") or []:
+        qty = round(float(ol.get("qty") or 0) * float(percent) / 100, 4)
+        if ol.get("id") and qty > 0:
+            raw_lines.append({"offer_line_id": ol["id"], "executed_qty": qty})
+    if not raw_lines:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "LINES_REQUIRED", "message": "Офертата няма редове за актуване"})
+    header = {k: data.get(k) for k in _HEADER_FIELDS}
+    header["notes"] = header.get("notes") or f"От оферта {offer.get('offer_no', '')}"
+    header["currency"] = offer.get("currency", "EUR")
+    return await key.run(
+        {"route": "POST /client-acts/from-offer/{offer_id}", "offer_id": offer_id, "body": data},
+        lambda: ca.create_act(db, user=user, project_id=offer["project_id"],
+                              raw_lines=raw_lines, header=header, key=key,
+                              endpoint="POST /api/client-acts/from-offer/{offer_id}",
+                              source_offer_id=offer_id))
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -247,7 +234,11 @@ async def create_act_from_offer(offer_id: str, data: dict, user: dict = Depends(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-cost/by-project/{project_id}")
-async def get_labor_cost_by_project(project_id: str, date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
+async def get_labor_cost_by_project(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_labor_cost.read", module="M2", resource_type="project_labor_cost")),  # SEC-02 (R20-2): before any read
+    date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate labor cost by project from work reports × employee rates"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -386,7 +377,10 @@ async def generate_execution_packages(offer_id: str, user: dict = Depends(requir
 
 
 @router.get("/execution-packages")
-async def list_execution_packages(project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_execution_packages(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.read", module="M2", resource_type="execution_package")),  # SEC-02 (R20-1): before any read
+    project_id: Optional[str] = None, offer_id: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"]}
     if project_id:
@@ -398,7 +392,11 @@ async def list_execution_packages(project_id: Optional[str] = None, offer_id: Op
 
 
 @router.put("/execution-packages/{pkg_id}")
-async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_execution_package(
+    pkg_id: str, data: dict,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.execution_package.update", module="M2", resource_type="execution_package")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     pkg = await tenant.execution_packages.find_one({"id": pkg_id, "org_id": user["org_id"]})
     if not pkg:
@@ -426,7 +424,12 @@ async def update_execution_package(pkg_id: str, data: dict, user: dict = Depends
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-profit/{project_id}")
-async def get_project_profit_summary(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_profit_summary(
+    project_id: str,
+    request: Request = None,                    # SUB-ADV-01 (FG-128); None = direct call
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_profit.read", module="M2", resource_type="project_profit")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Comprehensive project financial summary — revenue, costs, profit"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -460,26 +463,16 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     collected_revenue = sum(i.get("paid_amount", 0) for i in issued_invoices)
 
     # ── EXPENSES ──
-    # Material cost: from warehouse issues to this project
-    wh_issues = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "issue"},
-        {"_id": 0, "total": 1, "lines": 1}
-    ).to_list(100)
-    material_cost = sum(t.get("total", 0) or sum(l.get("total_price", 0) for l in t.get("lines", [])) for t in wh_issues)
-
-    # Returns reduce material cost
-    wh_returns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "project_id": project_id, "type": "return"},
-        {"_id": 0, "lines": 1}
-    ).to_list(100)
-    material_returns = sum(sum(l.get("total_price", 0) or 0 for l in t.get("lines", [])) for t in wh_returns)
-    net_material_cost = round(material_cost - material_returns, 2)
-
-    # Enhanced material from material_entries if available
+    # Material cost — 5C-C22: the ONE shared helper (canonical consumption
+    # + „фира" + legacy issues dated before the tenant cutover, Р13). The
+    # former private legacy issue/return sum is gone: legacy return rows
+    # never carried a price, so they never changed the figure.
     from app.routes.material_smr import get_material_summary_for_project
     material_summary = await get_material_summary_for_project(org_id, project_id)
-    if material_summary["has_data"]:
-        net_material_cost = material_summary["total_cost"]
+    net_material_cost = material_summary["total_cost"]
+    # 5C-C21 F-12 — the „фира" share of that total, shown as its own line;
+    # the total is still counted once.
+    material_waste_cost = material_summary.get("waste_cost", 0.0) or 0.0
 
     # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -508,6 +501,10 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
     from app.routes.subcontractors import get_subcontract_metrics
     sub_metrics = await get_subcontract_metrics(org_id, project_id)
     
+    from app.routes.subcontractors import advance_visible, get_advance_metrics
+    subcontract_advances = (await get_advance_metrics(org_id, project_id)
+                            if await advance_visible(request, user) else None)
+
     # Fallback to received invoices if no subcontractor packages
     if sub_metrics.get("available"):
         subcontract_cost = sub_metrics["certified"]  # certified = execution cost basis
@@ -519,11 +516,11 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         subcontract_cost = sum(i.get("subtotal", 0) or i.get("total", 0) for i in received_invoices)
 
     # Overhead: from allocations if exist
-    overhead_allocs = await tenant.project_overhead_alloc.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "allocated_amount": 1}
-    ).to_list(50)
-    overhead_cost = sum(a.get("allocated_amount", 0) for a in overhead_allocs)
+    # FG-89: the project's current OH-01 allocation — the single overhead source
+    from app.services.overhead_lifecycle import project_overhead_current
+    _oh = await project_overhead_current(tenant, project_id)
+    overhead_cost, overhead_allocs = _oh["amount"], _oh["rows"]
+    from app.services.overhead_lifecycle import recalculating_fields
 
     # ── PROFIT ──
     total_cost = round(net_material_cost + labor_cost + subcontract_cost + overhead_cost, 2)
@@ -562,7 +559,7 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
         "contracted_revenue": len(accepted_offers) > 0,
         "earned_revenue": len(accepted_acts) > 0,
         "billed_revenue": len(issued_invoices) > 0,
-        "material_cost": len(wh_issues) > 0,
+        "material_cost": material_summary["has_data"],
         "labor_cost": labor_summary["has_data"] if labor_summary else len(reports) > 0,
         "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
@@ -583,15 +580,25 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
             "receivables": receivables,
         },
 
+        # SUB-ADV-01-B (FG-128): subcontractor advances given / deducted / remaining — cash and
+        # settlement, NOT an expense (FLOW-006): outside "expenses"; finance roles only (else None).
+        "subcontract_advances": subcontract_advances,
+
         "expenses": {
-            "material": net_material_cost,
+            "material": round(net_material_cost - material_waste_cost, 2),
+            "waste": round(material_waste_cost, 2),          # „фира" (5C-C21 F-12)
             "material_detail": material_summary if material_summary["has_data"] else None,
+            # 5C-C22 / Р13 — the cutover split behind the material figure.
+            "material_cost_basis": {k: material_summary.get(k) for k in (
+                "source", "canonical_cost", "legacy_cost",
+                "legacy_excluded_cost", "cutover_at")},
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
             "labor_detail": labor_summary if labor_summary else None,
             "subcontract": round(subcontract_cost, 2),
             "subcontract_detail": sub_metrics if sub_metrics.get("available") else None,
             "overhead": round(overhead_cost, 2),
+            **recalculating_fields(_oh["recalculating"]),  # FG-116 (R38)
             "total": total_cost,
         },
 
@@ -612,7 +619,11 @@ async def get_project_profit_summary(project_id: str, user: dict = Depends(requi
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-smr-view/{project_id}")
-async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_smr_view(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_smr_view.read", module="M2", resource_type="project_smr_view")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Operational SMR view for project — main offer + execution packages with labor focus"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -653,10 +664,16 @@ async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)
             sub_by_pkg[ep_id]["contract"] += sl.get("subcontract_total", 0)
             sub_by_pkg[ep_id]["certified"] += sl.get("certified_total", 0)
 
+    # 5C-C22 — package material actual from the ONE shared helper (read
+    # time), not the `actual_material_cost` cache that only a recompute fills.
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+
     rows = []
     for pkg in pkgs:
         pid = pkg["id"]
         sale = pkg.get("sale_total", 0)
+        mat_split = split_for_package(mat_cost, pid)
         lab_budget = pkg.get("labor_budget_total", 0)
         lab_actual = pkg.get("actual_labor_cost", 0) or 0
         lab_remaining = round(lab_budget - lab_actual, 2) if lab_budget > 0 else None
@@ -707,9 +724,10 @@ async def get_project_smr_view(project_id: str, user: dict = Depends(require_m2)
             "remaining_hours": round(planned_h - used_h, 1) if planned_h else None,
             "progress_percent": progress,
             "has_progress": has_progress,
-            "material_actual": pkg.get("actual_material_cost", 0) or 0,
+            "material_actual": mat_split["material"],
+            "material_waste": mat_split["waste"],          # „фира"
             "subcontract": round(sub["certified"], 2) if sub else 0,
-            "total_actual": round(lab_actual + (pkg.get("actual_material_cost", 0) or 0) + (sub["certified"] if sub else 0), 2),
+            "total_actual": round(lab_actual + mat_split["total"] + (sub["certified"] if sub else 0), 2),
             "flags": flags,
             "status": pkg.get("status", ""),
         })

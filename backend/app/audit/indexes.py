@@ -189,7 +189,13 @@ async def ensure_audit_indexes(db) -> Dict[str, Any]:
             # MongoDB refuses a unique build over existing duplicates and builds
             # nothing (code 11000). Nothing is deleted: report and stop.
             if not (unique and _is_duplicate_error(exc)):
-                raise
+                # FG-126: any other build failure is still a fail-closed refusal,
+                # but the driver error (its errmsg names the "<db>.<collection>"
+                # namespace) is classified, not re-raised or chained.
+                raise AuditIndexError(
+                    "%s.%s: the planned index %s cannot be created (%s) — nothing dropped; "
+                    "check with scripts/w0_04_bootstrap_audit_indexes.py (dry run)" % (
+                        database_ref(db.name), coll, index_name(keys), safe_reason(exc))) from None
             # F-72-01: no keyValue / errmsg here and no exception chaining.
             index = index_name(keys)
             dup = {"database_ref": database_ref(db.name), "collection": coll, "index": index,

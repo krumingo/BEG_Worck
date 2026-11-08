@@ -172,6 +172,13 @@ def _app(monkeypatch, op, sysdb, mode):
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
     for module in (appdb, deps_auth, deps_modules, r_finance, r_offers, r_versions, u_audit):
         monkeypatch.setattr(module, "db", op)
+    # SEC-02 (main ea57121): the finance-read guard on the offer PDF compares the request's
+    # tenant database with the permission modules' legacy handle — the same scratch db here
+    import importlib
+    for name in ("app.permissions.money_write", "app.permissions.finance_read"):
+        module = importlib.import_module(name)
+        if hasattr(module, "db"):
+            monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
     for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
         monkeypatch.setattr(registry, coll, sysdb[coll])

@@ -129,12 +129,16 @@
 Мярката е каталогът на ролите по FLOW-002 (`app/permissions/catalog.py`), не мое мнение:
 * **Viewer** — „само четене; всяко четене е през членство в проекта, на ниво фирма не дава нищо“;
 * **Driver** — без никакви действия;
-* **Technician** — само подаване на актив за приемане;
+* **Technician** — само подаване на актив за приемане; **освен** труд и фира на обект, на който е член (Р16, Крум 06.11.2026 — бележка на SEC-01-C02 / FG-31: каталогът тук не е „трябва“ за труда и фирата; правилото е Р16, и SiteManager също);
 * **Warehousekeeper** — подаване на актив, предложение за Master Data, четене на Master Data.
 
 В теста тези потребители **не са членове на нито един проект**. Въпреки това в `off` (и еднакво в `shadow` и `enforce`):
 
-### 5.1. Viewer записва (28 endpoint-а)
+### 5.1. Viewer записва (28 endpoint-а — долна граница)
+
+> **SEC-01-C02 (FG-31):** списъкът е **долна граница**, не пълен списък. Харнесът вика всеки route с несъществуващи id и празно тяло, затова DELETE по id, плащане по пакет и „sync от съществуващи данни“ нямат върху какво да действат и не показват запис (§7.6). Пропуснати тук и доказани с проби върху съществуващи записи: `DELETE /api/price-modifiers/project/{id}` (FG-25 → SEC-01-C01), `POST /api/labor-entries/sync-from-work-reports` (FG-26 → C01 + C02, без изтриване), `POST /api/subcontractor-payments` (FG-27 → C02) и паричните записи на FG-30 (C02). Пробите: `tests/test_sec_01_c01_all_money_writes.py`, `tests/test_sec_01_c02_flow_guard_money_writes.py`; разликата в матрицата — `docs/evidence/SEC-01-C02/pm01_cells_changed.csv`.
+
+> **SEC-01 (Р14):** 8 от тези endpoint-а (`cash-transactions`, `bonus-payments`, `overhead-transactions`, `overhead-snapshots`, `price-modifiers/project/{project_id}`, `labor-entries`, `material-waste`, `client-link`) вече връщат 403 без запис за всички роли освен Owner/Admin/Accountant, еднакво в трите режима. Таблицата по-долу е състоянието на `main` @ `07da9ab`; актуалната матрица е `docs/evidence/PM-01/matrix.csv`, разликата клетка по клетка — `docs/evidence/SEC-01/pm01_cells_closed.csv` (120 клетки).
 
 Тези извиквания **реално записаха** в базата (oplog). Последната колона показва, че Driver, Technician и Warehousekeeper могат същото.
 
@@ -172,6 +176,8 @@
 Бележка: `POST /api/billing/signup` е публична регистрация на нова фирма — работи и без вход, затова не е въпрос на роля (виж 5.3).
 
 ### 5.2. Viewer чете финанси, заплати и печалба на ниво фирма
+
+> **SEC-02 (Р20):** всеки от 58-те endpoint-а в тази таблица вече има правило — 50 връщат 403 за всички роли освен Owner/Admin/Accountant (R20-1/R20-2), `expected-actual` (×2) и `centralized-reports/activities` пускат и SiteManager на обект, където е член днес (R20-2B, без цени към клиента), `all-reports` и `weekly-matrix` скриват ставките и стойностите (R20-5), а `/dashboard/stats`, `/worker-calendar` и `/billing/check-module/{code}` нямат пари и остават. Еднакво в трите режима. Регистърът: `backend/app/permissions/finance_read.py`; доказателството и таблицата endpoint → правило → източник: `docs/evidence/SEC-02/README.md`; разликата в матрицата: `docs/evidence/SEC-02/pm01_cells_changed.csv` (1362 клетки след SEC-02-A; там и досието — SiteManager получава версия без пари). Таблицата по-долу е състоянието преди SEC-02.
 
 Отговор 200 (данните в теста са празни, но достъпът е отворен):
 
@@ -228,6 +234,20 @@
 2. **`enforce` — само след доказателство на реалните данни**, че всеки активен потребител има TenantMembership и RoleAssignment (виж §7.2). Иначе някой ще загуби достъп до ~50 endpoint-а. Сам по себе си `enforce` на `main` не добавя защита извън одита на отказите.
 3. **LIVE-OPS:** пуснете същия тест (`--harness`) върху точния RC artifact, преди да решите режима за него. На `main` изискването не съществува.
 4. **Списъкът в §5** е отделно решение за Крум: кои от тези достъпи „болят в реални данни“. По правилата на проекта той се записва като дълг и не се поправя без потвърждение. Нито един режим не го решава — трябва миграция на endpoint-ите към Permission Service, по модул.
+
+## 8а. Добавка — LIVE-OPS-01 / TASK 5C (#55), след сливане на `main` @ `d226c49`
+
+Матрицата е генерирана наново с harness-а на клона на #55: **767 endpoint-а**, 18 408 клетки (тези на `main` плюс каноничния склад).
+
+Първият прогон на клона показа разлики между режимите на складовите маршрути на #55:
+* `GET /api/warehouse/migration-readiness/*` (4 маршрута): `off`/`shadow` 200 за Accountant, Driver, SiteManager, Technician, Viewer и Warehousekeeper, а `enforce` 403. Това е реална разлика в достъпа, против Р28.
+* `POST /api/warehouse/canonical/movements` (422 срещу 403), `GET /api/warehouse/canonical/stock/{item_id}` (400 срещу 403) и `POST /api/warehouse/migration-readiness/execute` (405 срещу 403). Тук се различава само редът на проверките.
+
+Поправка (Р28): тези маршрути получиха `legacy_check`. В `off`/`shadow` старата роля, преведена през `LEGACY_ROLE_MAP`, трябва да има същото действие от каталога, което `enforce` изисква (`legacy_gate.catalog_legacy_check`). Сега трите режима дават еднакъв статус във всяка клетка.
+
+Единствената нова разлика в записите: отказаният `POST /api/warehouse/migration-readiness/execute` в `enforce` записва AuditEvent „отказан достъп“. Това е същата категория като `POST /api/users` и `PUT /api/users/{user_id}`.
+
+Отделно harness-ът намери **500** в `POST /api/warehouse/canonical/project-writeoff` при нечислово количество. Поправено е: стойността трябва да е крайно десетично число, иначе 422.
 
 ## 9. Как се повтаря
 

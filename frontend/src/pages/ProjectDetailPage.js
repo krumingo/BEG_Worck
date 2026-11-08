@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useActiveProject } from "@/contexts/ProjectContext";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance, canReadBudgetView } from "@/lib/financeAccess";
 import API from "@/lib/api";
 import AssetQrBlock from "@/components/AssetQrBlock";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
@@ -75,6 +77,11 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  // SEC-02 (R20): project money for Owner/Admin/Accountant; the Technical Manager sees
+  // only the budget view (budget + spent + remaining per SMR) of his own projects.
+  const { user } = useAuth();
+  const seesFinance = canReadFinance(user?.role);
+  const seesBudget = canReadBudgetView(user?.role);
 
   const { setActiveProject } = useActiveProject();
   const [loading, setLoading] = useState(true);
@@ -356,6 +363,7 @@ export default function ProjectDetailPage() {
             </div>
 
             {/* Card: Баланс */}
+            {seesFinance && ( /* SEC-02-A: cash balance — finance roles only */
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-balance">
               <div className="flex items-center gap-2 mb-3"><Scale className="w-5 h-5 text-green-500" /><h3 className="font-semibold text-white">Баланс (касов)</h3><span className="text-[8px] px-1 py-px rounded-full bg-amber-500/15 text-amber-300 ml-1">с ДДС</span></div>
               <div className="space-y-2 text-sm">
@@ -367,9 +375,10 @@ export default function ProjectDetailPage() {
                 </div>
               </div>
             </div>
+            )}
 
             {/* Card: Финансов статус */}
-            <ProjectFinanceCard projectId={projectId} onNavigateFinance={() => handleTabChange("finance")} />
+            {seesFinance && <ProjectFinanceCard projectId={projectId} onNavigateFinance={() => handleTabChange("finance")} />}
 
             {/* Card: Екип (compact) */}
             <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-team-compact">
@@ -393,7 +402,7 @@ export default function ProjectDetailPage() {
                 {offers.accepted_count > 0 && (
                   <div className="flex justify-between"><span className="text-emerald-400">Одобрени:</span><span className="text-emerald-400 font-bold">{offers.accepted_count} ({offers.accepted_lines} позиции)</span></div>
                 )}
-                <div className="flex justify-between"><span className="text-gray-400">С ДДС:</span><span className="text-yellow-500 font-mono">{formatCurrency(offers.total_inc_vat, "EUR")}</span></div>
+                <div className="flex justify-between"><span className="text-gray-400">С ДДС:</span><span className="text-yellow-500 font-mono">{offers.total_inc_vat === undefined ? "—" : formatCurrency(offers.total_inc_vat, "EUR")}</span></div>
               </div>
               <Button variant="ghost" size="sm" className="mt-2 text-xs" onClick={() => handleTabChange("offers")}>Виж оферти →</Button>
             </div>
@@ -401,9 +410,11 @@ export default function ProjectDetailPage() {
 
           {/* Sub-projects section */}
           {/* Centralized View */}
+          {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-centralized">
             <CentralizedProjectView projectId={projectId} />
           </div>
+          )}
         </TabsContent>
 
         {/* ════ TAB: SMR ════ */}
@@ -441,7 +452,7 @@ export default function ProjectDetailPage() {
             onImported={() => { setShowExcelImport(false); fetchDashboard(); toast.success("КСС импортиран успешно"); }}
           />
 
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>
+          {seesBudget && <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><CentralizedActivitiesTable projectId={projectId} /></div>}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRGroupsPanel projectId={projectId} /></div>
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SMRLocationMap projectId={projectId} /></div>
           {/* Aggregated SMR with to-offer flow */}
@@ -463,14 +474,16 @@ export default function ProjectDetailPage() {
         {/* ════ TAB: FINANCE ════ */}
         <TabsContent value="finance" className="space-y-4 mt-4">
           {/* Financial Results: Cash / Operating / Fully Loaded */}
+          {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <FinancialResultsCard projectId={projectId} />
           </div>
+          )}
 
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectPnLDashboard projectId={projectId} /></div>
+          {seesFinance && <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ProjectPnLDashboard projectId={projectId} /></div>}
 
-          {/* Expected vs Actual */}
-          <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ExpectedActualPanel projectId={projectId} /></div>
+          {/* Expected vs Actual — the R20 budget view (SiteManager too, own projects) */}
+          {seesBudget && <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><ExpectedActualPanel projectId={projectId} /></div>}
 
           {/* Material Waste */}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><MaterialWastePanel projectId={projectId} /></div>
@@ -479,6 +492,7 @@ export default function ProjectDetailPage() {
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4"><SubcontractorPerformancePanel projectId={projectId} /></div>
 
           {/* Invoices with expandable payment history */}
+          {seesFinance && ( /* SEC-02-A: invoices — finance roles only */
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4" data-testid="card-invoices">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2"><Receipt className="w-5 h-5 text-pink-500" /><h3 className="font-semibold text-white">Фактури ({invoices.count})</h3></div>
@@ -500,6 +514,7 @@ export default function ProjectDetailPage() {
               </>
             ) : <p className="text-gray-500 text-sm">Няма издадени фактури</p>}
           </div>
+          )}
 
           <ProjectMaterialLedger projectId={projectId} />
 
@@ -511,7 +526,7 @@ export default function ProjectDetailPage() {
                 {offers.extra_offers.map(eo => (
                   <div key={eo.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/15 hover:bg-muted/25 cursor-pointer border border-gray-700/50 hover:border-amber-500/30 transition-colors" onClick={() => navigate(`/offers/${eo.id}`)}>
                     <div className="min-w-0 flex-1"><span className="font-mono text-sm text-amber-400">{eo.offer_no}</span><p className="text-sm text-gray-300 truncate">{eo.title}</p></div>
-                    <div className="text-right ml-4"><p className="font-mono text-sm font-bold text-white">{formatCurrency(eo.total || 0, eo.currency || "EUR")}</p></div>
+                    <div className="text-right ml-4"><p className="font-mono text-sm font-bold text-white">{eo.total === undefined ? "—" : formatCurrency(eo.total, eo.currency || "EUR")}</p></div>
                   </div>
                 ))}
               </div>
@@ -609,9 +624,11 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
+          {seesFinance && (
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <ProjectPersonnelPanel projectId={projectId} />
           </div>
+          )}
           <div className="bg-gray-800/50 border border-gray-700 rounded-lg p-4">
             <SiteWorkersPanel projectId={projectId} />
           </div>

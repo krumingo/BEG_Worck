@@ -12,6 +12,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.services.overhead_realtime import compute_realtime_overhead
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write, require_finance_read
 
 
 def _tenant(user: dict) -> TenantData:
@@ -60,7 +61,13 @@ async def get_worker_calendar(
 
 
 @router.post("/worker-calendar", status_code=201)
-async def create_calendar_entry(data: CalendarEntry, user: dict = Depends(get_current_user)):
+async def create_calendar_entry(
+    data: CalendarEntry,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar.create", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     if data.status not in VALID_STATUSES:
         raise HTTPException(status_code=400, detail=f"Invalid status. Valid: {VALID_STATUSES}")
@@ -95,7 +102,14 @@ async def create_calendar_entry(data: CalendarEntry, user: dict = Depends(get_cu
 
 
 @router.put("/worker-calendar/{entry_id}")
-async def update_calendar_entry(entry_id: str, data: CalendarEntry, user: dict = Depends(get_current_user)):
+async def update_calendar_entry(
+    entry_id: str,
+    data: CalendarEntry,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar.update", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     entry = await tenant.worker_calendar.find_one({"id": entry_id, "org_id": user["org_id"]})
     if not entry:
@@ -112,7 +126,13 @@ async def update_calendar_entry(entry_id: str, data: CalendarEntry, user: dict =
 
 
 @router.post("/worker-calendar/bulk", status_code=201)
-async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_user)):
+async def bulk_calendar(
+    data: CalendarBulk,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar_bulk.execute", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     tenant = _tenant(user)
     now = datetime.now(timezone.utc).isoformat()
     created = 0
@@ -141,7 +161,13 @@ async def bulk_calendar(data: CalendarBulk, user: dict = Depends(get_current_use
 
 
 @router.post("/worker-calendar/sync-from-sessions")
-async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def sync_from_sessions(
+    date: Optional[str] = None,
+    _sec01: dict = Depends(require_money_write(
+        "overhead.worker_calendar_sync.execute", module=None,
+        resource_type="worker_calendar")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(get_current_user),
+):
     """Auto-sync calendar from work_sessions for a given date."""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -190,7 +216,10 @@ async def sync_from_sessions(date: Optional[str] = None, user: dict = Depends(ge
 # ── Fixed Expenses ─────────────────────────────────────────────────
 
 @router.get("/fixed-expenses")
-async def get_fixed_expenses(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_fixed_expenses(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.fixed_expense.read", module=None, resource_type="fixed_expense")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     m = month or datetime.now(timezone.utc).strftime("%Y-%m")
     doc = await tenant.fixed_expenses.find_one({"org_id": user["org_id"], "month": m}, {"_id": 0})
@@ -222,24 +251,36 @@ async def update_fixed_expenses(data: FixedExpensesUpdate, user: dict = Depends(
 # ── Realtime Overhead ──────────────────────────────────────────────
 
 @router.get("/overhead/realtime")
-async def get_realtime_overhead(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_realtime_overhead(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime.read", module=None, resource_type="overhead_realtime")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     return await compute_realtime_overhead(user["org_id"], month)
 
 
 @router.get("/overhead/realtime/daily")
-async def get_daily_breakdown(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_daily_breakdown(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime_daily.read", module=None, resource_type="overhead_realtime_daily")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     result = await compute_realtime_overhead(user["org_id"], month)
     return {"month": result["month"], "daily": result["daily_breakdown"]}
 
 
 @router.get("/overhead/realtime/by-project")
-async def get_by_project(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_by_project(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime_by_project.read", module=None, resource_type="overhead_realtime_by_project")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     result = await compute_realtime_overhead(user["org_id"], month)
     return {"month": result["month"], "projects": result["by_project"]}
 
 
 @router.get("/overhead/realtime/trend")
-async def get_overhead_trend(months: int = 6, user: dict = Depends(get_current_user)):
+async def get_overhead_trend(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime_trend.read", module=None, resource_type="overhead_realtime_trend")),  # SEC-02 (R20-1): before any read
+    months: int = 6, user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
     now = datetime.now(timezone.utc)
     trend = []
