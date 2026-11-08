@@ -296,6 +296,11 @@ def expected(key: str, legacy_role: str, tenant: str, target: Optional[str]) -> 
         return {"status": ok, "writes": True}
     if rule == "finance_404":
         return {"status": 404, "writes": False}
+    if key == "oh_alloc":
+        # OH-01 (#74) FG-89: /overhead-allocation/compute is a READ-ONLY projection of the
+        # published OH-01 allocation (one overhead source) — the money gate stays, and a
+        # finance role gets 200 with nothing written.
+        return {"status": ok, "writes": False}
     if rule == "finance_reached":
         return {"status": None, "writes": None}
     return {"status": ok, "writes": True}

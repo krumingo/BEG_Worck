@@ -97,7 +97,8 @@ export default function ProjectPnLDashboard({ projectId }) {
               { icon: Package, label: t("pnl.materialWasteCost"), val: expense.material_waste_cost },
               { icon: Users, label: t("pnl.subcontractorCost"), val: expense.subcontractor_cost },
               { icon: Building2, label: t("pnl.contractCost"), val: expense.contract_cost },
-              { icon: Wallet, label: t("pnl.overhead"), val: expense.overhead },
+              // R38: the previous allocation is shown while the period is recomputed
+              { icon: Wallet, label: t("pnl.overhead"), val: expense.overhead, sub: expense.overhead_label || undefined },
             ].map(({ icon: Icon, label, val, sub }) => (
               <div key={label} className="flex items-center justify-between p-1.5 rounded bg-muted/10">
                 <div className="flex items-center gap-2">

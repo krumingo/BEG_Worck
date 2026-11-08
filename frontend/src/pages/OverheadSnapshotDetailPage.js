@@ -3,12 +3,16 @@ import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { useParams, useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import { createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ArrowLeft, Calculator, Loader2, BarChart3, Users, Clock, Split, FolderKanban } from "lucide-react";
+
+// OH-01: each allocation is a new version and needs an Idempotency-Key (R29).
+const allocateKeys = createIdempotencyHolder();
 
 export default function OverheadSnapshotDetailPage() {
   const { t } = useTranslation();
@@ -45,11 +49,15 @@ export default function OverheadSnapshotDetailPage() {
   const handleAllocate = async () => {
     setAllocating(true);
     try {
-      await API.post(`/overhead/snapshots/${snapshotId}/allocate`, { method: allocateMethod });
+      const endpoint = `/overhead/snapshots/${snapshotId}/allocate`;
+      const payload = { method: allocateMethod };
+      await API.post(endpoint, payload, idempotencyHeaders(allocateKeys.keyFor(endpoint, payload)));
+      allocateKeys.done();
       setAllocateDialogOpen(false);
       await fetchSnapshot();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      const detail = err.response?.data?.detail;
+      alert(detail?.message || detail || t("toast.errorOccurred"));
     } finally {
       setAllocating(false);
     }

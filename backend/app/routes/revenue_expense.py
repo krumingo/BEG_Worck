@@ -511,11 +511,11 @@ async def get_project_profit_summary(
         subcontract_cost = sum(i.get("subtotal", 0) or i.get("total", 0) for i in received_invoices)
 
     # Overhead: from allocations if exist
-    overhead_allocs = await tenant.project_overhead_alloc.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "allocated_amount": 1}
-    ).to_list(50)
-    overhead_cost = sum(a.get("allocated_amount", 0) for a in overhead_allocs)
+    # FG-89: the project's current OH-01 allocation — the single overhead source
+    from app.services.overhead_lifecycle import project_overhead_current
+    _oh = await project_overhead_current(tenant, project_id)
+    overhead_cost, overhead_allocs = _oh["amount"], _oh["rows"]
+    from app.services.overhead_lifecycle import recalculating_fields
 
     # ── PROFIT ──
     total_cost = round(net_material_cost + labor_cost + subcontract_cost + overhead_cost, 2)
@@ -589,6 +589,7 @@ async def get_project_profit_summary(
             "subcontract": round(subcontract_cost, 2),
             "subcontract_detail": sub_metrics if sub_metrics.get("available") else None,
             "overhead": round(overhead_cost, 2),
+            **recalculating_fields(_oh["recalculating"]),  # FG-116 (R38)
             "total": total_cost,
         },
 
