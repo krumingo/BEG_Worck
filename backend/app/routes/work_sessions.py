@@ -12,6 +12,7 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import OVERTIME_CONFIG, settings_id
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 
 
 def _tenant(user: dict) -> TenantData:
@@ -243,6 +244,7 @@ async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
 # ── List / Query ───────────────────────────────────────────────────
 
 @router.get("/work-sessions")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def list_sessions(
     worker_id: Optional[str] = None,
     site_id: Optional[str] = None,
@@ -335,6 +337,7 @@ async def get_my_today(user: dict = Depends(get_current_user)):
 # ── Summary ────────────────────────────────────────────────────────
 
 @router.get("/work-sessions/summary")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_summary(
     site_id: Optional[str] = None,
     date: Optional[str] = None,
@@ -442,6 +445,7 @@ async def split_session(session_id: str, data: SessionSplit, user: dict = Depend
 # ── Overtime Report ────────────────────────────────────────────────
 
 @router.get("/work-sessions/overtime")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_overtime_report(
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,

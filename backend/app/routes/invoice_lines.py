@@ -19,6 +19,7 @@ ALLOCATION_CORRECTION_REQUIRED = "ALLOCATION_CORRECTION_REQUIRED"
 PAID_STATUSES = ("Paid", "PartiallyPaid")
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m5
 from app.utils.audit import log_audit
 from ..models.invoice_lines import (
@@ -294,6 +295,8 @@ async def enrich_line_with_names(tenant: TenantData, line: dict) -> dict:
 
 @router.get("/invoice-lines")
 async def list_invoice_lines(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line.read", module="M5", resource_type="invoice_line")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     invoice_id: Optional[str] = None,
     allocation_type: Optional[str] = None,
@@ -343,7 +346,10 @@ async def list_invoice_lines(
 # ── Static routes (must come before /{line_id}) ─────────────────────
 
 @router.get("/invoice-lines/unallocated")
-async def get_unallocated_lines(user: dict = Depends(require_m5)):
+async def get_unallocated_lines(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line_unallocated.read", module="M5", resource_type="invoice_line_unallocated")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m5)):
     """Get all invoice lines that are not fully allocated"""
     tenant = _tenant(user)
     lines = await tenant.invoice_lines.find(
@@ -587,7 +593,11 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
 
 
 @router.get("/invoice-lines/{line_id}")
-async def get_invoice_line(line_id: str, user: dict = Depends(require_m5)):
+async def get_invoice_line(
+    line_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line_detail.read", module="M5", resource_type="invoice_line_detail")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m5)):
     """Get invoice line details"""
     tenant = _tenant(user)
     line = await tenant.invoice_lines.find_one({"id": line_id, "org_id": user["org_id"]}, {"_id": 0})
@@ -862,7 +872,11 @@ async def delete_invoice_line(line_id: str, user: dict = Depends(require_m5)):
 # ── Allocation Reports (using aggregation) ─────────────────────────
 
 @router.get("/invoice-lines/by-project/{project_id}")
-async def get_lines_by_project(project_id: str, user: dict = Depends(require_m5)):
+async def get_lines_by_project(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line_by_project.read", module="M5", resource_type="invoice_line_by_project")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m5)):
     """
     Get all invoice line allocations for a specific project.
     Uses aggregation to properly handle multi-allocation.
@@ -944,7 +958,11 @@ async def get_lines_by_project(project_id: str, user: dict = Depends(require_m5)
 
 
 @router.get("/invoice-lines/by-warehouse/{warehouse_id}")
-async def get_lines_by_warehouse(warehouse_id: str, user: dict = Depends(require_m5)):
+async def get_lines_by_warehouse(
+    warehouse_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line_by_warehouse.read", module="M5", resource_type="invoice_line_by_warehouse")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m5)):
     """
     Get all invoice line allocations for a specific warehouse.
     Uses aggregation to properly handle multi-allocation.
@@ -1016,7 +1034,11 @@ async def get_lines_by_warehouse(warehouse_id: str, user: dict = Depends(require
 
 
 @router.get("/invoice-lines/by-client/{client_id}")
-async def get_lines_by_client(client_id: str, user: dict = Depends(require_m5)):
+async def get_lines_by_client(
+    client_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line_by_client.read", module="M5", resource_type="invoice_line_by_client")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m5)):
     """
     Get all invoice line allocations for a specific client (person or company).
     Uses aggregation to properly handle multi-allocation.
@@ -1096,7 +1118,11 @@ async def get_lines_by_client(client_id: str, user: dict = Depends(require_m5)):
 
 
 @router.get("/invoice-lines/by-purchaser/{user_id}")
-async def get_lines_by_purchaser(user_id: str, user: dict = Depends(require_m5)):
+async def get_lines_by_purchaser(
+    user_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.invoice_line_by_purchaser.read", module="M5", resource_type="invoice_line_by_purchaser")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m5)):
     """Get all invoice lines purchased by a specific user (driver/employee)"""
     tenant = _tenant(user)
     lines = await tenant.invoice_lines.find({

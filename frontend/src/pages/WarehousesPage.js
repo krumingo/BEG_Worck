@@ -1,6 +1,8 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance } from "@/lib/financeAccess";
 import AssetQrBlock from "@/components/AssetQrBlock";
 import DataTable from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
@@ -43,6 +45,7 @@ import WarehouseCards from "@/components/warehouse/WarehouseCards";
 const WAREHOUSE_TYPES = ["central", "project", "vehicle", "person"];
 
 export default function WarehousesPage() {
+  const { user } = useAuth();   // SEC-02 (R20)
   const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState("warehouses");
   const [whView, setWhView] = useState("cards"); // cards | table
@@ -161,7 +164,7 @@ export default function WarehousesPage() {
       </div>
 
       {/* Stock Value Card */}
-      <StockValueCard />
+      {canReadFinance(user?.role) && <StockValueCard />}{/* SEC-02 (R20-1/rule 4): stock value is finance */}
 
       {/* Tabs */}
       <div className="flex items-center gap-1 border-b border-border">

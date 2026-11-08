@@ -1,0 +1,72 @@
+{
+ "calls": 4620,
+ "roles": [
+  "requester",
+  "technician",
+  "warehousekeeper",
+  "driver",
+  "viewer"
+ ],
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "hits": {},
+ "allowed_budget_view": {
+  "POST /api/budget-freezes/{project_id}": {
+   "off/requester": [
+    ".packages[].budget_total",
+    ".packages[].labor_budget_total",
+    ".packages[].material_budget_total",
+    ".totals.labor_budget",
+    ".totals.material_budget",
+    ".totals.total_budget"
+   ],
+   "shadow/requester": [
+    ".packages[].budget_total",
+    ".packages[].labor_budget_total",
+    ".packages[].material_budget_total",
+    ".totals.labor_budget",
+    ".totals.material_budget",
+    ".totals.total_budget"
+   ],
+   "enforce/requester": [
+    ".packages[].budget_total",
+    ".packages[].labor_budget_total",
+    ".packages[].material_budget_total",
+    ".totals.labor_budget",
+    ".totals.material_budget",
+    ".totals.total_budget"
+   ]
+  },
+  "POST /api/sites/{site_id}/pulse/generate": {
+   "off/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "shadow/requester": [
+    ".budget_snapshot.total_budget"
+   ],
+   "enforce/requester": [
+    ".budget_snapshot.total_budget"
+   ]
+  }
+ },
+ "judged_not_money": {
+  "POST /api/supplier-invoices": {
+   "reason": "vat_percent — the tax RATE echoed from the caller's own input; no amount",
+   "seen": {
+    "off/requester": [
+     ".vat_percent"
+    ],
+    "shadow/requester": [
+     ".vat_percent"
+    ],
+    "enforce/requester": [
+     ".vat_percent"
+    ]
+   }
+  }
+ },
+ "own_record": {}
+}

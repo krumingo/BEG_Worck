@@ -12,6 +12,7 @@ from app.tenancy.data_access import TenantData
 from app.services.paid_labor import paid_labor_v3
 from app.services.invoice_allocation import RECEIVED_LINE_FIELDS
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m5
 
 router = APIRouter(tags=["Dashboard"])
@@ -25,7 +26,10 @@ def _tenant(user: dict) -> TenantData:
 # ── Pending Payments ──────────────────────────────────────────────
 
 @router.get("/dashboard/pending-payments")
-async def get_pending_payments(user: dict = Depends(get_current_user)):
+async def get_pending_payments(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pending_payment.read", module=None, resource_type="pending_payment")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -298,6 +302,8 @@ async def get_dashboard_activity(
 
 @router.get("/reports/company-finance-series")
 async def get_finance_series(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance_series.read", module="M5", resource_type="company_finance_series")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     months: int = Query(3, ge=1, le=24),
 ):
@@ -497,6 +503,8 @@ def parse_date_preset(preset: str) -> tuple:
 
 @router.get("/reports/finance-details/summary")
 async def get_finance_details_summary(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_summary.read", module="M5", resource_type="finance_details_summary")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -628,6 +636,8 @@ async def get_finance_details_summary(
 
 @router.get("/reports/finance-details/by-counterparty")
 async def get_finance_by_counterparty(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_by_counterparty.read", module="M5", resource_type="finance_details_by_counterparty")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -713,6 +723,8 @@ async def get_finance_by_counterparty(
 
 @router.get("/reports/finance-details/by-project")
 async def get_finance_by_project(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_by_project.read", module="M5", resource_type="finance_details_by_project")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -853,6 +865,8 @@ async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to:
 
 @router.get("/reports/finance-details/transactions")
 async def get_finance_transactions(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_transactions.read", module="M5", resource_type="finance_details_transactions")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -1008,6 +1022,8 @@ async def get_finance_transactions(
 
 @router.get("/reports/finance-details/top-counterparties")
 async def get_top_counterparties(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_top_counterparties.read", module="M5", resource_type="finance_details_top_counterparties")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,

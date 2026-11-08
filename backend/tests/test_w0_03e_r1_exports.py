@@ -37,6 +37,15 @@ from tests.test_w0_03e_c03_isolation import (
 from tests.test_w0_03e_legacy_migration import ORG_A, ORG_B, run
 from tests.test_w0_03e_legacy_routes import ADMIN, client_for
 
+
+@pytest.fixture(autouse=True)
+def _permission_service_mode_off(monkeypatch):
+    """SEC-02: the finance reports here now pass the W0-02 permission dependency, which
+    reads PERMISSION_SERVICE_MODE. These tests are about MASTER_DATA_MODE and assume the
+    permission mode off (as ``enforce_with`` already pins); an earlier test file leaves
+    ``enforce`` in os.environ, so pin it for every test, not only the enforce ones."""
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+
 #: B-only strings added by this module, on top of the C03 markers.
 R1_MARKERS = B_MARKERS + ("B-SECRET-PROJECT", "B-CODE-PRX", "B-CODE-ONLY", "B-SECRET-OFFER",
                           "B-SECRET-EVENT", "B-SECRET-ADDRESS")

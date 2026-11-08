@@ -12,6 +12,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -302,6 +303,7 @@ def _empty_summary():
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-material-summary/{project_id}")
+@strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_project_material_summary(project_id: str, user: dict = Depends(require_m2)):
     """Comprehensive material financial summary for a project"""
     tenant = _tenant(user)

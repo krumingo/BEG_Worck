@@ -112,10 +112,14 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     contract_cost = round(contract_cost, 2)
 
     # ── f. OVERHEAD ────────────────────────────────────────────────
-    allocs = await tenant.project_overhead_allocations.find(
-        {"org_id": org_id, "project_id": project_id}, {"_id": 0, "allocated_amount": 1}
-    ).to_list(50)
-    overhead = round(sum(a.get("allocated_amount", 0) for a in allocs), 2)
+    # OH74-03: the published (current) version of each period — never 0, never both
+    # FG-127: the ONE project-overhead helper every reader uses (same legacy fallback, label)
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    _oh = await project_overhead_current(tenant, project_id)
+    allocs = _oh["rows"]
+    overhead = _oh["amount"]
+    # R38: the old allocation still counts while its period is recomputed — say so
+    overhead_recalculating = any(a.get("recalculating") for a in allocs)
 
     # ── f2. OTHER — documentless cash expenses booked straight to the project ──
     other_docs = await tenant.finance_payments.find(  # PAY-01: a reversed pair counts 0
@@ -163,6 +167,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
             "subcontractor_cost": subcontractor_cost,
             "contract_cost": contract_cost,
             "overhead": overhead,
+            **recalculating_fields(overhead_recalculating),  # FG-127: same fields everywhere
             "other_cost": other_cost,
             "total_expense": total_expense,
         },

@@ -90,6 +90,8 @@ ACTIONS: Set[str] = {
     # writes a Viewer could reach. One action per endpoint; finance roles only.
     "finance.subcontractor_payment.create",  # POST /api/subcontractor-payments (FG-27)
     "revenue.client_act_confirm.execute",    # POST /api/client-acts/{act_id}/confirm
+    # ACT-01 (#77, R14): a client act carries client prices and a receivable
+    "revenue.client_act.create",             # POST /api/client-acts
     "subcontract.act_confirm.execute",       # POST /api/subcontractor-acts/{act_id}/confirm
     "procurement.supplier_invoice.update",   # PUT  /api/supplier-invoices/{inv_id}
     "overhead.worker_calendar.create",       # POST /api/worker-calendar
@@ -140,6 +142,43 @@ ACTIONS: Set[str] = {
     "warehouse.migration.execute",
 }
 
+# ---------------------------------------------------------------------------
+# SEC-02 (R20, Krum 06.11.2026; FLOW-002, FLOW-010; PM-01 §5.2, FG-1/12/14/15):
+# reading money. The registry of every guarded GET is app/permissions/finance_read.py
+# (endpoint -> action -> rule -> canon source); the actions are listed here so the
+# catalog stays the one place that says who holds what.
+#
+#   FINANCE_READ_ACTIONS     company finance AND project money that only the finance
+#                            roles read (R20 rules 1 + 2): Owner/Admin (full set) and
+#                            Accountant, company scope. No other role, member or not.
+#   PROJECT_BUDGET_READ_ACTIONS
+#                            R20: the Technical Manager (canonical role_id
+#                            ``site_manager``, FG-14) reads budget + spent + remaining of
+#                            the projects they are a MEMBER of — granted only on the
+#                            project-scope assignment mirroring that membership
+#                            (project_membership_actions below), never company-wide.
+#                            Finance roles read it everywhere.
+#   MONEY_VALUES_READ        "may this caller see money values" on a shared screen whose
+#                            rule is "hide the values" (R20 rule 5; FG-1/FG-15 labor
+#                            rates, all-reports). Finance roles only, company scope.
+# FG-12: a project-scope assignment never carries a FINANCE_READ action or
+# MONEY_VALUES_READ, so combining a company role with project memberships can never
+# widen money reads beyond what the company role already gives.
+# ---------------------------------------------------------------------------
+from app.permissions.finance_read import (                       # noqa: E402
+    FINANCE_READ_ACTIONS, PROJECT_BUDGET_READ_ACTIONS, MONEY_VALUES_READ,
+    EMPLOYEE_FILE_ACTION, SUBSCRIPTION_PRICE_READ,
+)
+# SUBSCRIPTION_PRICE_READ (SEC-02-B): Owner/Admin only — through their full set.
+ACTIONS |= (FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
+            | {EMPLOYEE_FILE_ACTION, SUBSCRIPTION_PRICE_READ})
+SEC02_ACCOUNTANT_READ_ACTIONS: Set[str] = (
+    FINANCE_READ_ACTIONS | PROJECT_BUDGET_READ_ACTIONS | {MONEY_VALUES_READ}
+    | {EMPLOYEE_FILE_ACTION})
+# SEC-02-A (D9): the Technical Manager opens the employee file at company scope; the
+# handler gives him the no-money version of his own projects only.
+SEC02_SITE_MANAGER_COMPANY_ACTIONS: Set[str] = {EMPLOYEE_FILE_ACTION}
+
 # SEC-01: the money-write actions above, granted to Accountant (Owner/Admin get them
 # through their full set).
 MONEY_WRITE_ACTIONS: Set[str] = {
@@ -156,6 +195,8 @@ MONEY_WRITE_ACTIONS: Set[str] = {
     "labor.package_recompute.execute",
     "finance.overhead_snapshot_compute.execute",
     "pricing.project_modifier.delete",
+    # ACT-01 (#77): POST /api/client-acts — finance roles only (R14), the C01 rule
+    "revenue.client_act.create",
 }
 # SEC-01-C02 (R14; FG-27, FG-30): same rule, same holders (Owner/Admin/Accountant).
 MONEY_WRITE_ACTIONS_C02: Set[str] = {
@@ -187,6 +228,8 @@ FIELD_COST_WRITE_ACTIONS: Set[str] = {
 }
 # role_id (canonical or legacy) of the company roles R16 lets write on member projects.
 FIELD_COST_MEMBER_ROLE_IDS: Set[str] = {"site_manager", "LEGACY_TECHNICIAN"}
+# SEC-02 (R20, FG-14): the company role that reads the budget view of member projects.
+PROJECT_BUDGET_MEMBER_ROLE_IDS: Set[str] = {"site_manager"}
 
 # SEC-01-C01: Owner/Admin only (the existing rule of PUT /price-modifiers/org,
 # routes/price_modifiers.py) — through their full set; granted to no other role.
@@ -222,6 +265,8 @@ _ALL = set(ACTIONS)
 # from project_team membership (see the migration backfill). So company-scope
 # non-admin roles do NOT list budget.* — otherwise a company role would read
 # every project, which is broader than today's membership-based access.
+# Exception (SEC-02-C, R20, Krum 06.11.2026): Accountant holds budget.read (READ only)
+# company-wide — R20 gives the finance roles every project's money.
 CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
     "admin":           {"label_bg": "Администратор",          "actions": set(_ALL)},
@@ -243,7 +288,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.read_central_stock",
                                                                       "warehouse.read_price_history",
                                                                       "warehouse.read_stock",
-                                                                      "warehouse.read_history"}},
+                                                                      "warehouse.read_history",
+                                                                      # SEC-02 (R20, D9): the employee file, no money
+                                                                      *SEC02_SITE_MANAGER_COMPANY_ACTIONS}},
     "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
@@ -275,7 +322,14 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "warehouse.read_stock",
                                                                       "warehouse.read_history",
                                                                       # SEC-01 (R14): the money writes.
-                                                                      *MONEY_WRITE_ACTIONS}},
+                                                                      *MONEY_WRITE_ACTIONS,
+                                                                      # SEC-02 (R20): the finance reads
+                                                                      *SEC02_ACCOUNTANT_READ_ACTIONS,
+                                                                      # SEC-02-C (R20, B-D1): the
+                                                                      # finance role reads every
+                                                                      # project's budget — company
+                                                                      # scope, read only.
+                                                                      "budget.read"}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read",
@@ -377,6 +431,10 @@ def project_membership_actions(role_id: str, role_in_project: str) -> list:
                 else PROJECT_MEMBER_ACTIONS)
     if role_id in FIELD_COST_MEMBER_ROLE_IDS:
         base += sorted(FIELD_COST_WRITE_ACTIONS)
+    # SEC-02 (R20, FG-14): budget + spent + remaining of THIS project, for the
+    # Technical Manager only (canonical role_id, not role_in_project).
+    if role_id in PROJECT_BUDGET_MEMBER_ROLE_IDS:
+        base += sorted(PROJECT_BUDGET_READ_ACTIONS)
     return base
 
 # ---------------------------------------------------------------------------

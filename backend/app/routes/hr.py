@@ -11,6 +11,7 @@ from app.tenancy import project_team
 from app.tenancy.data_access import TenantData
 from app.services.legacy_payslips import legacy_payslips, legacy_payslip_one
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m4
 from app.utils.audit import log_audit
 from app.master_data.legacy_adapter import advance_master_person
@@ -855,6 +856,8 @@ async def create_contract_payment(data: ContractPaymentCreate, user: dict = Depe
 
 @router.get("/contract-payments")
 async def list_contract_payments(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.contract_payment.read", module="M4", resource_type="contract_payment")),  # SEC-02 (R20-1): before any read
     site_id: Optional[str] = None,
     status: Optional[str] = None,
     worker_name: Optional[str] = None,
