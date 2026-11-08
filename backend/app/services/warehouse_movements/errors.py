@@ -169,3 +169,8 @@ class ReceiptReversalConflictError(WarehouseMovementError):
     lot was already issued / moved (reverse those first) or it is already
     reversed. 409, nothing written. ``context["code"]`` says which."""
     error_code = "RECEIPT_REVERSAL_CONFLICT"
+
+
+class ReasonRequiredError(InvariantViolationError):
+    """WH-REV-01: a receipt reversal needs a non-blank reason — 422."""
+    error_code = "REASON_REQUIRED"

@@ -166,6 +166,7 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         # WH-REV-01
         "RECEIPT_NOT_REVERSIBLE": 422,
         "RECEIPT_REVERSAL_CONFLICT": 409,
+        "REASON_REQUIRED": 422,
         "INVOICE_LINE_FULLY_LINKED": 409,
         "INVOICE_LINE_UNIT_MISMATCH": 422,
         "NEGATIVE_STOCK": 422,
@@ -488,6 +489,12 @@ async def post_receipt_reversal(
         raise HTTPException(status_code=428, detail={
             "error_code": "IDEMPOTENCY_KEY_REQUIRED",
             "message": "Липсва Idempotency-Key — заявката не е записана"})
+    reason = (body.reason or "").strip()
+    if not reason:
+        # A reversal is an official correction: a blank reason is no reason.
+        raise HTTPException(status_code=422, detail={
+            "error_code": "REASON_REQUIRED",
+            "message": "Причината за сторното е задължителна"})
     tenant = _tenant_for(user)
     original = await tenant.warehouse_transactions.find_one(
         {"movement_id": movement_id}, {"_id": 0})
@@ -522,7 +529,7 @@ async def post_receipt_reversal(
                 project_id=original.get("project_id"),
                 subproject_id=original.get("subproject_id"),
                 idempotency_key=key,
-                reason=body.reason, notes=body.notes,
+                reason=reason, notes=body.notes,
                 reverses_movement_id=movement_id,
             ),
         )

@@ -329,3 +329,33 @@ async def test_rights_are_the_rights_of_the_receipt(canonical_mongo_db, allow_al
                 await _reverse(wc, mode, receipt, key=f"k-{receipt}", role=legacy)
             assert exc.value.status_code == 403, (role, action)
             assert await _rows(db) == before                     # nothing written
+
+
+
+@pytest.mark.parametrize("mode", MODES)
+@pytest.mark.parametrize("reason", ["   ", "\t\n", ""])
+async def test_a_blank_reason_is_422_and_writes_nothing(canonical_mongo_db, allow_always_gate,
+                                                       monkeypatch, mode, reason):
+    """Audit note (#82): the reason is trimmed; blank → 422 REASON_REQUIRED,
+    nothing written — at the route and in the service."""
+    from app.services.warehouse_movements.errors import ReasonRequiredError
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate,
+                                          monkeypatch, mode, allocations=ONLY_P)
+    wc = _wc(monkeypatch, client, db)
+    receipt = await _book(svc, mode, db, run, WH)
+    before, audits = await _rows(db), await db["audit_events"].count_documents({})
+    if reason:
+        with pytest.raises(HTTPException) as exc:
+            await _reverse(wc, mode, receipt, reason=reason)
+        assert (exc.value.status_code, exc.value.detail["error_code"]) == (422, "REASON_REQUIRED")
+    # the service refuses too (a direct caller cannot bypass the route)
+    orig = await db["warehouse_transactions"].find_one({"movement_id": receipt})
+    with pytest.raises(ReasonRequiredError):
+        await svc.execute(_ctx(mode, "Owner"), db, run.coll, _inp(
+            CanonicalAction.REVERSE_SUPPLIER_RECEIPT, T, source=WH,
+            destination=LocationKey.from_dict(orig["source"]), quantity=Decimal("10"),
+            reason=reason, reverses_movement_id=receipt))
+    assert await _rows(db) == before
+    assert await db["audit_events"].count_documents({}) == audits
+    out = await _reverse(wc, mode, receipt, reason="  грешно засичане  ")
+    assert out.envelope["reason"] == "грешно засичане"            # stored trimmed

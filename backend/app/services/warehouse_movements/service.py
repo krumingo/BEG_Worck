@@ -1876,6 +1876,10 @@ class CommandService:
         )
         from app.services.warehouse_movements.fifo import layers_at
         from app.services.warehouse_movements.reversal import REVERSAL_ACTION_VALUES
+        from app.services.warehouse_movements.errors import ReasonRequiredError
+        if not (inp.reason or "").strip():
+            raise ReasonRequiredError("a receipt reversal needs a reason",
+                                      context={"reverses_movement_id": inp.reverses_movement_id})
         receipt_id = inp.reverses_movement_id
         original = await tenant_collection.find_one({"movement_id": receipt_id}, {"_id": 0},
                                                     session=session)
