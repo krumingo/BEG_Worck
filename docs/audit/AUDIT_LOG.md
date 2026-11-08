@@ -5572,3 +5572,11 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 
 - Minor (carried over): `quality_score` has no range check.
 - **Next:** #84's final head. #83, #84 and #86 need main `1ea98fe` before their own merge.
+
+## 2026-11-08 19:16 UTC: check-in. main `3699c3b` verified; #84 `2ceb2a9` and #86 `6479cf1` merge checks; gates queued
+
+- **main `3699c3b`** (merge of #87, canon R56–R59): docs only. Tree = `merge-tree(1ea98fe, 1303686)`.
+- **#84 `2ceb2a9`** (Q007 `ef7cddd` + FG-269..271 `9630ff0e` + merge of main `1ea98fe`): only `run_meta.json` differs from merge-tree; role-union 0; PM-01 384/384, 0 extra.
+- **#86 `6479cf1`** (merge `0fe133db` of main `3699c3b` + `quality_score` 1–5 on POST and PUT): only `run_meta.json` differs from merge-tree; role-union 0; PM-01 168/168, 0 extra. The minor `quality_score` note is addressed (probes follow in the gates).
+- **#83 `9f86d0b`** (FG-266..268): no merge of main yet; waiting for its next head.
+- **Gates:** serial, #84 then #86 (disk at about 1.9 GB free).
