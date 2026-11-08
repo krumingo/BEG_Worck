@@ -1,4 +1,4 @@
-# Warehouse canonical suite on PRJ-01 b1d6e60 (main 3699c3b merged), file by file, local real MongoDB 7.0 rs0, PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, -rfs: 44 files / 1121 passed, 0 failed, 0 skipped (= main)
+# Warehouse canonical suite on PRJ-01 dbb04ba (round 5), file by file, local real MongoDB 7.0 rs0, PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, -rfs: 44 files / 1121 passed, 0 failed, 0 skipped (= main)
 tests/test_warehouse_canonical_actions.py: 7 passed
 tests/test_warehouse_canonical_c12_regressions.py: 14 passed
 tests/test_warehouse_canonical_c13_mongo.py: 6 passed
