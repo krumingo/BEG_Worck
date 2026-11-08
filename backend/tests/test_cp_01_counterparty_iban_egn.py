@@ -906,10 +906,12 @@ def test_a6_cash_to_a_counterparty_needs_a_receipt(monkeypatch, backend, mode):
         r = await manual_pay(c, **cash, cash_receipt_file_id="file_r1", cash_recipient_name="Иван Петров")
         assert r.status_code == 201, r.text
         assert r.json()["cash_receipt_file_id"] == "file_r1" and r.json()["cash_recipient_name"] == "Иван Петров"
-        # a cash payment that names no payee at all is not a counterparty payment (FG-242: a
-        # payee named only by its name IS one — see test_fg242_…)
+        # R59: a small expense with no payee only with a till receipt
         r = await manual_pay(c, method="Cash", account_id=CASH_A, counterparty_name=None)
-        assert r.status_code == 201
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+        r = await manual_pay(c, method="Cash", account_id=CASH_A, counterparty_name=None,
+                             cash_receipt_file_id="file_bon")
+        assert r.status_code == 201 and r.json()["cash_expense_without_payee"] is True
         if backend != "real":       # #69's cap reservation uses $round: real Mongo only
             return
         # a subcontractor in cash: the same rule, and blocked while its IBAN is unverified
@@ -1168,34 +1170,44 @@ def test_fg230_dq_rows_have_the_one_schema_of_81(monkeypatch, backend, mode):
 
 
 # ═══════════════════════════════════════════════ FLOW Guard pass 24 (#83 @ 7e0b914)
-def test_fg242_cash_to_a_payee_named_only_by_name_or_eik(monkeypatch, backend, mode):
+def test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list(monkeypatch, backend, mode):
+    """R59 (Krum, 08.11.2026, FG-242/FG-268): cash to a company or person only with a
+    counterparty_id chosen from the list; a name or ЕИК alone → 422 COUNTERPARTY_REQUIRED;
+    a small expense with no payee only with a till receipt; the R50.1 block always."""
     async def scenario(c, op):
-        cash = dict(method="Cash", account_id=CASH_A)
-        # a payee named only by its name: a receipt is required
-        r = await manual_pay(c, counterparty_name="Някой Друг", **cash)
-        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
-        r = await manual_pay(c, counterparty_name="Някой Друг", cash_receipt_file_id="file_r",
-                             cash_recipient_name="Някой Друг", **cash)
+        cash = dict(method="Cash", account_id=CASH_A, cash_receipt_file_id="file_r",
+                    cash_recipient_name="Иван")
+        before = await rows(op, "finance_payments")
+        for extra in ({"counterparty_name": "Някой Друг"}, {"counterparty_name": "Доставчик cp1"},
+                      {"counterparty_name": "DOSTAVCHIK  CP1 OOD"},
+                      {"counterparty_name": None, "counterparty_eik": "111111111"}):
+            r = await manual_pay(c, **dict(cash, **extra))
+            assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_REQUIRED", (extra, r.text)
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=dict(
+            cash, amount=5.0, project_id="prj-1", counterparty_name="Доставчик cp1"))
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_REQUIRED"
+        await op.invoices.update_one({"id": "inv-r1"}, {"$unset": {"supplier_counterparty_id": "",
+                                                                    "counterparty_eik": ""}})
+        r = await c.post("/api/finance/invoices/inv-r1/payments", headers=hdr("acct-a"),
+                         json=dict(cash, amount=5.0))          # an invoice linked to no counterparty
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_REQUIRED"
+        assert await rows(op, "finance_payments") == before
+        # the counterparty chosen from the list: receipt + recipient → paid
+        r = await manual_pay(c, counterparty_id="cp1", **cash)
         assert r.status_code == 201, r.text
-        # the name resolves to cp1, whose IBAN is unverified → blocked, also with a receipt
+        # … and blocked while its IBAN is unverified (R50.1), whatever is in the name
         await seed_account(op, "ba-pend", IBAN_NEW, "pending_verification")
-        for name in ("Доставчик cp1", "доставчик CP1"):
-            r = await manual_pay(c, counterparty_name=name, cash_receipt_file_id="file_r",
-                                 cash_recipient_name="Иван", **cash)
-            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN", r.text
-        # the same through other-expense, and through quick-pay of cp1's invoice (by its ЕИК)
-        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
-            "amount": 5.0, "project_id": "prj-1", "method": "Cash", "counterparty_name": "Доставчик cp1",
-            "cash_receipt_file_id": "file_r", "cash_recipient_name": "Иван"})
-        assert r.status_code == 409, r.text
-        await op.invoices.update_one({"id": "inv-r1"}, {"$unset": {"supplier_counterparty_id": ""}})
-        r = await c.post("/api/finance/invoices/inv-r1/payments", headers=hdr("acct-a"), json={
-            "amount": 5.0, "method": "Cash", "account_id": CASH_A,
-            "cash_receipt_file_id": "file_r", "cash_recipient_name": "Иван"})
+        r = await manual_pay(c, counterparty_id="cp1", counterparty_name="Друго име", **cash)
         assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
-        # cash with no payee at all (a withdrawal) is not a payment to a payee
-        r = await manual_pay(c, counterparty_name=None, **cash)
-        assert r.status_code == 201
+        # a small expense with no payee: only with a till receipt
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+            "amount": 3.0, "project_id": "prj-1", "method": "Cash"})
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "CASH_RECEIPT_REQUIRED"
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+            "amount": 3.0, "project_id": "prj-1", "method": "Cash", "cash_receipt_file_id": "file_bon"})
+        assert r.status_code == 201, r.text
+        row = [p for p in await rows(op, "finance_payments") if p["id"] == r.json()["id"]][0]
+        assert row["cash_expense_without_payee"] is True and row["cash_receipt_file_id"] == "file_bon"
     run(monkeypatch, backend, mode, scenario)
 
 
@@ -1366,31 +1378,18 @@ def test_fg267_a_possible_egn_without_a_company_owner_is_masked(monkeypatch, bac
     run(monkeypatch, backend, mode, scenario)
 
 
-def test_fg268_name_variants_and_eik_do_not_bypass_the_cash_block(monkeypatch, backend, mode):
+def test_fg268_r59_the_eik_stays_a_defence(monkeypatch, backend, mode):
+    """R59 keeps the ЕИК check: an ЕИК of another counterparty → 409; a bank transfer
+    named only by ЕИК resolves the payee, so its unverified IBAN blocks it."""
     async def scenario(c, op):
-        await seed_account(op, "ba-pend", IBAN_NEW, "pending_verification")      # cp1 is blocked
         cash = dict(method="Cash", account_id=CASH_A, cash_receipt_file_id="file_r",
                     cash_recipient_name="Иван")
-        for name in ("Доставчик  cp1", " доставчик CP1 ", "Доставчик cp1 ООД", "„Доставчик cp1“ ЕООД",
-                     "Dostavchik cp1", "DOSTAVCHIK CP1 OOD"):
-            r = await manual_pay(c, counterparty_name=name, **cash)
-            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN", (name, r.text)
-        # a different name but cp1's ЕИК in the body
-        r = await manual_pay(c, counterparty_name="Друг", counterparty_eik="111 111 111", **cash)
-        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
-        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json=dict(
-            cash, amount=5.0, project_id="prj-1", counterparty_name="X", counterparty_eik="111111111"))
-        assert r.status_code == 409, r.text
-        # counterparty_id of cp2 with cp1's ЕИК → the request names two payees
         r = await manual_pay(c, counterparty_id="cp2", counterparty_eik="111111111", **cash)
         assert r.status_code == 409 and r.json()["detail"]["reason"] == "PAYEE_MISMATCH"
-        # an ambiguous name never bypasses the block: two counterparties normalise alike
-        await op.counterparties.insert_one({"id": "cp1-twin", "org_id": ORG_A, "name": "DOSTAVCHIK CP1 EOOD",
-                                            "type": "supplier", "active": True})
-        r = await manual_pay(c, counterparty_name="доставчик cp1", **cash)
-        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
-        assert [p for p in await rows(op, "finance_payments")] == []
-        # a payee that is no counterparty at all still pays against a receipt
-        r = await manual_pay(c, counterparty_name="Пазар Ромфея", **cash)
-        assert r.status_code == 201
+        r = await manual_pay(c, counterparty_id="cp2", counterparty_eik="111111111")     # bank
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "PAYEE_MISMATCH"
+        await seed_account(op, "ba-pend", IBAN_NEW, "pending_verification")             # cp1
+        r = await manual_pay(c, counterparty_name="X", counterparty_eik="111 111 111")   # bank
+        assert r.status_code == 409 and r.json()["detail"]["reason"] == "BANK_ACCOUNT_PENDING"
+        assert await rows(op, "finance_payments") == []
     run(monkeypatch, backend, mode, scenario)

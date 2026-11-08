@@ -436,7 +436,8 @@ def test_09_project_pnl_other_cost_nets_to_zero(monkeypatch, backend, mode):
     async def scenario(c, op):
         from app.services.project_pnl import compute_project_pnl
         r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
-            "project_id": "prj-a", "amount": 25, "method": "Cash"})
+            "project_id": "prj-a", "amount": 25, "method": "Cash",
+            "cash_receipt_file_id": "file_till_receipt"})          # CP-01 R59: till receipt
         assert r.status_code == 201, r.text
 
         before = await compute_project_pnl(ORG_A, "prj-a")

@@ -289,6 +289,40 @@ On `bc0d1c7` these tests are 18 red, 6 passed on real Mongo (`fg_pass26_red_on_b
 |---|---|---|
 | **FG-266**: a typed ЕГН with no canonical record leaked into `audit_logs` and the create response | `counterparty_rules.mask_for_log` masks every IBAN, ЕГН and possible ЕГН, for every role, in: the legacy `audit_logs` details of a project update, every CP-01 AuditEvent diff (`master_records.diff`), and `/audit-logs` on read (rows written before CP-01). The project create response goes through the same reader masking. Storage still follows CP83-03: the copy is kept, masked on read, and a DQ issue is opened. | `test_fg266_a_typed_egn_never_reaches_logs_or_responses` |
 | **FG-267**: a 10-digit value with no owner, or with an unconfirmed company owner, was shown in full | A 10-digit `eik` / `tax_id` is a *possible ЕГН* unless the owner is a confirmed company (`owner_type == "company"` with an `owner_id`). Every role except Owner and Accountant sees it masked. A confirmed company's 10-digit tax id is never masked. The same rule applies on write and in the migration: kept, plus a DQ issue. | `test_fg267_a_possible_egn_without_a_company_owner_is_masked` (6 roles × 3 readers + the company control) |
-| **FG-268**: the cash block could be bypassed with a name variant or with `counterparty_eik` | A `counterparty_eik` in the request is always resolved. It decides the payee; if it belongs to a different counterparty than `counterparty_id` → 409 `PAYEE_MISMATCH`. Names are matched after normalising case, whitespace, punctuation and quotes, Bulgarian legal forms (ООД/ЕООД/АД/ЕАД/ЕТ/СД/КД…) and Cyrillic→Latin transliteration. An **ambiguous** name blocks if **any** of its matches has an unverified IBAN. | `test_fg268_name_variants_and_eik_do_not_bypass_the_cash_block` |
+| **FG-268** (superseded by R59, see §14): the cash block could be bypassed with a name variant or with `counterparty_eik` | A `counterparty_eik` in the request is always resolved. It decides the payee; if it belongs to a different counterparty than `counterparty_id` → 409 `PAYEE_MISMATCH`. Names are matched after normalising case, whitespace, punctuation and quotes, Bulgarian legal forms (ООД/ЕООД/АД/ЕАД/ЕТ/СД/КД…) and Cyrillic→Latin transliteration. An **ambiguous** name blocks if **any** of its matches has an unverified IBAN. | `test_fg268_name_variants_and_eik_do_not_bypass_the_cash_block` |
 
-**For Krum (FG-268):** should a named cash payment be required to carry a `counterparty_id`, instead of being matched by name? That is a business decision and is not implemented → **CP-01-D23**.
+**For Krum (FG-268):** should a named cash payment be required to carry a `counterparty_id`? ~~CP-01-D23~~ **Decided: R59** (§14).
+
+## 14. R59 (Krum, 08.11.2026; FG-268) and the merge of main `1ea98fe` (#77, #74)
+
+**R59:** a cash payment to a company or a person is possible **only with a counterparty chosen from the list** (`counterparty_id`). If it is missing, the Accountant creates it first. Small expenses with no counterparty (fuel, a shop) are allowed only with a till receipt (касов бон). The R50.1 block always applies.
+
+**The new rule** (`bank_account_guard._check_cash`, which replaces the name matching):
+
+| Cash outflow | Result |
+|---|---|
+| `counterparty_id` (or a counterparty the invoice / package is linked to) | receipt `file_id` + recipient name; while its IBAN is unverified → 409 `PAYEE_BLOCKED_PENDING_IBAN` |
+| a payee named only by `counterparty_name` or `counterparty_eik` | **422 `COUNTERPARTY_REQUIRED`**, nothing written; this also covers a received invoice that is linked to no counterparty |
+| no payee at all | only with a till receipt (`cash_receipt_file_id`) → recorded with `cash_expense_without_payee: true`; otherwise 422 `CASH_RECEIPT_REQUIRED` |
+
+**The ЕИК stays as a defence:**
+- If the ЕИК belongs to a different counterparty than `counterparty_id` → 409 `PAYEE_MISMATCH`.
+- On a bank transfer named only by ЕИК, the payee is resolved from it, so its IBAN rules apply.
+
+The name normalisation and matching code from FG-268 was removed; it is no longer the gate.
+
+**Tests:**
+- `test_fg242_r59_cash_to_a_named_payee_needs_a_counterparty_from_the_list`
+- `test_fg268_r59_the_eik_stays_a_defence`
+- `test_a6_cash_to_a_counterparty_needs_a_receipt` (its no-payee case: till receipt)
+
+**PAY-01 fixtures:** four PAY-01 tests post a cash `other-expense` with no payee and no receipt, and R59 refuses that with 422 `CASH_RECEIPT_REQUIRED` (24 cells red). Each body now carries a till receipt (`cash_receipt_file_id`). No assertion changed: the amounts, idempotency, project-in-tenant and reversal checks are the same. `other-income` is not guarded (CP83-02) and was left unchanged.
+
+On `9f86d0b` the new rule is 6 red; `r59_red_on_9f86d0b_real_mongo.txt`. The ЕИК-defence test passes there by design: it guards behaviour that already existed.
+
+**Merge of `1ea98fe`:**
+- Merge commit `e8bf97f`.
+- Only generated evidence conflicted (`PM-01/run_meta.json`, `SEC-01-C01/results.json`). It was taken from main and regenerated by its harnesses.
+- The code merged cleanly.
+
+Gates for this head: `gates_r59.txt`.

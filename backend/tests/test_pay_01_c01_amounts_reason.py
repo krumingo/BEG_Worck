@@ -48,8 +48,9 @@ ENDPOINTS = {
     "transfer": ("/api/finance/transfers",
                  '{"from_account_id": "%s", "to_account_id": "%s", "amount": @AMOUNT@}' % (BANK_A, CASH_A)),
     "account_funding": ("/api/finance/account-funding", '{"account_id": "%s", "amount": @AMOUNT@}' % BANK_A),
+    # CP-01 R59: a small expense with no payee only with a till receipt
     "other_expense": ("/api/finance/other-expense",
-                      '{"project_id": "prj-1", "amount": @AMOUNT@, "method": "Cash"}'),
+                      '{"project_id": "prj-1", "amount": @AMOUNT@, "method": "Cash", "cash_receipt_file_id": "file_till_receipt"}'),
     "other_income": ("/api/finance/other-income",
                      '{"project_id": "prj-1", "amount": @AMOUNT@, "method": "Cash"}'),
 }
