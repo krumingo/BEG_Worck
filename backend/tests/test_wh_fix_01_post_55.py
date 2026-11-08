@@ -39,6 +39,7 @@ _EXTRA_DB_MODULES = (
     "app.routes.warehouse_batches", "app.services.fifo_service",
     "app.services.material_waste", "app.routes.material_waste",
     "app.routes.warehouse_canonical", "app.routes.warehouse_canonical_queries",
+    "app.utils.audit",
 )
 
 
