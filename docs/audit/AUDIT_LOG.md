@@ -5485,3 +5485,16 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 - **Parents:** `ec7ddd8` + `c7df7ca` (the audited head; PASS at 17:15).
 - **Byte check:** the tree `faeb3b8` equals `merge-tree(ec7ddd8, c7df7ca)`.
 - **Next:** #84 (`2c2e75f`, running against main `ec7ddd8`), #81, #83 and #86 must take in `fddb018` before their own merge; each such merge gets a full re-audit.
+
+## 2026-11-08 18:01 UTC: check-in. New heads #74 `4c8b313`, #84 `b99c0eb`, #86 `19d77cf`; serial queue restarted
+
+- **Correction:** the two previous entries are stamped 18:25 and 18:30, but the real times were about 17:55 and 17:58. From now on entries are stamped from `date -u`.
+- **#74 `4c8b313`** (merge `182ea574` of main `fddb018` + evidence):
+  - Conflicts: `full_cost.py`, `overhead.py`, `server.py`, frontend `idempotency.js`/test, and generated files.
+  - `overhead.py`: the snapshot route keeps #69's `require_money_write("finance.overhead_snapshot_compute.execute")` gate before any read or write; the one key path is OH-01's `KeyedWrite` (main's `MoneyWrite` block intentionally dropped, as its own comment foresaw).
+  - `full_cost.py`: OH-01's costs line plus main's waste split.
+  - **Role-union:** 0 differences.
+  - **PM-01:** 45 own cells, all keep the PR's value on the head (9 already equal on main); 0 extra.
+- **#84 `b99c0eb`** (FG-264 on top of `2c2e75f`, code): the run on `2c2e75f` was stopped (stale) and re-queued on the new head.
+- **#86 `19d77cf`** (PRJ-01 rounds 2–3: FG-252..256, R56, "paid" from all ledger payments and advances): queued.
+- **Serial order:** #74 → #84 → #86.
