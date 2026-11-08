@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 31.4,
+ "seconds": 25.4,
  "rows": [
   {
    "mode": "off",
@@ -1360,13 +1360,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -1380,13 +1375,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -1430,13 +1420,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -3850,13 +3835,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -3870,13 +3850,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -3920,13 +3895,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7036,13 +7006,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7056,13 +7021,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7106,13 +7066,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9526,13 +9481,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9546,13 +9496,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9596,13 +9541,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -12802,13 +12742,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -12822,13 +12757,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -12876,13 +12806,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15470,13 +15395,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15490,13 +15410,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15544,13 +15459,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {

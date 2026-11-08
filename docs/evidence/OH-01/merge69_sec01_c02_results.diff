@@ -1,0 +1,359 @@
+diff --git a/docs/evidence/SEC-01-C02/results.json b/docs/evidence/SEC-01-C02/results.json
+index 3f881e7..3e99c3f 100644
+--- a/docs/evidence/SEC-01-C02/results.json
++++ b/docs/evidence/SEC-01-C02/results.json
+@@ -150,7 +150,7 @@
+  ],
+  "mongo": "local replica set (oplog)",
+  "outbound_http": "closed local port",
+- "seconds": 25.2,
++ "seconds": 26.0,
+  "rows": [
+   {
+    "mode": "off",
+@@ -1354,13 +1354,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -1374,13 +1369,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -1424,13 +1414,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -3853,13 +3838,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -3873,13 +3853,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -3923,13 +3898,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -7048,13 +7018,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -7068,13 +7033,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -7118,13 +7078,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -9547,13 +9502,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -9567,13 +9517,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -9617,13 +9562,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -12832,13 +12772,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -12852,13 +12787,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -12906,13 +12836,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "A"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -15509,13 +15434,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -15529,13 +15449,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -15583,13 +15498,8 @@
+    "target": null,
+    "status": 200,
+    "error_code": null,
+-   "written": [
+-    "op.execution_packages",
+-    "op.project_overhead_alloc"
+-   ],
+-   "written_orgs": [
+-    "B"
+-   ],
++   "written": [],
++   "written_orgs": [],
+    "deleted": []
+   },
+   {
+@@ -17721,11 +17631,11 @@
+    "user": "technician",
+    "kind": "expired",
+    "active": true,
+-   "from_date": "2026-10-07",
+-   "to_date": "2026-11-05",
++   "from_date": "2026-10-08",
++   "to_date": "2026-11-06",
+    "mirror_status": "active",
+-   "mirror_valid_from": "2026-10-07T00:00:00+00:00",
+-   "mirror_valid_to": "2026-11-05T23:59:59.999999+00:00",
++   "mirror_valid_from": "2026-10-08T00:00:00+00:00",
++   "mirror_valid_to": "2026-11-06T23:59:59.999999+00:00",
+    "mirror_has_field_actions": true
+   },
+   {
+@@ -17733,10 +17643,10 @@
+    "user": "requester",
+    "kind": "future",
+    "active": true,
+-   "from_date": "2026-11-07",
++   "from_date": "2026-11-08",
+    "to_date": null,
+    "mirror_status": "active",
+-   "mirror_valid_from": "2026-11-07T00:00:00+00:00",
++   "mirror_valid_from": "2026-11-08T00:00:00+00:00",
+    "mirror_valid_to": null,
+    "mirror_has_field_actions": true
+   },
+@@ -17745,11 +17655,11 @@
+    "user": "technician",
+    "kind": "expired",
+    "active": true,
+-   "from_date": "2026-10-07",
+-   "to_date": "2026-11-05",
++   "from_date": "2026-10-08",
++   "to_date": "2026-11-06",
+    "mirror_status": "active",
+-   "mirror_valid_from": "2026-10-07T00:00:00+00:00",
+-   "mirror_valid_to": "2026-11-05T23:59:59.999999+00:00",
++   "mirror_valid_from": "2026-10-08T00:00:00+00:00",
++   "mirror_valid_to": "2026-11-06T23:59:59.999999+00:00",
+    "mirror_has_field_actions": true
+   },
+   {
+@@ -17757,10 +17667,10 @@
+    "user": "requester",
+    "kind": "future",
+    "active": true,
+-   "from_date": "2026-11-07",
++   "from_date": "2026-11-08",
+    "to_date": null,
+    "mirror_status": "active",
+-   "mirror_valid_from": "2026-11-07T00:00:00+00:00",
++   "mirror_valid_from": "2026-11-08T00:00:00+00:00",
+    "mirror_valid_to": null,
+    "mirror_has_field_actions": true
+   }

@@ -161,10 +161,12 @@ async def get_profit_by_period(
     ).to_list(None)
 
     # Overhead by month
-    oh_allocs = await tenant.project_overhead_alloc.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "period": 1, "allocated_amount": 1}
-    ).to_list(50)
+    # FG-89: the project's current OH-01 allocation; its month is its snapshot's period
+    from app.services.overhead_lifecycle import project_overhead_current
+    oh_allocs = [{"period": (r.get("period_start") or "")[:7],
+                  "allocated_amount": r.get("allocated_amount", 0),
+                  "recalculating": bool(r.get("recalculating"))}
+                 for r in (await project_overhead_current(tenant, project_id))["rows"]]
 
     # Aggregate by period
     periods = {}
@@ -215,6 +217,8 @@ async def get_profit_by_period(
         if pk:
             ensure_period(pk)
             periods[pk]["overhead"] += oh.get("allocated_amount", 0)
+            periods[pk]["overhead_recalculating"] = (periods[pk].get("overhead_recalculating")
+                                                     or oh["recalculating"])
 
     # Calculate profits per period
     for pk, p in periods.items():
@@ -225,6 +229,9 @@ async def get_profit_by_period(
         gross_cost = p["material"] + p["waste"] + p["labor"] + p["subcontract"]
         p["gross_cost"] = round(gross_cost, 2)
         p["total_cost"] = round(gross_cost + p["overhead"], 2)
+        # FG-116 (R38): the same two fields as every other overhead reader, per month
+        from app.services.overhead_lifecycle import recalculating_fields
+        p.update(recalculating_fields(p.get("overhead_recalculating", False)))
         rev = p["earned"] if p["earned"] > 0 else p["billed"]
         p["gross_profit"] = round(rev - gross_cost, 2) if rev > 0 else None
         p["net_profit"] = round(rev - p["total_cost"], 2) if rev > 0 else None
