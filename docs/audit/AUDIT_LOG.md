@@ -5021,3 +5021,34 @@ Non-blocking:
 
 - #69 `faa3da0` = `20bd36c` plus one evidence file (`docs/evidence/SEC-01-MAIN-MERGE/README.md`, +16, docs only). The `20bd36c` PASS applies; no code changed.
 - All other heads are unchanged since their last audit: 71 b1ab349, 73 ef8661c, 74 31a9478, 75 388b81c, 76 b313933, 77 2cc1147, 79 8dc3c45, 80 28b5ab6, 81 d2d0ba2, 82 e9633aa (waiting for the FG-195 head). main `cd03324`.
+
+## 2026-11-08 11:50 UTC: #82 `1622f62` WH-REV-01 Addendum A (FG-195, Р46, Р47; FG-197 blank reason from `e9633aa`): PASS
+
+Read:
+- **FG-195:** `_correction_after_reversal` runs in the write's transaction. On a line with reversed linked receipts, a change of allocation / qty / unit / price needs a reason (else 409 ALLOCATION_CORRECTION_REQUIRED) and writes an `invoice_versions` snapshot plus an AuditEvent.
+- **Р46:** a new action `warehouse.reverse_supplier_receipt[_to_project]` at the route and in the service, for Warehousekeeper / Accountant / Owner / Admin. Procurement can no longer reverse.
+- **Р47:** an `expected_credit_notes` row per reversed linked receipt (deterministic id, so a replay adds no second row). The invoice CAS respects the PAY-01 row lock (INVOICE_BUSY). Quick-pay and `allocate_payment` refuse more than the net payable with 409 INVOICE_AWAITS_CREDIT_NOTE. These are the only two paths that write `payment_allocations`.
+- FG-195's AuditEvent is written with `record_event(db, …)`. `_tenant()` wraps the same `db`, so this is equivalent under the current layout, and the A2C / A1 guards are 0.
+
+Probe whrev01, now R1–R9 (3 modes, real Mongo): **144 passed.**
+
+| Probe | Result |
+|---|---|
+| R6: blank reason | 422 |
+| R8 ×10: reversal of 4 (credit 48) ∥ quick-pay 120 | exactly one winner every time: reversal 409 INVOICE_BUSY + payment 201 (11/30), or reversal 201 + payment 409 INVOICE_AWAITS_CREDIT_NOTE (19/30); never both |
+| R9: reversal while the payment holds the row lock (deterministic) | 409 INVOICE_BUSY; payment ok; no ECN |
+| R1–R5, R7 | as before |
+
+Gates (rs3; after the second machine restart of the day):
+
+| Gate | Result |
+|---|---|
+| wh_rev_01 | 101 |
+| warehouse canonical | 44 files / 1121, 0 bad |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+The PM-01 delta (36 cells) is Р46: SiteManager → 403, Accountant → passes the route.
