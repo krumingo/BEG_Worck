@@ -195,6 +195,17 @@
 | FG-173 | high | main `2ec61f3` | клиентското одобрение по линк не е ApprovalReceipt (свободно име, без контакт, hash, AuditEvent) | SUSPECTED | open |
 | FG-174 | low | main `2ec61f3` | ролята на контрагента е едно поле, не множество | SUSPECTED | open |
 | FG-175 | low | main `2ec61f3` | IBAN-ът във фактурата е свободен текст; няма проверена собствена сметка | SUSPECTED | open |
+| FG-176 | high | main `2ec61f3` | handover сменя локацията и затваря custody на предаващия преди ACCEPTED | SUSPECTED | open |
+| FG-177 | high | main `2ec61f3` | `take` със `to_id` записва ACCEPTED custody на друг потребител; „вземи от него“ само със сканиране | SUSPECTED | open |
+| FG-178 | high | main `2ec61f3` | отказът няма причина/доказателство и оставя актива без отговорник | SUSPECTED | open |
+| FG-179 | medium | main `2ec61f3` | `drop` на обект прехвърля без приемане от отговорника на обекта | SUSPECTED | open |
+| FG-180 | high | main `2ec61f3` | ГОСТ получател без задължителни данни и DQ блок | SUSPECTED | open |
+| FG-181 | medium | main `2ec61f3` | изтекъл срок за приемане — само pull аларма след 24 ч, без напомняне/ескалация | SUSPECTED | open |
+| FG-182 | high | main `2ec61f3` | няма AuditEvent за нито един преход на актив; няма Idempotency-Key | SUSPECTED | open |
+| FG-183 | high | main `2ec61f3` | отписване/бракуване през PUT без Approval; `take` връща отписан актив в употреба | SUSPECTED | open |
+| FG-184 | medium | main `2ec61f3` | hard delete на актив с история (режим off) | SUSPECTED | open |
+| FG-185 | medium | main `2ec61f3` | AI оценка на цена става `purchase_price`; снимката е base64, не `file_id` | SUSPECTED | open |
+| FG-186 | low | main `2ec61f3` | връщане от ремонт/в склад без приемане; ремонт и движения без проверка на права | SUSPECTED | open |
 
 
 ---
@@ -1779,6 +1790,83 @@
 - **Код (main `2ec61f3`):** `projects.py:370-371` копира `invoice_details` IBAN; редактира се в UI (`ProjectInfoPanel.js:180`); собствена сметка във фактурите няма.
 - **Решение:** промяна в кода — сметка от VerifiedBankAccount (FG-165), иначе изпращането се блокира.
 
+## FG-176 — handover сменя локацията и затваря custody на предаващия преди ACCEPTED
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Двуфазно „Докато предаването е PENDING_ACCEPTANCE, държател и отговорник остава предаващият… Custody … се сменят само при ACCEPTED“.
+- **Код (main `2ec61f3`):** `routes/assets_units.py:272-275, 300-303` — `handover` веднага `location=employee/получател`, `status=in_use`; `assets_custody.py:84-91` затваря custody на предаващия (`_close_active` :47-51) и пише `given`, който се брои за активен (:33) → `/custody/unit/{id}` (:193-196) показва получателя преди приемане. Същото в `give_custody` (:108).
+- **Решение:** промяна в кода — handover/give пише само `PENDING_ACCEPTANCE`; unit/custody се сменят в `accept`, в транзакция, с AuditEvent.
+
+## FG-177 — `take` със `to_id` записва ACCEPTED custody на друг потребител; „вземи от него“ само със сканиране
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — CLAUDE.md §16 „не третирай … QR като автоматично приемане или прехвърляне на отговорност“; FLOW-011 „Какво НЕ трябва: отговорността да се смени без ACCEPTED — само със сканиране“; „Служител … приема лично“.
+- **Код (main `2ec61f3`):** `assets_units.py:270-271` `to_id = data.to_id or user["id"]`; `assets_custody.py:74-83` → `status: "accepted"` за `target`; право само `get_current_user` (`assets_units.py:256`). UI „Вземи от него“ (`frontend/.../ScanLandingPage.js:126-131`) прехвърля от текущия държател без негово предаване. `give_custody` към себе си — самоприемане (`assets_custody.py:112,115`).
+- **Решение:** промяна в кода — `take` само за текущия потребител; вземане от друг = искане → предаване → приемане. Крум да реши дали самоприемане от склад/свободен актив е допустимо (FLOW-012 §9).
+
+## FG-178 — отказът няма причина/доказателство и оставя актива без отговорник
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Двуфазно „Отказ или проблем … с причина и доказателство … отговорността остава при предаващия … Нищо не се прехвърля мълчаливо“.
+- **Код (main `2ec61f3`):** `assets_custody.py:143-158` записва само `declined`; custody на предаващия вече е затворен (FG-176); unit остава `employee`/отказалия, `in_use`.
+- **Решение:** промяна в кода — `rejection_reason`, `evidence_file_id`, статус „Проблем при приемане“, custody остава/възстановява се на предаващия, AuditEvent.
+
+## FG-179 — `drop` на обект прехвърля без приемане от отговорника на обекта
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Актив само на обект „Актив, оставен ‚на обекта‘ без потвърдил отговорник, не е прехвърлен“.
+- **Код (main `2ec61f3`):** `assets_units.py:276-279` — веднага `location=project`, `in_use`; custody не се сменя (`assets_custody.py:95`); свободен актив остава без пазител, само admin аларма `no_custodian` (:211-231).
+- **Решение:** промяна в кода — `drop` = предаване към обектовия отговорник (`PENDING_ACCEPTANCE`).
+
+## FG-180 — ГОСТ получател без задължителни данни и DQ блок
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §ГОСТ „задължително … име, телефон, фирма, … срок за връщане“; „при ГОСТ без телефон е блокиран/алармиран“.
+- **Код (main `2ec61f3`):** custody само към `users` (`assets_custody.py:105-107`), `handover` винаги `employee` (`assets_units.py:275`); ГОСТ само като QR entity с име (`assets_qr.py:78-81`) и intake `location_type="guest"` със свободен `location_name` (`assets_intake_pending.py:35,74-76,157-158`).
+- **Решение:** промяна в кода — ГОСТ получател със задължителни полета и DQ блок; Крум да реши одобрения начин на потвърждение от ГОСТ (подпис, SMS…).
+
+## FG-181 — изтекъл срок за приемане — само pull аларма след 24 ч, без напомняне/ескалация
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Двуфазно „Изтичане на срок … напомняне и ескалация (FLOW-026). За инструменти … срокът е незабавно“.
+- **Код (main `2ec61f3`):** `assets_custody.py:34, 199-208` — праг 24 ч, само GET за admin.
+- **Решение:** промяна в кода — Action Inbox/аларма при създаване на предаването, ескалация по FLOW-026.
+
+## FG-182 — няма AuditEvent за нито един преход на актив; няма Idempotency-Key
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Двуфазно „Всеки преход … е AuditEvent с предаващ, получател, актив, локации, състояние и доказателства“; CLAUDE.md §14.
+- **Код (main `2ec61f3`):** `assets_custody.py`, `assets_units.py` (create/PUT/move), `assets_repairs.py`, `assets_qr.py`, `assets_items.py`, `asset_item_types.py`, intake approve/reject (`assets_intake_pending.py:169-261`) — без AuditEvent; `asset_movements` (`assets_units.py:287-298`) без accept/decline, състояние, доказателства.
+- **Решение:** промяна в кода — canonical AuditEvent за всеки преход и промяна; Idempotency-Key на move/give/accept.
+
+## FG-183 — отписване/бракуване през PUT без Approval; `take` връща отписан актив в употреба
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Липсващ актив „Само Крум/Owner/упълномощен админ може да одобрява отписване, бракуване…“; тест „скъп актив не се отписва без изискуемото одобрение“.
+- **Код (main `2ec61f3`):** `assets_units.py:203-219` `PUT` задава `status=written_off` и произволни `location_*` само с `require_admin` — без Approval, причина, AuditEvent, движение; `move_unit` (:260-303) не проверява терминален статус.
+- **Решение:** промяна в кода — отделно действие за отписване с Approval, причина, AuditEvent; PUT без status/location; `move` блокиран за терминални статуси.
+
+## FG-184 — hard delete на актив с история (режим off)
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — „Какво НЕ трябва: тихо изтриване на история“; CLAUDE.md правило 9.
+- **Код (main `2ec61f3`):** `assets_units.py:222-234` — hard delete в off/shadow (по подразбиране off, `master_data/deps.py:69-70`), без проверка на `asset_movements`/`asset_custody`/`asset_repairs`.
+- **Решение:** промяна в кода — 409/архив при всяка история, независимо от режима.
+
+## FG-185 — AI оценка на цена става `purchase_price`; снимката е base64, не `file_id`
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — CLAUDE.md §10 „AI не измисля … цена“; правило 6 (File Registry).
+- **Код (main `2ec61f3`):** `assets_intake_pending.py:135,162` `estimated_price_eur` → `purchase_price`; `purchase_date` = днес (:136,160); снимка като data URI в `photo_url` (:138-141; виж FG-143).
+- **Решение:** промяна в кода — `estimated_price` с източник „AI“; `purchase_price` само от фактура/ръчно.
+
+## FG-186 — връщане от ремонт/в склад без приемане; ремонт и движения без проверка на права
+
+- **Тежест:** low. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-011, проход 19).
+- **Канон:** FLOW-011 — §Ремонти/§Двуфазно „Складовото и сервизното приемане следват същия принцип“.
+- **Код (main `2ec61f3`):** `assets_repairs.py:175-178` (`repair_return` → `available`), `assets_units.py:282-285` + `assets_custody.py:93-94` (`return` затваря custody); `repair/send`, `repair/return`, `move`, `give` — всеки логнат (`assets_repairs.py:94,138`; `assets_units.py:256`; `assets_custody.py:99`).
+- **Решение:** промяна в кода — приемане от склада/получателя, проверка на права (Permission Service).
+
 ## Дневник на проходите
 
 ### Проход 2 — 06.11.2026 18:50 UTC (периодичен)
@@ -2196,6 +2284,11 @@
 
 - Няма нови SHA (main, всички отворени PR и пакетите — както в проход 17). #55 още не е слят → чакащият повторен преглед на FLOW-009 остава.
 - **Бавен преглед FLOW-010 на main** (`COVERAGE.md`): контрагенти, контакти, IBAN, ApprovalReceipt, финансов профил. Нови **FG-165..FG-175** (SUSPECTED). Най-тежки: FG-165 (няма проверка на IBAN), FG-166 (дубли по ЕИК), FG-167 (hard delete на контрагент с история — проверено четене на `counterparties.py:265-278`), FG-173 (клиентско одобрение без ApprovalReceipt). Още на main: FG-1 (`labor_smr.py:32-33`), FG-30, FG-133/FG-141, FG-129/FG-138 (OFF-01 не е слят).
+
+### Проход 19 — 08.11.2026 04:50 UTC (периодичен)
+
+- Няма нови SHA. #55 още не е слят → повторният преглед на FLOW-009 чака.
+- **Бавен преглед FLOW-011 на main** (`COVERAGE.md`): инструменти/машини/QR/активи. Нови **FG-176..FG-186** (SUSPECTED). Най-тежки: FG-176 (handover сменя отговорността преди ACCEPTED), FG-177 (`take` със `to_id` = ACCEPTED custody на друг само със сканиране — против CLAUDE.md §16; проверено четене на `assets_units.py:270-275` и `assets_custody.py:74-91`), FG-178, FG-180, FG-182, FG-183. Р1..Р43 не съдържат решение за активи; няма отворен PR за FLOW-011.
 
 ## Бележки, които не са разминавания
 
