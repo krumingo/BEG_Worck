@@ -65,7 +65,6 @@
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | payment_allocations | find(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_invoice_versions | GET /finance/invoices/{invoice_id}/versions | invoice_versions | find(invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | find_one(direction, invoice_no, id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoice_versions | count(invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoice_versions | insert_one(id, invoice_id, version_no, snapshot, edited_by, edited_by_n) | TenantData org_id (session) | BARE@base | FIXED |
@@ -75,6 +74,7 @@
 | app/routes/finance.py:issue_invoice | POST /finance/invoices/{invoice_id}/issue | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:send_invoice | POST /finance/invoices/{invoice_id}/send | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:send_invoice | POST /finance/invoices/{invoice_id}/send | invoices | update_one(id, status) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:_supersede_cancellation | (helper) | invoices | update_one(id, cancellation_request.status) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_cancel_blockers | (helper) | payment_allocations | count(active_allocations({'invoice_id': inv['i) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_cancel_blockers | (helper) | credit_debit_notes | count(original_invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_set_cancelled | (helper) | invoices | update_one(id, status) | TenantData org_id (session) | new read | SAFE |
@@ -405,4 +405,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 390 accesses — FIXED 130, SAFE 260
+Totals: 390 accesses — FIXED 129, SAFE 261

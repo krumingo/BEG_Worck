@@ -1,24 +1,25 @@
-# INV-CN-01 gates (Addendum A + merge of main 8c52e92), 2026-11-08T13:33:21Z, branch claude/inv-cn-01-credit-notes
-# real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), from backend/ with PYTHONPATH=.
+# INV-CN-01 gates (Addenda A+B+C, INV84-01, main 8c52e92 merged), 2026-11-08T14:52:34Z, branch claude/inv-cn-01-credit-notes
+# real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 239 module(s) checked, 0 violation(s)
 ## A1 guard
 W0-03E-A1 tenant access guard: 482 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-90 passed, 1 warning in 59.38s
-## PAY-01 family + 5C-C26l invoice suites (real mongo + mongomock)
-630 passed, 299 skipped, 1 warning in 141.86s (0:02:21)
+111 passed, 1 warning in 76.55s (0:01:16)
+## PAY-01 family (real mongo + mongomock)
+630 passed, 1 warning in 149.94s (0:02:29)
 ## R0 (real mongo)
-814 passed, 10 warnings in 154.49s (0:02:34)
+814 passed, 10 warnings in 152.82s (0:02:32)
 ## W0 (real mongo)
-15 failed, 1177 passed, 10 warnings in 148.34s (0:02:28)
+15 failed, 1177 passed, 10 warnings in 139.94s (0:02:19)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 87.41s (0:01:27)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 83.72s (0:01:23)
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 190.29s (0:03:10)
+6 passed, 10 warnings in 197.20s (0:03:17)
 ## frontend yarn test
 Test Suites: 17 passed, 17 total
 Tests:       173 passed, 173 total
+## warehouse suite: see warehouse_suite.txt
