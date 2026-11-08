@@ -5689,3 +5689,22 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **Assessment:** correct and minimal.
 - **Pending:** the jest (24/221) / build / Playwright (35/35) re-run, after the Mongo queue.
 - **#86:** `dbb04ba` skipped in the queue (FG-279/280 coming).
+
+## 2026-11-08 21:19 UTC: #81 `72e7e87` (F-81-03 + merge `fdfad13` of main `3699c3b` + evidence): PASS, no blocking finding
+
+- **Merge checks:** see the 20:27 entry (only generated evidence differs from merge-tree; role-union 0; PM-01 48/48, 0 extra). Its own test changes add the request / fixtures for SEC-02 only (0 assertion lines changed). `72e7e87` adds evidence only.
+- **F-81-03:** a payment to a supplier is never project income.
+
+| Gate | Result |
+|---|---|
+| probe X5–X7 | 18 |
+| probe X1–X4 | 12 + X4 (the probe's known `request=None` limitation) |
+| probe X8 | 12 |
+| SEC-01 | 30 |
+| wh_fix_01 | 311 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
