@@ -258,6 +258,11 @@
    "finance.client_act_detail.read"
   ],
   [
+   "GET /api/client-acts/remaining/{project_id}",
+   "R20-1",
+   "finance.client_act_remaining.read"
+  ],
+  [
    "GET /api/execution-packages",
    "R20-1",
    "finance.execution_package.read"
@@ -880,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 303.2,
+ "seconds": 203.3,
  "rows": [
   {
    "mode": "off",
@@ -5543,6 +5548,198 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/execution-packages",
    "rule": "R20-1",
    "target": null,
@@ -15674,7 +15871,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -15696,7 +15894,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -15746,7 +15945,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -19808,7 +20008,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -19820,7 +20020,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -19856,7 +20056,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -29935,6 +30135,198 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/execution-packages",
    "rule": "R20-1",
    "target": null,
@@ -40066,7 +40458,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -40088,7 +40481,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -40138,7 +40532,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -44200,7 +44595,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -44212,7 +44607,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -44248,7 +44643,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -49665,6 +50060,66 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": []
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -57653,6 +58108,198 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/execution-packages",
    "rule": "R20-1",
    "target": null,
@@ -67784,7 +68431,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -67806,7 +68454,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -67856,7 +68505,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -71918,7 +72568,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -71930,7 +72580,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -71966,7 +72616,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -82045,6 +82695,198 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/execution-packages",
    "rule": "R20-1",
    "target": null,
@@ -92176,7 +93018,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -92198,7 +93041,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -92248,7 +93092,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -96310,7 +97155,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -96322,7 +97167,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -96358,7 +97203,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -101775,6 +102620,66 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": []
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -109773,6 +110678,198 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/execution-packages",
    "rule": "R20-1",
    "target": null,
@@ -119934,7 +121031,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -119956,7 +121054,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -120006,7 +121105,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -124166,7 +125266,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -124178,7 +125278,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -124218,7 +125318,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -134381,6 +135481,198 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/execution-packages",
    "rule": "R20-1",
    "target": null,
@@ -144542,7 +145834,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -144564,7 +145857,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -144614,7 +145908,8 @@
     "subtotal",
     "total",
     "unit_price",
-    "vat_amount"
+    "vat_amount",
+    "vat_percent"
    ],
    "leaks_7777": true
   },
@@ -148774,7 +150069,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -148786,7 +150081,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -148826,7 +150121,7 @@
    "probe": "POST /api/client-acts/from-offer/{offer_id}",
    "rule": "R20-2",
    "target": null,
-   "status": 422,
+   "status": 428,
    "written": [],
    "foreign_ids": false
   },
@@ -154317,6 +155612,66 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": []
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/client-acts/remaining/{project_id}",
+   "rule": "R20-1",
+   "target": "XA",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -157827,7 +159182,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -157836,13 +159191,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "scope_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -157858,7 +159213,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "f0fd32829a59df4cb6115a0bcc2a33248f30551d3ad46fc00fd60c87979d8cec"
+     "integrity_hash": "e3e648cf9b6022ddbb5c28ce5bbf0c1fba985b792e8207dd3286a2e6e2b3db1a"
     }
    ]
   },
@@ -157869,7 +159224,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -157878,7 +159233,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157903,7 +159258,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "c771d472dffc8290ffcda1e5ac38df4ae7bf8d0b6d95b022654d289bb3153ec7"
+     "integrity_hash": "7a3e5f9a1f936f180ac648b488915c48202fab7cc56bb18138f1ca5fd02f768b"
     }
    ]
   },
@@ -157914,7 +159269,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -157926,7 +159281,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -157935,7 +159290,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -157961,7 +159316,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "a744241d790a46ccc5fb164b2c2c2c4e0d30145ad61872dee337e846d866d51c"
+     "integrity_hash": "e66a0e596f23cf7ac60bd75e7723d02b86ca6202562958e6fea7c5e203bc031d"
     }
    ]
   },
@@ -157972,7 +159327,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -157984,7 +159339,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -157996,7 +159351,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -158005,13 +159360,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "scope_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -158029,7 +159384,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "2d7416e4a99a9e1b2fbc2d6464ea78eabf9d7e38c27e4682014bb553f7f18e11"
+     "integrity_hash": "1ac01f0d6f53b2382c9103df2e71ef7bbb82f2360a14f252ee16836d9756b1ad"
     }
    ]
   },
@@ -158040,7 +159395,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -158049,7 +159404,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -158075,7 +159430,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "f815a2c7ba8c9c10229b10c4df50d49dd28c29ca06b9510bd8f96f6888073531"
+     "integrity_hash": "22d47115b71c98cc1022e2139bdabc96a2fc0d67835207d329a9569f266c840a"
     }
    ]
   },
@@ -158086,7 +159441,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -158098,7 +159453,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -158107,7 +159462,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -158133,7 +159488,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "642d1a3bc84ec3db377dfaf5dd70480853117ea1f5ed32bda8ac3db29667bf99"
+     "integrity_hash": "ee86a25d4be446041a2d250a21f3f848edd833eea67cc38bdcbee5c496571b4b"
     }
    ]
   },
@@ -158144,7 +159499,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -158156,7 +159511,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -158168,7 +159523,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -158177,13 +159532,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "scope_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -158201,7 +159556,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "3f829c5f3ac32d8da4e257ad2b0b4513b731360ab5b36e3a672a26af6d2f73cd"
+     "integrity_hash": "32184c5eadfb13d6747e079546bfcbb435f616b01e319edc32e21a8b8c7acafe"
     }
    ]
   },
@@ -158212,7 +159567,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -158221,7 +159576,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -158247,7 +159602,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "1341ba3dab58dc3e392c03308c1785149bd0d511f3134712579d2b44555ddb60"
+     "integrity_hash": "a384ba0773dac2580e2793cd9582fe41a4c6699a2b6bdb974cf2f493ce22c1d4"
     }
    ]
   },
@@ -158258,7 +159613,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -158270,7 +159625,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -158279,7 +159634,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -158305,7 +159660,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "3ee7ad7d0f4e9698a859619f70317d4c51f9af6087988f417db1d06b9951cca4"
+     "integrity_hash": "aa9b9e61b0864e1de7ee7c5a20e22a5bd5f5a1f061e6a1ede76b161f710db3d2"
     }
    ]
   },
@@ -158316,7 +159671,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -158328,7 +159683,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "1bab30bd-b99b-44b8-bb3a-a2bf6840d2a5",
+   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
