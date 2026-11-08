@@ -169,21 +169,21 @@
 | FG-147 | medium | SUB-ADV-01 `c4de7c9` | аванс и приспадане пишат само legacy `log_audit`, без canonical AuditEvent | PROVEN | open |
 | FG-148 | low | SUB-ADV-01 `c4de7c9` | толерансът при актуване (0.01) може да вдигне актуваното над договора → последното плащане се отказва | SUSPECTED | open |
 | FG-149 | low | OFF-01 `acc472f` | отварянето на клиентския линк сменя `updated_at` → фалшиво 409 при нова версия | PROVEN | resolved (OFF-01 `653a1a5`, PROVEN: 87 passed на реален Mongo) |
-| FG-150 | high | main `2ec61f3` | изписването от склада е 0 в P&L, финансовия резултат и централните справки (четат `unit_cost`, а изписването пише `unit_price`) | SUSPECTED | partial (main `cd03324`: всички справки за разход през `canonical_material_cost.project_material_cost`, `max()` го няма — `project_pnl.py:79-82`; остава картата „Материали“ `projects.py:1403-1414` и агрегатът `:2129-2136`, които сумират `warehouse_transactions.total_ex_vat` → 0) |
+| FG-150 | high | main `2ec61f3` | изписването от склада е 0 в P&L, финансовия резултат и централните справки (четат `unit_cost`, а изписването пише `unit_price`) | SUSPECTED | resolved на #81 `5c0faa5` (още не е в main): картата „Материали“ и агрегатът през каноничния helper (`projects.py:1034-1046, 1417-1423, 2152-2161`) |
 | FG-151 | high | main `2ec61f3` | стойността на изписването идва от клиента; обектът не приема (`received_by` е текст) | SUSPECTED | resolved (main `cd03324`: legacy изписване 410; изходящ `unit_value` от клиента се отказва `service.py:1413-1417`; стойност от слоевете `:1087-1098`; приемане отделно — Rule B. Входящата цена → FG-191) |
 | FG-152 | high | main `2ec61f3` | `/warehouse-return` и `/project-consumption` без роля и AuditEvent; връщането отива в свободна наличност, без карантина и без стойност | SUSPECTED | resolved (main `cd03324`: `/warehouse-return` и `/project-consumption` 410 `procurement.py:566-601`; каноничното връщане отива в карантина `service.py:1460-1463, 1520-1523`, права по Р28, AuditEvent. Остатък: старите `type:return` редове не намаляват разхода отпреди cutover) |
 | FG-153 | high | main `2ec61f3` | втори складов регистър (`warehouse_batches`) до `warehouse_transactions`; `/warehouse/consume` изписва без обект и основание | SUSPECTED | partial — на изчакване по заявка на оркестратора; решението за регистъра отпада (main `cd03324`: `warehouse_batches` е проекция, legacy записите 410). Остава: четенията на `fifo_service.py:142-175` и `warehouse_batches.py:72-95` ползват старата схема (`remaining_qty`, `unit_cost`) срещу проекцията (`remaining_quantity`, `unit_value`, `projections.py:228-260`) → `/warehouse/value` показва само замразените стари партиди; старата наличност не е мигрирана (`warehouse_migration.py:87-102` → 405) |
-| FG-154 | high | main `2ec61f3` | P&L не чете `allocations[]` на фактурния ред (само старите `allocation_type`/`allocation_ref_id`), т.е. разделеният ред е 0 или 100% | SUSPECTED | partial (main `cd03324`: Път Б = `allocations[].qty × цена` в `canonical_material_cost.py:281-298, 375-400` за P&L и всички справки през helper-а; остава `dashboard.py:686-707` — целият `$total` на фактурата към всяко разпределение) |
-| FG-155 | medium | main `2ec61f3` | остатъкът от фактурния ред може да остане неразпределен; разпределение „склад“ не създава наличност | SUSPECTED | open (main `cd03324`: `invoice_lines.py:182-185` `require_full_allocation` пак False; чака решение на Крум) |
+| FG-154 | high | main `2ec61f3` | P&L не чете `allocations[]` на фактурния ред (само старите `allocation_type`/`allocation_ref_id`), т.е. разделеният ред е 0 или 100% | SUSPECTED | partial (#81 `5c0faa5`: разделяне по ред `dashboard.py:766-789`; header fallback `:791-803` → FG-199) |
+| FG-155 | medium | main `2ec61f3` | остатъкът от фактурния ред може да остане неразпределен; разпределение „склад“ не създава наличност | SUSPECTED | partial (#81 `5c0faa5`: състояние от `allocations[]` `invoice_allocation.py:63-95`, „фактури за разпределяне“ + DQ + аларма; не покрива header-only (FG-199) и вградени редове (FG-200); „склад“ не създава наличност) |
 | FG-156 | medium | main `2ec61f3` | директна доставка влиза в склад `main`; приемането по фактура не е атомарно и е без Idempotency-Key | SUSPECTED | resolved (main `cd03324`: post-to-warehouse 410; директна доставка само към обекта на реда `service.py:1783-1815`; заключване в транзакция `:1029-1036`; задължителен `idempotency_key` `warehouse_canonical.py:76`) |
-| FG-157 | medium | main `2ec61f3` | фактура на доставчик се редактира след приемане в склада, без корекционно движение | SUSPECTED | partial (main `cd03324`: каноничните `invoice_lines` се заключват след свързано движение `invoice_lines.py:58-66`; остава `PUT /supplier-invoices` `procurement.py:396-433` — сменя `lines/total/status/project_id`, без AuditEvent) |
+| FG-157 | medium | main `2ec61f3` | фактура на доставчик се редактира след приемане в склада, без корекционно движение | SUSPECTED | partial (#81 `5c0faa5`: редакция след преглед → 409 + AuditEvent в транзакция; няма корекционен endpoint — дълг README #4) |
 | FG-158 | medium | main `2ec61f3` | отрицателни количества и надпревара при изписване/FIFO консумация → отрицателна наличност | SUSPECTED | resolved (main `cd03324`: qty > 0 `envelope.py:354-355`; FIFO и наличност в транзакция `service.py:820-860`, `NegativeStockError`; legacy пътищата 410) |
-| FG-159 | medium | main `2ec61f3` | брак/фира не е складово движение: без стойност, без намаляване на наличността | SUSPECTED | partial (main `cd03324`: каноничен `write_off` със стойност и отделен ред „фира“ в P&L `project_pnl.py:91-94`; остава жив `POST /projects/{id}/material-waste` `routes/material_waste.py:57-80` — без стойност, движение, роля и AuditEvent; ползва го `MaterialWastePanel.js:63`) |
+| FG-159 | medium | main `2ec61f3` | брак/фира не е складово движение: без стойност, без намаляване на наличността | SUSPECTED | resolved на #81 `5c0faa5` (още не е в main): фирата е канонично отписване през единствения писател (`routes/material_waste.py:63-104`), Р27, Idempotency-Key, AuditEvent |
 | FG-160 | medium | main `2ec61f3` | `create-sub-project` пренаписва `project_id` на историческите движения и плащания, без Approval | SUSPECTED | open, по-тежко (main `cd03324`: `projects.py:1565-1585` пренаписва и каноничните редове → FG-193) |
-| FG-161 | medium | main `2ec61f3` | складовите стойности се виждат от всички роли (Р20/Р34/Р35) | SUSPECTED | partial (main `cd03324`: каноничните GET маскират по Р20/Р34/Р35; остават `GET /warehouse-transactions` `procurement.py:462-474` (вкл. канонични `unit_value`/`layer_allocations`), `/warehouse-stock` `:519-526`, `/inventory/dashboard` `:741-848`, `warehouse_batches.py:72-125, 179-192`) |
+| FG-161 | medium | main `2ec61f3` | складовите стойности се виждат от всички роли (Р20/Р34/Р35) | SUSPECTED | resolved на #81 `5c0faa5` (още не е в main): маскиране в batches/stock/value/transactions |
 | FG-162 | medium | main `2ec61f3` | материалът е свободен текст (`material_name|unit`), не Master артикул; заявката става `fulfilled` без сравнение на количества | SUSPECTED | partial (main `cd03324`: `fulfilled` без сравнение изчезна; каноничната команда изисква `item_id`; заявките още са свободен текст `procurement.py:120-170`, без изпълнение по ред; Master проверката е изключена → FG-192) |
-| FG-163 | low | main `2ec61f3` | склад с наличност се деактивира или сменя типа си без проверка и без одит | SUSPECTED | partial (main `cd03324`: `DELETE /warehouses` 409 при наличност/висящо движение `warehouses.py:262-336`; `PUT` `:233-259` още сменя `type`/`project_id` и `active:false` — заобикаля проверката) |
-| FG-164 | medium | main `2ec61f3` | липсват движения склад→склад, обект→обект, „в път“, връщане към доставчик, ревизия; наличност само за склад `main` | SUSPECTED | partial (main `cd03324`: каноничният речник покрива всички движения `actions.py:13-45`, локации `envelope.py:33-43`; остават `/warehouse-stock` и `/inventory/dashboard` само за склад `main` по стария регистър `procurement.py:482-516`; ревизия без Approval = FG-22) |
+| FG-163 | low | main `2ec61f3` | склад с наличност се деактивира или сменя типа си без проверка и без одит | SUSPECTED | partial (#81 `5c0faa5`: общ 409 guard с DELETE; без AuditEvent и без транзакция около check-then-write `warehouses.py:267`) |
+| FG-164 | medium | main `2ec61f3` | липсват движения склад→склад, обект→обект, „в път“, връщане към доставчик, ревизия; наличност само за склад `main` | SUSPECTED | resolved (показване) на #81 `5c0faa5`; legacy + канонично заедно след миграция (README #7) |
 | FG-165 | high | main `2ec61f3` | няма регистър на проверени IBAN-и; плащане към нов/различен IBAN не се блокира | SUSPECTED | open |
 | FG-166 | high | main `2ec61f3` | дублирани контрагенти по ЕИК и по роля в 5 регистъра | SUSPECTED | open |
 | FG-167 | high | main `2ec61f3` | hard delete на контрагент с история (проверката гледа само `invoices`) | SUSPECTED | open |
@@ -209,15 +209,20 @@
 | FG-187 | medium | main `2ec61f3` | заявка за материал се отменя/„изпълнява“/пренаписва през общ PUT без роля, причина и одит | SUSPECTED | open |
 | FG-188 | low | main `2ec61f3` | мобилният API дава на шофьора модул „Доставки“ без бекенд; моделът на снимката е URL, не `file_id` | SUSPECTED | open |
 | FG-189 | low | main `2ec61f3` | транспортът в анализа на СМР е мълчалив фиксиран процент (10%) върху материала | SUSPECTED | open |
-| FG-190 | medium | main `cd03324` | справките за количества (покритие, фира/„overuse“, статистика) не четат каноничния регистър | SUSPECTED | open |
-| FG-191 | medium | main `cd03324` | стойността при приемане от доставчик идва от клиента, без сверка с фактурния ред | SUSPECTED | open |
-| FG-192 | high | main `cd03324` | проверката срещу Master артикул в каноничния склад е изключена по подразбиране | SUSPECTED | open |
-| FG-193 | high | main `cd03324` | `create-sub-project` пренаписва `project_id` на каноничните append-only складови редове извън единствения писател | SUSPECTED | open |
+| FG-190 | medium | main `cd03324` | справките за количества (покритие, фира/„overuse“, статистика) не четат каноничния регистър | SUSPECTED | resolved на #81 `5c0faa5` с уговорка → FG-202 (свързване по име) |
+| FG-191 | medium | main `cd03324` | стойността при приемане от доставчик идва от клиента, без сверка с фактурния ред | SUSPECTED | partial (#81 `5c0faa5`: свързано получаване → цената от реда, различна → 422 `service.py:1879-1909`; без ред — цена от клиента с DQ; виж FG-198) |
+| FG-192 | high | main `cd03324` | проверката срещу Master артикул в каноничния склад е изключена по подразбиране | SUSPECTED | resolved на #81 `5c0faa5` (още не е в main): `STRICT_MASTER_IDENTITY_DEFAULT=True`, без env флаг (`service.py:653, 684-685`); route подава strict (`warehouse_canonical.py:132`) |
+| FG-193 | high | main `cd03324` | `create-sub-project` пренаписва `project_id` на каноничните append-only складови редове извън единствения писател | SUSPECTED | resolved на #81 `5c0faa5` с уговорка → FG-203 (`projects.py:1584-1590` изключва `warehouse_transactions`; скенерът хваща `coll.update_many`) |
 | FG-194 | medium | WH-REV-01 `ed8f9e7` | сторното на получаване дава на склададжията право да връща към доставчик (каталогът му го отказва); Accountant не може да сторнира | PROVEN | open |
 | FG-195 | medium | WH-REV-01 `ed8f9e7` | сторно + allocate тихо преразпределя ред от вече платена фактура (FG-83 отново достъпно) | PROVEN | open |
 | FG-196 | low | WH-REV-01 `ed8f9e7` | сторното не създава очакване за кредитно известие — по Р44 фактурата остава платима в пълен размер | SUSPECTED | open |
 | FG-197 | low | WH-REV-01 `ed8f9e7` | основание от един интервал минава при сторно | SUSPECTED | open |
 | FG-198 | medium | пакет WH-FIX-01 (`2a52fc4`) | т.3 (FG-191) изисква финансова роля за цена на несвързано получаване — против Р32 (склададжията въвежда единична цена при приемане) | SUSPECTED | open |
+| FG-199 | **blocker** | #81 `5c0faa5`/`dae15da` | header-only разпределена фактура от доставчик се брои в обекта, маха се от „фактури за разпределяне“ и се плаща — против Р45/Р44 | PROVEN | open |
+| FG-200 | high | #81 `5c0faa5`/`dae15da` | фактури от доставчик, създадени от основния UI, пазят редовете вградени → броят се за разпределени и се плащат (Р44 се заобикаля) | PROVEN | open |
+| FG-201 | medium | #81 `5c0faa5`/`dae15da` | DQ задачата и ескалацията към Собственика по Р44 се обновяват само при четене на списъка; GET пише без AuditEvent | SUSPECTED | open |
+| FG-202 | low | #81 `5c0faa5`/`dae15da` | каноничните количества се свързват с планираните/заявените материали по име, не по `item_id` | SUSPECTED | open |
+| FG-203 | low | #81 `5c0faa5`/`dae15da` | статичният скенер за писатели по каноничния регистър не хваща alias на атрибут и `getattr` | PROVEN | open |
 
 
 ---
@@ -1940,6 +1945,7 @@
 - **Тежест:** medium. **Статус:** open. **PROVEN (проба `probes_whrev/test_probe_whrev.py`)** (проход 21).
 - **Канон:** FLOW-006 „Корекции“: „След плащане няма тихо редактиране … кредитно / дебитно известие“.
 - **Код (WH-REV-01 `ed8f9e7`):** `routes/invoice_lines.py:628-679` `allocate` не проверява статуса на фактурата; сторното също не го проверява. Проба на FLOW GUARD (реален Mongo, 3 режима): Paid фактура → сторно 201 → allocate P→Q 200, разходът минава от P към Q без версия и без canonical AuditEvent.
+- **Допълнение (#81):** и на `5c0faa5` след плащане `/invoice-lines/{id}/allocate` може да намали разпределението без проверка за платена фактура (SUSPECTED).
 - **Решение:** промяна в кода — поправката на FG-83 (версия на разпределението с причина и AuditEvent при статус ≠ Draft) преди merge на WH-REV-01, или сторно на ред от не-Draft фактура → DQ задача.
 
 ## FG-196 — сторното не създава очакване за кредитно известие — по Р44 фактурата остава платима в пълен размер
@@ -1962,6 +1968,41 @@
 - **Канон:** Р32 (уточнява Р20 за склада).
 - **Код (пакет WH-FIX-01 (`2a52fc4`)):** Пакет `docs/architecture/tasks/WH-FIX-01_POST_55_RESIDUE.md` т.3: „без ред — финансова роля + причина … по Р20“.
 - **Решение:** Крум да реши: при несвързано получаване склададжията пише цена по Р32 с DQ задача вместо 403, или Р32 се стеснява.
+
+## FG-199 — header-only разпределена фактура от доставчик се брои в обекта, маха се от „фактури за разпределяне“ и се плаща — против Р45/Р44
+
+- **Тежест:** **blocker**. **Статус:** open. **PROVEN (проба `fg21probe/test_fg21_probe.py`, реален Mongo + mongomock)** (проход 21).
+- **Канон:** Р45 (1) „…системата го **записва изрично на всеки ред** с AuditEvent … Флаг само в заглавието не е достатъчен.“; (2) „процент на ниво фактура не е окончателно разпределение“; (4) „Справките **не** показват временно разделение по процент; неразпределената фактура е само в „фактури за разпределяне“ …“; FLOW-008 L142 „неразпределена фактура да влиза в P&L на обекта;“; FLOW-043 D-04.
+- **Код (#81 `5c0faa5`/`dae15da`):** `services/invoice_allocation.py:102-107, 126-128` (`ensure_payable` пропуска header-only: „unchanged until the FLOW Guard rules (debt)“), `:219-228` (брои се за разпределена); `routes/dashboard.py:791-803` (един проект в заглавието → целият `total`; суми в заглавието → разделяне). Проба на реален Mongo: заглавие с един проект, ред без разпределение → finance-by-project 1200, P&L на обекта 0, не е в „за разпределяне“, DQ 0, плащане 201; заглавие 700/500 → разделяне, 201; заглавие с проект + ред 100% към склад → 1200 на обекта (двойна класификация). Тестът `test_wh_fix_01_a3_r44_allocation.py:176-187` твърди точно това поведение.
+- **Решение:** промяна в кода — премахни header fallback за `Received` фактури: header-only = висяща в „фактури за разпределяне“, плащане 409, докато дестинацията не е записана на всеки ред с AuditEvent (Р45 (1)); процентът само като помощ за точна сума на ред (Р45 (2)); миграция по Р45 (3) като отделна задача; заглавие/`project_id` само за издадени (приходни) фактури.
+
+## FG-200 — фактури от доставчик, създадени от основния UI, пазят редовете вградени → броят се за разпределени и се плащат (Р44 се заобикаля)
+
+- **Тежест:** high. **Статус:** open. **PROVEN (проба P1, реален Mongo на `5c0faa5`; mongomock на `f674eed`)** (проход 21).
+- **Канон:** Р44; FLOW-020 L200 „фактурен ред без дестинация да стане окончателен;“; FLOW-009 L84.
+- **Код (#81 `5c0faa5`/`dae15da`):** `InvoiceEditorPage.js:306` → `POST /finance/invoices` пази редовете в `invoice.lines` (`routes/finance.py:874-899`), `project_id` на реда се губи, документи в `invoice_lines` не се създават; `invoice_allocation_state` чете само `invoice_lines` (`services/invoice_allocation.py:83`) → ALLOCATED. Проба: quick-pay 1200 → 201, не е в „за разпределяне“, не е в никоя справка по обект.
+- **Решение:** промяна в кода — вградени редове без разпределение = висяща фактура (или задължителни `invoice_lines` за `Received`); Крум да реши, защото блокира всички UI фактури от доставчик, докато редовете не се пренесат.
+
+## FG-201 — DQ задачата и ескалацията към Собственика по Р44 се обновяват само при четене на списъка; GET пише без AuditEvent
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (проход 21).
+- **Канон:** Р44 „…в срок 3 дни (DQ задача + аларма); след срока — ескалация към Собственика.“; FLOW-026 (аларми със срок); CLAUDE.md §14.
+- **Код (#81 `5c0faa5`/`dae15da`):** `services/invoice_allocation.py:151-204` — DQ/аларма се пресмятат при GET `invoices-to-allocate`; няма scheduler → без отваряне няма ескалация; GET-ът пише без AuditEvent. Признато като дълг в PR.
+- **Решение:** промяна в кода — scheduler job или проверка на срока в alarm feed-а; записите от DQ с AuditEvent.
+
+## FG-202 — каноничните количества се свързват с планираните/заявените материали по име, не по `item_id`
+
+- **Тежест:** low. **Статус:** open. **SUSPECTED** (проход 21).
+- **Канон:** FLOW-009 „Един материал има Master артикул по FLOW-032“.
+- **Код (#81 `5c0faa5`/`dae15da`):** `services/canonical_material_cost.py` `canonical_trail_by_name`; `routes/materials_baseline.py:222-227` — при различно свободно име каноничните количества не се показват.
+- **Решение:** промяна в кода — свързване по `item_id`.
+
+## FG-203 — статичният скенер за писатели по каноничния регистър не хваща alias на атрибут и `getattr`
+
+- **Тежест:** low. **Статус:** open. **PROVEN (директно извикване)** (проход 21).
+- **Канон:** FLOW-009 „Всяко движение е отделен неизтриваем запис“ (един писател).
+- **Код (#81 `5c0faa5`/`dae15da`):** `services/warehouse_movements/legacy_inventory.py:122-181` — `wt = tenant.warehouse_transactions; wt.update_many(...)` и `getattr(tenant, …)` не се хващат (директно извикване на `_indirect_canonical_writes` → []).
+- **Решение:** промяна в кода — разшири `_HANDLE_ASSIGN_RE` за `= <x>.warehouse_transactions` и `getattr(…)`.
 
 ## Дневник на проходите
 
@@ -2400,6 +2441,30 @@
   - **partial:** FG-150, FG-153 (на изчакване), FG-154, FG-157, FG-159, FG-161, FG-162, FG-163, FG-164;
   - **open:** FG-155 (решение на Крум), FG-160 (по-тежко).
 - Нови от самия merge (SUSPECTED): **FG-190**, **FG-191**, **FG-192** (high — Master проверката е изключена по подразбиране; проверено, че `WAREHOUSE_STRICT_MASTER_IDENTITY` не се задава никъде в репото), **FG-193** (high — `create-sub-project` пренаписва каноничните редове; проверено четене на `projects.py:1566-1583` и `legacy_inventory.py:115-119`).
+
+### Проход 21 — 08.11.2026 08:50 UTC (периодичен)
+
+Нови SHA:
+- #69 `b2b3ae0` (суми в цели центове);
+- OFF-01 #79 `8dc3c45` (F-79-01);
+- LAB-01 `ef8661c` (merge на main `2ec61f3`);
+- LAB-02 `388b81c` (F-75-01);
+- пакети `2a52fc4` (Р44, WH-FIX-01, WH-REV-01), после `27b497d` (Р45);
+- нови клонове: WH-FIX-01 #81 `f674eed` → `5c0faa5` → `dae15da` и WH-REV-01 `ed8f9e7`.
+
+Проверки (MongoDB 7 replica set; контейнерът падна два пъти по време на прохода):
+- **#69, OFF-01, LAB-01, LAB-02:** прегледан е диффът. Нищо не противоречи на канона (Р43, Р41, FLOW-019/028). Тестовете на OFF-01 и LAB-02 не са пуснати, защото Mongo падна.
+- **WH-REV-01 `ed8f9e7`:** 83 passed (тестове на PR) и 48 passed (проби: паралелни сторна, сторно || allocate, платена фактура). Ядрото отговаря на канона: append-only, без hard delete, 409 при изписана партида, Idempotency-Key, AuditEvent в транзакция, плащанията не се пипат. Нови: **FG-194** (PROVEN), **FG-195** (PROVEN), **FG-196**, **FG-197**. Approval за сторно липсва — разширение на FG-22 (W0-07).
+- **Пакети:** **FG-198** — WH-FIX-01 т.3 срещу Р32.
+- **WH-FIX-01 #81 `5c0faa5`:** 100 passed (тестове на PR). Пробата FLOW GUARD мина 10/10 и показа FG-199/FG-200. Пълният складов suite не завърши заради Mongo: до ~35% е зелен; `test_warehouse_canonical_c13_mongo.py` дава 4 failed и на main `cd03324`, т.е. не е регресия на #81.
+  - resolved на #81 (още не е в main): FG-150, FG-159, FG-161, FG-164, FG-192; с уговорка FG-190 (→ FG-202) и FG-193 (→ FG-203);
+  - partial: FG-154, FG-155, FG-157, FG-163, FG-191.
+  - **Нови:**
+    - **FG-199 blocker:** header fallback, против Р45, PROVEN; още е на `dae15da`;
+    - **FG-200 high:** вградени редове от UI заобикалят Р44, PROVEN;
+    - **FG-201**, **FG-202**, **FG-203**.
+- **Оракул:** Q001 → Р44 (точки 2, 4, 9). Q002 е затворен с Р45.
+- Бавен преглед: FLOW-015 се отлага за следващия проход (проходът беше зает с #81 и WH-REV-01).
 
 ## Бележки, които не са разминавания
 

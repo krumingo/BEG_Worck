@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **20b** — 08.11.2026 07:20 UTC (повторен FLOW-009 след merge на #55).
+Последен проход: **21** — 08.11.2026 08:50 UTC (периодичен).
 
 ## Последно проверен SHA по клон
 
@@ -11,17 +11,19 @@
 | #56 `claude/auth-owner-recovery-forgot-password-sfv359` | `3234446` | 9 | слят в main (`0f870c3`); auth: FLOW-002/040, Р6, Р19 (D-16) |
 | #67 `claude/st-02-staging-stack` | `675faba` | 4 | слят в main (`35ae10b`) |
 | #68 `claude/pm-01-permission-matrix` | `4e20084` | 3 | слят в main (`8e3b190`) |
-| #69 `claude/sec-01-money-write-permissions` | `25ffd9b` | 17 | SEC-01 + C01 + C02 + SEC-R1 + C03 (+G) |
+| #69 `claude/sec-01-money-write-permissions` | `b2b3ae0` | 21 | SEC-01 + C01 + C02 + SEC-R1 + C03 (+G) |
 | #70 `claude/pay-01-payment-reversal` | `16a886f` | 13 | слят в main (`d226c49`) |
 | #71 `claude/sec-02-finance-read` | `b1ab349` | 16 | SEC-02, Р20/Р31 |
 | #72 `claude/w0-04-c01-audit-indexes` | `04e0a1b` | 13 | слят в main (`7b6da64`) |
-| #73 `claude/lab-01-labor-cost` | `0c0f5f8` | 13 | LAB-01, FLOW-019/028 |
+| #73 `claude/lab-01-labor-cost` | `ef8661c` | 21 | LAB-01, FLOW-019/028 |
 | `claude/oh-01-overhead` (OH-01) | `31a9478` | 13 | FLOW-024 |
-| `claude/lab-02-quantity-approval` (LAB-02) | `c68c942` | 13 | FLOW-028, Р33 |
+| `claude/lab-02-quantity-approval` (LAB-02) | `388b81c` | 21 | FLOW-028, Р33 |
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `b313933` | 17 | FLOW-021, Р39/Р40 |
 | `claude/act-01-client-act-from-offer` (ACT-01) | `2cc1147` | 15 | FLOW-004 |
-| `claude/off-01-offer-version-accept` (OFF-01) | `653a1a5` | 17 | FLOW-003, FLOW-002 magic link |
-| пакети (`claude/happy-meitner-bmcnel`) | `d420096` | 15 | Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
+| `claude/off-01-offer-version-accept` (OFF-01) | `8dc3c45` | 21 | FLOW-003, FLOW-002 magic link |
+| #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `dae15da` | 21 | FLOW-009/020/008, Р44, Р45; FG-199 blocker |
+| `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `ed8f9e7` | 21 | FLOW-009/006 |
+| пакети (`claude/happy-meitner-bmcnel`) | `27b497d` | 21 | Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
 ## Отворени PR, непрегледани в този проход
 
@@ -32,7 +34,8 @@
 ## Чакащо действие
 
 - Повторният преглед на FLOW-009 след merge на #55 е направен в проход 20b.
-- Пакетите са на `2a52fc4` (Р44, WH-FIX-01 с добавки A/A2/A3) — да се проверят срещу канона в следващия проход.
+- Пълният складов suite на #81 да се пусне отново при стабилен Mongo.
+- Бавен преглед FLOW-015 (отложен от проход 21).
 
 ## Бавен преглед на main
 
