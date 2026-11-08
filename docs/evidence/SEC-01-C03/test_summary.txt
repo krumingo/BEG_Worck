@@ -47,3 +47,10 @@ Crash right after the audit row + 2 same-key retries, 3 modes: payment 201/201 a
 Real Mongo: C03 6 / SEC-01 8 / C01 7 / C02 9 / PM-01 6 = 36 passed (PM-01 reproduced cell for cell); R0 814 passed
 W0: 1094 passed / 15 failed / 79 skipped after regenerating W0-03E-A2B inventory §1 (audit.py writer lines)
 Guards A1 436 / 0, A2C 216 / 0
+## Addendum H (Codex F-69-04: money in whole cents; UTC date fixture) — head ecd42d3
+C03 harness, 3 modes: 0.004 / 10.125 / 0.001 on every money route -> 422, 0 writes; cap 0.01: 6 sequential and 6 concurrent 0.004 -> all 422, nothing committed; 6 concurrent 0.01 -> one 201, committed = paid = 0.01; sum(completed) <= certified
+Counter-check on 25ffd9b (f69_04_counter_check_25ffd9b.json): 6 x 0.004 -> 6 x 201, committed 0.00, paid 0.02, sum 0.024
+Real Mongo (-rs): C03 6 / SEC-01 8 / C01 7 / C02 9 (UTC fixture) / PM-01 6 = 36 passed, 0 skipped; PM-01 reproduced cell for cell
+R0 + PAY-01 + W0-04-C01 + AUTH + ST-02: 1766 passed
+W0: 1094 passed / 15 failed / 79 skipped (same 15 test_w0_03e_legacy_routes); A1 436 / 0, A2C 216 / 0
+Frontend: yarn test 116 passed (unchanged in H)
