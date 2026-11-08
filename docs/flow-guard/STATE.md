@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **23** — 08.11.2026 12:50 UTC (периодичен).
+Последен проход: **24** — 08.11.2026 14:50 UTC (периодичен).
 
 ## Последно проверен SHA по клон
 
@@ -23,7 +23,7 @@
 | `claude/off-01-offer-version-accept` (OFF-01) | `8dc3c45` | 21 | FLOW-003, FLOW-002 magic link |
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `ac66058` | 24 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
-| #83 `claude/cp-01-counterparty-iban` (CP-01) | `ea51030` | 23 | FLOW-010, Р48 |
+| #83 `claude/cp-01-counterparty-iban` (CP-01) | `7e0b914` | 24 | FLOW-010, Р48 |
 | #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `5cce932` | 24 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
 | пакети (`claude/happy-meitner-bmcnel`) | `d4946bb` | 23c | Р53, Р52; Р50, Р51; Р48, Р49, CP-01, INV-CN-01; Р46, Р47; Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 

@@ -184,17 +184,17 @@
 | FG-162 | medium | main `2ec61f3` | материалът е свободен текст (`material_name|unit`), не Master артикул; заявката става `fulfilled` без сравнение на количества | SUSPECTED | partial (main `cd03324`: `fulfilled` без сравнение изчезна; каноничната команда изисква `item_id`; заявките още са свободен текст `procurement.py:120-170`, без изпълнение по ред; Master проверката е изключена → FG-192) |
 | FG-163 | low | main `2ec61f3` | склад с наличност се деактивира или сменя типа си без проверка и без одит | SUSPECTED | partial (#81 `5c0faa5`: общ 409 guard с DELETE; без AuditEvent и без транзакция около check-then-write `warehouses.py:267`) |
 | FG-164 | medium | main `2ec61f3` | липсват движения склад→склад, обект→обект, „в път“, връщане към доставчик, ревизия; наличност само за склад `main` | SUSPECTED | resolved (показване) на #81 `5c0faa5`; legacy + канонично заедно след миграция (README #7) |
-| FG-165 | high | main `2ec61f3` | няма регистър на проверени IBAN-и; плащане към нов/различен IBAN не се блокира | SUSPECTED | partial (#83 CP-01 `ea51030`: регистър VerifiedBankAccount + guard в quick-pay, `POST /finance/payments` (само с `counterparty_id`), `/subcontractor-payments`; отворени пътища → FG-225; guard по подразбиране shadow — Q005 D1) |
+| FG-165 | high | main `2ec61f3` | няма регистър на проверени IBAN-и; плащане към нов/различен IBAN не се блокира | SUSPECTED | resolved (#83 CP-01 `7e0b914`, PROVEN), без FG-242 и FG-243 |
 | FG-166 | high | main `2ec61f3` | дублирани контрагенти по ЕИК и по роля в 5 регистъра | SUSPECTED | open |
 | FG-167 | high | main `2ec61f3` | hard delete на контрагент с история (проверката гледа само `invoices`) | SUSPECTED | resolved (#83 `ea51030`, PROVEN: DELETE на петте регистъра → 409 `COUNTERPARTY_NO_DELETE`; lifecycle неактивен/архивиран с причина и AuditEvent) |
 | FG-168 | medium | main `2ec61f3` | финансовите суми по клиент/контрагент се виждат от всяка роля с модул M5 (#71 не ги покрива) | SUSPECTED | open |
 | FG-169 | medium | main `2ec61f3` | профилът смесва приходи и разходи (без `direction`) и брои само 20 фактури | SUSPECTED | open |
 | FG-170 | medium | main `2ec61f3` | клиентската карта връща 404 за клиенти фирми/лица на обекта | SUSPECTED | open |
-| FG-171 | medium | main `2ec61f3` | create/update на контрагенти, клиенти, фирми, лица без право и/или без AuditEvent | SUSPECTED | partial (#83 `ea51030`: create/update само Owner/Admin/Accountant с ключ, транзакция и canonical AuditEvent; остава смяната на собственик в `PUT /projects` без ключ/AuditEvent; няма път за чернова — Q005 D2) |
-| FG-172 | medium | main `2ec61f3` | ЕГН се връща в явен вид на всеки логнат | SUSPECTED | partial (#83 `ea51030`: `/persons*`, find-by-phone, AuditEvent маскирани; изтичания → FG-226, оракул → FG-227) |
+| FG-171 | medium | main `2ec61f3` | create/update на контрагенти, клиенти, фирми, лица без право и/или без AuditEvent | SUSPECTED | resolved (#83 CP-01 `7e0b914`, PROVEN); дълг D13 (PUT на проект без ключ/AuditEvent), D14 (без legacy `audit_logs`) |
+| FG-172 | medium | main `2ec61f3` | ЕГН се връща в явен вид на всеки логнат | SUSPECTED | resolved (#83 CP-01 `7e0b914`, PROVEN); дълг D19: `invoices.counterparty_eik` на физическо лице е пълно ЕГН, видимо за Admin |
 | FG-173 | high | main `2ec61f3` | клиентското одобрение по линк не е ApprovalReceipt (свободно име, без контакт, hash, AuditEvent) | SUSPECTED | open |
 | FG-174 | low | main `2ec61f3` | ролята на контрагента е едно поле, не множество | SUSPECTED | open |
-| FG-175 | low | main `2ec61f3` | IBAN-ът във фактурата е свободен текст; няма проверена собствена сметка | SUSPECTED | partial (#83 `ea51030`: IBAN на получена фактура се сверява с проверената сметка, иначе 409 + DQ; изходящата фактура (FLOW-010 §8.4, собствена проверена сметка) не е направена — `projects.py:405` свободен текст) |
+| FG-175 | low | main `2ec61f3` | IBAN-ът във фактурата е свободен текст; няма проверена собствена сметка | SUSPECTED | partial (#83 CP-01 `7e0b914`: IBAN на входяща фактура се сверява при плащане; собствената ни сметка в изходящите — дълг D20) |
 | FG-176 | high | main `2ec61f3` | handover сменя локацията и затваря custody на предаващия преди ACCEPTED | SUSPECTED | open |
 | FG-177 | high | main `2ec61f3` | `take` със `to_id` записва ACCEPTED custody на друг потребител; „вземи от него“ само със сканиране | SUSPECTED | open |
 | FG-178 | high | main `2ec61f3` | отказът няма причина/доказателство и оставя актива без отговорник | SUSPECTED | open |
@@ -244,12 +244,12 @@
 | FG-222 | low | #84 `7446d85` | прихващането пази само свободен текст, без правно основание и документ | SUSPECTED | resolved (#84 `71957db`, PROVEN: `legal_basis`, `file_id`, `source_credit_note_id`; сума до неизползваното; между договори → 409); бележка: `file_id` не се проверява във File Registry (дълг, FG-143) |
 | FG-223 | medium | #84 `7446d85` | входящо дебитно известие се прилага веднага, без основание и одобрение | PROVEN | resolved по Р51 (2) (#84 `71957db`, PROVEN: основание + `file_id`, pending до одобрение от Owner, плащане над него → 409 `DEBIT_NOTE_NOT_APPROVED` в quick-pay и allocate) |
 | FG-224 | medium | #81 `d2fe80b` | `POST material-waste` дава 503 вместо 428 за office ролите; тестът на SEC-01 за PM-01 матрицата е червен | PROVEN | resolved (#81 `ac66058`, PROVEN: `material-waste` без ключ → 428 преди Р27; `test_sec_01…pm01` зелен на реален Mongo; проби fg22 26/26 и fg23 10/10 без регресия) |
-| FG-225 | high | #83 CP-01 `ea51030` | плащане към непроверена/сменена сметка все още стига до FLOW-006 през три пътя | PROVEN | open |
-| FG-226 | medium | #83 CP-01 `ea51030` | пълно ЕГН изтича през invoice-details и списъка с обекти | PROVEN | open |
-| FG-227 | low | #83 CP-01 `ea51030` | търсенето по ЕГН е оракул за всеки логнат; маската в Master Data е различна | PROVEN | open |
-| FG-228 | medium | #83 CP-01 `ea51030` | при смяна на IBAN въвелият и проверилият могат да са двамата одобряващи | PROVEN | open — решено от Крум с **Р50 (2)** (`e1bf2eb` L111): въвелият не проверява и не одобрява; проверилият може да е одобряващ 1, вторият различен (минимум 3 души); чака код в #83 |
-| FG-229 | medium | #83 CP-01 `ea51030` | ЕИК на подизпълнител не се проверява за дубликат | PROVEN | open |
-| FG-230 | high | #83 CP-01 `ea51030` | клонът е от `cd03324` и конфликтира с main `4bca18a` (SEC-01); `dq_issues` с различна схема от #81 | PROVEN | open |
+| FG-225 | high | #83 CP-01 `ea51030` | плащане към непроверена/сменена сметка все още стига до FLOW-006 през три пътя | PROVEN | resolved (#83 CP-01 `7e0b914`, PROVEN в enforce: quick-pay, `POST /finance/payments` (със и без контрагент), allocate (`routes/finance.py:1970` → `bank_account_guard.py:88-109`), подизпълнители (методът по сметката, `bank_account_guard.py:82-85, 161-162`), other-expense (`finance.py:614-628`), в брой); изключение — плащане в брой без контрагент → FG-242 |
+| FG-226 | medium | #83 CP-01 `ea51030` | пълно ЕГН изтича през invoice-details и списъка с обекти | PROVEN | resolved (#83 CP-01 `7e0b914`, PROVEN за 5 роли; в базата се пише маскирано, `routes/projects.py:167, 233, 267-290, 354, 404`) |
+| FG-227 | low | #83 CP-01 `ea51030` | търсенето по ЕГН е оракул за всеки логнат; маската в Master Data е различна | PROVEN | resolved (#83 CP-01 `7e0b914`, PROVEN: търсене по ЕГН само за Accountant/Owner, `routes/clients.py:429`; маска `******1234`, `master_data/uniqueness.py:80`) |
+| FG-228 | medium | #83 CP-01 `ea51030` | при смяна на IBAN въвелият и проверилият могат да са двамата одобряващи | PROVEN | resolved по Р50 (2) (#83 CP-01 `7e0b914`, PROVEN: въвелият не одобрява, проверилият може да е одобряващ, Admin 403; `routes/bank_accounts.py:300-307`) |
+| FG-229 | medium | #83 CP-01 `ea51030` | ЕИК на подизпълнител не се проверява за дубликат | PROVEN | resolved (#83 CP-01 `7e0b914`, PROVEN: дублиран ЕИК подизпълнител↔контрагент → 409 + DQ; `routes/subcontractors.py:62-100`) |
+| FG-230 | high | #83 CP-01 `ea51030` | клонът е от `cd03324` и конфликтира с main `4bca18a` (SEC-01); `dq_issues` с различна схема от #81 | PROVEN | resolved (#83 CP-01 `7e0b914`: базата е `4bca18a`, `git merge-tree` с main `8c52e92` без конфликти; DQ схемата е като на #81); остатък → FG-245 |
 | FG-231 | medium | #84 `71957db` | два доставчика с еднакъв номер на фактура се отказват (уникалност на ниво фирма, не на издател) | PROVEN | open — решено от Крум с **Р53 (1)** (`d4946bb` L114): дубликат само при същия доставчик (ЕИК) + същия номер; чака код в #84 |
 | FG-232 | medium | #84 `71957db` | PUT на чернова с ръчен номер → 500 (KeyError след поправката на FG-217) | PROVEN | open — изпратено като поправка в кода (оркестратор) |
 | FG-233 | medium | #84 `71957db` | грешна входяща фактура се анулира, макар да е свързана със складово приемане само по `invoice_id` | PROVEN | open — изпратено като поправка в кода (оркестратор) |
@@ -260,6 +260,11 @@
 | FG-238 | medium | main `8c52e92` | снимка на обекта (доказателство) се трие окончателно заедно с оригиналния файл | SUSPECTED | open |
 | FG-239 | high | main `8c52e92` | Admin трие окончателно обект с цялата му история (разходи, плащания, снимки, отчети остават сираци) | SUSPECTED | open |
 | FG-240 | medium | main `8c52e92` | „качество/rework“ на подизпълнител — свободна оценка без права, AuditEvent и история; „платеното“ се въвежда ръчно | SUSPECTED | open |
+| FG-241 | high | #83 CP-01 `7e0b914` | приход по банка (`/finance/other-income`) се проверява като изходящо плащане → в enforce (production) приход не може да се запише | PROVEN | open |
+| FG-242 | medium | #83 CP-01 `7e0b914` | плащане в брой само с име на получателя (без `counterparty_id`) минава без разписка и без блок при висящ IBAN | PROVEN | open |
+| FG-243 | medium | #83 CP-01 `7e0b914` | висяща смяна на IBAN оцелява при архивиране и след връщането се активира без нова проверка | PROVEN | open |
+| FG-244 | low | #83 CP-01 `7e0b914` | подизпълнителите нямат „неактивен“/„архивиран“ | PROVEN | open |
+| FG-245 | medium | #83 CP-01 `7e0b914` | пълен IBAN през legacy полета и фактури за Viewer/SiteManager/Admin; `dq_issues` с две семейства след сливане с #81 | PROVEN | open |
 
 
 ---
@@ -2300,6 +2305,41 @@
 - **Код (main `8c52e92`):** `routes/subcontractor_performance.py:71-98` — POST/PUT без роля (и Viewer), без AuditEvent, без проверка на съществуването; PUT презаписва `quality_score`/`rework_flag`; `quality_score` без валидация (`:34`); `actual_paid_amount` ръчно (`:33, 42`) — втори източник за „платено“ до `finance_payments`.
 - **Решение:** промяна в кода — права (Owner/Admin/PM) + AuditEvent + append-only история; „платено“ от `finance_payments`; Крум да реши дали `subcontractor_performance` влиза в миграцията към FLOW-039 или се замразява read-only.
 
+## FG-241 — приход по банка (`/finance/other-income`) се проверява като изходящо плащане → в enforce (production) приход не може да се запише
+
+- **Тежест:** high. **Статус:** open. **PROVEN (проба C4)** (проход 24).
+- **Канон:** FLOW-006 (единният регистър приема всяко реално движение; FLOW-025 L164 „…винаги се записва в единния Payment ledger“); FLOW-010 §8 (проверката е за изходящи плащания).
+- **Код (#83 CP-01 `7e0b914`):** `routes/finance.py:653, 670-681` (`create_other_income`) — `check_payment_target(direction="Outflow", …)`, копирано от other-expense; приход по банка → 409 `NO_VERIFIED_BANK_ACCOUNT`; приход в брой от контрагент с висящ IBAN → 409 `PAYEE_BLOCKED_PENDING_IBAN`.
+- **Решение:** промяна в кода — без guard за прихода (или `direction="Inflow"`) + тест.
+
+## FG-242 — плащане в брой само с име на получателя (без `counterparty_id`) минава без разписка и без блок при висящ IBAN
+
+- **Тежест:** medium. **Статус:** open. **PROVEN (проба C1, shadow и enforce)** (проход 24).
+- **Канон:** Р50 (1) „плащане **в брой** към контрагент се допуска само срещу разписка … ако контрагентът има спрян/сменен непроверен IBAN, плащането в брой също е **спряно**“.
+- **Код (#83 CP-01 `7e0b914`):** `services/bank_account_guard.py:63-64` (`if not party_id: return None`), `:196-198`; `POST /finance/payments` и `/finance/other-expense` с `counterparty_name:"Доставчик cp1"` → 201 без разписка, докато cp1 има висяща смяна на IBAN.
+- **Решение:** промяна в кода — разписка за всяко изходящо плащане в брой с име на получател + блок при съвпадение с контрагент с висящ IBAN; или Крум да реши дали Р50 (1) важи без избран контрагент.
+
+## FG-243 — висяща смяна на IBAN оцелява при архивиране и след връщането се активира без нова проверка
+
+- **Тежест:** medium. **Статус:** open. **PROVEN (проба C3)** (проход 24).
+- **Канон:** Р50 (3) „старият IBAN не важи автоматично — проверява се наново“.
+- **Код (#83 CP-01 `7e0b914`):** `services/master_records.py:246-248` (`_reverify_bank_accounts` нулира само `status == verified`); проверена смяна с 1 одобрение отпреди архива → след връщането второто одобрение я активира → плащане към `****5678`.
+- **Решение:** промяна в кода — нулиране на проверка и одобрения и за висящите сметки при връщане; отказ на verify/approve, докато контрагентът е архивиран.
+
+## FG-244 — подизпълнителите нямат „неактивен“/„архивиран“
+
+- **Тежест:** low. **Статус:** open. **PROVEN (проба C7)** (проход 24).
+- **Канон:** Р48 (4) „контрагент никога не се изтрива … само „неактивен“ … или „архивиран“ …“.
+- **Код (#83 CP-01 `7e0b914`):** `routes/subcontractors.py` — няма маршрути за деактивиране/архивиране (`POST /subcontractors/sub1/archive` → 404); кодът за тях в `master_records.py:227-229` е мъртъв.
+- **Решение:** промяна в кода — маршрути през `mr.lifecycle`.
+
+## FG-245 — пълен IBAN през legacy полета и фактури за Viewer/SiteManager/Admin; `dq_issues` с две семейства след сливане с #81
+
+- **Тежест:** medium. **Статус:** open. **PROVEN (проби C8, C9)** (проход 24).
+- **Канон:** Р50 / Q005: пълен IBAN само Owner и Accountant, Admin само с изрично право, останалите `****1234`; CLAUDE.md §16 (един registry).
+- **Код (#83 CP-01 `7e0b914`):** `routes/counterparties.py:122-125` (`_public`, поле `iban`), `routes/subcontractors.py:102-116` (`bank_iban`), `GET /projects/{id}/invoice-details` (`invoice_details.iban`), `GET /finance/invoices` (`counterparty_iban`) за Admin; при сливане с #81 `dq_issues` се регистрира два пъти в `tenancy/ownership.py` (TASKS и AUDIT, ред 131).
+- **Решение:** промяна в кода — `cr.mask_iban` във всички reader-и при `full_iban_allowed=false`; едно семейство за `dq_issues`.
+
 ## Дневник на проходите
 
 ### Проход 2 — 06.11.2026 18:50 UTC (периодичен)
@@ -2829,6 +2869,21 @@
   - Р51 (3) partial → FG-233.
   - Нови: **FG-231** (Крум), **FG-232**, **FG-233**, **FG-234** (Крум), **FG-235**.
 - **Р52** (D8/D7/D12) записано в Q004.
+
+### Проход 24 — 08.11.2026 14:50 UTC (периодичен)
+
+Нови SHA:
+- #81 `ac66058` — **FG-224 resolved**; проби fg22 26/26 и fg23 10/10;
+- #71 `021a078` — парите се скриват при липсваща заявка (fail closed);
+- #84 `5cce932` — само тестове и evidence;
+- #83 CP-01 `7e0b914`.
+
+Проверки:
+- **#83 `7e0b914`** (реален Mongo): CP-01 482 passed / 3 skipped, PAY-01 630, SEC-01 30, PM-01 6, проби 20/20. Merge с main `8c52e92` без конфликти.
+  - Р48: (1), (2), (5), (6) PASS; (3), (4) PARTIAL. Р50: (2) PASS; (1), (3) PARTIAL.
+  - Resolved: FG-165, FG-171, FG-172, FG-225, FG-226, FG-227, FG-228, FG-229, FG-230. FG-175 partial.
+  - Нови: **FG-241** (high), **FG-242**, **FG-243**, **FG-244**, **FG-245**.
+- **Бавен преглед FLOW-018 на main:** FG-236..FG-240.
 
 ## Бележки, които не са разминавания
 
