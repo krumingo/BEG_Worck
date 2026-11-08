@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 25.2,
+ "seconds": 24.3,
  "rows": [
   {
    "mode": "off",
@@ -1622,15 +1622,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -1642,15 +1637,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -1692,15 +1682,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4121,15 +4106,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4141,15 +4121,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4191,15 +4166,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7316,15 +7286,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7336,15 +7301,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7386,15 +7346,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9815,15 +9770,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9835,15 +9785,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9885,15 +9830,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13120,15 +13060,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13140,15 +13075,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13194,15 +13124,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15797,15 +15722,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15817,15 +15737,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15871,15 +15786,10 @@
    "method": "POST",
    "path": "/api/sales/commit",
    "target": null,
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.sales",
-    "op.warehouse_batches"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 410,
+   "error_code": "SALE_DEPLETION_PENDING_CANONICAL_ACTION",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -17721,11 +17631,11 @@
    "user": "technician",
    "kind": "expired",
    "active": true,
-   "from_date": "2026-10-07",
-   "to_date": "2026-11-05",
+   "from_date": "2026-10-09",
+   "to_date": "2026-11-07",
    "mirror_status": "active",
-   "mirror_valid_from": "2026-10-07T00:00:00+00:00",
-   "mirror_valid_to": "2026-11-05T23:59:59.999999+00:00",
+   "mirror_valid_from": "2026-10-09T00:00:00+00:00",
+   "mirror_valid_to": "2026-11-07T23:59:59.999999+00:00",
    "mirror_has_field_actions": true
   },
   {
@@ -17733,10 +17643,10 @@
    "user": "requester",
    "kind": "future",
    "active": true,
-   "from_date": "2026-11-07",
+   "from_date": "2026-11-09",
    "to_date": null,
    "mirror_status": "active",
-   "mirror_valid_from": "2026-11-07T00:00:00+00:00",
+   "mirror_valid_from": "2026-11-09T00:00:00+00:00",
    "mirror_valid_to": null,
    "mirror_has_field_actions": true
   },
@@ -17745,11 +17655,11 @@
    "user": "technician",
    "kind": "expired",
    "active": true,
-   "from_date": "2026-10-07",
-   "to_date": "2026-11-05",
+   "from_date": "2026-10-09",
+   "to_date": "2026-11-07",
    "mirror_status": "active",
-   "mirror_valid_from": "2026-10-07T00:00:00+00:00",
-   "mirror_valid_to": "2026-11-05T23:59:59.999999+00:00",
+   "mirror_valid_from": "2026-10-09T00:00:00+00:00",
+   "mirror_valid_to": "2026-11-07T23:59:59.999999+00:00",
    "mirror_has_field_actions": true
   },
   {
@@ -17757,10 +17667,10 @@
    "user": "requester",
    "kind": "future",
    "active": true,
-   "from_date": "2026-11-07",
+   "from_date": "2026-11-09",
    "to_date": null,
    "mirror_status": "active",
-   "mirror_valid_from": "2026-11-07T00:00:00+00:00",
+   "mirror_valid_from": "2026-11-09T00:00:00+00:00",
    "mirror_valid_to": null,
    "mirror_has_field_actions": true
   }

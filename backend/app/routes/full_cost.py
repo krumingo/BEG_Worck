@@ -286,7 +286,10 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         raise HTTPException(status_code=404, detail="Package not found")
 
     sale = pkg.get("sale_total", 0)
-    mat = pkg.get("actual_material_cost", 0)
+    # 5C-C20 F-10 — canonical material actual at read time (no recompute).
+    from app.services.canonical_material_cost import package_material_split
+    split = await package_material_split(tenant, org_id, pkg)
+    mat = split["total"]          # consumption + фира, once
     lab = pkg.get("actual_labor_cost", 0)
     overhead = pkg.get("overhead_actual_allocated", 0)
 
@@ -312,7 +315,8 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
         "currency": "EUR",
         "sale_total": sale,
         "costs": {
-            "material": mat, "labor": lab, "subcontract": round(sub, 2),
+            "material": split["material"], "waste": split["waste"],
+            "labor": lab, "subcontract": round(sub, 2),
             "gross_cost": gross_cost, "overhead": overhead, "total_cost": total_cost,
         },
         "margin": {
@@ -352,7 +356,8 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
     # Material
     from app.routes.material_smr import get_material_summary_for_project
     mat_summary = await get_material_summary_for_project(org_id, project_id)
-    mat_cost = mat_summary["total_cost"]
+    mat_cost = mat_summary["total_cost"]                 # consumption + фира, once
+    mat_waste = mat_summary.get("waste_cost", 0.0) or 0.0  # 5C-C21 F-12
 
     # Labor
     from app.routes.labor_smr import get_labor_summary_for_project
@@ -391,7 +396,7 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
         "project_code": project.get("code", ""), "project_name": project.get("name", ""),
         "currency": "EUR",
         "revenue": {"contracted": round(contracted, 2), "earned": round(earned, 2), "billed": round(billed, 2), "collected": round(collected, 2), "receivables": round(billed - collected, 2), "basis": basis_label},
-        "costs": {"material": mat_cost, "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost},
+        "costs": {"material": round(mat_cost - mat_waste, 2), "waste": round(mat_waste, 2), "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost},
         "profit": {
             "gross_profit": gross_profit, "gross_margin_percent": gross_pct,
             "net_profit": net_profit, "net_margin_percent": net_pct,
@@ -451,10 +456,14 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 
     # Margin drop check
-    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_material_cost": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
+    # 5C-C22 — package material actual from the ONE shared helper (read
+    # time), not the `actual_material_cost` cache.
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    mat_cost = await project_material_cost(tenant, org_id, project_id)
+    pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "sale_total": 1, "actual_labor_cost": 1, "activity_name": 1}).to_list(200)
     for pkg in pkgs:
         sale = pkg.get("sale_total", 0)
-        actual = (pkg.get("actual_material_cost", 0) or 0) + (pkg.get("actual_labor_cost", 0) or 0)
+        actual = split_for_package(mat_cost, pkg["id"])["total"] + (pkg.get("actual_labor_cost", 0) or 0)
         if sale > 0 and actual > sale * 0.9:
             alerts.append({"type": "margin_drop", "severity": "critical", "package_id": pkg["id"], "message": f"{pkg.get('activity_name', '')}: разходи {round(actual, 2)} / продажба {sale} EUR"})
 

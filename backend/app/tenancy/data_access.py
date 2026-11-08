@@ -96,6 +96,13 @@ class TenantCollection:
         self.name = name
 
     @property
+    def tenant(self) -> "TenantData":
+        """The tenant view this collection belongs to (5C-C18), so a service
+        handed one scoped collection can reach a sibling collection of the
+        SAME server-resolved tenant without touching the raw database."""
+        return self._scope
+
+    @property
     def _raw(self):
         return self._scope._db[self.name]
 
@@ -148,8 +155,10 @@ class TenantCollection:
         """The motor name, so a converted call site reads like the original."""
         return await self.count(flt, **kw)
 
-    async def distinct(self, key: str, flt: Optional[Mapping] = None) -> List:
-        return await self._raw.distinct(key, self._scope.scoped(flt))
+    async def distinct(self, key: str, flt: Optional[Mapping] = None, **kw) -> List:
+        # 5C-C19 F-3: driver options (notably ``session``) pass through,
+        # in the same ``**kw`` style PR #56 uses for get/count.
+        return await self._raw.distinct(key, self._scope.scoped(flt), **kw)
 
     def aggregate(self, pipeline: List[Mapping]):
         """Aggregation restricted to the tenant; every join must be :meth:`TenantData.lookup`."""
@@ -158,6 +167,9 @@ class TenantCollection:
 
     # --------------------------------------------------------------- writes
     async def insert_one(self, doc: Dict, **kw):
+        # LIVE-OPS-01 / TASK 5C: forward kwargs (notably `session=`) so a
+        # consequential canonical write can take part in a replica-set
+        # transaction opened by the service. Tenant stamping is preserved.
         return await self._raw.insert_one(self._own(doc), **kw)
 
     async def insert_many(self, docs: List[Dict], **kw):
@@ -169,13 +181,13 @@ class TenantCollection:
     async def update_many(self, flt: Mapping, update: Mapping, **kw):
         return await self._raw.update_many(self._scope.scoped(flt), update, **kw)
 
-    async def delete_one(self, flt: Mapping):
-        return await self._raw.delete_one(self._scope.scoped(flt))
+    async def delete_one(self, flt: Mapping, **kw):
+        return await self._raw.delete_one(self._scope.scoped(flt), **kw)
 
-    async def delete_many(self, flt: Optional[Mapping] = None):
+    async def delete_many(self, flt: Optional[Mapping] = None, **kw):
         """W0-03E-A2C: a scoped bulk delete. An empty filter deletes only THIS
         tenant's documents, never the collection."""
-        return await self._raw.delete_many(self._scope.scoped(flt))
+        return await self._raw.delete_many(self._scope.scoped(flt), **kw)
 
     async def find_one_and_update(self, flt: Mapping, update: Mapping, **kw):
         return await self._raw.find_one_and_update(self._scope.scoped(flt), update, **kw)
@@ -213,6 +225,17 @@ class TenantData:
     def __init__(self, db, org_id: str):
         self._db = db
         self.org_id = _tenant_value(org_id)
+
+    @property
+    def transaction_client(self):
+        """The MongoDB client that can start a transaction over THIS tenant's
+        database (5C-C26l): the motor client of a real motor database, else
+        None (an in-memory test double — writes then run without a session)."""
+        try:
+            from motor.motor_asyncio import AsyncIOMotorDatabase
+        except Exception:                                  # pragma: no cover
+            return None
+        return self._db.client if isinstance(self._db, AsyncIOMotorDatabase) else None
 
     # --------------------------------------------------------- constructors
     @classmethod

@@ -624,6 +624,9 @@ ENFORCE_EXTRA_WRITES = {
     ("PUT", "/api/ocr-invoice/{intake_id}/approve"): "denial",
     ("POST", "/api/sales/commit"): "denial",
     ("POST", "/api/pricing/refresh"): "denial",
+    # LIVE-OPS-01 / TASK 5C (#55, Р28): the refused migration execute writes the
+    # enforce "access denied" AuditEvent — 403 in every mode, nothing else written.
+    ("POST", "/api/warehouse/migration-readiness/execute"): "denial",
 }
 
 

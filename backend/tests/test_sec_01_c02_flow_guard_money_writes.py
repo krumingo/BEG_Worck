@@ -262,6 +262,11 @@ def expected(key: str, legacy_role: str, tenant: str, target: Optional[str]) -> 
         return {"status": ok, "writes": writes}
     if legacy_role not in FINANCE:
         return deny
+    if key == "sales_commit":
+        # #55 TASK 5C (CODEX C13.3, main cd03324): the legacy sale route FAILS CLOSED —
+        # 410 SALE_DEPLETION_PENDING_CANONICAL_ACTION, nothing written, for any target.
+        # SEC-01-C02's money guard stays the first dependency: non-finance roles -> 403.
+        return {"status": 410, "writes": False}
     if target == "XA":
         return {"status": 404, "writes": False}          # looked up in the caller's tenant
     if rule == "ledger":

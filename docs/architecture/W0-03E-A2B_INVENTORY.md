@@ -64,7 +64,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `location_nodes` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `machines` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `material_consumption_log` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `material_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `material_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/warehouse_movements/projections.py:163 |
 | `material_prices` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `material_requests` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `material_waste_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -129,7 +129,9 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `subscriptions` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:107<br>app/routes/billing.py:178 |
 | `supplier_invoices` | offers / contracts / invoices / invoice_lines | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `users` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/core/seed.py:81<br>app/routes/auth.py:417<br>app/routes/auth.py:466<br>app/routes/auth.py:466<br>app/routes/platform.py:300<br>app/tenancy/onboarding.py:123 |
-| `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `warehouse_batches` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/warehouse_movements/projections.py:255<br>app/services/warehouse_movements/projections.py:306<br>app/services/warehouse_movements/projections.py:340 |
+| `warehouse_in_transit` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | app/services/warehouse_movements/projections.py:605 |
+| `warehouse_ledger_counters` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouse_transactions` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `warehouses` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `work_reports` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
@@ -165,7 +167,7 @@ app/routes/activity_budgets.py:77 activity_budgets.find in list_activity_budgets
 app/routes/assets_intake_pending.py:183 asset_intake_pending.find_one in approve_intake()
 app/routes/assets_intake_pending.py:189 asset_intake_pending.update_one in approve_intake()
 app/routes/auth.py:115 users.find in login()
-app/tenancy/data_access.py:400 offers.find in resolve_review_token()
+app/tenancy/data_access.py:423 offers.find in resolve_review_token()
 app/tenancy/identity.py:72 users.find in users_with_email()
 app/tenancy/project_team.py:292 project_team.count_documents in ownerless_row_count()
 ```
