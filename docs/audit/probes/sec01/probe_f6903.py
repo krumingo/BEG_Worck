@@ -107,5 +107,37 @@ with TestClient(app, raise_server_exceptions=False) as tc:
             if dl != 1 or g3.status_code >= 500:
                 F.append("%s G audit +%d" % (mode, dl))
             restore()
+        if os.environ.get("PROBE_H") == "1":
+            # H (#69 b2b3ae0, addendum H, Codex F-69-04): money in whole cents.
+            def setcap(cert):
+                q(lambda: op.subcontractor_packages.update_one({"id": PKG}, {"$set": {
+                    "certified_total": cert, "paid_total": 0, "committed_paid_total": 0}}))
+            restore(); setcap(0.05); l0 = ledger()
+            h1 = [tc.post("/api/subcontractor-payments", json=pay(0.0049), headers=H()).status_code for _ in range(20)]
+            p = pkg(); st1 = (p.get("committed_paid_total"), p.get("paid_total"), ledger() - l0)
+            print(mode, "H1 cap 0.05, 20x0.0049 seq:", sorted(set(h1)), "committed/paid/ledger+", st1)
+            if set(h1) != {422} or st1 != (0, 0, 0):
+                F.append("%s H1 %s %s" % (mode, sorted(set(h1)), st1))
+            restore(); setcap(0.05); l0 = ledger()
+            h2 = q(lambda: gather([("/api/subcontractor-payments", pay(0.01), H()) for _ in range(12)]))
+            codes = sorted(x.status_code for x in h2); p = pkg(); srows = round(sum(float(x["amount"]) for x in rows()), 6)
+            st2 = (codes.count(201), round(float(p.get("committed_paid_total") or 0), 6), round(float(p.get("paid_total") or 0), 6), srows, ledger() - l0)
+            print(mode, "H2 cap 0.05, 12x0.01 concurrent:", codes, "201s/committed/paid/Σrows/ledger+", st2)
+            if st2 != (5, 0.05, 0.05, 0.05, 5):
+                F.append("%s H2 %s" % (mode, st2))
+            restore(); setcap(100000)
+            cells = {}
+            for v, want in ((0.30000000000000004, 422), (1e-3, 422), (5e-324, 422), (123.456789, 422),
+                            (99.999, 422), (10.10, 201), (100, 201), (1e2, 201), (0.01, 201), (12345.67, 201)):
+                r = tc.post("/api/subcontractor-payments", json=pay(v), headers=H())
+                cells[repr(v)] = r.status_code
+                if r.status_code != want:
+                    F.append("%s H3 %r -> %s (want %s)" % (mode, v, r.status_code, want))
+            vat = tc.post("/api/subcontractor-payments", json={**pay(10), "vat_amount": 0.005}, headers=H()).status_code
+            cells["vat 0.005"] = vat
+            if vat != 422:
+                F.append("%s H3 vat 0.005 -> %s" % (mode, vat))
+            print(mode, "H3 values:", cells)
+            restore()
     q(lambda: client.drop_database(os.environ["DB_NAME"])); q(lambda: client.drop_database(os.environ["BEG_SYSTEM_DB"]))
 print("FAILS:", F or "none")

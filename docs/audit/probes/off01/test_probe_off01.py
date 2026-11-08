@@ -413,3 +413,40 @@ def test_o19_client_view_races_new_version(monkeypatch, backend, mode, rep):
         assert nv.status_code == 200 and o["status"] == "Superseded" and not leak
         assert g.status_code in (200, 410)
     run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("case", [("5", "7.345", 100, "12.345", 1234.5, "1234.50"),
+                                  ("0.1", "0.2", 3, "0.30", 0.9, "0.90"),
+                                  ("19.999", "0.001", 7, "20.00", 140.0, "140.00")])
+def test_o20_exact_client_unit_price(monkeypatch, backend, mode, case):
+    """8dc3c45 F-79-01: material 5 + labour 7.345, qty 100 → the review payload and the PDF text
+    show unit 12.345 and line 1234.50; no float noise (0.30000000000000004); still no split (R43)."""
+    mat, lab, qty, unit_txt, line_total, line_txt = case
+
+    async def scenario(c, op):
+        doc = offer_doc("o1", token=TOKEN)
+        doc["lines"][0].update({"material_unit_cost": float(mat), "labor_unit_cost": float(lab), "qty": qty,
+                                "line_total": line_total})
+        doc.update({"subtotal": line_total, "vat_amount": round(line_total * 0.2, 2),
+                    "total": round(line_total * 1.2, 2)})
+        await op.offers.insert_one(doc)
+        g = await c.get("/api/offers/review/%s" % TOKEN)
+        ln = (g.json().get("lines") or [{}])[0] if g.status_code == 200 else {}
+        p = await c.get("/api/offers/o1/pdf", headers=hdr("admin-a"))
+        import io
+        from pypdf import PdfReader
+        txt = " ".join(pg.extract_text() or "" for pg in PdfReader(io.BytesIO(p.content)).pages)
+        split = [k for k in ln if k in ("material_unit_cost", "labor_unit_cost", "line_material_cost",
+                                        "line_labor_cost", "labor_hours_per_unit")]
+        pdf_split = [w for w in ("Мат", "Труд", "%.2f" % float(mat), "%.2f" % float(lab)) if w in txt
+                     and w not in unit_txt and w not in line_txt]
+        noise = [m for m in ("0000000", "9999999") if m in g.text or m in txt]
+        print("O20 %s/%s+%s×%s: GET %s unit %r text %r line %r | PDF %s unit-in %s line-in %s | split %s pdf-split %s noise %s" % (
+            mode, mat, lab, qty, g.status_code, ln.get("unit_price"), ln.get("unit_price_text"),
+            ln.get("line_total"), p.status_code, unit_txt in txt, line_txt in txt, split or "none",
+            pdf_split or "none", noise or "none"))
+        assert g.status_code == 200 and p.status_code == 200
+        assert ln.get("unit_price_text") == unit_txt and ln.get("line_total") == line_total
+        assert unit_txt in txt and line_txt in txt
+        assert not split and not pdf_split and not noise
+    run(monkeypatch, backend, mode, scenario)
