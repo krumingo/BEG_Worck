@@ -5736,3 +5736,21 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - role-union 0; PM-01 24/24, 0 extra.
   - Gates queued after #83.
 - **#86 `03b86cd`** (round 6: FG-279/280; not yet merged with `ea57121`): waiting for its final head.
+
+## 2026-11-08 22:09 UTC: #83 `1e455e3` (R59 + FG-266..268 + FG-275/267 + merge `3143ade` of main `3699c3b` + evidence): PASS, no blocking finding
+
+- **Merge checks:** see the 20:27 entry (merge identical to merge-tree; role-union 0; PM-01 864/864, 0 extra). `1e455e3` adds evidence only on top of `464ce36`.
+
+| Gate | Result |
+|---|---|
+| probe K1–K3 | 84 |
+| cp_01 | 602 (+3 mongomock-only skips) |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | 9 failed, all also on main (NEW_FAILS 0) |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+
+- **Note:** `1e455e3` is merged with main `3699c3b`, not yet `ea57121` (#76). It needs that merge and a re-audit before its own merge.
