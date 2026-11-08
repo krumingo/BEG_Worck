@@ -5404,3 +5404,31 @@ SEC71-M1 resolved. No blocking finding remains.
   - **CP83-04:** the fixture gets a verified supplier account through the real register (Accountant enters, Owner verifies from 2 sources); the guard stays on; no assertion changed.
 - **#86 `4bf5eae`** (PRJ-01, new): first review only. Delete is allowed only for an empty Draft (409 PROJECT_HAS_HISTORY / PROJECT_NOT_DRAFT); it needs a key and writes an AuditEvent in one transaction. Archive/cancel are conditional status changes with a reason. Photos are retired, not deleted.
 - **Machine restart at ~16:26 UTC:** the first gate runs (b77f/b83d/b86a) were voided and re-run from scratch.
+
+## 2026-11-08 17:15 UTC: #77 `c7df7ca` (ACT-01 + merge `5d75736` of main `0750d75`): PASS, no blocking finding
+
+- **Merge checks:** see the 16:35 entry (role-union only narrows: `finance.client_act_money.read` dropped; PM-01 120/120 cells, 0 extra).
+- **Guards on the merged head:**
+  - create and confirm use `require_money_write` (#69);
+  - list, detail, PUT, from-offer and remaining use `require_finance_read` (#71);
+  - every act read is R20-1, so a non-finance caller gets 403 and never sees money;
+  - FG-142 expected values must be whole cents (`money_value`).
+- **C02 test:** fixture and confirm body only; the assertions are unchanged.
+
+| Gate (serial re-run after the restart / disk crash) | Result |
+|---|---|
+| act01 | 113 |
+| probe act01 | FAILS none (enforce: 428 without a key, 201, replay 201, 409; 1 act, 1 event) |
+| SEC-01 + SEC-02 | 61 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+- **#84 `2c2e75f`, merge checks done ahead of its run:**
+  - merge `5692247` tree = `merge-tree(d32a33f, ec7ddd8)`;
+  - role-union: 0 differences;
+  - PM-01 delta: 360 cells = the PR's own, 0 extra.
+- **Disk:** the space allowance hit 0 at ~16:36 and all 3 mongod crashed. I removed my old worktrees and an old venv; `docker volume prune` (~20 GB of dangling scratch volumes) was refused by the permission check and is asked of Krum. Runs are serial until then.
