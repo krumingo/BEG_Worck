@@ -87,6 +87,7 @@ class InvoiceCreate(BaseModel):
     lines: List[InvoiceLineInput] = []
 
 class InvoiceUpdate(BaseModel):
+    reason: Optional[str] = None  # INV-CN-01 Р49(1): required to change the due date after issue
     invoice_no: Optional[str] = None
     kind: Optional[str] = None
     counterparty_name: Optional[str] = None

@@ -1,0 +1,90 @@
+"""
+INV-CN-01 Addendum A — the one-off, idempotent data/index migration (FG-217, Р49(1)).
+
+Dry run by default (``plan``): a read-only report, nothing written. ``apply`` (after the
+Owner's approval of that exact report — CLAUDE.md §8, critical migration):
+
+  1. FG-217: an outgoing or incoming DRAFT whose ``invoice_no`` is null / "" loses the
+     field (a draft has no number);
+  2. Р49(1): a LEGACY outgoing draft that already carries a number (numbered at creation
+     before INV-CN-01) becomes ``Issued`` — locked — with ``issued_number`` and a
+     canonical AuditEvent per invoice (``finance.invoice.issued_by_migration``);
+  3. FG-217: the legacy unique+sparse ``(org_id, invoice_no)`` index (it indexes a
+     missing number as null) is dropped and the partial, direction-scoped index is built.
+
+Running it again finds nothing to do (each step is conditional). Rollback: the report
+lists every invoice id changed; the status can be put back to Draft from it, and the
+legacy index re-created — both need the same approval.
+"""
+from __future__ import annotations
+
+from typing import Dict, List
+
+from app.services import invoice_corrections as ic
+from app.tenancy.data_access import TenantData, all_tenant_ids
+
+LEGACY_INDEX_KEY = {"org_id": 1, "invoice_no": 1}
+MIGRATION_ACTION = "finance.invoice.issued_by_migration"
+
+
+def _is_legacy_index(spec: dict) -> bool:
+    key = dict(spec.get("key") or [])
+    return key == LEGACY_INDEX_KEY and bool(spec.get("unique")) and not spec.get("partialFilterExpression")
+
+
+async def plan(database) -> Dict:
+    """Read-only report: what ``apply`` would change (per tenant), and the index state."""
+    indexes = await database.invoices.index_information()
+    legacy = sorted(n for n, spec in indexes.items() if _is_legacy_index(spec))
+    target = ic.INVOICE_NO_INDEX[2]["name"]
+    tenants: List[Dict] = []
+    for org_id in await all_tenant_ids(database):
+        tenant = TenantData.for_resolved_org(database, org_id)
+        empty = await tenant.invoices.find(
+            {"status": ic.DRAFT, "invoice_no": {"$exists": True, "$in": [None, ""]}},
+            {"_id": 0, "id": 1}).to_list(None)
+        numbered = await tenant.invoices.find(
+            {"status": ic.DRAFT, "direction": "Issued", "invoice_no": {"$gt": ""}},
+            {"_id": 0, "id": 1, "invoice_no": 1, "total": 1, "created_at": 1}).to_list(None)
+        if empty or numbered:
+            tenants.append({"org_id": org_id,
+                            "drafts_number_removed": [d["id"] for d in empty],
+                            "legacy_numbered_drafts_to_issue": numbered})
+    return {"legacy_index": legacy, "target_index": target,
+            "target_index_present": target in indexes, "tenants": tenants,
+            "changes": sum(len(t["drafts_number_removed"]) + len(t["legacy_numbered_drafts_to_issue"])
+                           for t in tenants) + len(legacy) + (0 if target in indexes else 1)}
+
+
+async def apply(database, *, actor_id: str) -> Dict:
+    """Perform the plan. Idempotent: every write is conditioned on the state it changes."""
+    from app.audit.envelope import ACTOR_SYSTEM, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    report = await plan(database)
+    now = ic.now_iso()
+    for t in report["tenants"]:
+        tenant = TenantData.for_resolved_org(database, t["org_id"])
+        if t["drafts_number_removed"]:
+            await tenant.invoices.update_many(
+                {"id": {"$in": t["drafts_number_removed"]}, "status": ic.DRAFT,
+                 "invoice_no": {"$exists": True, "$in": [None, ""]}}, {"$unset": {"invoice_no": ""}})
+        for inv in t["legacy_numbered_drafts_to_issue"]:
+            res = await tenant.invoices.update_one(
+                {"id": inv["id"], "status": ic.DRAFT, "invoice_no": inv["invoice_no"]},
+                {"$set": {"status": ic.ISSUED, "issued_number": inv["invoice_no"],
+                          "issued_at": inv.get("created_at") or now, "issued_by": actor_id,
+                          "issued_by_migration": True, "updated_at": now}})
+            if res.modified_count == 1:
+                await record_event(database, build_event(
+                    tenant_id=t["org_id"], actor_type=ACTOR_SYSTEM, actor_id=actor_id,
+                    action=MIGRATION_ACTION, source_flow="FLOW-006",
+                    retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="finance.invoice",
+                    entity_id=inv["id"], reason="INV-CN-01 Р49(1): номерирана чернова = издадена",
+                    structured_diff={"status": {"before": ic.DRAFT, "after": ic.ISSUED},
+                                     "invoice_no": inv["invoice_no"]},
+                    effective_role_assignments=["migration"], source_channel="migration"))
+    for name in report["legacy_index"]:
+        await database.invoices.drop_index(name)
+    keys, opts = ic.INVOICE_NO_INDEX[1], ic.INVOICE_NO_INDEX[2]
+    await database.invoices.create_index(keys, **opts)
+    return report

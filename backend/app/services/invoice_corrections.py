@@ -50,6 +50,11 @@ REFUND_EXCEEDS_BALANCE = "REFUND_EXCEEDS_BALANCE"
 DUPLICATE_CREDIT_NOTE = "DUPLICATE_CREDIT_NOTE"
 NOTE_INVALID = "NOTE_INVALID"
 INVOICE_NOT_CORRECTABLE = "INVOICE_NOT_CORRECTABLE"
+USE_CORRECTION = "USE_CORRECTION"
+CANCELLATION_PENDING = "CANCELLATION_PENDING"
+DEBIT_NOTE_NOT_APPROVED = "DEBIT_NOTE_NOT_APPROVED"
+OFFSET_BASIS_REQUIRED = "OFFSET_BASIS_REQUIRED"
+DUE_DATE_REASON_REQUIRED = "DUE_DATE_REASON_REQUIRED"
 
 # ── statuses ──────────────────────────────────────────────────────────────────
 # Р49.1: Draft → Issued (number; locked) → Sent → PartiallyPaid / Paid ; Cancelled
@@ -57,6 +62,7 @@ DRAFT, ISSUED, SENT, CANCELLED = "Draft", "Issued", "Sent", "Cancelled"
 NOTE_PENDING = "pending_approval"     # outgoing: created by the Accountant, no number yet
 NOTE_APPROVED = "approved"            # outgoing: approved by the Owner, numbered
 NOTE_REGISTERED = "registered"        # incoming: registered by the Accountant
+NOTE_REJECTED = "rejected"            # D10: rejected by the Owner / withdrawn by the author
 OFFSET_PENDING, OFFSET_APPROVED = "pending_approval", "approved"
 
 KIND_CREDIT, KIND_DEBIT = "credit", "debit"
@@ -71,7 +77,8 @@ EDITABLE_AFTER_ISSUE = frozenset({"notes", "due_date"})
 # Owner after this many days (computed on read, nothing written by a GET).
 EXPECTED_CREDIT_ESCALATION_DAYS = 14
 # Р49.8: "съвпадение до стотинка"
-MATCH_TOLERANCE = Decimal("0.01")
+#: FG-219: "до стотинка" = EXACT equality after rounding to whole cents (difference 0.00).
+MATCH_TOLERANCE = Decimal("0.00")
 
 NUMBER_COUNTER = "invoice_document_number"   # one shared sequence: invoices + notes (Р49.3)
 CORRECTION_ACTOR_SOURCE = "FLOW-006"
@@ -104,8 +111,20 @@ def now_iso() -> str:
 
 # ═══════════════════════════════════════════════════════════════ §1 lock
 def is_locked(invoice: dict) -> bool:
-    """Р49.1: only a Draft is editable. Every other status is an official document."""
-    return (invoice or {}).get("status") != DRAFT
+    """Р49.1: only a Draft is editable. Every other status is an official document.
+    Addendum A / Р49(1): a LEGACY outgoing draft that already carries a number (numbered
+    at creation before INV-CN-01) is treated as issued — locked — even before the
+    migration (``invoice_corrections_migration``) gives it the status Issued."""
+    inv = invoice or {}
+    if inv.get("status") != DRAFT:
+        return True
+    return is_legacy_numbered_draft(inv)
+
+
+def is_legacy_numbered_draft(invoice: dict) -> bool:
+    inv = invoice or {}
+    return (inv.get("status") == DRAFT and inv.get("direction") == "Issued"
+            and isinstance(inv.get("invoice_no"), str) and bool(inv.get("invoice_no").strip()))
 
 
 def locked_refusal(invoice: dict, fields: Optional[Iterable[str]] = None) -> HTTPException:
@@ -164,15 +183,38 @@ async def seed_number_counter(tenant, prefix: str, settings: dict) -> None:
         pass
 
 
+MAX_NUMBER_SKIPS = 10000
+
+
+async def number_taken(tenant, number: str, *, session=None, exclude_invoice_id=None) -> bool:
+    """Is ``number`` already used by an OUR document (outgoing invoice or outgoing note)?
+    Supplier numbers (incoming invoices / notes) are another series and never count."""
+    flt = {"direction": "Issued", "invoice_no": number}
+    if exclude_invoice_id:
+        flt["id"] = {"$ne": exclude_invoice_id}
+    if await tenant.invoices.find_one(flt, {"_id": 0, "id": 1}, session=session):
+        return True
+    return bool(await tenant.credit_debit_notes.find_one(
+        {"direction": OUTGOING, "number": number}, {"_id": 0, "id": 1}, session=session))
+
+
 async def take_number(tenant, prefix: str, *, session) -> str:
     """Р49.3: the next number of the ONE sequence shared by invoices and notes. An atomic
     ``$inc`` in the caller's transaction: two concurrent takers get two numbers; an
-    aborted transaction gives its number back (no gap, no duplicate)."""
+    aborted transaction gives its number back (no gap, no duplicate).
+
+    FG-218: a number already used (a manual number typed inside the auto series) is
+    SKIPPED, inside the same transaction — the series can never block for good."""
     from pymongo import ReturnDocument
-    doc = await tenant.org_counters.find_one_and_update(
-        {"org_id": tenant.org_id, "counter_type": NUMBER_COUNTER},
-        {"$inc": {"value": 1}}, return_document=ReturnDocument.AFTER, session=session)
-    return format_number(prefix, int(doc["value"]))
+    for _ in range(MAX_NUMBER_SKIPS):
+        doc = await tenant.org_counters.find_one_and_update(
+            {"org_id": tenant.org_id, "counter_type": NUMBER_COUNTER},
+            {"$inc": {"value": 1}}, return_document=ReturnDocument.AFTER, session=session)
+        number = format_number(prefix, int(doc["value"]))
+        if not await number_taken(tenant, number, session=session):
+            return number
+    raise conflict("INVOICE_NUMBER_SERIES_EXHAUSTED",
+                   "Не е намерен свободен номер в поредицата — проверете настройките")
 
 
 # ═══════════════════════════════════════════════════════════════ open balance
@@ -443,7 +485,17 @@ def expected_escalation(row: dict, now: Optional[datetime] = None) -> dict:
 #: transaction that needs them (an index build must not run inside a transaction).
 #: Partial filters: only documents that carry the field are constrained, so legacy
 #: rows (no ``issued_number``) are never touched or refused.
+#: FG-217: the invoice-number index of OUR series and the supplier series, separately
+#: (``direction`` in the key), only for documents that carry a non-empty number — a draft
+#: has none. Replaces the legacy unique+sparse (org_id, invoice_no) index, which indexes
+#: a missing number as null (the second draft → DuplicateKeyError). The legacy index is
+#: dropped only by the migration (``invoice_corrections_migration``).
+INVOICE_NO_INDEX = ("invoices", [("org_id", 1), ("direction", 1), ("invoice_no", 1)],
+                    {"name": "inv_cn_01_invoice_no_by_direction", "unique": True,
+                     "partialFilterExpression": {"invoice_no": {"$gt": ""}}})
+
 PLANNED_INDEXES = (
+    INVOICE_NO_INDEX,
     ("invoices", [("org_id", 1), ("issued_number", 1)],
      {"name": "inv_cn_01_issued_number_unique", "unique": True,
       "partialFilterExpression": {"issued_number": {"$type": "string"}}}),
@@ -501,35 +553,88 @@ async def current_open(tenant, invoice: dict, *, session=None) -> Decimal:
     return adjusted_total({**invoice, **derived}) - paid
 
 
-async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, *, session) -> dict:
-    """Р47 + Р49.8: a registered supplier credit note is linked with what the invoice
-    AWAITS (``expected_credit_notes``, written by a receipt reversal — PR #82; until #82
-    merges the collection is simply empty and nothing is awaited).
+EXPECTED_LINK_REQUIRED = "EXPECTED_CREDIT_LINK_REQUIRED"
+EXPECTED_LINK_INVALID = "EXPECTED_CREDIT_LINK_INVALID"
 
-      * nothing awaited → the note applies (payable reduced);
-      * Σ awaited equals the note to the cent → every awaited row is fulfilled, the DQ
-        task closes, the payment limit is recomputed (payable reduced by the note);
-      * a difference → the awaited rows stay open (the limit stays), each gets the DQ
-        „разлика в кредитно известие“; the note is registered but NOT applied."""
-    rows = await tenant.expected_credit_notes.find({"invoice_id": invoice_id, "status": "open"},
-                                                   {"_id": 0}, session=session).to_list(1000)
+
+async def check_expected_link(tenant, invoice_id: str, ids, *, session=None) -> List[dict]:
+    """FG-220 / Р49.8 „свързва се от Счетоводителя“: the Accountant names the awaited
+    credit(s) explicitly (``expected_credit_note_ids``) — the system never links by
+    amount. A supplier invoice with an open awaited credit cannot get a credit note
+    without the link (422); every named row must be an OPEN row of THIS invoice (422)."""
+    open_rows = await tenant.expected_credit_notes.find(
+        {"invoice_id": invoice_id, "status": "open"}, {"_id": 0}, session=session).to_list(1000)
+    if ids is None:
+        if open_rows:
+            raise unprocessable(EXPECTED_LINK_REQUIRED,
+                                "Фактурата очаква кредитно известие — посочете кое очаквано "
+                                "известие се покрива (expected_credit_note_ids)",
+                                open=[r.get("id") for r in open_rows])
+        return []
+    if (not isinstance(ids, list) or not ids or len(set(ids)) != len(ids)
+            or not all(isinstance(i, str) and i for i in ids)):
+        raise unprocessable(EXPECTED_LINK_INVALID, "expected_credit_note_ids: списък от идентификатори")
+    by_id = {r.get("id"): r for r in open_rows}
+    missing = [i for i in ids if i not in by_id]
+    if missing:
+        raise unprocessable(EXPECTED_LINK_INVALID,
+                            "Очакваното известие не е отворено за тази фактура", ids=missing)
+    return [by_id[i] for i in ids]
+
+
+async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, rows: List[dict], *,
+                                session) -> dict:
+    """Р47 + Р49.8 (FG-219, FG-220): the registered supplier credit note is linked by the
+    Accountant with the NAMED awaited rows (``expected_credit_notes`` of PR #82).
+
+      * no row named (nothing awaited) → the note applies (payable reduced);
+      * Σ named rows equals the note EXACTLY in whole cents (difference 0.00) → the rows
+        are fulfilled, their DQ tasks close, the payment limit is recomputed;
+      * any difference (1 cent too) → the rows stay open (the limit stays) and get the
+        DQ „разлика в кредитно известие“; the note is registered but NOT applied."""
     if not rows:
         return {"applied": True, "expected": None, "matched": None}
     expected = sum((cents(r.get("amount")) for r in rows), Decimal(0))
     at = now_iso()
-    ids = [r["id"] for r in rows if r.get("id")]
-    if abs(expected - cents(gross)) <= MATCH_TOLERANCE:
-        await tenant.expected_credit_notes.update_many(
-            {"id": {"$in": ids}, "status": "open"},
+    ids = [r["id"] for r in rows]
+    if expected - cents(gross) == MATCH_TOLERANCE:
+        res = await tenant.expected_credit_notes.update_many(
+            {"id": {"$in": ids}, "invoice_id": invoice_id, "status": "open"},
             {"$set": {"status": "fulfilled", "credit_note_id": note_id, "fulfilled_at": at,
                       "dq_task.status": "closed", "dq_task.closed_at": at}}, session=session)
-        await tenant.invoices.update_one({"id": invoice_id}, {"$set": {"awaiting_credit_note": False}},
-                                         session=session)
-        return {"applied": True, "expected": money(expected), "matched": True}
+        if res.modified_count != len(ids):
+            raise conflict(EXPECTED_LINK_INVALID, "Очакваното известие вече е покрито")
+        if not await tenant.expected_credit_notes.find_one(
+                {"invoice_id": invoice_id, "status": "open"}, {"_id": 0, "id": 1}, session=session):
+            await tenant.invoices.update_one({"id": invoice_id},
+                                             {"$set": {"awaiting_credit_note": False}}, session=session)
+        return {"applied": True, "expected": money(expected), "matched": True, "rows": ids}
     await tenant.expected_credit_notes.update_many(
-        {"id": {"$in": ids}, "status": "open"},
+        {"id": {"$in": ids}, "invoice_id": invoice_id, "status": "open"},
         {"$set": {"dq_mismatch": {"title": "разлика в кредитно известие", "status": "open",
                                   "credit_note_id": note_id, "expected": money(expected),
                                   "registered": money(cents(gross)), "at": at}}}, session=session)
-    return {"applied": False, "expected": money(expected), "matched": False,
+    return {"applied": False, "expected": money(expected), "matched": False, "rows": ids,
             "dq": "разлика в кредитно известие"}
+
+
+async def linked_to_warehouse(tenant, invoice: dict, *, session=None) -> bool:
+    """Р51(3): is a supplier invoice linked to a warehouse receipt? Any of its
+    ``invoice_lines`` rows referenced by a canonical ledger movement."""
+    from app.services.invoice_line_lock import first_linked_movement
+    async for line in tenant.invoice_lines.find({"invoice_id": invoice["id"]}, {"_id": 0, "id": 1},
+                                                session=session):
+        if await first_linked_movement(tenant, line["id"], session=session):
+            return True
+    return False
+
+
+async def pending_debit(tenant, invoice_id: str, *, session=None) -> Decimal:
+    """Р51(2): gross of supplier debit notes registered but not yet approved by the Owner —
+    the increase they ask for is NOT payable until approved."""
+    total = Decimal(0)
+    async for n in tenant.credit_debit_notes.find(
+            {"original_invoice_id": invoice_id, "kind": KIND_DEBIT, "status": NOTE_PENDING},
+            {"_id": 0, "gross": 1}, session=session):
+        total += cents(n.get("gross"))
+    return total

@@ -224,7 +224,8 @@ async def update_invoice_status(tenant: TenantData, invoice_id: str, *, session=
         new_status = "Paid"
     elif paid_amount > 0 and remaining > 0:
         new_status = "PartiallyPaid"
-    elif invoice["status"] in ["Issued", "Sent", "PartiallyPaid", "Overdue"] or settled_by_credit:
+    # INV-CN-01 D15: a Paid invoice whose payments are all cancelled is no longer "Paid"
+    elif invoice["status"] in ["Issued", "Sent", "PartiallyPaid", "Overdue", "Paid"] or settled_by_credit:
         if invoice.get("issued_at") and not invoice.get("sent_at"):
             new_status = ISSUED          # Р49.1: issued, not yet sent
         elif invoice["status"] in ["Sent", "PartiallyPaid", "Overdue", "Paid"] and invoice.get("due_date"):
@@ -956,6 +957,10 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     }
     if manual_number:
         invoice["manual_number"] = manual_number
+    if not invoice.get("invoice_no"):
+        # FG-217: a draft has NO number field at all (not null) — a unique number index
+        # never sees it, so a tenant may hold any number of drafts.
+        invoice.pop("invoice_no", None)
     if data.act_id:
         # Р49.5 / FLOW-025 L124: an invoice from an approved act of THIS tenant; the cap
         # (never above the act's value) is enforced when the invoice is issued.
@@ -973,7 +978,16 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     invoice = compute_invoice_totals(invoice)
     invoice["remaining_amount"] = invoice["total"]
     
-    await _tenant(user).invoices.insert_one(invoice)
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await _tenant(user).invoices.insert_one(invoice)
+    except DuplicateKeyError:
+        # FG-217: never a 500 — a number clash, or the legacy (org_id, invoice_no) index that
+        # scripts/inv_cn_01_migrate.py replaces, is answered with a reason; nothing written.
+        raise HTTPException(status_code=409, detail={
+            "error_code": "INVOICE_NUMBER_TAKEN",
+            "message": "Номерът вече е използван (или индексът на номерата чака миграцията "
+                       "INV-CN-01) — нищо не е записано"})
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
                     {"invoice_no": data.invoice_no, "direction": data.direction})
     
@@ -1046,6 +1060,7 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     from app.services.invoice_corrections import (EDITABLE_AFTER_ISSUE, is_locked,
                                                   locked_fields, locked_refusal)
     requested = {k: v for k, v in data.model_dump().items() if v is not None}
+    due_reason = (requested.pop("reason", None) or "").strip()
     if is_locked(invoice):
         changed = [k for k in locked_fields(requested) if requested[k] != invoice.get(k)]
         if invoice["status"] == "Cancelled" or changed:
@@ -1071,8 +1086,21 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             raise HTTPException(status_code=400, detail="Invoice number already exists")
     
     update = dict(requested)
+    due_change = None
     if is_locked(invoice):
         update = {k: v for k, v in update.items() if k in EDITABLE_AFTER_ISSUE}
+        if "due_date" in update and update["due_date"] != invoice.get("due_date"):
+            # Addendum A / Р49(1): after issue the due date changes only with a reason and
+            # a canonical AuditEvent (in the same transaction as the change).
+            if not due_reason:
+                raise HTTPException(status_code=400, detail={
+                    "error_code": "DUE_DATE_REASON_REQUIRED",
+                    "message": "Промяна на падежа на издадена фактура иска причина"})
+            from app.services.money_amount import check_reason
+            check_reason(due_reason)
+            due_change = {"before": invoice.get("due_date"), "after": update["due_date"]}
+        else:
+            update.pop("due_date", None)
     elif invoice.get("direction") == "Issued" and "invoice_no" in update:
         # Р49.1: a draft has no number; a typed one is kept only for manual numbering
         typed = (update.pop("invoice_no") or "").strip()
@@ -1106,6 +1134,10 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             }, session=session)
 
         await tenant.invoices.update_one({"id": invoice_id}, {"$set": update}, session=session)
+        if due_change is not None:
+            await _audit_tx(user, "finance.invoice.due_date_changed", "finance.invoice", invoice_id,
+                            due_reason, {"due_date": due_change,
+                                         "invoice_no": current.get("invoice_no")}, None, session)
 
         # Recompute if vat changed
         if "vat_percent" in update:
@@ -1211,12 +1243,8 @@ async def _issue_in_tx(tenant: TenantData, user: dict, invoice_id: str, session,
         if not number:
             raise HTTPException(status_code=400, detail="Номерът на фактурата е задължителен")
     if current.get("direction") == "Issued":
-        clash = await tenant.invoices.find_one({"direction": "Issued", "invoice_no": number,
-                                                "id": {"$ne": invoice_id}}, {"_id": 0, "id": 1},
-                                               session=session)
-        clash = clash or await tenant.credit_debit_notes.find_one(
-            {"direction": ic.OUTGOING, "number": number}, {"_id": 0, "id": 1}, session=session)
-        if clash:
+        # FG-217: only OUR series counts (a supplier's number never blocks our issue)
+        if await ic.number_taken(tenant, number, session=session, exclude_invoice_id=invoice_id):
             raise ic.conflict("INVOICE_NUMBER_TAKEN", f"Номер {number} вече е използван", number=number)
     now = ic.now_iso()
     fields = {"status": ic.ISSUED, "invoice_no": number, "issued_at": now,
@@ -1336,14 +1364,73 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
+def _cancel_refusal(inv: dict) -> Optional[HTTPException]:
+    """Р49.2 + Р51(1, 3): may this invoice be cancelled at all (statuses only)?"""
+    from app.services import invoice_corrections as ic
+    status = inv.get("status")
+    if status == "Cancelled":
+        return ic.conflict(STATUS_CHANGED, "Фактурата вече е анулирана")
+    if inv.get("direction") == "Issued":
+        if status == ic.DRAFT and not ic.is_legacy_numbered_draft(inv):
+            return ic.conflict(ic.INVOICE_NOT_ISSUED,
+                               "Черновата няма номер — изтрийте я или я поправете")
+        if (status not in (ic.ISSUED, ic.DRAFT) or inv.get("sent_at")
+                or inv.get("vat_ledger_period")):
+            return ic.conflict(ic.USE_CREDIT_NOTE,
+                               "Фактурата е изпратена или платена — анулиране не е позволено; "
+                               "издайте кредитно известие", status=status)
+    elif status == "Paid" or (inv.get("paid_amount") or 0) > 0:
+        return ic.conflict(ic.USE_CORRECTION, "Платена входяща фактура не се анулира — корекция/сторно",
+                           status=status)
+    return None
+
+
+async def _cancel_blockers(tenant: TenantData, inv: dict, session) -> None:
+    """In the transaction: no active payment, no note; a supplier invoice not linked to a
+    warehouse receipt (Р51(3))."""
+    from app.services import invoice_corrections as ic
+    out = ic.USE_CREDIT_NOTE if inv.get("direction") == "Issued" else ic.USE_CORRECTION
+    if await tenant.payment_allocations.count(active_allocations({"invoice_id": inv["id"]}),
+                                              session=session) > 0:
+        raise ic.conflict(out, "Фактурата има плащане — не се анулира")
+    if await tenant.credit_debit_notes.count({"original_invoice_id": inv["id"]}, session=session) > 0:
+        raise ic.conflict(out, "По фактурата има известие — не се анулира")
+    if inv.get("direction") != "Issued" and await ic.linked_to_warehouse(tenant, inv, session=session):
+        raise ic.conflict(ic.USE_CORRECTION,
+                          "Фактурата е свързана със складово приемане — корекция/сторно, не анулиране")
+
+
+async def _set_cancelled(tenant: TenantData, user: dict, current: dict, reason: str,
+                         key: Optional[str], session, extra: Optional[dict] = None) -> None:
+    from app.services import invoice_corrections as ic
+    now = ic.now_iso()
+    fields = {"status": "Cancelled", "cancelled_at": now, "cancelled_by": user["id"],
+              "cancel_reason": reason, "updated_at": now, **(extra or {})}
+    res = await tenant.invoices.update_one({"id": current["id"], "status": current["status"]},
+                                           {"$set": fields}, session=session)
+    if res.matched_count != 1:
+        raise ic.conflict(STATUS_CHANGED, "Статусът на фактурата се промени")
+    await _audit_tx(user, "finance.invoice.cancelled", "finance.invoice", current["id"], reason,
+                    {"status": {"before": current["status"], "after": "Cancelled"},
+                     "invoice_no": current.get("invoice_no"), "total": current.get("total"),
+                     "direction": current.get("direction"),
+                     "requested_by": (current.get("cancellation_request") or {}).get("requested_by")},
+                    key, session)
+
+
 @router.post("/finance/invoices/{invoice_id}/cancel")
 async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
                          reason: Optional[str] = Query(None),
                          idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
                          user: dict = Depends(require_m5)):
-    """INV-CN-01 / Р49.2: cancellation (анулиране) with a reason. An outgoing invoice is
-    cancelled only while Issued — not sent, not paid, no note on it; the number stays,
-    with status Cancelled. After sending / payment → 409 USE_CREDIT_NOTE."""
+    """INV-CN-01 / Р49.2 + Р51 — cancellation (анулиране), always with a reason.
+
+    * outgoing (Р51(1)): only while Issued — not sent, not paid, no note. This call is
+      the Accountant's PROPOSAL (``cancellation_request``); the Owner, another person,
+      approves it (``…/cancel/approve``). The number stays, with status Cancelled.
+      After sending / payment → 409 USE_CREDIT_NOTE.
+    * incoming entered by mistake (Р51(3)): cancelled here by the Accountant, if it is
+      not paid and not linked to a warehouse receipt; otherwise 409 USE_CORRECTION."""
     from app.services import invoice_corrections as ic
     from app.services.auth_tx import run_in_transaction
     if not finance_permission(user):
@@ -1354,56 +1441,142 @@ async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     req = _Request(body, reason, idempotency_key)      # reason (400) + key (428)
-
-    def refusal(inv: dict) -> Optional[HTTPException]:
-        status = inv.get("status")
-        if status == "Cancelled":
-            return ic.conflict(STATUS_CHANGED, "Фактурата вече е анулирана")
-        if inv.get("direction") == "Issued":
-            if status == ic.DRAFT:
-                return ic.conflict(ic.INVOICE_NOT_ISSUED,
-                                   "Черновата няма номер — изтрийте я или я поправете")
-            if status != ic.ISSUED or inv.get("sent_at") or inv.get("vat_ledger_period"):
-                return ic.conflict(ic.USE_CREDIT_NOTE,
-                                   "Фактурата е изпратена или платена — анулиране не е позволено; "
-                                   "издайте кредитно известие", status=status)
-        elif status == "Paid":
-            return ic.conflict(ic.USE_CREDIT_NOTE, "Платена фактура не се анулира — кредитно известие",
-                               status=status)
-        return None
-
-    first = refusal(invoice)
+    first = _cancel_refusal(invoice)
     if first is not None:
         raise first
-    action = "finance.invoice.cancel"
+    outgoing = invoice.get("direction") == "Issued"
 
     async def work():
         async def tx_body(session):
             current = await claim_invoice(tenant, invoice_id, session=session,
                                           forbidden=("Cancelled",), code=STATUS_CHANGED)
-            again = refusal(current)
+            again = _cancel_refusal(current)
             if again is not None:
                 raise again
-            if await tenant.payment_allocations.count(
-                    active_allocations({"invoice_id": invoice_id}), session=session) > 0:
-                raise ic.conflict(ic.USE_CREDIT_NOTE, "Фактурата има плащане — кредитно известие")
-            if await tenant.credit_debit_notes.count({"original_invoice_id": invoice_id},
-                                                     session=session) > 0:
-                raise ic.conflict(ic.USE_CREDIT_NOTE, "По фактурата има известие — не се анулира")
+            await _cancel_blockers(tenant, current, session)
+            if not outgoing:
+                await _set_cancelled(tenant, user, current, req.reason, req.key, session)
+                return
+            pending = current.get("cancellation_request") or {}
+            if pending.get("status") == ic.NOTE_PENDING:
+                raise ic.conflict(ic.CANCELLATION_PENDING, "Вече има предложение за анулиране",
+                                  requested_by=pending.get("requested_by"))
             now = ic.now_iso()
-            await tenant.invoices.update_one({"id": invoice_id, "status": current["status"]}, {"$set": {
-                "status": "Cancelled", "cancelled_at": now, "cancelled_by": user["id"],
-                "cancel_reason": req.reason, "updated_at": now}}, session=session)
-            await _audit_tx(user, "finance.invoice.cancelled", "finance.invoice", invoice_id,
-                            req.reason, {"status": {"before": current["status"], "after": "Cancelled"},
-                                         "invoice_no": current.get("invoice_no"),
-                                         "total": current.get("total")}, req.key, session)
+            request = {"id": str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-invoice-cancel:%s:%s" % (
+                           user["org_id"], req.key))),
+                       "status": ic.NOTE_PENDING, "version": int(pending.get("version") or 0) + 1,
+                       "reason": req.reason, "requested_by": user["id"], "requested_at": now}
+            await tenant.invoices.update_one({"id": invoice_id, "status": current["status"]},
+                                             {"$set": {"cancellation_request": request,
+                                                       "updated_at": now}}, session=session)
+            await _audit_tx(user, "finance.invoice.cancellation_requested", "finance.invoice",
+                            invoice_id, req.reason, {"request_id": request["id"],
+                                                     "version": request["version"],
+                                                     "invoice_no": current.get("invoice_no")},
+                            req.key, session)
         await _tx(run_in_transaction, tx_body)
-        await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice",
-                        invoice_id, {"invoice_no": invoice["invoice_no"], "reason": req.reason})
+        if not outgoing:
+            await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice",
+                            invoice_id, {"invoice_no": invoice.get("invoice_no"), "reason": req.reason})
         return await tenant.invoices.get(invoice_id, {"_id": 0})
 
-    return await _once(user, req.key, action, {"invoice_id": invoice_id, "reason": req.reason}, work)
+    return await _once(user, req.key, "finance.invoice.cancel",
+                       {"invoice_id": invoice_id, "reason": req.reason}, work)
+
+
+@router.post("/finance/invoices/{invoice_id}/cancel/approve")
+async def approve_invoice_cancellation(invoice_id: str, body: Optional[dict] = Body(None),
+                                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                                       user: dict = Depends(require_m5)):
+    """Р51(1): the Owner — not the person who proposed it — approves the EXACT version of
+    a cancellation proposal; every condition is checked again in the same transaction."""
+    from app.services import invoice_corrections as ic
+    from app.services.auth_tx import run_in_transaction
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    if user.get("role") != "Owner":
+        raise HTTPException(status_code=403, detail={
+            "error_code": ic.APPROVER_ROLE_REQUIRED, "message": "Одобрява само Собственикът"})
+    key = _require_key(idempotency_key)
+    version = (body or {}).get("version") if isinstance(body, dict) else None
+    if isinstance(version, bool) or not isinstance(version, int):
+        raise HTTPException(status_code=422, detail={
+            "error_code": ic.VERSION_MISMATCH, "message": "Посочете версията, която одобрявате"})
+    tenant = _tenant(user)
+
+    async def work():
+        async def tx_body(session):
+            current = await claim_invoice(tenant, invoice_id, session=session,
+                                          forbidden=("Cancelled",), code=STATUS_CHANGED)
+            if current is None:
+                raise HTTPException(status_code=404, detail="Invoice not found")
+            request = current.get("cancellation_request") or {}
+            if request.get("status") != ic.NOTE_PENDING:
+                raise ic.conflict(ic.NOT_PENDING, "Няма предложение за анулиране")
+            if request.get("version") != version:
+                raise ic.conflict(ic.VERSION_MISMATCH, "Одобрява се точна версия — версията е друга")
+            if request.get("requested_by") == user["id"]:
+                raise ic.conflict(ic.SAME_PERSON_APPROVAL,
+                                  "Предложилият анулирането не може да го одобри — нужен е друг човек")
+            again = _cancel_refusal(current)
+            if again is not None:
+                raise again
+            await _cancel_blockers(tenant, current, session)
+            at = ic.now_iso()
+            await _set_cancelled(tenant, user, current, request.get("reason") or "", key, session, {
+                "cancellation_request.status": ic.NOTE_APPROVED,
+                "cancellation_request.approved_by": user["id"],
+                "cancellation_request.approved_at": at})
+        await _tx(run_in_transaction, tx_body)
+        await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice",
+                        invoice_id, {"approved": True})
+        return await tenant.invoices.get(invoice_id, {"_id": 0})
+
+    return await _once(user, key, "finance.invoice.cancel.approve",
+                       {"invoice_id": invoice_id, "version": version}, work)
+
+
+@router.post("/finance/invoices/{invoice_id}/cancel/reject")
+async def reject_invoice_cancellation(invoice_id: str, body: Optional[dict] = Body(None),
+                                      reason: Optional[str] = Query(None),
+                                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                                      user: dict = Depends(require_m5)):
+    """Debt D10 closed: a pending cancellation proposal is rejected by the Owner, or
+    withdrawn by the person who proposed it — with a reason; the invoice stays as it is."""
+    from app.services import invoice_corrections as ic
+    from app.services.auth_tx import run_in_transaction
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    req = _Request(body, reason, idempotency_key)
+    tenant = _tenant(user)
+
+    async def work():
+        async def tx_body(session):
+            current = await claim_invoice(tenant, invoice_id, session=session,
+                                          forbidden=("Cancelled",), code=STATUS_CHANGED)
+            if current is None:
+                raise HTTPException(status_code=404, detail="Invoice not found")
+            request = current.get("cancellation_request") or {}
+            if request.get("status") != ic.NOTE_PENDING:
+                raise ic.conflict(ic.NOT_PENDING, "Няма предложение за анулиране")
+            if user.get("role") != "Owner" and request.get("requested_by") != user["id"]:
+                raise HTTPException(status_code=403, detail={
+                    "error_code": ic.APPROVER_ROLE_REQUIRED,
+                    "message": "Отхвърля Собственикът или оттегля предложилият"})
+            at = ic.now_iso()
+            await tenant.invoices.update_one({"id": invoice_id}, {"$set": {
+                "cancellation_request.status": ic.NOTE_REJECTED,
+                "cancellation_request.rejected_by": user["id"],
+                "cancellation_request.rejected_at": at,
+                "cancellation_request.reject_reason": req.reason, "updated_at": at}}, session=session)
+            await _audit_tx(user, "finance.invoice.cancellation_rejected", "finance.invoice", invoice_id,
+                            req.reason, {"request_id": request.get("id"), "version": request.get("version")},
+                            req.key, session)
+        await _tx(run_in_transaction, tx_body)
+        return await tenant.invoices.get(invoice_id, {"_id": 0})
+
+    return await _once(user, req.key, "finance.invoice.cancel.reject",
+                       {"invoice_id": invoice_id, "reason": req.reason}, work)
 
 
 @router.delete("/finance/invoices/{invoice_id}")
@@ -1421,7 +1594,8 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         raise HTTPException(status_code=409, detail="Can only delete Draft invoices")
     # INV-CN-01 (CLAUDE.md §2.9, Р49): an outgoing invoice that carries a number is never
     # hard-deleted (a legacy draft numbered before INV-CN-01 is issued and cancelled).
-    if invoice.get("direction") == "Issued" and invoice.get("invoice_no"):
+    # Р51(3): an incoming invoice (supplier number) entered by mistake is CANCELLED, not deleted.
+    if isinstance(invoice.get("invoice_no"), str) and invoice["invoice_no"].strip():
         from app.services.invoice_corrections import INVOICE_NUMBERED, conflict
         raise conflict(INVOICE_NUMBERED, "Фактура с номер не се изтрива — анулирайте я с причина",
                        invoice_no=invoice.get("invoice_no"))
@@ -1430,8 +1604,7 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     
     # FG-140: only while still Draft (CAS) — a concurrent send wins → 409.
     res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft",
-                                            "$or": [{"direction": {"$ne": "Issued"}},
-                                                    {"invoice_no": {"$in": [None, ""]}}]})
+                                            "invoice_no": {"$in": [None, ""]}})
     if res.deleted_count == 0:
         raise status_conflict(NOT_DRAFT, invoice_id, (await tenant.invoices.get(invoice_id) or {}).get("status"))
     return {"ok": True}
@@ -1517,6 +1690,7 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
     payment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-quick-pay:%s:%s:%s" % (org_id, invoice_id, key)))
     allocation_id = _allocation_id(org_id, payment_id, key, 0)
     remaining = await _invoice_remaining(tenant, invoice, [allocation_id])
+    await _refuse_unapproved_debit(tenant, invoice_id, amount, remaining)    # Р51(2)
     if amount > remaining + 0.01:  # small tolerance for rounding
         raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
 
@@ -1717,6 +1891,18 @@ def _invoice_lock(tenant: TenantData, invoice_id: str):
                      "Invoice %s not found" % invoice_id)
 
 
+async def _refuse_unapproved_debit(tenant: TenantData, invoice_id: str, amount: float,
+                                   remaining: float) -> None:
+    """INV-CN-01 / Р51(2): a supplier debit note raises the payable only after the Owner
+    approves it; until then a payment above the open amount that would cover it → 409."""
+    from app.services.invoice_corrections import DEBIT_NOTE_NOT_APPROVED, conflict, pending_debit
+    pending = await pending_debit(tenant, invoice_id)
+    if pending > 0 and amount > remaining + 1e-9:
+        raise conflict(DEBIT_NOTE_NOT_APPROVED,
+                       "Дебитното известие още не е одобрено от Собственика — увеличението не се плаща",
+                       invoice_id=invoice_id, pending_debit=float(pending), payable=round(remaining, 2))
+
+
 async def _invoice_remaining(tenant: TenantData, invoice: dict, exclude_ids=()) -> float:
     """Open amount of an invoice from its ACTIVE allocations (the rule of update_invoice_status),
     read under the invoice lock — never from the stored, possibly stale remaining_amount."""
@@ -1754,6 +1940,9 @@ async def _reverse_one(tenant: TenantData, user: dict, payment_id: str, reason: 
     original.pop("_id", None)
     await _ensure_reversal_row(tenant, user, original, now)
     await _reversal_audit(user, original, idem_key)
+    if original.get("refund_invoice_id"):
+        # INV-CN-01 D9: a reversed refund gives the credit balance back on its invoice
+        await update_invoice_status(tenant, original["refund_invoice_id"])
     return {"payment_id": payment_id, "reversal_payment_id": rev_id}
 
 
@@ -2092,6 +2281,7 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                     invoices[alloc.invoice_id] = invoice
                     invoice["_remaining"] = await _invoice_remaining(tenant, invoice, own_ids)
                 remaining = invoice["_remaining"] - planned_by_invoice.get(alloc.invoice_id, 0)
+                await _refuse_unapproved_debit(tenant, alloc.invoice_id, amount, remaining)  # Р51(2)
                 if amount > remaining + 1e-9:
                     raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
                 planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount

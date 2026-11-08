@@ -352,6 +352,23 @@ export default function InvoiceEditorPage() {
     try {
       await API.post(`/finance/invoices/${invoiceId}/cancel`, { reason },
         { headers: { "Idempotency-Key": newIdempotencyKey() } });
+      // Р51(1): an outgoing invoice is cancelled only after the Owner approves the proposal
+      if (invoice?.direction === "Issued") alert("Предложението за анулиране чака одобрение от Собственика");
+      await fetchData();
+    } catch (err) {
+      alert(apiErrorText(err, t("toast.saveFailed")));
+    } finally { setSaving(false); }
+  };
+
+  const handleCancelDecision = async (approveIt) => {
+    const req = invoice?.cancellation_request;
+    if (!req) return;
+    const body = approveIt ? { version: req.version } : { reason: (window.prompt("Причина:") || "").trim() };
+    if (!approveIt && !body.reason) return;
+    setSaving(true);
+    try {
+      await API.post(`/finance/invoices/${invoiceId}/cancel/${approveIt ? "approve" : "reject"}`, body,
+        { headers: { "Idempotency-Key": newIdempotencyKey() } });
       await fetchData();
     } catch (err) {
       alert(apiErrorText(err, t("toast.saveFailed")));
@@ -424,11 +441,16 @@ export default function InvoiceEditorPage() {
   const isAdmin = ["Admin", "Owner"].includes(user?.role);
   const locked = !(canEdit && (isNew || editing));
   const canSend = (isDraft || invoice?.status === "Issued") && !isNew && canManage;
-  const canDeleteDraft = isDraft && !isNew && canManage;
+  const canDeleteDraft = isDraft && !isNew && canManage && !invoice?.invoice_no;   // Р49 / Р51(3)
   // Р49.2: an outgoing invoice is cancelled only while issued and not sent
-  const canCancel = invoice && canManage && (invoice.direction === "Issued"
-    ? invoice.status === "Issued"
-    : ["Sent", "PartiallyPaid", "Overdue"].includes(invoice.status));
+  // Р51(3): a supplier invoice entered by mistake is cancelled too (not paid, not received)
+  const canCancel = invoice && canManage && !(invoice.cancellation_request?.status === "pending_approval") &&
+    (invoice.direction === "Issued"
+      ? invoice.status === "Issued"
+      : ["Draft", "Sent", "Overdue"].includes(invoice.status) && !(invoice.paid_amount > 0));
+  const pendingCancel = invoice?.cancellation_request?.status === "pending_approval";
+  const canDecideCancel = pendingCancel && user?.role === "Owner" && invoice.cancellation_request.requested_by !== user?.id;
+  const canWithdrawCancel = pendingCancel && invoice.cancellation_request.requested_by === user?.id;
   const canPay = invoice && !["Draft", "Cancelled", "Paid"].includes(invoice.status) && canManage && (invoice.remaining_amount > 0);
   const hasProject = invoice && invoice.project_id;
 
@@ -510,9 +532,24 @@ export default function InvoiceEditorPage() {
               <Download className="w-4 h-4 mr-1" /> PDF
             </Button>
           )}
-          {canCancel && isAdmin && (
+          {canCancel && (
             <Button variant="outline" className="text-red-400 border-red-500/30" onClick={handleCancel} disabled={saving} data-testid="cancel-btn">
               <X className="w-4 h-4 mr-1" /> {t("finance.cancelInvoice")}
+            </Button>
+          )}
+          {pendingCancel && (
+            <Badge variant="outline" className="text-xs text-amber-400" data-testid="cancel-pending-badge">
+              Чака одобрение за анулиране: {invoice.cancellation_request.reason}
+            </Badge>
+          )}
+          {canDecideCancel && (
+            <Button size="sm" onClick={() => handleCancelDecision(true)} disabled={saving} data-testid="approve-cancel-btn">
+              Одобри анулирането
+            </Button>
+          )}
+          {(canDecideCancel || canWithdrawCancel) && (
+            <Button size="sm" variant="outline" onClick={() => handleCancelDecision(false)} disabled={saving} data-testid="reject-cancel-btn">
+              Отхвърли
             </Button>
           )}
           {canDeleteDraft && (

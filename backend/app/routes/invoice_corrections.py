@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
@@ -128,6 +129,14 @@ async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
         basis = None
         if kind == ic.KIND_DEBIT and direction == ic.OUTGOING:
             basis = await _debit_basis(tenant, invoice, body.get("basis"))
+        elif kind == ic.KIND_DEBIT:
+            basis = _supplier_debit_basis(body.get("basis"), file_id)      # Р51(2)
+        link_ids = body.get("expected_credit_note_ids")
+        if kind == ic.KIND_CREDIT and direction == ic.INCOMING:
+            await ic.check_expected_link(tenant, invoice_id, link_ids)       # FG-220 (fail fast)
+        elif link_ids is not None:
+            raise ic.unprocessable(ic.EXPECTED_LINK_INVALID,
+                                   "expected_credit_note_ids е само за входящо кредитно известие")
         number = None
         supplier_key = None
         if direction == ic.INCOMING:
@@ -152,6 +161,11 @@ async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
         }
         if direction == ic.OUTGOING:
             doc.update({"status": ic.NOTE_PENDING, "issue_date": None})
+        elif kind == ic.KIND_DEBIT:
+            # Р51(2): a supplier debit note raises the payable only after the Owner approves
+            doc.update({"status": ic.NOTE_PENDING,
+                        "issue_date": body.get("issue_date") if isinstance(body.get("issue_date"), str)
+                        else now[:10]})
         else:
             doc.update({"status": ic.NOTE_REGISTERED,
                         "issue_date": body.get("issue_date") if isinstance(body.get("issue_date"), str)
@@ -171,17 +185,16 @@ async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
             if kind == ic.KIND_CREDIT:
                 await ic.check_credit_cap(tenant, current, lines, session=session)
             row = dict(doc)
-            if direction == ic.INCOMING:
-                link = ({"applied": True, "expected": None, "matched": None}
-                        if kind != ic.KIND_CREDIT else
-                        await ic.match_expected_credit(tenant, invoice_id, totals["gross"], note_id,
-                                                       session=session))
+            if direction == ic.INCOMING and kind == ic.KIND_CREDIT:
+                rows = await ic.check_expected_link(tenant, invoice_id, link_ids, session=session)
+                link = await ic.match_expected_credit(tenant, invoice_id, totals["gross"], note_id,
+                                                      rows, session=session)
                 row.update({"applied": link["applied"], "expected_link": link})
             await tenant.credit_debit_notes.insert_one(row, session=session)
             if row["applied"]:
                 await fin.update_invoice_status(tenant, invoice_id, session=session)
             await fin._audit_tx(user, "finance.%s_note.%s" % (kind, "registered"
-                                if direction == ic.INCOMING else "drafted"),
+                                if row["status"] == ic.NOTE_REGISTERED else "drafted"),
                                 "finance.%s_note" % kind, note_id, reason,
                                 {"original_invoice_id": invoice_id, "direction": direction,
                                  "net": totals["net"], "vat": totals["vat"], "gross": totals["gross"],
@@ -207,6 +220,22 @@ async def _debit_basis(tenant, invoice: dict, basis) -> dict:
     return {"type": "act", "id": act["id"], "act_number": act.get("act_number")}
 
 
+SUPPLIER_DEBIT_BASES = ("order", "additional_delivery", "annex")
+
+
+def _supplier_debit_basis(basis, file_id) -> dict:
+    """Р51(2): a supplier debit note needs its basis — the order, an additional delivery or
+    an annex (reference) — and the document (``file_id``) → otherwise 422."""
+    if (not isinstance(basis, dict) or basis.get("type") not in SUPPLIER_DEBIT_BASES
+            or not isinstance(basis.get("ref"), str) or not basis["ref"].strip()
+            or not isinstance(file_id, str) or not file_id.strip()):
+        raise ic.unprocessable(ic.DEBIT_NOTE_BASIS_REQUIRED,
+                               "Входящото дебитно известие изисква основание (поръчка, допълнителна "
+                               "доставка или анекс) и документ (file_id)",
+                               allowed=list(SUPPLIER_DEBIT_BASES))
+    return {"type": basis["type"], "ref": basis["ref"].strip()}
+
+
 @router.post("/finance/credit-notes/{note_id}/approve")
 async def approve_note(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
@@ -227,7 +256,7 @@ async def approve_note(note_id: str, body: dict = Body(...), user: dict = Depend
                                                             session=session)
             if note is None:
                 raise HTTPException(status_code=404, detail="Note not found")
-            if note.get("direction") != ic.OUTGOING or note.get("status") != ic.NOTE_PENDING:
+            if note.get("status") != ic.NOTE_PENDING:
                 raise ic.conflict(ic.NOT_PENDING, "Известието не чака одобрение",
                                   status=note.get("status"))
             if note.get("version") != version:
@@ -243,12 +272,16 @@ async def approve_note(note_id: str, body: dict = Body(...), user: dict = Depend
                 act = await ic.claim_act(tenant, note["basis"]["id"], session=session)
                 ic.check_act_approved(act)
                 await ic.check_act_cap(tenant, act, ic.cents(note["net"]), session=session)
-            number = await ic.take_number(tenant, prefix, session=session)
+            # an outgoing note gets OUR next number; a supplier note keeps the supplier's
+            number = (await ic.take_number(tenant, prefix, session=session)
+                      if note.get("direction") == ic.OUTGOING else note.get("number"))
             at = ic.now_iso()
             res = await tenant.credit_debit_notes.update_one(
                 {"id": note_id, "status": ic.NOTE_PENDING, "version": version},
                 {"$set": {"status": ic.NOTE_APPROVED, "applied": True, "number": number,
-                          "issue_date": at[:10], "approved_by": user["id"], "approved_at": at,
+                          "issue_date": (at[:10] if note.get("direction") == ic.OUTGOING
+                                         else note.get("issue_date")),
+                          "approved_by": user["id"], "approved_at": at,
                           "approval": {"version": version, "approved_by": user["id"], "at": at,
                                        "evidence": {"lines": note["lines"], "gross": note["gross"]}},
                           "updated_at": at}}, session=session)
@@ -267,6 +300,62 @@ async def approve_note(note_id: str, body: dict = Body(...), user: dict = Depend
 
     return await fin._once(user, key, "finance.credit_debit_note.approve",
                            {"note_id": note_id, "version": version}, work)
+
+
+async def _reject(user: dict, key: str, reason: str, collection: str, row_id: str, label: str):
+    """D10: a pending note / offset is rejected by the Owner, or withdrawn by its author,
+    with a reason — it never had an effect and keeps none; nothing is deleted."""
+    from app.services.auth_tx import run_in_transaction
+    tenant = fin._tenant(user)
+    coll = tenant.credit_debit_notes if collection == "credit_debit_notes" else tenant.invoice_offsets
+
+    async def tx_body(session):
+        row = await coll.find_one({"id": row_id}, {"_id": 0}, session=session)
+        if row is None:
+            raise HTTPException(status_code=404, detail="Not found")
+        if row.get("status") != ic.NOTE_PENDING:
+            raise ic.conflict(ic.NOT_PENDING, "Не чака одобрение", status=row.get("status"))
+        if user.get("role") not in APPROVER_ROLES and row.get("created_by") != user["id"]:
+            raise HTTPException(status_code=403, detail={
+                "error_code": ic.APPROVER_ROLE_REQUIRED,
+                "message": "Отхвърля Собственикът или оттегля авторът"})
+        at = ic.now_iso()
+        res = await coll.update_one({"id": row_id, "status": ic.NOTE_PENDING}, {"$set": {
+            "status": ic.NOTE_REJECTED, "rejected_by": user["id"], "rejected_at": at,
+            "reject_reason": reason, "updated_at": at}}, session=session)
+        if res.matched_count != 1:
+            raise ic.conflict(ic.NOT_PENDING, "Не чака одобрение")
+        await fin._audit_tx(user, "finance.%s.rejected" % label, "finance.%s" % label, row_id, reason,
+                            {"status": {"before": ic.NOTE_PENDING, "after": ic.NOTE_REJECTED},
+                             "author": row.get("created_by")}, key, session)
+    await fin._tx(run_in_transaction, tx_body)
+    return await coll.find_one({"id": row_id}, {"_id": 0})
+
+
+@router.post("/finance/credit-notes/{note_id}/reject")
+async def reject_note(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    _guard(user)
+    key = fin._require_key(idempotency_key)
+    reason = _reason(body if isinstance(body, dict) else {})
+
+    async def work():
+        return await _reject(user, key, reason, "credit_debit_notes", note_id, "credit_debit_note")
+    return await fin._once(user, key, "finance.credit_debit_note.reject",
+                           {"note_id": note_id, "reason": reason}, work)
+
+
+@router.post("/finance/offsets/{offset_id}/reject")
+async def reject_offset(offset_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    _guard(user)
+    key = fin._require_key(idempotency_key)
+    reason = _reason(body if isinstance(body, dict) else {})
+
+    async def work():
+        return await _reject(user, key, reason, "invoice_offsets", offset_id, "offset")
+    return await fin._once(user, key, "finance.offset.reject",
+                           {"offset_id": offset_id, "reason": reason}, work)
 
 
 @router.get("/finance/credit-notes")
@@ -387,6 +476,17 @@ async def create_offset(body: dict = Body(...), user: dict = Depends(require_m5)
     src_id, tgt_id = body.get("source_invoice_id"), body.get("target_invoice_id")
     if not isinstance(src_id, str) or not isinstance(tgt_id, str) or src_id == tgt_id:
         raise ic.unprocessable(ic.NOTE_INVALID, "Посочете две различни фактури")
+    # FG-222 / FLOW-010 L355-357: an explicit legal / contractual basis, its document
+    # (file_id) and the EXACT source obligations — the two invoices and the approved
+    # credit note that created the balance — never free text alone.
+    legal_basis, file_id = body.get("legal_basis"), body.get("file_id")
+    note_src = body.get("source_credit_note_id")
+    if (not isinstance(legal_basis, str) or not legal_basis.strip()
+            or not isinstance(file_id, str) or not file_id.strip()
+            or not isinstance(note_src, str) or not note_src):
+        raise ic.unprocessable(ic.OFFSET_BASIS_REQUIRED,
+                               "Прихващането изисква правно основание (legal_basis), документ "
+                               "(file_id) и кредитното известие-източник (source_credit_note_id)")
 
     async def work():
         from app.services.auth_tx import run_in_transaction
@@ -400,11 +500,13 @@ async def create_offset(body: dict = Body(...), user: dict = Depends(require_m5)
         offset_id = _stable_id("invoice-offset", user["org_id"], key)
 
         async def tx_body(session):
-            await _check_offset(tenant, src_id, tgt_id, amount, session)
+            await _check_offset(tenant, src_id, tgt_id, amount, session, note_src, offset_id)
             at = ic.now_iso()
             await tenant.invoice_offsets.insert_one({
                 "id": offset_id, "org_id": user["org_id"], "source_invoice_id": src_id,
                 "target_invoice_id": tgt_id, "amount": ic.money(ic.cents(amount)), "reason": reason,
+                "legal_basis": legal_basis.strip(), "file_id": file_id.strip(),
+                "source_credit_note_id": note_src,
                 "status": ic.OFFSET_PENDING, "version": 1, "contract_scope": list(ic.contract_key(src)),
                 "created_by": user["id"], "created_at": at, "updated_at": at}, session=session)
             await fin._audit_tx(user, "finance.offset.requested", "finance.offset", offset_id, reason,
@@ -416,8 +518,24 @@ async def create_offset(body: dict = Body(...), user: dict = Depends(require_m5)
     return await fin._once(user, key, "finance.offset.create", {"body": body}, work)
 
 
-async def _check_offset(tenant, src_id: str, tgt_id: str, amount, session) -> None:
+async def _check_offset(tenant, src_id: str, tgt_id: str, amount, session,
+                        note_id: Optional[str], offset_id: Optional[str]) -> None:
     src = await _claim(tenant, src_id, session)
+    if note_id is not None:
+        note = await tenant.credit_debit_notes.find_one(
+            {"id": note_id, "original_invoice_id": src_id, "kind": ic.KIND_CREDIT, "applied": True,
+             "status": {"$in": [ic.NOTE_APPROVED, ic.NOTE_REGISTERED]}}, {"_id": 0}, session=session)
+        if note is None:
+            raise ic.unprocessable(ic.OFFSET_BASIS_REQUIRED,
+                                   "Източникът трябва да е приложено кредитно известие по фактурата-източник")
+        used = Decimal(0)
+        async for o in tenant.invoice_offsets.find(
+                {"source_credit_note_id": note_id, "status": {"$in": [ic.OFFSET_PENDING, ic.OFFSET_APPROVED]},
+                 "id": {"$ne": offset_id}}, {"_id": 0, "amount": 1}, session=session):
+            used += ic.cents(o.get("amount"))
+        if ic.cents(amount) > ic.cents(note.get("gross")) - used:
+            raise ic.conflict(ic.OFFSET_EXCEEDS_BALANCE, "Сумата надвишава неизползваното по известието",
+                              note_gross=note.get("gross"), already_offset=ic.money(used))
     tgt = await _claim(tenant, tgt_id, session)
     balance = -(await ic.current_open(tenant, src, session=session))
     open_tgt = await ic.current_open(tenant, tgt, session=session)
@@ -454,7 +572,8 @@ async def approve_offset(offset_id: str, body: dict = Body(...), user: dict = De
                 raise ic.conflict(ic.SAME_PERSON_APPROVAL,
                                   "Авторът не може да одобри своето прихващане — нужен е друг човек")
             await _check_offset(tenant, off["source_invoice_id"], off["target_invoice_id"],
-                                off["amount"], session)
+                                off["amount"], session, off.get("source_credit_note_id") or None,
+                                offset_id)
             at = ic.now_iso()
             await tenant.invoice_offsets.update_one(
                 {"id": offset_id, "status": ic.OFFSET_PENDING, "version": version},

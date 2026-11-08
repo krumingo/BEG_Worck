@@ -568,9 +568,13 @@ async def startup():
     await db.smr_groups.create_index([("org_id", 1), ("project_id", 1), ("sort_order", 1)])
 
 
-    # Invoice unique number index (prevents duplicates)
+    # Invoice unique number index (prevents duplicates).
+    # INV-CN-01 FG-217: partial and per direction — a draft has no number, and a supplier
+    # number never blocks our own series. The legacy unique+sparse (org_id, invoice_no)
+    # index is dropped only by scripts/inv_cn_01_migrate.py (dry run, then --apply).
     try:
-        await db.invoices.create_index([("org_id", 1), ("invoice_no", 1)], unique=True, sparse=True)
+        from app.services.invoice_corrections import INVOICE_NO_INDEX
+        await db.invoices.create_index(INVOICE_NO_INDEX[1], **INVOICE_NO_INDEX[2])
     except Exception:
         pass  # Index may already exist or have conflicts with existing data
 

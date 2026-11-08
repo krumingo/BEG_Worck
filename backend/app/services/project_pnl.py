@@ -30,7 +30,8 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
-    _rev_statuses = ["Issued", "Sent", "Paid", "PartiallyPaid"]   # INV-CN-01: Issued is official
+    # INV-CN-01: Issued is official; D15 — an Overdue invoice is issued revenue too
+    _rev_statuses = ["Issued", "Sent", "Paid", "PartiallyPaid", "Overdue"]
     # Gross (с ДДС) — invoiced / received, the cash view
     invoiced_total = sum(i.get("total", 0) for i in invoices if i.get("status") in _rev_statuses)
     # Net (без ДДС) — management revenue basis

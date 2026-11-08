@@ -12,6 +12,7 @@ const NOTE_STATUS = {
   pending_approval: "Чака одобрение",
   approved: "Одобрено",
   registered: "Регистрирано",
+  rejected: "Отхвърлено",
 };
 
 const num = (text) => parseFloat(String(text || "").replace(",", "."));
@@ -76,6 +77,25 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
       const number = (window.prompt("Номер на известието от доставчика:") || "").trim();
       if (!number) return;
       body.number = number;
+      // FG-220: the Accountant links the awaited credit explicitly
+      const open = (data?.expected_credit_notes || []).filter((e) => e.status === "open");
+      if (kind === "credit" && open.length > 0) {
+        const ids = (window.prompt(
+          "Кое очаквано известие покрива (ID, разделени със запетая):\n" +
+            open.map((e) => `${e.id} — ${e.amount}`).join("\n"),
+          open.map((e) => e.id).join(",")) || "").split(",").map((x) => x.trim()).filter(Boolean);
+        if (ids.length === 0) return;
+        body.expected_credit_note_ids = ids;
+      }
+      if (kind === "debit") {
+        // Р51(2): basis (order / additional delivery / annex) + document
+        const type = (window.prompt("Основание: order / additional_delivery / annex", "order") || "").trim();
+        const ref = (window.prompt("Номер/описание на основанието:") || "").trim();
+        const fileId = (window.prompt("Документ (file_id):") || "").trim();
+        if (!type || !ref || !fileId) return;
+        body.basis = { type, ref };
+        body.file_id = fileId;
+      }
     }
     if (kind === "debit" && outgoing) {
       const actId = (window.prompt("Основание — ID на одобрен акт:") || "").trim();
@@ -86,6 +106,10 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
   };
 
   const approve = (note) => post(`/finance/credit-notes/${note.id}/approve`, { version: note.version });
+  const reject = (note) => {
+    const reason = (window.prompt("Причина за отхвърляне / оттегляне:") || "").trim();
+    if (reason) post(`/finance/credit-notes/${note.id}/reject`, { reason });
+  };
 
   if (!invoice || invoice.status === "Draft") return null;
   return (
@@ -119,6 +143,11 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
             {n.status === "pending_approval" && isOwner && n.created_by !== user?.id && (
               <Button size="sm" disabled={busy} onClick={() => approve(n)} data-testid={`approve-note-${n.id}`}>
                 Одобри
+              </Button>
+            )}
+            {n.status === "pending_approval" && (isOwner || n.created_by === user?.id) && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => reject(n)} data-testid={`reject-note-${n.id}`}>
+                Отхвърли
               </Button>
             )}
           </span>
