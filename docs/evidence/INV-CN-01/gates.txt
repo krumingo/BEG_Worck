@@ -1,0 +1,24 @@
+# INV-CN-01 gates, 2026-11-08T12:39:31Z, branch claude/inv-cn-01-credit-notes on main cd03324
+# real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), from backend/ with PYTHONPATH=.
+## A2C guard
+W0-03E-A2C tenant boundary guard: 236 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 476 unit(s) checked, 0 violation(s)
+## INV-CN-01 (real mongo, 3 modes)
+57 passed, 1 warning in 40.15s
+## PAY-01 family + 5C-C26l invoice suites (real mongo + mongomock)
+630 passed, 299 skipped, 1 warning in 151.72s (0:02:31)
+## R0 (real mongo)
+814 passed, 10 warnings in 156.90s (0:02:36)
+## W0 (real mongo)
+15 failed, 1177 passed, 10 warnings in 142.40s (0:02:22)
+failures by file:
+     15 FAILED tests/test_w0_03e_legacy_routes.py
+## W0 DB-free
+15 failed, 1094 passed, 83 skipped, 10 warnings in 83.10s (0:01:23)
+     15 FAILED tests/test_w0_03e_legacy_routes.py
+## PM-01 (real mongo, -rs)
+6 passed, 10 warnings in 191.00s (0:03:11)
+## frontend yarn test
+Test Suites: 17 passed, 17 total
+Tests:       170 passed, 170 total
