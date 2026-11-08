@@ -5530,3 +5530,9 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 - **Role-union:** 0 differences.
 - **PM-01:** 168 own cells, all keep the PR's value on the head; 0 extra.
 - **Gates:** queued after #84 `d5d3089` (serial).
+
+## 2026-11-08 18:26 UTC: main `1ea98fe` (merge of #74): verified
+
+- **Parents:** `fddb018` + `4c8b313` (the audited head, PASS).
+- **Byte check:** the tree `bde4153` equals `merge-tree(fddb018, 4c8b313)`.
+- **Next:** #76 is merging main. #83, #84 and #86 need `1ea98fe` before their own merge.
