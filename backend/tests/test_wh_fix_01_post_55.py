@@ -731,3 +731,19 @@ async def test_fg202_planned_rows_join_canonical_quantities_by_item_id(
     cov = await materials_baseline.get_material_coverage(PROJECT, user=_user())
     issued = {r["id"]: r["issued_qty"] for r in cov["rows"]}
     assert issued == {"pm-c22": 10, "pm-other": 0}
+
+
+async def test_whfix81_line_unit_price_is_used_exactly(canonical_mongo_db, allow_always_gate,
+                                                       monkeypatch):
+    """The line's own unit_price is stored exactly — Σ qty × price = the line
+    value, no 0.0001 residue (only a DERIVED total / qty price is quantized)."""
+    client, db = canonical_mongo_db
+    _patch_all(monkeypatch, db)
+    await db["invoice_lines"].insert_one({
+        "id": "line-x", "org_id": T, "invoice_id": "inv-x", "qty": 3, "unit": "bag",
+        "unit_price": 0.33333, "line_total_ex_vat": 0.99999,
+        "allocations": [{"type": "warehouse", "ref_id": "wh_1", "qty": 3}]})
+    run = _Run(client, allow_always_gate, db)
+    res = await run(CanonicalAction.RECEIVE_FROM_SUPPLIER, source=SUP, destination=WH,
+                    quantity=Decimal("3"), invoice_id="inv-x", invoice_line_id="line-x")
+    assert Decimal(str(res.envelope["unit_value"])) * 3 == Decimal("0.99999")

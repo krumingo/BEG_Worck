@@ -90,6 +90,7 @@ ORG_KEYED: Dict[str, str] = {
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
               "change_orders", "client_acts", "contract_payments", "invoices",
               "invoice_lines", "invoice_versions", "invoice_settings", "supplier_invoices",
+              "invoice_line_allocation_versions",
               "ocr_invoice_intake", "historical_offer_rows", "historical_import_batches",
               "sales"),
     **_family(FAMILY_PAYMENTS,

@@ -363,6 +363,13 @@ async def _matrix(monkeypatch, db, mode):
                 for d in u["header_destinations"]} == {"pr-only-b": "Unknown"}
         # inv-shared's line is fully allocated to warehouses (the line wins over
         # its header pr-x): final, on no project, not in the bucket.
+        # WHFIX81 (restored check): A's line on the shared invoice id, allocated
+        # to the shared project id pr-x → the report names A's own project.
+        await db["invoice_lines"].update_one({"id": "line-a", "org_id": ORG_A}, {"$set": {
+            "allocations": [{"type": "project", "ref_id": "pr-x"}]}})
+        shared = await get(c, "/api/reports/finance-details/by-project?" + PERIOD)
+        assert {r["project_id"]: r["project_name"] for r in shared["items"]} == {
+            "pr-x": "A-OWN-PROJECT"}
         await get(c, "/api/reports/finance-details/transactions?" + PERIOD)
         await get(c, "/api/reports/finance-details/top-counterparties?direction=income&" + PERIOD)
         await get(c, "/api/reports/finance-details/top-counterparties?direction=expense&" + PERIOD)

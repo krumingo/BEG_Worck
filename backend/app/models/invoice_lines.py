@@ -124,6 +124,9 @@ class AllocationInputItem(BaseModel):
 class InvoiceLineAllocationsUpdate(BaseModel):
     """Update allocations for a line - replaces all existing allocations"""
     allocations: List[AllocationInputItem]
+    # WHFIX81-06 (CLAUDE.md §7, FLOW-006 „Корекции"): the allocation of a
+    # PAID invoice changes only as a correction — a reason is required.
+    correction_reason: Optional[str] = None
 
 
 # DEPRECATED: Keep for backward compatibility

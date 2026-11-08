@@ -1898,15 +1898,20 @@ class CommandService:
             client = Decimal(str(inp.unit_value or "0"))
         except Exception:
             client = Decimal("0")
-        if client > 0 and client.quantize(q) != line_price.quantize(q):
+        if client > 0 and client != line_price and client.quantize(q) != line_price.quantize(q):
             raise InvoiceLinePriceMismatchError(
                 "unit_value differs from the invoice line's unit price",
                 context={"invoice_line_id": inp.invoice_line_id,
                          "line_unit_price": str(line_price),
                          "supplied_unit_value": str(inp.unit_value)})
-        # Stored like the other server-derived unit values (4 decimals) —
-        # the line's division can carry 28 digits (WHFIX81 non-blocking).
-        inp.unit_value = line_price.quantize(q)
+        # The line's own `unit_price` is used EXACTLY (Σ qty × price = the
+        # line value, no residue). Only a price DERIVED as total / qty (no
+        # unit_price on the line) is stored with 4 decimals — that division
+        # can carry 28 digits; its ≤ 0.0001 × qty residue is recorded debt.
+        if line.get("unit_price") is not None:
+            inp.unit_value = line_price
+        else:
+            inp.unit_value = line_price.quantize(q)
 
     @staticmethod
     async def _lock_invoice_line(tenant_collection, *, session, invoice_line_id: str) -> None:

@@ -1127,6 +1127,54 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
                                       forbidden=("Cancelled", "Paid"), code=STATUS_CHANGED)
         if current is None:
             raise HTTPException(status_code=404, detail="Invoice not found")
+        # WHFIX81-06: on an invoice with money paid, changing a line's
+        # destination is a correction: reason required, the previous document
+        # kept as a version (invoice_versions), AuditEvent — else 409.
+        from app.services.invoice_allocation import embedded_as_line, stamp_embedded_lines
+        import copy
+
+        def _dests(doc):
+            # the EFFECTIVE destination of each line, after the header stamp
+            # (A4 #9) a save would apply — a UI re-save is not a change.
+            doc = copy.deepcopy(doc)
+            if doc.get("direction") == "Received":
+                stamp_embedded_lines(doc)
+            out = []
+            for l in doc.get("lines") or []:
+                eff = embedded_as_line(l)["allocations"]
+                def _q(a, l=l):
+                    try:
+                        whole = a.get("qty") is None or float(a["qty"]) == float(l.get("qty") or 0)
+                    except (TypeError, ValueError):
+                        whole = False
+                    return "whole" if whole else str(a.get("qty"))
+                out.append(sorted([str(a.get("type")), str(a.get("ref_id")), _q(a)] for a in eff))
+            return out
+        paid = current.get("status") in ("Paid", "PartiallyPaid") or \
+            float(current.get("paid_amount") or 0) > 0
+        before_d = _dests(current)
+        after_d = _dests({**current, "lines": lines})
+        if paid and before_d != after_d:
+            reason = (data.correction_reason or "").strip()
+            if not reason:
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "ALLOCATION_CORRECTION_REQUIRED", "invoice_id": invoice_id,
+                    "message": "Фактурата е платена — разпределението се променя само с "
+                               "корекция (посочете причина)."})
+            check_reason(reason)
+            vcount = await tenant.invoice_versions.count({"invoice_id": invoice_id},
+                                                         session=session)
+            await tenant.invoice_versions.insert_one({
+                "id": str(uuid.uuid4()), "org_id": user["org_id"], "invoice_id": invoice_id,
+                "version_no": vcount + 1,
+                "snapshot": {k: v for k, v in current.items() if k != "_id"},
+                "edited_by": user.get("id"), "edited_at": now, "reason": reason,
+                "kind": "allocation_correction"}, session=session)
+            from app.services.invoice_allocation import audit_allocation_change
+            await audit_allocation_change(tenant, user, invoice_id,
+                                          [{"embedded_lines": before_d}],
+                                          [{"embedded_lines": after_d}],
+                                          session=session, reason=reason)
         computed = compute_invoice_totals({**{k: v for k, v in current.items() if k != "_id"},
                                            "lines": lines})
         paid = computed.get("paid_amount", 0) or 0

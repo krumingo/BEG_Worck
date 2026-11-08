@@ -408,6 +408,17 @@ def test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server(monkeyp
                 assert by_pr["items"] == []
                 assert {d["ref_id"]: d["project_name"] for u in by_pr["to_allocate"]
                         for d in u["header_destinations"]} == {"pr-only-b": "Unknown"}
+                # WHFIX81 (restored check): A's line on the shared invoice id,
+                # allocated to the shared project id pr-x → A's own project name.
+                line_a = await db["invoice_lines"].find_one({"id": "line-a", "org_id": ORG_A})
+                await db["invoice_lines"].update_one({"id": "line-a", "org_id": ORG_A}, {"$set": {
+                    "allocations": [{"type": "project", "ref_id": "pr-x"}]}})
+                shared = (await c.get("/api/reports/finance-details/by-project?" + PERIOD)).json()
+                assert {r["project_id"]: r["project_name"] for r in shared["items"]} == {
+                    "pr-x": "A-OWN-PROJECT"}
+                assert_no_b(None, shared, b_ids=b_ids)
+                await db["invoice_lines"].update_one({"id": "line-a", "org_id": ORG_A}, {"$set": {
+                    "allocations": line_a["allocations"]}})      # the next mode sees the fixture
                 top = (await c.get("/api/reports/finance-details/top-counterparties?direction=income&"
                                    + PERIOD)).json()
                 assert [r["counterparty_name"] for r in top["items"]] == ["Unknown"]

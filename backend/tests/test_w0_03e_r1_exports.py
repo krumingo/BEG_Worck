@@ -293,6 +293,16 @@ def test_finance_detail_drilldowns_name_only_tenant_a_records(monkeypatch, mode)
     # inv-shared's line is fully allocated to warehouses (the line wins over its
     # header pr-x): final, on no project, not in the bucket.
     assert projects == {"pr-only-b": ("", "Unknown")}
+
+    # WHFIX81 (restored check): once A's line on the SHARED invoice id is
+    # allocated to the SHARED project id pr-x, the report names A's own project
+    # (B's pr-x / B's invoice under the same ids never reach A).
+    run(db["invoice_lines"].update_one({"id": "line-a", "org_id": ORG_A}, {"$set": {
+        "allocations": [{"type": "project", "ref_id": "pr-x"}]}}))
+    shared = c.get("/api/reports/finance-details/by-project?" + PERIOD).json()
+    assert {r["project_id"]: (r["project_code"], r["project_name"]) for r in shared["items"]} == {
+        "pr-x": ("A-CODE-PRX", "A-OWN-PROJECT")}
+    assert_no_b(db, shared)
     top = {}
     for direction in ("expense", "income"):
         body = c.get("/api/reports/finance-details/top-counterparties?direction=%s&%s"

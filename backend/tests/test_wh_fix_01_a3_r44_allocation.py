@@ -319,3 +319,102 @@ def test_a4_new_line_gets_the_single_header_destination(monkeypatch, backend, mo
         assert await op.audit_events.count_documents(
             {"action": "finance.invoice_line.allocation_corrected", "entity_id": line["id"]}) == 1
     run(monkeypatch, backend, mode, scenario)
+
+
+# ─────────── WHFIX81-06 — a PAID invoice's allocation changes only by correction ───────────
+
+async def _paid_fully_allocated(c):
+    r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
+        "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 100}]})
+    assert r.status_code == 200, r.text
+    r = await c.post(f"/api/finance/invoices/{INV}/payments", headers=hdr("acct-a"),
+                     json={"amount": 1200.0, "method": "BankTransfer", "account_id": h.BANK_A})
+    assert r.status_code == 201, r.text
+
+
+def test_whfix81_06_plain_reallocation_of_a_paid_invoice_is_409(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await _paid_fully_allocated(c)
+        assert (await op.invoices.find_one({"id": INV}))["status"] == "Paid"
+        before = await snap(op, ("invoice_lines", "invoice_line_allocation_versions", "audit_events"))
+        r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
+            "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 60}]})
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"]["error_code"] == "ALLOCATION_CORRECTION_REQUIRED"
+        assert await snap(op, ("invoice_lines", "invoice_line_allocation_versions",
+                               "audit_events")) == before            # nothing written
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_whfix81_06_correction_is_versioned_with_reason_and_audit(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await _paid_fully_allocated(c)
+        r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
+            "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 60}],
+            "correction_reason": "грешно разпределение — 40 са за склада"})
+        assert r.status_code == 200, r.text
+        v = (await c.get(f"/api/invoice-lines/{LINE}/allocation-versions", headers=hdr("acct-a"))).json()
+        assert [x["version"] for x in v["versions"]] == [1]
+        assert v["versions"][0]["allocations"][0]["qty"] == 100      # the previous one is readable
+        assert v["versions"][0]["reason"].startswith("грешно")
+        assert v["current"]["version"] == 2 and v["current"]["allocations"][0]["qty"] == 60
+        ev = await op.audit_events.find_one({"action": "finance.invoice_line.allocation_corrected",
+                                             "entity_id": LINE, "reason": {"$exists": True,
+                                                                           "$ne": None}})
+        assert ev and ev["reason"].startswith("грешно")
+        # the paid invoice is now pending again → its DQ issue is open
+        assert await op.dq_issues.count_documents({"entity_id": INV, "status": "open"}) == 1
+    run(monkeypatch, backend, mode, scenario)
+
+
+@pytest.mark.parametrize("who", ["viewer-a", "site-a", "tech-a"])
+def test_whfix81_06_correction_needs_a_money_role(monkeypatch, backend, mode, who):
+    async def scenario(c, op):
+        await _paid_fully_allocated(c)
+        r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr(who), json={
+            "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 60}],
+            "correction_reason": "опит"})
+        assert r.status_code == 403, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_whfix81_06_reallocation_racing_a_payment_is_refused(monkeypatch, backend, mode):
+    """A payment in flight holds the invoice row lock (PAY-01): the
+    reallocation's transaction claims the same invoice → 409 INVOICE_BUSY,
+    nothing written; afterwards it sees the committed payment."""
+    async def scenario(c, op):
+        from app.services.invoice_state import ROW_LOCK_FIELD
+        await op.invoices.update_one({"id": INV}, {"$set": {ROW_LOCK_FIELD: {
+            "owner": "pay-in-flight", "at": datetime.now(timezone.utc).isoformat()}}})
+        before = await snap(op, ("invoice_lines", "audit_events"))
+        r = await c.post(f"/api/invoice-lines/{LINE}/allocate", headers=hdr("acct-a"), json={
+            "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 100}]})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "INVOICE_BUSY", r.text
+        assert await snap(op, ("invoice_lines", "audit_events")) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_whfix81_06_embedded_lines_of_a_paid_invoice_change_only_by_correction(
+        monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=_ui_invoice("prj-1"))
+        inv_id = r.json()["id"]
+        assert (await c.post(f"/api/finance/invoices/{inv_id}/send", headers=hdr("acct-a"))).status_code == 200
+        r = await c.post(f"/api/finance/invoices/{inv_id}/payments", headers=hdr("acct-a"),
+                         json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
+        assert r.status_code == 201, r.text
+        same = {"lines": [{"description": "Пясък", "unit": "t", "qty": 4, "unit_price": 25}]}
+        assert (await c.put(f"/api/finance/invoices/{inv_id}/lines", headers=hdr("acct-a"),
+                            json=same)).status_code == 200            # a re-save is no change
+        moved = {"lines": [{"description": "Пясък", "unit": "t", "qty": 4, "unit_price": 25,
+                            "project_id": "prj-a"}]}
+        r = await c.put(f"/api/finance/invoices/{inv_id}/lines", headers=hdr("acct-a"), json=moved)
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "ALLOCATION_CORRECTION_REQUIRED"
+        r = await c.put(f"/api/finance/invoices/{inv_id}/lines", headers=hdr("acct-a"),
+                        json={**moved, "correction_reason": "друг обект"})
+        assert r.status_code == 200, r.text
+        [ver] = await op.invoice_versions.find({"invoice_id": inv_id,
+                                                "kind": "allocation_correction"}).to_list(None)
+        assert ver["reason"] == "друг обект"
+        assert ver["snapshot"]["lines"][0]["project_id"] == "prj-1"   # the previous version
+    run(monkeypatch, backend, mode, scenario)

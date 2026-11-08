@@ -11,7 +11,12 @@ from app.db import db
 from app.services.invoice_line_lock import (
     InvoiceLineAllocationLocked, run_transaction, write_unless_linked,
 )
-from app.services.invoice_state import NOT_DRAFT, claim_invoice
+from app.services.invoice_state import NOT_DRAFT, STATUS_CHANGED, claim_invoice
+
+# WHFIX81-06 — an invoice with money paid on it is an official record: its
+# allocation changes only as a correction (reason, version, AuditEvent).
+ALLOCATION_CORRECTION_REQUIRED = "ALLOCATION_CORRECTION_REQUIRED"
+PAID_STATUSES = ("Paid", "PartiallyPaid")
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m5
@@ -377,6 +382,24 @@ async def get_invoices_to_allocate(user: dict = Depends(require_m5)):
     return {"count": len(items), "invoices": items}
 
 
+@router.get("/invoice-lines/{line_id}/allocation-versions")
+async def get_allocation_versions(line_id: str, user: dict = Depends(require_m5)):
+    """WHFIX81-06 — the previous allocations of a line (corrections of a paid
+    invoice), oldest first, and the current one. Finance roles only."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    tenant = _tenant(user)
+    line = await tenant.invoice_lines.find_one({"id": line_id},
+                                               {"_id": 0, "allocations": 1, "allocation_version": 1})
+    if not line:
+        raise HTTPException(status_code=404, detail="Invoice line not found")
+    versions = await tenant.invoice_line_allocation_versions.find(
+        {"invoice_line_id": line_id}, {"_id": 0}).sort("version", 1).to_list(None)
+    return {"line_id": line_id, "versions": versions,
+            "current": {"version": line.get("allocation_version") or 0,
+                        "allocations": line.get("allocations") or []}}
+
+
 @router.get("/invoice-lines/enums")
 async def get_invoice_line_enums():
     """Get available enum values"""
@@ -724,7 +747,25 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
 
     now = datetime.now(timezone.utc).isoformat()
 
+    reason = (data.correction_reason or "").strip()
+    if reason:
+        from app.services.money_amount import check_reason
+        check_reason(reason)              # ≤ 500 chars, no control / invisible chars → 400
+
     async def _write(session):
+        # WHFIX81-06: the invoice is CLAIMED in this transaction — a CAS write on
+        # its document that honours the PAY-01 payment row lock (INVOICE_BUSY
+        # while a payment is being written), so a payment and a reallocation of
+        # the same invoice are serialized and each sees the other's result.
+        inv = await claim_invoice(tenant, line["invoice_id"], session=session,
+                                  forbidden=("Cancelled",), code=STATUS_CHANGED)
+        paid = bool(inv) and (inv.get("status") in PAID_STATUSES
+                              or float(inv.get("paid_amount") or 0) > 0)
+        if paid and not reason:
+            raise HTTPException(status_code=409, detail={
+                "error_code": ALLOCATION_CORRECTION_REQUIRED, "invoice_id": line["invoice_id"],
+                "message": "Фактурата е платена — разпределението се променя само с корекция "
+                           "(посочете причина)."})
         # Codex F-55-C26-04: the purchased qty is read in the lock
         # transaction, not from the row read before it.
         current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "qty": 1},
@@ -744,12 +785,25 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
             )
         # WH-FIX-01 A2 #4 — the allocation change is a correction with a
         # canonical AuditEvent in the same transaction.
-        before = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "allocations": 1},
-                                                     session=session)
+        before = await tenant.invoice_lines.find_one(
+            {"id": line_id}, {"_id": 0, "allocations": 1, "allocation_version": 1},
+            session=session)
         from app.services.invoice_allocation import audit_allocation_change
+        version = int((before or {}).get("allocation_version") or 0) + 1
+        if paid:
+            # WHFIX81-06: a correction keeps the previous version READABLE
+            # (append-only `invoice_line_allocation_versions`).
+            await tenant.invoice_line_allocation_versions.insert_one({
+                "id": f"{line_id}:v{version - 1}", "org_id": user["org_id"],
+                "invoice_id": line["invoice_id"], "invoice_line_id": line_id,
+                "version": version - 1, "allocations": (before or {}).get("allocations") or [],
+                "superseded_at": now, "superseded_by": user["id"], "reason": reason},
+                session=session)
         await audit_allocation_change(tenant, user, line_id, (before or {}).get("allocations") or [],
-                                      allocs, session=session)
+                                      allocs, session=session,
+                                      reason=reason or None)
         await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
+            "allocation_version": version,
             "allocations": allocs,
             "qty_allocated": round(total_allocated, 4),
             "qty_unallocated": round(qty_purchased - total_allocated, 4),
