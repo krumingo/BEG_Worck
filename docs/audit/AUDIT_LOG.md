@@ -4864,3 +4864,33 @@ Non-blocking:
 PR comment 6719287307. Gates batch `b81` is running on rs0.
 
 #82 `ed8f9e7` WH-REV-01 (new, assigned): probe `whrev01` R1–R7 **111 passed** (details with the gates). #82's own suite: 76. Warehouse gates batch `b82` running on rs3.
+
+## 2026-11-08 09:05 UTC: #69 `b2b3ae0` (addendum H, Codex F-69-04): PASS on the head; rebase onto main needed
+
+**Fix:** `money_value(..., places=2)` refuses more than 2 decimals with 422 before any write; never a silent round. Quantities (`hours`, `qty`) pass `places=None`. The `dated_window` fixture now uses the UTC date. #76's `subcontractors.py` calls the same `money_value` (payments, advances, deductions), so the #69 × #76 merge keeps the rule.
+
+New probe `PROBE_H=1` in `docs/audit/probes/sec01/probe_f6903.py`, 3 modes: **FAILS: none.**
+
+| Case | Result |
+|---|---|
+| H1: cap 0.05, 20 × 0.0049 sequential | all 422; committed / paid / ledger delta 0 / 0 / 0 |
+| H2: cap 0.05, 12 × 0.01 concurrent | exactly 5 × 201 (7 × 409); committed = paid = Σ rows = 0.05; ledger +5 |
+| H3: 0.30000000000000004, 1e-3, 5e-324, 123.456789, 99.999 | 422 |
+| H3: 10.10, 100, 1e2, 0.01, 12345.67 | 201 |
+| H3: `vat_amount` 0.005 | 422 |
+| G (audit crash) and F1–F4 together | still pass |
+
+Gates on the head:
+
+| Gate | Result |
+|---|---|
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+**Merge with main `cd03324` conflicts** in `permissions/catalog.py`, `routes/procurement.py`, `routes/sales.py`, `tests/test_pm_01_permission_matrix.py` and PM-01 `matrix.csv` / `run_meta.json`. These come from #55's merge; the same files already conflicted at `25ffd9b`. #69 needs a rebase onto `cd03324` before merge. The trial-merge gates must be re-run then.
+
+**Main observation (not #69, debt D-MAIN-PAY-SUBCENT):** finance quick-pay / `create_payment` / `allocate` call `positive_amount` without `places`. Sub-cent amounts are stored as-is; the overpay is bounded by the fixed `remaining + 0.01` tolerance, because after one overshoot the remaining is negative.
