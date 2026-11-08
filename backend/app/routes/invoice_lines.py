@@ -148,6 +148,9 @@ def compute_allocation_stats(line: dict) -> dict:
     line["qty_allocated"] = round(qty_allocated, 4)
     line["qty_unallocated"] = round(qty_unallocated, 4)
     line["is_fully_allocated"] = qty_unallocated <= 0.0001  # Float tolerance
+    # WH-FIX-01 A2 (FG-155): final only at 100 %; otherwise the interim
+    # „чака разпределение" (the same rule as services.invoice_allocation).
+    line["allocation_status"] = "allocated" if line["is_fully_allocated"] else "pending_allocation"
     
     return line
 
@@ -340,6 +343,19 @@ async def get_unallocated_lines(user: dict = Depends(require_m5)):
         "count": len(result),
         "lines": result
     }
+
+
+@router.get("/invoice-lines/invoices-to-allocate")
+async def get_invoices_to_allocate(user: dict = Depends(require_m5)):
+    """WH-FIX-01 A2/A3 (FG-155, Р44) — „фактури за разпределяне": every
+    supplier invoice with a line in the interim state „чака разпределение",
+    drill-down to the lines, with its DQ issue (owner Accountant, deadline,
+    escalation to Owner) and alarm. Finance roles only (Р14 / Р20)."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    from app.services.invoice_allocation import invoices_to_allocate
+    items = await invoices_to_allocate(_tenant(user), user["org_id"])
+    return {"count": len(items), "invoices": items}
 
 
 @router.get("/invoice-lines/enums")
@@ -600,6 +616,11 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
                     raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({qty})")
                 if require_full and abs(total_allocated - qty) > 0.0001:
                     raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {qty}")
+            if "allocations" in update:
+                from app.services.invoice_allocation import audit_allocation_change
+                await audit_allocation_change(tenant, user, line_id,
+                                              current.get("allocations") or [],
+                                              update["allocations"] or [], session=session)
             merged = compute_allocation_stats(compute_line_totals({**current, **update}))
             patch = {
                 **update,
@@ -615,6 +636,8 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
             await recalculate_invoice_totals(tenant, line["invoice_id"], session=session)
         # FG-109 / FG-124: the costing inputs are refused (409) on a linked
         # line; vat_percent alone is not costing but still derives totals.
+        from app.audit.store import ensure_chain_index
+        await ensure_chain_index(tenant._db)  # WH-FIX-01 A2 #4: record_event runs in the tx
         await _unless_linked(tenant, line_id, _write,
                              refuse_if_linked=any(k in update for k in LOCKED_WHEN_LINKED))
 
@@ -669,6 +692,13 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
                 status_code=400,
                 detail=f"Full allocation required by organization settings. Allocated: {total_allocated}, Required: {qty_purchased}. Unallocated: {qty_purchased - total_allocated}"
             )
+        # WH-FIX-01 A2 #4 — the allocation change is a correction with a
+        # canonical AuditEvent in the same transaction.
+        before = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "allocations": 1},
+                                                     session=session)
+        from app.services.invoice_allocation import audit_allocation_change
+        await audit_allocation_change(tenant, user, line_id, (before or {}).get("allocations") or [],
+                                      allocs, session=session)
         await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
             "allocations": allocs,
             "qty_allocated": round(total_allocated, 4),
@@ -676,6 +706,8 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
             "is_fully_allocated": abs(total_allocated - qty_purchased) <= 0.0001,
             "updated_at": now,
         }}, session=session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)     # WH-FIX-01 A2 #4: record_event runs in the tx
     await _unless_linked(tenant, line_id, _write)                # FG-109
 
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_line_allocated", "invoice_line", line_id,

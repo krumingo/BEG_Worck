@@ -1279,6 +1279,10 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
     invoice = await tenant.invoices.get(invoice_id)
     if invoice["status"] in ["Draft", "Cancelled"]:
         raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
+    # Р44 (WH-FIX-01 A3, FG-155): no payment of a supplier invoice with a line
+    # that is not 100 % allocated — 409 INVOICE_NOT_FULLY_ALLOCATED, nothing written.
+    from app.services.invoice_allocation import ensure_payable
+    await ensure_payable(tenant, invoice)
 
     payment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-quick-pay:%s:%s:%s" % (org_id, invoice_id, key)))
     allocation_id = _allocation_id(org_id, payment_id, key, 0)
@@ -1849,6 +1853,9 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                     raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
                 if invoice["status"] == "Cancelled":
                     raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
+                # Р44 (WH-FIX-01 A3): every payment path — validated before the first write.
+                from app.services.invoice_allocation import ensure_payable
+                await ensure_payable(tenant, invoice)
                 expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
                 if payment["direction"] != expected_dir:
                     raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")
