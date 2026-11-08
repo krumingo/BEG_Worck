@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **30** — 08.11.2026 20:50 UTC.
+Последен проход: **31** — 08.11.2026 20:50–22:00 UTC (#84, #81, SUB-ADV-01 и #86 `8e8be48` — в проверка).
 
 ## Последно проверен SHA по клон
 
@@ -23,10 +23,11 @@
 | `claude/off-01-offer-version-accept` (OFF-01) | `8dc3c45` | 21 | FLOW-003, FLOW-002 magic link |
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `5b08e59` | 26 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
-| #83 `claude/cp-01-counterparty-iban` (CP-01) | `9f86d0b` | 28 | FLOW-010, Р48 |
+| #83 `claude/cp-01-counterparty-iban` (CP-01) | `1e455e3` | 31 | FLOW-010, Р48 |
 | #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `e75b558` | 29 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
-| #86 `claude/prj-01-project-lifecycle` (PRJ-01) | `abc6fda` | 30 | FLOW-001, FLOW-018/039, Р54 |
-| пакети (`claude/happy-meitner-bmcnel`) | `ec7ddd8` (main) | 25b | Р55, Р54, Р53, Р52 (в main след #85);  Р50, Р51; Р48, Р49, CP-01, INV-CN-01; Р46, Р47; Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
+| #86 `claude/prj-01-project-lifecycle` (PRJ-01) | `dbb04ba` | 31 | FLOW-001, FLOW-018/039, Р54 |
+| `claude/pwa-01-installable-shell` (PWA-01) | `a05167a` | 31 | FLOW-037, Р61, MFE; FG-315..321 |
+| пакети (`claude/happy-meitner-bmcnel`) | `dccc7164` | 31 | Р61 (Q008), Р60; Р55, Р54, Р53, Р52 (в main след #85);  Р50, Р51; Р48, Р49, CP-01, INV-CN-01; Р46, Р47; Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
 ## Отворени PR, непрегледани в този проход
 
@@ -67,4 +68,5 @@
 | FLOW-017 | 23 | `COVERAGE.md` |
 | FLOW-018 | 24 | `COVERAGE.md` |
 | FLOW-001 | 26 | `COVERAGE.md` |
-| следващ: FLOW-022 (main) | — | — |
+| FLOW-022 | 31 | `COVERAGE.md` (FG-325..335) |
+| следващ: FLOW-023 (main) | — | — |
