@@ -95,15 +95,18 @@ async def create_waste_entry(
     # twice for the same request.
     money_value(data.qty, "qty", places=None)
     await project_in_tenant(_tenant(user), project_id)
-    # WHFIX81-05: the Р27 rights are decided FIRST (as the canonical endpoint,
-    # FG-55): a caller without the right gets 403 whatever the body holds.
-    ctx = await canon.require_project_writeoff(request, user)
-    await _r27_first(canon, ctx, user, project_id, data.subproject_id, request)
+    # SEC-01 / R29 (WHFIX81-M1, FG-224): no key → 428 right after the SEC-01
+    # gate and its input checks, BEFORE the Р27 resolution (which reads the
+    # tenant registry / indexes) — as on main.
     key = (idempotency_key or data.idempotency_key or "").strip()
     if not key:
         raise HTTPException(status_code=428, detail={
             "error_code": "IDEMPOTENCY_KEY_REQUIRED",
             "message": "send an Idempotency-Key header"})
+    # WHFIX81-05: the Р27 rights are decided FIRST (as the canonical endpoint,
+    # FG-55): a caller without the right gets 403 whatever the body holds.
+    ctx = await canon.require_project_writeoff(request, user)
+    await _r27_first(canon, ctx, user, project_id, data.subproject_id, request)
     if not data.item_id:
         raise HTTPException(status_code=422, detail={
             "error_code": "MASTER_IDENTITY_MISSING",

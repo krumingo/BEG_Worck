@@ -176,8 +176,10 @@ BODY_OVERRIDES = {
         "material_name": "PM01", "item_id": PM01_ITEM_ID, "qty": 1, "unit": "бр",
         "reason": "PM01", "file_ids": ["pm01-file"]},
 }
-# … and the headers they need (a fresh Idempotency-Key per cell).
-HEADER_OVERRIDES = {("POST", "/api/projects/{project_id}/material-waste")}
+# No Idempotency-Key is sent (as on main): an ALLOWED caller passes the rights and
+# gets 428 (R29), a refused one 403 — the cell tests the permission (WHFIX81-M1:
+# SEC-01's matrix check reads these cells).
+HEADER_OVERRIDES: set = set()
 
 
 def build_request(method: str, path: str, spec: Dict[str, Any], values: Dict[str, str]):
