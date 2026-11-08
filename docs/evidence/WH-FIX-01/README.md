@@ -162,3 +162,7 @@ Decisions inside the finding (recorded, not new rules):
   * `project_pnl`;
   * `project_financial_results`;
   * project dashboard card 5 / `count_invoices`.
+
+Gates @ `c3257a6` (real Mongo rs0, `-rs`, baseline main `4bca18a`): R0 814 / 0 skipped · W0 the
+same 15 (identical set) · PAY-01 630 · SEC-01 30/30 · PM-01 6 / 0 skipped · A2C 237/0 · A1 478/0 ·
+warehouse 4 failed + 16 errors (identical to main) · WH-FIX-01 suites 287 passed (185 + 102 new).
