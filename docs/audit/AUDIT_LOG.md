@@ -5052,3 +5052,27 @@ Gates (rs3; after the second machine restart of the day):
 | PM-01 | 6 |
 
 The PM-01 delta (36 cells) is Р46: SiteManager → 403, Accountant → passes the route.
+
+## 2026-11-08 12:00 UTC: #81 `2d60acd` (delta from `d2d0ba2`: WHFIX81-06, exact line price, W0 name check restored): PASS
+
+- **WHFIX81-06, fixed.**
+  - `allocate_invoice_line` claims the invoice in its transaction, a CAS that honours the PAY-01 row lock.
+  - On a Paid / PartiallyPaid invoice, a change without `correction_reason` → 409 ALLOCATION_CORRECTION_REQUIRED. With a reason: an append-only `invoice_line_allocation_versions` row, `allocation_version + 1`, and an AuditEvent.
+  - `PUT /finance/invoices/{id}/lines` applies the same rule to embedded lines (`invoice_versions` snapshot + AuditEvent).
+  - Probe X5: pay, then reallocate to 60 → **409**, line stays 100. X6: a reallocation during the payment → **409**, payment 201, line 100. X7: the GET still writes nothing.
+- **Exact price:** a line's own `unit_price` is used exactly. Only a derived `total / qty` is quantized to 4 decimals (recorded debt, ≤ 0.0001 × qty).
+- **W0:** the shared-project name check is restored in `test_w0_03e_a1_collision_matrix`, `test_w0_03e_r1_exports` and `test_w0_03e_real_mongo`: A's line on the shared invoice id, allocated to `pr-x`, gives `A-OWN-PROJECT`.
+
+Gates (rs1):
+
+| Gate | Result |
+|---|---|
+| wh_fix_01 + a3_r44 | 177 |
+| warehouse canonical | 44 files / 1121, 0 bad |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+Still open for whichever of #81 / #82 merges second: the `service.py` conflict, and `_supplier_invoice_link` must skip reversed receipts.
