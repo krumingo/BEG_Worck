@@ -10,6 +10,15 @@
    "audit_new": 4,
    "available": true,
    "b_linked_to_own": true,
+   "dq_resolve_events": 1,
+   "dq_routing": [
+    {
+     "assignee_is_sm": true,
+     "escalate_to_role": "owner",
+     "has_due": true,
+     "owner_role": "site_manager"
+    }
+   ],
    "dry_counts": {
     "already": 0,
     "dq": 2,
@@ -17,6 +26,12 @@
     "link": 2
    },
    "dry_wrote": 0,
+   "escalate_again": 0,
+   "escalate_later": 1,
+   "escalate_now": 0,
+   "escalated_rows": [
+    "owner"
+   ],
    "first_counts": {
     "already": 0,
     "dq": 2,
@@ -24,18 +39,30 @@
     "link": 2
    },
    "link_events": 1,
+   "map_counts": {
+    "already": 2,
+    "dq": 0,
+    "dq_open": 1,
+    "link": 1
+   },
+   "orphan_after_map": "prj01-A-completed2",
    "orphan_dq": [
     {
      "status": "open",
      "type": "PROJECT_WARRANTY_ORIGINAL_UNKNOWN"
     }
    ],
+   "orphan_dq_after_map": [
+    "resolved"
+   ],
    "orphan_linked": null,
+   "orphan_parent_after_map": "prj01-A-completed2",
+   "parent_after_link": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "parent_expected": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "parent_linked_to": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "parent_type": "Warranty",
-   "projects_after": 52,
-   "projects_before": 52,
+   "projects_after": 62,
+   "projects_before": 62,
    "second_counts": {
     "already": 2,
     "dq": 0,
@@ -43,6 +70,13 @@
     "link": 0
    },
    "wrong_plan_refused": "PlanMismatch"
+  },
+  "sub_paths": {
+   "add_sub": "WARRANTY_IN_ORIGINAL_PROJECT",
+   "create_sub": "WARRANTY_IN_ORIGINAL_PROJECT",
+   "new_projects": 0,
+   "warranty_projects": 2,
+   "wrap": "WARRANTY_IN_ORIGINAL_PROJECT"
   },
   "to_warranty": {
    "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
@@ -86,17 +120,17 @@
     "diff": {
      "after": {
       "kind": "warranty",
-      "reopen_id": "c5a621c4-405c-5168-ad84-e1681ff37c66",
+      "reopen_id": "b6912260-74ff-5c63-9dbf-73b31043d2e6",
       "status": "Active"
      },
      "before": {
       "status": "Completed"
      }
     },
-    "idempotency_key": "790b35cc1a6a42dea471f541358e695b",
+    "idempotency_key": "ac1827c7417443ec8262b3c923564e4c",
     "reason": "теч в банята след приемане",
     "source_flow": "FLOW-001",
-    "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+    "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
    }
   ],
   "no_key": 428,
@@ -104,8 +138,30 @@
   "ok": 200,
   "put_reopen": 400,
   "reclose": 200,
+  "reopen_warranty_project": {
+   "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
+   "project_status": "Completed",
+   "status": 409
+  },
   "replay": 200,
   "replay_same": true,
+  "request_events": [
+   "project.reopen_request",
+   "project.reopen"
+  ],
+  "request_no_reason": 400,
+  "request_notifications": 3,
+  "request_notified": 3,
+  "request_ok": 201,
+  "request_owner_reopen": 200,
+  "request_site_manager_reopen": 403,
+  "request_status_after": [
+   "done"
+  ],
+  "request_status_before": [
+   "open"
+  ],
+  "request_technician": 403,
   "role_accountant": 403,
   "role_requester": 403,
   "role_technician": 403,
@@ -128,13 +184,16 @@
      },
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
     },
-    "idempotency_key": "4b1ce2768f284ab681abf53914bd1b3e",
+    "idempotency_key": "a79cdac4a4704b79a0de9a19c37df8b2",
     "reason": "грешна снимка",
     "source_flow": "FLOW-029",
-    "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+    "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
    }
   ],
   "file_kept": true,
+  "file_owner": 200,
+  "file_uploader": 404,
+  "file_viewer": 404,
   "listed": false,
   "no_key": 428,
   "no_reason": 400,
@@ -163,10 +222,10 @@
        "status": "Completed"
       }
      },
-     "idempotency_key": "987b095d0e1244f996ee27eef6c059ef",
+     "idempotency_key": "eb73fd0219784cd58fb444190c98ac1a",
      "reason": "приключен и платен",
      "source_flow": "FLOW-001",
-     "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+     "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
     }
    ],
    "from_active": 409,
@@ -192,10 +251,10 @@
        "status": "Draft"
       }
      },
-     "idempotency_key": "1e3bbd294ce5476c910978867c8a4bb9",
+     "idempotency_key": "cf495ae70aa844d2b5b3c33c6de366f5",
      "reason": "клиентът се отказа",
      "source_flow": "FLOW-001",
-     "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+     "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
     }
    ],
    "project_status": "Cancelled",
@@ -205,6 +264,30 @@
   "cross_tenant": {
    "project_kept": true,
    "status": 404
+  },
+  "draft_client": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": [
+    "client"
+   ],
+   "project_kept": true,
+   "status": 409
+  },
+  "draft_phase": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": [
+    "project_phases"
+   ],
+   "project_kept": true,
+   "status": 409
+  },
+  "draft_team": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": [
+    "team_members"
+   ],
+   "project_kept": true,
+   "status": 409
   },
   "empty_draft": {
    "events": [
@@ -219,10 +302,10 @@
        "type": "Billable"
       }
      },
-     "idempotency_key": "7040772e4af148cdbf8f490ebe8e7fc1",
+     "idempotency_key": "c3faee5e311e48c6a4d98b50bdbf4d17",
      "reason": "празна чернова",
      "source_flow": "FLOW-001",
-     "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+     "tenant_id": "5329bed6-c0ea-42da-a915-546126573a8d"
     }
    ],
    "project_kept": false,
@@ -293,6 +376,15 @@
    "row_kept": true,
    "status": 409
   },
+  "link_media_context": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "media_files": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
   "link_offer": {
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
@@ -315,6 +407,15 @@
    "error_code": "PROJECT_HAS_HISTORY",
    "links": {
     "project_photos": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_qr_entity": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "asset_qr_codes": 1
    },
    "project_kept": true,
    "row_kept": true,
@@ -358,6 +459,38 @@
    "project_status": "Paused",
    "status": 409
   },
+  "put_status_d3": {
+   "events": [
+    {
+     "action": "project.status_change",
+     "diff": {
+      "after": {
+       "status": "Paused"
+      },
+      "before": {
+       "status": "Active"
+      }
+     },
+     "reason": "чака материал"
+    },
+    {
+     "action": "project.status_change",
+     "diff": {
+      "after": {
+       "status": "Active"
+      },
+      "before": {
+       "status": "Paused"
+      }
+     },
+     "reason": "материалът дойде"
+    }
+   ],
+   "name_only": 200,
+   "no_key": 428,
+   "no_reason": 400,
+   "ok": 200
+  },
   "role_accountant": {
    "project_kept": true,
    "status": 403
@@ -389,10 +522,24 @@
    "subcontractor_performance.create",
    "subcontractor_performance.update"
   ],
+  "get_requester_money_keys": [],
+  "get_viewer_money_keys": [],
   "legacy_manual_exposed": 999,
   "legacy_manual_kept": 999,
-  "legacy_paid_shown": 150.0,
+  "legacy_paid_shown": 180.0,
   "legacy_paid_source": "payment_ledger",
+  "log_owner": 200,
+  "log_site_manager": 200,
+  "log_technician": 403,
+  "log_viewer": 403,
+  "score_invalid": [
+   422,
+   422,
+   422,
+   422,
+   422
+  ],
+  "update_nothing": 422,
   "update_owner": 200,
   "update_paid_field": 422,
   "update_replay_same": true,
