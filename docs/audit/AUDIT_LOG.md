@@ -5367,3 +5367,24 @@ SEC71-M1 resolved. No blocking finding remains.
 | R0 | 814 |
 | PM-01 | 6 |
 | **warehouse** | **1121 (44 files, 0 bad)** |
+
+## 2026-11-08 16:00 UTC: #81 `5b08e59` (WH81-03 fix on top of `20b1663`): PASS, no blocking finding
+
+- **Delta vs `20b1663`:** `"direction": "Issued"` added to 7 revenue / incoming queries (project_pnl pnl + trend, centralized_reports, project_financial_results, client summary, project aggregate `count_invoices`, cashflow incoming), plus tests. Turnover views are untouched (correct: document turnover). F-81-01 / F-81-02 unchanged from `20b1663` (verified there).
+- **Probe X8:** 12 passed (was red at `20b1663`).
+
+| Gate | Result |
+|---|---|
+| probe X5–X7 | 18 |
+| probe X1–X4 | 12 + X4 (the probe's known `request=None` limitation) |
+| probe X8 | 12 |
+| SEC-01 | 30 |
+| wh_fix_01 (incl. f81_readers) | 299 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+#81 still has to take in main `0750d75` before its merge; that merge gets a full re-audit.
