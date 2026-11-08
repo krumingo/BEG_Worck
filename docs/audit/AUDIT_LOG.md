@@ -5680,3 +5680,12 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | PM-01 | 6 |
 
 - **Next (chain6, serial):** #81 `72e7e87` → #84 `cdd3dc8` → #86 `dbb04ba` → #83 `1e455e3`. All four are evidence-only on top of the merge-checked heads.
+
+## 2026-11-08 21:08 UTC: #88 `7c284fa` (code `e571b06`): D1 fix reviewed
+
+- **`sessionRejected(err)`:** true only for 401, or 403 on `/auth/me` (`err.config.url` ends with `/auth/me`). Otherwise (network error, 5xx) the token stays and `user` is restored from the cached `bw_user`; org stays unknown, and nothing from `/api` is cached.
+- **`logout()`:** async, and awaits `clearTenantLocalData()` (my minor note is resolved).
+- **The axios 401 interceptor** still clears and redirects on a real 401.
+- **Assessment:** correct and minimal.
+- **Pending:** the jest (24/221) / build / Playwright (35/35) re-run, after the Mongo queue.
+- **#86:** `dbb04ba` skipped in the queue (FG-279/280 coming).
