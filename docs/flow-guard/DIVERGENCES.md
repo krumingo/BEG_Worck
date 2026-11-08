@@ -184,6 +184,17 @@
 | FG-162 | medium | main `2ec61f3` | материалът е свободен текст (`material_name|unit`), не Master артикул; заявката става `fulfilled` без сравнение на количества | SUSPECTED | open |
 | FG-163 | low | main `2ec61f3` | склад с наличност се деактивира или сменя типа си без проверка и без одит | SUSPECTED | open |
 | FG-164 | medium | main `2ec61f3` | липсват движения склад→склад, обект→обект, „в път“, връщане към доставчик, ревизия; наличност само за склад `main` | SUSPECTED | open |
+| FG-165 | high | main `2ec61f3` | няма регистър на проверени IBAN-и; плащане към нов/различен IBAN не се блокира | SUSPECTED | open |
+| FG-166 | high | main `2ec61f3` | дублирани контрагенти по ЕИК и по роля в 5 регистъра | SUSPECTED | open |
+| FG-167 | high | main `2ec61f3` | hard delete на контрагент с история (проверката гледа само `invoices`) | SUSPECTED | open |
+| FG-168 | medium | main `2ec61f3` | финансовите суми по клиент/контрагент се виждат от всяка роля с модул M5 (#71 не ги покрива) | SUSPECTED | open |
+| FG-169 | medium | main `2ec61f3` | профилът смесва приходи и разходи (без `direction`) и брои само 20 фактури | SUSPECTED | open |
+| FG-170 | medium | main `2ec61f3` | клиентската карта връща 404 за клиенти фирми/лица на обекта | SUSPECTED | open |
+| FG-171 | medium | main `2ec61f3` | create/update на контрагенти, клиенти, фирми, лица без право и/или без AuditEvent | SUSPECTED | open |
+| FG-172 | medium | main `2ec61f3` | ЕГН се връща в явен вид на всеки логнат | SUSPECTED | open |
+| FG-173 | high | main `2ec61f3` | клиентското одобрение по линк не е ApprovalReceipt (свободно име, без контакт, hash, AuditEvent) | SUSPECTED | open |
+| FG-174 | low | main `2ec61f3` | ролята на контрагента е едно поле, не множество | SUSPECTED | open |
+| FG-175 | low | main `2ec61f3` | IBAN-ът във фактурата е свободен текст; няма проверена собствена сметка | SUSPECTED | open |
 
 
 ---
@@ -1691,6 +1702,83 @@
 - **Код (main `2ec61f3`):** Няма склад→склад, обект→обект, „в път“, връщане към доставчик, ревизия с DQ/Approval; наличност само за `type:"main"` (`procurement.py:531`); `models/warehouse.py:7` без подобект/машина/транспорт.
 - **Решение:** промяна в кода — пакетът е #55; Крум да реши дали legacy пътищата се замразяват read-only до сливането.
 
+## FG-165 — няма регистър на проверени IBAN-и; плащане към нов/различен IBAN не се блокира
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §8.1 „Първи превод към нов IBAN… изпълнението е блокирано до успешна верификация“; §8.2 два източника; §12.
+- **Код (main `2ec61f3`):** IBAN се среща само в `routes/projects.py:370-371` (свободен текст); OCR не извлича IBAN (`services/ocr_invoice.py:72-75`); плащане към подизпълнител с `payment_method: bank` без сметка (`routes/subcontractors.py:493-525`).
+- **Решение:** промяна в кода — нов пакет: `VerifiedBankAccount` със статуси от §3.3 и два източника; банково плащане изисква проверена сметка (иначе 409 + DQ задача); действие `bank_account.verify`, AuditEvent.
+
+## FG-166 — дублирани контрагенти по ЕИК и по роля в 5 регистъра
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §2 „Ролята не създава втори контрагент“; §12 „две организации със същия ЕИК“.
+- **Код (main `2ec61f3`):** `subcontractors.py:58-70` без проверка на ЕИК; `counterparties.py:160-166` и `clients.py:521-526` проверяват само в своята колекция; `counterparties.py:341-395` (auto-link) създава нов `client`. Master Data проверката е само при `MASTER_DATA_MODE=enforce` (по подразбиране `off`, `master_data/deps.py:69-70`).
+- **Решение:** промяна в кода — проверка на ЕИК във всички регистри при create/update (409 с препратка) докато Master Data е off/shadow; Крум да реши кога Master Data минава в enforce.
+
+## FG-167 — hard delete на контрагент с история (проверката гледа само `invoices`)
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §12 „изтриване на контрагент с договорна, комуникационна или финансова история“; CLAUDE.md правило 9.
+- **Код (main `2ec61f3`):** `routes/counterparties.py:265` брои само `invoices.supplier_counterparty_id`; при 0 и режим off `guarded_identity_delete` връща None (`master_data/legacy_adapter.py:313-315`) → `delete_one` (`counterparties.py:278`) — трие контрагент с `supplier_invoices.supplier_id` (`procurement.py:292,313`) или `warehouse_batches.supplier_id`. `clients.py:288-306` гледа само свързани контрагенти, не `projects.owner_id`/`sales.client_id`.
+- **Решение:** промяна в кода — `count_usage` (`legacy_adapter.py:260`) и в off; използван запис → архив, никога hard delete.
+
+## FG-168 — финансовите суми по клиент/контрагент се виждат от всяка роля с модул M5 (#71 не ги покрива)
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — Р20; FLOW-010 §3.2.
+- **Код (main `2ec61f3`):** `routes/clients.py:753-841` `/clients/{id}/summary` и `routes/counterparties.py:203-223` (`total_invoiced`, `recent_invoices`) — само `require_m5` (модул, `deps/modules.py:108-109`); UI защита (`App.js:285`) не е сървърна.
+- **Решение:** промяна в кода — `require_finance_read` (SEC-02) на двата endpoint-а или маскиране на паричните полета.
+
+## FG-169 — профилът смесва приходи и разходи (без `direction`) и брои само 20 фактури
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §9 „Няма двусмислена обща колона „Приходи““.
+- **Код (main `2ec61f3`):** `clients.py:779-782, 814-817` — всички фактури по обекта, без `direction`/статус → получени фактури и чернови в `total_revenue`/`balance_due`; `counterparties.py:215-221` `total_invoiced` от `to_list(20)`.
+- **Решение:** промяна в кода — read model контрагент → обект → договор → роля с колоните от §9 по `direction` и от FLOW-006 регистъра.
+
+## FG-170 — клиентската карта връща 404 за клиенти фирми/лица на обекта
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §11, §13 (от контрагента към обектите).
+- **Код (main `2ec61f3`):** `clients.py:719-747` пише `owner_id` от `companies`/`persons`; `/clients/{id}/summary` търси в `clients` (`:758-760`); UI бутонът (`ProjectInfoPanel.js:160`) подава `owner_id`.
+- **Решение:** промяна в кода — един resolver през companies/persons/clients (после Master ID), или Крум да реши кой регистър е „клиент“.
+
+## FG-171 — create/update на контрагенти, клиенти, фирми, лица без право и/или без AuditEvent
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — FLOW-002 критични действия (Master Data, банкова сметка); CLAUDE.md §14.
+- **Код (main `2ec61f3`):** Без роля: `PUT /companies/{id}` (`projects.py:810-826`), `PUT /persons/{id}` (`:690-698`), `POST /clients/company` (`clients.py:506`), `/clients/person` (`:566`), `/companies` (`projects.py:757`), `/clients/find-or-create` (`clients.py:312-349`, `require_m5`), `POST /subcontractors` (`subcontractors.py:58`, `require_m2`), `import-client-invoice` (`projects.py:340-400`). С роля, без одит: `PUT /counterparties` (`:226-250`, сменя и ЕИК), `PUT /clients` (`:239-275`), unlink/auto-link (`counterparties.py:322-403`).
+- **Решение:** промяна в кода — действия `counterparty.*`/`client.*` в Permission Service, canonical AuditEvent с diff; смяна на ЕИК/име на използван запис през Master Data/Approval.
+
+## FG-172 — ЕГН се връща в явен вид на всеки логнат
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §3.2 (достъп по FLOW-002); `clients.py` сам маскира ЕГН (`:387,470`).
+- **Код (main `2ec61f3`):** `GET /persons` (`projects.py:625-636`), `/persons/{id}` (`:680-687`), `/persons/find-by-phone` (`:669`) — целият документ с `egn`, само `get_current_user`.
+- **Решение:** промяна в кода — projection без/маскиран `egn`; пълен ЕГН само за правоимащи роли.
+
+## FG-173 — клиентското одобрение по линк не е ApprovalReceipt (свободно име, без контакт, hash, AuditEvent)
+
+- **Тежест:** high. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §6 „идентичност на потвърдилия… метод на верификация… контакт… AuditEvent“; §3.2.
+- **Код (main `2ec61f3`):** `routes/offers.py:1140-1176` — `client_name` от тялото; без контакт и права, без hash на версията, без AuditEvent; събитието в глобалния `db.offer_events` (`:1171`). OFF-01 (не е на main) пише `verification: "link_token_only"`. FG-129 покрива само версията.
+- **Решение:** промяна в кода — ApprovalReceipt с `contact_id` (Contact Role), метод на верификация, hash на версията, AuditEvent; Крум да реши кой метод на идентификация стига за линк.
+
+## FG-174 — ролята на контрагента е едно поле, не множество
+
+- **Тежест:** low. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §2 (много роли едновременно).
+- **Код (main `2ec61f3`):** `models/finance.py:22`, `counterparties.py:285` — `type` ∈ supplier/client/both/person; подизпълнителите са отделна колекция.
+- **Решение:** промяна в кода — `roles: [...]` върху Master организацията; `type` само за четене.
+
+## FG-175 — IBAN-ът във фактурата е свободен текст; няма проверена собствена сметка
+
+- **Тежест:** low. **Статус:** open. **SUSPECTED** (бавен преглед на FLOW-010, проход 18).
+- **Канон:** FLOW-010 — §8.4.
+- **Код (main `2ec61f3`):** `projects.py:370-371` копира `invoice_details` IBAN; редактира се в UI (`ProjectInfoPanel.js:180`); собствена сметка във фактурите няма.
+- **Решение:** промяна в кода — сметка от VerifiedBankAccount (FG-165), иначе изпращането се блокира.
+
 ## Дневник на проходите
 
 ### Проход 2 — 06.11.2026 18:50 UTC (периодичен)
@@ -2103,6 +2191,11 @@
 - **SUB-ADV-01 `b313933`:** `test_sub_adv_01_subcontractor_advance.py` → 8 passed. Одит редът е идемпотентен, но остава legacy `log_audit` → **FG-147 остава open**.
 - **#69 `25ffd9b`:** `test_sec_01_c03_payment_amount_idempotency.py` → 6 passed. `utils/audit.py`: при `entry_id` редът е с `_id = entry_id`, `DuplicateKeyError` по `_id` се поглъща — не противоречи на канона (legacy слой; canonical AuditEvent е отделно).
 - **Бавен преглед FLOW-009 на main** (`COVERAGE.md`): main няма каноничен складов регистър (два legacy — `warehouse_transactions` и `warehouse_batches`). Нови **FG-150..FG-164** (SUSPECTED). Най-тежки: FG-150 (изписването е 0 в P&L — ключът `unit_cost` никога не се пише; проверено, че `procurement.py` е единственият writer), FG-151..FG-154. Повечето се затварят от #55; FG-150 и FG-154 са само в четенето на справките и могат да се оправят на main и без #55. Още на main: FG-17, FG-29, FG-30, FG-35, FG-83, FG-143, FG-145, FG-146.
+
+### Проход 18 — 08.11.2026 02:50 UTC (периодичен)
+
+- Няма нови SHA (main, всички отворени PR и пакетите — както в проход 17). #55 още не е слят → чакащият повторен преглед на FLOW-009 остава.
+- **Бавен преглед FLOW-010 на main** (`COVERAGE.md`): контрагенти, контакти, IBAN, ApprovalReceipt, финансов профил. Нови **FG-165..FG-175** (SUSPECTED). Най-тежки: FG-165 (няма проверка на IBAN), FG-166 (дубли по ЕИК), FG-167 (hard delete на контрагент с история — проверено четене на `counterparties.py:265-278`), FG-173 (клиентско одобрение без ApprovalReceipt). Още на main: FG-1 (`labor_smr.py:32-33`), FG-30, FG-133/FG-141, FG-129/FG-138 (OFF-01 не е слят).
 
 ## Бележки, които не са разминавания
 
