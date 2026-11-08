@@ -5726,3 +5726,13 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | **warehouse** | **1121 (44 files, 0 bad)** |
 
 - **Disk:** at 597 MB free during this run. I freed ~0.5 GB (worktrees, idle test DBs, pip/uv caches). `docker volume prune` and truncating the audit mongod json logs (~5.3 GB) were refused by the permission check; Krum is asked to approve either directly.
+
+## 2026-11-08 21:46 UTC: check-in. main `ea57121` (merge of #76) verified; #79 `f526182` merge checks; queue
+
+- **main `ea57121`:** parents `3699c3b` + `aa369d8` (the audited head, PASS). Tree = `merge-tree(3699c3b, aa369d8)`.
+- **#79 `f526182`** (merge `552ffdce` of main `ea57121` + PM-01 harness):
+  - conflicts only in the generated A1/A2B inventories and `run_meta`;
+  - the one extra merge diff is a test-harness binding of the `money_write` / `finance_read` modules to the scratch db for #71's guard (no assertion change);
+  - role-union 0; PM-01 24/24, 0 extra.
+  - Gates queued after #83.
+- **#86 `03b86cd`** (round 6: FG-279/280; not yet merged with `ea57121`): waiting for its final head.
