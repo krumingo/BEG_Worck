@@ -159,6 +159,7 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         "INVOICE_LINE_PROJECT_MISMATCH": 422,
         "INVOICE_LINE_QTY_EXCEEDED": 422,
         "INVOICE_LINE_FULLY_LINKED": 409,
+        "INVOICE_CANCELLED": 409,          # INV-CN-01 FG-233
         "INVOICE_LINE_UNIT_MISMATCH": 422,
         "NEGATIVE_STOCK": 422,
         "ORIGIN_ACCEPTANCE_OVERRUN": 422,

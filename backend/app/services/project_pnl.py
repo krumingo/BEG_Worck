@@ -106,12 +106,9 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     # line: material_cost + material_waste_cost == the helper's total.
     material_waste_cost = round(wh.get("waste_cost", 0.0) or 0.0, 2)
     material_cost = round(material_total - material_waste_cost, 2)
-    # INV-CN-01 / Р52(1) (D8): a supplier credit / debit note WITHOUT a receipt reversal
-    # changes the cost of the original line's project once; a note linked to a reversal
-    # does not (the reversal already removed the cost).
-    from app.services.invoice_corrections import supplier_note_cost_effect
-    supplier_notes_cost = float(await supplier_note_cost_effect(tenant, project_id))
-    material_cost = round(material_cost - supplier_notes_cost, 2)
+    # INV-CN-01 / Р52(1) (D8, FG-247): supplier notes are INSIDE the helper's total (one
+    # cost source for every reader); shown here only as provenance.
+    supplier_notes_cost = -float(wh.get("supplier_note_cost", 0.0) or 0.0)
 
     # ── e. SUBCONTRACTOR COST ──────────────────────────────────────
     sub_payments = await tenant.subcontractor_payments.find(

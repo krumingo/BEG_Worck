@@ -650,7 +650,10 @@ async def approve_offset(offset_id: str, body: dict = Body(...), user: dict = De
                                  "amount": off["amount"], "version": version,
                                  "author": off.get("created_by")}, key, session)
         await fin._tx(run_in_transaction, tx_body)
-        return await tenant.invoice_offsets.find_one({"id": offset_id}, {"_id": 0})
+        off = await tenant.invoice_offsets.find_one({"id": offset_id}, {"_id": 0})
+        for inv_id in (off["source_invoice_id"], off["target_invoice_id"]):     # FG-246
+            await fin._supersede_cancellation(tenant, user, inv_id, "offset")
+        return off
 
     return await fin._once(user, key, "finance.offset.approve",
                            {"offset_id": offset_id, "version": version}, work)

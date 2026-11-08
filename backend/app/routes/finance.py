@@ -1433,6 +1433,13 @@ async def _cancel_blockers(tenant: TenantData, inv: dict, session) -> None:
         raise ic.conflict(out, "Фактурата има плащане — не се анулира")
     if await tenant.credit_debit_notes.count({"original_invoice_id": inv["id"]}, session=session) > 0:
         raise ic.conflict(out, "По фактурата има известие — не се анулира")
+    # FG-246: an invoice that is a source or target of an approved / pending offset is not
+    # cancelled (the credit balance or the settled amount would be lost)
+    if await tenant.invoice_offsets.count(
+            {"status": {"$in": [ic.OFFSET_PENDING, ic.OFFSET_APPROVED]},
+             "$or": [{"source_invoice_id": inv["id"]}, {"target_invoice_id": inv["id"]}]},
+            session=session) > 0:
+        raise ic.conflict(ic.USE_CREDIT_NOTE, "Фактурата участва в прихващане — не се анулира")
     if inv.get("direction") != "Issued" and await ic.linked_to_warehouse(tenant, inv, session=session):
         raise ic.conflict(ic.USE_CORRECTION,
                           "Фактурата е свързана със складово приемане — корекция/сторно, не анулиране")
@@ -1496,12 +1503,18 @@ async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
     async def work():
         if not outgoing:
             await ic.ensure_invoice_line_locks(tenant, invoice)          # FG-233 (outside tx)
+            from app.services.invoice_line_lock import ensure_invoice_lock
+            await ensure_invoice_lock(tenant, invoice_id)
 
         async def tx_body(session):
             current = await claim_invoice(tenant, invoice_id, session=session,
                                           forbidden=("Cancelled",), code=STATUS_CHANGED)
             if not outgoing:
-                await ic.lock_invoice_lines(tenant, current, session=session)   # FG-233
+                # FG-233: the invoice lock + the line locks a linked receipt writes
+                from app.services.invoice_line_lock import bump_invoice_lock
+                if session is not None:
+                    await bump_invoice_lock(tenant, invoice_id, session=session)
+                await ic.lock_invoice_lines(tenant, current, session=session)
             again = _cancel_refusal(current)
             if again is not None:
                 raise again

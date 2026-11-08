@@ -25,6 +25,8 @@ Source of truth:
 """
 from __future__ import annotations
 
+import re
+
 from datetime import datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Dict, Iterable, List, Optional
@@ -202,7 +204,23 @@ def supplier_key(invoice: dict) -> Optional[str]:
 
 
 async def supplier_number_taken(tenant, invoice: dict, number: str, *, exclude_invoice_id=None) -> bool:
-    flt = {"direction": "Received", "invoice_no": number, "supplier_key": supplier_key(invoice)}
+    """Р53(1): the same supplier + number already exists. FG-248: a LEGACY row written
+    before the ``supplier_key`` backfill is matched by its ЕИК or counterparty record too,
+    so a duplicate cannot be created before the migration (and break its apply)."""
+    key = supplier_key(invoice)
+    alternatives = [{"supplier_key": key}]
+    eik = (invoice.get("counterparty_eik") or "").strip()
+    cp = invoice.get("supplier_counterparty_id") if isinstance(invoice.get("supplier_counterparty_id"), str) else ""
+    legacy = {"supplier_key": {"$exists": False}}
+    if eik:
+        alternatives.append({**legacy, "counterparty_eik": eik})
+    elif cp:
+        alternatives.append({**legacy, "counterparty_eik": {"$in": [None, ""]}, "supplier_counterparty_id": cp})
+    elif key and key.startswith("name:"):
+        alternatives.append({**legacy, "counterparty_eik": {"$in": [None, ""]},
+                             "counterparty_name": {"$regex": "^\\s*%s\\s*$" % re.escape(key[5:]),
+                                                   "$options": "i"}})
+    flt = {"direction": "Received", "invoice_no": number, "$or": alternatives}
     if exclude_invoice_id:
         flt["id"] = {"$ne": exclude_invoice_id}
     return bool(await tenant.invoices.find_one(flt, {"_id": 0, "id": 1}))
@@ -716,35 +734,88 @@ async def pending_debit(tenant, invoice_id: str, *, session=None) -> Decimal:
     return total
 
 
-async def supplier_note_cost_effect(tenant, project_id: str) -> Decimal:
-    """Р52(1) / D8 — the effect of supplier credit / debit notes on a project's cost.
-
-    * a note LINKED to a receipt reversal (``expected_link.rows``) only reduces the
-      payable and is the tax document: the reversal already took the cost out of the
-      project — no second P&L effect;
-    * a note WITHOUT a reversal (discount, defect) changes the cost of the project of the
-      ORIGINAL line (Р49.7): the line's direct project allocations (Path B, by quantity
-      share), else the line's / invoice's project. Credit → minus, debit → plus.
-    Returns the amount to SUBTRACT from the project's material cost (net, whole cents)."""
-    from app.services.canonical_material_cost import effective_allocations
-    total = Decimal(0)
+async def _applied_supplier_notes(tenant):
     async for n in tenant.credit_debit_notes.find(
             {"direction": INCOMING, "applied": True, "status": {"$in": [NOTE_REGISTERED, NOTE_APPROVED]}},
             {"_id": 0}):
+        yield n
+
+
+def _project_share(row: dict, project_id: str) -> Decimal:
+    """The share of a supplier invoice line allocated DIRECTLY to the project (Path B
+    selection rule, ``effective_allocations``): Σ allocated qty / line qty, else 1."""
+    from app.services.canonical_material_cost import effective_allocations
+    mine = [a for a in effective_allocations(row) if a.get("type") == "project" and a.get("ref_id") == project_id]
+    if not mine:
+        return Decimal(0)
+    qty = Decimal(str(row.get("qty") or 0))
+    if qty > 0 and all(a.get("qty") is not None for a in mine):
+        return min(sum((Decimal(str(a["qty"])) for a in mine), Decimal(0)) / qty, Decimal(1))
+    return Decimal(1)
+
+
+async def supplier_note_cost_lines(tenant, project_id: str, counted_by_line: Dict[str, float]) -> List[dict]:
+    """Р52(1) / D8, FG-247 — the cost lines of supplier credit / debit notes for ONE
+    project, added by ``canonical_material_cost.project_material_cost`` (THE single cost
+    source of every reader — P&L, full cost, financial results, SMR reports; D-04).
+
+    * only a note WITHOUT a receipt reversal counts (a note linked to a reversal changes
+      the payable only — the reversal already removed the cost);
+    * only a line that IS in this project's cost base counts: a supplier invoice line
+      allocated directly to the project (Path B), by the project's share; a credit never
+      takes more than the line's counted value here (it cannot go below 0); an embedded
+      finance-invoice line or a line received into the warehouse is no Path B cost of the
+      project → no effect here (the latter's value is the FIFO layer, FLOW-009 — debt);
+    * each line is dated by the note's own date → its period (Р49.7)."""
+    from app.services.canonical_material_cost import _moment, period_of
+    out: List[dict] = []
+    remaining = {k: Decimal(str(v)) for k, v in counted_by_line.items()}
+    notes = [n async for n in _applied_supplier_notes(tenant)]
+    notes.sort(key=lambda n: (str(n.get("issue_date") or ""), str(n.get("created_at") or "")))
+    for n in notes:
         if (n.get("expected_link") or {}).get("rows"):
-            continue                                   # linked to a reversal: payable only
-        sign = Decimal(1) if n.get("kind") == KIND_CREDIT else Decimal(-1)
+            continue
+        credit = n.get("kind") == KIND_CREDIT
+        at = _moment(n.get("issue_date") or n.get("created_at"))
         for l in n.get("lines") or []:
-            net = cents(l.get("net"))
-            row = await tenant.invoice_lines.find_one({"id": l["original_line_id"]}, {"_id": 0})
-            if row is not None:
-                allocs = [a for a in effective_allocations(row) if a.get("type") == "project"]
-                qty = Decimal(str(row.get("qty") or 0))
-                for a in allocs:
-                    if a.get("ref_id") != project_id:
-                        continue
-                    share = (Decimal(str(a["qty"])) / qty) if (a.get("qty") and qty > 0) else Decimal(1)
-                    total += sign * cents(net * min(share, Decimal(1)))
-            elif n.get("project_id") == project_id:
-                total += sign * net
+            line_id = l.get("original_line_id")
+            if line_id not in remaining:
+                continue
+            row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
+            share = _project_share(row or {}, project_id)
+            if share <= 0:
+                continue
+            effect = cents(cents(l.get("net")) * share)
+            if credit:
+                effect = min(effect, max(remaining[line_id], Decimal(0)))
+                remaining[line_id] -= effect
+                value = -effect
+            else:
+                remaining[line_id] += effect
+                value = effect
+            if value == 0:
+                continue
+            out.append({"source": "supplier_note", "kind": "credit_note" if credit else "debit_note",
+                        "waste": False, "value": float(value), "qty": 0.0, "item_id": None,
+                        "unit": None, "material_name": l.get("description") or "",
+                        "package_id": None, "at": at, "period": period_of(at), "ref": n.get("id"),
+                        "invoice_line_id": line_id, "note_number": n.get("number")})
+    return out
+
+
+async def supplier_note_input_vat(tenant, project_id: str) -> Decimal:
+    """FG-247(c): the VAT of supplier credit / debit notes on lines allocated to the
+    project, by the same share (credit −, debit +). A note is the TAX document, so this
+    holds for a note linked to a receipt reversal too (the reversal itself never changes
+    input VAT — ``project_input_vat``)."""
+    total = Decimal(0)
+    async for n in _applied_supplier_notes(tenant):
+        sign = Decimal(-1) if n.get("kind") == KIND_CREDIT else Decimal(1)
+        for l in n.get("lines") or []:
+            row = await tenant.invoice_lines.find_one({"id": l.get("original_line_id")}, {"_id": 0})
+            if row is None:
+                continue
+            share = _project_share(row, project_id)
+            if share > 0:
+                total += sign * cents(cents(l.get("vat")) * share)
     return total

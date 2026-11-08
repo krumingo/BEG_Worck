@@ -134,3 +134,33 @@ async def write_unless_linked(tenant, line_id: str,
         await write(session)
 
     await run_transaction(tenant, _body)
+
+
+# ── INV-CN-01 FG-233: the per-INVOICE lock (a receipt that names the invoice only) ──
+def invoice_lock_id(org_id: str, invoice_id: str) -> str:
+    return f"invoice_lock:{org_id}:{invoice_id}"
+
+
+async def ensure_invoice_lock(tenant, invoice_id: str) -> None:
+    """Create the invoice lock document OUTSIDE any transaction (idempotent)."""
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await tenant.warehouse_ledger_counters.update_one(
+            {"_id": invoice_lock_id(tenant.org_id, invoice_id)},
+            {"$setOnInsert": {"tenant_id": tenant.org_id, "name": "invoice_lock",
+                              "invoice_id": invoice_id, "value": 0}},
+            upsert=True)
+    except DuplicateKeyError:
+        pass
+
+
+async def bump_invoice_lock(tenant, invoice_id: str, *, session=None) -> None:
+    """Write the invoice lock document in the caller's transaction: a supplier receipt
+    that names the invoice and a cancel of that invoice both write it, so they are
+    serialised (WriteConflict → ``with_transaction`` re-runs the loser, which then sees
+    the committed receipt / cancellation)."""
+    await tenant.warehouse_ledger_counters.update_one(
+        {"_id": invoice_lock_id(tenant.org_id, invoice_id)},
+        {"$inc": {"value": 1},
+         "$setOnInsert": {"tenant_id": tenant.org_id, "name": "invoice_lock", "invoice_id": invoice_id}},
+        upsert=True, session=session)
