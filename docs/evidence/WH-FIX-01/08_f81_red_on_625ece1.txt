@@ -102,4 +102,4 @@ FAILED tests/test_wh_fix_01_f81_readers.py::test_f81_02_issued_income_is_the_hea
 FAILED tests/test_wh_fix_01_f81_readers.py::test_f81_02_issued_income_is_the_header_total_like_main[real-enforce-prj-1-True]
 FAILED tests/test_wh_fix_01_f81_readers.py::test_f81_02_issued_income_is_the_header_total_like_main[real-enforce-prj-x-False]
 FAILED tests/test_wh_fix_01_f81_readers.py::test_f81_02_issued_income_is_the_header_total_like_main[real-enforce-prj-x-True]
-78 failed, 24 passed, 2 warnings in 25.94s
+78 failed, 24 passed, 2 warnings in 21.27s

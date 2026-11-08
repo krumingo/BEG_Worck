@@ -45,8 +45,9 @@ def run(monkeypatch, backend, mode, scenario):
             await h._bootstrap_indexes(op)
             await h._seed(op, sysdb)
             app = h._app(monkeypatch, op, sysdb, mode)
-            from app.routes import dashboard, reports, revenue_expense, material_smr, subcontractors
-            for mod in (dashboard, reports, revenue_expense, material_smr, subcontractors):
+            from app.routes import (dashboard, reports, revenue_expense, material_smr,
+                                    subcontractors, labor_smr)
+            for mod in (dashboard, reports, revenue_expense, material_smr, subcontractors, labor_smr):
                 monkeypatch.setattr(mod, "db", op)
 
             async def _no_payroll(*a, **k):
