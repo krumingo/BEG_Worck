@@ -6,7 +6,7 @@
 
 | Клон / PR | Проверен SHA | Проход | Бележка |
 |---|---|---|---|
-| `main` | `4bca18a` | 23 | merge #69 (`4bca18a`); merge #55 (`cd03324`); по-рано merge PM-01 (#68), ST-02 (#67), AUTH-01/02 (#56), W0-04-C01 (#72), PAY-01 (#70), W0-04-C02 (#78). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7), FLOW-020 (8), FLOW-021 (9), FLOW-005 (10), FLOW-004 (11), FLOW-007 (12), FLOW-003 (13), FLOW-013 (14), FLOW-014 (15), FLOW-016 (16), FLOW-009 (17), FLOW-010 (18), FLOW-011 (19), FLOW-012 (20), FLOW-015 (22), FLOW-017 (23) |
+| `main` | `8c52e92` | 23c | merge #80 (`8c52e92`, docs); merge #69 (`4bca18a`); merge #55 (`cd03324`); по-рано merge PM-01 (#68), ST-02 (#67), AUTH-01/02 (#56), W0-04-C01 (#72), PAY-01 (#70), W0-04-C02 (#78). Бавен преглед: FLOW-002 (1), FLOW-006 (2), FLOW-040 (3), FLOW-028 (4), FLOW-019 (5), FLOW-008 (6), FLOW-024 (7), FLOW-020 (8), FLOW-021 (9), FLOW-005 (10), FLOW-004 (11), FLOW-007 (12), FLOW-003 (13), FLOW-013 (14), FLOW-014 (15), FLOW-016 (16), FLOW-009 (17), FLOW-010 (18), FLOW-011 (19), FLOW-012 (20), FLOW-015 (22), FLOW-017 (23) |
 | #55 `task5c/live-ops-01-canonical-stock-core` | `ed48595` | 15 | слят в main (`cd03324`); склад: FLOW-009/020/008, Р10/Р11/Р13 |
 | #56 `claude/auth-owner-recovery-forgot-password-sfv359` | `3234446` | 9 | слят в main (`0f870c3`); auth: FLOW-002/040, Р6, Р19 (D-16) |
 | #67 `claude/st-02-staging-stack` | `675faba` | 4 | слят в main (`35ae10b`) |
@@ -24,7 +24,7 @@
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `d2fe80b` | 23 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `ea51030` | 23 | FLOW-010, Р48 |
-| #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `7446d85` | 23 | FLOW-006/025/034, Р47, Р49 |
+| #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `71957db` | 23c | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
 | пакети (`claude/happy-meitner-bmcnel`) | `0a31bd3` | 23b | Р52; Р50, Р51; Р48, Р49, CP-01, INV-CN-01; Р46, Р47; Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
 ## Отворени PR, непрегледани в този проход
