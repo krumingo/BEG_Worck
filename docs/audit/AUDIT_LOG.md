@@ -4812,3 +4812,35 @@ Gates:
 | #73 + main (`2670a53`) | lab_01 117 | 630 | same 15 | 0 / 0 | 814 | 6 |
 
 #73 has no `test_lab_02*`. The batch's combined lab_01 + lab_02 glob made pytest refuse the whole command line, so lab_01 was re-run on its own.
+
+## 2026-11-08 08:55 UTC: #79 `8dc3c45` (Codex F-79-01 + deterministic test_16): PASS
+
+**F-79-01 fix:** the client unit price is now computed exactly, as Decimal material + Decimal labour. The payload carries `unit_price_text` (at least 2 decimals, trailing zeros trimmed), and the PDF uses `unit_price_text` / `qty_text`.
+
+New probe O20 (`docs/audit/probes/off01/test_probe_off01.py`), 3 modes:
+
+| Case | GET review | PDF text |
+|---|---|---|
+| 5 + 7.345, ×100 | `unit_price_text` "12.345", `line_total` 1234.5 | contains "12.345" and "1234.50" |
+| 0.1 + 0.2, ×3 | "0.30" (no float noise) | contains it |
+| 19.999 + 0.001, ×7 | "20.00" / 140.0 | contains it |
+
+In all cases there is no split key in the payload, no split figure in the PDF, and no float noise (`0000000` / `9999999`). R43 still holds: O16 keys = activity_name, id, line_total, note, qty, sort_order, unit, unit_price, unit_price_text.
+
+My own first O20 had a false positive ("0.00" is a substring of "20.00"); the probe filter is fixed.
+
+**test_16 is strengthened, not weakened.** Every old assertion is kept. New: deterministic `send_first` / `rival_first` orderings through pause hooks, plus assertions on the winner per ordering (send_first → 200 / 409 OFFER_IN_USE; rival_first → 200 / 409 OFFER_CHANGED), and `orderings == {send_first: 2R, rival_first: 2R}`.
+
+Gates:
+
+| Gate | Result |
+|---|---|
+| Probe O1–O20 | **675 passed** |
+| OFF-01 (clean venv) | 237 |
+| Trial merge with main `cd03324` (`a6c7e99`): OFF-01 | 237 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+**Merge with main conflicts only in generated files:** `docs/architecture/W0-03E-A1_INVENTORY.md`, `W0-03E-A2B_INVENTORY.md` and `docs/evidence/PM-01/run_meta.json`. In the trial tree the two inventories were regenerated with their scripts (`w0_03e_a1_inventory.py`, `w0_03e_a2b_inventory.py`), and the static guard plus W0 pass. At merge time: regenerate those, and PM-01 `--harness`.
