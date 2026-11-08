@@ -1,0 +1,406 @@
+{
+ "fg236": {
+  "create_billable": 201,
+  "create_warranty": {
+   "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
+   "status": 409,
+   "written": 0
+  },
+  "migration": {
+   "audit_new": 4,
+   "available": true,
+   "b_linked_to_own": true,
+   "dry_counts": {
+    "already": 0,
+    "dq": 2,
+    "dq_open": 0,
+    "link": 2
+   },
+   "dry_wrote": 0,
+   "first_counts": {
+    "already": 0,
+    "dq": 2,
+    "dq_open": 0,
+    "link": 2
+   },
+   "link_events": 1,
+   "orphan_dq": [
+    {
+     "status": "open",
+     "type": "PROJECT_WARRANTY_ORIGINAL_UNKNOWN"
+    }
+   ],
+   "orphan_linked": null,
+   "parent_expected": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "parent_linked_to": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "parent_type": "Warranty",
+   "projects_after": 52,
+   "projects_before": 52,
+   "second_counts": {
+    "already": 2,
+    "dq": 0,
+    "dq_open": 2,
+    "link": 0
+   },
+   "wrong_plan_refused": "PlanMismatch"
+  },
+  "to_warranty": {
+   "error_code": "WARRANTY_IN_ORIGINAL_PROJECT",
+   "status": 409,
+   "type": "Billable"
+  },
+  "type_empty": {
+   "status": 200,
+   "type": "Overhead"
+  },
+  "type_used": {
+   "error_code": "PROJECT_TYPE_LOCKED",
+   "status": 409,
+   "type": "Billable"
+  }
+ },
+ "fg237": {
+  "again_while_active": 409,
+  "bad_kind": 400,
+  "cross_tenant": 404,
+  "current_reopen_after_close": false,
+  "current_reopen_id": true,
+  "cycles": [
+   {
+    "closed_at": null,
+    "kind": "warranty",
+    "reason": "теч в банята след приемане"
+   }
+  ],
+  "cycles_after_close": [
+   {
+    "closed": true,
+    "kind": "warranty"
+   }
+  ],
+  "enforce_owner": 200,
+  "enforce_viewer": 403,
+  "events": [
+   {
+    "action": "project.reopen",
+    "diff": {
+     "after": {
+      "kind": "warranty",
+      "reopen_id": "c5a621c4-405c-5168-ad84-e1681ff37c66",
+      "status": "Active"
+     },
+     "before": {
+      "status": "Completed"
+     }
+    },
+    "idempotency_key": "790b35cc1a6a42dea471f541358e695b",
+    "reason": "теч в банята след приемане",
+    "source_flow": "FLOW-001",
+    "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+   }
+  ],
+  "no_key": 428,
+  "no_reason": 400,
+  "ok": 200,
+  "put_reopen": 400,
+  "reclose": 200,
+  "replay": 200,
+  "replay_same": true,
+  "role_accountant": 403,
+  "role_requester": 403,
+  "role_technician": 403,
+  "role_viewer": 403,
+  "status_after": "Active",
+  "status_before": "Completed",
+  "writable_after": true,
+  "writable_before": false
+ },
+ "fg238": {
+  "events": [
+   {
+    "action": "project.photo.retire",
+    "diff": {
+     "after": {
+      "status": "retired"
+     },
+     "before": {
+      "status": "active"
+     },
+     "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29"
+    },
+    "idempotency_key": "4b1ce2768f284ab681abf53914bd1b3e",
+    "reason": "грешна снимка",
+    "source_flow": "FLOW-029",
+    "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+   }
+  ],
+  "file_kept": true,
+  "listed": false,
+  "no_key": 428,
+  "no_reason": 400,
+  "other_user": 403,
+  "retire": 200,
+  "row_kept": true,
+  "row_reason": "грешна снимка",
+  "row_status": "retired",
+  "upload": 201
+ },
+ "fg239": {
+  "active_empty": {
+   "error_code": "PROJECT_NOT_DRAFT",
+   "project_kept": true,
+   "status": 409
+  },
+  "archive": {
+   "events": [
+    {
+     "action": "project.archive",
+     "diff": {
+      "after": {
+       "status": "Archived"
+      },
+      "before": {
+       "status": "Completed"
+      }
+     },
+     "idempotency_key": "987b095d0e1244f996ee27eef6c059ef",
+     "reason": "приключен и платен",
+     "source_flow": "FLOW-001",
+     "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+    }
+   ],
+   "from_active": 409,
+   "from_active_code": "INVALID_TRANSITION",
+   "no_key": 428,
+   "no_reason": 400,
+   "ok": 200,
+   "reason": "приключен и платен",
+   "replay": 200,
+   "replay_same": true,
+   "site_manager": 403,
+   "status": "Archived"
+  },
+  "cancel": {
+   "events": [
+    {
+     "action": "project.cancel",
+     "diff": {
+      "after": {
+       "status": "Cancelled"
+      },
+      "before": {
+       "status": "Draft"
+      }
+     },
+     "idempotency_key": "1e3bbd294ce5476c910978867c8a4bb9",
+     "reason": "клиентът се отказа",
+     "source_flow": "FLOW-001",
+     "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+    }
+   ],
+   "project_status": "Cancelled",
+   "reason": "клиентът се отказа",
+   "status": 200
+  },
+  "cross_tenant": {
+   "project_kept": true,
+   "status": 404
+  },
+  "empty_draft": {
+   "events": [
+    {
+     "action": "project.delete",
+     "diff": {
+      "after": null,
+      "before": {
+       "code": "PRB-A-draft_empty",
+       "name": "Probe A draft_empty",
+       "status": "Draft",
+       "type": "Billable"
+      }
+     },
+     "idempotency_key": "7040772e4af148cdbf8f490ebe8e7fc1",
+     "reason": "празна чернова",
+     "source_flow": "FLOW-001",
+     "tenant_id": "c07b91c7-763f-4e82-81e3-6d8d990610eb"
+    }
+   ],
+   "project_kept": false,
+   "replay_same": true,
+   "replay_status": 200,
+   "status": 200
+  },
+  "link_attendance": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "attendance_entries": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_child_project": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "projects": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_client_act": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "client_acts": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_file": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "media_files": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_invoice": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "invoices": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_labor": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "labor_entries": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_material_waste": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "material_waste_entries": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_offer": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "offers": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_payment": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "finance_payments": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_photo": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "project_photos": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_subcontract": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "subcontractor_packages": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_warehouse": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "warehouse_transactions": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "link_work_report": {
+   "error_code": "PROJECT_HAS_HISTORY",
+   "links": {
+    "work_reports": 1
+   },
+   "project_kept": true,
+   "row_kept": true,
+   "status": 409
+  },
+  "no_key": {
+   "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+   "project_kept": true,
+   "status": 428
+  },
+  "put_cancel_by_site_manager": {
+   "error_code": "USE_LIFECYCLE_ENDPOINT",
+   "pause": 200,
+   "project_status": "Paused",
+   "status": 409
+  },
+  "role_accountant": {
+   "project_kept": true,
+   "status": 403
+  },
+  "role_requester": {
+   "project_kept": true,
+   "status": 403
+  },
+  "role_technician": {
+   "project_kept": true,
+   "status": 403
+  },
+  "role_viewer": {
+   "project_kept": true,
+   "status": 403
+  }
+ },
+ "fg240": {
+  "create_accountant": 403,
+  "create_no_key": 428,
+  "create_paid_field": 422,
+  "create_site_manager": 201,
+  "create_site_manager_p2": 403,
+  "create_technician": 403,
+  "create_unknown_sub": 422,
+  "create_viewer": 403,
+  "created_version": 1,
+  "events": [
+   "subcontractor_performance.create",
+   "subcontractor_performance.update"
+  ],
+  "legacy_manual_exposed": 999,
+  "legacy_manual_kept": 999,
+  "legacy_paid_shown": 150.0,
+  "legacy_paid_source": "payment_ledger",
+  "update_owner": 200,
+  "update_paid_field": 422,
+  "update_replay_same": true,
+  "update_viewer": 403,
+  "version_after": 2,
+  "versions": [
+   1,
+   2
+  ]
+ }
+}
