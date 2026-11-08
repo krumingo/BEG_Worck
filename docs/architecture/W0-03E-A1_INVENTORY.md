@@ -81,6 +81,7 @@
 | app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | financial_accounts | get(id = payment.get('account_id')) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_invoice_payments | GET /finance/invoices/{invoice_id}/payments | payment_allocations | find(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:add_invoice_payment | POST /finance/invoices/{invoice_id}/payments | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/finance.py:_quick_pay_bank_target | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_quick_pay_locked | (helper) | invoices | get(id = invoice_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_quick_pay_locked | (helper) | financial_accounts | get(id = account_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_quick_pay_locked | (helper) | finance_payments | update_one(id) | TenantData org_id (session) | new read | SAFE |
@@ -325,16 +326,8 @@
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | companies | get(id = owner_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | clients | get(id = owner_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | persons | get(id = owner_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/projects.py:update_person | PUT /persons/{person_id} | persons | get(id = person_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/projects.py:update_person | PUT /persons/{person_id} | persons | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/projects.py:delete_person | DELETE /persons/{person_id} | persons | get(id = person_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/projects.py:delete_person | DELETE /persons/{person_id} | projects | count(owner_type, owner_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/projects.py:delete_person | DELETE /persons/{person_id} | persons | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/projects.py:update_company | PUT /companies/{company_id} | companies | get(id = company_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/projects.py:update_company | PUT /companies/{company_id} | companies | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/projects.py:delete_company | DELETE /companies/{company_id} | companies | get(id = company_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/projects.py:delete_company | DELETE /companies/{company_id} | projects | count(owner_type, owner_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/projects.py:delete_company | DELETE /companies/{company_id} | companies | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | users | get(id = adv['user_id']) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | advances | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/hr.py:create_advance | POST /advances | advances | insert_one(advance) | TenantData org_id (session) | new read | SAFE |
@@ -342,19 +335,10 @@
 | app/routes/hr.py:create_advance | POST /advances | financial_accounts | get(id = data.account_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:create_advance | POST /advances | finance_payments | insert_one(id, direction, amount, currency, date, method, account_id, c) | TenantData org_id (session) | new read | SAFE |
 | app/routes/clients.py:update_client | PUT /clients/{client_id} | clients | get(id = client_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/clients.py:update_client | PUT /clients/{client_id} | clients | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/clients.py:update_client | PUT /clients/{client_id} | clients | find_one(phone_normalized, id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/clients.py:delete_client | DELETE /clients/{client_id} | clients | get(id = client_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/clients.py:delete_client | DELETE /clients/{client_id} | counterparties | count(client_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/clients.py:delete_client | DELETE /clients/{client_id} | clients | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/clients.py:delete_client | DELETE /clients/{client_id} | clients | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/counterparties.py:update_counterparty | PUT /counterparties/{counterparty_id} | counterparties | get(id = counterparty_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/counterparties.py:update_counterparty | PUT /counterparties/{counterparty_id} | counterparties | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/counterparties.py:update_counterparty | PUT /counterparties/{counterparty_id} | counterparties | find_one(eik, id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | counterparties | get(id = counterparty_id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | invoices | count(supplier_counterparty_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | counterparties | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/counterparties.py:delete_counterparty | DELETE /counterparties/{counterparty_id} | counterparties | update_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/locations.py:update_location | PUT /locations/{node_id} | location_nodes | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/locations.py:update_location | PUT /locations/{node_id} | location_nodes | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/locations.py:delete_location | DELETE /locations/{node_id} | location_nodes | find_one(id) | TenantData org_id (session) | scoped@base | SAFE |
@@ -392,4 +376,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 377 accesses — FIXED 131, SAFE 246
+Totals: 361 accesses — FIXED 123, SAFE 238

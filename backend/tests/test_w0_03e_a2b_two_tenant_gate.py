@@ -178,7 +178,10 @@ class Caller:
         return r
 
     async def post(self, path, body):
-        return await self.c.post(path, json=body, headers=self.h)
+        # R29 / CP-01: a master-data or money write carries an Idempotency-Key (428 otherwise)
+        import uuid as _uuid
+        return await self.c.post(path, json=body,
+                                 headers=dict(self.h, **{"Idempotency-Key": "gate-" + _uuid.uuid4().hex}))
 
     async def delete(self, path):
         return await self.c.delete(path, headers=self.h)

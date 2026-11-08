@@ -51,19 +51,26 @@ SITE = {"id": "site-1", "org_id": ORG_A, "role": "SiteManager", "email": "s@x"}
 # module, collection, url template, allowed legacy role, used-by, archive flag
 DELETE_PATHS = [
     (auth, "users", "/api/users/%s", ADMIN, ("project_team", {"user_id": None}), "is_active"),
-    (clients, "clients", "/api/clients/%s", ADMIN, ("sales", {"client_id": None}), "is_active"),
-    (counterparties, "counterparties", "/api/counterparties/%s", ADMIN,
-     ("supplier_invoices", {"supplier_id": None}), "active"),
     (locations, "location_nodes", "/api/locations/%s", ADMIN,
      ("material_waste", {"location_id": None}), None),
-    (projects, "persons", "/api/persons/%s", ADMIN, None, "is_active"),
-    (projects, "companies", "/api/companies/%s", ADMIN, None, "is_active"),
     (smr_groups, "smr_groups", "/api/smr-groups/%s", ADMIN, ("missing_smr", {"group_id": None}), None),
     (assets_items, "asset_items", "/api/assets/items/%s", ADMIN, None, "is_active"),
     (assets_units, "asset_units", "/api/assets/units/%s", ADMIN,
      ("asset_custody", {"unit_id": None}), "is_active"),
 ]
 IDS = [p[1] for p in DELETE_PATHS]
+
+# CP-01 (decision R48.4, Krum 08.11.2026): a counterparty / client / company / person is NEVER
+# deleted, used or not, in every MASTER_DATA_MODE — the old DELETE answers 409
+# COUNTERPARTY_NO_DELETE and writes nothing; „неактивен“ / „архивиран“ replace it. These four
+# collections therefore left DELETE_PATHS (whose contract is "an unused, unmigrated identity
+# may still be hard-deleted") and are covered by test_cp01_* below.
+NO_DELETE_PATHS = [
+    (clients, "clients", "/api/clients/%s"),
+    (counterparties, "counterparties", "/api/counterparties/%s"),
+    (projects, "persons", "/api/persons/%s"),
+    (projects, "companies", "/api/companies/%s"),
+]
 
 
 class RouteCtx(Ctx):
@@ -194,12 +201,38 @@ def test_off_keeps_the_legacy_behaviour_and_touches_no_master_data(monkeypatch, 
 
 def test_shadow_never_blocks_and_writes_no_audit(monkeypatch):
     monkeypatch.setenv(ENV_MODE, "shadow")
-    db = db_with("clients", doc_for("clients", "x1", ORG_A))
-    run(db["sales"].insert_one({"id": "s1", "org_id": ORG_A, "client_id": "x1"}))
-    response = client_for(monkeypatch, clients, db, ADMIN).delete("/api/clients/x1")
+    db = db_with("location_nodes", doc_for("location_nodes", "x1", ORG_A))
+    run(db["material_waste"].insert_one({"id": "s1", "org_id": ORG_A, "location_id": "x1"}))
+    response = client_for(monkeypatch, locations, db, ADMIN).delete("/api/locations/x1")
     assert response.status_code == 200
     assert run(db[AUDIT_COLLECTION].count_documents({})) == 0
-    assert run(db["clients"].count_documents({})) == 0
+    assert run(db["location_nodes"].count_documents({})) == 0
+
+
+@pytest.mark.parametrize("mode", ["off", "shadow", "enforce"])
+@pytest.mark.parametrize("path", NO_DELETE_PATHS, ids=[p[1] for p in NO_DELETE_PATHS])
+def test_cp01_counterparty_identities_are_never_deleted(monkeypatch, path, mode):
+    module, coll, url = path
+    mine, theirs = doc_for(coll, "same-id", ORG_A), doc_for(coll, "same-id", ORG_B)
+    db = db_with(coll, theirs, mine)
+    if mode == "enforce":
+        enforce_with(monkeypatch, db)
+    else:
+        monkeypatch.setenv(ENV_MODE, mode)
+    before = run(find_all(db, coll))
+    client = client_for(monkeypatch, module, db, ADMIN)
+    from app.deps.auth import require_admin
+
+    async def _admin():
+        return dict(ADMIN)
+    client.app.dependency_overrides[require_admin] = _admin     # persons/companies DELETE
+    response = client.delete(url % "same-id")
+    assert response.status_code == 409, response.text
+    assert response.json()["detail"]["error_code"] == "COUNTERPARTY_NO_DELETE"
+    assert run(find_all(db, coll)) == before                       # both tenants' rows intact
+    assert run(db[AUDIT_COLLECTION].count_documents({})) == 0
+    response = client.delete(url % "b-only")
+    assert response.status_code == 404                              # a foreign id is not found
 
 
 # ================================================================ enforce
@@ -260,8 +293,7 @@ def test_enforce_deletes_an_unused_unmigrated_identity_with_evidence(monkeypatch
 
 
 def test_enforce_requires_the_adapter_permission_and_audits_the_denial(monkeypatch):
-    for module, coll, url, user in ((clients, "clients", "/api/clients/%s", ACCOUNTANT),
-                                    (locations, "location_nodes", "/api/locations/%s", SITE)):
+    for module, coll, url, user in ((locations, "location_nodes", "/api/locations/%s", SITE),):
         db = db_with(coll, doc_for(coll, "x1", ORG_A))
         enforce_with(monkeypatch, db)
         response = client_for(monkeypatch, module, db, user).delete(url % "x1")
@@ -274,29 +306,29 @@ def test_enforce_requires_the_adapter_permission_and_audits_the_denial(monkeypat
 
 
 def test_enforce_refuses_without_a_resolved_tenant_or_on_a_foreign_data_path(monkeypatch):
-    db = db_with("clients", doc_for("clients", "x1", ORG_A))
+    db = db_with("location_nodes", doc_for("location_nodes", "x1", ORG_A))
     monkeypatch.setenv(ENV_MODE, "enforce")
 
     async def none(user):
         return None
     monkeypatch.setattr(la, "context_for", none)
-    r = client_for(monkeypatch, clients, db, ADMIN).delete("/api/clients/x1")
+    r = client_for(monkeypatch, locations, db, ADMIN).delete("/api/locations/x1")
     assert r.status_code == 403 and r.json()["detail"]["error_code"] == "TENANT_NOT_RESOLVED"
     enforce_with(monkeypatch, db, matches=False)
-    r = client_for(monkeypatch, clients, db, ADMIN).delete("/api/clients/x1")
+    r = client_for(monkeypatch, locations, db, ADMIN).delete("/api/locations/x1")
     assert r.status_code == 409 and r.json()["detail"]["error_code"] == "TENANT_DATA_PATH_NOT_MIGRATED"
     enforce_with(monkeypatch, db, ctx=RouteCtx(db, org_id=ORG_B))
-    r = client_for(monkeypatch, clients, db, ADMIN).delete("/api/clients/x1")
+    r = client_for(monkeypatch, locations, db, ADMIN).delete("/api/locations/x1")
     assert r.status_code == 409
-    assert run(db["clients"].count_documents({})) == 1
+    assert run(db["location_nodes"].count_documents({})) == 1
 
 
 def test_an_invalid_master_data_mode_refuses_the_delete(monkeypatch):
     monkeypatch.setenv(ENV_MODE, "enforc")
-    db = db_with("clients", doc_for("clients", "x1", ORG_A))
-    r = client_for(monkeypatch, clients, db, ADMIN).delete("/api/clients/x1")
+    db = db_with("location_nodes", doc_for("location_nodes", "x1", ORG_A))
+    r = client_for(monkeypatch, locations, db, ADMIN).delete("/api/locations/x1")
     assert r.status_code == 503
-    assert run(db["clients"].count_documents({})) == 1
+    assert run(db["location_nodes"].count_documents({})) == 1
 
 
 # ================================================================ warehouses bulk

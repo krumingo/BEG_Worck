@@ -42,6 +42,9 @@ class CounterpartyUpdate(BaseModel):
     payment_terms_days: Optional[int] = None
     notes: Optional[str] = None
     active: Optional[bool] = None
+    # CP-01: optimistic concurrency + the reason of an ЕИК change (R48.6)
+    version: Optional[int] = None
+    eik_change_reason: Optional[str] = None
 
 class FinancialAccountCreate(BaseModel):
     name: str
@@ -77,6 +80,7 @@ class InvoiceCreate(BaseModel):
     counterparty_email: Optional[str] = None  # Email
     counterparty_phone: Optional[str] = None  # Phone
     supplier_counterparty_id: Optional[str] = None  # Reference to counterparties collection
+    counterparty_iban: Optional[str] = None  # CP-01 / FG-175: IBAN printed on the invoice
     scan_doc_id: Optional[str] = None  # Reference to scanned document
     issue_date: str
     due_date: str
@@ -96,6 +100,7 @@ class InvoiceUpdate(BaseModel):
     counterparty_email: Optional[str] = None
     counterparty_phone: Optional[str] = None
     supplier_counterparty_id: Optional[str] = None
+    counterparty_iban: Optional[str] = None  # CP-01 / FG-175: IBAN printed on the invoice
     scan_doc_id: Optional[str] = None
     project_id: Optional[str] = None
     issue_date: Optional[str] = None
@@ -116,6 +121,9 @@ class PaymentCreate(BaseModel):
     counterparty_name: Optional[str] = None
     reference: Optional[str] = None
     note: Optional[str] = None
+    # CP-01 §1: the payee and its verified bank account (FLOW-010 §3.3 / FLOW-006)
+    counterparty_id: Optional[str] = None
+    bank_account_id: Optional[str] = None
 
     @field_validator("amount", mode="before")
     @classmethod

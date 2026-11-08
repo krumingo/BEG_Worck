@@ -85,7 +85,9 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_PARTIES,
               "companies", "clients", "counterparties", "subcontractors",
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",
-              "subcontractor_payments", "subcontractor_performance"),
+              "subcontractor_payments", "subcontractor_performance",
+              # CP-01: the VerifiedBankAccount register and the ЕИК claim rows
+              "verified_bank_accounts", "counterparty_eik_claims", "company_eik_claims"),
     **_family(FAMILY_COMMERCIAL,
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
               "change_orders", "client_acts", "contract_payments", "invoices",
@@ -126,7 +128,7 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),
     **_family(FAMILY_AUDIT,
-              "audit_logs"),
+              "audit_logs", "dq_issues"),  # CP-01: minimal Data Quality rows (until W0-07)
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",

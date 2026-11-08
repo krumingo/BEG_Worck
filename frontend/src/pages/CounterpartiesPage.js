@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { apiErrorText, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import DataTable from "@/components/DataTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,7 +51,7 @@ export default function CounterpartiesPage() {
 
   const handleAutoLinkClient = async (row) => {
     try {
-      const response = await API.post(`/counterparties/${row.id}/auto-link-client`);
+      const response = await API.post(`/counterparties/${row.id}/auto-link-client`, {}, idempotencyHeaders(newIdempotencyKey()));
       if (response.data.created) {
         toast.success(t("clients.autoCreateClient") + " - " + t("common.success"));
       } else {
@@ -156,22 +157,25 @@ export default function CounterpartiesPage() {
 
   const confirmDelete = async () => {
     try {
-      await API.delete(`/counterparties/${editingItem.id}`);
+      // CP-01 (R48.4): a counterparty is never deleted — it is deactivated with a reason
+      const reason = window.prompt("Причина за деактивиране на контрагента");
+      if (!reason || !reason.trim()) return;
+      await API.post(`/counterparties/${editingItem.id}/deactivate`, { reason: reason.trim() }, idempotencyHeaders(newIdempotencyKey()));
       toast.success(t("data.deleteSuccess"));
       setDeleteOpen(false);
       setRefreshKey((k) => k + 1);
     } catch (err) {
-      toast.error(err.response?.data?.detail || t("common.error"));
+      toast.error(apiErrorText(err, t("common.error")));
     }
   };
 
   const handleSave = async (data) => {
     try {
       if (editingItem) {
-        await API.put(`/counterparties/${editingItem.id}`, data);
+        await API.put(`/counterparties/${editingItem.id}`, data, idempotencyHeaders(newIdempotencyKey()));
         toast.success(t("data.updateSuccess"));
       } else {
-        await API.post("/counterparties", data);
+        await API.post("/counterparties", data, idempotencyHeaders(newIdempotencyKey()));
         toast.success(t("data.createSuccess"));
       }
       setModalOpen(false);

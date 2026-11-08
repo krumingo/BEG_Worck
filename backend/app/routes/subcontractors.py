@@ -6,7 +6,7 @@ Phase 3: Subcontractor Acts (Certified Expense)
 Phase 4: Subcontractor Payments
 Phase 5: Profit Integration (extends revenue_expense)
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional, List
 import logging
 
@@ -20,6 +20,8 @@ from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
+from app.services import master_records as mr
+from app.services.bank_account_guard import check_payment_target, require_selectable_party
 
 router = APIRouter(tags=["Subcontractors"])
 
@@ -56,18 +58,17 @@ PKG_STATUSES = ["draft", "confirmed", "in_progress", "partially_certified", "com
 
 
 @router.post("/subcontractors", status_code=201)
-async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(require_m2)):
-    tenant = _tenant(user)
-    now = datetime.now(timezone.utc).isoformat()
+async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(require_m2),
+                               idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """CP-01 (R48.5): a subcontractor is a counterparty — Accountant/Admin/Owner, key, AuditEvent."""
     sub = {
-        "id": str(uuid.uuid4()), "org_id": user["org_id"],
         "name": data.name, "eik": data.eik, "vat_number": data.vat_number,
         "contact_person": data.contact_person, "phone": data.phone,
         "email": data.email, "address": data.address, "notes": data.notes,
-        "active": True, "created_at": now, "updated_at": now,
+        "active": True,
     }
-    await tenant.subcontractors.insert_one(sub)
-    return {k: v for k, v in sub.items() if k != "_id"}
+    return await mr.create(db, user, idempotency_key, collection="subcontractors", doc=sub,
+                           fingerprint=data.model_dump())
 
 
 @router.get("/subcontractors")
@@ -514,9 +515,21 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
         account = await tenant.financial_accounts.find_one({"org_id": org_id, "account_type": "Cash"})
     account_id = account["id"] if account else None
 
+    # CP-01 §1 (FLOW-006 / FLOW-010 §8.1): executed only to a verified bank account of the
+    # subcontractor; an inactive / archived subcontractor is not paid (422). Nothing written before.
+    method = data.get("payment_method", "bank")
+    if account and account.get("account_type", account.get("type")) == "Cash":
+        method = "cash"
+    await require_selectable_party(tenant, "subcontractor", pkg["subcontractor_id"])
+    bank_stamp = await check_payment_target(
+        tenant, user, direction="Outflow", method=method, party_type="subcontractor",
+        party_id=pkg["subcontractor_id"], bank_account_id=data.get("bank_account_id"),
+        path="/subcontractor-payments") or {}
+
     payment = {
         "id": str(uuid.uuid4()), "org_id": org_id,
         "project_id": pkg["project_id"], "subcontractor_id": pkg["subcontractor_id"],
+        **bank_stamp,
         "package_id": pkg_id, "act_id": data.get("act_id"),
         "payment_no": await _get_next_pay_no(org_id),
         "payment_date": data.get("payment_date", now[:10]),
@@ -544,6 +557,7 @@ async def create_subcontractor_payment(data: dict, user: dict = Depends(require_
             "note": "Подизпълнител/бригада плащане",
             "project_id": pkg["project_id"],
             "subcontractor_payment_id": payment["id"],
+            **bank_stamp,
             "created_at": now, "updated_at": now,
         })
 

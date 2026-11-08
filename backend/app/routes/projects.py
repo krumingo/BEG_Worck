@@ -2,9 +2,9 @@
 Project routes - /api/projects/*, /api/project-enums, /api/persons/*, /api/companies/*
 Includes owner (person/company) management merged from Sites module.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, UploadFile, File, Form, Request
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 from datetime import datetime, timezone
 from pathlib import Path
 import uuid
@@ -24,7 +24,9 @@ from app.deps.auth import (
 )
 from app.deps.modules import enforce_limit
 from app.utils.audit import log_audit
-from app.master_data.legacy_adapter import guarded_identity_delete
+from app.services import counterparty_rules as cr
+from app.services import master_records as mr
+from app.services.master_write import audit, conflict, forbidden, kw, once_in_tx, require_key
 
 router = APIRouter(tags=["projects"])
 
@@ -173,6 +175,7 @@ async def create_project(data: ProjectCreate, user: dict = Depends(get_current_u
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be: {', '.join(PROJECT_STATUSES)}")
     if data.type not in PROJECT_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid type. Must be: {', '.join(PROJECT_TYPES)}")
+    await _require_selectable_owner(tenant, data.owner_type, data.owner_id)  # CP-01 R48.4
     # Validate owner type if provided
     if data.owner_type and data.owner_type not in OWNER_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid owner type. Must be: {', '.join(OWNER_TYPES)}")
@@ -249,7 +252,31 @@ async def get_project(project_id: str, user: dict = Depends(get_current_user)):
     else:
         project["site_manager_name"] = ""
     project["team_count"] = await project_team.active_member_count(_team(user), project_id)
+    _mask_owner_egn(project)
     return project
+
+
+def _mask_owner_egn(project: dict) -> dict:
+    """R48.3: a person's ЕГН copied into ``invoice_details`` before CP-01 is shown masked."""
+    inv = project.get("invoice_details")
+    if project.get("owner_type") == "person" and isinstance(inv, dict) and inv.get("eik") \
+            and not str(inv["eik"]).startswith(cr.EGN_MASK_PREFIX):
+        project["invoice_details"] = dict(inv, eik=cr.mask_egn(inv["eik"]))
+    return project
+
+
+async def _require_selectable_owner(tenant, owner_type, owner_id) -> None:
+    """R48.4: an inactive / archived client is not chosen for a project → 422."""
+    if not owner_id:
+        return
+    coll = "companies" if owner_type == "company" else "persons" if owner_type == "person" else None
+    if coll is None:
+        return
+    doc = await tenant.collection(coll).get(owner_id, {"_id": 0})
+    if doc is not None and not cr.is_selectable(doc, coll):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "COUNTERPARTY_NOT_SELECTABLE",
+            "message": "Клиентът е неактивен или архивиран — не може да се избира"})
 
 @router.put("/projects/{project_id}")
 async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depends(get_current_user)):
@@ -260,6 +287,13 @@ async def update_project(project_id: str, data: ProjectUpdate, user: dict = Depe
     if not await can_manage_project(user, project_id):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if ("owner_id" in update and update["owner_id"] != project.get("owner_id")) or \
+            ("owner_type" in update and update["owner_type"] != project.get("owner_type")):
+        # R22: the client of a project is changed only by Owner / Admin / Accountant
+        if not cr.can_write_master(user):
+            raise forbidden("Клиентът на обекта се сменя само от Собственик, Админ или Счетоводител (Р22)")
+        await _require_selectable_owner(tenant, update.get("owner_type", project.get("owner_type")),
+                                        update.get("owner_id", project.get("owner_id")))
     if "status" in update and update["status"] not in PROJECT_STATUSES:
         raise HTTPException(status_code=400, detail="Invalid status")
     
@@ -381,7 +415,7 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
         if person:
             invoice = {
                 "company_name": person.get("full_name") or person.get("fullName") or f"{person.get('first_name', '')} {person.get('last_name', '')}".strip(),
-                "eik": person.get("egn") or "",
+                "eik": cr.mask_egn(person.get("egn")) if person.get("egn") else "",  # R48.3
                 "registered_address": person.get("address") or "",
                 "is_vat_registered": False,
             }
@@ -623,46 +657,44 @@ class PersonUpdate(BaseModel):
 
 
 @router.get("/persons")
-async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] = None):
-    """List all persons in organization"""
+async def list_persons(user: dict = Depends(get_current_user), q: Optional[str] = None,
+                       include_archived: bool = False):
+    """List all persons in organization — ЕГН always masked (R48.3), archived hidden (R48.4)"""
     tenant = _tenant(user)
-    query = {"org_id": user["org_id"]}
+    query = mr.hide_archived({"org_id": user["org_id"]}, include_archived)
     persons = await tenant.persons.find(query, {"_id": 0}).sort("last_name", 1).to_list(500)
     if q:
         q_lower = q.lower()
         persons = [p for p in persons if q_lower in p.get("first_name", "").lower()
                    or q_lower in p.get("last_name", "").lower()
                    or q_lower in p.get("phone", "").lower()]
-    return persons
+    return [cr.mask_person(p) for p in persons]
 
 
 @router.post("/persons", status_code=201)
-async def create_person(data: PersonCreate, user: dict = Depends(get_current_user)):
-    """Create a new person"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
+async def create_person(data: PersonCreate, user: dict = Depends(get_current_user),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Create a new person — Accountant/Admin/Owner (R48.5), key (R29), AuditEvent"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     phone = normalize_phone(data.phone)
     if not phone:
         raise HTTPException(status_code=400, detail="Phone number is required")
-    existing = await tenant.persons.find_one({"org_id": org_id, "phone": phone})
-    if existing:
-        raise HTTPException(status_code=400, detail="Person with this phone already exists")
-    now = datetime.now(timezone.utc).isoformat()
+
+    async def check(tenant, session):
+        if await tenant.persons.find_one({"phone": phone}, {"_id": 0, "id": 1}, **kw(session)):
+            raise HTTPException(status_code=400, detail="Person with this phone already exists")
+
     person = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
         "phone": phone,
         "first_name": data.first_name.strip(),
         "last_name": data.last_name.strip(),
         "email": data.email.strip() if data.email else None,
         "notes": data.notes or "",
-        "created_at": now,
-        "updated_at": now,
+        "is_active": True,
     }
-    await tenant.persons.insert_one(person)
-    await log_audit(org_id, user["id"], user["email"], "created", "person", person["id"], 
-                    {"phone": phone, "name": f"{data.first_name} {data.last_name}"})
-    return {k: v for k, v in person.items() if k != "_id"}
+    return await mr.create(db, user, idempotency_key, collection="persons", doc=person,
+                           fingerprint=data.model_dump(), check=check, result=cr.mask_person)
 
 
 @router.get("/persons/find-by-phone")
@@ -673,47 +705,65 @@ async def find_person_by_phone(phone: str, user: dict = Depends(get_current_user
     person = await tenant.persons.find_one({"org_id": user["org_id"], "phone": normalized}, {"_id": 0})
     if not person:
         return {"found": False, "person": None}
-    return {"found": True, "person": person}
+    return {"found": True, "person": cr.mask_person(person)}
 
 
 @router.get("/persons/{person_id}")
 async def get_person(person_id: str, user: dict = Depends(get_current_user)):
-    """Get person by ID"""
+    """Get person by ID — ЕГН masked for every role; the full value only via /egn (R48.3)"""
     tenant = _tenant(user)
     person = await tenant.persons.find_one({"id": person_id, "org_id": user["org_id"]}, {"_id": 0})
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    return person
+    return cr.mask_person(person)
+
+
+@router.post("/persons/{person_id}/egn/reveal")
+async def reveal_person_egn(person_id: str, user: dict = Depends(get_current_user),
+                            idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """R48.3: the full ЕГН — Owner / Accountant only; every reveal is an AuditEvent
+    (who, when, whose) committed before the value is returned."""
+    if not cr.can_reveal_egn(user):
+        raise forbidden("Пълното ЕГН се вижда само от Собственик и Счетоводител (Р48.3)")
+    tenant = _tenant(user)
+    key = idempotency_key.strip() if isinstance(idempotency_key, str) and idempotency_key.strip() \
+        else "reveal-" + uuid.uuid4().hex
+
+    async def tx(session):
+        person = await tenant.persons.find_one({"id": person_id}, {"_id": 0, "id": 1, "egn": 1},
+                                               **kw(session))
+        if not person:
+            raise HTTPException(status_code=404, detail="Person not found")
+        await audit(db, session, user, "person.egn.revealed", entity_type="person",
+                    entity_id=person_id, key=key,
+                    diff={"egn_masked": cr.mask_egn(person.get("egn")),
+                          "revealed_by": user["id"], "role": user.get("role")})
+        return person.get("egn") or ""
+
+    from app.services.master_write import run_tx
+    egn = await run_tx(db, tx)
+    return {"id": person_id, "egn": egn, "revealed": True}
 
 
 @router.put("/persons/{person_id}")
-async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user)):
-    """Update person"""
-    person = await _tenant(user).persons.get(person_id)
-    if not person:
-        raise HTTPException(status_code=404, detail="Person not found")
+async def update_person(person_id: str, data: PersonUpdate, user: dict = Depends(get_current_user),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Update person — Accountant/Admin/Owner, key, CAS, AuditEvent (CP-01)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     update = {k: v.strip() if isinstance(v, str) else v for k, v in data.model_dump().items() if v is not None}
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await _tenant(user).persons.update_one({"id": person_id}, {"$set": update})
-    return await _tenant(user).persons.get(person_id, {"_id": 0})
+    return await mr.update(db, user, idempotency_key, collection="persons", record_id=person_id,
+                           changes=update, fingerprint={"id": person_id, "body": data.model_dump()},
+                           result=cr.mask_person)
 
 
 @router.delete("/persons/{person_id}")
 async def delete_person(person_id: str, request: Request, user: dict = Depends(require_admin)):
-    """Delete person (admin only)"""
-    person = await _tenant(user).persons.get(person_id)
+    """R48.4: a person is never deleted → 409 COUNTERPARTY_NO_DELETE, nothing written."""
+    person = await _tenant(user).persons.get(person_id, {"_id": 0, "id": 1})
     if not person:
         raise HTTPException(status_code=404, detail="Person not found")
-    project_count = await _tenant(user).projects.count({"owner_type": "person", "owner_id": person_id,
-                                                       "org_id": user["org_id"]})
-    if project_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete: person is owner of {project_count} project(s)")
-    done = await guarded_identity_delete(user, request, db, collection="persons",
-                                         legacy_id=person_id)
-    if done is not None:
-        return done
-    await _tenant(user).persons.delete_one({"id": person_id, "org_id": user["org_id"]})
-    return {"ok": True}
+    raise mr.no_delete("persons")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -742,10 +792,11 @@ class CompanyUpdate(BaseModel):
 
 
 @router.get("/companies")
-async def list_companies(user: dict = Depends(get_current_user), q: Optional[str] = None):
-    """List all companies in organization"""
+async def list_companies(user: dict = Depends(get_current_user), q: Optional[str] = None,
+                         include_archived: bool = False):
+    """List all companies in organization (archived hidden — R48.4)"""
     tenant = _tenant(user)
-    query = {"org_id": user["org_id"]}
+    query = mr.hide_archived({"org_id": user["org_id"]}, include_archived)
     companies = await tenant.companies.find(query, {"_id": 0}).sort("name", 1).to_list(500)
     if q:
         q_lower = q.lower()
@@ -754,20 +805,22 @@ async def list_companies(user: dict = Depends(get_current_user), q: Optional[str
 
 
 @router.post("/companies", status_code=201)
-async def create_company(data: CompanyCreate, user: dict = Depends(get_current_user)):
-    """Create a new company"""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
+async def create_company(data: CompanyCreate, user: dict = Depends(get_current_user),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Create a new company — Accountant/Admin/Owner, key; a duplicate ЕИК → 409 (+ DQ)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     eik = normalize_eik(data.eik)
     if not eik:
         raise HTTPException(status_code=400, detail="EIK is required")
-    existing = await tenant.companies.find_one({"org_id": org_id, "eik": eik})
-    if existing:
-        raise HTTPException(status_code=400, detail="Company with this EIK already exists")
-    now = datetime.now(timezone.utc).isoformat()
+    from app.routes.clients import _claim_company_eik, company_duplicate_dq
+
+    async def check(tenant, session):
+        await _claim_company_eik(tenant, session, eik)
+        if await tenant.companies.find_one({"eik": eik}, {"_id": 0, "id": 1}, **kw(session)):
+            raise conflict("EIK_ALREADY_EXISTS", "Company with this EIK already exists")
+
     company = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
         "eik": eik,
         "name": data.name.strip(),
         "vat_number": data.vat_number.strip() if data.vat_number else None,
@@ -776,13 +829,11 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
         "email": data.email.strip() if data.email else None,
         "phone": normalize_phone(data.phone) if data.phone else None,
         "notes": data.notes or "",
-        "created_at": now,
-        "updated_at": now,
+        "is_active": True,
     }
-    await tenant.companies.insert_one(company)
-    await log_audit(org_id, user["id"], user["email"], "created", "company", company["id"], 
-                    {"eik": eik, "name": data.name})
-    return {k: v for k, v in company.items() if k != "_id"}
+    return await company_duplicate_dq(_tenant(user), user, eik, lambda: mr.create(
+        db, user, idempotency_key, collection="companies", doc=company,
+        fingerprint=data.model_dump(), check=check))
 
 
 @router.get("/companies/find-by-eik")
@@ -807,11 +858,11 @@ async def get_company(company_id: str, user: dict = Depends(get_current_user)):
 
 
 @router.put("/companies/{company_id}")
-async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user)):
-    """Update company"""
-    company = await _tenant(user).companies.get(company_id)
-    if not company:
-        raise HTTPException(status_code=404, detail="Company not found")
+async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depends(get_current_user),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Update company — Accountant/Admin/Owner, key, CAS, AuditEvent (CP-01)"""
+    mr.require_writer(user)
+    require_key(idempotency_key)
     update = {}
     for k, v in data.model_dump().items():
         if v is not None:
@@ -821,27 +872,33 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
                 update[k] = v.strip()
             else:
                 update[k] = v
-    update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await _tenant(user).companies.update_one({"id": company_id}, {"$set": update})
-    return await _tenant(user).companies.get(company_id, {"_id": 0})
+    return await mr.update(db, user, idempotency_key, collection="companies", record_id=company_id,
+                           changes=update, fingerprint={"id": company_id, "body": data.model_dump()})
 
 
 @router.delete("/companies/{company_id}")
 async def delete_company(company_id: str, request: Request, user: dict = Depends(require_admin)):
-    """Delete company (admin only)"""
-    company = await _tenant(user).companies.get(company_id)
+    """R48.4: a company is never deleted → 409 COUNTERPARTY_NO_DELETE, nothing written."""
+    company = await _tenant(user).companies.get(company_id, {"_id": 0, "id": 1})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    project_count = await _tenant(user).projects.count({"owner_type": "company", "owner_id": company_id,
-                                                       "org_id": user["org_id"]})
-    if project_count > 0:
-        raise HTTPException(status_code=400, detail=f"Cannot delete: company is owner of {project_count} project(s)")
-    done = await guarded_identity_delete(user, request, db, collection="companies",
-                                         legacy_id=company_id)
-    if done is not None:
-        return done
-    await _tenant(user).companies.delete_one({"id": company_id, "org_id": user["org_id"]})
-    return {"ok": True}
+    raise mr.no_delete("companies")
+
+
+def _lifecycle_route(collection: str, action: str):
+    async def handler(record_id: str, body: Dict[str, Any] = Body(default={}),
+                      user: dict = Depends(get_current_user),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+        return await mr.lifecycle(db, user, idempotency_key, collection=collection,
+                                  record_id=record_id, action=action, body=body)
+    handler.__name__ = "%s_%s" % (action, collection)
+    return handler
+
+
+for _coll, _prefix in (("persons", "/persons"), ("companies", "/companies")):
+    for _action in mr.LIFECYCLE_ACTIONS:
+        router.add_api_route("%s/{record_id}/%s" % (_prefix, _action),
+                             _lifecycle_route(_coll, _action), methods=["POST"])
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -997,7 +1054,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
                 client_data = {
                     "id": p.get("id"),
                     "name": f"{p.get('first_name', '')} {p.get('last_name', '')}".strip(),
-                    "tax_id": p.get("egn", ""),
+                    "tax_id": cr.mask_egn(p.get("egn")) if p.get("egn") else "",  # R48.3
                     "vat_number": "",
                     "responsible_person": "",
                     "address": p.get("address", ""),

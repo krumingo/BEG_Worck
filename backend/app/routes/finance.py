@@ -32,6 +32,9 @@ from ..models.finance import (
     PaymentCreate, AllocatePaymentRequest
 )
 
+from app.services.bank_account_guard import (check_payment_target, require_selectable_party,
+                                             resolve_invoice_party)
+
 router = APIRouter(tags=["Finance"])
 
 # ── Helpers ────────────────────────────────────────────────────────
@@ -112,6 +115,18 @@ async def _require_tenant_project(user: dict, project_id) -> None:
         raise HTTPException(status_code=422, detail={
             "error_code": "PROJECT_NOT_FOUND",
             "message": "Обектът не съществува в тази фирма"})
+
+
+def _invoice_iban(value) -> Optional[str]:
+    """CP-01 / FG-175: the IBAN printed on an invoice is kept normalised; a malformed one → 422.
+    It is never trusted as a payment target: the payment checks it against the verified account."""
+    from app.services.counterparty_rules import iban_is_valid, normalize_iban
+    if value is None or (isinstance(value, str) and not value.strip()):
+        return None
+    if not iban_is_valid(value):
+        raise HTTPException(status_code=422, detail={"error_code": "IBAN_INVALID",
+                                                     "message": "Невалиден IBAN във фактурата"})
+    return normalize_iban(value)
 
 
 def finance_permission(user: dict) -> bool:
@@ -856,6 +871,11 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     vat_check = validate_vat_number(data.counterparty_vat_no or "")
     if not vat_check["valid"]:
         raise HTTPException(status_code=400, detail=vat_check["message"])
+    # CP-01 R48.4: an inactive / archived counterparty is not chosen for a new invoice → 422
+    _ptype, _pid = await resolve_invoice_party(_tenant(user), {"counterparty_eik": data.counterparty_eik})
+    if _pid:
+        await require_selectable_party(_tenant(user), _ptype, _pid)
+    iban_value = _invoice_iban(data.counterparty_iban)
 
     # Generate or validate invoice number
     invoice_no = data.invoice_no
@@ -899,6 +919,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         "counterparty_mol": data.counterparty_mol,
         "counterparty_email": data.counterparty_email,
         "counterparty_phone": data.counterparty_phone,
+        "counterparty_iban": iban_value,
         "issue_date": data.issue_date,
         "due_date": data.due_date,
         "currency": data.currency,
@@ -1006,6 +1027,11 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             raise HTTPException(status_code=400, detail="Invoice number already exists")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
+    if "counterparty_iban" in update:
+        update["counterparty_iban"] = _invoice_iban(update["counterparty_iban"])
+    if update.get("supplier_counterparty_id") and \
+            update["supplier_counterparty_id"] != invoice.get("supplier_counterparty_id"):
+        await require_selectable_party(tenant, "counterparty", update["supplier_counterparty_id"])
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     version_id = str(uuid.uuid4())
 
@@ -1254,10 +1280,12 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     async def work():
         org_id = user["org_id"]
         tenant = _tenant(user)
+        # CP-01 §1: checked before anything is written; a replay never reaches this.
+        bank_stamp = await _quick_pay_bank_target(tenant, user, invoice_id, data)
         # Addendum C: the remaining check and the writes run under the invoice lock, so two
         # concurrent payments (quick-pay or allocate) can never pay more than the invoice.
         async with _invoice_lock(tenant, invoice_id):
-            ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key)
+            ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key, bank_stamp)
         updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})   # read after the unlock
         return {
             "ok": True,
@@ -1270,8 +1298,25 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
     return await _once(user, key, "finance.invoice_payment.create", {"invoice_id": invoice_id, "body": data}, work)
 
 
+async def _quick_pay_bank_target(tenant: TenantData, user: dict, invoice_id: str, data: dict) -> dict:
+    """CP-01 §1 + FG-175: paying a received invoice goes only to a verified bank account of
+    its counterparty; an IBAN on the invoice that is not that account blocks it (+ DQ)."""
+    invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
+    if not invoice or invoice.get("direction") == "Issued":
+        return {}
+    party_type, party_id = await resolve_invoice_party(tenant, invoice)
+    method = data.get("method") or data.get("payment_method", "BankTransfer")
+    if party_id:
+        await require_selectable_party(tenant, party_type, party_id)
+    return await check_payment_target(
+        tenant, user, direction="Outflow", method=method, party_type=party_type, party_id=party_id,
+        bank_account_id=data.get("bank_account_id") if isinstance(data.get("bank_account_id"), str) else None,
+        invoice_iban=invoice.get("counterparty_iban"),
+        path="/finance/invoices/{id}/payments") or {}
+
+
 async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, data: dict,
-                            amount: float, key: str) -> dict:
+                            amount: float, key: str, bank_stamp: Optional[dict] = None) -> dict:
     """The quick-pay write, run while the invoice row is locked. The payment and allocation ids
     are derived from the idempotency key and written as upserts (D5 rule): a retry of the same
     key after a failure between the two writes never adds a second payment."""
@@ -1314,6 +1359,7 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
         "created_at": now,
         "updated_at": now,
     }
+    payment.update(bank_stamp or {})
     await tenant.finance_payments.update_one({"id": payment_id}, {"$setOnInsert": payment}, upsert=True)
     allocation = {
         "id": allocation_id,
@@ -1735,9 +1781,20 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
     key = _require_key(idempotency_key)  # R29: no key → 428, nothing written
     amount = positive_amount(data.amount)  # PAY-01-C01: finite > 0, else 422, nothing written
 
+    # CP-01 §1: an outgoing payment to a counterparty is executed only to a verified bank
+    # account (FLOW-010 §8.1, FLOW-025 L187) — checked before the key is taken, nothing written.
+    # A replay of the same key returns the first result (_once) before this runs again.
+
     async def work():
-        # Route to the correct account: cash → Каса, otherwise the chosen account.
         tenant = _tenant(user)
+        if data.counterparty_id:
+            await require_selectable_party(tenant, "counterparty", data.counterparty_id)
+        bank_stamp = await check_payment_target(
+            tenant, user, direction=data.direction, method=data.method,
+            party_type="counterparty" if data.counterparty_id else None,
+            party_id=data.counterparty_id, bank_account_id=data.bank_account_id,
+            path="/finance/payments") or {}
+        # Route to the correct account: cash → Каса, otherwise the chosen account.
         account_id = await _resolve_payment_account(tenant, data.method, data.account_id)
         account = await tenant.financial_accounts.get(account_id)
         if not account:
@@ -1759,6 +1816,9 @@ async def create_payment(data: PaymentCreate, user: dict = Depends(require_m5),
             "created_at": now,
             "updated_at": now,
         }
+        if data.counterparty_id:
+            payment["counterparty_id"] = data.counterparty_id
+        payment.update(bank_stamp)
         await tenant.finance_payments.insert_one(payment)
     
         await log_audit(user["org_id"], user["id"], user["email"], "payment_created", "payment", payment["id"],
