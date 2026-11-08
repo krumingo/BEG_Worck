@@ -57,7 +57,22 @@ Main `ec7ddd8` е слят в клона с merge commit (`5a80d22`, без ко
 Нови дългове: **PRJ-01-D12** — ескалацията на DQ няма планировчик; `--escalate` трябва да се пуска ежедневно (или да влезе в W0-07). **PRJ-01-D13** — виж по-горе. D1, D5, D7, D9 са решени с Р56.
 
 
-## Gates
+## Кръг 4 — FLOW Guard проход 28 (FG-272, FG-273 код, FG-274) + main 3699c3b
+Main `3699c3b` (#74 OH-01 + документи) е слят с merge commit `0fe133d` (конфликт само в генерирания `PM-01/run_meta.json`, регенериран с harness-а). Аудитът за `quality_score` (Р56-3): проверката 1–5 (`StrictInt`, `ge=1`, `le=5`) е в `PerformanceCreate` и `PerformanceUpdate` от `0314e6e`; тестът вече покрива POST и PUT с 0, 6, 99, −3, 2.5, „x“, „4“, true → 422 и 1, 5 → OK (`6479cf1`). Разширеният тест върху `6479cf1` дава **2 failed** (`red_round4_on_6479cf1.txt`); след поправката — 9 passed.
+
+| | Поправка |
+|---|---|
+| FG-272 | Проверката за история намира препратка **вътре в масиви и под-документи**. |
+| FG-274 | `business_links`: **една** exists-заявка на колекция по именуваните пътища (`find_one` с `$or`; индекс по пътя обслужва клона си), после общото сканиране, **спира при първото попадение**. `DELETE` прави проверката **преди** транзакцията (първо евтините: клиент → екип → етапи → история), а транзакцията трие с **CAS** върху `status=Draft` + `updated_at` (иначе 409 `PROJECT_CHANGED`). Остатъчен риск: нов запис в друга колекция, създаден между проверката и CAS-а, не променя обекта → **PRJ-01-D14**. |
+| FG-273 (код) | Автоматичното преименуване на кода на под-обект в `create-sub-project` (напр. свързан гаранционен проект под оригинала) е транзакция с CAS по стария код + каноничен AuditEvent `project.code_change` (преди/след). Първата половина (връзка към корена или второ ниво) чака Крум. |
+
+Форми на препратка към обект, които проверката покрива (за HANDOFF):
+* поле на най-горно ниво с произволно име — `project_id`, `site_id`, `subproject_id`, `parent_project_id`, `warranty_of_project_id`, `context_id` (`media_files`), `entity_id` (`asset_qr_codes`), `allocation_ref_id` (invoice lines) и всяко друго;
+* масив от id-та на най-горно ниво;
+* вложени масиви от препратки: `allocations[].ref_id` / `allocations[].refId` (`invoice_lines`, `POST /invoice-lines`), `lines[].project_id`, `lines[].allocation_ref_id`, `lines[].allocations[].ref_id` / `refId` (`invoices`), `day_entries[].project_id` (`worker_calendar`);
+* вложени под-документи: `transit_origin.project_id` (склад), `context.entity_id` (файлове);
+* **всяка друга форма** до 4 нива под документа (общо сканиране с `$objectToArray` / `$map`; id-тата са UUID, равна стойност = препратка). Тестът включва и непознат ключ: `material_requests.items[].target.site`.
+
 Виж `test_summary.txt`.
 
 ## Дългове (Крум / оркестратор)
