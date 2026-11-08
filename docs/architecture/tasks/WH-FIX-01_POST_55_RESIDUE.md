@@ -1,0 +1,27 @@
+# WH-FIX-01 — Остатъци след #55 (FLOW-009 re-sweep на main cd03324)
+
+> Дата: 08.11.2026 · Източник: FLOW Guard pass 20b (claude/flow-guard @ 4ac6655). Канон: FLOW-009 (Път А/Б, един път на разход), FLOW-032, FLOW-043 D-04, CLAUDE.md §2.9, §2.12 (един източник), §7, §14, решения Р20/Р28/Р34/Р35.
+> Клон: нов от main `cd03324`, `claude/wh-fix-01-post-55`. Draft PR към main. Без merge/deploy. Първо ДОКАЖИ всяко с тест (червен на main).
+
+## Задължително (high)
+1. **FG-193:** `projects.py:1566–1583` (create-sub-project) прави `update_many` върху каноничните append-only складови редове и сменя project_id — извън единствения писател; проекциите не се пренаписват → разминаване. Поправка: каноничните редове НЕ се пипат; преместването към подобект става с канонично движение (transfer) през единствения писател, или подобектът наследява историята чрез релация без пренаписване. Разширете статичния скенер (`legacy_inventory.py:115–119`) да хваща и `coll.update_many`/`update_one`/`replace_one`/`delete_*` върху каноничните колекции извън писателя.
+2. **FG-192:** `WAREHOUSE_STRICT_MASTER_IDENTITY` по подразбиране "0" (`service.py:653–657`), никъде не се задава → всякакъв низ минава като item_id. Поправка: строгият режим е по подразбиране (fail-closed), без env-флаг за изключване в prod; несъществуващ item → 422. Ако legacy данни го чупят — DQ отчет, не тихо приемане.
+3. **FG-191:** `service.py:965` — unit_value при получаване идва от клиента; invoice_line_id е по избор; няма проверка срещу реда от фактурата. Поправка: при свързан ред цената е от реда (различна → 422); без ред — финансова роля + причина (или DQ), по Р20.
+4. **FG-150 (partial):** `projects.py:1403–1414` (карта „Материали“) и `:2129–2136` още сумират legacy `warehouse_transactions.total_ex_vat` → 0. Минете през общия каноничен helper.
+5. **FG-154 (partial):** `dashboard.py:686–707` брои цялата сума на фактурата към всеки разпределен обект. Ползвайте разпределението по ред (allocations[]).
+
+## Средно
+6. **FG-161 (Р20/Р34/Р35):** немаскирани стойности: `GET /warehouse-transactions` (procurement.py:462–474, вкл. canonical unit_value/layer_allocations), `/warehouse-stock` :519–526, `/inventory/dashboard` :741–848, `warehouse_batches.py` :72–125, 179–192 → по правилата на SEC-02/R34/R35.
+7. **FG-157:** `PUT /supplier-invoices` (procurement.py:396–433) редактира редове/сума/статус/project_id без AuditEvent → след свързано движение заключено (като #55), иначе AuditEvent; изпратени/платени — само корекция.
+8. **FG-159 (Р10):** `POST /projects/{id}/material-waste` (material_waste.py:57–80) — без стойност/движение/роля/AuditEvent → канонично движение „фира“ през писателя на #55 (роля по Р27, Р37 за стойност).
+9. **FG-163:** `PUT /warehouses` (warehouses.py:233–259) сменя type/project_id/active, заобикаляйки 409 на DELETE → същите проверки.
+10. **FG-190:** количествени отчети четат legacy type/lines (materials_baseline.py:204–221, revenue_snapshot.py:331–339, services/material_waste.py:71–98, procurement.py:785–806) → каноничния helper.
+11. **FG-164:** `/warehouse-stock`, `/inventory/dashboard` показват само legacy главен склад → каноничните проекции.
+
+## Извън обхвата (не прави)
+FG-153 (стара схема на партиди/legacy миграция — на изчакване), FG-155 (require_full_allocation по подразбиране — решение на Крум), FG-162 (свободен текст в заявки — отделна задача FLOW-032).
+
+## Тестове / gates
+Всеки пункт: червен на main, зелен след; real Mongo, 3 режима; warehouse suite; R0; W0 същите 15; A2C/A1 0; PM-01 реален (0 skipped).
+## Предаване
+HANDOFF в PR, `docs/evidence/WH-FIX-01/`. Съобщение: `WH-FIX-01 DONE pr=… head=…`.
