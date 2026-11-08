@@ -5523,3 +5523,10 @@ Minor (non-blocking): the DQ `entity_id` for an ЕГН copy is the owner id in t
 - **Р58 reader** `GET /finance/company-costs/accepted-differences`: finance roles only, read-only, derived from the accepted notes.
   - Observation (non-blocking): the company-cost part is not in the company finance summaries.
 - **#86:** skipped at the orchestrator's request until its final head (it will merge `fddb018`).
+
+## 2026-11-08 18:26 UTC: periodic pass. #86 `e0fd1e2` (merge of main `fddb018`) merge checks; queued after #84
+
+- **Byte check:** the merge `e0fd1e2` differs from `merge-tree(30a92ae, fddb018)` only in the generated `PM-01/run_meta.json` and `SEC-02/results.json`.
+- **Role-union:** 0 differences.
+- **PM-01:** 168 own cells, all keep the PR's value on the head; 0 extra.
+- **Gates:** queued after #84 `d5d3089` (serial).
