@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
-import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
+import { apiErrorText, createKeyHolder, idempotencyHeaders, newIdempotencyKey } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,9 +48,11 @@ import {
 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import SmartAutocomplete from "@/components/common/SmartAutocomplete";
+import InvoiceCorrectionsPanel from "@/components/InvoiceCorrectionsPanel";
 
 const STATUS_COLORS = {
   Draft: "bg-gray-500/20 text-gray-400 border-gray-500/30",
+  Issued: "bg-sky-500/20 text-sky-400 border-sky-500/30",
   Sent: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   PartiallyPaid: "bg-amber-500/20 text-amber-400 border-amber-500/30",
   Paid: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30",
@@ -60,7 +62,8 @@ const STATUS_COLORS = {
 
 const STATUS_BG_LABELS = {
   Draft: "Чернова",
-  Sent: "Издадена",
+  Issued: "Издадена",
+  Sent: "Изпратена",
   PartiallyPaid: "Частично платена",
   Paid: "Платена",
   Overdue: "Просрочена",
@@ -285,7 +288,8 @@ export default function InvoiceEditorPage() {
   };
 
   const handleSave = async () => {
-    if (!invoiceNo.trim()) { alert(t("validation.required")); return; }
+    // INV-CN-01 / Р49.1: an outgoing invoice gets its number when it is issued
+    if (direction !== "Issued" && !invoiceNo.trim()) { alert(t("validation.required")); return; }
     if (!issueDate || !dueDate) { alert(t("validation.required")); return; }
     if (dueDate < issueDate) { alert("Падежът не може да бъде преди датата на издаване"); return; }
     setSaving(true);
@@ -324,7 +328,7 @@ export default function InvoiceEditorPage() {
         setEditing(false);
       }
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally { setSaving(false); }
   };
 
@@ -335,18 +339,22 @@ export default function InvoiceEditorPage() {
       await API.post(`/finance/invoices/${invoiceId}/send`);
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.sendFailed"));
+      alert(apiErrorText(err, t("toast.sendFailed")));
     } finally { setSaving(false); }
   };
 
   const handleCancel = async () => {
     if (!window.confirm(t("finance.confirmCancel"))) return;
+    // INV-CN-01 / Р49.2: cancellation needs a reason; the number stays as "Анулирана"
+    const reason = (window.prompt("Причина за анулиране:") || "").trim();
+    if (!reason) return;
     setSaving(true);
     try {
-      await API.post(`/finance/invoices/${invoiceId}/cancel`);
+      await API.post(`/finance/invoices/${invoiceId}/cancel`, { reason },
+        { headers: { "Idempotency-Key": newIdempotencyKey() } });
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.saveFailed"));
+      alert(apiErrorText(err, t("toast.saveFailed")));
     } finally { setSaving(false); }
   };
 
@@ -356,7 +364,7 @@ export default function InvoiceEditorPage() {
       await API.delete(`/finance/invoices/${invoiceId}`);
       navigate("/finance/invoices");
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.deleteFailed"));
+      alert(apiErrorText(err, t("toast.deleteFailed")));
     }
   };
 
@@ -411,13 +419,16 @@ export default function InvoiceEditorPage() {
   };
 
   const isDraft = !invoice || invoice.status === "Draft";
-  // Allow editing: Draft, Sent, PartiallyPaid, Overdue. Not: Paid, Cancelled
-  const canEdit = canManage && (!invoice || !["Paid", "Cancelled"].includes(invoice.status));
+  // INV-CN-01 / Р49.1: only a Draft is edited; an issued invoice is corrected with a note
+  const canEdit = canManage && (!invoice || invoice.status === "Draft");
   const isAdmin = ["Admin", "Owner"].includes(user?.role);
   const locked = !(canEdit && (isNew || editing));
-  const canSend = isDraft && !isNew && canManage;
+  const canSend = (isDraft || invoice?.status === "Issued") && !isNew && canManage;
   const canDeleteDraft = isDraft && !isNew && canManage;
-  const canCancel = invoice && ["Sent", "PartiallyPaid", "Overdue"].includes(invoice.status) && canManage;
+  // Р49.2: an outgoing invoice is cancelled only while issued and not sent
+  const canCancel = invoice && canManage && (invoice.direction === "Issued"
+    ? invoice.status === "Issued"
+    : ["Sent", "PartiallyPaid", "Overdue"].includes(invoice.status));
   const canPay = invoice && !["Draft", "Cancelled", "Paid"].includes(invoice.status) && canManage && (invoice.remaining_amount > 0);
   const hasProject = invoice && invoice.project_id;
 
@@ -473,7 +484,7 @@ export default function InvoiceEditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isAdmin && !isNew && !editing && (
+          {isAdmin && !isNew && !editing && isDraft && (
             <Button variant="outline" onClick={() => setEditing(true)} data-testid="edit-btn">
               <Pencil className="w-4 h-4 mr-1" /> Редакция
             </Button>
@@ -777,6 +788,11 @@ export default function InvoiceEditorPage() {
             <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("common.notes")}
               disabled={locked} className="bg-background min-h-[80px]" data-testid="notes-textarea" />
           </div>
+
+          {/* INV-CN-01: credit / debit notes */}
+          {invoice && !isNew && (
+            <InvoiceCorrectionsPanel invoice={invoice} user={user} onChanged={fetchData} />
+          )}
 
           {/* Payment History */}
           {!isNew && invoice && invoice.status !== "Draft" && (
