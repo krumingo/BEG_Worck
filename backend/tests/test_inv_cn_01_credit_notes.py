@@ -1313,8 +1313,9 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
             await op.invoice_lines.insert_one(row)
         # il-58w was received INTO THE WAREHOUSE (a canonical ledger movement + its FIFO layer)
         await op.warehouse_transactions.insert_one({
-            "id": "wt-58", "org_id": ORG_A, "action": "receipt", "movement_id": "mv-58",
-            "invoice_id": bill["id"], "invoice_line_id": "il-58w", "qty": 10, "unit_cost": 10.0})
+            "id": "wt-58", "org_id": ORG_A, "action": "receive_from_supplier", "movement_id": "mv-58",
+            "invoice_id": bill["id"], "invoice_line_id": "il-58w", "qty": 10, "unit_cost": 10.0,
+            "destination": {"location_type": "central_warehouse", "location_id": "wh-1"}})
         await op.warehouse_transactions.insert_one({
             "id": "wt-58r", "org_id": ORG_A, "action": "receipt_reversal", "movement_id": "mv-58r",
             "invoice_id": bill["id"], "invoice_line_id": "il-58w", "qty": -3, "unit_cost": 10.0})
@@ -1335,8 +1336,8 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
         acc = r.json()["difference_accepted"]
         period = acc["at"][:7]
         # 12.00 gross → 10.00 net, split by the note's lines: 5.00 warehouse + 5.00 project
-        assert sorted((s["original_line_id"], s["net"], s["target"]) for s in acc["split"]) == [
-            ("il-58p", 5.0, "project"), ("il-58w", 5.0, "company")]
+        assert sorted((s["original_line_id"], s["net"], s["target"], s["basis"]) for s in acc["split"]) == [
+            ("il-58p", 5.0, "project", "allocation"), ("il-58w", 5.0, "company", "warehouse_receipt")]
         assert acc["company_cost"] == 5.0
         # the warehouse part is a COMPANY cost (loss on the return) in the acceptance period
         r = await c.get("/api/finance/company-costs/accepted-differences?period=%s" % period,
@@ -1362,7 +1363,8 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
         # label; never in project P&L, never in the overhead allocation base
         import importlib
         from tests.test_warehouse_canonical_c22_all_reports_cutover import _DB_MODULES
-        for name in set(_DB_MODULES) | {"app.services.pnl_aggregator", "app.services.project_pnl"}:
+        for name in set(_DB_MODULES) | {"app.services.pnl_aggregator", "app.services.project_pnl",
+                                        "app.permissions.money_write", "app.routes.project_pnl"}:
             module = importlib.import_module(name)
             if hasattr(module, "db"):
                 monkeypatch.setattr(module, "db", op)
@@ -1375,6 +1377,17 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
         assert res["totals"]["final_profit"] == round(res["totals"]["profit"] - 5.0, 2)
         assert [(l["ref"], l["invoice_line_id"], l["value"]) for l in res["company_losses"]["lines"]] == [
             (n["id"], "il-58w", 5.0)]
+        # FG-271: the SAME line in every company-result reader
+        r = await c.get("/api/org/pnl-overview", headers=hdr("owner-a"))
+        assert r.status_code == 200, r.text
+        ov = r.json()
+        assert ov["company_losses"] == res["company_losses"]
+        assert ov["totals"]["company_losses"] == 5.0
+        assert ov["totals"]["final_profit"] == round(ov["totals"]["profit"] - 5.0, 2)
+        assert all(p.get("company_losses") is None for p in ov["projects"])
+        r = await c.get("/api/finance/stats", headers=hdr("owner-a"))
+        assert r.status_code == 200, r.text
+        assert r.json()["company_losses"] == res["company_losses"]
         assert await op.overhead_transactions.count_documents({}) == 0
         assert await op.overhead_snapshots.count_documents({}) == 0
         assert await op.overhead_costs.count_documents({}) == 0
@@ -1383,6 +1396,73 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
         assert r.status_code == 200 and r.json()["lines"] == [], r.text
         r = await c.get("/api/org/pnl-attribution", headers=hdr("admin-b"))
         assert r.status_code == 200 and r.json()["company_losses"]["amount"] == 0, r.text
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination(monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services.canonical_material_cost import project_material_cost
+        from app.services import invoice_corrections as ic
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+
+        async def accepted(bill, number, lines, expected):
+            await op.expected_credit_notes.insert_one({
+                "id": "ecn_" + number, "org_id": ORG_A, "invoice_id": bill["id"], "amount": expected,
+                "status": "open", "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+            n = (await note(c, bill, number=number, expected_credit_note_ids=["ecn_" + number],
+                            lines=lines)).json()
+            r = await c.post("/api/finance/credit-notes/%s/accept-difference" % n["id"],
+                             headers=hdr("owner-a"), json={"reason": "доставчикът не коригира"})
+            assert r.status_code == 200, r.text
+            return n, {s["original_line_id"]: s for s in r.json()["difference_accepted"]["split"]}
+
+        # FG-269: a DIRECT delivery to a project (no allocation on the line) → the project's
+        # cost (Р55(3)), never a company cost
+        bill = await sent(c, direction="Received", project="prj-1")
+        await op.invoice_lines.insert_one({
+            "id": "il-269", "org_id": ORG_A, "invoice_id": bill["id"], "description": "Лепило",
+            "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+            "created_at": "2026-10-02T08:00:00+00:00"})
+        await op.warehouse_transactions.insert_one({
+            "id": "wt-269", "org_id": ORG_A, "action": "receive_from_supplier_to_project",
+            "movement_id": "mv-269", "invoice_id": bill["id"], "invoice_line_id": "il-269", "qty": 10,
+            "project_id": "prj-1", "destination": {"location_type": "project", "location_id": "prj-1"}})
+        before = await project_material_cost(tenant, ORG_A, "prj-1")
+        n, split = await accepted(bill, "CN-269", [{"original_line_id": "il-269", "amount": 25.0}], 36.0)
+        assert (split["il-269"]["target"], split["il-269"]["basis"], split["il-269"]["project_id"],
+                split["il-269"]["net"]) == ("project", "direct_delivery", "prj-1", 5.0)
+        after = await project_material_cost(tenant, ORG_A, "prj-1")
+        assert [(ln["invoice_line_id"], ln["value"]) for ln in after["lines"]
+                if ln.get("kind") == "accepted_difference"] == [("il-269", 5.0)]
+        assert round(after["total_cost"] - before["total_cost"], 2) == 5.0
+        assert (await ic.company_losses_block(tenant))["amount"] == 0.0
+
+        # FG-270: a receipt linked ONLY by invoice_id reclassifies no line: the allocated line
+        # stays the project's; the other line cannot be determined → DQ, no company cost
+        bill2 = await sent(c, direction="Received", project="prj-1")
+        for lid in ("il-270p", "il-270x"):
+            row = {"id": lid, "org_id": ORG_A, "invoice_id": bill2["id"], "description": lid,
+                   "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+                   "created_at": "2026-10-02T08:00:00+00:00"}
+            if lid == "il-270p":
+                row["allocations"] = [{"type": "project", "ref_id": "prj-1", "qty": 10}]
+            await op.invoice_lines.insert_one(row)
+        await op.warehouse_transactions.insert_one({
+            "id": "wt-270", "org_id": ORG_A, "action": "receive_from_supplier", "movement_id": "mv-270",
+            "invoice_id": bill2["id"], "qty": 10,
+            "destination": {"location_type": "central_warehouse", "location_id": "wh-1"}})
+        before = await project_material_cost(tenant, ORG_A, "prj-1")
+        n2, split = await accepted(bill2, "CN-270", [{"original_line_id": "il-270p", "amount": 25.0},
+                                                     {"original_line_id": "il-270x", "amount": 25.0}], 72.0)
+        assert (split["il-270p"]["target"], split["il-270p"]["basis"]) == ("project", "allocation")
+        assert (split["il-270x"]["target"], split["il-270x"]["basis"]) == ("undetermined", "invoice_level_receipt")
+        assert (await ic.company_losses_block(tenant))["amount"] == 0.0          # no automatic company cost
+        after = await project_material_cost(tenant, ORG_A, "prj-1")
+        assert round(after["total_cost"] - before["total_cost"], 2) == 5.0       # only the allocated line
+        dq = await op.dq_issues.find_one({"kind": "accepted_difference_line_undetermined"}, {"_id": 0})
+        assert dq and (dq["entity_id"], dq["assignee_role"], dq["status"]) == (
+            "%s:il-270x" % n2["id"], "accountant", "open")
     run(monkeypatch, mode, scenario)
 
 

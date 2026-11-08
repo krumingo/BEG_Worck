@@ -185,6 +185,16 @@ Red proof against 2c2e75f: `fg264_red_on_2c2e75f.txt`.
 
 Red proof against b99c0eb: `r58_red_on_b99c0eb.txt`. On b99c0eb the warehouse part of an accepted difference was booked **nowhere**.
 
+## FLOW Guard pass 27 (on caea933): point → code → test
+
+| Point | Fix | Test |
+|---|---|---|
+| **FG-269** | The target of an accepted difference is decided **per line by the destination of the line's own canonical receipt** (`classify_difference_line`): `receive_from_supplier` (into a warehouse) → `company` (Р58); `receive_from_supplier_to_project` (direct delivery) → `project` **of that delivery** (Р55(3)), stored as `split[].project_id`, so the project gets the whole line part even without a Path B allocation. | `test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination`, part 1: a direct delivery to prj-1 → `project/direct_delivery/prj-1`, +5.00 on prj-1, company losses 0 |
+| **FG-270** | A receipt linked **only by `invoice_id`** never reclassifies a line. A line allocated to a project stays `project` (`allocation`). A line that cannot be determined (invoice-level receipt only, or mixed warehouse/direct receipts, or direct deliveries to several projects) → `undetermined`: **no automatic cost** and a canonical `dq_issues` record (`accepted_difference_line_undetermined`, entity `note:line`, `assignee_role=accountant`). | the same test, part 2: the allocated line → project (+5.00), the other → `undetermined` + DQ, company losses 0 |
+| **FG-271** | **One** shape, `company_losses_block` (same label, `includes` text, amount, drill-down lines), returned by **every company-result reader**: `/org/pnl-attribution`, `/org/pnl-overview` (+ `totals.company_losses`, `totals.final_profit`; projects untouched) and `/finance/stats`. One UI component, `CompanyLossesLine`, shows it in the dashboard P&L overview, the Финансов pulse result tile, the profit-attribution widget, Финансов анализ and the finance overview. Never in a project P&L. | the `test_r58_…` scenario: the three readers return the identical block; no project row carries it; no overhead record is written |
+
+Red proofs against ef7cddd: `fg_pass27_red_on_ef7cddd.txt`. FG-269: a direct delivery became `company`. FG-270: both lines became `company`. FG-271: neither reader had the line.
+
 ## Debts after Addendum A
 
 | # | Status |
@@ -206,7 +216,7 @@ Red proof against b99c0eb: `r58_red_on_b99c0eb.txt`. On b99c0eb the warehouse pa
 | D14 out of scope | Act correction (t24), VAT ledger/export, e-invoice/SAF-T, partial release of retentions, full Approval Center. |
 | D15 Overdue in P&L; Paid stays Paid | **Fixed** (`test_d15_…`). Overdue now counts as issued revenue. |
 | D16 approver | **Closed.** The Owner approves (Р49.4, Р51). |
-| D17 Р58 company cost in company reports | **Closed by the canon (oracle Q007, FLOW-015 / FLOW-024 L170-180).** The company result reader in main, `GET /org/pnl-attribution` (`compute_org_profit_attribution`), now has a separate line **"Фирмени загуби (не се разпределят)"** (`company_losses`: label, `includes` text, amount, drill-down lines) and `totals.final_profit = profit − company_losses`. The existing `profit` (the sum of projects) is unchanged. The cost is never in a project P&L and never in the overhead allocation base. The dashboard widget shows the line with its drill-down. Test: the `test_r58_…` scenario; red proof `q007_red_on_caea933.txt`. |
+| D17 Р58 company cost in company reports | **Closed by the canon (oracle Q007, FLOW-015 / FLOW-024 L170-180).** The company result readers in main (`/org/pnl-attribution`, and per FG-271 also `/org/pnl-overview` and `/finance/stats`) now have a separate line **"Фирмени загуби (не се разпределят)"** (`company_losses`: label, `includes` text, amount, drill-down lines) and `totals.final_profit = profit − company_losses`. The existing `profit` (the sum of projects) is unchanged. The cost is never in a project P&L and never in the overhead allocation base. The dashboard widget shows the line with its drill-down. Test: the `test_r58_…` scenario; red proof `q007_red_on_caea933.txt`. |
 | D18 FLOW-009 warehouse losses view | **Open (no such view in main).** Q007 also wants the Р58 company loss visible in a warehouse losses view (FLOW-009). Main has only per-project material waste (`/projects/{id}/material-waste`), no company-level warehouse-losses view. Per Q007 no new screen is invented. Spec for whoever builds it: show the `company_cost_lines` (Р58 accepted differences on warehouse lines) as losses on return, by acceptance period, with drill-down to the note. |
 | SEC-01 (#69, now in main) | **Open.** `finance.py` routes, old and new, still use `finance_permission` (Owner/Admin/Accountant); #69 did not migrate `finance.py`. Moving the whole module to `require_money_write` plus catalog actions is one follow-up, so the module keeps a single rule. |
 

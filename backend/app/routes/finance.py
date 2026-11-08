@@ -2557,6 +2557,11 @@ async def delete_payment(payment_id: str,
 
 # ── Finance Stats ──────────────────────────────────────────────────
 
+async def _company_losses(tenant) -> dict:
+    from app.services import invoice_corrections as ic
+    return await ic.company_losses_block(tenant)
+
+
 @router.get("/finance/stats")
 async def get_finance_stats(user: dict = Depends(require_m5)):
     if not finance_permission(user):
@@ -2646,6 +2651,8 @@ async def get_finance_stats(user: dict = Depends(require_m5)):
         "payables_overdue_count": overdue_pay[0]["count"] if overdue_pay else 0,
         "cash_balance": round(cash_balance, 2),
         "bank_balance": round(bank_balance, 2),
+        # Q007 / FG-271: the company losses line (same label + drill-down everywhere)
+        "company_losses": await _company_losses(tenant),
     }
 
 

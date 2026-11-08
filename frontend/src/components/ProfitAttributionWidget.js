@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { money } from "@/lib/i18nUtils";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import CompanyLossesLine from "@/components/CompanyLossesLine";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TrendingUp, TrendingDown, PieChart, Loader2, ArrowRight } from "lucide-react";
@@ -37,21 +38,7 @@ export default function ProfitAttributionWidget() {
         <Button variant="ghost" size="sm" className="text-xs" onClick={() => navigate("/finance/analysis")}>Пълен анализ <ArrowRight className="w-3 h-3 ml-1" /></Button>
       </div>
 
-      {data.company_losses?.amount > 0 && (
-        <details className="mb-3 text-xs" data-testid="company-losses">
-          <summary className="cursor-pointer flex justify-between" title={data.company_losses.includes}>
-            <span>{data.company_losses.label}</span>
-            <span className="text-red-400 font-mono">−{fmt(data.company_losses.amount)} · Краен резултат: {fmt(totals.final_profit)}</span>
-          </summary>
-          <p className="text-[10px] text-muted-foreground mt-1">{data.company_losses.includes}</p>
-          {data.company_losses.lines.map((l) => (
-            <div key={`${l.ref}-${l.invoice_line_id}`} className="flex justify-between pl-2">
-              <span>{l.period} · известие {l.note_number} · {l.reason}</span>
-              <span className="font-mono">{fmt(l.value)}</span>
-            </div>
-          ))}
-        </details>
-      )}
+      <CompanyLossesLine block={data.company_losses} finalProfit={totals.final_profit} className="mb-3" />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Winners */}

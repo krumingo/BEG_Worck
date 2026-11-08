@@ -119,8 +119,13 @@ async def get_org_pnl_overview(
 
     totals = {k: round(v, 2) for k, v in totals.items()}
     totals["margin_pct"] = round(totals["profit"] / totals["revenue"] * 100, 1) if totals["revenue"] > 0 else 0
+    # Q007 / FG-271: company losses — a separate line of the company result, never a project's
+    from app.services.invoice_corrections import company_losses_block
+    losses = await company_losses_block(tenant)
+    totals["company_losses"] = losses["amount"]
+    totals["final_profit"] = round(totals["profit"] - losses["amount"], 2)
 
-    return {"projects": results, "totals": totals}
+    return {"projects": results, "totals": totals, "company_losses": losses}
 
 
 # ── Aggregated PnL + Profit Attribution ──

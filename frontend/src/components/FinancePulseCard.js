@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { money } from "@/lib/i18nUtils";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import CompanyLossesLine from "@/components/CompanyLossesLine";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, AlertTriangle, Clock, TrendingUp, Loader2 } from "lucide-react";
 
@@ -23,7 +24,7 @@ export default function FinancePulseCard() {
       API.get("/finance/aging-report").catch(() => ({ data: { totals: {} } })),
     ]).then(([sRes, pRes, aRes]) => {
       setStats(sRes.data);
-      setPnl(pRes.data?.totals || {});
+      setPnl({ ...(pRes.data?.totals || {}), losses: pRes.data?.company_losses });
       setAging(aRes.data?.totals || {});
     }).finally(() => setLoading(false));
   }, []);
@@ -76,6 +77,7 @@ export default function FinancePulseCard() {
           <p className="text-[9px] text-muted-foreground">Каса: {stats?.cash_balance || 0} · Банка: {stats?.bank_balance || 0}</p>
         </div>
       </div>
+      <CompanyLossesLine block={pnl?.losses} finalProfit={pnl?.final_profit} className="mt-3" />
     </div>
   );
 }

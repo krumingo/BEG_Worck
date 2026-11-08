@@ -901,14 +901,25 @@ async def _accepted_difference_lines(tenant, project_id: str, note: dict,
         return []
     diff_net = cents(diff_gross * note_net / note_gross)       # the note's own VAT ratio
     at = _moment(acc.get("at"))
-    company = {s["original_line_id"] for s in acc.get("split") or [] if s.get("target") == COST_TARGET_COMPANY}
+    split = {s["original_line_id"]: s for s in acc.get("split") or []}
     out: List[dict] = []
     for l in note.get("lines") or []:
         line_id = l.get("original_line_id")
+        entry = split.get(line_id)
+        if entry is not None and entry.get("target") != COST_TARGET_PROJECT:
+            continue                                   # Р58 company / FG-270 undetermined
+        if entry is not None and entry.get("project_id"):
+            # FG-269: a direct delivery — the project of the delivery, the whole line part
+            if entry["project_id"] != project_id or cents(entry.get("net")) <= 0:
+                continue
+            out.append({"source": "supplier_note", "kind": "accepted_difference", "waste": False,
+                        "value": float(cents(entry["net"])), "qty": 0.0, "item_id": None, "unit": None,
+                        "material_name": l.get("description") or "", "package_id": None, "at": at,
+                        "period": period_of(at), "ref": note.get("id"), "invoice_line_id": line_id,
+                        "note_number": note.get("number")})
+            continue
         if line_id not in counted_by_line or note_net <= 0:
             continue                                   # not a line of THIS project
-        if line_id in company:
-            continue                                   # Р58: a warehouse line → company cost
         row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0})
         share = _project_share(row or {}, project_id)
         value = cents(diff_net * cents(l.get("net")) / note_net * share)
@@ -924,27 +935,62 @@ async def _accepted_difference_lines(tenant, project_id: str, note: dict,
 
 COST_TARGET_COMPANY = "company"
 COST_TARGET_PROJECT = "project"
+COST_TARGET_UNDETERMINED = "undetermined"
+DQ_DIFFERENCE_LINE_UNDETERMINED = "accepted_difference_line_undetermined"
+COMPANY_LOSSES_LABEL = "Фирмени загуби (не се разпределят)"
+COMPANY_LOSSES_INCLUDES = ("Приети разлики по кредитни известия на доставчици за стока, приета в склада "
+                           "(загуба от връщане, Р58), в периода на приемането. Не са в резултата на "
+                           "обектите и не са в базата за разпределение на режийни.")
+_RECEIVE_TO_WAREHOUSE = "receive_from_supplier"
+_RECEIVE_TO_PROJECT = "receive_from_supplier_to_project"
 
 
-async def line_received_in_warehouse(tenant, invoice_id: str, line_id: str, *, session=None) -> bool:
-    """Р58: was this supplier invoice line received INTO THE WAREHOUSE? A canonical ledger
-    movement that names the line, or names the invoice with no line at all."""
-    from app.services.invoice_line_lock import first_linked_movement
-    if await first_linked_movement(tenant, line_id, session=session):
-        return True
-    return bool(await tenant.warehouse_transactions.find_one(
-        {"action": {"$exists": True}, "invoice_id": invoice_id, "invoice_line_id": {"$in": [None, ""]}},
-        {"_id": 0, "movement_id": 1}, session=session))
+async def classify_difference_line(tenant, invoice_id: str, line_id: str, *, session=None) -> dict:
+    """Р58 / FG-269 / FG-270: where is the accepted difference of ONE invoice line a cost?
+    Decided PER LINE by the destination of the line's own canonical receipt(s):
+
+    * every receipt of the line went INTO A WAREHOUSE (``receive_from_supplier``) →
+      ``company`` (Р58: loss on the return; FIFO untouched);
+    * every receipt of the line was a DIRECT delivery to ONE project
+      (``receive_from_supplier_to_project``) → ``project`` of that delivery (Р55(3));
+    * receipts of both kinds, or direct deliveries to several projects → ``undetermined``;
+    * no receipt of the line: a line allocated to a project (Path B) → ``project`` (FG-251);
+      otherwise, if the invoice has a receipt linked ONLY by ``invoice_id`` (no line), the
+      line cannot be determined → ``undetermined`` (such a receipt never reclassifies a
+      line by itself); with no receipt at all → ``project`` (FG-251, unchanged).
+
+    ``undetermined`` books no cost automatically; the caller opens a DQ."""
+    from app.services.warehouse_movements.projections import _project_of
+    kinds, projects = set(), set()
+    async for r in tenant.warehouse_transactions.find(
+            {"invoice_line_id": line_id, "action": {"$in": [_RECEIVE_TO_WAREHOUSE, _RECEIVE_TO_PROJECT]}},
+            {"_id": 0, "action": 1, "destination": 1, "project_id": 1}, session=session):
+        if r["action"] == _RECEIVE_TO_WAREHOUSE:
+            kinds.add(COST_TARGET_COMPANY)
+        else:
+            kinds.add(COST_TARGET_PROJECT)
+            projects.add(_project_of(r.get("destination"), r.get("project_id")) or r.get("project_id"))
+    if kinds == {COST_TARGET_COMPANY}:
+        return {"target": COST_TARGET_COMPANY, "basis": "warehouse_receipt"}
+    if kinds == {COST_TARGET_PROJECT} and len(projects) == 1 and None not in projects:
+        return {"target": COST_TARGET_PROJECT, "basis": "direct_delivery", "project_id": projects.pop()}
+    if kinds:
+        return {"target": COST_TARGET_UNDETERMINED, "basis": "mixed_receipts"}
+    row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "allocations": 1}, session=session) or {}
+    if any(a.get("type") == "project" for a in row.get("allocations") or []):
+        return {"target": COST_TARGET_PROJECT, "basis": "allocation"}
+    if await tenant.warehouse_transactions.find_one(
+            {"action": {"$in": [_RECEIVE_TO_WAREHOUSE, _RECEIVE_TO_PROJECT]}, "invoice_id": invoice_id,
+             "invoice_line_id": {"$in": [None, ""]}}, {"_id": 0, "action": 1}, session=session):
+        return {"target": COST_TARGET_UNDETERMINED, "basis": "invoice_level_receipt"}
+    return {"target": COST_TARGET_PROJECT, "basis": "no_receipt"}
 
 
 async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, session=None) -> List[dict]:
     """Р55(3) + Р58: split the accepted (uncredited) difference over the note's lines, net
     of VAT by the note's own VAT ratio, and say WHERE each part is a cost — frozen at the
-    moment of acceptance:
-
-    * a line received into the warehouse → ``company``: a company cost (a loss on the
-      return) in the period of acceptance; the warehouse FIFO prices are NOT changed;
-    * any other line → ``project``: the original line's project / SMR (FG-251)."""
+    moment of acceptance (``classify_difference_line``). An ``undetermined`` line opens a
+    canonical DQ for the Accountant and is booked nowhere automatically (FG-270)."""
     note_gross, note_net = cents(note.get("gross")), cents(note.get("net"))
     if diff_gross <= 0 or note_gross <= 0 or note_net <= 0:
         return []
@@ -955,10 +1001,16 @@ async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, 
     for i, l in enumerate(lines):
         part = left if i == len(lines) - 1 else cents(diff_net * cents(l.get("net")) / note_net)
         left -= part
-        warehouse = await line_received_in_warehouse(tenant, note["original_invoice_id"],
-                                                     l.get("original_line_id"), session=session)
-        out.append({"original_line_id": l.get("original_line_id"), "net": money(part),
-                    "target": COST_TARGET_COMPANY if warehouse else COST_TARGET_PROJECT})
+        cls = await classify_difference_line(tenant, note["original_invoice_id"], l.get("original_line_id"),
+                                             session=session)
+        entry = {"original_line_id": l.get("original_line_id"), "net": money(part), **cls}
+        if cls["target"] == COST_TARGET_UNDETERMINED:
+            await open_dq_issue(
+                tenant, kind=DQ_DIFFERENCE_LINE_UNDETERMINED, entity_type="finance.credit_note_line",
+                entity_id="%s:%s" % (note["id"], l.get("original_line_id")),
+                title="приета разлика: не може да се определи склад или обект за реда",
+                assignee_role="accountant", source="finance.credit_note.accept_difference", session=session)
+        out.append(entry)
     return out
 
 
@@ -982,6 +1034,14 @@ async def company_cost_lines(tenant, period: Optional[str] = None) -> List[dict]
                         "invoice_id": n.get("original_invoice_id"), "invoice_line_id": s["original_line_id"],
                         "note_number": n.get("number"), "reason": acc.get("reason")})
     return out
+
+
+async def company_losses_block(tenant) -> dict:
+    """Q007 / FG-271: THE one shape of the company-losses line every company-result reader
+    returns — same label, same "what it includes" text, same drill-down."""
+    lines = await company_cost_lines(tenant)
+    return {"label": COMPANY_LOSSES_LABEL, "includes": COMPANY_LOSSES_INCLUDES,
+            "amount": money(sum((cents(l["value"]) for l in lines), Decimal(0))), "lines": lines}
 
 
 async def supplier_note_input_vat(tenant, project_id: str) -> Decimal:

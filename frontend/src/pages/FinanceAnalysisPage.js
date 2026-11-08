@@ -4,6 +4,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import API from "@/lib/api";
+import CompanyLossesLine from "@/components/CompanyLossesLine";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -69,6 +70,8 @@ export default function FinanceAnalysisPage() {
         <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Печалба<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className={`text-lg font-bold font-mono ${totals.profit >= 0 ? "text-emerald-400" : "text-red-400"}`}>{fmt(totals.profit)} €</p></div>
         <div className="rounded-xl border p-3"><p className="text-[10px] text-muted-foreground flex items-center gap-1">Марж<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300">без ДДС</span></p><p className="text-lg font-bold font-mono">{totals.margin_pct || 0}%</p></div>
       </div>
+
+      <CompanyLossesLine block={overview?.company_losses} finalProfit={totals.final_profit} className="rounded-xl border p-3" />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Projects table */}

@@ -127,9 +127,9 @@ async def compute_org_profit_attribution(org_id: str) -> dict:
     # Р58 / FLOW-024 (Q007): company losses are NOT distributed to projects and NOT in the
     # overhead allocation base — a separate line of the final company result, with drill-down
     # and a label saying what it includes. Derived from the accepted notes (no second ledger).
-    from app.services.invoice_corrections import company_cost_lines
-    loss_lines = await company_cost_lines(tenant)
-    company_losses = round(sum(float(l["value"]) for l in loss_lines), 2)
+    from app.services.invoice_corrections import company_losses_block
+    losses = await company_losses_block(tenant)
+    company_losses = losses["amount"]
 
     return {
         "totals": {
@@ -140,14 +140,7 @@ async def compute_org_profit_attribution(org_id: str) -> dict:
             "company_losses": company_losses,
             "final_profit": round(total_profit - company_losses, 2),
         },
-        "company_losses": {
-            "label": "Фирмени загуби (не се разпределят)",
-            "includes": ("Приети разлики по кредитни известия на доставчици за стока, приета в склада "
-                         "(загуба от връщане, Р58), в периода на приемането. Не са в резултата на "
-                         "обектите и не са в базата за разпределение на режийни."),
-            "amount": company_losses,
-            "lines": loss_lines,
-        },
+        "company_losses": losses,
         "top_winners": winners,
         "top_losers": losers,
         "expense_breakdown": {
