@@ -707,54 +707,106 @@ def test_15_accept_evidence_must_be_a_file_of_this_tenant(monkeypatch, backend, 
 def test_16_restore_or_edit_racing_send_never_leaves_a_sent_offer_unlike_its_snapshot(
         monkeypatch, backend, mode):
     """OFF79-03: restore read „Draft“, then wrote unconditionally — racing /send it left the
-    offer Sent at 12 while the send snapshot said 1200. Every draft write is now a CAS."""
+    offer Sent at 12 while the send snapshot said 1200. Every draft write is now a CAS.
+
+    Codex F-79 (test_16 timing): the two orderings that matter are FORCED with pause hooks
+    placed right after each side has read the offer — never left to the scheduler:
+      * send_first — the rival pauses after its read, /send commits, the rival resumes and
+        must lose its CAS (409 OFFER_IN_USE);
+      * rival_first — /send pauses after its read (before its transaction), the rival
+        commits, /send resumes and must lose its CAS (409 OFFER_CHANGED);
+    plus free races, where only the invariant is checked."""
+    import app.routes.offer_versions as r_versions
+    import app.routes.offers as r_offers
+    gate = {}
+
+    def hooked(original):
+        async def hook(*args, side, **kw):
+            g = gate.get(side)
+            if g:
+                g["reached"].set()
+                await g["go"].wait()
+            return await original(*args, **kw)
+        return hook
+    tx, used, can = r_offers._in_transaction, r_versions._draft_was_used, r_offers.can_edit_offer
+    send_hook, used_hook, can_hook = hooked(tx), hooked(used), hooked(can)
+    monkeypatch.setattr(r_offers, "_in_transaction", lambda body: send_hook(body, side="send"))
+    monkeypatch.setattr(r_versions, "_draft_was_used",
+                        lambda tenant, offer: used_hook(tenant, offer, side="rival"))
+    monkeypatch.setattr(r_offers, "can_edit_offer",
+                        lambda user, offer: can_hook(user, offer, side="rival"))
+
+    async def ordered(paused_side, paused_call, other_call):
+        """Start the paused side, wait until it has read the offer, run the other side to the
+        end, then let the paused side finish."""
+        g = gate[paused_side] = {"reached": asyncio.Event(), "go": asyncio.Event()}
+        task = asyncio.ensure_future(paused_call)
+        await asyncio.wait_for(g["reached"].wait(), 10)
+        other = await other_call
+        g["go"].set()
+        paused = await task
+        gate.pop(paused_side)
+        return paused, other
+
     async def scenario(c, op):
         stats = {"restore": 0, "send": 0, "lines": 0}
+        orderings = {"send_first": 0, "rival_first": 0}
         for i in range(ROUNDS):
             for rival in ("restore", "lines"):
-                oid = "rr-%s-%d" % (rival, i)
-                await op.offers.insert_one(offer_doc(oid, status="Draft"))
-                await op.offer_versions.insert_one(_snapshot(oid, 1, total=12.0))
-                if rival == "restore":
-                    other = c.post("/api/offers/%s/versions/1/restore" % oid, headers=hdr("admin-a"))
-                else:
-                    other = c.put("/api/offers/%s/lines" % oid, headers=hdr("admin-a"), json={
-                        "lines": [{"activity_name": "Плочки", "unit": "m2", "qty": 1,
-                                   "material_unit_cost": 5, "labor_unit_cost": 5}]})
-                async def staggered(coro, delay):
-                    await asyncio.sleep(delay)
-                    return await coro
-                # send is a transaction (slower than one write): on odd rounds the rival starts
-                # a little later, so both outcomes are exercised in every mode
-                s, o = await asyncio.gather(
-                    c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a")),
-                    staggered(other, 0.002 * (i % 2) * (1 + i % 5)))
-                # the rival either loses (409 / 403 once the offer is Sent) or finished
-                # before /send read the offer — then the send sends the rival's result
-                assert s.status_code in (200, 409) and o.status_code in (200, 403, 409), (
-                    i, rival, s.status_code, s.text, o.status_code, o.text)
-                assert 200 in (s.status_code, o.status_code)
-                doc = await get(op, oid)
-                sent_snaps = await op.offer_versions.find(
-                    {"offer_id": oid, "is_auto_backup": True, "snapshot_json.status": "Sent"},
-                    {"_id": 0}).to_list(None)
-                assert _consistent(doc), doc
-                if s.status_code == 200:
-                    stats["send"] += 1
-                    assert doc["status"] == "Sent"
-                    assert len(sent_snaps) == 1
-                    assert sent_snaps[0]["snapshot_json"]["total"] == doc["total"], (rival, doc["total"])
-                    assert sent_snaps[0]["snapshot_json"]["lines"] == doc["lines"]
-                    if o.status_code != 200:
-                        assert doc["total"] == 1200.0
-                        if o.status_code == 409:
-                            assert code(o) == "OFFER_IN_USE", o.text
-                else:
-                    stats[rival] += 1
-                    assert doc["status"] == "Draft" and doc["total"] != 1200.0
-                    assert sent_snaps == []
-                    assert code(s) == "OFFER_CHANGED", s.text
+                for order in ("send_first", "rival_first", "free"):
+                    oid = "rr-%s-%s-%d" % (rival, order, i)
+                    await op.offers.insert_one(offer_doc(oid, status="Draft"))
+                    await op.offer_versions.insert_one(_snapshot(oid, 1, total=12.0))
+                    if rival == "restore":
+                        other = c.post("/api/offers/%s/versions/1/restore" % oid, headers=hdr("admin-a"))
+                    else:
+                        other = c.put("/api/offers/%s/lines" % oid, headers=hdr("admin-a"), json={
+                            "lines": [{"activity_name": "Плочки", "unit": "m2", "qty": 1,
+                                       "material_unit_cost": 5, "labor_unit_cost": 5}]})
+                    send = c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a"))
+                    if order == "send_first":
+                        o, s = await ordered("rival", other, send)
+                    elif order == "rival_first":
+                        s, o = await ordered("send", send, other)
+                    else:
+                        s, o = await asyncio.gather(send, other)
+                    # the rival either loses (409 / 403 once the offer is Sent) or finished
+                    # before /send read the offer — then the send sends the rival's result
+                    assert s.status_code in (200, 409) and o.status_code in (200, 403, 409), (
+                        i, rival, order, s.status_code, s.text, o.status_code, o.text)
+                    assert 200 in (s.status_code, o.status_code)
+                    doc = await get(op, oid)
+                    sent_snaps = await op.offer_versions.find(
+                        {"offer_id": oid, "is_auto_backup": True, "snapshot_json.status": "Sent"},
+                        {"_id": 0}).to_list(None)
+                    assert _consistent(doc), doc
+                    if s.status_code == 200:
+                        stats["send"] += 1
+                        assert doc["status"] == "Sent"
+                        assert len(sent_snaps) == 1
+                        assert sent_snaps[0]["snapshot_json"]["total"] == doc["total"], (rival, doc["total"])
+                        assert sent_snaps[0]["snapshot_json"]["lines"] == doc["lines"]
+                        if o.status_code != 200:
+                            assert doc["total"] == 1200.0
+                            if o.status_code == 409:
+                                assert code(o) == "OFFER_IN_USE", o.text
+                    else:
+                        stats[rival] += 1
+                        assert doc["status"] == "Draft" and doc["total"] != 1200.0
+                        assert sent_snaps == []
+                        assert code(s) == "OFFER_CHANGED", s.text
+                    # the forced orderings have exactly one possible outcome
+                    if order == "send_first":
+                        orderings[order] += 1
+                        assert s.status_code == 200 and o.status_code == 409, (rival, s.text, o.text)
+                        assert code(o) == "OFFER_IN_USE"
+                    elif order == "rival_first":
+                        orderings[order] += 1
+                        assert o.status_code == 200 and s.status_code == 409, (rival, s.text, o.text)
+                        assert code(s) == "OFFER_CHANGED"
         assert stats["send"] > 0
+        assert stats["restore"] > 0 and stats["lines"] > 0
+        assert orderings == {"send_first": 2 * ROUNDS, "rival_first": 2 * ROUNDS}
     run(monkeypatch, backend, mode, scenario)
 
 
@@ -1095,4 +1147,51 @@ def test_26_a_client_view_never_makes_a_concurrent_write_lose(monkeypatch, backe
             assert nv.status_code == 200, (i, nv.text)          # never a 409 because of a view
             for g in (rs[0], rs[2]):
                 assert g.status_code in (200, 410), (i, g.text)  # 410 once it is superseded
+    run(monkeypatch, backend, mode, scenario)
+
+
+
+# ═════════════════ Codex F-79-01 [P2]: the public unit price is the exact contract price
+def test_27_the_client_unit_price_is_exact_and_matches_the_line_value(monkeypatch, backend, mode):
+    """F-79-01: client_line rounded the combined unit price to 2 decimals and kept the line
+    value: qty 100, 5 + 7.345 → shown 12.34 next to 1234.50 (100 × 12.34 = 1234.00). The price
+    is now the exact sum of the internal components (Decimal), shown with as many decimals as
+    it has (at least 2), in the review payload and the PDF; the sent values are not touched."""
+    async def scenario(c, op):
+        import io
+        import re
+        import pdfplumber
+        from decimal import Decimal
+        for qty, mu, lu, shown in ((100, 5, 7.345, "12.345"), (3, 0.1, 0.2, "0.30"),
+                                   (7, 1.2345, 0.0001, "1.2346"), (10, 40, 60, "100.00")):
+            r = await c.post("/api/offers", headers=hdr("admin-a"), json={
+                "project_id": PRJ_A, "title": "Дробна цена", "vat_percent": 20,
+                "lines": [{"activity_name": "Мазилка", "unit": "m2", "qty": qty,
+                           "material_unit_cost": mu, "labor_unit_cost": lu}]})
+            assert r.status_code == 201, r.text
+            oid = r.json()["id"]
+            stored = (await get(op, oid))["lines"][0]
+            s = await c.post("/api/offers/%s/send" % oid, headers=hdr("admin-a"))
+            assert s.status_code == 200, s.text
+            sent = await get(op, oid)
+            assert sent["lines"][0]["line_total"] == stored["line_total"]      # untouched
+            g = await c.get("/api/offers/review/" + s.json()["review_token"])
+            assert g.status_code == 200, g.text
+            line = g.json()["lines"][0]
+            assert line["unit_price_text"] == shown, (qty, mu, lu, line)
+            assert Decimal(line["unit_price_text"]) == Decimal(repr(mu)) + Decimal(repr(lu))
+            assert line["line_total"] == stored["line_total"]
+            # what the client reads adds up: qty × shown price = shown line value (to the cent)
+            assert (Decimal(str(qty)) * Decimal(line["unit_price_text"])).quantize(Decimal("0.01")) \
+                == Decimal("%.2f" % line["line_total"]), line
+            for key in INTERNAL_COST_KEYS:
+                assert key not in g.text, key                                # R43 still holds
+            p = await c.get("/api/offers/%s/pdf" % oid, headers=hdr("admin-a"))
+            assert p.status_code == 200, p.text[:300]
+            with pdfplumber.open(io.BytesIO(p.content)) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+            assert re.search(r"(?<![\d.])%s(?![\d])" % re.escape(shown), text), (shown, text)
+            assert "%.2f" % stored["line_total"] in text, text
+            if shown == "12.345":
+                assert not re.search(r"(?<![\d.])12\.34(?![\d])", text), text   # never 12.34
     run(monkeypatch, backend, mode, scenario)
