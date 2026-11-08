@@ -5076,3 +5076,14 @@ Gates (rs1):
 | PM-01 | 6 |
 
 Still open for whichever of #81 / #82 merges second: the `service.py` conflict, and `_supplier_invoice_link` must skip reversed receipts.
+
+## 2026-11-08 12:10 UTC: main moved to `4bca18a` (Merge PR #69, Krum's approval relayed by the orchestrator)
+
+Verified:
+- The tree of `4bca18a` = the tree of `faa3da0` = `590847be…` (byte-identical).
+- Parents: `cd03324` + `faa3da0`.
+- `faa3da0` = `20bd36c` + one docs file, and `20bd36c` passed the full merged gates (sec01 probe G/H/F, SEC-01 30, PAY 630, W0 same 15, A2C / A1 0 / 0, R0 814, PM-01 6, warehouse 1121).
+
+So the main sanity of `4bca18a` is covered by that run; no re-run is needed.
+
+Merge queue (orchestrator): #71 (merging main) → #77 → #74 → #76 → #73 + #75 → #79 → #81 → #82. Each must be re-audited on its merge with the new main (conflict resolution and gates).
