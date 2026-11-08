@@ -5207,3 +5207,26 @@ Main `8c52e92` added Р51 (affects INV-CN-01). PR comment posted.
 | PM-01 | 6 |
 
 The X4 probe failure is my probe's `request=None` limitation (known), not the code.
+
+## 2026-11-08 14:30 UTC: #84 `71957db` (merge of main `8c52e92` + Addendum A / Р51): INV84-01 STILL OPEN (6 red; behaviour correct)
+
+- **Merge `8cbd15a` byte check:** the tree equals `merge-tree(3893b9f, 8c52e92)` plus the 2 generated conflicts only.
+- **Probe `invcn01`, updated for Р51** (cancel = proposal + Owner approval; offset needs legal_basis + file_id + source_credit_note_id): 99 passed. A stale cancellation proposal approved after a payment → 409 USE_CREDIT_NOTE; V4 exactly one wins.
+- **Migration:** the dry run is read-only; idempotent; no document deleted; AuditEvent per migrated invoice. Minor: it drops the legacy unique index before building the new one.
+
+| Gate | Result |
+|---|---|
+| inv_cn_01 | 90 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+| **warehouse** | **1115 / 1121** |
+
+**INV84-01 (6 red, all in `c26l_n_invoice_status`):**
+- the lock test needs the Р49 reason (verified: locked → INVOICE_BUSY, released → Cancelled);
+- `send_and_delete_are_conditional` must accept INVOICE_NUMBERED for the delete (verified: then it passes, nothing written).
+
+PR comment 6722039745 updated with the exact test fixes.
