@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 27.7,
+ "seconds": 28.4,
  "rows": [
   {
    "mode": "off",
@@ -634,7 +634,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -652,7 +654,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -696,7 +700,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -1313,7 +1319,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1331,7 +1336,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1375,7 +1379,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1432,7 +1435,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1450,7 +1452,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -1494,7 +1495,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -3625,7 +3625,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -3643,7 +3645,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -3687,7 +3691,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -4304,7 +4310,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4322,7 +4327,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4366,7 +4370,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4423,7 +4426,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4441,7 +4443,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -4485,7 +4486,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7201,7 +7201,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -7219,7 +7221,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -7263,7 +7267,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -7880,7 +7886,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7898,7 +7903,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7942,7 +7946,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -7999,7 +8002,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -8017,7 +8019,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -8061,7 +8062,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10192,7 +10192,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -10210,7 +10212,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -10254,7 +10258,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -10871,7 +10877,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10889,7 +10894,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10933,7 +10937,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -10990,7 +10993,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -11008,7 +11010,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -11052,7 +11053,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -13808,7 +13808,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -13826,7 +13828,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -13874,7 +13878,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -14549,7 +14555,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14567,7 +14572,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14615,7 +14619,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14678,7 +14681,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14696,7 +14698,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -14744,7 +14745,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -16989,7 +16989,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -17007,7 +17009,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -17055,7 +17059,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -17730,7 +17736,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17748,7 +17753,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17796,7 +17800,6 @@
    "target": "P1",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17859,7 +17862,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17877,7 +17879,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [
@@ -17925,7 +17926,6 @@
    "target": "P2",
    "status": 200,
    "written": [
-    "op.audit_events",
     "op.projects"
    ],
    "written_orgs": [

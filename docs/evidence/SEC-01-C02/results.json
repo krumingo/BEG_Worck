@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 24.3,
+ "seconds": 25.4,
  "rows": [
   {
    "mode": "off",
@@ -425,8 +425,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -445,8 +447,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -495,8 +499,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -1354,13 +1360,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -1374,13 +1375,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -1424,13 +1420,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2909,8 +2900,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -2929,8 +2922,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -2979,8 +2974,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -3838,13 +3835,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -3858,13 +3850,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -3908,13 +3895,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -6089,8 +6071,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -6109,8 +6093,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -6159,8 +6145,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -7018,13 +7006,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7038,13 +7021,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -7088,13 +7066,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8573,8 +8546,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -8593,8 +8568,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -8643,8 +8620,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -9502,13 +9481,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9522,13 +9496,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -9572,13 +9541,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -11773,8 +11737,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -11793,8 +11759,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -11847,8 +11815,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "A"
@@ -12772,13 +12742,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -12792,13 +12757,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -12846,13 +12806,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -14435,8 +14390,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -14455,8 +14412,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -14509,8 +14468,10 @@
    "status": 200,
    "error_code": null,
    "written": [
-    "op.audit_logs",
-    "op.client_acts"
+    "op.audit_events",
+    "op.client_act_line_totals",
+    "op.client_acts",
+    "op.offers"
    ],
    "written_orgs": [
     "B"
@@ -15434,13 +15395,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15454,13 +15410,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -15508,13 +15459,8 @@
    "target": null,
    "status": 200,
    "error_code": null,
-   "written": [
-    "op.execution_packages",
-    "op.project_overhead_alloc"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
