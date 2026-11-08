@@ -1,10 +1,10 @@
-# INV-CN-01 Addendum B / Р52(1) D8 — trial merge of this branch + PR #82 @ 1622f62 (WH-REV-01)
-# conflicts: finance.py (Р51(2) unapproved-debit check + #82 _awaited_credit cap: KEEP BOTH), ownership.py (expected_credit_notes: one entry), generated files (regenerate)
+# INV-CN-01 — trial merge of this branch (FG pass 25 head) + PR #82 @ 1622f62 (WH-REV-01)
+# conflicts: finance.py (Р51(2) unapproved-debit check + #82 _awaited_credit cap: KEEP BOTH), service.py (FG-233 _lock_invoice + #82 _expect_credit_note: KEEP BOTH, each with its @staticmethod), ownership.py (expected_credit_notes: one entry), generated files (regenerate)
 # real Mongo mongo:7.0 rs0, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1
-PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider tests/test_inv_cn_01_credit_notes.py tests/test_wh_rev_01_receipt_reversal.py tests/test_inv_cn_01_r52_d8_trial_merge_pr82.py -rs
-215 passed, 5 warnings in 110.15s (0:01:50)
+PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider tests/test_inv_cn_01_credit_notes.py tests/test_inv_cn_01_fg233_receipt_race.py tests/test_wh_rev_01_receipt_reversal.py tests/test_inv_cn_01_r52_d8_trial_merge_pr82.py -rs
+230 passed, 5 warnings in 110.66s (0:01:50)
 
-# the trial-merge-only test (it needs #82's canonical reversal) — commit it with whichever of #82 / #84 merges second:
+# the trial-merge-only test (needs #82's canonical reversal) — commit it with whichever of #82 / #84 merges second:
 ```python
 """
 INV-CN-01 Addendum B / Р52(1) (D8) — on the TRIAL MERGE with PR #82 only (it needs #82's

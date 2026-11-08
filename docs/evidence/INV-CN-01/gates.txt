@@ -1,25 +1,31 @@
-# INV-CN-01 gates (Addenda A+B+C, INV84-01, main 8c52e92 merged), 2026-11-08T14:52:34Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (FG pass 25 + Addenda A-C, main 0750d75 merged), 2026-11-08T15:50:16Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
-W0-03E-A2C tenant boundary guard: 239 module(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 240 module(s) checked, 0 violation(s)
 ## A1 guard
-W0-03E-A1 tenant access guard: 482 unit(s) checked, 0 violation(s)
+W0-03E-A1 tenant access guard: 484 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-111 passed, 1 warning in 76.55s (0:01:16)
+126 passed, 1 warning in 82.50s (0:01:22)
 ## PAY-01 family (real mongo + mongomock)
-630 passed, 1 warning in 149.94s (0:02:29)
+630 passed, 1 warning in 141.15s (0:02:21)
 ## R0 (real mongo)
-814 passed, 10 warnings in 152.82s (0:02:32)
+814 passed, 10 warnings in 154.60s (0:02:34)
 ## W0 (real mongo)
-15 failed, 1177 passed, 10 warnings in 139.94s (0:02:19)
+16 failed, 1176 passed, 10 warnings in 143.31s (0:02:23)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
+      1 FAILED tests/test_w0_03e_real_mongo.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 83.72s (0:01:23)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 86.55s (0:01:26)
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 197.20s (0:03:17)
+6 passed, 10 warnings in 198.69s (0:03:18)
 ## frontend yarn test
-Test Suites: 17 passed, 17 total
-Tests:       173 passed, 173 total
+Test Suites: 19 passed, 19 total
+Tests:       179 passed, 179 total
 ## warehouse suite: see warehouse_suite.txt
+
+## W0 note (re-run on a fresh Mongo, and main 0750d75 in the same environment)
+branch: 16 failed, 1176 passed, 10 warnings in 141.47s (0:02:21)
+main 0750d75: 16 failed, 1176 passed, 10 warnings in 139.43s (0:02:19)
+the failure lists are IDENTICAL: the 15 test_w0_03e_legacy_routes.py + test_w0_03e_real_mongo.py::test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server (order-dependent in the full W0 run on main 0750d75 too; the file alone: 9 passed)

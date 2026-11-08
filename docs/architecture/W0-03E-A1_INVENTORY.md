@@ -77,6 +77,7 @@
 | app/routes/finance.py:_supersede_cancellation | (helper) | invoices | update_one(id, cancellation_request.status) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_cancel_blockers | (helper) | payment_allocations | count(active_allocations({'invoice_id': inv['i) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_cancel_blockers | (helper) | credit_debit_notes | count(original_invoice_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:_cancel_blockers | (helper) | invoice_offsets | count(status, $or) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:_set_cancelled | (helper) | invoices | update_one(id, status) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:cancel_invoice | POST /finance/invoices/{invoice_id}/cancel | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:cancel_invoice | POST /finance/invoices/{invoice_id}/cancel | invoices | update_one(id, status) | TenantData org_id (session) | BARE@base | FIXED |
@@ -405,4 +406,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 390 accesses — FIXED 129, SAFE 261
+Totals: 391 accesses — FIXED 129, SAFE 262
