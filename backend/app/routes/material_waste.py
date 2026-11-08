@@ -1,8 +1,8 @@
 """
 Routes - Material Waste Tracking v1.
 """
-from fastapi import APIRouter, Depends, HTTPException
-from typing import Optional
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from typing import List, Optional
 from datetime import datetime, timezone
 from pydantic import BaseModel
 import uuid
@@ -31,6 +31,12 @@ class WasteEntryCreate(BaseModel):
     waste_type: str = "damaged"
     notes: Optional[str] = None
     date: Optional[str] = None
+    # WH-FIX-01 (FG-159) — the canonical write-off's inputs.
+    subproject_id: Optional[str] = None
+    file_ids: Optional[List[str]] = None
+    reason: Optional[str] = None
+    idempotency_key: Optional[str] = None
+    occurred_at: Optional[str] = None
 
 
 @router.get("/projects/{project_id}/material-waste")
@@ -55,29 +61,47 @@ async def get_compact_waste(project_id: str, user: dict = Depends(get_current_us
 
 
 @router.post("/projects/{project_id}/material-waste", status_code=201)
-async def create_waste_entry(project_id: str, data: WasteEntryCreate, user: dict = Depends(get_current_user)):
-    tenant = _tenant(user)
-    now = datetime.now(timezone.utc).isoformat()
-    entry = {
-        "id": str(uuid.uuid4()),
-        "org_id": user["org_id"],
-        "project_id": project_id,
-        "material_name": data.material_name,
-        "item_id": data.item_id,
-        "activity_type": data.activity_type,
-        "smr_type": data.smr_type,
-        "location_id": data.location_id,
-        "qty": data.qty,
-        "unit": data.unit,
-        "waste_type": data.waste_type,
-        "notes": data.notes,
-        "date": data.date or now[:10],
-        "created_by": user["id"],
-        "created_at": now,
-        "updated_at": now,
-    }
-    await tenant.material_waste_entries.insert_one(entry)
-    return {k: v for k, v in entry.items() if k != "_id"}
+async def create_waste_entry(project_id: str, data: WasteEntryCreate, request: Request,
+                             user: dict = Depends(get_current_user),
+                             idempotency_key_header: Optional[str] = Header(
+                                 None, alias="Idempotency-Key")):
+    """WH-FIX-01 (FG-159, Р10 / Р27 / Р37; FLOW-009): a waste („фира") from
+    the project is a CANONICAL write-off movement through the single writer
+    (the same path as POST /warehouse/canonical/project-writeoff): Р27
+    rights in every mode, a FIFO value from the ledger (never from the
+    client), evidence, an Idempotency-Key and the AuditEvent of the command
+    service. The former free row in `material_waste_entries` (no value, no
+    movement, no rights, no AuditEvent) is no longer written; the register
+    stays readable as history.
+
+    Required: `item_id` (a Master item — free text cannot be written off),
+    `file_ids` (evidence), an `Idempotency-Key` header (or
+    `idempotency_key`) and a reason (`reason`, else the `waste_type`)."""
+    from app.routes import warehouse_canonical as canon
+    if not data.item_id:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "MASTER_IDENTITY_MISSING",
+            "message": "a waste needs a Master item (item_id); free text cannot be written off"})
+    key = (idempotency_key_header or data.idempotency_key or "").strip()
+    if not key:
+        raise HTTPException(status_code=428, detail={
+            "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+            "message": "send an Idempotency-Key header"})
+    reason = (data.reason or data.waste_type or "").strip()
+    try:
+        body = canon.ProjectWriteOffBody(
+            project_id=project_id, subproject_id=data.subproject_id,
+            item_id=data.item_id, unit=data.unit, quantity=str(data.qty),
+            idempotency_key=key, reason=reason, file_ids=data.file_ids or [],
+            notes=data.notes, occurred_at=data.occurred_at)
+    except Exception as exc:                      # pydantic validation → 422
+        raise HTTPException(status_code=422, detail={
+            "error_code": "INVALID_WASTE", "message": str(exc)})
+    ctx = await canon.require_project_writeoff(request, user)
+    result = await canon.post_project_writeoff(body, request, user=user, ctx=ctx)
+    return {"movement_id": result.movement_id, "audit_event_id": result.audit_event_id,
+            "replay": result.replay, "envelope": result.envelope,
+            "source": "warehouse_write_off"}
 
 
 @router.get("/projects/{project_id}/material-waste/log")

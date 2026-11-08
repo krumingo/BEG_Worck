@@ -684,51 +684,17 @@ async def get_finance_by_project(
         date_to = today.strftime("%Y-%m-%d")
         date_from = (today - timedelta(days=90)).strftime("%Y-%m-%d")
     
-    # Aggregate by project allocation
-    pipeline = [
-        {"$match": {
-            "org_id": org_id,
-            "issue_date": {"$gte": date_from, "$lte": date_to},
-            "allocations": {"$exists": True, "$ne": []}
-        }},
-        {"$unwind": "$allocations"},
-        {"$match": {"allocations.type": "project"}},
-        {"$group": {
-            "_id": "$allocations.ref_id",
-            "total_expenses": {"$sum": {"$cond": [{"$eq": ["$direction", "Received"]}, "$total", 0]}},
-            "total_income": {"$sum": {"$cond": [{"$eq": ["$direction", "Issued"]}, "$total", 0]}},
-            "invoice_count": {"$sum": 1},
-        }},
-        {"$project": {
-            "_id": 0,
-            "project_id": "$_id",
-            "total_expenses": 1,
-            "total_income": 1,
-            "total": {"$add": ["$total_expenses", "$total_income"]},
-            "invoice_count": 1,
-        }},
-        {"$sort": {"total": -1}},
-        {"$skip": (page - 1) * page_size},
-        {"$limit": page_size},
-    ]
-    
-    results = await _tenant(user).invoices.aggregate(pipeline).to_list(page_size)
-    
-    # Count total
-    count_pipeline = [
-        {"$match": {
-            "org_id": org_id,
-            "issue_date": {"$gte": date_from, "$lte": date_to},
-            "allocations": {"$exists": True, "$ne": []}
-        }},
-        {"$unwind": "$allocations"},
-        {"$match": {"allocations.type": "project"}},
-        {"$group": {"_id": "$allocations.ref_id"}},
-        {"$count": "total"}
-    ]
-    count_result = await _tenant(user).invoices.aggregate(count_pipeline).to_list(1)
-    total = count_result[0]["total"] if count_result else 0
-    
+    # WH-FIX-01 (FG-154): each project gets ITS share of an invoice — the
+    # per-line allocation (invoice line ``allocations[]``, or the deprecated
+    # single allocation for the whole line; the same reading as Path B /
+    # ``canonical_material_cost.effective_allocations``): share of the line =
+    # allocated qty / line qty × the line's amount incl. VAT. Before, the
+    # WHOLE invoice total was added to every allocated project.
+    results, unsplit = await _finance_by_project_rows(
+        _tenant(user), org_id, date_from, date_to)
+    total = len(results)
+    results = results[(page - 1) * page_size:(page - 1) * page_size + page_size]
+
     # Enrich with project names
     project_ids = [r["project_id"] for r in results]
     projects = await _tenant(user).projects.find(
@@ -749,7 +715,91 @@ async def get_finance_by_project(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
         "period": {"date_from": date_from, "date_to": date_to},
+        # Invoices allocated to several projects with no line to split them
+        # by — counted on no project (Data Quality), never in full on each.
+        "unsplit_invoices": unsplit,
     }
+
+
+def _line_amount(line: dict) -> float:
+    """A line's amount incl. VAT (stored total, else ex VAT + VAT)."""
+    if line.get("line_total_inc_vat") is not None:
+        return float(line.get("line_total_inc_vat") or 0)
+    ex = line.get("line_total_ex_vat")
+    if ex is None:
+        ex = float(line.get("qty") or 0) * float(line.get("unit_price") or 0)
+    ex = float(ex or 0)
+    vat = line.get("vat_amount")
+    if vat is None:
+        vat = ex * float(line.get("vat_percent") or 0) / 100
+    return ex + float(vat or 0)
+
+
+async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to: str):
+    """WH-FIX-01 (FG-154) — {project: expenses / income / invoices} from the
+    per-line allocations of the period's invoices."""
+    from app.services.canonical_material_cost import effective_allocations
+    invoices = {}
+    async for inv in tenant.invoices.find(
+            {"org_id": org_id, "issue_date": {"$gte": date_from, "$lte": date_to}},
+            {"_id": 0, "id": 1, "direction": 1, "total": 1, "allocations": 1,
+             "invoice_no": 1}):
+        invoices[inv["id"]] = inv
+    agg: dict = {}
+    unsplit = []
+
+    def _add(pid, inv, amount):
+        row = agg.setdefault(pid, {"project_id": pid, "total_expenses": 0.0,
+                                   "total_income": 0.0, "_invoices": set()})
+        if inv.get("direction") == "Received":
+            row["total_expenses"] += amount
+        elif inv.get("direction") == "Issued":
+            row["total_income"] += amount
+        row["_invoices"].add(inv["id"])
+
+    with_lines = set()
+    if invoices:
+        async for line in tenant.invoice_lines.find(
+                {"org_id": org_id, "invoice_id": {"$in": list(invoices)}},
+                {"_id": 0, "invoice_id": 1, "qty": 1, "unit_price": 1, "vat_percent": 1,
+                 "vat_amount": 1, "line_total_ex_vat": 1, "line_total_inc_vat": 1,
+                 "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1}):
+            inv = invoices.get(line.get("invoice_id"))
+            if inv is None:
+                continue
+            with_lines.add(inv["id"])
+            amount = _line_amount(line)
+            qty = line.get("qty")
+            qty = float(qty) if qty not in (None, "") else None
+            for a in effective_allocations(line):
+                if a["type"] != "project" or not a["ref_id"]:
+                    continue
+                if a["qty"] is not None and qty and qty > 0:
+                    share = min(a["qty"], qty) / qty
+                else:
+                    share = 1.0
+                _add(a["ref_id"], inv, amount * share)
+    for inv in invoices.values():
+        if inv["id"] in with_lines:
+            continue
+        # A header-level allocation without lines (older data): one project
+        # takes the whole total; several cannot be split → Data Quality.
+        projects = sorted({a.get("ref_id") for a in (inv.get("allocations") or [])
+                           if isinstance(a, dict) and a.get("type") == "project"
+                           and a.get("ref_id")})
+        if len(projects) == 1:
+            _add(projects[0], inv, float(inv.get("total") or 0))
+        elif len(projects) > 1:
+            unsplit.append({"invoice_id": inv["id"], "invoice_no": inv.get("invoice_no"),
+                            "project_ids": projects})
+    results = []
+    for row in agg.values():
+        exp, inc = round(row["total_expenses"], 2), round(row["total_income"], 2)
+        results.append({"project_id": row["project_id"], "total_expenses": exp,
+                        "total_income": inc, "total": round(exp + inc, 2),
+                        "invoice_count": len(row["_invoices"])})
+    results.sort(key=lambda r: (-r["total"], r["project_id"]))
+    return results, unsplit
 
 
 @router.get("/reports/finance-details/transactions")

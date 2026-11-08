@@ -84,6 +84,39 @@ async def canonical_mongo_db():
                     "transactions required by TASK 5C")
     db_name = f"begwork_task5c_{uuid.uuid4().hex[:8]}"
     db = client[db_name]
+    # WH-FIX-01 (FG-192): the service is strict about Master identity by
+    # default. The pre-WH-FIX-01 scenarios seed no `md_item`, so THIS fixture
+    # keeps their earlier (non-strict) construction default for the test's
+    # duration only — the production route passes strict=True explicitly and
+    # `test_wh_fix_01_*` covers the strict default with `strict_mongo_db`.
+    from app.services.warehouse_movements import service as _wh_service
+    _prev_strict = getattr(_wh_service, "STRICT_MASTER_IDENTITY_DEFAULT", None)
+    if _prev_strict is not None:
+        _wh_service.STRICT_MASTER_IDENTITY_DEFAULT = False
+    try:
+        from app.services.warehouse_movements.indexes import ensure_required_indexes
+        await ensure_required_indexes(db)
+        yield client, db
+    finally:
+        if _prev_strict is not None:
+            _wh_service.STRICT_MASTER_IDENTITY_DEFAULT = _prev_strict
+        await client.drop_database(db_name)
+        client.close()
+
+
+@pytest_asyncio.fixture
+async def strict_mongo_db():
+    """WH-FIX-01 — a fresh database with the production (strict) default."""
+    require_replica_set_or_fail()
+    mongo_url = os.environ.get("MONGO_URL", "")
+    if not mongo_url:
+        pytest.fail("MONGO_URL unset; required for the canonical warehouse suite")
+    client = AsyncIOMotorClient(mongo_url)
+    if not await _is_replica_set(client):
+        pytest.fail("MONGO_URL does not point at a replica-set — "
+                    "transactions required by TASK 5C")
+    db_name = f"begwork_whfix01_{uuid.uuid4().hex[:8]}"
+    db = client[db_name]
     try:
         from app.services.warehouse_movements.indexes import ensure_required_indexes
         await ensure_required_indexes(db)

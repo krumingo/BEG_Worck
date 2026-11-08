@@ -627,6 +627,33 @@ def _action_or_none(value: Any) -> Optional[CanonicalAction]:
         return None
 
 
+def invoice_line_unit_price(line: Optional[Dict[str, Any]]) -> Optional[Decimal]:
+    """WH-FIX-01 (FG-191) — the unit price (ex VAT) of an invoice line:
+    ``unit_price``; else ``line_total_ex_vat / qty``. None when the line is
+    missing or carries no usable price."""
+    if not line:
+        return None
+    try:
+        if line.get("unit_price") is not None:
+            price = Decimal(str(line["unit_price"]))
+        elif line.get("line_total_ex_vat") is not None and line.get("qty"):
+            price = Decimal(str(line["line_total_ex_vat"])) / Decimal(str(line["qty"]))
+        else:
+            return None
+    except Exception:
+        return None
+    if not price.is_finite() or price < 0:
+        return None
+    return price
+
+
+# WH-FIX-01 (FG-192) — the module default of `CommandService` master
+# identity. Production code never changes it; no environment variable reads
+# into it. (The pre-WH-FIX-01 real-Mongo fixtures, which seed no Master Data,
+# lower it for their own test only — `tests/warehouse_canonical_conftest`.)
+STRICT_MASTER_IDENTITY_DEFAULT = True
+
+
 # -----------------------------------------------------------------------
 # Command service
 # -----------------------------------------------------------------------
@@ -645,15 +672,17 @@ class CommandService:
         self._gate = gate or PermissionGate()
         self._verify_once = verify_indexes_once
         self._verified: set = set()
-        # In environments where Master Data has not yet been migrated
-        # (early tests, isolated review), the service may fall back to
-        # TRUSTING client `item_id` and `unit` after validating shape.
-        # The default is strict in production; tests pass
-        # strict_master_identity=False to run without md_item seeded.
+        # WH-FIX-01 (FG-192, FLOW-032 / FLOW-009): Master identity is
+        # STRICT by default — fail-closed: an `item_id` that is neither a
+        # confirmed `md_item` nor a `md_pending_mapping` of the tenant is
+        # refused (422 MASTER_IDENTITY_MISSING). There is NO environment
+        # flag any more (the former `WAREHOUSE_STRICT_MASTER_IDENTITY`
+        # defaulted to "0" and was set nowhere, so every string passed as an
+        # item). Only code can construct a non-strict service (the pre-
+        # WH-FIX-01 unit fixtures, `STRICT_MASTER_IDENTITY_DEFAULT`); the
+        # production route passes `strict_master_identity=True` explicitly.
         if strict_master_identity is None:
-            strict_master_identity = os.environ.get(
-                "WAREHOUSE_STRICT_MASTER_IDENTITY", "0"
-            ).strip().lower() in {"1", "true", "yes", "on"}
+            strict_master_identity = STRICT_MASTER_IDENTITY_DEFAULT
         self._strict_master = bool(strict_master_identity)
 
     # ------------------------------------------------- public entrypoint
@@ -901,6 +930,15 @@ class CommandService:
                     context={"action": action.value},
                 )
             unit = inp.unit
+
+        # WH-FIX-01 (FG-191, FLOW-009 / D-04): a supplier receipt LINKED to an
+        # invoice line is valued at the LINE's unit price (server-derived,
+        # read in this transaction) — a different client unit_value is
+        # refused (422 INVOICE_LINE_PRICE_MISMATCH); an omitted one is filled
+        # from the line. A receipt without a resolvable line keeps the price
+        # entered at the warehouse (Р32) and is surfaced as Data Quality
+        # (MANUAL_PRICE_WITHOUT_INVOICE_LINE, queries.integrity_warnings).
+        await self._bind_invoice_line_price(tenant_db, inp, session=session)
 
         # Pending-mapping items can only enter QUARANTINE (C06).
         if pending:
@@ -1814,6 +1852,36 @@ class CommandService:
                 context={"invoice_line_id": inp.invoice_line_id,
                          "allocated": str(allocated), "delivered": str(delivered),
                          "quantity": str(inp.quantity)})
+
+    @staticmethod
+    async def _bind_invoice_line_price(tenant_db, inp: CommandInput, *, session) -> None:
+        """WH-FIX-01 (FG-191) — see the call site in ``_execute_in_tx``."""
+        if inp.action not in (CanonicalAction.RECEIVE_FROM_SUPPLIER,
+                              CanonicalAction.RECEIVE_FROM_SUPPLIER_TO_PROJECT) \
+                or not inp.invoice_line_id:
+            return
+        from app.services.warehouse_movements.errors import InvoiceLinePriceMismatchError
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(tenant_db, inp.tenant_id)
+        line = await tenant.invoice_lines.find_one(
+            {"id": inp.invoice_line_id},
+            {"_id": 0, "unit_price": 1, "qty": 1, "line_total_ex_vat": 1},
+            session=session)
+        line_price = invoice_line_unit_price(line)
+        if line_price is None:
+            return            # unknown / unpriced line — FG-53 debt, DQ warning
+        q = Decimal("0.0001")
+        try:
+            client = Decimal(str(inp.unit_value or "0"))
+        except Exception:
+            client = Decimal("0")
+        if client > 0 and client.quantize(q) != line_price.quantize(q):
+            raise InvoiceLinePriceMismatchError(
+                "unit_value differs from the invoice line's unit price",
+                context={"invoice_line_id": inp.invoice_line_id,
+                         "line_unit_price": str(line_price),
+                         "supplied_unit_value": str(inp.unit_value)})
+        inp.unit_value = line_price
 
     @staticmethod
     async def _lock_invoice_line(tenant_collection, *, session, invoice_line_id: str) -> None:

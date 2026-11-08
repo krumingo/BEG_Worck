@@ -219,6 +219,12 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
                 issued_by_name[name] = issued_by_name.get(name, 0) + float(wl.get("qty_issued", 0))
             elif wt["type"] == "return":
                 returned_by_name[name] = returned_by_name.get(name, 0) + float(wl.get("qty_returned", 0))
+    # WH-FIX-01 (FG-190): the canonical ledger through the shared helper —
+    # canonical rows carry `action`, not the legacy `type` + `lines` above.
+    from app.services.canonical_material_cost import canonical_trail_by_name
+    for name, c in (await canonical_trail_by_name(tenant, org_id, project_id)).items():
+        issued_by_name[name] = issued_by_name.get(name, 0) + c["issued_to_project"]
+        returned_by_name[name] = returned_by_name.get(name, 0) + c["returned"]
 
     # Load consumption
     consumptions = await tenant.project_material_ops.find(
@@ -231,6 +237,8 @@ async def get_material_coverage(project_id: str, user: dict = Depends(require_m2
         for cl in co.get("lines", []):
             name = cl.get("material_name", "")
             consumed_by_name[name] = consumed_by_name.get(name, 0) + float(cl.get("qty_consumed", 0))
+    for name, c in (await canonical_trail_by_name(tenant, org_id, project_id)).items():
+        consumed_by_name[name] = consumed_by_name.get(name, 0) + c["consumed"]   # WH-FIX-01 FG-190
 
     # Enrich planned rows
     enriched = []

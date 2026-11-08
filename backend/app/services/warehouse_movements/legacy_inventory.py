@@ -119,6 +119,68 @@ _WRITER_METHOD_RE = re.compile(
 )
 
 
+# WH-FIX-01 (FG-193) — writes that reach a canonical-only collection
+# INDIRECTLY: `db["warehouse_transactions"].update_many(...)`,
+# `tenant.collection("warehouse_transactions").delete_one(...)`, or through
+# a variable bound to such a handle — `coll = tenant.collection(name)` /
+# `coll = db[name]` (the name a literal, a module constant, or a loop variable
+# over a list that holds the literal) followed by `coll.update_many(...)`.
+_WRITE_METHODS = (r"(?:insert_one|insert_many|update_one|update_many|delete_one|"
+                  r"delete_many|replace_one|bulk_write|find_one_and_update|"
+                  r"find_one_and_delete|find_one_and_replace)")
+_DIRECT_HANDLE_WRITE_RE = re.compile(
+    r"(?:\[\s*['\"](?P<c1>\w+)['\"]\s*\]|"
+    r"\.(?:collection|get_collection)\(\s*['\"](?P<c2>\w+)['\"]\s*\))"
+    r"\s*\.\s*" + _WRITE_METHODS + r"\s*\(")
+_HANDLE_ASSIGN_RE = re.compile(
+    r"^\s*(?P<var>\w+)\s*=\s*(?:await\s+)?[\w\.]+\s*"
+    r"(?:\[\s*(?P<a1>[^\]]+?)\s*\]|\.(?:collection|get_collection)\(\s*(?P<a2>[^)]+?)\s*\))\s*$")
+_CONST_RE = re.compile(r"^(?P<name>[A-Z][A-Z0-9_]*)\s*=\s*['\"](?P<val>\w+)['\"]\s*$")
+
+
+def _indirect_canonical_writes(lines: List[str], collections: Set[str]) -> List[Tuple[int, str, str]]:
+    """(line_no, collection, snippet) of every indirect write to a canonical
+    collection in one file (WH-FIX-01, FG-193)."""
+    consts = {}
+    for ln in lines:
+        m = _CONST_RE.match(ln.strip())
+        if m and m.group("val") in collections:
+            consts[m.group("name")] = m.group("val")
+    out: List[Tuple[int, str, str]] = []
+    for idx, line in enumerate(lines):
+        m = _DIRECT_HANDLE_WRITE_RE.search(line)
+        if m:
+            coll = m.group("c1") or m.group("c2")
+            if coll in collections:
+                out.append((idx + 1, coll, line.strip()))
+        a = _HANDLE_ASSIGN_RE.match(line)
+        if not a:
+            continue
+        arg = (a.group("a1") or a.group("a2") or "").strip()
+        targets: Set[str] = set()
+        lit = re.fullmatch(r"['\"](\w+)['\"]", arg)
+        if lit and lit.group(1) in collections:
+            targets.add(lit.group(1))
+        elif arg in consts:
+            targets.add(consts[arg])
+        elif re.fullmatch(r"\w+", arg):
+            # a loop / parameter variable: any canonical literal in the 40
+            # lines before the binding is a collection it may name.
+            window = "\n".join(lines[max(0, idx - 40):idx])
+            for coll in collections:
+                if re.search(r"['\"]" + coll + r"['\"]", window):
+                    targets.add(coll)
+        if not targets:
+            continue
+        write_re = re.compile(r"\b" + re.escape(a.group("var")) + r"\s*\.\s*"
+                              + _WRITE_METHODS + r"\s*\(")
+        for j in range(idx + 1, min(idx + 26, len(lines))):
+            if write_re.search(lines[j]):
+                for coll in sorted(targets):
+                    out.append((j + 1, coll, lines[j].strip()))
+    return out
+
+
 def refuse_legacy_writer(route_id: str, canonical_action: str) -> None:
     """Raise `LegacyWriterRetiredError` unconditionally.
 
@@ -196,6 +258,14 @@ def scan_repository_for_legacy_writers(repo_root: Path | None = None) -> Dict[st
             lines = text.splitlines()
         except Exception:
             continue
+        # 1b. WH-FIX-01 (FG-193) — indirect handles (subscript /
+        # `.collection(...)` / a variable bound to one). Per-site allowed only.
+        for line_no, coll, snippet in _indirect_canonical_writes(
+                lines, CANONICAL_ONLY_COLLECTIONS):
+            if (rel, coll) in ALLOWED_WRITER_SITES:
+                continue
+            hits[coll].append({"file": rel, "line": line_no, "snippet": snippet,
+                               "detected_via": "indirect_handle"})
         for line_no, line in enumerate(lines, start=1):
             stripped = line.strip()
             # 1. Direct writes to canonical-only collections. Per-site
