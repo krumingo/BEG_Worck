@@ -124,7 +124,8 @@ export default function OfferReviewPage() {
                   <td className="p-3 text-gray-400">{line.unit}</td>
                   <td className="p-3 text-right font-mono text-gray-300">{line.qty}</td>
                   {/* R43: the client sees only the combined unit price */}
-                  <td className="p-3 text-right font-mono text-gray-400">{(line.unit_price || 0).toFixed(2)}</td>
+                  {/* F-79-01: the exact contract price as the server formats it (never re-rounded) */}
+                  <td className="p-3 text-right font-mono text-gray-400">{line.unit_price_text ?? (line.unit_price || 0).toFixed(2)}</td>
                   <td className="p-3 text-right font-mono font-medium text-white">{(line.line_total || 0).toFixed(2)} {offer.currency}</td>
                 </tr>
               ))}

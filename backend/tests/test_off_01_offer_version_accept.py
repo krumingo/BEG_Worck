@@ -1163,7 +1163,8 @@ def test_27_the_client_unit_price_is_exact_and_matches_the_line_value(monkeypatc
         import pdfplumber
         from decimal import Decimal
         for qty, mu, lu, shown in ((100, 5, 7.345, "12.345"), (3, 0.1, 0.2, "0.30"),
-                                   (7, 1.2345, 0.0001, "1.2346"), (10, 40, 60, "100.00")):
+                                   (7, 1.2345, 0.0001, "1.2346"), (10, 40, 60, "100.00"),
+                                   (2.5, 10, 0.5, "10.50")):
             r = await c.post("/api/offers", headers=hdr("admin-a"), json={
                 "project_id": PRJ_A, "title": "Дробна цена", "vat_percent": 20,
                 "lines": [{"activity_name": "Мазилка", "unit": "m2", "qty": qty,
@@ -1192,6 +1193,8 @@ def test_27_the_client_unit_price_is_exact_and_matches_the_line_value(monkeypatc
                 text = "\n".join(page.extract_text() or "" for page in pdf.pages)
             assert re.search(r"(?<![\d.])%s(?![\d])" % re.escape(shown), text), (shown, text)
             assert "%.2f" % stored["line_total"] in text, text
+            qty_shown = ("%s" % qty) if "." in str(qty) else "%d.0" % qty
+            assert qty_shown in text, (qty_shown, text)                       # exact quantity
             if shown == "12.345":
                 assert not re.search(r"(?<![\d.])12\.34(?![\d])", text), text   # never 12.34
     run(monkeypatch, backend, mode, scenario)

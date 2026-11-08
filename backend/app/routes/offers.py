@@ -225,15 +225,52 @@ async def _family_guard(tenant: TenantData, offer: dict, session) -> None:
                         "Друга версия на тази оферта вече е одобрена. Моля, свържете се с изпълнителя.")
 
 
+def _exact(value) -> "Decimal":
+    """A stored number as the decimal the user entered (``repr`` of a float is its shortest
+    round-trip form: 7.345 → Decimal('7.345'), never 7.34499999…)."""
+    from decimal import Decimal
+    if isinstance(value, float):
+        return Decimal(repr(value))
+    return Decimal(str(value or 0))
+
+
+def client_unit_price(line: dict) -> "Decimal":
+    """Codex F-79-01: the combined contract unit price — the EXACT sum of the internal
+    components, never rounded (12.345 stays 12.345, so 100 × it is the line value 1234.50)."""
+    return _exact(line.get("material_unit_cost", 0)) + _exact(line.get("labor_unit_cost", 0))
+
+
+def price_text(value: "Decimal") -> str:
+    """At least 2 decimals and as many more as the exact price has (trailing zeros trimmed):
+    12.345 → "12.345", 0.3 → "0.30", 100 → "100.00"."""
+    text = format(value, "f")
+    whole, _, frac = text.partition(".")
+    frac = frac.rstrip("0")
+    return "%s.%s" % (whole, frac.ljust(2, "0"))
+
+
+def qty_text(qty) -> str:
+    """The exact quantity for the client document, at least 1 decimal (the PDF's old style):
+    2.25 → "2.25" (it was "2.2"), 100 → "100.0"."""
+    text = format(_exact(qty), "f")
+    whole, _, frac = text.partition(".")
+    return "%s.%s" % (whole, frac.rstrip("0").ljust(1, "0"))
+
+
 def client_line(line: dict) -> dict:
     """R43 (Krum, 07.11.2026; FLOW-003, FLOW-010): what a CLIENT sees of an offer line — the
-    combined unit price, quantity and value. The material/labour split is internal."""
+    combined unit price, quantity and value. The material/labour split is internal.
+    F-79-01: the price is exact (``unit_price`` number + ``unit_price_text`` for display);
+    the stored line value is shown as it was sent, never re-fitted to a rounded price."""
+    from decimal import Decimal
     qty = line.get("qty", 0) or 0
-    unit_price = round((line.get("material_unit_cost", 0) or 0) + (line.get("labor_unit_cost", 0) or 0), 2)
+    unit = client_unit_price(line)
     total = line.get("line_total")
+    if total is None:
+        total = float((_exact(qty) * unit).quantize(Decimal("0.01")))
     return {"id": line.get("id"), "activity_name": line.get("activity_name"),
-            "unit": line.get("unit"), "qty": qty, "unit_price": unit_price,
-            "line_total": round(qty * unit_price, 2) if total is None else total,
+            "unit": line.get("unit"), "qty": qty, "unit_price": float(unit),
+            "unit_price_text": price_text(unit), "line_total": total,
             "note": line.get("note"), "sort_order": line.get("sort_order")}
 
 
@@ -1031,11 +1068,11 @@ async def export_offer_pdf(offer_id: str, user: dict = Depends(require_m2)):
     line_data = [["№", "Описание", "Ед.", "К-во", "Ед. цена", "Общо"]]
     for i, l in enumerate(offer.get("lines", [])):
         cl = client_line(l)
-        qty, up, lt = cl["qty"], cl["unit_price"], cl["line_total"]
+        qty, up, lt = cl["qty"], cl["unit_price_text"], cl["line_total"]   # F-79-01: exact price
         note = ""
         if l.get("note"):
             note = f"\n{l['note']}"
-        line_data.append([str(i+1), Paragraph(f"{l.get('activity_name', '')}{note}", sN), UNIT_LABELS_BG.get(l.get("unit", ""), l.get("unit", "")), f"{qty:.1f}", f"{up:.2f}", f"{lt:.2f}"])
+        line_data.append([str(i+1), Paragraph(f"{l.get('activity_name', '')}{note}", sN), UNIT_LABELS_BG.get(l.get("unit", ""), l.get("unit", "")), qty_text(qty), up, f"{lt:.2f}"])
     
     lt = RLTable(line_data, colWidths=cw, repeatRows=1)
     lt.setStyle(TableStyle([
