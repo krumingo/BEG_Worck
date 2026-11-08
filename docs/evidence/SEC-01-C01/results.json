@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 20.3,
+ "seconds": 28.8,
  "rows": [
   {
    "mode": "off",
@@ -634,7 +634,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -652,7 +654,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -696,7 +700,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -753,6 +759,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -770,6 +777,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -865,6 +873,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -882,6 +891,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -925,6 +935,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -981,6 +992,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -998,6 +1010,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -1041,6 +1054,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3579,7 +3593,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -3597,7 +3613,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -3641,7 +3659,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -3698,6 +3718,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3715,6 +3736,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3810,6 +3832,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3827,6 +3850,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3870,6 +3894,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3926,6 +3951,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3943,6 +3969,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -3986,6 +4013,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7109,7 +7137,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -7127,7 +7157,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -7171,7 +7203,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -7228,6 +7262,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7245,6 +7280,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7340,6 +7376,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7357,6 +7394,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7400,6 +7438,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7456,6 +7495,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7473,6 +7513,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -7516,6 +7557,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10054,7 +10096,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -10072,7 +10116,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -10116,7 +10162,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -10173,6 +10221,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10190,6 +10239,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10285,6 +10335,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10302,6 +10353,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10345,6 +10397,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10401,6 +10454,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10418,6 +10472,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -10461,6 +10516,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -13624,7 +13680,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -13642,7 +13700,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -13690,7 +13750,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -13753,6 +13815,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -13770,6 +13833,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -13877,6 +13941,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -13894,6 +13959,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -13941,6 +14007,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14003,6 +14070,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14020,6 +14088,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -14067,6 +14136,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -16759,7 +16829,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -16777,7 +16849,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -16825,7 +16899,9 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.audit_logs",
+    "op.overhead_period_locks",
     "op.overhead_snapshots"
    ],
    "written_orgs": [
@@ -16888,6 +16964,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -16905,6 +16982,7 @@
    "target": null,
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17012,6 +17090,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17029,6 +17108,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17076,6 +17156,7 @@
    "target": "P1",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17138,6 +17219,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17155,6 +17237,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [
@@ -17202,6 +17285,7 @@
    "target": "P2",
    "status": 200,
    "written": [
+    "op.audit_events",
     "op.price_modifiers_config"
    ],
    "written_orgs": [

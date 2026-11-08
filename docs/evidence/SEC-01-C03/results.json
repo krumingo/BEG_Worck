@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 18.9,
+ "seconds": 28.6,
  "amount_rows": [
   {
    "mode": "off",
@@ -4276,6 +4276,7 @@
    "first": {
     "status": 200,
     "business_written": [
+     "op.overhead_period_locks",
      "op.overhead_snapshots"
     ]
    },
@@ -4351,6 +4352,7 @@
    "first": {
     "status": 200,
     "business_written": [
+     "op.overhead_period_locks",
      "op.overhead_snapshots"
     ]
    },
@@ -4426,6 +4428,7 @@
    "first": {
     "status": 200,
     "business_written": [
+     "op.overhead_period_locks",
      "op.overhead_snapshots"
     ]
    },
@@ -4458,7 +4461,7 @@
     409
    ],
    "retry_payment_ids": [
-    "5c696daf-783c-5bd5-a5ad-739d49a5eee9"
+    "75bb745e-8b7c-5c8b-a823-1783dc8618e1"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4482,7 +4485,7 @@
     409
    ],
    "retry_payment_ids": [
-    "9e3ae022-e1db-544c-b427-afaebd479743"
+    "6d350168-21d3-5140-b84b-28879635a4f2"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4506,7 +4509,7 @@
     409
    ],
    "retry_payment_ids": [
-    "be08d1b5-2b81-5e7c-a601-a62e45e89cb5"
+    "70cb5d92-349c-5499-90ae-aa9006ec3517"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4958,12 +4961,14 @@
    },
    "overhead_compute": {
     "first_status": 500,
-    "audit_rows_after_crash": 1,
+    "audit_rows_after_crash": 0,
     "retry_statuses": [
      200,
      200
     ],
-    "audit_rows_after_retries": 1
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
    }
   },
   {
@@ -4979,12 +4984,14 @@
    },
    "overhead_compute": {
     "first_status": 500,
-    "audit_rows_after_crash": 1,
+    "audit_rows_after_crash": 0,
     "retry_statuses": [
      200,
      200
     ],
-    "audit_rows_after_retries": 1
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
    }
   },
   {
@@ -5000,12 +5007,14 @@
    },
    "overhead_compute": {
     "first_status": 500,
-    "audit_rows_after_crash": 1,
+    "audit_rows_after_crash": 0,
     "retry_statuses": [
      200,
      200
     ],
-    "audit_rows_after_retries": 1
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
    }
   }
  ],

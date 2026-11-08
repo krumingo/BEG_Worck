@@ -885,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 203.3,
+ "seconds": 165.8,
  "rows": [
   {
    "mode": "off",
@@ -13071,6 +13071,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -13100,6 +13102,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -13157,6 +13161,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -13228,6 +13234,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -13257,6 +13265,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -13314,6 +13324,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -37658,6 +37670,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -37687,6 +37701,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -37744,6 +37760,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -37815,6 +37833,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -37844,6 +37864,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -37901,6 +37923,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -65631,6 +65655,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -65660,6 +65686,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -65717,6 +65745,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -65788,6 +65818,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -65817,6 +65849,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -65874,6 +65908,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -90218,6 +90254,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -90247,6 +90285,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -90304,6 +90344,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -90375,6 +90417,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -90404,6 +90448,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -90461,6 +90507,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -118231,6 +118279,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -118260,6 +118310,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -118317,6 +118369,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -118388,6 +118442,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -118417,6 +118473,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -118474,6 +118532,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -143034,6 +143094,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -143063,6 +143125,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -143120,6 +143184,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -143191,6 +143257,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -143220,6 +143288,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -143277,6 +143347,8 @@
     "expenses",
     "income",
     "paid",
+    "paid_issued",
+    "paid_received",
     "subtotal",
     "total",
     "total_ex_vat",
@@ -159182,7 +159254,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -159191,13 +159263,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "scope_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -159213,7 +159285,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "e3e648cf9b6022ddbb5c28ce5bbf0c1fba985b792e8207dd3286a2e6e2b3db1a"
+     "integrity_hash": "05dfb1a44137adb3d3642d43f9aa45e5b46fc94f51fc798134e786ee8f0ca275"
     }
    ]
   },
@@ -159224,7 +159296,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -159233,7 +159305,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159258,7 +159330,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "7a3e5f9a1f936f180ac648b488915c48202fab7cc56bb18138f1ca5fd02f768b"
+     "integrity_hash": "f6ff4763b8cec1b977e4f1ca67b9fbf38be5827555181b047f56a7a233720a8b"
     }
    ]
   },
@@ -159269,7 +159341,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -159281,7 +159353,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -159290,7 +159362,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159316,7 +159388,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "e66a0e596f23cf7ac60bd75e7723d02b86ca6202562958e6fea7c5e203bc031d"
+     "integrity_hash": "7d22ae5d1af1b4a999365bcf69e2a6304233756609c7ec080863cf35c9c9a730"
     }
    ]
   },
@@ -159327,7 +159399,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -159339,7 +159411,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -159351,7 +159423,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -159360,13 +159432,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "scope_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159384,7 +159456,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "1ac01f0d6f53b2382c9103df2e71ef7bbb82f2360a14f252ee16836d9756b1ad"
+     "integrity_hash": "12519bc024c0049425d7af3b8608277ed345e5285d4bb5067f541b794a81a5e6"
     }
    ]
   },
@@ -159395,7 +159467,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -159404,7 +159476,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159430,7 +159502,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "22d47115b71c98cc1022e2139bdabc96a2fc0d67835207d329a9569f266c840a"
+     "integrity_hash": "8663ba6dd47184d585e582ab6168df637d35b0ead109d288fb9405edccf430d9"
     }
    ]
   },
@@ -159441,7 +159513,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -159453,7 +159525,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -159462,7 +159534,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159488,7 +159560,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "ee86a25d4be446041a2d250a21f3f848edd833eea67cc38bdcbee5c496571b4b"
+     "integrity_hash": "232a66bd6553ad4453b07599227515380477a25d44052c806cb07ff1c1416ef5"
     }
    ]
   },
@@ -159499,7 +159571,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -159511,7 +159583,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -159523,7 +159595,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -159532,13 +159604,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "scope_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159556,7 +159628,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "32184c5eadfb13d6747e079546bfcbb435f616b01e319edc32e21a8b8c7acafe"
+     "integrity_hash": "2c00d4dfae5052649f59769bf2d0a52a44ab2f8bf5d90bddeafcc7bd3c5b4992"
     }
    ]
   },
@@ -159567,7 +159639,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -159576,7 +159648,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159602,7 +159674,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "a384ba0773dac2580e2793cd9582fe41a4c6699a2b6bdb974cf2f493ce22c1d4"
+     "integrity_hash": "4a2f002f85a512f4265d99c7a746fc36f7eb07ead895d9bf17fb370bbdcb1df4"
     }
    ]
   },
@@ -159613,7 +159685,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -159625,7 +159697,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -159634,7 +159706,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+     "tenant_id": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159660,7 +159732,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "aa9b9e61b0864e1de7ee7c5a20e22a5bd5f5a1f061e6a1ede76b161f710db3d2"
+     "integrity_hash": "7e9fcf4d5fcca007a4093b75414ba12262d53997521c1f4ecdb63659a6e522a8"
     }
    ]
   },
@@ -159671,7 +159743,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -159683,7 +159755,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "d44db99a-1ab5-494a-a1dc-578d2d795b35",
+   "expected_tenant": "63b24266-52d8-4eae-b2f6-a587e93b59a3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
