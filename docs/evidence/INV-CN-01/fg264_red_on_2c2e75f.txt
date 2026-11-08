@@ -1,0 +1,4 @@
+# INV-CN-01 FG-264 + FG-249 dq_issues: the current test file run against the previous head 2c2e75f, real Mongo, -k enforce
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg249_supplier_tax_id_is_mandatory_duplicates_by_put_are_409_legacy_gets_dq[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index[enforce]
+2 failed, 41 passed, 86 deselected, 1 warning in 30.78s

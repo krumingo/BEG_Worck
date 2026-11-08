@@ -168,6 +168,15 @@ Every test runs on real Mongo in off / shadow / enforce. The same file fails the
 | **FG-251 / Р55(3)** | When the Owner accepts a difference on a note linked to a reversal, the part the supplier did not credit stays a cost of the original line's project. It is net (the note's own VAT ratio), by the line's project share, and dated on the **acceptance** (its period), as a line of THE cost source. The AuditEvent carries `difference_gross` and `cost_period`. | `test_fg251_an_accepted_difference_after_a_reversal_is_project_cost_in_the_acceptance_period` (36.00 awaited, 30.00 credited → +5.00 net in the acceptance month; helper and P&L agree) |
 | Main | **ec7ddd8** (#85 docs, R55) merged with a merge commit (5692247). | — |
 
+## FG-264 (FLOW Guard on 2c2e75f) and the FG-249 note
+
+| Point | Fix | Test |
+|---|---|---|
+| **FG-264** | A supplier invoice's create, and any edit of its number or supplier, decides "same supplier + number?" and writes **in ONE transaction under the (supplier, number) lock document** (`org_counters`, `_id supplier_invoice_lock:<org>:<supplier_key>:<number>`), so concurrent requests are serialised with or without the unique index. The per-supplier unique index is built **at startup and at first use** (`ensure_indexes`) wherever the data allows, which covers every fresh/new tenant and every migrated one. A legacy database whose rows collide refuses the build and keeps the lock-serialised check until `inv_cn_01_migrate.py` backfills and builds it. | `test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index`: 6 parallel POSTs → **1×201 + 5×409**, (a) on a fresh tenant with no migration, (b) on a legacy database where the index cannot be built |
+| **FG-249 note** | The DQ for a legacy supplier invoice without ЕИК / tax number is a **canonical `dq_issues` record** (new tenant collection, registered in `ownership.py`): one per (kind, entity) with a deterministic id, `kind = supplier_tax_id_missing`, `entity_type = finance.invoice`, `assignee_role = accountant`, `status = open`. It is idempotent. | `test_fg249_…` (record shape + a second apply adds nothing) |
+
+Red proof against 2c2e75f: `fg264_red_on_2c2e75f.txt`.
+
 ## Debts after Addendum A
 
 | # | Status |
