@@ -21,7 +21,7 @@
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `b313933` | 17 | FLOW-021, Р39/Р40 |
 | `claude/act-01-client-act-from-offer` (ACT-01) | `2cc1147` | 15 | FLOW-004 |
 | `claude/off-01-offer-version-accept` (OFF-01) | `8dc3c45` | 21 | FLOW-003, FLOW-002 magic link |
-| #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `c86d161` | 22 | FLOW-009/020/008, Р44, Р45; FG-199 resolved |
+| #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `2d60acd` | 22b | FLOW-009/020/008, Р44, Р45; FG-199 resolved; FG-215 open |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
 | пакети (`claude/happy-meitner-bmcnel`) | `28b5ab6` | 21b | Р46, Р47; Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
