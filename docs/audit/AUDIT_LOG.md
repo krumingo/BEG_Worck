@@ -4705,3 +4705,41 @@ Probe with `PROBE_FG114=1 PROBE_F76=1` × 3 modes: **FAILS none**.
 The merge with main `2ec61f3` is clean. I updated PR comment 6714054560 to "resolved".
 
 - **Pending:** the same fix on #69 (its programmer is applying it). Re-run the S11 payment case on the new #69 head.
+
+### #79 @ `653a1a5` (FG-149: a client view is not an edit) — **full PASS**
+
+- **Static review.** The public view writes only `$max {viewed_at, last_viewed_at}` + `$inc view_count` and never `updated_at`. No CAS filter reads `viewed_at` / `view_count` (they occur only in that write). The review response does not include them.
+
+| Check | Result |
+|---|---|
+| probe O1–O19 × 3 modes | **666 passed** |
+| **O19** client view ∥ new-version ×20 per mode | new-version **200 every time**; o1 Superseded; `view_count` 1; no leak of `view_count` / `last_viewed_at` / `updated_at` |
+| OFF-01 suite in the clean venv | 234 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+
+The merge with main `2ec61f3` is clean.
+
+- Process note: the first `b79g` probe run was void. It was killed by a machine restart (Docker down → every test failed to connect), and the re-run found the probe file missing. The probe was then run alone.
+
+### #69 @ `25ffd9b` (addendum G: audit `entry_id`, the SUBADV76-01 class)
+
+- `audit.py` is **byte-identical** to #76 `b313933` (`cmp`). The subcontractor payment audit and the overhead snapshot audit use `entry_id=mw.new_id(…)`.
+
+**sec01 probe G** (crash right after the payment's audit insert, then 2 same-key retries) × 3 modes:
+
+| Head | 3 modes | `audit_logs` rows |
+|---|---|---|
+| **`25ffd9b`** | 500 → 201 → 201 | **+1**, ledger 1 |
+| baseline `da47777` | 500 → 201 → 201 | **+2** (the probe detects the defect; the fix closes it) |
+
+F1–F4 still pass (FAILS none).
+
+| Gate | Result |
+|---|---|
+| sec01 | 30 |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 + merge with main | (finishing) |
