@@ -1,28 +1,28 @@
-# INV-CN-01 gates (FG-264 + Addendum D / Р55 + FG pass 25 + Addenda A-C, main ec7ddd8 merged), 2026-11-08T17:35:53Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (Р58/FG-265 + FG-264 + Addenda A-D, main fddb018 merged), 2026-11-08T18:07:36Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
-W0-03E-A2C tenant boundary guard: 240 module(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 241 module(s) checked, 0 violation(s)
 ## A1 guard
-W0-03E-A1 tenant access guard: 484 unit(s) checked, 0 violation(s)
+W0-03E-A1 tenant access guard: 486 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-138 passed, 1 warning in 96.37s (0:01:36)
+141 passed, 1 warning in 97.83s (0:01:37)
 ## PAY-01 family (real mongo + mongomock)
-630 passed, 1 warning in 139.61s (0:02:19)
+630 passed, 1 warning in 141.97s (0:02:21)
 ## R0 (real mongo)
-814 passed, 10 warnings in 150.88s (0:02:30)
+814 passed, 10 warnings in 151.45s (0:02:31)
 ## W0 (real mongo)
-16 failed, 1176 passed, 10 warnings in 140.10s (0:02:20)
+16 failed, 1176 passed, 10 warnings in 139.67s (0:02:19)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
       1 FAILED tests/test_w0_03e_real_mongo.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 84.24s (0:01:24)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 81.90s (0:01:21)
      15 FAILED tests/test_w0_03e_legacy_routes.py
+## ACT-01 (#77, no regression, real mongo)
+113 passed in 47.64s
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 192.17s (0:03:12)
+6 passed, 10 warnings in 189.39s (0:03:09)
 ## frontend yarn test
 Test Suites: 19 passed, 19 total
 Tests:       179 passed, 179 total
 ## warehouse suite: see warehouse_suite.txt
-
-## W0 note: the 16 = the known 15 test_w0_03e_legacy_routes.py + test_w0_03e_real_mongo.py::test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server — identical list on main in this environment (order-dependent since #71; the file alone passes).
