@@ -1,9 +1,21 @@
 """
 Service - Material Waste Summary.
 Aggregates planned/requested/delivered/issued/returned/waste per material per project.
+
+5C-C23 F-15: ``wasted`` = the manual register (``material_waste_entries``)
+PLUS the canonical write-offs from the project („фира", Р10), read through the
+shared ``canonical_material_cost.project_material_cost`` helper — no second
+register. Write-offs are listed in ``writeoffs`` with
+``source = warehouse_write_off`` („отписване от склада"); the summary keeps the
+manual and write-off counts apart (``manual_waste_*`` / ``writeoff_*``).
 """
 from app.db import db
 from app.tenancy.data_access import TenantData
+
+
+# 5C-C23 F-15 — how a canonical write-off is marked on the card.
+WRITE_OFF_SOURCE = "warehouse_write_off"
+WRITE_OFF_LABEL = "отписване от склада"
 
 
 def _status(issued, planned):
@@ -24,7 +36,8 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
     def _get(name):
         n = name.strip() if name else "Неизвестен"
         if n not in mats:
-            mats[n] = {"planned": 0, "requested": 0, "delivered": 0, "issued": 0, "returned": 0, "wasted": 0, "unit": ""}
+            mats[n] = {"planned": 0, "requested": 0, "delivered": 0, "issued": 0, "returned": 0,
+                       "wasted": 0, "manual_wasted": 0, "writeoff": 0, "unit": ""}
         return mats[n]
 
     # ── A. Planned (from smr_analyses materials) ────────────────
@@ -55,19 +68,20 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                 e["unit"] = ln["unit"]
 
     # ── C. Delivered (warehouse receipts) ───────────────────────
-    receipts = await tenant.warehouse_transactions.find(
+    # CODEX C12.10: no silent cap on canonical ledger reads.
+    _cursor_c = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "receipt"}, {"_id": 0, "lines": 1}
-    ).to_list(200)
-    for t in receipts:
+    )
+    async for t in _cursor_c:
         for ln in t.get("lines", []):
             e = _get(ln.get("material_name", ""))
             e["delivered"] += float(ln.get("qty_received", 0) or ln.get("qty_issued", 0) or 0)
 
     # ── D. Issued (warehouse issues to project) ─────────────────
-    issues = await tenant.warehouse_transactions.find(
+    _cursor_d = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "issue"}, {"_id": 0, "lines": 1}
-    ).to_list(500)
-    for t in issues:
+    )
+    async for t in _cursor_d:
         for ln in t.get("lines", []):
             e = _get(ln.get("material_name", ""))
             e["issued"] += float(ln.get("qty_issued", 0) or 0)
@@ -75,10 +89,10 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
                 e["unit"] = ln["unit"]
 
     # ── E. Returns ──────────────────────────────────────────────
-    returns = await tenant.warehouse_transactions.find(
+    _cursor_e = tenant.warehouse_transactions.find(
         {"org_id": org_id, "project_id": project_id, "type": "return"}, {"_id": 0, "lines": 1}
-    ).to_list(100)
-    for t in returns:
+    )
+    async for t in _cursor_e:
         for ln in t.get("lines", []):
             e = _get(ln.get("material_name", ""))
             e["returned"] += float(ln.get("qty_issued", 0) or ln.get("qty_returned", 0) or 0)
@@ -90,9 +104,48 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
     if date_to:
         wq.setdefault("date", {})["$lte"] = date_to
     wastes = await tenant.material_waste_entries.find(wq, {"_id": 0}).to_list(500)
+    manual_waste_qty = 0.0
     for w in wastes:
         e = _get(w.get("material_name", ""))
-        e["wasted"] += w.get("qty", 0) or 0
+        q = w.get("qty", 0) or 0
+        e["wasted"] += q
+        e["manual_wasted"] += q
+        manual_waste_qty += q
+
+    # ── G. Canonical write-offs („фира", 5C-C23 F-15) ───────────
+    # Read through the ONE shared material-cost helper (the same lines every
+    # finance report counts) — no second register is written or read. The
+    # manual register above stays as it is; write-offs are added beside it
+    # and marked ``source = warehouse_write_off`` („отписване от склада").
+    from app.services.canonical_material_cost import (
+        project_material_cost, waste_lines, WASTE_LABEL)
+    cost = await project_material_cost(tenant, org_id, project_id)
+    writeoffs = []
+    writeoff_qty = 0.0
+    writeoff_value = 0.0
+    for ln in waste_lines(cost):
+        day = ln["at"].strftime("%Y-%m-%d") if ln["at"] else None
+        if date_from and (day is None or day < date_from):
+            continue
+        if date_to and (day is None or day > date_to):
+            continue
+        e = _get(ln.get("material_name") or "")
+        q = float(ln.get("qty") or 0)
+        e["wasted"] += q
+        e["writeoff"] += q
+        if ln.get("unit") and not e["unit"]:
+            e["unit"] = ln["unit"]
+        writeoff_qty += q
+        writeoff_value += float(ln.get("value") or 0)
+        writeoffs.append({
+            "source": WRITE_OFF_SOURCE, "source_label": WRITE_OFF_LABEL,
+            "cost_label": WASTE_LABEL,
+            "id": ln.get("ref"), "movement_id": ln.get("movement_id"),
+            "material_name": (ln.get("material_name") or "").strip() or "Неизвестен",
+            "item_id": ln.get("item_id"), "qty": round(q, 4), "unit": ln.get("unit") or "",
+            "value": ln.get("value"), "reason": ln.get("reason"), "date": day,
+        })
+    writeoffs.sort(key=lambda w: w["date"] or "", reverse=True)
 
     # ── Build result ────────────────────────────────────────────
     materials = []
@@ -115,6 +168,8 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
             "issued_qty": round(d["issued"], 2),
             "returned_qty": round(d["returned"], 2),
             "wasted_qty": round(d["wasted"], 2),
+            "manual_wasted_qty": round(d["manual_wasted"], 2),
+            "written_off_qty": round(d["writeoff"], 4),
             "net_used_qty": round(net_used, 2),
             "variance_vs_planned": variance,
             "variance_pct": variance_pct,
@@ -131,11 +186,18 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
 
     summary = {
         "materials_count": len(materials),
-        "total_waste_items": len(wastes),
+        # manual register entries + canonical write-offs, each listed once
+        "total_waste_items": len(wastes) + len(writeoffs),
         "total_waste_qty": round(total_waste, 2),
+        "manual_waste_items": len(wastes),
+        "manual_waste_qty": round(manual_waste_qty, 2),
+        "writeoff_items": len(writeoffs),
+        "writeoff_qty": round(writeoff_qty, 4),
+        "writeoff_value": round(writeoff_value, 2),
+        "writeoff_label": WRITE_OFF_LABEL,
         "overuse_count": overuse_count,
         "biggest_overuse": biggest_overuse["material_name"] if biggest_overuse and biggest_overuse.get("variance_vs_planned", 0) > 0 else None,
         "biggest_waste": biggest_waste["material_name"] if biggest_waste and biggest_waste.get("wasted_qty", 0) > 0 else None,
     }
 
-    return {"summary": summary, "materials": materials}
+    return {"summary": summary, "materials": materials, "writeoffs": writeoffs}

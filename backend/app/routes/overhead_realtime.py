@@ -12,7 +12,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m4
 from app.services.overhead_realtime import compute_realtime_overhead
 from app.tenancy.data_access import TenantData
-from app.permissions.money_write import require_money_write
+from app.permissions.money_write import require_money_write, require_finance_read
 
 
 def _tenant(user: dict) -> TenantData:
@@ -216,7 +216,10 @@ async def sync_from_sessions(
 # ── Fixed Expenses ─────────────────────────────────────────────────
 
 @router.get("/fixed-expenses")
-async def get_fixed_expenses(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_fixed_expenses(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.fixed_expense.read", module=None, resource_type="fixed_expense")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     m = month or datetime.now(timezone.utc).strftime("%Y-%m")
     doc = await tenant.fixed_expenses.find_one({"org_id": user["org_id"], "month": m}, {"_id": 0})
@@ -248,24 +251,36 @@ async def update_fixed_expenses(data: FixedExpensesUpdate, user: dict = Depends(
 # ── Realtime Overhead ──────────────────────────────────────────────
 
 @router.get("/overhead/realtime")
-async def get_realtime_overhead(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_realtime_overhead(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime.read", module=None, resource_type="overhead_realtime")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     return await compute_realtime_overhead(user["org_id"], month)
 
 
 @router.get("/overhead/realtime/daily")
-async def get_daily_breakdown(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_daily_breakdown(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime_daily.read", module=None, resource_type="overhead_realtime_daily")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     result = await compute_realtime_overhead(user["org_id"], month)
     return {"month": result["month"], "daily": result["daily_breakdown"]}
 
 
 @router.get("/overhead/realtime/by-project")
-async def get_by_project(month: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_by_project(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime_by_project.read", module=None, resource_type="overhead_realtime_by_project")),  # SEC-02 (R20-1): before any read
+    month: Optional[str] = None, user: dict = Depends(get_current_user)):
     result = await compute_realtime_overhead(user["org_id"], month)
     return {"month": result["month"], "projects": result["by_project"]}
 
 
 @router.get("/overhead/realtime/trend")
-async def get_overhead_trend(months: int = 6, user: dict = Depends(get_current_user)):
+async def get_overhead_trend(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_realtime_trend.read", module=None, resource_type="overhead_realtime_trend")),  # SEC-02 (R20-1): before any read
+    months: int = 6, user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
     now = datetime.now(timezone.utc)
     trend = []

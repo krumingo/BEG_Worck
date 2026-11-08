@@ -1,0 +1,26 @@
+diff --git a/backend/tests/test_sec_01_c02_flow_guard_money_writes.py b/backend/tests/test_sec_01_c02_flow_guard_money_writes.py
+index b58a604..b78e925 100644
+--- a/backend/tests/test_sec_01_c02_flow_guard_money_writes.py
++++ b/backend/tests/test_sec_01_c02_flow_guard_money_writes.py
+@@ -267,6 +267,8 @@ def expected(key: str, legacy_role: str, tenant: str, target: Optional[str]) ->
+         return {"status": ok, "writes": True}
+     if rule == "finance_404":
+         return {"status": 404, "writes": False}
++    if key == "oh_alloc":        # OH-01 FG-89: a read-only projection of the OH-01 allocation
++        return {"status": ok, "writes": False}
+     if rule == "finance_reached":
+         return {"status": None, "writes": None}
+     return {"status": ok, "writes": True}
+diff --git a/backend/tests/test_sec_01_c03_payment_amount_idempotency.py b/backend/tests/test_sec_01_c03_payment_amount_idempotency.py
+index e526144..e2e89d7 100644
+--- a/backend/tests/test_sec_01_c03_payment_amount_idempotency.py
++++ b/backend/tests/test_sec_01_c03_payment_amount_idempotency.py
+@@ -613,7 +613,7 @@ def check_computed_and_race(result: Dict[str, Any]) -> None:
+             continue
+         assert r["other_body"] == {"status": 409, "business_written": []}, r
+         if r["route"] == "overhead_compute":
+-            assert r["first"]["business_written"] == ["op.overhead_snapshots"], r
++            assert r["first"]["business_written"] == ["op.overhead_period_locks", "op.overhead_snapshots"], r  # OH-01: the period-lock row
+             assert r["admin_snapshots_after"] == 1, r          # same key twice: 1 snapshot
+     race = result["f69_01_interrupted_payment_race"]
+     assert [r["mode"] for r in race] == list(MODES)

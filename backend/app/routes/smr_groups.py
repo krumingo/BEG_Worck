@@ -11,6 +11,7 @@ import uuid
 from app.db import db
 from app.master_data.legacy_adapter import guarded_identity_delete
 from app.deps.auth import get_current_user
+from app.permissions.money_write import strip_money_for_non_finance
 from app.deps.modules import require_m2
 from app.tenancy.data_access import TenantData
 
@@ -175,6 +176,7 @@ async def create_group(project_id: str, data: GroupCreate, user: dict = Depends(
 
 
 @router.get("/projects/{project_id}/smr-groups")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def list_groups(
     project_id: str,
     location_id: Optional[str] = None,
@@ -195,6 +197,7 @@ async def list_groups(
 
 
 @router.get("/projects/{project_id}/smr-groups/tree")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_groups_tree(project_id: str, user: dict = Depends(require_m2)):
     """Full tree: Location → Group → SMR lines."""
     tenant = _tenant(user)

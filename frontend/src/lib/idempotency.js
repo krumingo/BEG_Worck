@@ -1,22 +1,38 @@
 /**
- * One Idempotency-Key per money submission (CLAUDE.md §14; R29, Krum 06.11.2026).
+ * One Idempotency-Key per money submission (CLAUDE.md §14; R29, Krum 06.11.2026 — a money
+ * write without a key is refused with 428 IDEMPOTENCY_KEY_REQUIRED).
  *
- * The server replays a request it already performed when the same key comes again
- * with the same body (no second payment), answers 409 when the same key comes with a
- * different body, and refuses a money write without a key (428 IDEMPOTENCY_KEY_REQUIRED).
+ * The server replays a request it already performed when the same key comes again with the
+ * same body (no second payment), and answers 409 when the same key comes with a different
+ * body. Two holders, one rule:
  *
- * Two holders, one per caller style (both kept on the merge of #69 SEC-01-C03 and
- * #70 PAY-01-C01 Addendum B, which added this file independently):
- *   createIdempotencyHolder() — keyed by endpoint + payload (SEC-01-C03 forms): the same
- *                               payload reuses the key until done();
- *   createKeyHolder()         — one key per submission (PAY-01 finance pages): a network
- *                               error keeps it for the retry, any server answer drops it.
+ *  - ``createKeyHolder`` (PAY-01-C01 Addendum B, #70): one key per submitted form; after the
+ *    server answered (success or a refusal) the next submit gets a fresh key, a network error
+ *    keeps it for the retry.
+ *  - ``createIdempotencyHolder`` (SEC-01-C03, #69): one key while the endpoint + payload stay
+ *    the same; a changed payload or a success takes a new key.
  */
 
 export function newIdempotencyKey() {
   const c = typeof globalThis !== "undefined" ? globalThis.crypto : undefined;
   if (c && typeof c.randomUUID === "function") return c.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function createKeyHolder() {
+  let key = null;
+  return {
+    // The key of the current submission (created on first use).
+    get() {
+      if (!key) key = newIdempotencyKey();
+      return key;
+    },
+    // After a request: keep the key only when the server never answered (network error),
+    // so the retry is recognised as the same request.
+    settle(err) {
+      if (!err || err.response) key = null;
+    },
+  };
 }
 
 /**
@@ -35,22 +51,6 @@ export function createIdempotencyHolder() {
     },
     done() {
       current = null;
-    },
-  };
-}
-
-export function createKeyHolder() {
-  let key = null;
-  return {
-    // The key of the current submission (created on first use).
-    get() {
-      if (!key) key = newIdempotencyKey();
-      return key;
-    },
-    // After a request: keep the key only when the server never answered (network error),
-    // so the retry is recognised as the same request.
-    settle(err) {
-      if (!err || err.response) key = null;
     },
   };
 }

@@ -10,6 +10,8 @@ import uuid
 from app.db import db
 from app.tenancy import project_team
 from app.deps.auth import get_current_user, can_access_project, can_manage_project
+from app.permissions.money_write import (strip_for_budget_view, strip_money_for_non_finance,
+                                         FINANCE_WRITE_ROLES)
 from app.utils.audit import log_audit
 from app.tenancy.guard import TenantContext
 from app.permissions.deps import require_permission
@@ -61,13 +63,16 @@ async def get_activity_types(user: dict = Depends(get_current_user)):
 
 
 @router.get("/projects/{project_id}/activity-budgets")
+@strip_for_budget_view   # SEC-02-B (R20-5B)
 async def list_activity_budgets(
     project_id: str,
     ctx: TenantContext = Depends(require_permission(
         "budget.read", module="M2", scope="project",
         scope_id_param="project_id", resource_type="activity_budget",
         # Legacy behavior (used in off/shadow): project_team membership.
-        legacy_check=lambda user, request: can_access_project(user, request.path_params["project_id"]),
+        # SEC-02-C (R20, B-D1): the finance roles read every project's budget.
+        legacy_check=lambda user, request: (user.get("role") in FINANCE_WRITE_ROLES
+                                            or can_access_project(user, request.path_params["project_id"])),
     )),
 ):
     """Get all activity budgets for a project."""
@@ -166,6 +171,7 @@ async def delete_activity_budget(project_id: str, budget_id: str, user: dict = D
 
 
 @router.get("/projects/{project_id}/activity-budget-summary")
+@strip_for_budget_view(labor_source="daily_logs")   # FG-63: spent = daily work log hours   # SEC-02-B (R20-5B, FG-43)
 async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_current_user)):
     """
     Get budget vs spent summary grouped by type/subtype.
@@ -177,7 +183,8 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
     - percentLaborUsed, percentMaterialsUsed
     """
     tenant = _tenant(user)
-    if not await can_access_project(user, project_id):
+    # SEC-02-B (FG-43, R20): the finance roles read the budget screen of every project.
+    if user.get("role") not in FINANCE_WRITE_ROLES and not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
     
     org_id = user["org_id"]
@@ -405,6 +412,7 @@ async def get_forecast(budget_id: str, user: dict = Depends(get_current_user)):
 # ── Snapshot Calculation ───────────────────────────────────────────
 
 @router.post("/projects/{project_id}/activity-budgets/{budget_id}/calculate-snapshot")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depends(get_current_user)):
     """Calculate and persist man-hours/man-days snapshot for a budget line."""
     tenant = _tenant(user)
@@ -438,6 +446,7 @@ async def calculate_snapshot(project_id: str, budget_id: str, user: dict = Depen
 
 
 @router.post("/projects/{project_id}/activity-budgets/calculate-all-snapshots")
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def calculate_all_snapshots(project_id: str, user: dict = Depends(get_current_user)):
     """Calculate snapshots for ALL budget lines in a project."""
     tenant = _tenant(user)
@@ -521,10 +530,12 @@ async def get_burn(budget_id: str, user: dict = Depends(get_current_user)):
 # ── Project Budget Health ──────────────────────────────────────────
 
 @router.get("/projects/{project_id}/budget-health")
+@strip_for_budget_view   # SEC-02-B (R20-5B)
 async def get_budget_health(project_id: str, user: dict = Depends(get_current_user)):
     """Aggregated burn for entire project across all activity budgets."""
     tenant = _tenant(user)
-    if not await can_access_project(user, project_id):
+    # SEC-02-C (R20, B-D1): the finance roles read every project's budget.
+    if user.get("role") not in FINANCE_WRITE_ROLES and not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     org_id = user["org_id"]
@@ -657,10 +668,12 @@ async def get_earned_value(project_id: str, user: dict = Depends(get_current_use
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/projects/{project_id}/activities-overview")
+@strip_for_budget_view   # SEC-02-B (R20-5B, FG-43)
 async def get_activities_overview(project_id: str, user: dict = Depends(get_current_user)):
     """Full activities table: budget + actuals + extras + status."""
     tenant = _tenant(user)
-    if not await can_access_project(user, project_id):
+    # SEC-02-B (FG-43, R20): the finance roles read the budget screen of every project.
+    if user.get("role") not in FINANCE_WRITE_ROLES and not await can_access_project(user, project_id):
         raise HTTPException(status_code=403, detail="Access denied")
 
     org_id = user["org_id"]
@@ -805,6 +818,7 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/projects/{project_id}/activity-reports/{smr_type}")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_activity_reports(
     project_id: str, smr_type: str,
     status: Optional[str] = None,
@@ -912,6 +926,7 @@ async def get_activity_reports(
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/work-sessions/{session_id}/detail")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_session_detail(session_id: str, user: dict = Depends(get_current_user)):
     """Level 3 drill-down: detailed view of a work session / worker-day."""
     tenant = _tenant(user)

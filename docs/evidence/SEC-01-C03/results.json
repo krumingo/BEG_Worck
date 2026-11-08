@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 29.6,
+ "seconds": 27.1,
  "amount_rows": [
   {
    "mode": "off",
@@ -4312,6 +4312,7 @@
    "first": {
     "status": 200,
     "business_written": [
+     "op.overhead_period_locks",
      "op.overhead_snapshots"
     ]
    },
@@ -4387,6 +4388,7 @@
    "first": {
     "status": 200,
     "business_written": [
+     "op.overhead_period_locks",
      "op.overhead_snapshots"
     ]
    },
@@ -4462,6 +4464,7 @@
    "first": {
     "status": 200,
     "business_written": [
+     "op.overhead_period_locks",
      "op.overhead_snapshots"
     ]
    },
@@ -4487,14 +4490,14 @@
    },
    "retry_statuses": [
     201,
-    201,
-    201,
-    201,
+    409,
+    409,
+    409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "cabd04a6-a51a-5bec-954f-f73b089b71b2"
+    "489be3eb-8f47-5914-9199-6146dc71d813"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4518,7 +4521,7 @@
     409
    ],
    "retry_payment_ids": [
-    "eb81cb4c-c8fe-5592-9247-a9d776f3f1db"
+    "a9158d40-131d-53b5-b3f8-6d988b62c331"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4535,14 +4538,14 @@
    },
    "retry_statuses": [
     201,
-    201,
+    409,
     409,
     409,
     409,
     409
    ],
    "retry_payment_ids": [
-    "c113ebca-f45d-518b-ac8f-b753bfbf322b"
+    "2eec705e-98c5-5940-9e84-b5a67b17f6dd"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4803,10 +4806,10 @@
     },
     "retry_statuses": [
      201,
-     201,
-     201,
-     201,
-     201,
+     409,
+     409,
+     409,
+     409,
      409,
      409,
      409,
@@ -4880,9 +4883,9 @@
     },
     "retry_statuses": [
      201,
-     201,
-     201,
-     201,
+     409,
+     409,
+     409,
      409,
      409,
      409,
@@ -4957,7 +4960,7 @@
     },
     "retry_statuses": [
      201,
-     201,
+     409,
      409,
      409,
      409,
@@ -4976,6 +4979,544 @@
      "allocations": 1,
      "allocations_sum": 60.0,
      "ledger_rows": 1
+    }
+   }
+  }
+ ],
+ "audit_crash_retry": [
+  {
+   "mode": "off",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 0,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
+   }
+  },
+  {
+   "mode": "shadow",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 0,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
+   }
+  },
+  {
+   "mode": "enforce",
+   "subcontractor_payment": {
+    "first_status": 500,
+    "audit_rows_after_crash": 1,
+    "retry_statuses": [
+     201,
+     201
+    ],
+    "audit_rows_after_retries": 1
+   },
+   "overhead_compute": {
+    "first_status": 500,
+    "audit_rows_after_crash": 0,
+    "retry_statuses": [
+     200,
+     200
+    ],
+    "audit_rows_after_retries": 1,
+    "canonical_events_after_crash": 1,
+    "canonical_events_after_retries": 1
+   }
+  }
+ ],
+ "f69_04_subcent": [
+  {
+   "mode": "off",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.01,
+     "completed_sum": 0.01,
+     "certified": 0.01
+    }
+   }
+  },
+  {
+   "mode": "shadow",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.01,
+     "completed_sum": 0.01,
+     "certified": 0.01
+    }
+   }
+  },
+  {
+   "mode": "enforce",
+   "money_routes": {
+    "cash": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "bonus": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohtx": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "ohsnap": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    },
+    "subpay_vat": {
+     "0.004": {
+      "status": 422,
+      "business_written": []
+     },
+     "10.125": {
+      "status": 422,
+      "business_written": []
+     },
+     "0.001": {
+      "status": 422,
+      "business_written": []
+     },
+     "two_decimals": {
+      "status": 201
+     }
+    }
+   },
+   "cap_0_01_sequential_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_004": {
+    "statuses": [
+     422,
+     422,
+     422,
+     422,
+     422,
+     422
+    ],
+    "state": {
+     "committed": 0,
+     "paid": 0,
+     "completed_sum": 0,
+     "certified": 0.01
+    }
+   },
+   "cap_0_01_concurrent_0_01": {
+    "statuses": [
+     201,
+     409,
+     409,
+     409,
+     409,
+     409
+    ],
+    "state": {
+     "committed": 0.01,
+     "paid": 0.01,
+     "completed_sum": 0.01,
+     "certified": 0.01
     }
    }
   }

@@ -109,16 +109,31 @@ export default function ProcurementPage() {
     finally { setSaving(false); }
   };
 
-  // Post to warehouse
+  // CODEX C11.9 — the invoice-to-warehouse post has been retired here
+  // in favor of the canonical warehouse page. v6 §4.6 requires full
+  // typed invoice allocation with Σ(qty) and Σ(value) line-sum
+  // constraints and double-post protection; posting one supplier
+  // receipt per invoice line with a client-derived price bypasses
+  // that contract. The button now opens the canonical warehouse page
+  // with the invoice preselected for proper per-destination
+  // acceptance under Rule B.
   const postToWarehouse = async (invId) => {
-    if (!window.confirm("Потвърдете приемане в Основен склад?")) return;
-    setPosting(true);
-    try {
-      await API.post(`/supplier-invoices/${invId}/post-to-warehouse`);
-      setReviewOpen(false);
-      fetchData();
-    } catch (err) { alert(err.response?.data?.detail || "Грешка"); }
-    finally { setPosting(false); }
+    const inv = invoices.find((i) => i.id === invId);
+    if (!inv) { alert("Фактурата не е намерена"); return; }
+    const explanation =
+      "Приемането в склад минава през каноничния склад (FLOW-009 §4.6).\n\n" +
+      "Отворете каноничната страница и за всеки ред на фактурата запишете " +
+      "приемане към съответната дестинация (склад / обект). Директното " +
+      "посткване от тази страница е спряно, защото не покрива правилата за " +
+      "типизирана алокация и двойно постване.";
+    if (window.confirm(`${explanation}\n\nДа отворя каноничната страница?`)) {
+      try {
+        const url = `/warehouse/canonical?invoice_id=${encodeURIComponent(inv.id)}`;
+        window.open(url, "_blank", "noopener");
+      } catch (err) {
+        alert(err?.message || "Грешка при отваряне");
+      }
+    }
   };
 
   // Review line helpers

@@ -7,7 +7,7 @@
   "enforce"
  ],
  "mongo": "local replica set (oplog)",
- "seconds": 18.1,
+ "seconds": 15.8,
  "roles": [
   {
    "mode": "off",
@@ -719,7 +719,7 @@
     409
    ],
    "ids_201": [
-    "9bee2e15-71c5-5df0-b3e6-522cc7ca5f24"
+    "f5528f0d-74c6-566d-95b2-a5472951374a"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -736,7 +736,7 @@
     409
    ],
    "ids_201": [
-    "21bb944b-c796-5612-978d-a370c1fc697b"
+    "559acea0-c396-53ed-aa83-d2cb31db2be2"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -753,7 +753,7 @@
     409
    ],
    "ids_201": [
-    "5cc0c552-d02e-5fca-93a9-62fdd3561721"
+    "ea682563-c65f-537c-bce8-10184c918c62"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -1471,11 +1471,15 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "owner": {
@@ -1524,11 +1528,15 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "admin": {
@@ -1577,64 +1585,48 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "requester": {
     "statuses": [
      200,
      200,
-     200,
-     200,
-     200
+     403,
+     403,
+     403
     ],
     "list_keys": [],
     "one_advance": null,
     "one_keys": [],
     "act_keys": [],
     "advance_rows": 0,
-    "profit_advances": null,
-    "profit_expenses_keys": [
-     "labor",
-     "labor_detail",
-     "labor_hours",
-     "material",
-     "material_detail",
-     "overhead",
-     "subcontract",
-     "subcontract_detail",
-     "total"
-    ]
+    "profit_advances": "n/a",
+    "profit_expenses_keys": []
    },
    "technician": {
     "statuses": [
      200,
      200,
-     200,
-     200,
-     200
+     403,
+     403,
+     403
     ],
     "list_keys": [],
     "one_advance": null,
     "one_keys": [],
     "act_keys": [],
     "advance_rows": 0,
-    "profit_advances": null,
-    "profit_expenses_keys": [
-     "labor",
-     "labor_detail",
-     "labor_hours",
-     "material",
-     "material_detail",
-     "overhead",
-     "subcontract",
-     "subcontract_detail",
-     "total"
-    ]
+    "profit_advances": "n/a",
+    "profit_expenses_keys": []
    }
   },
   {
@@ -1685,11 +1677,15 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "owner": {
@@ -1738,11 +1734,15 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "admin": {
@@ -1791,64 +1791,48 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "requester": {
     "statuses": [
      200,
      200,
-     200,
-     200,
-     200
+     403,
+     403,
+     403
     ],
     "list_keys": [],
     "one_advance": null,
     "one_keys": [],
     "act_keys": [],
     "advance_rows": 0,
-    "profit_advances": null,
-    "profit_expenses_keys": [
-     "labor",
-     "labor_detail",
-     "labor_hours",
-     "material",
-     "material_detail",
-     "overhead",
-     "subcontract",
-     "subcontract_detail",
-     "total"
-    ]
+    "profit_advances": "n/a",
+    "profit_expenses_keys": []
    },
    "technician": {
     "statuses": [
      200,
      200,
-     200,
-     200,
-     200
+     403,
+     403,
+     403
     ],
     "list_keys": [],
     "one_advance": null,
     "one_keys": [],
     "act_keys": [],
     "advance_rows": 0,
-    "profit_advances": null,
-    "profit_expenses_keys": [
-     "labor",
-     "labor_detail",
-     "labor_hours",
-     "material",
-     "material_detail",
-     "overhead",
-     "subcontract",
-     "subcontract_detail",
-     "total"
-    ]
+    "profit_advances": "n/a",
+    "profit_expenses_keys": []
    }
   },
   {
@@ -1899,11 +1883,15 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "owner": {
@@ -1952,11 +1940,15 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "admin": {
@@ -2005,64 +1997,48 @@
      "labor_detail",
      "labor_hours",
      "material",
+     "material_cost_basis",
      "material_detail",
      "overhead",
+     "overhead_label",
+     "overhead_recalculating",
      "subcontract",
      "subcontract_detail",
-     "total"
+     "total",
+     "waste"
     ]
    },
    "requester": {
     "statuses": [
      200,
      200,
-     200,
-     200,
-     200
+     403,
+     403,
+     403
     ],
     "list_keys": [],
     "one_advance": null,
     "one_keys": [],
     "act_keys": [],
     "advance_rows": 0,
-    "profit_advances": null,
-    "profit_expenses_keys": [
-     "labor",
-     "labor_detail",
-     "labor_hours",
-     "material",
-     "material_detail",
-     "overhead",
-     "subcontract",
-     "subcontract_detail",
-     "total"
-    ]
+    "profit_advances": "n/a",
+    "profit_expenses_keys": []
    },
    "technician": {
     "statuses": [
      200,
      200,
-     200,
-     200,
-     200
+     403,
+     403,
+     403
     ],
     "list_keys": [],
     "one_advance": null,
     "one_keys": [],
     "act_keys": [],
     "advance_rows": 0,
-    "profit_advances": null,
-    "profit_expenses_keys": [
-     "labor",
-     "labor_detail",
-     "labor_hours",
-     "material",
-     "material_detail",
-     "overhead",
-     "subcontract",
-     "subcontract_detail",
-     "total"
-    ]
+    "profit_advances": "n/a",
+    "profit_expenses_keys": []
    }
   }
  ],
@@ -2363,7 +2339,7 @@
       409
      ],
      "codes_409": [
-      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0

@@ -48,11 +48,11 @@ export function SitePulseCard({ pulse }) {
         </div>
         <div className="flex items-center gap-1">
           <DollarSign className="w-3 h-3 text-emerald-400" />
-          <span className="font-mono">{(pulse.total_labor_cost || 0).toFixed(0)}</span>
+          <span className="font-mono">{pulse.total_labor_cost === undefined ? "—" : (pulse.total_labor_cost || 0).toFixed(0)}</span>
         </div>
         <div className="flex items-center gap-1">
           <Package className="w-3 h-3 text-purple-400" />
-          <span className="font-mono">{(pulse.total_material_cost || 0).toFixed(0)}</span>
+          <span className="font-mono">{pulse.total_material_cost === undefined ? "—" : (pulse.total_material_cost || 0).toFixed(0)}</span>
         </div>
       </div>
 
@@ -97,7 +97,7 @@ export function SitePulseCard({ pulse }) {
               {pulse.workers.map(w => (
                 <div key={w.worker_id} className="flex justify-between p-1 bg-muted/10 rounded">
                   <span>{w.worker_name}</span>
-                  <span className="font-mono">{w.hours?.toFixed(1)}ч | {w.labor_cost?.toFixed(0)} €</span>
+                  <span className="font-mono">{w.hours?.toFixed(1)}ч{w.labor_cost === undefined ? "" : ` | ${w.labor_cost.toFixed(0)} €`}</span>{/* SEC-02-C (R31): no per-worker money without the finance right */}
                 </div>
               ))}
             </div>

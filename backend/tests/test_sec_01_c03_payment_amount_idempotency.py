@@ -243,6 +243,113 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         fg90: List[Dict[str, Any]] = []
         fg105: List[Dict[str, Any]] = []
         f6903: List[Dict[str, Any]] = []
+        audit_crash: List[Dict[str, Any]] = []
+        subcent: List[Dict[str, Any]] = []
+
+        def subcent_probe(mode: str) -> Dict[str, Any]:
+            import httpx
+            out: Dict[str, Any] = {"mode": mode, "money_routes": {}}
+            # every MONEY field of #69: more than 2 decimals -> 422, nothing written
+            for key in ("cash", "bonus", "ohtx", "ohsnap", "subpay", "subpay_vat"):
+                field = EP[key][2]
+                base = body_for(key, fx["A"], c02)
+                cells = {}
+                for value in (0.004, 10.125, 0.001):
+                    res = post("accountant", key, with_value(base, field, value), uuid.uuid4().hex)
+                    cells[str(value)] = {"status": res["status"],
+                                         "business_written": res["business_written"]}
+                    if res["written"]:
+                        restore_all()
+                ok = post("accountant", key, with_value(base, field, 10.12 if field == "amount"
+                                                        else 1.25), uuid.uuid4().hex)
+                cells["two_decimals"] = {"status": ok["status"]}
+                restore_all()
+                out["money_routes"][key] = cells
+            # the cap in cents: certified 0.01
+            hdr = {"Authorization": "Bearer " + tokens["accountant"]}
+            base = body_for("subpay", fx["A"], c02)
+            pkg_id = base["package_id"]
+            tc.portal.call(lambda: op_db.subcontractor_packages.update_one(
+                {"id": pkg_id}, {"$set": {"certified_total": 0.01, "paid_total": 0,
+                                          "committed_paid_total": 0}}))
+
+            async def six(amount):
+                async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app),
+                                             base_url="http://testserver") as ac:
+                    return await asyncio.gather(*[ac.post(
+                        "/api/subcontractor-payments", json={**base, "amount": amount},
+                        headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}) for _ in range(6)])
+
+            def state():
+                pkg = tc.portal.call(lambda: op_db.subcontractor_packages.find_one(
+                    {"id": pkg_id}, {"_id": 0}))
+                allocs = tc.portal.call(lambda: op_db.subcontractor_payments.find(
+                    {"package_id": pkg_id, "status": "completed"}, {"_id": 0, "amount": 1})
+                    .to_list(100))
+                return {"committed": pkg.get("committed_paid_total"), "paid": pkg.get("paid_total"),
+                        "completed_sum": round(sum(float(a["amount"]) for a in allocs), 6),
+                        "certified": pkg.get("certified_total")}
+            seq = [tc.post("/api/subcontractor-payments", json={**base, "amount": 0.004},
+                           headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}).status_code
+                   for _ in range(6)]
+            out["cap_0_01_sequential_0_004"] = {"statuses": seq, "state": state()}
+            conc = tc.portal.call(lambda: six(0.004))
+            out["cap_0_01_concurrent_0_004"] = {"statuses": sorted(r.status_code for r in conc),
+                                                "state": state()}
+            whole = tc.portal.call(lambda: six(0.01))
+            out["cap_0_01_concurrent_0_01"] = {"statuses": sorted(r.status_code for r in whole),
+                                               "state": state()}
+            restore_all()
+            return out
+
+        def audit_crash_probe(mode: str) -> Dict[str, Any]:
+            from app.permissions import workflow
+            original = workflow.mark_idempotent_step
+            out: Dict[str, Any] = {"mode": mode}
+            cases = (
+                ("subcontractor_payment", "/api/subcontractor-payments", "accountant",
+                 {**body_for("subpay", fx["A"], c02), "amount": 10},
+                 {"action": "subcontractor_payment_created"}, None),
+                # OH-01 (#74): compute's step "audit" is the canonical AuditEvent; the legacy
+                # audit_logs row is its own step "legacy_audit" (OH74-04) — both counted
+                ("overhead_compute", "/api/overhead/snapshots/compute", "admin",
+                 {"period_start": "2026-10-01", "period_end": "2026-10-07", "method": "Hours"},
+                 {"action": "computed", "entity_type": "overhead_snapshot"},
+                 {"action": "overhead.snapshot.computed"}),
+            )
+            for name, url, role, body, audit_q, canon_q in cases:
+                hdr = {"Authorization": "Bearer " + tokens[role]}
+                before = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                canon = (lambda: tc.portal.call(lambda: op_db.audit_events.count_documents(canon_q))) \
+                    if canon_q else (lambda: 0)
+                canon_before = canon()
+                state = {"armed": True}
+
+                async def failing(db_, *, step, **kw):
+                    if step == "audit" and state["armed"]:
+                        state["armed"] = False      # the audit row is written; its step is not
+                        raise RuntimeError("injected crash after the audit row")
+                    return await original(db_, step=step, **kw)
+                idem = uuid.uuid4().hex
+                workflow.mark_idempotent_step = failing
+                try:
+                    first = tc.post(url, json=body, headers={**hdr, "Idempotency-Key": idem})
+                finally:
+                    workflow.mark_idempotent_step = original
+                after_crash = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                canon_after_crash = canon()
+                retries = [tc.post(url, json=body, headers={**hdr, "Idempotency-Key": idem})
+                           for _ in range(2)]
+                final = tc.portal.call(lambda: op_db.audit_logs.count_documents(audit_q))
+                out[name] = {"first_status": first.status_code,
+                             "audit_rows_after_crash": after_crash - before,
+                             "retry_statuses": [r.status_code for r in retries],
+                             "audit_rows_after_retries": final - before}
+                if canon_q:
+                    out[name]["canonical_events_after_crash"] = canon_after_crash - canon_before
+                    out[name]["canonical_events_after_retries"] = canon() - canon_before
+                restore_all()
+            return out
 
         def reserve_crash_probe(mode: str) -> Dict[str, Any]:
             import httpx
@@ -569,6 +676,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             fg105.append(many_payments_probe(mode))
             # F-69-03: crash right after the cap reservation; the same key must finish once.
             f6903.append(reserve_crash_probe(mode))
+            # Audit of #69 @ da47777: crash right after the audit row; 2 same-key retries.
+            audit_crash.append(audit_crash_probe(mode))
+            # F-69-04: sub-cent amounts; the certified cap in whole cents.
+            subcent.append(subcent_probe(mode))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -582,7 +693,8 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         "fg29_project_in_tenant": fg29, "fg15_labor_money": fg15,
         "f69_02_computed_routes": computed, "f69_01_interrupted_payment_race": race,
         "fg90_certified_cap": fg90, "fg105_many_payments": fg105,
-        "f69_03_reserve_crash": f6903,
+        "f69_03_reserve_crash": f6903, "audit_crash_retry": audit_crash,
+        "f69_04_subcent": subcent,
     }
     out_json.parent.mkdir(parents=True, exist_ok=True)
     out_json.write_text(json.dumps(result, indent=1, ensure_ascii=False, default=str) + "\n",
@@ -708,6 +820,41 @@ def check_result(result: Dict[str, Any]) -> None:
             # finished exactly once: 1 ledger row, 1 allocation of 60, committed 60 (no phantom)
             assert c["final"] == {"committed": 60.0, "paid": 60.0, "allocations": 1,
                                   "allocations_sum": 60.0, "ledger_rows": 1}, (case, r)
+    rows = result["audit_crash_retry"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for name in ("subcontractor_payment", "overhead_compute"):
+            c = r[name]
+            assert c["first_status"] == 500, (name, r)
+            if name == "overhead_compute":
+                # OH-01 (#74): the crash hit the canonical-event step ("audit"); the legacy
+                # row is the later "legacy_audit" step — exactly one of each in the end
+                assert c["canonical_events_after_crash"] == 1, (name, r)
+                assert c["audit_rows_after_crash"] == 0, (name, r)
+                assert c["canonical_events_after_retries"] == 1, (name, r)
+            else:
+                assert c["audit_rows_after_crash"] == 1, (name, r)
+            assert all(st in (200, 201) for st in c["retry_statuses"]), (name, r)
+            assert c["audit_rows_after_retries"] == 1, (name, r)   # exactly one audit row
+    rows = result["f69_04_subcent"]
+    assert [r["mode"] for r in rows] == list(MODES)
+    for r in rows:
+        for key, cells in r["money_routes"].items():
+            for value in ("0.004", "10.125", "0.001"):
+                assert cells[value] == {"status": 422, "business_written": []}, (key, r)
+            assert cells["two_decimals"]["status"] == 201, (key, r)
+        zero = {"committed": 0, "paid": 0, "completed_sum": 0, "certified": 0.01}
+        assert r["cap_0_01_sequential_0_004"] == {"statuses": [422] * 6, "state": zero}, r
+        assert r["cap_0_01_concurrent_0_004"] == {"statuses": [422] * 6, "state": zero}, r
+        c = r["cap_0_01_concurrent_0_01"]
+        assert c["statuses"] == [201, 409, 409, 409, 409, 409], r
+        assert c["state"] == {"committed": 0.01, "paid": 0.01, "completed_sum": 0.01,
+                              "certified": 0.01}, r
+        # the invariant: completed payments never exceed the certified total
+        for k in ("cap_0_01_sequential_0_004", "cap_0_01_concurrent_0_004",
+                  "cap_0_01_concurrent_0_01"):
+            st = r[k]["state"]
+            assert st["completed_sum"] <= st["certified"] + 1e-9, (k, r)
 
 
 def check_computed_and_race(result: Dict[str, Any]) -> None:
@@ -725,7 +872,10 @@ def check_computed_and_race(result: Dict[str, Any]) -> None:
             continue
         assert r["other_body"] == {"status": 409, "business_written": []}, r
         if r["route"] == "overhead_compute":
-            assert r["first"]["business_written"] == ["op.overhead_snapshots"], r
+            # OH-01 (#74): the compute also writes its period-lock row (bookkeeping of the
+            # one-active-snapshot-per-period lock, FG-86); still ONE snapshot per key
+            assert r["first"]["business_written"] == ["op.overhead_period_locks",
+                                                      "op.overhead_snapshots"], r
             assert r["admin_snapshots_after"] == 1, r          # same key twice: 1 snapshot
     race = result["f69_01_interrupted_payment_race"]
     assert [r["mode"] for r in race] == list(MODES)

@@ -1,0 +1,11 @@
+# SEC-02-E counter-check: audit probe docs/audit/probes/sec02/probe_sec02_d_pulse_generate.py (vendored unchanged as backend/tools/audit_probe_sec02_d_pulse_generate.py), PERMISSION_SERVICE_MODE=off, local MongoDB 7.0 replica set
+## at e6ea838 (before SEC-02-E)
+A warehousekeeper (non-member) POST pulse/generate → 200; workers[].labor_cost [200.0]; total_labor_cost 200.0; budget 200.0
+A viewer POST pulse/generate → 200; workers[].labor_cost [200.0]; total_labor_cost 200.0; budget 200.0
+B SM pulse/range → 200; per day (total_spent, date, workers): [(None, '2026-11-02', 1), (None, '2026-11-03', 1)]
+FAILS: ['pulse/generate leaks per-worker labor_cost to warehousekeeper (non-member)', 'pulse/generate leaks per-worker labor_cost to viewer']
+## at SEC-02-E
+A warehousekeeper (non-member) POST pulse/generate → 403; workers[].labor_cost []; total_labor_cost None; budget None
+A viewer POST pulse/generate → 403; workers[].labor_cost []; total_labor_cost None; budget None
+B SM pulse/range → 200; per day (total_spent, date, workers): [(None, '2026-11-03', 1)]
+FAILS: none

@@ -35,6 +35,7 @@ replays (or reveals) someone else's response.
 import contextlib
 import json
 import uuid
+from decimal import Decimal
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 from fastapi import HTTPException
@@ -56,16 +57,28 @@ MAX_KEY_LENGTH = 200
 _NS = uuid.UUID("7d6c3f0e-5c1a-4f43-9a51-5ec01c03a001")
 
 
-def money_value(value: Any, field: str = "amount", *, allow_zero: bool = False) -> float:
+def money_value(value: Any, field: str = "amount", *, allow_zero: bool = False,
+                places: Optional[int] = 2) -> float:
     """``value`` as a finite float > 0 (``>= 0`` with ``allow_zero``), else 422.
 
     SEC-01-C03-B (FG-47): the SAME rule as PR #70 (``app/services/money_amount.py``, copied
     byte for byte so the two PRs merge without conflict): only a JSON number — a string
     (numeric text too), a boolean, None, a list, NaN, ±Infinity and 1e309 are refused.
+
+    SEC-01-C03-H (Codex F-69-04): a MONEY value has at most ``places`` (2) decimal places —
+    one canonical amount in whole cents for validation, the certified-cap reservation, the
+    allocation and the ledger. A finer amount (``0.004``, ``10.125``) is refused with 422
+    before any write — never rounded silently (rounding each sub-cent increment to 0 let
+    many of them pass a cap). ``places=None`` for quantities that are not money (hours, qty).
     """
     if allow_zero and is_number(value) and value == 0:
         return 0.0
-    return positive_amount(value, field)
+    amount = positive_amount(value, field)
+    if places is not None and Decimal(str(value)).as_tuple().exponent < -places:
+        raise HTTPException(status_code=422, detail=(
+            "Сумата може да има най-много %d знака след десетичната запетая" % places
+            + ("" if field == "amount" else " (%s)" % field)))
+    return amount
 
 
 async def project_in_tenant(tenant, project_id: Any) -> None:

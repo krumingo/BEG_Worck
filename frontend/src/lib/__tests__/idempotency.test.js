@@ -1,40 +1,9 @@
-/**
- * SEC-01-C03 (#69): a money form keeps one Idempotency-Key while its payload stays the same.
- * PAY-01-C01 Addendum B (#70, R29): one key per submission (createKeyHolder).
- */
+// R29 (PAY-01-C01 Addendum B; SEC-01-C03): every money write carries an Idempotency-Key.
 import {
   apiErrorText, createIdempotencyHolder, createKeyHolder, idempotencyHeaders, newIdempotencyKey,
-} from "@/lib/idempotency";
+} from "../idempotency";
 
-test("a retry of the same submission reuses the key", () => {
-  const h = createIdempotencyHolder();
-  const k1 = h.keyFor("/subcontractor-payments", { amount: "10", package_id: "p" });
-  const k2 = h.keyFor("/subcontractor-payments", { amount: "10", package_id: "p" });
-  expect(k2).toBe(k1);
-});
-
-test("a changed payload or another endpoint gets a new key", () => {
-  const h = createIdempotencyHolder();
-  const k1 = h.keyFor("/subcontractor-payments", { amount: "10" });
-  expect(h.keyFor("/subcontractor-payments", { amount: "11" })).not.toBe(k1);
-  expect(h.keyFor("/overhead-snapshots", { amount: "11" })).not.toBe(k1);
-});
-
-test("after a success the next submission is a new operation", () => {
-  const h = createIdempotencyHolder();
-  const k1 = h.keyFor("/x", { amount: 1 });
-  h.done();
-  expect(h.keyFor("/x", { amount: 1 })).not.toBe(k1);
-});
-
-test("keys are distinct and the header has the canonical name", () => {
-  expect(newIdempotencyKey()).not.toBe(newIdempotencyKey());
-  expect(idempotencyHeaders("abc")).toEqual({ headers: { "Idempotency-Key": "abc" } });
-});
-
-// R29 (PAY-01-C01 Addendum B): every money write carries an Idempotency-Key.
-
-describe("idempotency keys", () => {
+describe("idempotency keys (createKeyHolder, #70)", () => {
   test("a new key is non-empty and unique", () => {
     const a = newIdempotencyKey();
     const b = newIdempotencyKey();
@@ -74,5 +43,28 @@ describe("idempotency keys", () => {
       .toEqual("Съобщение");
     expect(apiErrorText({ response: { data: { detail: [{ msg: "pydantic" }] } } }, "fallback")).toEqual("fallback");
     expect(apiErrorText(new Error("Network Error"), "fallback")).toEqual("fallback");
+  });
+});
+
+describe("idempotency keys per payload (createIdempotencyHolder, SEC-01-C03)", () => {
+  test("a retry of the same submission reuses the key", () => {
+    const h = createIdempotencyHolder();
+    const k1 = h.keyFor("/subcontractor-payments", { amount: 10, package_id: "p" });
+    const k2 = h.keyFor("/subcontractor-payments", { amount: 10, package_id: "p" });
+    expect(k2).toBe(k1);
+  });
+
+  test("a changed payload or another endpoint gets a new key", () => {
+    const h = createIdempotencyHolder();
+    const k1 = h.keyFor("/subcontractor-payments", { amount: 10 });
+    expect(h.keyFor("/subcontractor-payments", { amount: 11 })).not.toBe(k1);
+    expect(h.keyFor("/overhead-snapshots", { amount: 11 })).not.toBe(k1);
+  });
+
+  test("after a success the next submission is a new operation", () => {
+    const h = createIdempotencyHolder();
+    const k1 = h.keyFor("/x", { amount: 1 });
+    h.done();
+    expect(h.keyFor("/x", { amount: 1 })).not.toBe(k1);
   });
 });

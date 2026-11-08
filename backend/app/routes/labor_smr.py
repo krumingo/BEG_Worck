@@ -16,7 +16,8 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import require_field_cost_write
+from app.permissions.money_write import (require_field_cost_write, require_finance_read, money_values_visible, without_keys, strip_money_for_non_finance)
+from app.permissions.finance_read import LABOR_MONEY_FIELDS
 from app.permissions.money_input import (MoneyWrite, money_value, project_in_tenant,  # SEC-01-C03
                                          labor_money_visible, without_labor_money)
 
@@ -61,7 +62,7 @@ async def create_labor_entry(
     """Create a labor time entry linked to an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    hours = money_value(data.get("hours"), "hours")  # SEC-01-C03: finite > 0, else 422 before any write
+    hours = money_value(data.get("hours"), "hours", places=None)  # SEC-01-C03: finite > 0, else 422 before any write
     await project_in_tenant(tenant, data.get("project_id"))  # SEC-01-C03-B (FG-29)
     now = datetime.now(timezone.utc).isoformat()
 
@@ -248,17 +249,39 @@ async def _sync_labor_entries(data: dict, user: dict) -> dict:
 
 @router.get("/labor-entries")
 async def list_labor_entries(
+    request: Request,
     project_id: Optional[str] = None,
     execution_package_id: Optional[str] = None,
     employee_id: Optional[str] = None,
     user: dict = Depends(require_m2),
 ):
+    """SEC-02 (FG-1 GET; R20-5, R16, FLOW-037 §3.4).
+
+    Finance roles: every row, with rate and cost (as before). Every other role: only the
+    rows of projects they are a CURRENT member of (date-aware project_team membership,
+    the same relation as R16), and never ``hourly_rate`` / ``labor_cost``. A project
+    filter on a project they are not a member of is a 403.
+    """
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
+    show_money = await money_values_visible(request, user)
+    if not show_money:
+        from app.tenancy import project_team
+        team = project_team.tenant_for(db, user)
+        if project_id:
+            if not await project_team.is_member(team, user["id"], project_id):
+                raise HTTPException(status_code=403, detail="Access denied")
+        else:
+            candidates = await project_team.assigned_project_ids(team, user["id"])
+            current = [p for p in candidates
+                       if await project_team.is_member(team, user["id"], p)]
+            q["project_id"] = {"$in": current}
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if employee_id: q["employee_id"] = employee_id
     entries = await tenant.labor_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
+    if not show_money:
+        entries = without_keys(entries, LABOR_MONEY_FIELDS)
     return entries
 
 
@@ -369,7 +392,11 @@ async def _recompute_package_labor(project_id: str, user: dict) -> dict:
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-cost/by-execution-package/{pkg_id}")
-async def get_labor_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(require_m2)):
+async def get_labor_cost_by_exec_pkg(
+    pkg_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_labor_cost.read", module="M2", resource_type="package_labor_cost")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Detailed labor cost breakdown for an execution package"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -444,8 +471,17 @@ async def get_labor_cost_by_exec_pkg(pkg_id: str, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/labor-warnings/{project_id}")
-async def get_labor_warnings(project_id: str, user: dict = Depends(require_m2)):
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
+async def get_labor_warnings(project_id: str, request: Request,
+                             user: dict = Depends(require_m2)):
     """Get labor warnings for all execution packages in a project"""
+    # SEC-02-B (SEC02-1): the money is stripped by the decorator; a caller without the
+    # finance right also needs a CURRENT membership of the project.
+    if not await money_values_visible(request, user):
+        from app.tenancy import project_team
+        if not await project_team.is_member(project_team.tenant_for(db, user), user["id"],
+                                            project_id):
+            raise HTTPException(status_code=403, detail="Access denied")
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkgs = await tenant.execution_packages.find(

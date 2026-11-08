@@ -1,12 +1,14 @@
 """
 Routes - Site Pulse (daily automated snapshots).
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import (strip_money_for_non_finance, strip_pulse_for_non_finance,
+                                         require_project_budget_read, require_finance_read)
 from app.services.pulse_generator import generate_pulse, generate_all_pulses
 from app.tenancy.data_access import TenantData
 
@@ -19,6 +21,7 @@ router = APIRouter(tags=["Site Pulse"])
 
 
 @router.get("/sites/{site_id}/pulse")
+@strip_pulse_for_non_finance   # SEC-02-C (R20-5B, R31; B-D2)
 async def get_site_pulse(site_id: str, date: Optional[str] = None, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -32,6 +35,7 @@ async def get_site_pulse(site_id: str, date: Optional[str] = None, user: dict = 
 
 
 @router.get("/sites/{site_id}/pulse/range")
+@strip_pulse_for_non_finance   # SEC-02-C (R20-5B, R31; B-D2)
 async def get_pulse_range(site_id: str, date_from: str = "", date_to: str = "", user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     query = {"org_id": user["org_id"], "site_id": site_id}
@@ -44,13 +48,21 @@ async def get_pulse_range(site_id: str, date_from: str = "", date_to: str = "", 
 
 
 @router.post("/sites/{site_id}/pulse/generate")
-async def generate_site_pulse(site_id: str, date: Optional[str] = None, user: dict = Depends(get_current_user)):
+@strip_pulse_for_non_finance   # SEC-02-E (audit SEC02D-1): the answer is a pulse too
+async def generate_site_pulse(
+    site_id: str,
+    # SEC-02-E (R20, R31): finance roles; the Technical Manager on his current member site.
+    _sec02: dict = Depends(require_project_budget_read(
+        "finance.site_pulse_generate.execute", module=None, resource_type="site_pulse",
+        project_from="site")),
+    date: Optional[str] = None, user: dict = Depends(get_current_user)):
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     pulse = await generate_pulse(user["org_id"], site_id, d)
     return pulse
 
 
 @router.get("/pulse/today")
+@strip_pulse_for_non_finance   # SEC-02-C (R20-5B, R31; B-D2)
 async def get_today_pulses(user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -64,14 +76,20 @@ async def get_today_pulses(user: dict = Depends(get_current_user)):
 
 
 @router.post("/pulse/generate-all")
-async def generate_all(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def generate_all(
+    # SEC-02-E (R20): regenerates every site's stored pulse (money) — finance roles only.
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pulse_generate_all.execute", module=None, resource_type="site_pulse")),
+    date: Optional[str] = None, user: dict = Depends(get_current_user)):
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     results = await generate_all_pulses(user["org_id"], d)
     return {"ok": True, "generated": len(results), "date": d}
 
 
 @router.get("/pulse/summary")
-async def get_pulse_summary(date: Optional[str] = None, user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
+async def get_pulse_summary(request: Request, date: Optional[str] = None,
+                            user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     d = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     items = await tenant.site_pulses.find(
@@ -82,9 +100,19 @@ async def get_pulse_summary(date: Optional[str] = None, user: dict = Depends(get
     total_hours = round(sum(p.get("total_hours", 0) for p in items), 2)
     total_labor = round(sum(p.get("total_labor_cost", 0) for p in items), 2)
     total_material = round(sum(p.get("total_material_cost", 0) for p in items), 2)
+    # SEC-02-G (audit SEC71-04; R31): no budget band of a single-paid-worker site for a
+    # caller without the finance right — its money alerts are left out (count included).
+    from app.permissions.money_write import (money_values_visible, single_paid_sites,
+                                             drop_band_alerts)
+    single = set()
+    if not await money_values_visible(request, user):
+        single = await single_paid_sites(user, [p.get("site_id") for p in items])
     all_alerts = []
     for p in items:
-        for a in p.get("alerts", []):
+        alerts = p.get("alerts", [])
+        if p.get("site_id") in single:
+            alerts = drop_band_alerts(alerts)
+        for a in alerts:
             all_alerts.append({**a, "site_name": p.get("site_name", ""), "site_id": p.get("site_id")})
 
     return {

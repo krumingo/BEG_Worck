@@ -1,0 +1,15 @@
+# LIVE-OPS-01 / TASK 5C — pytest configuration for the canonical
+# warehouse suite. CODEX C10: default asyncio_mode=auto so async tests
+# run under strict pytest-asyncio without requiring a CLI flag.
+#
+# This file is intentionally minimal; the project does not use
+# pyproject.toml for the main build (it keeps `requirements.txt`).
+# Only [tool.pytest.ini_options] is configured here.
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests", "validation_tests"]
+# `importlib` mode avoids the "attempted relative import with no known
+# parent package" collection error CODEX saw on fresh canonical tests.
+addopts = "--import-mode=importlib"
