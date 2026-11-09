@@ -20,6 +20,7 @@ from typing import Optional
 from fastapi import APIRouter, Body, Depends, Header, HTTPException
 
 from app.deps.modules import require_m5
+from app.permissions.money_write import require_finance_read, require_money_write
 from app.routes import finance as fin
 from app.services import invoice_corrections as ic
 from app.services.invoice_state import STATUS_CHANGED, claim_invoice
@@ -99,7 +100,9 @@ def _public(doc: Optional[dict]) -> Optional[dict]:
 
 # ═════════════════════════════════════════════════════════════ notes
 @router.post("/finance/credit-notes", status_code=201)
-async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
+async def create_note(body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.credit_note.create", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Create a credit / debit note to an issued invoice.
 
@@ -249,7 +252,9 @@ def _supplier_debit_basis(basis, file_id) -> dict:
 
 
 @router.post("/finance/credit-notes/{note_id}/approve")
-async def approve_note(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+async def approve_note(note_id: str, body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.credit_note.approve", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р49.4 / CLAUDE.md §8: the Owner — not the author — approves the EXACT version of an
     outgoing note. Only then the note gets its number (shared sequence) and changes the
@@ -345,7 +350,9 @@ async def _reject(user: dict, key: str, reason: str, collection: str, row_id: st
 
 
 @router.post("/finance/credit-notes/{note_id}/reject")
-async def reject_note(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+async def reject_note(note_id: str, body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.credit_note_reject.execute", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     _guard(user)
     key = fin._require_key(idempotency_key)
@@ -358,7 +365,9 @@ async def reject_note(note_id: str, body: dict = Body(...), user: dict = Depends
 
 
 @router.post("/finance/offsets/{offset_id}/reject")
-async def reject_offset(offset_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+async def reject_offset(offset_id: str, body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.invoice_offset_reject.execute", module="M5", resource_type="invoice_offset")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     _guard(user)
     key = fin._require_key(idempotency_key)
@@ -371,7 +380,9 @@ async def reject_offset(offset_id: str, body: dict = Body(...), user: dict = Dep
 
 
 @router.post("/finance/credit-notes/{note_id}/accept-difference")
-async def accept_difference(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+async def accept_difference(note_id: str, body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.credit_note_difference.approve", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р52(2) / D7: a supplier credit note that differs from the awaited credit stays
     registered and NOT applied (the limit stays) until either a corrected note arrives
@@ -498,7 +509,9 @@ async def _difference_write(user: dict, note_id: str, key: str, action: str, pay
 
 @router.post("/finance/credit-notes/{note_id}/difference-lines/{line_id}/resolve")
 async def resolve_difference_line(note_id: str, line_id: str, body: dict = Body(...),
-                                  user: dict = Depends(require_m5),
+                                  _sec: dict = Depends(require_money_write(
+        "finance.credit_note_difference_line.execute", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                                   idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """FG-277: a line of an accepted difference that is booked nowhere (``undetermined`` at
     acceptance, or reversed by the Owner) is decided by a finance user (Р14: Owner / Admin
@@ -601,7 +614,9 @@ def _pending_proposal(note: dict, proposal_id: str) -> dict:
 
 @router.post("/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/approve")
 async def approve_difference_proposal(note_id: str, proposal_id: str, body: dict = Body(default={}),
-                                      user: dict = Depends(require_m5),
+                                      _sec: dict = Depends(require_money_write(
+        "finance.credit_note_difference_proposal.approve", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р63 (FG-281): the OWNER approves a re-booking proposal after a reversal (another
     project, company cost, or a Completed project). The proposer never approves (403).
@@ -649,7 +664,9 @@ async def approve_difference_proposal(note_id: str, proposal_id: str, body: dict
 
 @router.post("/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/reject")
 async def reject_difference_proposal(note_id: str, proposal_id: str, body: dict = Body(...),
-                                     user: dict = Depends(require_m5),
+                                     _sec: dict = Depends(require_money_write(
+        "finance.credit_note_difference_proposal_reject.execute", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р63: the Owner rejects a re-booking proposal, or its proposer withdraws it (reason,
     AuditEvent). The line stays open (its DQ issue too) for a new proposal."""
@@ -671,7 +688,9 @@ async def reject_difference_proposal(note_id: str, proposal_id: str, body: dict 
 
 
 @router.post("/finance/credit-notes/{note_id}/reverse-difference")
-async def reverse_difference(note_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+async def reverse_difference(note_id: str, body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.credit_note_difference_reversal.execute", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                              idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """FG-276: the correction path of an accepted difference. The OWNER, with a reason,
     reverses every line booked now: an APPEND-ONLY reversal posting (−net, same target /
@@ -708,7 +727,9 @@ async def reverse_difference(note_id: str, body: dict = Body(...), user: dict = 
 
 
 @router.get("/finance/credit-notes")
-async def list_notes(invoice_id: Optional[str] = None, user: dict = Depends(require_m5)):
+async def list_notes(invoice_id: Optional[str] = None, _sec: dict = Depends(require_finance_read(
+        "finance.credit_note.read", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5)):
     _guard(user)
     flt = {"original_invoice_id": invoice_id} if invoice_id else {}
     return await fin._tenant(user).credit_debit_notes.find(flt, {"_id": 0}).sort(
@@ -716,7 +737,9 @@ async def list_notes(invoice_id: Optional[str] = None, user: dict = Depends(requ
 
 
 @router.get("/finance/credit-notes/{note_id}")
-async def get_note(note_id: str, user: dict = Depends(require_m5)):
+async def get_note(note_id: str, _sec: dict = Depends(require_finance_read(
+        "finance.credit_note_detail.read", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5)):
     _guard(user)
     note = await fin._tenant(user).credit_debit_notes.find_one({"id": note_id}, {"_id": 0})
     if not note:
@@ -725,7 +748,9 @@ async def get_note(note_id: str, user: dict = Depends(require_m5)):
 
 
 @router.get("/finance/invoices/{invoice_id}/corrections")
-async def invoice_corrections(invoice_id: str, user: dict = Depends(require_m5)):
+async def invoice_corrections(invoice_id: str, _sec: dict = Depends(require_finance_read(
+        "finance.invoice_corrections.read", module="M5", resource_type="invoice")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5)):
     """Read-only: the notes, offsets and refunds of an invoice, credited per line, the
     open amount / credit balance, and (Р49.8) the credit the invoice awaits with its
     14-day escalation to the Owner — computed here, nothing written."""
@@ -757,7 +782,9 @@ async def invoice_corrections(invoice_id: str, user: dict = Depends(require_m5))
 
 @router.get("/finance/company-costs/accepted-differences")
 async def company_cost_of_accepted_differences(period: Optional[str] = None,
-                                               user: dict = Depends(require_m5)):
+                                               _sec: dict = Depends(require_finance_read(
+        "finance.company_accepted_difference.read", module="M5", resource_type="credit_debit_note")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5)):
     """Read-only, Р58 / FG-265: the company costs (losses on a return) of accepted credit
     differences on warehouse-received lines, in the period of acceptance — derived from
     the accepted notes (no second ledger). ``period`` = YYYY-MM."""
@@ -770,7 +797,9 @@ async def company_cost_of_accepted_differences(period: Optional[str] = None,
 # ═════════════════════════════════════════════════════════════ refund (Р49.6 а)
 @router.post("/finance/invoices/{invoice_id}/refund", status_code=201)
 async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
-                                user: dict = Depends(require_m5),
+                                _sec: dict = Depends(require_money_write(
+        "finance.invoice_refund.create", module="M5", resource_type="invoice")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                                 idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р49.6 (а): the Accountant returns a credit balance — a real payment in the ONE
     Payment ledger (FLOW-006 ``finance_payments``), never above the balance."""
@@ -823,7 +852,9 @@ async def refund_credit_balance(invoice_id: str, body: dict = Body(...),
 
 # ═════════════════════════════════════════════════════════════ offset (Р49.6 б)
 @router.post("/finance/offsets", status_code=201)
-async def create_offset(body: dict = Body(...), user: dict = Depends(require_m5),
+async def create_offset(body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.invoice_offset.create", module="M5", resource_type="invoice_offset")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Р49.6 (б) / FLOW-010 L354-360: an explicit offset of a credit balance against an
     open amount, with both sources, only within the same contract (else 409
@@ -926,7 +957,9 @@ async def _check_offset(tenant, src_id: str, tgt_id: str, amount, session,
 
 
 @router.post("/finance/offsets/{offset_id}/approve")
-async def approve_offset(offset_id: str, body: dict = Body(...), user: dict = Depends(require_m5),
+async def approve_offset(offset_id: str, body: dict = Body(...), _sec: dict = Depends(require_money_write(
+        "finance.invoice_offset.approve", module="M5", resource_type="invoice_offset")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5),
                          idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """The second approval of an offset (FLOW-034 L72): the Owner, not the author, the
     exact version; both invoices are re-checked in the same transaction."""
@@ -977,7 +1010,9 @@ async def approve_offset(offset_id: str, body: dict = Body(...), user: dict = De
 
 
 @router.get("/finance/offsets")
-async def list_offsets(user: dict = Depends(require_m5)):
+async def list_offsets(_sec: dict = Depends(require_finance_read(
+        "finance.invoice_offset.read", module="M5", resource_type="invoice_offset")),  # F-84-01: PermissionService first
+        user: dict = Depends(require_m5)):
     _guard(user)
     return await fin._tenant(user).invoice_offsets.find({}, {"_id": 0}).sort(
         "created_at", -1).to_list(500)

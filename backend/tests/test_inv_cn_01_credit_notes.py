@@ -97,7 +97,8 @@ def _app(monkeypatch, op, sysdb, mode):
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit):
+    from app.permissions import money_write as perm_money
+    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit, perm_money):
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
     for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
@@ -1921,6 +1922,84 @@ def test_inv84_n2_every_invariant_holds_without_its_unique_index_and_a_missing_i
         await note(c, b1, number="CN-NEXT", lines=[{"original_line_id": b1["lines"][0]["id"], "qty": 1}])
         assert (await op.dq_issues.find_one(
             {"id": "dq-index-not-built-inv_cn_01_incoming_number_unique"}))["status"] == "resolved"
+    run(monkeypatch, mode, scenario)
+
+
+F8401_WRITES = [
+    "/api/finance/credit-notes", "/api/finance/credit-notes/{n}/approve",
+    "/api/finance/credit-notes/{n}/reject", "/api/finance/credit-notes/{n}/accept-difference",
+    "/api/finance/credit-notes/{n}/difference-lines/x/resolve",
+    "/api/finance/credit-notes/{n}/difference-proposals/x/approve",
+    "/api/finance/credit-notes/{n}/difference-proposals/x/reject",
+    "/api/finance/credit-notes/{n}/reverse-difference", "/api/finance/invoices/{i}/refund",
+    "/api/finance/offsets", "/api/finance/offsets/{o}/approve", "/api/finance/offsets/{o}/reject"]
+F8401_READS = ["/api/finance/credit-notes", "/api/finance/credit-notes/{n}",
+               "/api/finance/invoices/{i}/corrections", "/api/finance/company-costs/accepted-differences",
+               "/api/finance/offsets"]
+F8401_BUSINESS = ("invoices", "credit_debit_notes", "invoice_offsets", "finance_payments",
+                  "payment_allocations", "expected_credit_notes", "dq_issues", "alarm_events",
+                  "org_counters", "idempotency_keys")
+
+
+@pytest.mark.parametrize("assignment", ["revoked", "expired", "missing"])
+def test_f84_01_every_correction_route_goes_through_the_permission_service(monkeypatch, mode, assignment):
+    """Codex F-84-01: a tenant Admin whose RoleAssignment is revoked / expired / missing
+    (login valid, legacy users.role still Admin). enforce: EVERY read and write of the
+    corrections router answers 403 with the Permission Service reason and writes NO business
+    row (only the denial AuditEvent). off / shadow keep the legacy role rule (as every money
+    write of SEC-01): the same Admin is still served."""
+    async def scenario(c, op):
+        sysdb = op.client["invcn_sys_" + op.name.split("invcn_op_", 1)[1]]
+        inv = await sent(c)
+        assert (await quick_pay(c, inv["id"], 240.0)).status_code == 201
+        n = (await note(c, inv)).json()
+        assert (await approve(c, n["id"])).status_code == 200
+        b = await sent(c)
+        off = (await offset(c, inv, b, 10, n["id"])).json()
+        ids = {"n": n["id"], "i": inv["id"], "o": off["id"]}
+        flt = {"user_id": "admin-a", "tenant_id": ORG_A}
+        if assignment == "revoked":
+            await sysdb.tenant_role_assignments.update_one(flt, {"$set": {"status": "revoked"}})
+        elif assignment == "expired":
+            await sysdb.tenant_role_assignments.update_one(
+                flt, {"$set": {"valid_to": "2020-01-01T00:00:00+00:00"}})
+        else:
+            await sysdb.tenant_role_assignments.delete_one(flt)
+
+        async def business():
+            out = {}
+            for coll in F8401_BUSINESS:
+                out[coll] = sorted((await op[coll].find({}, {"_id": 0}).to_list(None)), key=repr)
+            return out
+
+        reason = {"revoked": "ASSIGNMENT_REVOKED", "expired": "ASSIGNMENT_EXPIRED",
+                  "missing": "NO_ASSIGNMENT"}[assignment]
+        if mode == "enforce":
+            before = await business()
+            for path in F8401_WRITES:
+                r = await c.post(path.format(**ids), headers=hdr("admin-a"),
+                                 json={"reason": "r", "version": 1, "kind": "credit"})
+                assert r.status_code == 403, (path, r.text)
+                assert reason in r.text, (path, r.text)
+            for path in F8401_READS:
+                r = await c.get(path.format(**ids), headers=hdr("admin-a"))
+                assert r.status_code == 403, (path, r.text)
+            assert await business() == before                    # no business write at all
+            # the control: the same routes still serve an Admin WITH an active assignment
+            assert (await c.get("/api/finance/credit-notes/%s" % n["id"], headers=hdr("owner-a"))).status_code == 200
+        else:
+            # off / shadow: the legacy users.role rule (SEC-01) — the Admin is still served
+            assert (await c.get("/api/finance/credit-notes/%s" % n["id"], headers=hdr("admin-a"))).status_code == 200
+            r = await note(c, inv, who="admin-a", lines=[{"original_line_id": inv["lines"][0]["id"], "qty": 1}])
+            assert r.status_code == 201, r.text
+        # a Viewer is refused in every mode, nothing written
+        before = await business()
+        r = await c.post("/api/finance/credit-notes", headers=hdr("viewer-a"),
+                         json={"kind": "credit", "original_invoice_id": inv["id"], "reason": "r",
+                               "lines": [{"original_line_id": inv["lines"][0]["id"], "qty": 1}]})
+        assert r.status_code == 403, r.text
+        assert (await c.get("/api/finance/offsets", headers=hdr("viewer-a"))).status_code == 403
+        assert await business() == before
     run(monkeypatch, mode, scenario)
 
 

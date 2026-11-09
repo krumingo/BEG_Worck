@@ -653,6 +653,19 @@ ENFORCE_EXTRA_WRITES = {
     # SUB-ADV-01 (R39): the advance (Owner/Accountant) and its deduction on an act.
     ("POST", "/api/subcontractor-packages/{pkg_id}/advances"): "denial",
     ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"): "denial",
+    # INV-CN-01 (#84, Codex F-84-01): notes, refunds, offsets, the accepted-difference journal.
+    ("POST", "/api/finance/credit-notes"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/approve"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/reject"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/accept-difference"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/difference-lines/{line_id}/resolve"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/approve"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/reject"): "denial",
+    ("POST", "/api/finance/credit-notes/{note_id}/reverse-difference"): "denial",
+    ("POST", "/api/finance/invoices/{invoice_id}/refund"): "denial",
+    ("POST", "/api/finance/offsets"): "denial",
+    ("POST", "/api/finance/offsets/{offset_id}/approve"): "denial",
+    ("POST", "/api/finance/offsets/{offset_id}/reject"): "denial",
     # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
     ("GET", "/api/reports/company-finance-export"): "denial",
     # SEC-02-A (D1): the money-only file exports (significant verb "export").

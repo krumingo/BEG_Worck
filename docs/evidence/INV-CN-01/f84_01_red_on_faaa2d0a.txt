@@ -1,0 +1,16 @@
+# Codex F-84-01 red proof — the new test run against faaa2d0a (real Mongo, 3 modes × revoked / expired / missing assignment)
+# On faaa2d0a the corrections router used only the role check: in ENFORCE a tenant Admin whose RoleAssignment is revoked /
+# expired / missing (users.role still Admin) REACHED the handler (422 body validation, i.e. past the rights) instead of 403.
+E               AssertionError: ('/api/finance/credit-notes', '{"detail":{"error_code":"NOTE_INVALID","message":"original_invoice_id е задължително"}}')
+E               assert 422 == 403
+E                +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+E               AssertionError: ('/api/finance/credit-notes', '{"detail":{"error_code":"NOTE_INVALID","message":"original_invoice_id е задължително"}}')
+E               assert 422 == 403
+E                +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+E               AssertionError: ('/api/finance/credit-notes', '{"detail":{"error_code":"NOTE_INVALID","message":"original_invoice_id е задължително"}}')
+E               assert 422 == 403
+E                +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_01_every_correction_route_goes_through_the_permission_service[enforce-revoked]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_01_every_correction_route_goes_through_the_permission_service[enforce-expired]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_f84_01_every_correction_route_goes_through_the_permission_service[enforce-missing]
+3 failed, 6 passed, 165 deselected, 1 warning in 10.91s
