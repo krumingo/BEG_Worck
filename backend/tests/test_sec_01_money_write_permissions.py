@@ -291,6 +291,10 @@ def check_rows(rows: List[Dict[str, Any]]) -> None:
             else:
                 assert r["status"] == 404, r
                 assert r["written"] == [], r
+        elif r["path"].endswith("/material-waste"):
+            # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+            assert r["status"] == 422, r
+            assert r["written"] == [], r
         else:
             assert r["status"] == SUCCESS[r["path"]], r
             assert BUSINESS[r["path"]] in r["written"], r

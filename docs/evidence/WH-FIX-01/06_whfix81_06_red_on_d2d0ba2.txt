@@ -1,0 +1,6 @@
+      1 25 failed, 18 passed, 134 deselected in 11.94s
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_whfix81_06_correction_is_versioned_with_reason_and_audit
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_whfix81_06_embedded_lines_of_a_paid_invoice_change_only_by_correction
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_whfix81_06_plain_reallocation_of_a_paid_invoice_is_409
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_whfix81_06_reallocation_racing_a_payment_is_refused
+      1 FAILED tests/test_wh_fix_01_post_55.py::test_whfix81_line_unit_price_is_used_exactly

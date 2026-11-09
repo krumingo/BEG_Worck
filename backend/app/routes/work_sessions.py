@@ -213,7 +213,7 @@ async def start_session(data: SessionStart, user: dict = Depends(get_current_use
     result = {k: v for k, v in session.items() if k != "_id"}
     if open_session:
         result["auto_closed_session_id"] = open_session["id"]
-    return result
+    return _hours_only([result])[0]        # FG-502: hours only, no session money
 
 
 # ── End Session ────────────────────────────────────────────────────
@@ -253,7 +253,7 @@ async def end_session(data: SessionEnd, user: dict = Depends(get_current_user)):
             "updated_at": now_iso,
         }},
     )
-    return await tenant.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})
+    return _hours_only([await tenant.work_sessions.find_one({"id": open_session["id"]}, {"_id": 0})])[0]  # FG-502
 
 
 # ── List / Query ───────────────────────────────────────────────────
@@ -459,7 +459,7 @@ async def split_session(session_id: str, data: SessionSplit, user: dict = Depend
     return {
         "ok": True,
         "original_id": session_id,
-        "new_sessions": [{k: v for k, v in ns.items() if k != "_id"} for ns in new_sessions],
+        "new_sessions": _hours_only([{k: v for k, v in ns.items() if k != "_id"} for ns in new_sessions]),  # FG-502
     }
 
 
@@ -545,7 +545,7 @@ async def update_session(session_id: str, data: SessionUpdate, user: dict = Depe
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     await tenant.work_sessions.update_one({"id": session_id}, {"$set": update})
-    return await tenant.work_sessions.find_one({"id": session_id}, {"_id": 0})
+    return _hours_only([await tenant.work_sessions.find_one({"id": session_id}, {"_id": 0})])[0]  # FG-502
 
 
 # ── Delete (Admin only, flagged only) ──────────────────────────────

@@ -1,28 +1,77 @@
-# LAB-01-N checks (2026-11-07) — reset claim + budget return in ONE transaction (auth_tx.run_in_transaction); merged main 0f870c3; code 3b52e3a
-## new crash test on the previous code (c45be70): FAILED — report SUBMITTED, budget not returned
-## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness (W0_03_REAL_MONGO_URL=mongodb://127.0.0.1:27017/?directConnection=true) exit=0
-  changed cells vs. #73 4591432:
-    changed cells: 48
-    - POST /api/auth/forgot-password: status —→200, wrote —→yes — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
-    - POST /api/auth/reset-password: status —→400, wrote —→yes — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
-  changed cells vs. main 0f870c3:
-    changed cells: 54
-    - POST /api/auth/forgot-password: status —→200, wrote —→yes — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
-    - POST /api/auth/reset-password: status —→400, wrote —→yes — 24 cells: roles accountant, admin, driver, owner, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
+# L01N gates (2026-11-09) — head 749ccd6 — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness exit=0
+  changed cells vs. the branch before the merge:
+    changed cells: 0
+  changed cells vs. main's committed matrix:
+    changed cells: 78
+    - POST /api/labor-entries/{entry_id}/approve: status —→428, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/approve: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/approve: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/{entry_id}/reject: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/reject: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/reject: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/{entry_id}/reverse: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/reverse: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/reverse: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
     - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
-## PM-01 tests WITH the real-Mongo regression
-6 passed, 6 warnings in 177.88s (0:02:57)
+## W0-03E-A2B inventory regenerated: scripts/w0_03e_a2b_inventory.py exit=0
+## PM-01 tests
+6 passed, 10 warnings in 235.66s (0:03:55)
 ## A2C guard
-W0-03E-A2C tenant boundary guard: 214 module(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 245 module(s) checked, 0 violation(s)
 ## A1 guard
-W0-03E-A1 tenant access guard: 432 unit(s) checked, 0 violation(s)
-## LAB-01 tests (real mongo set; -rs)
-SKIPPED [1] tests/test_lab_01_e_flow_guard_7.py:286: needs the W0-04-C01 unique audit_idempotency index (#72, merges before #73); run on a trial merge with #72 — see docs/evidence/LAB-01/tests-LAB-01-F.txt
-114 passed, 1 skipped, 1 warning in 6.14s
-## main's AUTH-01/02 tests (merged in)
-122 passed, 6 warnings in 172.86s (0:02:52)
-## tests/test_r0_0*.py (real)
-814 passed, 6 warnings in 163.70s (0:02:43)
-## W0 DB-free
-15 failed, 1085 passed, 50 skipped, 6 warnings in 72.00s (0:01:11)
+W0-03E-A1 tenant access guard: 494 unit(s) checked, 0 violation(s)
+## LAB suites
+201 passed, 1 warning in 29.47s
+## SEC-01 (money_write_permissions + c01 + c02 + c03)
+30 passed, 10 warnings in 128.34s (0:02:08)
+## SEC-02 (test_sec_02_finance_read.py)
+31 passed, 10 warnings in 242.64s (0:04:02)
+## PAY-01
+630 passed, 1 warning in 167.89s (0:02:47)
+## W0-04 (real)
+74 passed, 1 warning in 15.49s
+## AUTH-01/02
+122 passed, 10 warnings in 178.52s (0:02:58)
+## R0 tests/test_r0_0*.py (real)
+814 passed, 10 warnings in 172.84s (0:02:52)
+## W0 DB-free (no real Mongo URL)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 95.92s (0:01:35)
   non-legacy_routes failures: 0
+## frontend (head 749ccd6)
+Test Suites: 20 passed, 20 total
+Tests:       182 passed, 182 total
+Done in 34.29s.
+
+## live server, BEFORE the test update (3 old assertions expected session money in start/end — FG-502 removed it):
+  login token: yes; project: d0aaf534-564f-460d-b2ba-a8d04f501603
+PASSED tests/test_work_sessions.py::test_auto_close_on_new_start
+PASSED tests/test_work_sessions.py::test_my_today
+PASSED tests/test_work_sessions.py::test_summary
+PASSED tests/test_work_sessions.py::test_active_sessions
+PASSED tests/test_work_sessions.py::test_split_session
+PASSED tests/test_work_sessions.py::test_overtime_report
+PASSED tests/test_work_sessions.py::test_update_session
+PASSED tests/test_work_sessions.py::test_end_no_open
+PASSED tests/test_work_sessions.py::test_list_sessions
+FAILED tests/test_work_sessions.py::test_start_session
+FAILED tests/test_work_sessions.py::test_end_session
+FAILED tests/test_work_sessions.py::test_hourly_rate_snapshot
+3 failed, 9 passed in 2.17s
+
+## live server, AFTER the 3 assertions were changed to 'no session money' (tests/test_work_sessions.py, this commit):
+## tests/test_work_sessions.py — LIVE server (uvicorn :8012, head 749ccd6, fresh mongo:7.0 rs0, seeded admin, one project)
+  login token: yes; project: 0a52a3f3-53f2-42eb-9b89-5ddd2c3cd9f7
+PASSED tests/test_work_sessions.py::test_start_session
+PASSED tests/test_work_sessions.py::test_end_session
+PASSED tests/test_work_sessions.py::test_auto_close_on_new_start
+PASSED tests/test_work_sessions.py::test_hourly_rate_snapshot
+PASSED tests/test_work_sessions.py::test_my_today
+PASSED tests/test_work_sessions.py::test_summary
+PASSED tests/test_work_sessions.py::test_active_sessions
+PASSED tests/test_work_sessions.py::test_split_session
+PASSED tests/test_work_sessions.py::test_overtime_report
+PASSED tests/test_work_sessions.py::test_update_session
+PASSED tests/test_work_sessions.py::test_end_no_open
+PASSED tests/test_work_sessions.py::test_list_sessions
+12 passed in 1.69s

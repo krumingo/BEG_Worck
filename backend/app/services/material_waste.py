@@ -97,6 +97,20 @@ async def build_material_waste_summary(org_id: str, project_id: str, date_from: 
             e = _get(ln.get("material_name", ""))
             e["returned"] += float(ln.get("qty_issued", 0) or ln.get("qty_returned", 0) or 0)
 
+    # ── E2. Canonical ledger (WH-FIX-01, FG-190) ─────────────────
+    # Canonical rows carry `action` + item / quantity, never the legacy
+    # `type` + `lines` read above; the shared trail helper counts them:
+    # accepted on / delivered into the project = delivered and issued (Р17),
+    # moved away = returned. Write-offs are section G (no double count).
+    from app.services.canonical_material_cost import canonical_trail_by_name
+    for name, c in (await canonical_trail_by_name(tenant, org_id, project_id)).items():
+        e = _get(name)
+        e["delivered"] += c["issued_to_project"]
+        e["issued"] += c["issued_to_project"]
+        e["returned"] += c["returned"]
+        if c.get("unit") and not e["unit"]:
+            e["unit"] = c["unit"]
+
     # ── F. Waste entries ────────────────────────────────────────
     wq = {"org_id": org_id, "project_id": project_id}
     if date_from:

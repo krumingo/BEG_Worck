@@ -225,6 +225,12 @@ async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hou
         {"org_id": org_id, "user_id": employee_id}, {"_id": 0}) or {}
     pay_type = (pkg or {}).get("labor_pay_type") or profile.get("pay_type") or "Hourly"
     if pay_type == "Akord":
+        # R62 + R33 (FLOW Guard): the akord quantity is the LAB-02 APPROVED quantity — never a
+        # second quantity typed into a manual row. This branch has no LAB-02 approval source,
+        # so a manual akord row is refused (LAB-02, #75, links the approved quantity).
+        raise HTTPException(status_code=422, detail={
+            "code": "AKORD_NEEDS_APPROVED_QUANTITY",
+            "message": "Акордният ред се остойностява само от одобрено количество (LAB-02) — ръчно въведено количество не се приема"})
         q = money_value(quantity, "quantity", places=None)        # finite > 0, else 422
         piece = (pkg or {}).get("labor_piece_rate")
         if not piece or float(piece) <= 0:

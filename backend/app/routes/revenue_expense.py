@@ -492,11 +492,26 @@ async def get_project_profit_summary(
     if sub_metrics.get("available"):
         subcontract_cost = sub_metrics["certified"]  # certified = execution cost basis
     else:
+        # F-81-01 / Р45: a supplier invoice reaches the project P&L only by the
+        # part of its LINES allocated to the project (ex VAT) — never by the
+        # header project_id / whole subtotal; the unallocated rest is in
+        # „фактури за разпределяне", not in this project. FLOW-043 D-04 (one
+        # classification): `invoice_lines` documents allocated to the project
+        # are already in the material cost (Path B, FG-17), so only invoices
+        # whose lines are EMBEDDED (FG-200) are read here.
+        from app.services.invoice_allocation import RECEIVED_LINE_FIELDS, received_result
         received_invoices = await tenant.invoices.find(
-            {"project_id": project_id, "org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled"]}},
-            {"_id": 0, "subtotal": 1, "total": 1}
-        ).to_list(100)
-        subcontract_cost = sum(i.get("subtotal", 0) or i.get("total", 0) for i in received_invoices)
+            {"org_id": org_id, "direction": "Received", "status": {"$nin": ["Draft", "Cancelled"]},
+             "$or": [{"project_id": project_id}, {"lines.project_id": project_id},
+                     {"lines.allocations": {"$elemMatch": {"type": "project", "ref_id": project_id}}}]},
+            {"_id": 0, **RECEIVED_LINE_FIELDS}
+        ).to_list(500)
+        _ids = [i["id"] for i in received_invoices if i.get("id")]
+        _path_b = {ln.get("invoice_id") async for ln in tenant.invoice_lines.find(
+            {"org_id": org_id, "invoice_id": {"$in": _ids}}, {"_id": 0, "invoice_id": 1})}
+        received_invoices = [i for i in received_invoices if i.get("id") not in _path_b]
+        subcontract_cost = round(sum((await received_result(
+            tenant, org_id, received_invoices, dest_type="project", ref_id=project_id)).values()), 2)
 
     # Overhead: from allocations if exist
     # FG-89: the project's current OH-01 allocation — the single overhead source
