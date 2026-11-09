@@ -77,7 +77,7 @@
 | FG-55 | low | #55 `4a3d15c` | родителят на подобект се връща в грешката преди проверката на правата | PROVEN | resolved (#55 `f0d86ab`; `/movements` → FG-69) |
 | FG-56 | medium | #55 `4a3d15c` | Р32: складовият работник не вижда единичните цени (добавка E не е изпълнена) | PROVEN | resolved по Р32 (#55 `81e412c`, PROVEN ×3 режима) |
 | FG-57 | low | #72 `e733c66` | `record_event` върху база без уникалния индекс пак разклонява веригата тихо (няма fail-closed) | PROVEN | resolved (#72 `8ac194a`, PROVEN: без индекси 20/20, true) |
-| FG-58 | medium | main `35ae10b` | ръчен `POST /labor-entries` без присъствие и отчет; възможно двойно броене със sync | SUSPECTED | open; проход 32: ефектът PROVEN — на #73 `7ee87f8` ръчен ред (`labor_smr.py:106-110`) остойностява часове × `hourly_rate` и за акордов работник; влиза в FG-340 |
+| FG-58 | medium | main `35ae10b` | ръчен `POST /labor-entries` без присъствие и отчет; възможно двойно броене със sync | SUSPECTED | partial по Р62 (#73 `a97db46`, PROVEN: ръчният ред е pending и влиза само след `POST /labor-entries/{id}/approve` от Owner (`labor_smr.py:142-176`, Admin/Accountant/SiteManager 403, повторно 409, AuditEvent); остават цената часове × ставка за акорд и двойното броене → FG-423; без отказ/сторно → FG-424) |
 | FG-59 | high | #55 `81e412c` | роля, вързана с обект, действа в централния склад, ако добави `project_id` в тялото | PROVEN | resolved (#55 `518aab4`, PROVEN ×3: 403 R28_PROJECT_REQUIRED, 0 реда) |
 | FG-60 | medium | #55 `81e412c` | `balance` и `history` без филтър показват количества на чужди обекти на не-член SiteManager | PROVEN | resolved (#55 `518aab4`, PROVEN ×3: само член-обекти) |
 | FG-61 | medium | #55 `81e412c` | приемане от доставчик към обект с различен `project_id` от тялото | PROVEN | resolved (#55 `518aab4`, PROVEN ×3: 422, 0 реда) |
@@ -226,7 +226,7 @@
 | FG-204 | high | main `cd03324` | парите на таблата (P&L на всички обекти, плащания, прогноза, Pulse) се виждат от всяка роля | SUSPECTED | partial — backend затворен с merge на #71 в main `0750d75` (`require_finance_read` на `/org/pnl-overview`, `/projects/{id}/pnl/aggregated`, pending-payments, finance-details, cashflow, morning briefing, pulse; SUSPECTED за този merge — тестовете на #71 бяха PROVEN); остава UI `isManager` в `DashboardPage.js` (SiteManager/Accountant) |
 | FG-205 | high | main `cd03324` | cash-flow прогнозата брои задълженията към доставчици като постъпления и започва от 0 | SUSPECTED | partial (#81 `5b08e59` WH81-03: прогнозата брои като „Incoming“ само издадени фактури, `services/cashflow_forecast.py:20`; остава кумулативът от 0 вместо от каса/банка; не е в main) |
 | FG-206 | medium | main `cd03324` | формулите на таблото се различават от официалната (`/finance/stats`); Draft/Cancelled влизат; филтрите важат частично | SUSPECTED | open |
-| FG-207 | medium | main `cd03324` | Pulse пази snapshot и го показва като текущ; втори списък аларми без статус; GET пише | SUSPECTED | open |
+| FG-207 | medium | main `cd03324` | Pulse пази snapshot и го показва като текущ; втори списък аларми без статус; GET пише | PROVEN | open (#73 `a97db46`, PROVEN: `pulse_generator.py:82-90` и `morning_briefing.py:47-59` още броят от сесиите — брифингът показва 90%, алармата 145%) |
 | FG-208 | medium | main `cd03324` | алармата няма собственик, срок и действие | SUSPECTED | open |
 | FG-209 | medium | main `cd03324` | „видяна“ аларма изпада от броячите; „решена“ с едно кликване от всяка роля, без причина и одит | SUSPECTED | open |
 | FG-210 | medium | main `cd03324` | auto-resolve затваря аларми, чието условие още е вярно (заради cooldown) | SUSPECTED | open |
@@ -332,7 +332,7 @@
 | FG-333 | medium | main `3699c3b` | скрити коефициенти (град, малко количество) и DEMO ставки влизат в цената без източник | PROVEN | open (+ Krum: кои условия) |
 | FG-334 | low | main `3699c3b` | редовете на офертата/анализа не пазят произхода на цената | SUSPECTED | open |
 | FG-335 | low | main `3699c3b` | `record-edit` приема произволни калибрационни събития от всяка роля с M2 | SUSPECTED | open |
-| FG-340 | high | #73 LAB-01 `7ee87f8` (+ main) | един обект — три различни трудови разхода: P&L (LAB-01) 850, `project-profit` 150/600, `project-net-profit` 600; пакетите и бюджетите четат `labor_entries` | PROVEN | open — решено от Крум по Р62 (09.11.2026): едно число от `project_labor_cost`, само одобрени отчети; ръчен ред — само след одобрение от Собственика; кодът на #73 още не е приведен |
+| FG-340 | high | #73 LAB-01 `7ee87f8` (+ main) | един обект — три различни трудови разхода: P&L (LAB-01) 850, `project-profit` 150/600, `project-net-profit` 600; пакетите и бюджетите четат `labor_entries` | PROVEN | partial по Р62 (#73 LAB-01 `a97db46`, код = `b33058e`; PROVEN: P&L, `/project-profit` (без резервния път през `work_reports`), `/project-net-profit`, пакетите и бюджетната аларма — едно число от `project_labor_cost` (850 → 1450 след одобрение на ръчен ред); остават ≥13 четеца с други числа → FG-420, FG-421, FG-422) |
 | FG-341 | low | #75 LAB-02 `5809367` | паричните пътища на LAB-02 (`labor-terms`, approve/classify, pending) са с твърди списъци роли, извън SEC-01/SEC-02 каталозите и `require_m2` | SUSPECTED | open (дълг) |
 | FG-350 | medium | OFF-01 #79 `f526182` (+ main) | `POST /offers/{id}/new-version`, `POST /versions/{n}/restore` и `PUT /offers/{id}/lines` връщат клиентски цени на Технически ръководител | PROVEN | open (+ Krum: може ли ТР да пише оферти) |
 | FG-351 | low | main `ea57121` (и OFF-01) | отварянето на клиентския линк не записва AuditEvent (само първо гледане в `offer_events`; 410 — нищо) | PROVEN | open |
@@ -359,7 +359,7 @@
 | FG-387 | medium | main `ea57121` | „потвърждаване“ връща решена аларма в `acknowledged`; преходите не се проверяват, нямат история и AuditEvent | PROVEN | open |
 | FG-388 | low | main `ea57121` | 3 нива вместо 5, няма „Блокиращо“; `severity:"blocking"` се приема, но не влиза в броячите | PROVEN | open |
 | FG-389 | medium | main `ea57121` | няма финансова група аларми (кеш, просрочия, аванс, ретенция, Р44) и централен каталог; 8+ паралелни списъка с предупреждения без статус | PROVEN | open |
-| FG-390 | medium | main `ea57121` | бюджетната аларма смята „изхарчено“ от `work_sessions` (без одобрение, вкл. Draft обекти), не по Р31 | PROVEN | open |
+| FG-390 | medium | main `ea57121` | бюджетната аларма смята „изхарчено“ от `work_sessions` (без одобрение, вкл. Draft обекти), не по Р31 | PROVEN | resolved за двигателя на алармите (#73 `a97db46`, PROVEN: `alarm_engine.py:66-69` чете `project_labor_cost`); остават Draft обектите (`:56-58`) и прогресът (`:78-81`); брифингът и Pulse → FG-207, FG-421 |
 | FG-391 | medium | main `ea57121` | алармите нямат обхват по обекти: SiteManager/Technician/Viewer виждат бюджетната тежест на всички обекти и извънредния труд по име | PROVEN | open (+ Krum decision) |
 | FG-392 | low | main `ea57121` | `notify_roles` никой не чете; няма push / Action Inbox / Daily Digest за аларми | PROVEN | open |
 | FG-393 | low | main `ea57121` | няма причинно-следствени вериги, финансов ефект и разлика прогноза/факт | SUSPECTED | open |
@@ -376,6 +376,11 @@
 | FG-415 | low | #84 `5242cba` | праг „Completed“ при новото разнасяне не е в Р63 и се прилага неравно (само при подаден project id; не при връщане към разпределение, неопределен ред и одобрение; Archived/Cancelled/Finished — без праг) | PROVEN | open — Krum decision (D20, Q009) |
 | FG-416 | low | #84 `5242cba` | отпечатъкът за идемпотентност при одобрение е само note id + proposal id — същият ключ с друг коментар връща записаното 200 и губи коментара | PROVEN | open |
 | FG-417 | low | #84 `5242cba` | фирменият резултат се реже на 500 обекта без флаг; новият обхват (всички статуси + подобекти) стига прага по-рано | SUSPECTED | open |
+| FG-420 | high | #73 LAB-01 `a97db46` (+ main) | финансови справки извън `project_labor_cost`: `/labor-cost/by-project` (всички `work_reports` вкл. Draft), `/profit-by-period` (pending ръчни редове), кеширани `actual_*_cost` на пакетите | PROVEN | open |
+| FG-421 | high | #73 LAB-01 `a97db46` (+ main) | справки, които още четат `work_sessions` или черновите: activity_budgets, project_financial_results, centralized_reports („Include BOTH draft AND approved costs“), morning_briefing, projects | PROVEN | open |
+| FG-422 | medium | #73 LAB-01 `a97db46` | budget-health / earned-value / burn взимат `by_smr`/`labor_total` без престоя и ръчните редове, алармата — `total`: 750 / 825 / 850 за един бюджет | PROVEN | open |
+| FG-423 | medium | #73 LAB-01 `a97db46` | ръчният ред се оценява часове × ставка и за акорд; няма проверка за дублиране с одобрен отчет (часовете се броят два пъти) | PROVEN | open |
+| FG-424 | medium | #73 LAB-01 `a97db46` | одобрението на ръчен ред: без отказ/сторно, без Idempotency-Key, без точна версия/стойност, записът и AuditEvent не са в една транзакция; Owner одобрява собствения си ред | PROVEN | open (+ Krum: самоодобрение) |
 | FG-435 | high | main `44e8d97` | официалният прогрес по СМР е ръчен субективен процент от всяка роля с M2, без одобрение/измерване/AuditEvent; Accountant задава `qty_executed` направо | PROVEN | open |
 | FG-436 | medium | main `44e8d97` | прогресът на всеки обект се чете от не-членове (Viewer), с имената на въвелите | PROVEN | open |
 | FG-437 | medium | main `44e8d97` | една крайна дата без baseline/план/прогноза/договорен срок; SiteManager я мести без причина/анекс/версия; фазите без одит и с hard delete | PROVEN | open |
@@ -3734,6 +3739,45 @@
 - **На PR:** #79 OFF-01 (`offer_versions.py:25-33`, `_refuse_if_used`, OFF79-01) — restore и delete само за Draft, която никога не е изпращана; иначе 409 `OFFER_IN_USE`. Ще се затвори при merge на #79; канонични AuditEvent там не са проверени.
 - **Решение:** промяна в кода — сливане на OFF-01 (#79) и тест на main, че restore/delete на Sent/Accepted оферта → 409 и нищо не се записва; канонични AuditEvent за restore/delete на чернова.
 
+## FG-420 — финансови справки за труда извън `project_labor_cost`
+
+- **Тежест:** high. **Статус:** open. **PROVEN** (проход 37, `scratchpad/fg37lab_probe/probe_r62.py`).
+- **Канон:** Р62 „разходът за труд по обект е **едно число във всички справки** от един канонически източник (project_labor_cost): само **одобрени** отчети … Чернови и неодобрени отчети не влизат никъде.“; CLAUDE.md §2.12.
+- **Код (#73 LAB-01 `a97db46`):** `routes/revenue_expense.py:236-306` `GET /labor-cost/by-project` — всички `work_reports` вкл. Draft × ставка (логиката, махната от `/project-profit`); `routes/revenue_snapshot.py:144-197` `GET /profit-by-period` — сурови `labor_entries` вкл. pending; кеширани `actual_total_cost`/`actual_labor_cost` (`revenue_expense.py:379-391, 532-543`).
+- **Проба:** при P&L 850 → 1450: `/labor-cost/by-project` 150 / 150 / 150; `/profit-by-period` 0 → 600 (неодобреният ред се брои) → 600; кешираните суми 777 навсякъде.
+- **Решение:** промяна в кода — тези четци през `project_labor_cost`; кешът се преизчислява от него или се маха.
+
+## FG-421 — справки, които още четат `work_sessions` или черновите
+
+- **Тежест:** high. **Статус:** open. **PROVEN**.
+- **Канон:** Р62 (както FG-420); FLOW-019 „Реалният труд идва само от одобрени дневни отчети“.
+- **Код (#73 LAB-01 `a97db46`):** `routes/activity_budgets.py:679-692, 838-848`; `services/project_financial_results.py:51-55, 163-191`; `routes/centralized_reports.py:41-45, 208-210` („Include BOTH draft AND approved costs“); `services/morning_briefing.py:47-59`; `routes/projects.py:1949-1959, 2135-2141`.
+- **Проба:** activities-overview / financial-results / Pulse 900; centralized-reports 1000 (с черновите); сутрешният брифинг 90%, а алармата 145% — при P&L 1450.
+- **Решение:** промяна в кода — всички през `project_labor_cost`; регресионен тест, който сравнява всеки четец с него.
+
+## FG-422 — бюджетните показатели взимат различна част от труда
+
+- **Тежест:** medium. **Статус:** open. **PROVEN**.
+- **Канон:** Р62 (едно число); FLOW-019.
+- **Код (#73 LAB-01 `a97db46`):** `routes/activity_budgets.py:351-361` — budget-health, earned-value и burn взимат `by_smr` / `labor_total` (без престоя и без ръчните редове), алармата — `total`.
+- **Проба:** един бюджет — 750 / 825 / 850 (след одобрение: 750 / 1425 / 1450).
+- **Решение:** промяна в кода — един и същ компонент от `project_labor_cost` (и изрично етикетиран, ако е частичен).
+
+## FG-423 — ръчният ред: часове × ставка и за акорд; двойно броене
+
+- **Тежест:** medium. **Статус:** open. **PROVEN**.
+- **Канон:** Р62 „по часова ставка или акорд (одобрено количество × единична цена)“; CLAUDE.md §7 „Акордът изисква одобрено количество × единична цена труд“; FLOW-019 — забрана „едни и същи часове да се броят два пъти“.
+- **Код (#73 LAB-01 `a97db46`):** `routes/labor_smr.py:117-120` — часове × `hourly_rate`; няма проверка срещу одобрен отчет за същия работник/ден/СМР.
+- **Проба:** акордов работник 40 ч × 15 = 600; ръчен ред 8 ч върху одобрен отчет 8 ч → часовете стават двойни.
+- **Решение:** промяна в кода — акордът по одобрено количество × единична цена; отказ или DQ при застъпване с одобрен отчет.
+
+## FG-424 — одобрението на ръчен ред няма отказ, сторно, ключ и точна версия
+
+- **Тежест:** medium. **Статус:** open (+ Krum decision). **PROVEN**.
+- **Канон:** CLAUDE.md §7 (reversal/correction вместо редакция), §8 „Approval винаги сочи към exact version и evidence“, §14 (idempotency key, domain transaction, AuditEvent, correction/reversal path); Р29.
+- **Код (#73 LAB-01 `a97db46`):** `routes/labor_smr.py:142-176` — reject / reverse / DELETE / PUT → 404; Idempotency-Key не се изисква (в AuditEvent `None`); одобрява се id, не версия/стойност; записът и AuditEvent не са в една транзакция; `created_by = approved_by` е позволено.
+- **Решение:** промяна в кода — отказ и сторно с причина, Idempotency-Key, одобрение на точна версия, една транзакция. Крум решава дали Собственикът може да одобрява собствения си ред.
+
 ## FG-435 — официалният прогрес по СМР е ръчен субективен процент: всяка роля с M2 го задава за всеки обект, без одобрение, измерване и AuditEvent; финансова роля задава „изпълнено количество“ направо
 
 - **Тежест:** high. **Статус:** open. **PROVEN** (проба P1, P6).
@@ -4546,7 +4590,8 @@
 
 - main без промяна (`44e8d97`).
 - Бавен преглед FLOW-027 на main `44e8d97`: графикът не е изграден (Wave 2.1); съществуващите пътища за прогрес, крайна дата и часове нарушават канона. Нови FG-435..441 (FG-435 high). Krum: FG-438 (резервна ставка труд — 18 €/ч или 200 €/ден), FG-439 (дневен лимит часове на работник), FG-440 (стартира ли графикът като Pilot BEG преди W0-06/07).
-- LAB-01 #73 `a97db46` (Р62), CP-01 #83 `4929451` (FG-290, FG-294), WH-FIX-01 #81 `3028304` (сливане на main + аванси) — в проверка.
+- LAB-01 #73 `a97db46` (по-късно `b33058e` — само evidence): сливането `c3d5f8d8` на main `44e8d97` — без загубен пазач; Р62 изпълнено за P&L, `/project-profit`, `/project-net-profit`, пакетите и алармата (PROVEN); FG-340, FG-58 → partial; FG-390 → resolved за алармите; FG-207 → PROVEN; нови FG-420..424 (2 high). Тестове: LAB-01 129 passed (R62 12), PAY-01 91, SEC-01-C01 7, SEC-02 31.
+- CP-01 #83 `4929451`, WH-FIX-01 #81 `3028304` — в проверка.
 
 ## Бележки, които не са разминавания
 

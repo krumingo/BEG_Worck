@@ -15,7 +15,7 @@
 | #70 `claude/pay-01-payment-reversal` | `16a886f` | 13 | слят в main (`d226c49`) |
 | #71 `claude/sec-02-finance-read` | `021a078` | 24b | слят в main (`0750d75`);  SEC-02, Р20/Р31 |
 | #72 `claude/w0-04-c01-audit-indexes` | `04e0a1b` | 13 | слят в main (`7b6da64`) |
-| #73 `claude/lab-01-labor-cost` | `5e3a152` | 34 | LAB-01, FLOW-019/028 |
+| #73 `claude/lab-01-labor-cost` | `b33058e` | 37 | LAB-01, FLOW-019/028 |
 | `claude/oh-01-overhead` (OH-01) | `4c8b313` | 27 | слят в main (`1ea98fe2`);  FLOW-024 |
 | #75 `claude/lab-02-quantity-approval` (LAB-02) | `48ba662` | 34 | FLOW-028, Р33 |
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `aa369d8` | 31 | слят в main (`ea57121`);  FLOW-021, Р39/Р40 |
