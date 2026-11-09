@@ -327,6 +327,8 @@ UNCHANGED_VALUE_ROLES = frozenset({"procurement"})
 WAREHOUSE_VALUE_ROLES = frozenset({"warehouse"})
 VALUE_KEYS = frozenset({"unit_value", "total_value", "movement_value", "value",
                         "line_value", "layer_value",
+                        # WH-FIX-01 (FG-161) — legacy warehouse rows.
+                        "total_ex_vat", "total_vat", "total_inc_vat", "grand_total",
                         # 5C-C26 audit C26A-2 — Path B integrity warnings.
                         "counted_value", "covered_value", "legacy_value"})
 # 5C-C26 audit C26A-1/2: any other money-named key is dropped too (the audit
@@ -455,6 +457,85 @@ async def _values_for(ctx, data: Dict[str, Any], *,
     out[rows_key] = rows
     if hidden:
         out["values_hidden"] = True
+    return out
+
+
+# ───────────── WH-FIX-01 (FG-161) — the same rules for legacy reads ─────────────
+# The legacy warehouse reads (procurement `/warehouse-transactions`,
+# `/warehouse-stock`, `/inventory/dashboard`, `warehouse_batches.py`) run on
+# the session user (require_m2 / get_current_user), not on a TenantContext.
+# They apply THE rules above (Р20 / Р32 / Р34 / Р35, FG-23) decided from the
+# legacy session role (Р28 parity: off / shadow decide by that role too).
+LEGACY_WAREHOUSE_TYPE_MAP = {"main": "central_warehouse", "central": "central_warehouse",
+                             "project": "project"}
+
+
+class _SessionRoleCtx:
+    def __init__(self, user: dict):
+        from app.permissions.deps import MODE_OFF
+        self.user = user or {}
+        self.mode = MODE_OFF
+        self.user_id = self.user.get("id")
+        self.tenant_id = self.user.get("org_id")
+
+
+async def value_scope_for_user(user: dict):
+    """"all" or the location types the session role sees money on."""
+    return await _value_scope(_SessionRoleCtx(user))
+
+
+async def _legacy_warehouse_types(tenant, org_id: str) -> Dict[str, str]:
+    out = {}
+    async for wh in tenant.warehouses.find({"org_id": org_id},
+                                           {"_id": 0, "id": 1, "type": 1}):
+        out[wh["id"]] = LEGACY_WAREHOUSE_TYPE_MAP.get(wh.get("type"), "small_warehouse")
+    return out
+
+
+def _with_location(row: Dict[str, Any], wh_types: Dict[str, str]) -> Dict[str, Any]:
+    """The row as the visibility rule reads it: a legacy row (no canonical
+    location) is located at its `warehouse_id` (unknown → no money)."""
+    if any(isinstance(row.get(k), dict) for k in ("location", "source", "destination")) \
+            or "location_type" in row:
+        return row
+    probe = dict(row)
+    wh = row.get("warehouse_id")
+    probe["location"] = {"location_type": wh_types.get(wh) if wh else None}
+    return probe
+
+
+async def mask_rows_for_user(user: dict, tenant, rows: List[Dict[str, Any]]):
+    """(rows, values_hidden) — per row, money only where the role sees it."""
+    scope = await value_scope_for_user(user)
+    if scope == "all":
+        return rows, False
+    wh_types = await _legacy_warehouse_types(tenant, user.get("org_id"))
+    out, hidden = [], False
+    for row in rows:
+        if scope and _value_visible(_with_location(row, wh_types), scope):
+            out.append(row)
+        else:
+            out.append(strip_values(row))
+            hidden = True
+    return out, hidden
+
+
+async def mask_doc_for_user(user: dict, tenant, doc: Dict[str, Any], *,
+                            location_type: Optional[str] = None) -> Dict[str, Any]:
+    """One payload decided as one row located at ``location_type`` (or at
+    its own location / warehouse_id)."""
+    scope = await value_scope_for_user(user)
+    if scope == "all":
+        return doc
+    probe = dict(doc)
+    if location_type is not None:
+        probe["location"] = {"location_type": location_type}
+    else:
+        probe = _with_location(doc, await _legacy_warehouse_types(tenant, user.get("org_id")))
+    if scope and _value_visible(probe, scope):
+        return doc
+    out = strip_values(doc)
+    out["values_hidden"] = True
     return out
 
 

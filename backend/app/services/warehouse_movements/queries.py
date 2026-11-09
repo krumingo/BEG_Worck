@@ -339,6 +339,29 @@ async def integrity_warnings(
             "note": "historical rows pre-TASK-5C; canonical writer refuses these",
         })
 
+    # WH-FIX-01 (FG-191, Data Quality): a priced supplier receipt that names
+    # NO invoice line carries a price entered at the warehouse (Р32) that no
+    # invoice confirms. Not refused (Р32) — shown here until it is linked.
+    manual_ids = []
+    async for r in tenant_collection.find(
+            {"tenant_id": tenant_id,
+             "action": {"$in": ["receive_from_supplier", "receive_from_supplier_to_project"]},
+             "$or": [{"invoice_line_id": None}, {"invoice_line_id": ""}]},
+            {"_id": 0, "movement_id": 1, "unit_value": 1}, session=session):
+        try:
+            priced = Decimal(str(r.get("unit_value") or "0")) > 0
+        except Exception:
+            priced = True
+        if priced:
+            manual_ids.append(r.get("movement_id"))
+    if manual_ids:
+        warnings.append({
+            "code": "MANUAL_PRICE_WITHOUT_INVOICE_LINE",
+            "count": len(manual_ids),
+            "movement_ids": sorted(m for m in manual_ids if m),
+            "note": "receipt priced without an invoice line — link it or confirm the price",
+        })
+
     # Unresolved in-transit aging — dispatches older than N hours whose
     # accepted qty < dispatched qty.
     aged_dispatch_cutoff = (now.timestamp() - in_transit_aging_hours * 3600)

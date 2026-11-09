@@ -129,7 +129,7 @@ def _service() -> CommandService:
     Instances are cheap; keeping one around is fine but a per-request
     instance keeps tests independent.
     """
-    return CommandService(mongo_client)
+    return CommandService(mongo_client, strict_master_identity=True)  # WH-FIX-01 FG-192
 
 
 async def _response(ctx, result) -> "MovementCommandResponse":
@@ -160,6 +160,7 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         "INVOICE_LINE_QTY_EXCEEDED": 422,
         "INVOICE_LINE_FULLY_LINKED": 409,
         "INVOICE_LINE_UNIT_MISMATCH": 422,
+        "INVOICE_LINE_PRICE_MISMATCH": 422,      # WH-FIX-01 FG-191
         "NEGATIVE_STOCK": 422,
         "ORIGIN_ACCEPTANCE_OVERRUN": 422,
         "QUARANTINE_STATE_VIOLATION": 422,

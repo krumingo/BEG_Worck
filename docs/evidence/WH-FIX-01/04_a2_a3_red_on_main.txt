@@ -1,0 +1,222 @@
+FFFFFFFFFFFF......FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF                   [100%]
+=================================== FAILURES ===================================
+E   AssertionError: {"allocation_id":"74255e56-a7f7-5953-81f0-c56611429612","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.462928+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"32601234-cc99-554b-9a9e-e74a98914e95"}
+    assert 201 == 409
+     +  where 201 = <Response [201 Created]>.status_code
+------------------------------ Captured log call -------------------------------
+WARNING  app.utils.crypto:crypto.py:21 Using development JWT secret. Set JWT_SECRET env var for production.
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:77: AssertionError: {"allocation_id":"74255e56-a7f7-5953-81f0-c56611429612","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.462928+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"32601234-cc99-554b-9a9e-e74a98914e95"}
+E   AssertionError: {"allocation_id":"4f473788-d2a3-5cee-83f8-3c8c182bdc1a","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.489238+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"3bfebaf3-e56d-569b-8e3e-f0242973e18d"}
+    assert 201 == 409
+     +  where 201 = <Response [201 Created]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:77: AssertionError: {"allocation_id":"4f473788-d2a3-5cee-83f8-3c8c182bdc1a","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.489238+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"3bfebaf3-e56d-569b-8e3e-f0242973e18d"}
+E   AssertionError: {"allocation_id":"2a983667-2789-5084-9314-ab0bb20ed94d","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.517050+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"e9100d83-c358-59cc-99a8-ab4f15f80b8a"}
+    assert 201 == 409
+     +  where 201 = <Response [201 Created]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:77: AssertionError: {"allocation_id":"2a983667-2789-5084-9314-ab0bb20ed94d","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.517050+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"e9100d83-c358-59cc-99a8-ab4f15f80b8a"}
+E   AssertionError: {"allocation_id":"c139e7c2-cf12-5f18-b4f9-6861518ddc1c","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.749861+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"119c76e9-13af-5f75-abfd-93d30c10eaec"}
+    assert 201 == 409
+     +  where 201 = <Response [201 Created]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:77: AssertionError: {"allocation_id":"c139e7c2-cf12-5f18-b4f9-6861518ddc1c","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:33.749861+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"119c76e9-13af-5f75-abfd-93d30c10eaec"}
+E   AssertionError: {"allocation_id":"09bd224a-7c4b-5209-8098-40e358d30e3d","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:34.179410+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"24e52869-ba81-5484-b2d1-f013c8effb5f"}
+    assert 201 == 409
+     +  where 201 = <Response [201 Created]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:77: AssertionError: {"allocation_id":"09bd224a-7c4b-5209-8098-40e358d30e3d","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:34.179410+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"24e52869-ba81-5484-b2d1-f013c8effb5f"}
+E   AssertionError: {"allocation_id":"1f13b414-fe97-5698-af0c-dc7cc3a403eb","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:34.625998+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"170906a5-f745-5553-a02b-09366efd51a0"}
+    assert 201 == 409
+     +  where 201 = <Response [201 Created]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:77: AssertionError: {"allocation_id":"1f13b414-fe97-5698-af0c-dc7cc3a403eb","amount":1200.0,"invoice":{"counterparty_name":"Доставчик","currency":"EUR","direction":"Received","due_date":"2099-12-31","id":"inv-r44","invoice_no":"R-44","issue_date":"2026-11-01","kind":"Invoice","org_id":"ORG-PAY01-A","paid_amount":1200.0,"remaining_amount":0,"status":"Paid","subtotal":1000.0,"total":1200.0,"updated_at":"2026-11-08T08:25:34.625998+00:00","vat_amount":200.0,"vat_percent":20},"ok":true,"payment_id":"170906a5-f745-5553-a02b-09366efd51a0"}
+E   AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:34.872813+00:00","amount_allocated":50.0,"id":"238c7c23-6a7d-5a8b-92c7-0777dd51932d","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"366fc3c4-ed5e-42bf-abb7-43382bd4b3eb"}],"ok":true}
+    assert 200 == 409
+     +  where 200 = <Response [200 OK]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:92: AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:34.872813+00:00","amount_allocated":50.0,"id":"238c7c23-6a7d-5a8b-92c7-0777dd51932d","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"366fc3c4-ed5e-42bf-abb7-43382bd4b3eb"}],"ok":true}
+E   AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:34.906434+00:00","amount_allocated":50.0,"id":"e1625f31-f931-57a3-b1ff-159c4ed12696","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"d0aca8a2-5357-45c1-985a-ab60833accdb"}],"ok":true}
+    assert 200 == 409
+     +  where 200 = <Response [200 OK]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:92: AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:34.906434+00:00","amount_allocated":50.0,"id":"e1625f31-f931-57a3-b1ff-159c4ed12696","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"d0aca8a2-5357-45c1-985a-ab60833accdb"}],"ok":true}
+E   AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:34.934112+00:00","amount_allocated":50.0,"id":"d4de7e41-5272-5c41-88c5-f7df12093d1b","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"1ad697bc-b3c3-4239-a080-47d2779de76e"}],"ok":true}
+    assert 200 == 409
+     +  where 200 = <Response [200 OK]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:92: AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:34.934112+00:00","amount_allocated":50.0,"id":"d4de7e41-5272-5c41-88c5-f7df12093d1b","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"1ad697bc-b3c3-4239-a080-47d2779de76e"}],"ok":true}
+E   AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:35.166464+00:00","amount_allocated":50.0,"id":"82d9a98a-d12e-58a9-9462-ba044c7df863","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"0e52710f-7764-47fa-885f-1916e9a1ed68"}],"ok":true}
+    assert 200 == 409
+     +  where 200 = <Response [200 OK]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:92: AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:35.166464+00:00","amount_allocated":50.0,"id":"82d9a98a-d12e-58a9-9462-ba044c7df863","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"0e52710f-7764-47fa-885f-1916e9a1ed68"}],"ok":true}
+E   AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:35.600941+00:00","amount_allocated":50.0,"id":"30ef234b-b390-5836-8e01-ad6a06fa5465","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"1995ed10-c356-4db3-9fb2-35f0994be915"}],"ok":true}
+    assert 200 == 409
+     +  where 200 = <Response [200 OK]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:92: AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:35.600941+00:00","amount_allocated":50.0,"id":"30ef234b-b390-5836-8e01-ad6a06fa5465","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"1995ed10-c356-4db3-9fb2-35f0994be915"}],"ok":true}
+E   AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:36.062889+00:00","amount_allocated":50.0,"id":"32ba6d9d-d724-565e-9f1f-a956bb821410","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"44b9d961-a3c5-4138-967e-f58f97772a44"}],"ok":true}
+    assert 200 == 409
+     +  where 200 = <Response [200 OK]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:92: AssertionError: {"allocations":[{"allocated_at":"2026-11-08T08:25:36.062889+00:00","amount_allocated":50.0,"id":"32ba6d9d-d724-565e-9f1f-a956bb821410","invoice_id":"inv-r44","org_id":"ORG-PAY01-A","payment_id":"44b9d961-a3c5-4138-967e-f58f97772a44"}],"ok":true}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 200
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:111: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 200
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:111: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 200
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:111: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 200
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:111: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 200
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:111: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 200
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:111: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   AssertionError: {"detail":"Invoice line not found"}
+    assert 404 == 403
+     +  where 404 = <Response [404 Not Found]>.status_code
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:150: AssertionError: {"detail":"Invoice line not found"}
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+E   ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_a3_r44_allocation.py:159: ModuleNotFoundError: No module named 'app.services.invoice_allocation'
+=========================== short test summary info ============================
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409[mongomock-off]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409[mongomock-shadow]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409[mongomock-enforce]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409[real-off]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409[real-shadow]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409[real-enforce]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_allocate_payment_to_it_is_409[mongomock-off]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_allocate_payment_to_it_is_409[mongomock-shadow]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_allocate_payment_to_it_is_409[mongomock-enforce]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_allocate_payment_to_it_is_409[real-off]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_allocate_payment_to_it_is_409[real-shadow]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_r44_allocate_payment_to_it_is_409[real-enforce]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes[mongomock-off]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes[mongomock-shadow]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes[mongomock-enforce]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes[real-off]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes[real-shadow]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes[real-enforce]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-off-viewer-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-off-site-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-off-tech-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-shadow-viewer-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-shadow-site-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-shadow-tech-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-enforce-viewer-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-enforce-site-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[mongomock-enforce-tech-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-off-viewer-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-off-site-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-off-tech-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-shadow-viewer-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-shadow-site-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-shadow-tech-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-enforce-viewer-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-enforce-site-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_list_is_for_finance_roles_only[real-enforce-tech-a]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[mongomock-off-None-3]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[mongomock-off-5-5]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[mongomock-shadow-None-3]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[mongomock-shadow-5-5]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[mongomock-enforce-None-3]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[mongomock-enforce-5-5]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[real-off-None-3]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[real-off-5-5]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[real-shadow-None-3]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[real-shadow-5-5]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[real-enforce-None-3]
+FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner[real-enforce-5-5]
+48 failed, 6 passed in 11.81s

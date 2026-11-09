@@ -252,6 +252,15 @@ async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict 
     if new_type == "person" and not (update.get("person_id") or warehouse.get("person_id")):
         raise HTTPException(status_code=400, detail="person_id required for person warehouse")
     
+    # WH-FIX-01 (FG-163): changing what the warehouse is, or deactivating
+    # it, passes the same in-use guard as DELETE (409, nothing written).
+    identity_change = any(
+        k in update and update[k] != warehouse.get(k)
+        for k in ("type", "project_id", "vehicle_id", "person_id"))
+    deactivate = update.get("active") is False and warehouse.get("active", True) is not False
+    if identity_change or deactivate:
+        await _refuse_if_warehouse_in_use(tenant, user["org_id"], warehouse_id)
+
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     # W0-03E-A2B: this tenant's warehouse only (ids collide across tenants).
@@ -259,28 +268,14 @@ async def update_warehouse(warehouse_id: str, data: WarehouseUpdate, user: dict 
     return await tenant.warehouses.find_one({"id": warehouse_id, "org_id": user["org_id"]}, {"_id": 0})
 
 
-@router.delete("/warehouses/{warehouse_id}")
-async def delete_warehouse(warehouse_id: str, user: dict = Depends(get_current_user)):
-    """Archive warehouse (soft delete by setting active=false).
-
-    CODEX C08 — warehouse archive now refuses when the warehouse has
-    ANY of: open stock, open reservation, open quarantine, open
-    in-transit remainder, or a pending movement/mapping that references
-    this warehouse (v6 §5.1 and FLOW-009 "Какво НЕ трябва да позволява").
-    The TODO is closed.
-    """
-    if not warehouse_permission(user):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
-
-    tenant = _tenant(user)
-    warehouse = await tenant.warehouses.get(warehouse_id)
-    if not warehouse:
-        raise HTTPException(status_code=404, detail="Warehouse not found")
-
+async def _refuse_if_warehouse_in_use(tenant, org: str, wh_id: str) -> None:
+    """CODEX C08 — 409 when the warehouse still has open stock, an open
+    reservation / quarantine / in-transit, or a pending movement naming it.
+    WH-FIX-01 (FG-163): the SAME guard for DELETE (archive) and for a PUT
+    that changes what the warehouse is (type / project / vehicle / person)
+    or deactivates it — a PUT can no longer bypass the 409 of DELETE."""
     # Dependency guards — scan the canonical ledger for any row still
     # anchored to this warehouse at a non-closed state.
-    org = user["org_id"]
-    wh_id = warehouse_id
 
     # 1. Any outstanding stock (unconsumed inbound minus outbound against
     # this warehouse). We piggyback on `item_balance_by_location` by
@@ -325,6 +320,28 @@ async def delete_warehouse(warehouse_id: str, user: dict = Depends(get_current_u
             "message": "Open reservation/quarantine/in-transit refuses archive",
             "pending_movement_id": pending.get("movement_id") or pending.get("id"),
         })
+
+
+@router.delete("/warehouses/{warehouse_id}")
+async def delete_warehouse(warehouse_id: str, user: dict = Depends(get_current_user)):
+    """Archive warehouse (soft delete by setting active=false).
+
+    CODEX C08 — warehouse archive now refuses when the warehouse has
+    ANY of: open stock, open reservation, open quarantine, open
+    in-transit remainder, or a pending movement/mapping that references
+    this warehouse (v6 §5.1 and FLOW-009 "Какво НЕ трябва да позволява").
+    The TODO is closed.
+    """
+    if not warehouse_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    tenant = _tenant(user)
+    warehouse = await tenant.warehouses.get(warehouse_id)
+    if not warehouse:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+
+    # Dependency guards — CODEX C08 (shared with PUT, WH-FIX-01 FG-163).
+    await _refuse_if_warehouse_in_use(tenant, user["org_id"], warehouse_id)
 
     await tenant.warehouses.update_one(
         {"id": warehouse_id},
