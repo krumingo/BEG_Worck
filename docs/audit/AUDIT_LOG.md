@@ -5887,3 +5887,22 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 
 - At the orchestrator's request, this session stops running Mongo gates. AUDIT-2 runs the queue on a fresh disk from the 07:24 handoff and the entries above.
 - No batch or Mongo test is running here. This log is pushed (`claude/audit-log`).
+## 2026-11-09 07:30 UTC: AUDIT-2 takes over (fresh session, empty disk)
+
+- **Handover:** from session `session_01UghxKZiQ4VfsNzfoAGs1Ek` (disk full). Method, probes and gates unchanged.
+- **Environment:** three local `mongo:7.0` single-node replica sets (`rs0`), each on its own docker volume created by this session, `--quiet --slowms 600000 --logpath /tmp/mongod.log` (no json log driver). Every gate drops its test DBs and `fsync`s; each warehouse file runs on a clean DB; a watchdog stops a run below 500 MB free. ~26 GB free.
+- **Role-union tool:** `catalog.PERMISSION_MATRIX` of the merge vs the union of both parents (per role, removed and added actions); constants that differ from both parents are listed.
+
+## 2026-11-09 07:33 UTC: main `1525a1e` (merge of #81) verified
+
+- Parents `44e8d97` + `3028304` (the audited head, PASS). Tree `d2011a67` = `merge-tree(44e8d97, 3028304)`, byte-identical.
+- Role-union 0.
+- **Baseline on real Mongo:** W0 = 16 failed / 1176 passed (the 15 `test_w0_03e_legacy_routes` + the order-dependent `test_w0_03e_real_mongo::test_r1_…`); A2C 0/242; A1 0/488.
+
+## 2026-11-09 07:50 UTC: #88 PWA-01 `7c284fa` (code `e571b06`): PASS, no blocking finding
+
+- **Backend diff:** empty. Code review: see the 20:49 / 21:08 entries (D1 fix correct and minimal).
+- **On the head:** `yarn install --frozen-lockfile`; jest **24 suites / 221**; `yarn build` OK (CRA warnings only); Playwright with the pre-installed Chromium, prod build served by `e2e/server.js`: **35 / 35**.
+- **Cache Storage (my run's `cache-check.json`):** only `bw-shell-7c284fab3d89-*`; **0** `/api`, `/uploads`, `/ws` entries; offline `fetch('/api/payments')` = network error; logout and tenant switch leave only the shell cache.
+- **Onto main `1525a1e`:** merges cleanly. On the trial merge (backend byte-identical to main): jest **25 / 224** (main's extra suite), build OK, Playwright **35 / 35**.
+- **Mongo gates:** not applicable (no backend change; merged backend = main).
