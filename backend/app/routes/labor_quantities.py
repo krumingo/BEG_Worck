@@ -244,6 +244,23 @@ async def list_labor_terms(project_id: str, user: dict = Depends(get_current_use
     return {"project_id": project_id, "items": pkgs}
 
 
+async def _written_terms(tenant: TenantData, org_id: str, package_id: str, version) -> Optional[dict]:
+    """FG-464: the answer of PUT /labor-terms (and of its replay) is the version THIS request
+    wrote — its history row — never the package's current terms, which a later change may
+    already have moved on."""
+    pkg = await tenant.execution_packages.find_one({"org_id": org_id, "id": package_id}, {"_id": 0})
+    if pkg is None or version is None:
+        return pkg
+    hist = await tenant.labor_terms_history.find_one(
+        {"org_id": org_id, "package_id": package_id, "version": version}, {"_id": 0})
+    if hist is None:
+        return None
+    return {**pkg, **(hist.get("after") or {}), "labor_terms_version": version,
+            "labor_terms_updated_at": hist.get("changed_at"),
+            "labor_terms_updated_by": hist.get("changed_by"),
+            "written_version": version, "current_version": pkg.get("labor_terms_version")}
+
+
 @router.put("/labor-terms/{package_id}")
 async def set_labor_terms(package_id: str, data: LaborTermsInput, user: dict = Depends(get_current_user),
                           idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key")):
@@ -304,11 +321,11 @@ async def set_labor_terms(package_id: str, data: LaborTermsInput, user: dict = D
             return version
 
         version = await _run_tx(body)
-        out = await tenant.execution_packages.find_one({"org_id": org_id, "id": package_id}, {"_id": 0})
-        return out, f"{package_id}:{version}"
+        return await _written_terms(tenant, org_id, package_id, version), f"{package_id}:{version}"
 
     async def replay(ref):
-        return await tenant.execution_packages.find_one({"org_id": org_id, "id": ref.split(":")[0]}, {"_id": 0})
+        pkg_id, _, ver = ref.rpartition(":")
+        return await _written_terms(tenant, org_id, pkg_id, int(ver) if ver.isdigit() else None)
 
     return await _idempotent(user, idempotency_key, "labor_terms.set",
                              {"package_id": package_id, **data.model_dump()}, perform, replay)

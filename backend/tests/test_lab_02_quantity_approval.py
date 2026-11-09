@@ -610,3 +610,41 @@ def test_f75_01_without_transactions_the_piece_rate_is_refused_and_writes_nothin
     from app.routes import labor_quantities as _lq
     production_run_tx = _lq._run_tx
     run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════════════════════ FG-464 (FLOW Guard pass 38)
+def test_fg464_the_answer_and_its_replay_are_the_version_this_request_wrote(monkeypatch, backend):
+    """PUT /labor-terms answers with the version IT wrote (its history row) — never the
+    package's current terms, which a later change may already have moved on; the replay of
+    its key answers the same, after any number of later changes."""
+    from app.routes import labor_quantities as lq
+
+    async def scenario(c, op):
+        h1 = H("acct")
+        a = await c.put("/api/labor-terms/pkg-sh", json={"labor_pay_type": "Akord", "labor_piece_rate": 5,
+                                                          "reason": "v1"}, headers=h1)
+        assert a.status_code == 200, a.text
+        assert (a.json()["labor_terms_version"], a.json()["labor_piece_rate"]) == (1, 5)
+        b = await c.put("/api/labor-terms/pkg-sh", json={"labor_pay_type": "Akord", "labor_piece_rate": 7,
+                                                          "reason": "v2"}, headers=H("owner"))
+        assert (b.json()["labor_terms_version"], b.json()["labor_piece_rate"]) == (2, 7), b.text
+        again = await c.put("/api/labor-terms/pkg-sh", json={"labor_pay_type": "Akord", "labor_piece_rate": 5,
+                                                              "reason": "v1"}, headers=h1)
+        assert again.status_code == 200 and again.json()["idempotent_replay"] is True, again.text
+        assert (again.json()["labor_terms_version"], again.json()["labor_piece_rate"]) == (1, 5), again.text
+        assert again.json()["current_version"] == 2
+
+        # a change committed between this request's write and its answer
+        inner = lq._run_tx
+
+        async def then_someone_else(body):
+            version = await inner(body)
+            await op.execution_packages.update_one({"id": "pkg-sh"}, {"$set": {
+                "labor_piece_rate": 99, "labor_terms_version": version + 1}})
+            return version
+        monkeypatch.setattr(lq, "_run_tx", then_someone_else)
+        d = await c.put("/api/labor-terms/pkg-sh", json={"labor_pay_type": "Akord", "labor_piece_rate": 8,
+                                                          "reason": "v3"}, headers=H("admin"))
+        assert d.status_code == 200, d.text
+        assert (d.json()["labor_terms_version"], d.json()["labor_piece_rate"]) == (3, 8), d.json()
+    run(monkeypatch, scenario, backend)
