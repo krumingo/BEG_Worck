@@ -1,0 +1,27 @@
+## warehouse canonical — head caf8413 — file by file, real mongo:7.0 rs0 (fresh), PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, MONGO_TEST_DB=begwork_task5c_test, -rfs (conftest on, as main's evidence)
+tests/test_warehouse_canonical_actions.py: 7 passed in 1.23s
+tests/test_warehouse_canonical_c12_regressions.py: 14 passed in 3.30s
+tests/test_warehouse_canonical_c13_mongo.py: 6 passed in 3.18s
+tests/test_warehouse_canonical_c13_regressions.py: 22 passed in 1.74s
+tests/test_warehouse_canonical_c14_regressions.py: 8 passed in 1.15s
+tests/test_warehouse_canonical_c15_regressions.py: 7 passed in 1.14s
+tests/test_warehouse_canonical_c16_regressions.py: 5 passed in 1.19s
+tests/test_warehouse_canonical_c18_corrections.py: 10 passed in 1.90s
+tests/test_warehouse_canonical_c19_bot_findings.py: 25 passed, 9 warnings in 8.67s
+tests/test_warehouse_canonical_c20_finance_reads.py: 11 passed in 4.59s
+tests/test_warehouse_canonical_c21_writeoff_transfer.py: 16 passed, 4 warnings in 6.35s
+tests/test_warehouse_canonical_c22_all_reports_cutover.py: 10 passed in 6.78s
+tests/test_warehouse_canonical_c23_profit_period_waste.py: 10 passed in 4.92s
+tests/test_warehouse_canonical_c24_fifo_layers_legacy_index.py: 10 passed in 6.77s
+tests/test_warehouse_canonical_c25_cost_at_accept_transit.py: 16 passed, 4 warnings in 11.38s
+tests/test_warehouse_canonical_c26_one_path_per_lot.py: 12 passed in 6.70s
+tests/test_warehouse_canonical_c26a_writeoff_rights_values.py: 38 passed in 12.17s
+tests/test_warehouse_canonical_c26b_project_writeoff_endpoint.py: 22 passed, 4 warnings in 6.75s
+tests/test_warehouse_canonical_c26b_value_leak.py: 4 passed, 12 warnings in 2.64s
+tests/test_warehouse_canonical_c26c_r27_all_modes.py: 40 passed, 4 warnings in 14.45s
+tests/test_warehouse_canonical_c26d_subproject_parent.py: 24 passed, 4 warnings in 7.86s
+tests/test_warehouse_canonical_c26e_r28_all_modes.py: 272 passed in 95.24s (0:01:35)
+tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed in 21.19s
+tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed in 9.10s
+tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed, 4 warnings in 7.15s
+# from c26j on: the first pass hit mongod's open-file limit ('Too many open files', WiredTiger panic) in c26j; re-run file by file, each on a fresh container:
