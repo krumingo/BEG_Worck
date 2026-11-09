@@ -133,10 +133,16 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),
     **_family(FAMILY_AUDIT,
-              "audit_logs"),
+              "audit_logs",
+              # PWA-02 (R61): the offline sync ledger — one receipt per idempotency key,
+              # field-vs-office conflicts, late records waiting for the office, and items
+              # that arrived from a blocked device.
+              "sync_receipts", "sync_conflicts", "sync_late", "sync_quarantine"),
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",
+              # PWA-02 (R61-6): the per-tenant device register (revoked_at/by/reason).
+              "sync_devices",
               "ai_cache",
               # R0-01: the checkout record a Stripe webhook resolves its tenant
               # from, and the processed-event ledger (unique stripe_event_id).

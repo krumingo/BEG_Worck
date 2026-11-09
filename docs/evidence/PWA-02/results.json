@@ -1,0 +1,499 @@
+{
+ "calls": {
+  "confirm": 0,
+  "edit": 1,
+  "note": 3
+ },
+ "conflict": {
+  "conflict_rows": 1,
+  "replay": {
+   "captured_at": "2026-11-09T17:00:38.369379+00:00",
+   "idempotency_key": "20fa7307-c7ea-4192-a117-3455b7d74a0a",
+   "local_id": "b2f0c65b-514c-41d4-a836-f2a371200d56",
+   "received_at": "2026-11-09T17:00:38.374004+00:00",
+   "replay": true,
+   "result": {
+    "conflict_id": "1cb1377d-0f78-424f-89d4-e9ba3376d2f3",
+    "kind": "approved"
+   },
+   "status": "conflict"
+  },
+  "result": {
+   "captured_at": "2026-11-09T17:00:38.369379+00:00",
+   "idempotency_key": "20fa7307-c7ea-4192-a117-3455b7d74a0a",
+   "local_id": "b2f0c65b-514c-41d4-a836-f2a371200d56",
+   "received_at": "2026-11-09T17:00:38.374004+00:00",
+   "replay": false,
+   "result": {
+    "conflict_id": "1cb1377d-0f78-424f-89d4-e9ba3376d2f3",
+    "kind": "approved"
+   },
+   "status": "conflict"
+  },
+  "row": {
+   "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "diff": [
+    {
+     "field": "hours",
+     "office": 8,
+     "phone": 10
+    },
+    {
+     "field": "updated_at",
+     "office": "2026-11-09T07:00:00+00:00",
+     "phone": "2026-11-08T07:00:00+00:00"
+    }
+   ],
+   "field_version": {
+    "hours": 10,
+    "status": "APPROVED",
+    "updated_at": "2026-11-08T07:00:00+00:00"
+   },
+   "kind": "approved",
+   "office_version": {
+    "hours": 8,
+    "status": "APPROVED",
+    "updated_at": "2026-11-09T07:00:00+00:00"
+   },
+   "status": "open"
+  }
+ },
+ "console": {
+  "B_owner_sees_A_device": false,
+  "accountant": 403,
+  "admin": 200,
+  "owner": 200,
+  "owner_counts": {
+   "conflicts": 1,
+   "devices": 1,
+   "late": 2,
+   "quarantine": 0,
+   "revoked": 0
+  },
+  "owner_sees_device": true,
+  "requester": 403,
+  "technician": 403,
+  "viewer": 403
+ },
+ "device": {
+  "batch_unregistered": {
+   "body": {
+    "detail": {
+     "error_code": "DEVICE_NOT_REGISTERED",
+     "message": "Устройството не е регистрирано"
+    }
+   },
+   "error_code": "DEVICE_NOT_REGISTERED",
+   "status": 409
+  },
+  "devices_rows": 1,
+  "register": {
+   "body": {
+    "created_at": "2026-11-09T17:00:38.144316+00:00",
+    "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "label": "Телефон Иван",
+    "last_seen_at": "2026-11-09T17:00:38.144316+00:00",
+    "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "last_user_name": "ST01 A technician",
+    "org_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2",
+    "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "revoked_at": null,
+    "user_agent": "testclient"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "register_again": {
+   "body": {
+    "created_at": "2026-11-09T17:00:38.144316+00:00",
+    "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "label": "Телефон Иван",
+    "last_seen_at": "2026-11-09T17:00:38.153808+00:00",
+    "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "last_user_name": "ST01 A technician",
+    "org_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2",
+    "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "revoked_at": null,
+    "user_agent": "testclient"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "register_bad_id": {
+   "body": {
+    "detail": {
+     "error_code": "DEVICE_ID_INVALID",
+     "message": "Невалиден идентификатор на устройство"
+    }
+   },
+   "error_code": "DEVICE_ID_INVALID",
+   "status": 422
+  }
+ },
+ "flag": {
+  "batch_off": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "flag_by_owner": {
+   "body": {
+    "detail": {
+     "error_code": "PLATFORM_ADMIN_REQUIRED",
+     "message": "Platform administrator access required"
+    }
+   },
+   "error_code": "PLATFORM_ADMIN_REQUIRED",
+   "status": 403
+  },
+  "flag_by_platform_admin": {
+   "body": {
+    "enabled": true,
+    "module_code": "offline_queue"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "register_off": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "status_B_still_off": {
+   "enabled": false,
+   "revoked": false,
+   "server_time": "2026-11-09T17:00:38.139952+00:00",
+   "tenant_id": "f6ef855c-55b4-4653-8304-a619732deef4",
+   "user_id": "76e13e35-b362-5593-b92a-e3342cf6b3bf"
+  },
+  "status_off": {
+   "enabled": false,
+   "revoked": false,
+   "server_time": "2026-11-09T17:00:38.103906+00:00",
+   "tenant_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  },
+  "status_on": {
+   "enabled": true,
+   "revoked": false,
+   "server_time": "2026-11-09T17:00:38.136223+00:00",
+   "tenant_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  }
+ },
+ "idempotency": {
+  "calls_note": 2,
+  "event_fields": {
+   "idempotency_key": "2c4f5ed8-86e0-48e2-a455-a798c2291bc0",
+   "source_channel": "offline_sync",
+   "source_flow": "FLOW-037",
+   "structured_diff": {
+    "captured_at": "2026-11-09T17:00:38.171632+00:00",
+    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "op_type": "probe.note",
+    "received_at": "2026-11-09T17:00:38.177725+00:00"
+   },
+   "tenant_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2"
+  },
+  "first": {
+   "captured_at": "2026-11-09T17:00:38.171632+00:00",
+   "idempotency_key": "2c4f5ed8-86e0-48e2-a455-a798c2291bc0",
+   "local_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+   "received_at": "2026-11-09T17:00:38.177725+00:00",
+   "replay": false,
+   "result": {
+    "entity_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+    "entity_type": "probe",
+    "ok": true
+   },
+   "status": "synced"
+  },
+  "key_reused": {
+   "idempotency_key": "2c4f5ed8-86e0-48e2-a455-a798c2291bc0",
+   "local_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+   "replay": false,
+   "result": {
+    "error_code": "IDEMPOTENCY_KEY_REUSED",
+    "message": "Ключът вече е използван за друг запис"
+   },
+   "status": "rejected"
+  },
+  "parallel_statuses": [
+   "processing",
+   "processing",
+   "synced"
+  ],
+  "receipts_env1": 1,
+  "receipts_par": 1,
+  "second": {
+   "captured_at": "2026-11-09T17:00:38.171632+00:00",
+   "idempotency_key": "2c4f5ed8-86e0-48e2-a455-a798c2291bc0",
+   "local_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+   "received_at": "2026-11-09T17:00:38.177725+00:00",
+   "replay": true,
+   "result": {
+    "entity_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+    "entity_type": "probe",
+    "ok": true
+   },
+   "status": "synced"
+  },
+  "synced_events": 2,
+  "third": {
+   "captured_at": "2026-11-09T17:00:38.171632+00:00",
+   "idempotency_key": "2c4f5ed8-86e0-48e2-a455-a798c2291bc0",
+   "local_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+   "received_at": "2026-11-09T17:00:38.177725+00:00",
+   "replay": true,
+   "result": {
+    "entity_id": "cfb89477-b971-44d5-a6f7-08ae0c4eb95c",
+    "entity_type": "probe",
+    "ok": true
+   },
+   "status": "synced"
+  }
+ },
+ "late": {
+  "clock_skew": {
+   "captured_at": "2026-11-09T17:00:38.336739+00:00",
+   "idempotency_key": "c64335b9-224b-4c7e-9237-0f60c536d237",
+   "local_id": "44ee1859-c426-4ea0-88e3-89cd75dd1702",
+   "received_at": "2026-11-09T17:00:38.342870+00:00",
+   "replay": false,
+   "result": {
+    "late_id": "b856d4ff-9794-40c2-b0cc-0b668e7b8667",
+    "reason": "clock_skew"
+   },
+   "status": "late"
+  },
+  "handler_not_called": true,
+  "late_row": {
+   "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "captured_at": "2026-11-08T15:00:38.320663+00:00",
+   "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+   "reason": "previous_day",
+   "received_at": "2026-11-09T17:00:38.324923+00:00",
+   "status": "open"
+  },
+  "late_rows": 2,
+  "nine_minutes_is_fine": "synced",
+  "previous_day": {
+   "captured_at": "2026-11-08T15:00:38.320663+00:00",
+   "idempotency_key": "7c0a38e9-99bd-439e-87f7-3c76619862e2",
+   "local_id": "f4b958e7-b7ca-4033-9cad-21794a3d3cbf",
+   "received_at": "2026-11-09T17:00:38.324923+00:00",
+   "replay": false,
+   "result": {
+    "late_id": "7bcf2043-b4e0-46ae-8e9d-2d7255d8d61e",
+    "reason": "previous_day"
+   },
+   "status": "late"
+  }
+ },
+ "refusals": {
+  "B_batch_on_A_device": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "bad_envelope": {
+   "idempotency_key": null,
+   "local_id": null,
+   "replay": false,
+   "result": {
+    "error_code": "ENVELOPE_INVALID",
+    "message": "Невалидно поле local_id"
+   },
+   "status": "rejected"
+  },
+  "empty_batch": 422,
+  "online_only_approve": {
+   "captured_at": "2026-11-09T17:00:38.262730+00:00",
+   "idempotency_key": "60eaa8bf-fe6b-46d2-8cfb-a8421a47b70e",
+   "local_id": "b2313740-e167-44fb-a0fb-33cb78386663",
+   "received_at": "2026-11-09T17:00:38.269050+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "ONLINE_ONLY",
+    "message": "Това изисква интернет"
+   },
+   "status": "rejected"
+  },
+  "online_only_payment": {
+   "captured_at": "2026-11-09T17:00:38.252700+00:00",
+   "idempotency_key": "b1659eec-1edd-4b75-86c5-84c7f9399f3a",
+   "local_id": "4648c75a-1567-4c7c-8c06-224c116cbb1e",
+   "received_at": "2026-11-09T17:00:38.256625+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "ONLINE_ONLY",
+    "message": "Това изисква интернет"
+   },
+   "status": "rejected"
+  },
+  "tenant_mismatch": {
+   "idempotency_key": "e4eed568-8155-4e72-b8b1-b667cbdf62f1",
+   "local_id": "3427bd5b-3bb1-4e10-9dd0-7ea8b6d9f532",
+   "replay": false,
+   "result": {
+    "error_code": "TENANT_MISMATCH",
+    "message": "Записът е за друга фирма"
+   },
+   "status": "rejected"
+  },
+  "unsupported": {
+   "captured_at": "2026-11-09T17:00:38.274687+00:00",
+   "idempotency_key": "1dbc7be7-9057-42e1-b833-0818cf59e7e8",
+   "local_id": "236ca4bb-8ae7-4296-a1d9-67b3b6175f9b",
+   "received_at": "2026-11-09T17:00:38.279019+00:00",
+   "replay": false,
+   "result": {
+    "error_code": "UNSUPPORTED_OP",
+    "message": "Този запис не може да се прави без интернет"
+   },
+   "status": "rejected"
+  },
+  "user_mismatch": {
+   "idempotency_key": "9acafe17-fbce-4c2c-8f53-a575b93ccc42",
+   "local_id": "1d3607da-3fea-4249-8dbb-08e82b5ffab0",
+   "replay": false,
+   "result": {
+    "error_code": "USER_MISMATCH",
+    "message": "Записът е на друг потребител"
+   },
+   "status": "rejected"
+  }
+ },
+ "revoke": {
+  "batch_after_revoke": {
+   "error_code": "DEVICE_REVOKED",
+   "results": [
+    {
+     "captured_at": "2026-11-09T17:00:38.472433+00:00",
+     "idempotency_key": "c48b95f8-7f52-45fe-8865-109777f2667b",
+     "local_id": "fa5df73b-82d6-4feb-8afb-1118f0d02602",
+     "received_at": "2026-11-09T17:00:38.477648+00:00",
+     "replay": false,
+     "result": {
+      "quarantine_id": "7afb5cd9-2091-42c8-b8c5-5cb1579f9e20"
+     },
+     "status": "quarantined"
+    }
+   ],
+   "status": 403
+  },
+  "by_B_owner": {
+   "body": {
+    "detail": {
+     "error_code": "DEVICE_NOT_FOUND",
+     "message": "Няма такова устройство"
+    }
+   },
+   "error_code": "DEVICE_NOT_FOUND",
+   "status": 404
+  },
+  "by_owner": {
+   "body": {
+    "created_at": "2026-11-09T17:00:38.144316+00:00",
+    "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+    "label": "Телефон Иван",
+    "last_seen_at": "2026-11-09T17:00:38.153808+00:00",
+    "last_sync_at": "2026-11-09T17:00:38.389900+00:00",
+    "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "last_user_name": "ST01 A technician",
+    "org_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2",
+    "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+    "revoke_reason": "Изгубен телефон",
+    "revoked_at": "2026-11-09T17:00:38.460628+00:00",
+    "revoked_by": "8d850180-5e33-4d65-b3f3-b0b3b1d30273",
+    "revoked_by_name": "ST01 A owner",
+    "user_agent": "testclient"
+   },
+   "error_code": null,
+   "status": 200
+  },
+  "by_technician": 403,
+  "console_counts": {
+   "conflicts": 1,
+   "devices": 1,
+   "late": 2,
+   "quarantine": 1,
+   "revoked": 1
+  },
+  "handler_not_called": true,
+  "no_key": {
+   "body": {
+    "detail": {
+     "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+     "message": "Липсва Idempotency-Key — заявката не е записана"
+    }
+   },
+   "error_code": "IDEMPOTENCY_KEY_REQUIRED",
+   "status": 428
+  },
+  "no_reason": {
+   "body": {
+    "detail": {
+     "error_code": "REASON_REQUIRED",
+     "message": "Посочете причина"
+    }
+   },
+   "error_code": "REASON_REQUIRED",
+   "status": 422
+  },
+  "quarantine_rows": 1,
+  "register_after_revoke": {
+   "body": {
+    "detail": {
+     "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
+     "error_code": "DEVICE_REVOKED",
+     "message": "Устройството е блокирано"
+    }
+   },
+   "error_code": "DEVICE_REVOKED",
+   "status": 403
+  },
+  "revoke_event": {
+   "actor_id": "8d850180-5e33-4d65-b3f3-b0b3b1d30273",
+   "reason": "Изгубен телефон",
+   "tenant_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2"
+  },
+  "status_revoked": {
+   "enabled": true,
+   "revoked": true,
+   "server_time": "2026-11-09T17:00:38.471904+00:00",
+   "tenant_id": "bc09009b-f280-4e3b-87a6-a948876f7eb2",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
+  },
+  "user_can_still_log_in": 200
+ },
+ "rollback": {
+  "batch_when_off": {
+   "body": {
+    "detail": {
+     "error_code": "OFFLINE_QUEUE_DISABLED",
+     "message": "Работата без интернет не е включена за фирмата"
+    }
+   },
+   "error_code": "OFFLINE_QUEUE_DISABLED",
+   "status": 403
+  },
+  "off": 200,
+  "receipts_kept": 10
+ }
+}

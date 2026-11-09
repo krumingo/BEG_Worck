@@ -1,0 +1,558 @@
+"""PWA-02 (R61) — the server side of the offline queue.
+
+A phone records field work without a connection and later sends the queued items to
+``POST /api/sync/batch``. Each item carries an envelope (FLOW-037 §9): ``local_id``,
+``idempotency_key``, ``op_type``, ``captured_at`` + ``captured_tz``,
+``device_clock_offset_ms``, ``device_id``, ``tenant_id``, ``user_id``, ``base_version``
+and the operation payload. This module decides, for every item and in this order:
+
+1. the envelope is valid and belongs to the caller's tenant and user, else REJECTED;
+2. the same (tenant, user, idempotency_key) was seen before → the stored answer, nothing
+   written again (``sync_receipts``, unique index; kept, never expired → ≥ 30 days);
+3. the device is blocked (R61-6) → QUARANTINED (``sync_quarantine``), never official;
+4. the operation needs the internet (money, approvals, contracts, IBAN, roles…) or is not
+   an offline type this build knows → REJECTED;
+5. the record is late (R61-3: captured before today in the tenant's zone, or the phone's
+   clock is more than 10 minutes off) → LATE (``sync_late``), not official until Owner or
+   Admin confirms it;
+6. the handler of the operation runs THE SAME domain path as the online endpoint. A
+   field edit against a record that changed in the office, or that is approved or paid,
+   raises :class:`SyncConflict` → CONFLICT (``sync_conflicts``, R61-2/R61-4); nothing is
+   merged or overwritten.
+
+The authoritative time of an item is the server's time of receipt; ``captured_at`` is kept
+next to it and shown. The console (Owner/Admin) is a projection of these collections, not
+a second source of truth.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import re
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Awaitable, Callable, Dict, List, Optional
+
+from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
+
+from app.db import db
+from app.tenancy.data_access import TenantData
+
+try:  # Python 3.9+
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+except ImportError:  # pragma: no cover
+    ZoneInfo = None  # type: ignore
+    ZoneInfoNotFoundError = Exception  # type: ignore
+
+FLAG_CODE = "offline_queue"
+DEFAULT_TZ = "Europe/Sofia"
+#: R61-3 / PWA-02 default: a phone clock more than 10 minutes off makes the record late.
+CLOCK_SKEW_LIMIT_MS = 10 * 60 * 1000
+MAX_BATCH = 50
+#: a receipt left "processing" this long (a crashed request) may be taken over.
+PROCESSING_STALE = timedelta(minutes=2)
+
+# item statuses (the client maps them to the FLOW-037 §9 words)
+SYNCED = "synced"
+CONFLICT = "conflict"
+LATE = "late"
+REJECTED = "rejected"
+QUARANTINED = "quarantined"
+PROCESSING = "processing"
+
+#: R61-1: these never go through the offline queue — money and approvals need the internet.
+ONLINE_ONLY_PREFIXES = (
+    "payment", "invoice", "notice", "act", "contract", "annex", "approval", "approve",
+    "iban", "counterparty", "role", "permission", "master_data",
+)
+
+UUID_RE = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+
+COLLECTIONS = ("sync_devices", "sync_receipts", "sync_conflicts", "sync_late", "sync_quarantine")
+
+
+def refuse(status: int, code: str, message: str, **extra) -> HTTPException:
+    return HTTPException(status_code=status, detail={"error_code": code, "message": message,
+                                                     **extra})
+
+
+def now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def iso(dt: datetime) -> str:
+    return dt.astimezone(timezone.utc).isoformat()
+
+
+def _tenant(user: Dict[str, Any]) -> TenantData:
+    return TenantData.for_user(db, user)
+
+
+# ───────────────────────────────────────────────────────────────────── indexes
+async def ensure_sync_indexes(database) -> None:
+    """Idempotent; at startup and for every tenant database (no request creates a
+    collection). There is no migration runner in main — same pattern as OH-01."""
+    await database["sync_devices"].create_index([("org_id", 1), ("id", 1)], unique=True,
+                                                name="pwa02_device_unique")
+    await database["sync_receipts"].create_index(
+        [("org_id", 1), ("user_id", 1), ("idempotency_key", 1)], unique=True,
+        name="pwa02_receipt_key_unique")
+    await database["sync_receipts"].create_index([("org_id", 1), ("device_id", 1), ("received_at", -1)],
+                                                 name="pwa02_receipt_device")
+    for name in ("sync_conflicts", "sync_late", "sync_quarantine"):
+        await database[name].create_index([("org_id", 1), ("status", 1), ("created_at", -1)],
+                                          name="pwa02_%s_status" % name)
+
+
+async def ensure_sync_indexes_for_installation(op_db, system_db) -> List[str]:
+    names = [op_db.name]
+    records = await system_db["tenant_registry"].find(
+        {}, {"_id": 0, "database_name": 1}).to_list(None)
+    for r in records:
+        name = r.get("database_name")
+        if name and name not in names:
+            names.append(name)
+    for name in names:
+        await ensure_sync_indexes(op_db if name == op_db.name else op_db.client[name])
+    return names
+
+
+# ──────────────────────────────────────────────────────────────── feature flag
+async def is_enabled(user: Dict[str, Any]) -> bool:
+    row = await _tenant(user).feature_flags.find_one(
+        {"org_id": user["org_id"], "module_code": FLAG_CODE}, {"_id": 0, "enabled": 1})
+    return bool(row and row.get("enabled") is True)
+
+
+async def require_enabled(user: Dict[str, Any]) -> None:
+    if not await is_enabled(user):
+        raise refuse(403, "OFFLINE_QUEUE_DISABLED", "Работата без интернет не е включена за фирмата")
+
+
+async def set_enabled(user: Dict[str, Any], enabled: bool) -> Dict[str, Any]:
+    stamp = iso(now_utc())
+    await _tenant(user).feature_flags.update_one(
+        {"org_id": user["org_id"], "module_code": FLAG_CODE},
+        {"$set": {"enabled": bool(enabled), "updated_at": stamp, "updated_by": user["id"]},
+         "$setOnInsert": {"created_at": stamp}},
+        upsert=True)
+    await audit(user, action="sync.flag_set", entity_type="feature_flag", entity_id=FLAG_CODE,
+                diff={"enabled": bool(enabled)}, reason=None, key=None)
+    return {"module_code": FLAG_CODE, "enabled": bool(enabled)}
+
+
+# ──────────────────────────────────────────────────────────────────── audit
+async def audit(user: Dict[str, Any], *, action: str, entity_type: str, entity_id: str,
+                diff: Dict[str, Any], reason: Optional[str], key: Optional[str]) -> Dict[str, Any]:
+    """The canonical W0-04 AuditEvent (FLOW-037 offline sync)."""
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    event = build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"], action=action,
+        source_flow="FLOW-037", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        entity_type=entity_type, entity_id=entity_id, reason=reason, structured_diff=diff,
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=key,
+        source_channel="offline_sync")
+    return await record_event(db, event)
+
+
+# ────────────────────────────────────────────────────────────────── devices
+def valid_device_id(value: Any) -> str:
+    if not isinstance(value, str) or not UUID_RE.match(value):
+        raise refuse(422, "DEVICE_ID_INVALID", "Невалиден идентификатор на устройство")
+    return value.lower()
+
+
+async def get_device(user: Dict[str, Any], device_id: str) -> Optional[Dict[str, Any]]:
+    return await _tenant(user).sync_devices.find_one(
+        {"org_id": user["org_id"], "id": device_id}, {"_id": 0})
+
+
+async def register_device(user: Dict[str, Any], device_id: str, label: str,
+                          user_agent: str) -> Dict[str, Any]:
+    """Registered at login (and on every app start); a blocked device stays blocked."""
+    device_id = valid_device_id(device_id)
+    existing = await get_device(user, device_id)
+    if existing and existing.get("revoked_at"):
+        raise refuse(403, "DEVICE_REVOKED", "Устройството е блокирано", device_id=device_id)
+    stamp = iso(now_utc())
+    await _tenant(user).sync_devices.update_one(
+        {"org_id": user["org_id"], "id": device_id},
+        {"$set": {"last_user_id": user["id"], "last_user_name": _user_name(user),
+                  "label": (label or "")[:80], "user_agent": (user_agent or "")[:200],
+                  "last_seen_at": stamp},
+         "$setOnInsert": {"created_at": stamp, "registered_by": user["id"],
+                          "revoked_at": None}},
+        upsert=True)
+    if not existing:
+        await audit(user, action="sync.device_registered", entity_type="sync_device",
+                    entity_id=device_id, diff={"label": (label or "")[:80]}, reason=None, key=None)
+    return await get_device(user, device_id)
+
+
+async def revoke_device(user: Dict[str, Any], device_id: str, reason: str, key: str) -> Dict[str, Any]:
+    """R61-6: Owner/Admin blocks a lost or stolen phone. Idempotent per key."""
+    device_id = valid_device_id(device_id)
+    device = await get_device(user, device_id)
+    if not device:
+        raise refuse(404, "DEVICE_NOT_FOUND", "Няма такова устройство")
+    if device.get("revoked_at"):
+        return device
+    stamp = iso(now_utc())
+    await _tenant(user).sync_devices.update_one(
+        {"org_id": user["org_id"], "id": device_id, "revoked_at": None},
+        {"$set": {"revoked_at": stamp, "revoked_by": user["id"],
+                  "revoked_by_name": _user_name(user), "revoke_reason": reason}})
+    await audit(user, action="sync.device_revoked", entity_type="sync_device", entity_id=device_id,
+                diff={"before": {"revoked_at": None}, "after": {"revoked_at": stamp}},
+                reason=reason, key=key)
+    return await get_device(user, device_id)
+
+
+def _user_name(user: Dict[str, Any]) -> str:
+    name = ("%s %s" % (user.get("first_name") or "", user.get("last_name") or "")).strip()
+    return name or user.get("name") or user.get("email") or user.get("id") or ""
+
+
+# ─────────────────────────────────────────────────────────────── envelope
+class EnvelopeError(Exception):
+    def __init__(self, code: str, message: str):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+
+
+def _parse_iso(value: Any) -> datetime:
+    if not isinstance(value, str) or not value:
+        raise EnvelopeError("CAPTURED_AT_INVALID", "Липсва или е невалиден час на записа")
+    try:
+        dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise EnvelopeError("CAPTURED_AT_INVALID", "Липсва или е невалиден час на записа")
+    if dt.tzinfo is None:
+        raise EnvelopeError("CAPTURED_AT_INVALID", "Часът на записа трябва да е с часова зона (UTC)")
+    return dt.astimezone(timezone.utc)
+
+
+def zone(name: Optional[str]):
+    if ZoneInfo is None:
+        return timezone.utc
+    try:
+        return ZoneInfo(name or DEFAULT_TZ)
+    except (ZoneInfoNotFoundError, ValueError):
+        return ZoneInfo(DEFAULT_TZ)
+
+
+def validate_envelope(user: Dict[str, Any], item: Any, device_id: str) -> Dict[str, Any]:
+    if not isinstance(item, dict):
+        raise EnvelopeError("ENVELOPE_INVALID", "Невалиден запис")
+    for field in ("local_id", "idempotency_key"):
+        if not isinstance(item.get(field), str) or not UUID_RE.match(item[field]):
+            raise EnvelopeError("ENVELOPE_INVALID", "Невалидно поле %s" % field)
+    op = item.get("op_type")
+    if not isinstance(op, str) or not re.match(r"^[a-z][a-z0-9_.]{1,60}$", op):
+        raise EnvelopeError("ENVELOPE_INVALID", "Невалиден тип на записа")
+    # Tenant isolation: the tenant comes from the session only; an envelope written for
+    # another tenant (or user) is refused, never re-targeted.
+    if item.get("tenant_id") != user["org_id"]:
+        raise EnvelopeError("TENANT_MISMATCH", "Записът е за друга фирма")
+    if item.get("user_id") != user["id"]:
+        raise EnvelopeError("USER_MISMATCH", "Записът е на друг потребител")
+    if item.get("device_id") and str(item["device_id"]).lower() != device_id:
+        raise EnvelopeError("DEVICE_MISMATCH", "Записът е от друго устройство")
+    captured = _parse_iso(item.get("captured_at"))
+    tz = item.get("captured_tz") if isinstance(item.get("captured_tz"), str) else DEFAULT_TZ
+    offset = item.get("device_clock_offset_ms", 0)
+    if not isinstance(offset, (int, float)) or isinstance(offset, bool):
+        offset = 0
+    payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
+    base_version = item.get("base_version")
+    if base_version is not None and not isinstance(base_version, str):
+        raise EnvelopeError("ENVELOPE_INVALID", "Невалидна версия")
+    return {"local_id": item["local_id"].lower(), "idempotency_key": item["idempotency_key"].lower(),
+            "op_type": op, "captured_at": iso(captured), "captured_dt": captured,
+            "captured_tz": tz[:64], "device_clock_offset_ms": int(offset),
+            "payload": payload, "base_version": base_version,
+            "project_id": item.get("project_id") if isinstance(item.get("project_id"), str) else None}
+
+
+def fingerprint(env: Dict[str, Any]) -> str:
+    body = {k: env[k] for k in ("local_id", "op_type", "captured_at", "payload", "base_version",
+                                "project_id")}
+    return hashlib.sha256(json.dumps(body, sort_keys=True, separators=(",", ":"),
+                                     default=str).encode()).hexdigest()
+
+
+def is_online_only(op_type: str) -> bool:
+    head = op_type.split(".", 1)[0]
+    return any(head.startswith(p) for p in ONLINE_ONLY_PREFIXES) or ".approve" in op_type
+
+
+async def tenant_zone(user: Dict[str, Any]):
+    org = await _tenant(user).own_organization({"_id": 0, "org_timezone": 1})
+    return zone((org or {}).get("org_timezone") or DEFAULT_TZ)
+
+
+def late_reason(env: Dict[str, Any], received: datetime, tz) -> Optional[str]:
+    """R61-3: before today (tenant zone, server clock) or a phone clock off by > 10 min."""
+    if abs(env["device_clock_offset_ms"]) > CLOCK_SKEW_LIMIT_MS:
+        return "clock_skew"
+    if env["captured_dt"].astimezone(tz).date() < received.astimezone(tz).date():
+        return "previous_day"
+    if env["captured_dt"] > received + timedelta(milliseconds=CLOCK_SKEW_LIMIT_MS):
+        return "clock_skew"  # captured "in the future"
+    return None
+
+
+# ───────────────────────────────────────────────────────────────── handlers
+class SyncConflict(Exception):
+    """Raised by a handler: the office record differs from what the phone edited, or is
+    approved / paid (R61-2, R61-4). Nothing has been written."""
+
+    def __init__(self, *, entity_type: str, entity_id: str, office: Dict[str, Any],
+                 field: Dict[str, Any], kind: str = "version"):
+        super().__init__(kind)
+        self.entity_type = entity_type
+        self.entity_id = entity_id
+        self.office = office
+        self.field = field
+        self.kind = kind  # version | approved | paid | already_recorded
+
+
+class SyncRejected(Exception):
+    """Raised by a handler: the server refused the item (validation / permission). The
+    phone shows „Изисква проверка“; no retry."""
+
+    def __init__(self, code: str, message: str, http_status: int = 422):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.http_status = http_status
+
+
+#: op_type -> handler(user, env, ctx) -> result dict. Handlers call the SAME domain path
+#: as the online endpoint and tag what they create with ``sync_local_id`` so that a
+#: request interrupted after the write is not written twice.
+Handler = Callable[[Dict[str, Any], Dict[str, Any], Dict[str, Any]], Awaitable[Dict[str, Any]]]
+HANDLERS: Dict[str, Handler] = {}
+#: op_type -> handler used when Owner/Admin CONFIRMS a late record (the captured date).
+CONFIRM_HANDLERS: Dict[str, Handler] = {}
+
+
+def register(op_type: str, handler: Handler, confirm: Optional[Handler] = None) -> None:
+    HANDLERS[op_type] = handler
+    if confirm is not None:
+        CONFIRM_HANDLERS[op_type] = confirm
+
+
+def diff_versions(office: Dict[str, Any], field: Dict[str, Any]) -> List[Dict[str, Any]]:
+    keys = sorted(set(office) | set(field))
+    return [{"field": k, "office": office.get(k), "phone": field.get(k)}
+            for k in keys if office.get(k) != field.get(k)]
+
+
+# ──────────────────────────────────────────────────────────────── receipts
+async def _claim(user: Dict[str, Any], env: Dict[str, Any], device_id: str,
+                 received: datetime) -> Dict[str, Any]:
+    """Insert the receipt (unique key). Returns {"replay": receipt} when the key was seen."""
+    tenant = _tenant(user)
+    fp = fingerprint(env)
+    doc = {"id": str(uuid.uuid4()), "org_id": user["org_id"], "user_id": user["id"],
+           "idempotency_key": env["idempotency_key"], "local_id": env["local_id"],
+           "op_type": env["op_type"], "device_id": device_id, "fingerprint": fp,
+           "captured_at": env["captured_at"], "captured_tz": env["captured_tz"],
+           "device_clock_offset_ms": env["device_clock_offset_ms"],
+           "received_at": iso(received), "status": PROCESSING, "result": None}
+    try:
+        await tenant.sync_receipts.insert_one(dict(doc))
+        return {"claimed": doc}
+    except DuplicateKeyError:
+        pass
+    prior = await tenant.sync_receipts.find_one(
+        {"org_id": user["org_id"], "user_id": user["id"],
+         "idempotency_key": env["idempotency_key"]}, {"_id": 0})
+    if not prior:  # pragma: no cover — vanished between insert and read
+        raise EnvelopeError("RETRY", "Опитайте отново")
+    if prior.get("fingerprint") != fp:
+        raise EnvelopeError("IDEMPOTENCY_KEY_REUSED", "Ключът вече е използван за друг запис")
+    if prior.get("status") == PROCESSING:
+        started = datetime.fromisoformat(prior["received_at"])
+        if received - started < PROCESSING_STALE:
+            return {"replay": {**prior, "status": PROCESSING}}
+        # a crashed request: take it over (compare-and-set on the stamp it left)
+        took = await tenant.sync_receipts.update_one(
+            {"org_id": user["org_id"], "id": prior["id"], "status": PROCESSING,
+             "received_at": prior["received_at"]},
+            {"$set": {"received_at": iso(received)}})
+        if took.modified_count == 1:
+            return {"claimed": {**prior, "received_at": iso(received)}}
+        return {"replay": {**prior, "status": PROCESSING}}
+    return {"replay": prior}
+
+
+async def _finish(user: Dict[str, Any], receipt: Dict[str, Any], status: str,
+                  result: Dict[str, Any]) -> Dict[str, Any]:
+    await _tenant(user).sync_receipts.update_one(
+        {"org_id": user["org_id"], "id": receipt["id"]},
+        {"$set": {"status": status, "result": result, "finished_at": iso(now_utc())}})
+    return _answer(receipt, status, result, replay=False)
+
+
+def _answer(receipt: Dict[str, Any], status: str, result: Optional[Dict[str, Any]],
+            replay: bool) -> Dict[str, Any]:
+    return {"local_id": receipt["local_id"], "idempotency_key": receipt["idempotency_key"],
+            "status": status, "result": result or {}, "replay": replay,
+            "received_at": receipt.get("received_at"), "captured_at": receipt.get("captured_at")}
+
+
+def _side_doc(user: Dict[str, Any], env: Dict[str, Any], device_id: str, received: datetime,
+              **extra) -> Dict[str, Any]:
+    return {"id": str(uuid.uuid4()), "org_id": user["org_id"], "status": "open",
+            "op_type": env["op_type"], "local_id": env["local_id"],
+            "idempotency_key": env["idempotency_key"], "device_id": device_id,
+            "author_id": user["id"], "author_name": _user_name(user),
+            "author_role": user.get("role"), "project_id": env.get("project_id"),
+            "captured_at": env["captured_at"], "captured_tz": env["captured_tz"],
+            "device_clock_offset_ms": env["device_clock_offset_ms"],
+            "received_at": iso(received), "created_at": iso(received),
+            "payload": env["payload"], "base_version": env.get("base_version"), **extra}
+
+
+# ─────────────────────────────────────────────────────────────────── batch
+async def process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked: bool,
+                       received: datetime, tz) -> Dict[str, Any]:
+    try:
+        env = validate_envelope(user, raw, device_id)
+    except EnvelopeError as e:
+        return {"local_id": (raw or {}).get("local_id") if isinstance(raw, dict) else None,
+                "idempotency_key": (raw or {}).get("idempotency_key") if isinstance(raw, dict) else None,
+                "status": REJECTED, "result": {"error_code": e.code, "message": e.message},
+                "replay": False}
+    try:
+        claim = await _claim(user, env, device_id, received)
+    except EnvelopeError as e:
+        return {"local_id": env["local_id"], "idempotency_key": env["idempotency_key"],
+                "status": REJECTED, "result": {"error_code": e.code, "message": e.message},
+                "replay": False}
+    if "replay" in claim:
+        prior = claim["replay"]
+        return _answer(prior, prior.get("status"), prior.get("result"), replay=True)
+    receipt = claim["claimed"]
+    tenant = _tenant(user)
+
+    if revoked:  # R61-6: kept for the console, never official
+        doc = _side_doc(user, env, device_id, received, reason="device_revoked")
+        await tenant.sync_quarantine.insert_one(doc)
+        await audit(user, action="sync.item_quarantined", entity_type="sync_quarantine",
+                    entity_id=doc["id"], diff={"op_type": env["op_type"], "device_id": device_id},
+                    reason="device_revoked", key=env["idempotency_key"])
+        return await _finish(user, receipt, QUARANTINED, {"quarantine_id": doc["id"]})
+
+    if is_online_only(env["op_type"]):
+        return await _finish(user, receipt, REJECTED, {
+            "error_code": "ONLINE_ONLY", "message": "Това изисква интернет"})
+    handler = HANDLERS.get(env["op_type"])
+    if handler is None:
+        return await _finish(user, receipt, REJECTED, {
+            "error_code": "UNSUPPORTED_OP", "message": "Този запис не може да се прави без интернет"})
+
+    why_late = late_reason(env, received, tz)
+    if why_late:
+        doc = _side_doc(user, env, device_id, received, reason=why_late)
+        await tenant.sync_late.insert_one(doc)
+        await audit(user, action="sync.item_late", entity_type="sync_late", entity_id=doc["id"],
+                    diff={"op_type": env["op_type"], "captured_at": env["captured_at"],
+                          "received_at": iso(received)},
+                    reason=why_late, key=env["idempotency_key"])
+        return await _finish(user, receipt, LATE, {"late_id": doc["id"], "reason": why_late})
+
+    ctx = {"device_id": device_id, "received_at": iso(received), "tz": tz,
+           "captured_date": env["captured_dt"].astimezone(tz).date().isoformat()}
+    try:
+        result = await handler(user, env, ctx)
+    except SyncConflict as c:
+        doc = _side_doc(user, env, device_id, received, kind=c.kind, entity_type=c.entity_type,
+                        entity_id=c.entity_id, office_version=c.office, field_version=c.field,
+                        diff=diff_versions(c.office, c.field))
+        await tenant.sync_conflicts.insert_one(doc)
+        await audit(user, action="sync.item_conflict", entity_type=c.entity_type,
+                    entity_id=c.entity_id, diff={"conflict_id": doc["id"], "kind": c.kind},
+                    reason=None, key=env["idempotency_key"])
+        return await _finish(user, receipt, CONFLICT, {"conflict_id": doc["id"], "kind": c.kind})
+    except SyncRejected as r:
+        return await _finish(user, receipt, REJECTED, {"error_code": r.code, "message": r.message})
+    except HTTPException as h:
+        detail = h.detail if isinstance(h.detail, dict) else {"message": str(h.detail)}
+        return await _finish(user, receipt, REJECTED, {
+            "error_code": detail.get("error_code") or "HTTP_%d" % h.status_code,
+            "message": detail.get("message") or str(h.detail), "http_status": h.status_code})
+    await audit(user, action="sync.item_synced", entity_type=result.get("entity_type") or env["op_type"],
+                entity_id=str(result.get("entity_id") or env["local_id"]),
+                diff={"op_type": env["op_type"], "device_id": device_id,
+                      "captured_at": env["captured_at"], "received_at": iso(received)},
+                reason=None, key=env["idempotency_key"])
+    return await _finish(user, receipt, SYNCED, result)
+
+
+async def process_batch(user: Dict[str, Any], device_id: str, items: Any) -> Dict[str, Any]:
+    device_id = valid_device_id(device_id)
+    if not isinstance(items, list) or not items:
+        raise refuse(422, "BATCH_EMPTY", "Няма записи за изпращане")
+    if len(items) > MAX_BATCH:
+        raise refuse(413, "BATCH_TOO_LARGE", "Твърде много записи наведнъж", max=MAX_BATCH)
+    device = await get_device(user, device_id)
+    if not device:
+        raise refuse(409, "DEVICE_NOT_REGISTERED", "Устройството не е регистрирано")
+    revoked = bool(device.get("revoked_at"))
+    received = now_utc()
+    tz = await tenant_zone(user)
+    results = [await process_item(user, item, device_id, revoked, received, tz) for item in items]
+    if revoked:
+        # R61-6: stop accepting; the phone wipes its local data on this answer.
+        raise refuse(403, "DEVICE_REVOKED", "Устройството е блокирано", results=results)
+    await _tenant(user).sync_devices.update_one(
+        {"org_id": user["org_id"], "id": device_id},
+        {"$set": {"last_sync_at": iso(received), "last_user_id": user["id"],
+                  "last_user_name": _user_name(user)}})
+    return {"server_time": iso(received), "results": results}
+
+
+# ──────────────────────────────────────────────────────────────── console
+async def console(user: Dict[str, Any]) -> Dict[str, Any]:
+    """FLOW-037 §14 — a projection for Owner/Admin, never a second source of truth."""
+    tenant = _tenant(user)
+    org = user["org_id"]
+    devices = await tenant.sync_devices.find({"org_id": org}, {"_id": 0}).sort(
+        "last_seen_at", -1).to_list(500)
+    proj = {"_id": 0}
+    conflicts = await tenant.sync_conflicts.find({"org_id": org, "status": "open"}, proj).sort(
+        "created_at", -1).to_list(200)
+    late = await tenant.sync_late.find({"org_id": org, "status": "open"}, proj).sort(
+        "created_at", -1).to_list(200)
+    quarantine = await tenant.sync_quarantine.find({"org_id": org, "status": "open"}, proj).sort(
+        "created_at", -1).to_list(200)
+    since = iso(now_utc() - timedelta(days=30))
+    pipeline = [{"$match": {"org_id": org, "received_at": {"$gte": since}}},
+                {"$group": {"_id": {"device_id": "$device_id", "status": "$status"},
+                            "n": {"$sum": 1}}}]
+    per_device: Dict[str, Dict[str, int]] = {}
+    async for row in tenant.sync_receipts.aggregate(pipeline):
+        per_device.setdefault(row["_id"]["device_id"], {})[row["_id"]["status"]] = row["n"]
+    for d in devices:
+        d["receipts_30d"] = per_device.get(d["id"], {})
+    return {"enabled": await is_enabled(user), "server_time": iso(now_utc()),
+            "devices": devices, "conflicts": conflicts, "late": late, "quarantine": quarantine,
+            "counts": {"devices": len(devices),
+                       "revoked": sum(1 for d in devices if d.get("revoked_at")),
+                       "conflicts": len(conflicts), "late": len(late),
+                       "quarantine": len(quarantine)}}
+
+
+async def my_receipts(user: Dict[str, Any], device_id: str) -> List[Dict[str, Any]]:
+    """The phone asks what the server holds for its keys (e.g. after reinstalling)."""
+    device_id = valid_device_id(device_id)
+    rows = await _tenant(user).sync_receipts.find(
+        {"org_id": user["org_id"], "user_id": user["id"], "device_id": device_id},
+        {"_id": 0, "fingerprint": 0}).sort("received_at", -1).to_list(200)
+    return rows
