@@ -19,8 +19,21 @@ const check = (name, ok, detail) => {
 };
 
 (async () => {
-  const browser = await chromium.launch();
-  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  // Test harness only: posthog-js treats navigator.webdriver / the "HeadlessChrome" brand as a
+  // bot and sends nothing. Look like a normal browser so the real sending path is exercised.
+  const browser = await chromium.launch({ args: ["--disable-blink-features=AutomationControlled"] });
+  // posthog-js drops events from "HeadlessChrome" (bot filter): use a normal desktop UA.
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 800 },
+    userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+  });
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => false });
+    if (navigator.userAgentData) {
+      const brands = [{ brand: "Chromium", version: "126" }, { brand: "Google Chrome", version: "126" }];
+      Object.defineProperty(navigator, "userAgentData", { get: () => ({ brands, mobile: false, platform: "Linux" }) });
+    }
+  });
   const external = [];
   await ctx.route((u) => !u.href.startsWith(BASE), (r) => { external.push(r.request().url()); r.abort(); });
   const page = await ctx.newPage();

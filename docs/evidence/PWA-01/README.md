@@ -76,3 +76,48 @@ node docs/evidence/PWA-01/e2e/run.js http://localhost:4173 docs/evidence/PWA-01
   `/manifest.webmanifest` при deploy. Не е променяно (без infra/deploy промяна в PWA-01).
 - **D7 — `<title>`** е сменен от „Emergent | Fullstack App“ на „BEG_Work“ (името на продукта, нужно за
   прозореца на инсталираното приложение). Цветовете са от текущата тъмна тема (`#070b13`, амбър лого).
+
+## R68 — PostHog без запис на екрана (Крум, 09.11.2026, FG-317)
+Промяна (commit `01f9029`):
+- Inline PostHog snippet-ът е махнат от `index.html`. Той съдържаше твърдо вписан ключ и включен
+  `session_recording`.
+- `src/lib/analytics.js` се зарежда само ако при build има `REACT_APP_POSTHOG_KEY`; иначе не се
+  зарежда нищо.
+- Настройки на клиента:
+  - `disable_session_recording: true`, а в `loaded` се вика и `stopSessionRecording()`;
+  - изключени са autocapture, heatmaps, rageclick, dead clicks и exception capture;
+  - `mask_all_text` и `mask_all_element_attributes` са включени.
+- `before_send` пропуска само `$pageview` и `app_error`:
+  - от свойствата остават само тези в allow-list;
+  - URL-ът е без query и hash;
+  - грешката носи само типа си (`TypeError`…), никога съобщението.
+
+Проверки (`e2e/analytics-check.js`, Playwright):
+| | Резултат |
+|---|---|
+| red: build на `7c284fa`/`e571b06`, без ключ | 0/2: PostHog се зарежда с вписания ключ (`r68/red-7c284fa.*`) |
+| green: build без ключ | 2/2: няма `window.posthog`, няма заявка към PostHog (`r68/green-off.json`) |
+| green: build с тестов ключ + истинският posthog-js 1.200.0, сервиран локално | 10/10 (`r68/green-on.json`) |
+
+Подробности за green с тестов ключ:
+- `/decide` *иска* session recording, но записът не стартира.
+- Няма заявка за запис или snapshot (`/s/`, recorder).
+- Изпращат се само `$pageview` и `app_error`.
+- Нито едно въведено ЕГН, IBAN, сума, име или парола не е в заявките. Проверката декодира всяко тяло.
+
+Повторение на проверката с ключ:
+
+```
+npm pack posthog-js@1.200.0 && tar xzf posthog-js-1.200.0.tgz
+REACT_APP_POSTHOG_KEY=phc_test REACT_APP_POSTHOG_HOST=http://localhost:4174/__posthog yarn build
+PH_ARRAY_JS=package/dist/array.js node e2e/server.js frontend/build 4174 &
+node e2e/analytics-check.js http://localhost:4174 out.json on
+```
+
+В тестовата среда posthog-js приема headless Chromium за бот и не изпраща нищо. Затова само скриптът
+за проверка скрива `navigator.webdriver` и марката „HeadlessChrome“. Продуктовият код не е променян
+за това.
+
+**Отворена точка за Крум:** вписаният ключ е махнат. За да продължи анонимната статистика, при
+production build трябва да се подаде `REACT_APP_POSTHOG_KEY` (и по желание `REACT_APP_POSTHOG_HOST`).
+Без него статистиката е изключена.
