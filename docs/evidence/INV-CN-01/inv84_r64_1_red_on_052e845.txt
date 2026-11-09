@@ -1,0 +1,35 @@
+# INV84-R64-1 red proof — the new test run against 052e845 (real Mongo rs0, 3 modes × 4 allocation shapes)
+# On 052e845 rebooking_projects / classify_difference_line read only allocations[].ref_id:
+#  - the legacy single allocation (allocation_type/allocation_ref_id) was classified 'no_receipt', not 'allocation';
+#  - legacy / camel (refId) / no readable allocation: re-booking 'back to the own allocation' onto an ARCHIVED
+#    project was BOOKED AT ONCE (one more posting), without the Owner. Only the new shape made a proposal.
+E       AssertionError: assert [{'at': '2026...cc4c6f', ...}] == [{'at': '2026...f54fc0', ...}]
+E         
+E         Left contains one more item: {'at': '2026-11-09T08:39:39.371394+00:00', 'basis': 'resolved_by_accountant', 'by': 'acct-a', 'id': 'dp_166512bca5cc4c6f', ...}
+E         Use -v to get more diff
+E       AssertionError: assert ('project', 'no_receipt') == ('project', 'allocation')
+E         
+E         At index 1 diff: 'no_receipt' != 'allocation'
+E         Use -v to get more diff
+E       AssertionError: assert [{'at': '2026...f1487f', ...}] == [{'at': '2026...7a469b', ...}]
+E         
+E         Left contains one more item: {'at': '2026-11-09T08:39:41.156273+00:00', 'basis': 'resolved_by_accountant', 'by': 'acct-a', 'id': 'dp_a4205c57dff1487f', ...}
+E         Use -v to get more diff
+E       AssertionError: assert [{'at': '2026...684a0e', ...}] == [{'at': '2026...39437b', ...}]
+E         
+E         Left contains one more item: {'at': '2026-11-09T08:39:41.748668+00:00', 'basis': 'resolved_by_accountant', 'by': 'acct-a', 'id': 'dp_2182d97956684a0e', ...}
+E         Use -v to get more diff
+E       AssertionError: assert ('project', 'no_receipt') == ('project', 'allocation')
+E         
+E         At index 1 diff: 'no_receipt' != 'allocation'
+E         Use -v to get more diff
+E       AssertionError: assert [{'at': '2026...ba4770', ...}] == [{'at': '2026...1f44eb', ...}]
+E         
+E         Left contains one more item: {'at': '2026-11-09T08:39:43.514790+00:00', 'basis': 'resolved_by_accountant', 'by': 'acct-a', 'id': 'dp_3f109da389ba4770', ...}
+E         Use -v to get more diff
+E       AssertionError: assert [{'at': '2026...7e42d8', ...}] == [{'at': '2026...a24c9d', ...}]
+E         
+E         Left contains one more item: {'at': '2026-11-09T08:39:44.080662+00:00', 'basis': 'resolved_by_accountant', 'by': 'acct-a', 'id': 'dp_46da2bce367e42d8', ...}
+E         Use -v to get more diff
+E       AssertionError: assert ('project', 'no_receipt') == ('project', 'allocation')
+E         

@@ -536,7 +536,7 @@ async def resolve_difference_line(note_id: str, line_id: str, body: dict = Body(
             statuses = await ic.project_statuses(
                 tenant, await ic.rebooking_projects(tenant, line_id, target, project_id, session=session),
                 session=session)
-            closed = ic.any_project_closed(statuses)
+            closed = ic.any_project_closed(statuses, target)
             if not same or closed:
                 proposal = {"id": "dpr_" + uuid.uuid4().hex[:16], "original_line_id": line_id,
                             "net": line["net"], "target": target, "project_id": project_id,

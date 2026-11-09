@@ -1762,6 +1762,48 @@ def test_wh_fix_01_merge_a_locked_supplier_invoice_changes_only_its_line_destina
     run(monkeypatch, mode, scenario)
 
 
+R64_SHAPES = {   # INV84-R64-1 (AUDIT-2 probe): every shape of the SAME line allocation to prj-1
+    "new": {"allocations": [{"type": "project", "ref_id": "prj-1", "qty": 10}]},
+    "legacy": {"allocation_type": "project", "allocation_ref_id": "prj-1"},
+    "camel": {"allocations": [{"type": "project", "refId": "prj-1", "qty": 10}]},
+    "none": {},          # no readable allocation → fail closed
+}
+
+
+@pytest.mark.parametrize("shape", sorted(R64_SHAPES))
+def test_inv84_r64_1_back_to_own_allocation_on_a_closed_project_is_a_proposal(monkeypatch, mode, shape):
+    async def scenario(c, op):
+        bill = await sent(c, direction="Received", project="prj-1")
+        await op.invoice_lines.insert_one({
+            "id": "il-p", "org_id": ORG_A, "invoice_id": bill["id"], "description": "il-p",
+            "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+            "created_at": "2026-10-02T08:00:00+00:00", **R64_SHAPES[shape]})
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_p", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
+            "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+        n = (await note(c, bill, number="CN-P", expected_credit_note_ids=["ecn_p"],
+                        lines=[{"original_line_id": "il-p", "amount": 25.0}])).json()
+        base = "/api/finance/credit-notes/%s" % n["id"]
+        r = await c.post(base + "/accept-difference", headers=hdr("owner-a"), json={"reason": "не коригира"})
+        assert r.status_code == 200, r.text
+        split = r.json()["difference_accepted"]["split"][0]
+        assert (split["target"], split["basis"]) == (
+            "project", "no_receipt" if shape == "none" else "allocation")
+        assert (await c.post(base + "/reverse-difference", headers=hdr("owner-a"),
+                             json={"reason": "грешно"})).status_code == 200
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"status": "Archived"}})
+        before = (await op.credit_debit_notes.find_one({"id": n["id"]}))["difference_accepted"]["postings"]
+        r = await c.post(base + "/difference-lines/il-p/resolve", headers=hdr("acct-a"),
+                         json={"target": "project", "reason": "обратно на обекта"})
+        assert r.status_code == 200, r.text
+        acc = (await op.credit_debit_notes.find_one({"id": n["id"]}))["difference_accepted"]
+        assert acc["postings"] == before                                     # nothing booked at once
+        prop = acc["proposals"][-1]
+        assert prop["why_approval"] == "closed_project"
+        assert prop["project_statuses"] == ({} if shape == "none" else {"prj-1": "Archived"})
+    run(monkeypatch, mode, scenario)
+
+
 def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
     async def scenario(c, op):
         body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",

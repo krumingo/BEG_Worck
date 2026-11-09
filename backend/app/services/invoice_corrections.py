@@ -1008,9 +1008,13 @@ async def rebooking_projects(tenant, line_id: str, target: str, project_id: Opti
         return []
     if project_id:
         return [project_id]
-    row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "allocations": 1},
-                                              session=session) or {}
-    return sorted({a["ref_id"] for a in row.get("allocations") or []
+    from app.services.canonical_material_cost import effective_allocations
+    row = await tenant.invoice_lines.find_one(
+        {"id": line_id}, {"_id": 0, "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1,
+                          "qty": 1}, session=session) or {}
+    # INV84-R64-1: EVERY allocation shape (allocations[].ref_id / refId, and the deprecated
+    # single allocation_type / allocation_ref_id) — the same reading as the cost source
+    return sorted({a["ref_id"] for a in effective_allocations(row)
                    if a.get("type") == "project" and a.get("ref_id")})
 
 
@@ -1023,8 +1027,12 @@ async def project_statuses(tenant, project_ids: List[str], *, session=None) -> D
     return out
 
 
-def any_project_closed(statuses: Dict[str, Optional[str]]) -> bool:
-    """Р64: a missing project, or one not Active / Paused, counts as closed."""
+def any_project_closed(statuses: Dict[str, Optional[str]], target: Optional[str] = None) -> bool:
+    """Р64: a missing project, or one not Active / Paused, counts as closed. INV84-R64-1:
+    fail closed — a PROJECT destination whose project cannot be resolved at all (no named
+    project, no readable allocation) counts as closed too, so it is a proposal."""
+    if target == COST_TARGET_PROJECT and not statuses:
+        return True
     return any(st not in OPEN_PROJECT_STATUSES for st in statuses.values())
 POSTING_BOOKING = "booking"            # at the Owner's acceptance (Р55(3) / Р58)
 POSTING_RESOLUTION = "resolution"      # FG-277: the Accountant decides an open line
@@ -1068,8 +1076,11 @@ async def classify_difference_line(tenant, invoice_id: str, line_id: str, *, ses
         return {"target": COST_TARGET_PROJECT, "basis": "direct_delivery", "project_id": projects.pop()}
     if kinds:
         return {"target": COST_TARGET_UNDETERMINED, "basis": "mixed_receipts"}
-    row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "allocations": 1}, session=session) or {}
-    if any(a.get("type") == "project" for a in row.get("allocations") or []):
+    from app.services.canonical_material_cost import effective_allocations
+    row = await tenant.invoice_lines.find_one(
+        {"id": line_id}, {"_id": 0, "allocations": 1, "allocation_type": 1, "allocation_ref_id": 1,
+                          "qty": 1}, session=session) or {}
+    if any(a.get("type") == "project" for a in effective_allocations(row)):   # INV84-R64-1
         return {"target": COST_TARGET_PROJECT, "basis": "allocation"}
     if await tenant.warehouse_transactions.find_one(
             {"action": {"$in": [_RECEIVE_TO_WAREHOUSE, _RECEIVE_TO_PROJECT]}, "invoice_id": invoice_id,
