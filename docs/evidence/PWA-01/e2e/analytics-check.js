@@ -38,6 +38,9 @@ const check = (name, ok, detail) => {
     }
   });
   const external = [];
+  // PWA88-N1: every request the browser makes, with its type, to prove no remote script.
+  const allRequests = [];
+  ctx.on("request", (r) => allRequests.push({ url: r.url(), type: r.resourceType() }));
   await ctx.route((u) => !u.href.startsWith(BASE), (r) => { external.push(r.request().url()); r.abort(); });
   // ── FG-470: the client opens the offer magic link / a reset link ──────────────────
   const review = await ctx.newPage();
@@ -114,11 +117,24 @@ const check = (name, ok, detail) => {
   const everything = JSON.stringify(log) + JSON.stringify(external);
   res.external_requests = external;
 
+  // Scripts may come only from the app's own bundle on its own origin.
+  const appScript = (u) => u.startsWith(`${BASE}/static/js/`) || u === `${BASE}/service-worker.js`;
+  const foreignScripts = allRequests.filter((r) => r.type === "script" && !appScript(r.url)).map((r) => r.url);
+  const phStatic = allRequests.filter((r) => /posthog/i.test(r.url) || /\/__posthog\/(static|.*\.js)/.test(r.url)).filter((r) => r.type === "script" || /\.js(\?|$)/.test(r.url) || /\/static\//.test(r.url)).map((r) => r.url);
+  res.script_requests = allRequests.filter((r) => r.type === "script").map((r) => r.url);
+  const isPosthogUrl = (u) => /posthog/i.test(u) || u.startsWith(`${BASE}/__posthog/`);
+  check("PWA88-N1: no script loaded from any PostHog host", !foreignScripts.some(isPosthogUrl), foreignScripts.filter(isPosthogUrl));
+  // Other third-party scripts are pre-existing (index.html, debt D5) — listed, not judged here.
+  res.other_third_party_scripts = [...new Set(foreignScripts.filter((u) => !isPosthogUrl(u)))];
+  console.log(`INFO  other third-party scripts (pre-existing, D5): ${JSON.stringify(res.other_third_party_scripts)}`);
+  check("PWA88-N1: nothing fetched from a PostHog static/CDN path (array.js, recorder, surveys, toolbar)", phStatic.length === 0 && !log.some((r) => /^\/static\//.test(r.path) || /\.js$/.test(r.path)), phStatic);
+
   if (EXPECT === "off") {
     check("no key: window.posthog absent and no analytics script", !state.loaded && !state.scriptTag, state);
     check("no key: no request to any PostHog host", !external.some((u) => /posthog/.test(u)) && log.length === 0, external.filter((u) => /posthog/.test(u)));
   } else {
-    check("real posthog-js loaded from the local test host", state.loaded && state.real_library, state);
+    check("bundled posthog-js initialised (no runtime loader)", state.loaded && state.real_library, state);
+    check("PWA88-N1: no /decide call (no remote config)", !log.some((r) => /^\/(decide|flags)/.test(r.path)), log.map((r) => r.path));
     check("client: disable_session_recording true", state.disable_session_recording === true);
     check("client: autocapture false, text masked", state.autocapture === false && state.mask_all_text === true);
     check("client: recording not started despite /decide asking for it", state.recording_started !== true, state.recording_started);

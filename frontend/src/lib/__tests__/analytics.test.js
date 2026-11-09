@@ -3,36 +3,71 @@ import { initAnalytics, analyticsOptions, sanitizeEvent, ALLOWED_EVENTS, templat
 import fs from "fs";
 import path from "path";
 
-function fakeDom() {
-  const appended = [];
+function fakeDom(pathname = "/login") {
   const listeners = {};
-  const doc = {
-    head: { appendChild: (el) => appended.push(el) },
-    createElement: () => ({ setAttribute(k, v) { this[k] = v; } }),
-  };
-  const win = { addEventListener: (n, fn) => { listeners[n] = fn; }, location: { pathname: "/login" } };
-  return { doc, win, appended, listeners };
+  const win = { addEventListener: (n, fn) => { listeners[n] = fn; }, location: { pathname } };
+  return { win, listeners };
 }
 
-test("no key: nothing is loaded, no posthog object", () => {
-  const { doc, win, appended } = fakeDom();
-  expect(initAnalytics({ key: "", win, doc })).toBeNull();
-  expect(initAnalytics({ key: undefined, win, doc })).toBeNull();
-  expect(appended).toHaveLength(0);
+function fakeLib() {
+  const ph = { init: jest.fn(), capture: jest.fn() };
+  const load = jest.fn(async () => ({ default: ph }));
+  return { ph, load };
+}
+
+const scriptsInDom = () => document.querySelectorAll("script").length;
+
+test("no key: nothing is loaded, the library chunk is not even fetched", async () => {
+  const { win } = fakeDom();
+  const { load } = fakeLib();
+  expect(initAnalytics({ key: "", win, load })).toBeNull();
+  expect(initAnalytics({ key: undefined, win, load })).toBeNull();
+  expect(load).not.toHaveBeenCalled();
   expect(win.posthog).toBeUndefined();
 });
 
-test("session recording is disabled and no recording method is stubbed", () => {
-  const { doc, win, appended } = fakeDom();
-  const opts = initAnalytics({ key: "phc_test", host: "https://us.i.posthog.com", win, doc });
+test("bundled library is initialised with recording off; no <script> is injected (PWA88-N1)", async () => {
+  const { win } = fakeDom();
+  const { ph, load } = fakeLib();
+  const before = scriptsInDom();
+  const r = initAnalytics({ key: "phc_test", host: "https://us.i.posthog.com", win, load });
+  await r.ready;
+  expect(load).toHaveBeenCalledTimes(1);
+  expect(ph.init).toHaveBeenCalledTimes(1);
+  const [key, opts] = ph.init.mock.calls[0];
+  expect(key).toBe("phc_test");
   expect(opts.disable_session_recording).toBe(true);
-  expect(appended).toHaveLength(1);
-  expect(appended[0].src).toBe("https://us-assets.i.posthog.com/static/array.js");
-  expect(win.posthog.startSessionRecording).toBeUndefined();
-  expect(win.posthog._i[0][1].disable_session_recording).toBe(true);
+  expect(scriptsInDom()).toBe(before);
+  expect(win.posthog).toBe(ph);
   const stop = jest.fn();
-  opts.loaded({ stopSessionRecording: stop });
+  r.options.loaded({ stopSessionRecording: stop });
   expect(stop).toHaveBeenCalled();
+});
+
+test("no remote config or remote extensions: decide, surveys, site apps, experiments, toolbar off", () => {
+  const o = analyticsOptions();
+  expect(o.advanced_disable_decide).toBe(true);
+  expect(o.advanced_disable_feature_flags).toBe(true);
+  expect(o.disable_surveys).toBe(true);
+  expect(o.opt_in_site_apps).toBe(false);
+  expect(o.disable_web_experiments).toBe(true);
+  expect(o.advanced_disable_toolbar_metrics).toBe(true);
+});
+
+test("the source imports the pinned no-external build and never injects a script", () => {
+  const src = fs.readFileSync(path.join(__dirname, "../analytics.js"), "utf8");
+  expect(src).toMatch(/import\("posthog-js\/dist\/module\.no-external"\)/);
+  expect(src).not.toMatch(/createElement\(|array\.js|-assets\.i\.posthog\.com/);
+  const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "../../../package.json"), "utf8"));
+  expect(pkg.dependencies["posthog-js"]).toBe("1.200.0"); // exact pin, no range
+  expect(require("posthog-js/package.json").version).toBe("1.200.0");
+  expect(fs.existsSync(require.resolve("posthog-js/dist/module.no-external.js"))).toBe(true);
+});
+
+test("a failing chunk load never breaks the app", async () => {
+  const { win } = fakeDom();
+  const r = initAnalytics({ key: "phc_test", win, load: async () => { throw new Error("offline"); } });
+  await expect(r.ready).resolves.toBeNull();
 });
 
 test("autocapture of clicks, text and inputs is off; text and attributes masked", () => {
@@ -80,13 +115,12 @@ test("app_error carries only the error type, never a message", () => {
   expect(weird.properties.error_kind).toBe("Error");
 });
 
-test("window errors are reported as app_error with the type only", () => {
-  const { doc, win, listeners } = fakeDom();
-  initAnalytics({ key: "phc_test", win, doc });
-  const captured = [];
-  win.posthog.capture = (...a) => captured.push(a);
+test("window errors are reported as app_error with the type only", async () => {
+  const { win, listeners } = fakeDom();
+  const { ph, load } = fakeLib();
+  await initAnalytics({ key: "phc_test", win, load }).ready;
   listeners.error({ error: { name: "RangeError", message: "ЕГН 7501010010" } });
-  expect(captured).toEqual([["app_error", { error_kind: "RangeError" }]]);
+  expect(ph.capture).toHaveBeenCalledWith("app_error", { error_kind: "RangeError" });
 });
 
 test("index.html no longer carries the inline PostHog snippet or a key", () => {
@@ -99,10 +133,10 @@ const TOKEN = "rvTOKEN_9f3Kq2xY7pL0aB4cD8eF";
 
 test("token routes: analytics is not loaded at all", () => {
   for (const p of [`/offers/review/${TOKEN}`, "/offers/review/", "/reset-password"]) {
-    const { doc, win, appended } = fakeDom();
-    win.location.pathname = p;
-    expect(initAnalytics({ key: "phc_test", win, doc })).toBeNull();
-    expect(appended).toHaveLength(0);
+    const { win } = fakeDom(p);
+    const { load } = fakeLib();
+    expect(initAnalytics({ key: "phc_test", win, load })).toBeNull();
+    expect(load).not.toHaveBeenCalled();
     expect(win.posthog).toBeUndefined();
   }
 });

@@ -9,7 +9,11 @@
 //   never its message, which could hold field content (ЕГН, IBAN, amounts, names).
 // * No user is identified (person_profiles: "identified_only" and identify is never called).
 // * Without REACT_APP_POSTHOG_KEY nothing is loaded at all.
-// Loader: PostHog's own snippet, minus the session-recording stubs. No npm dependency.
+// Loader (PWA88-N1): posthog-js is BUNDLED from npm, pinned to 1.200.0 in yarn.lock, using
+// its "no-external" build, which cannot load remote scripts (no surveys, toolbar, site apps,
+// web experiments or recorder). No script is ever injected from a PostHog host into the
+// origin that holds bw_token. /decide is disabled, so no remote config can turn anything on.
+// The library is a lazy chunk: without a key it is never even fetched.
 
 const DEFAULT_HOST = "https://us.i.posthog.com";
 
@@ -85,9 +89,14 @@ export function analyticsOptions({ host = DEFAULT_HOST } = {}) {
     capture_exceptions: false,
     capture_performance: false,
     disable_surveys: true,
+    disable_web_experiments: true,
+    opt_in_site_apps: false,
+    advanced_disable_decide: true,
+    advanced_disable_feature_flags: true,
+    advanced_disable_feature_flags_on_first_load: true,
+    advanced_disable_toolbar_metrics: true,
     mask_all_text: true,
     mask_all_element_attributes: true,
-    advanced_disable_decide: false,
     before_send: sanitizeEvent,
     loaded: (ph) => {
       // Belt and braces: even if remote config tries to enable it, recording stays off.
@@ -131,32 +140,7 @@ export function sanitizeEvent(event) {
   return { ...event, properties: props, $set: undefined, $set_once: undefined };
 }
 
-// PostHog's loader snippet (MIT), with the session-recording methods removed from the stub.
-const STUB_METHODS =
-  "init capture register register_once unregister opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing reset get_distinct_id get_session_id onFeatureFlags".split(" ");
-
-function installSnippet(win, doc, host) {
-  if (win.posthog && win.posthog.__SV) return win.posthog;
-  const ph = win.posthog || [];
-  ph._i = [];
-  ph.init = function init(key, options, name) {
-    const target = name ? (ph[name] = []) : ph;
-    STUB_METHODS.forEach((m) => {
-      target[m] = (...args) => target.push([m, ...args]);
-    });
-    ph._i.push([key, options, name]);
-  };
-  ph.__SV = 1;
-  win.posthog = ph;
-  const script = doc.createElement("script");
-  script.type = "text/javascript";
-  script.crossOrigin = "anonymous";
-  script.async = true;
-  script.src = `${host.replace(".i.posthog.com", "-assets.i.posthog.com")}/static/array.js`;
-  script.setAttribute("data-analytics", "posthog");
-  doc.head.appendChild(script);
-  return ph;
-}
+const loadLibrary = () => import("posthog-js/dist/module.no-external");
 
 const wiredWindows = new WeakSet();
 
@@ -164,14 +148,22 @@ export function initAnalytics({
   key = process.env.REACT_APP_POSTHOG_KEY,
   host = process.env.REACT_APP_POSTHOG_HOST || DEFAULT_HOST,
   win = typeof window !== "undefined" ? window : undefined,
-  doc = typeof document !== "undefined" ? document : undefined,
+  load = loadLibrary,
 } = {}) {
-  if (!key || !win || !doc) return null; // no key → nothing loads
+  if (!key || !win) return null; // no key → nothing loads (the chunk is not even fetched)
   // FG-470: a client opening an offer link or a reset link never loads analytics.
   if (isNoAnalyticsPath(win.location && win.location.pathname)) return null;
   const options = analyticsOptions({ host });
-  const ph = installSnippet(win, doc, host);
-  ph.init(key, options);
+  const ready = Promise.resolve()
+    .then(load)
+    .then((mod) => {
+      const ph = (mod && (mod.default || mod.posthog)) || null;
+      if (!ph || typeof ph.init !== "function") return null;
+      ph.init(key, options);
+      win.posthog = ph; // same-origin handle (error reporting, evidence checks)
+      return ph;
+    })
+    .catch(() => null); // analytics must never break the app
   if (!wiredWindows.has(win)) {
     wiredWindows.add(win);
     const report = (kind) => {
@@ -180,5 +172,5 @@ export function initAnalytics({
     win.addEventListener("error", (e) => report((e && e.error && e.error.name) || "Error"));
     win.addEventListener("unhandledrejection", (e) => report((e && e.reason && e.reason.name) || "UnhandledRejection"));
   }
-  return options;
+  return { options, ready };
 }
