@@ -17,7 +17,62 @@ load_dotenv(_root / '.env')
 
 from app.db import db
 
-JWT_SECRET = os.environ.get('JWT_SECRET', 'dev-secret-key')
+class JwtSecretMissing(RuntimeError):
+    """SEC-03 (M-1): no usable JWT_SECRET outside an explicit test/dev run."""
+
+
+#: Same labels as ``app.services.auth_events`` (not imported: ``app.services``
+#: imports this module, so importing it here would be circular).
+_NON_PRODUCTION_ENV_VALUES = frozenset(
+    {"development", "dev", "local", "test", "testing", "staging", "stage"})
+
+#: SEC-03 (M-1): the HS256 key must carry at least 256 bits.
+JWT_SECRET_MIN_BYTES = 32
+
+
+def _explicit_test_mode() -> bool:
+    """True only for an explicit non-production run: the pytest runner (it sets
+    ``PYTEST_VERSION`` for the whole process and its children), or ``ENV`` /
+    ``ENVIRONMENT`` set and every set value a non-production label (the same
+    rule as ``auth_events.explicitly_non_production``). Anything else — unset,
+    unknown, production — is NOT test mode: fail closed."""
+    if os.environ.get("PYTEST_VERSION"):
+        return True
+    seen = False
+    for key in ("ENV", "ENVIRONMENT"):
+        raw = (os.environ.get(key) or "").strip().lower()
+        if not raw:
+            continue
+        if raw not in _NON_PRODUCTION_ENV_VALUES:
+            return False
+        seen = True
+    return seen
+
+
+def load_jwt_secret() -> str:
+    """SEC-03 (M-1): there is no known fallback key any more.
+
+    * ``JWT_SECRET`` of at least 32 bytes → used.
+    * Missing or shorter, outside explicit test mode → :class:`JwtSecretMissing`
+      (the import fails, so the application refuses to start).
+    * Explicit test mode: a short configured secret is accepted (test fixtures);
+      a missing one becomes a random key for this process only — never a string
+      anyone can know, so a token can not be forged even there.
+    """
+    secret = os.environ.get("JWT_SECRET") or ""
+    if len(secret.encode("utf-8")) >= JWT_SECRET_MIN_BYTES:
+        return secret
+    if not _explicit_test_mode():
+        raise JwtSecretMissing(
+            "JWT_SECRET is missing or shorter than %d bytes; the server refuses to start "
+            "(set it in the environment / secret store)" % JWT_SECRET_MIN_BYTES)
+    if secret:
+        return secret
+    import secrets as _secrets
+    return _secrets.token_urlsafe(48)
+
+
+JWT_SECRET = load_jwt_secret()
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRATION_HOURS = 24
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import API from "@/lib/api";
 import { Printer, Loader2 } from "lucide-react";
+import { escapeHtml as esc } from "@/lib/escapeHtml";
 
 // Показва QR на СЪЩЕСТВУВАЩ актив по неговия qr_id (не генерира нов).
 // Плюс серийния номер и бутон Печат.
@@ -30,8 +31,12 @@ export default function UnitQrBlock({ qrId, serialNo }) {
   const doPrint = () => {
     const w = window.open("", "_blank", "width=400,height=500");
     if (!w) return;
-    w.document.write(`<html><head><title>${qrId}</title></head><body style="text-align:center;font-family:sans-serif;padding:24px;">${svg || ""}<div style="font-family:monospace;font-size:18px;margin-top:8px;">${qrId}</div>${serialNo ? `<div style="font-size:13px;color:#555;">Сериен №: ${serialNo}</div>` : ""}<script>window.onload=function(){window.print();}<\/script></body></html>`);
+    // SEC-03 (M-5): qrId / serialNo are escaped; the SVG is our own server's QR
+    // (segno), the same markup this component already renders. No inline
+    // <script> (blocked by the CSP anyway): the opener starts the print.
+    w.document.write(`<html><head><title>${esc(qrId)}</title></head><body style="text-align:center;font-family:sans-serif;padding:24px;">${svg || ""}<div style="font-family:monospace;font-size:18px;margin-top:8px;">${esc(qrId)}</div>${serialNo ? `<div style="font-size:13px;color:#555;">Сериен №: ${esc(serialNo)}</div>` : ""}</body></html>`);
     w.document.close();
+    setTimeout(() => w.print(), 300);
   };
 
   return (

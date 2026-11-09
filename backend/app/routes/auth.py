@@ -627,11 +627,15 @@ async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_p
     tenant = _tenant(user)
     if data.module_code == "M0":
         raise HTTPException(status_code=400, detail="Core module cannot be disabled")
+    from app.services.ai_provider import AI_FLAG
     result = await tenant.feature_flags.update_one(
         {"org_id": user["org_id"], "module_code": data.module_code},
-        {"$set": {"enabled": data.enabled, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
+        {"$set": {"enabled": data.enabled, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}},
+        # SEC-03 / Р76: the per-tenant AI switch has no seeded row (absent = off);
+        # the first toggle by a Platform Admin creates it. Modules still 404.
+        upsert=(data.module_code == AI_FLAG),
     )
-    if result.matched_count == 0:
+    if result.matched_count == 0 and result.upserted_id is None:
         raise HTTPException(status_code=404, detail="Module not found")
     await log_audit(user["org_id"], user["id"], user["email"], "toggled", "feature_flag", data.module_code, {"enabled": data.enabled})
     return await tenant.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)

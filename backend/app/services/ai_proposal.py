@@ -242,13 +242,12 @@ LLM_SYSTEM_PROMPT = """Ти си експерт по строително-мон
 - Всеки материал трябва да има reason"""
 
 
-async def llm_proposal(title: str, unit: str, qty: float, city: str = None) -> dict:
-    """Generate proposal using LLM (OpenAI via Emergent)"""
-    api_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not api_key:
-        raise ValueError("EMERGENT_LLM_KEY not configured")
-
-    from emergentintegrations.llm.chat import LlmChat, UserMessage
+async def llm_proposal(title: str, unit: str, qty: float, city: str = None,
+                       org_id: str = None) -> dict:
+    """Generate a proposal with the configured AI provider (SEC-03 / Р76:
+    Anthropic directly, key and model from configuration, tenant flag
+    ``ai_enabled``). Raises ``AINotConfigured`` when AI is not set up."""
+    from app.services import ai_provider
 
     city_hint = f" в град {city}" if city else " в България"
     user_text = f"""Анализирай следното СМР:
@@ -258,16 +257,10 @@ async def llm_proposal(title: str, unit: str, qty: float, city: str = None) -> d
 
 Върни JSON предложение за цена, материали и свързани работи."""
 
-    chat = LlmChat(
-        api_key=api_key,
-        session_id=f"ai-proposal-{uuid.uuid4().hex[:8]}",
-        system_message=LLM_SYSTEM_PROMPT,
-    ).with_model("openai", "gpt-4.1-mini")
-
-    response = await chat.send_message(UserMessage(text=user_text))
+    response_text = await ai_provider.complete(org_id, system=LLM_SYSTEM_PROMPT, text=user_text)
 
     # Parse JSON from response
-    response_text = str(response).strip()
+    response_text = response_text.strip()
     # Remove markdown code fences if present
     if response_text.startswith("```"):
         lines = response_text.split("\n")
@@ -334,11 +327,16 @@ async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, o
     Applies approved calibration factors if available.
     """
     # Try LLM first
+    from app.services.ai_provider import AINotConfigured, AI_NOT_CONFIGURED_MESSAGE
     try:
-        result = await llm_proposal(title, unit, qty, city)
-        logger.info(f"LLM proposal succeeded for: {title[:50]}")
+        result = await llm_proposal(title, unit, qty, city, org_id)
+        logger.info("LLM proposal succeeded")
+    except AINotConfigured:
+        result = rule_based_proposal(title, unit, qty, city)
+        result["fallback_reason"] = AI_NOT_CONFIGURED_MESSAGE + ", използван rule-based engine"
     except Exception as e:
-        logger.warning(f"LLM proposal failed ({type(e).__name__}: {e}), falling back to rule-based")
+        # Type only: never the request content or an SDK error text in the log.
+        logger.warning("LLM proposal failed (%s), falling back to rule-based", type(e).__name__)
         result = rule_based_proposal(title, unit, qty, city)
         result["fallback_reason"] = "LLM недостъпен, използван rule-based engine"
 

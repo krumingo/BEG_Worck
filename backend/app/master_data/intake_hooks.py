@@ -45,11 +45,11 @@ MAX_OBSERVED = 200
 #: on a path whose failure the caller is not allowed to notice.
 MAX_PER_IMPORT = 200
 
-#: The model behind the asset recognition endpoints, required by FLOW-040 §4.4
-#: for an ``ACTOR_AI`` event. Kept next to the hook that reports it so the two
-#: cannot drift apart silently; ``assets_ai_intake`` passes its own when it has
-#: a better one.
-ASSET_AI_MODEL = "openai/gpt-4.1-mini"
+#: FLOW-040 §4.4 requires a model on an ``ACTOR_AI`` event. SEC-03 / Р76: the
+#: model is configuration (``ANTHROPIC_MODEL``), never a constant in the code,
+#: so both recognition endpoints pass ``ai_provider.model_and_version()``. This
+#: label is only what a direct call that names no model is attributed to.
+ASSET_AI_MODEL = "anthropic/unspecified"
 
 
 async def observe_ocr_supplier(user: Optional[Dict[str, Any]],

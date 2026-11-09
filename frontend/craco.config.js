@@ -9,6 +9,17 @@ const buildInfo = resolveBuildInfo(__dirname);
 process.env.REACT_APP_BUILD_SHA = buildInfo.build_sha;
 process.env.REACT_APP_BUILD_TIME = buildInfo.build_time;
 
+// SEC-03 (M-4): the Content-Security-Policy allows scripts from 'self' only, so
+// CRA must not inline its webpack runtime into index.html.
+process.env.INLINE_RUNTIME_CHUNK = "false";
+// The CSP <meta> in public/index.html names the API origin and — only when an
+// analytics key is configured — the analytics host. CRA leaves an undefined
+// %REACT_APP_*% placeholder literally in the HTML, so both are always defined.
+process.env.REACT_APP_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "";
+process.env.REACT_APP_POSTHOG_HOST = process.env.REACT_APP_POSTHOG_KEY
+  ? process.env.REACT_APP_POSTHOG_HOST || "https://us.i.posthog.com"
+  : "";
+
 // Check if we're in development/preview mode (not production build)
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build,
 // and jest sets NODE_ENV=test. The visual-edit instrumentation wraps rendered

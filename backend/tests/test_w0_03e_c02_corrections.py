@@ -327,24 +327,23 @@ def test_ai_batch_recognition_match_stays_a_suggestion_with_a_master_ref(monkeyp
         return True
     monkeypatch.setattr(assets_intake_pending, "_can_submit", can_submit)
     monkeypatch.setattr(asset_item_types, "db", db)
-    monkeypatch.setenv("EMERGENT_LLM_KEY", "test-only")
+    # SEC-03 / Р76: the recognition goes through app/services/ai_provider.py
+    # (Anthropic directly; key + model from env, tenant flag ai_enabled). The
+    # SDK client is replaced by a fake answering the same JSON.
+    from app.services import ai_provider
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-only")
+    monkeypatch.setenv("ANTHROPIC_MODEL", "test-only-model")
+    monkeypatch.setattr(ai_provider, "db", db)
+    run(db["feature_flags"].insert_one({"org_id": ADMIN["org_id"], "module_code": "ai_enabled", "enabled": True}))
     answer = json.dumps({"name": "Bosch GBH", "brand": "Bosch", "model": "GBH",
                          "type_label": "Бормашини", "confidence": 90})
 
-    class Chat:
-        def __init__(self, **kw):
-            pass
+    class _Messages:
+        async def create(self, **kw):
+            return types.SimpleNamespace(content=[types.SimpleNamespace(type="text", text=answer)])
 
-        def with_model(self, *a):
-            return self
-
-        async def send_message(self, msg):
-            return answer
-    fake = types.ModuleType("emergentintegrations.llm.chat")
-    fake.LlmChat, fake.UserMessage, fake.ImageContent = Chat, (lambda **kw: kw), (lambda **kw: kw)
-    for name in ("emergentintegrations", "emergentintegrations.llm"):
-        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
-    monkeypatch.setitem(sys.modules, "emergentintegrations.llm.chat", fake)
+    monkeypatch.setattr(ai_provider, "client_factory",
+                        lambda api_key: types.SimpleNamespace(messages=_Messages()))
     run(db["asset_items"].update_one({"id": "ai1"}, {"$set": {"is_active": True}}))
     masters = run(db["md_asset_type"].count_documents({}))
     r = client_for(monkeypatch, assets_batch_intake, db, ADMIN).post(
