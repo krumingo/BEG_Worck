@@ -316,7 +316,7 @@
 | FG-310 | low | #81 `a7166d4` (merge `fdfad135`) | сливането на main запази остарели evidence файлове (PM-01 run_meta, SEC-01/C01/C02/C03 results) — 2 теста за evidence са червени само на #81 | PROVEN | resolved (#81 `72e7e87`, PROVEN: само evidence файлове, регенерирани от harness-ите (PM-01, SEC-01/C01/C02/C03, SEC-02); двата теста `test_the_committed_evidence_satisfies_the_package` минават; всички 5 evidence теста — 5 passed) |
 | FG-315 | medium | PWA-01 `a05167a` | локалните данни са по tenant, не по потребител; изходът/401 трие всичко без предупреждение — основа, която противоречи на Р61 (5) за PWA-02 | PROVEN | open (дълг за PWA-02) |
 | FG-316 | low | PWA-01 `a05167a` | изчистването не покрива IndexedDB, бисквитки и HTTP кеша | PROVEN | open |
-| FG-317 | medium | PWA-01 `a05167a` | външни скриптове с запис на сесията (PostHog `session_recording`) са в инсталираното приложение — могат да запишат ЕГН/IBAN/суми | PROVEN | partial по Р68 (#88 PWA-01 `d59bcca`, PROVEN: PostHog без session recording (`analytics.js:30, 46-49`), без autocapture/heatmaps/rageclick/exceptions, маскиран текст, без identify, само `error_kind`, ключ от env, URL без query/hash; Playwright: само `array.js`, `/decide`, `/e/`); остава (SUSPECTED, Krum): `emergent-main.js` (`index.html:35`) на всяка страница; бисквитката `ph_*` оцелява при изчистването; токенът на линка → FG-470; проход 40 (#88 `62f898a` / `30206f63`, PWA88-N1): posthog-js 1.200.0 е вграден в bundle-а — без външен `array.js`, без `/decide`, без remote config/surveys/site apps/experiments (jest + evidence 18/18); остава `emergent-main.js` (`index.html`) — потвърдено и от SEC-SCAN 2026-11-09 H-1 (клон `claude/sec-scan`), Krum |
+| FG-317 | medium | PWA-01 `a05167a` | външни скриптове с запис на сесията (PostHog `session_recording`) са в инсталираното приложение — могат да запишат ЕГН/IBAN/суми | PROVEN | partial по Р68 (#88 PWA-01 `d59bcca`, PROVEN: PostHog без session recording (`analytics.js:30, 46-49`), без autocapture/heatmaps/rageclick/exceptions, маскиран текст, без identify, само `error_kind`, ключ от env, URL без query/hash; Playwright: само `array.js`, `/decide`, `/e/`); остава (SUSPECTED, Krum): `emergent-main.js` (`index.html:35`) на всяка страница; бисквитката `ph_*` оцелява при изчистването; токенът на линка → FG-470; проход 40 (#88 `62f898a` / `30206f63`, PWA88-N1): posthog-js 1.200.0 е вграден в bundle-а — без външен `array.js`, без `/decide`, без remote config/surveys/site apps/experiments (jest + evidence 18/18); остава `emergent-main.js` (`index.html`) — потвърдено и от SEC-SCAN 2026-11-09 H-1 (клон `claude/sec-scan`), Krum; решено от Крум по Р75 (09.11.2026): скриптовете и надписът на Emergent се махат — пакет SEC-03 |
 | FG-318 | low | PWA-01 `a05167a` | `/api` и `/uploads` нямат `Cache-Control: no-store`; e2e mock-ът го добавя и скрива липсата | SUSPECTED | open |
 | FG-319 | low | PWA-01 `a05167a` | презареждане без интернет губи сесията (токенът се трие при мрежова грешка) | PROVEN | resolved (PWA-01 #88 `7c284fa` / `e571b06`, PROVEN по код + jest `AuthContext.offline.test.js`: токенът се трие само при 401 или 403 от `/auth/me` (`AuthContext.js` `sessionRejected`); при мрежова грешка/5xx потребителят идва от `bw_user`, нищо от `/api` не се кешира; блокирано устройство (Р61 (6)) получава 401/403 и сесията приключва) |
 | FG-320 | low | PWA-01 `a05167a` | версията на service worker-а не е версията на работещата страница; другите табове се поемат без презареждане | PROVEN | open |
@@ -5002,6 +5002,17 @@
   - старите ДДС номера се маскират при четене (FG-498).
 
 **Остава за Крум:** един касов бон за много плащания (FG-426, заедно с Р72).
+
+### Проход 41 — 09.11.2026 14:50 UTC (периодичен)
+
+- main без промяна (`1525a1e`).
+- Нови решения на Крум на `claude/happy-meitner-bmcnel` `7824b51`:
+  - **Р75 (SEC-SCAN):** махат се скриптовете/надписът на Emergent; сървърът не стартира без таен ключ; служебният адрес за напомняния се заключва; CSP и без вграждане; почистване на имената при печат.
+  - **Р76 (SEC-SCAN M-2):** AI директно с Anthropic, закрепена версия, ключ и модел в настройките; без тях AI е изключен, ръчните процеси продължават.
+  - FG-317 (остатък `emergent-main.js`) → решено по Р75, изпълнение в SEC-03.
+- Пакет `docs/architecture/tasks/SEC-03_EMERGENT_REMOVAL_AND_HARDENING.md` — проверен срещу канона: не противоречи на FLOW/CLAUDE.md. Т. 8–10 следват CLAUDE.md §10 (AI само чернови → потвърждение → права; AI не е единична точка на отказ; feature flag изключен по подразбиране). Т. 9 (без ЕГН/IBAN към модела) съответства на Р48/Р71. Т. 5 (служебният адрес през Tenant Guard, AuditEvent) — на CLAUDE.md §3/§14.
+- В проверка: #73 `d34d41b` (сливане на main `1525a1e`, FG-500/502, акорд по Р33) + #75 `4fa4957`; #83 `2415b5f` (FG-495..499).
+- Бавният преглед (FLOW-029) — отложен (тестовата база: 65 стари бази, сривове).
 
 ## Бележки, които не са разминавания
 
