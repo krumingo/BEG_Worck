@@ -287,6 +287,8 @@ def test_r62_an_owner_approved_manual_row_counts_everywhere(monkeypatch, backend
 @pytest.mark.parametrize("who", ["admin", "sm", "w1"])
 def test_r62_only_the_owner_or_the_accountant_decides_a_manual_row(monkeypatch, who):
     async def scenario(c, op):
+        # R73: the row's creator may reject / reverse it — here nobody of `who` created it
+        await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"created_by": "acct"}})
         for kind in ("approve", "reject"):
             r = await c.post(f"/api/labor-entries/le-man/{kind}", json=_decision(reason="x"), headers=_key(who))
             assert r.status_code == 403, (who, kind, r.text)
@@ -658,4 +660,61 @@ def test_fg463_a_retried_create_replays_its_row_and_is_not_a_duplicate(monkeypat
         r3 = await c.post("/api/labor-entries", json=body, headers=_key("admin"))
         assert r3.status_code == 409 and r3.json()["detail"]["code"] == "DUPLICATE_MANUAL_ROW", r3.text
         assert await op.labor_entries.count_documents({"date": "2026-11-13"}) == 1
+    run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ R73 (Krum, canon a11a4c41)
+
+def test_r73_the_creator_rejects_his_own_row_and_the_audit_names_him(monkeypatch, backend):
+    """R73: the creator MAY reject his own manual row — recorded with who, in which role,
+    when (AuditEvent); he never approves it (R66)."""
+    async def scenario(c, op):
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("admin"))
+        assert r.status_code == 403, r.text                                  # creator: no approval
+        r = await c.post("/api/labor-entries/le-man/reject", json=_decision(reason="грешен ден"),
+                         headers=_key("admin"))
+        assert r.status_code == 200, r.text
+        row = r.json()
+        assert (row["approval_status"], row["rejected_by"], row["rejected_by_role"]) == ("rejected", "admin", "Admin")
+        assert row["rejected_at"]
+        ev = await op.audit_events.find_one({"entity_id": "le-man"}, {"_id": 0})
+        assert ev["action"] == "labor.manual_entry.rejected" and ev["actor_id"] == "admin"
+        assert ev["structured_diff"]["actor"] == {"user_id": "admin", "role": "Admin", "is_creator": True}
+        assert "Admin" in ev["reason"] and ev["occurred_at"]                  # who, role, when
+        assert set((await _numbers(c)).values()) == {180.0}                  # never counted
+    run(monkeypatch, scenario, backend)
+
+
+@pytest.mark.parametrize("creator", ["owner", "acct"])
+def test_r73_r66_a_deciding_creator_still_never_approves_his_row(monkeypatch, creator):
+    async def scenario(c, op):
+        await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"created_by": creator}})
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key(creator))
+        assert r.status_code == 403 and r.json()["detail"]["code"] == "SAME_PERSON_APPROVAL", r.text
+        assert (await op.labor_entries.find_one({"id": "le-man"}))["approval_status"] == "pending"
+    run(monkeypatch, scenario)
+
+
+def test_r73_the_creator_reverses_his_own_approved_row(monkeypatch):
+    async def scenario(c, op):
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("owner"))
+        assert r.status_code == 200, r.text
+        r = await c.post("/api/labor-entries/le-man/reverse", json=_decision(version=2, reason="двойно"),
+                         headers=_key("admin"))
+        assert r.status_code == 200, r.text
+        assert (r.json()["reversed_by"], r.json()["reversed_by_role"]) == ("admin", "Admin")
+        ev = await op.audit_events.find_one({"entity_id": "le-man", "action": "labor.manual_entry.reversed"})
+        assert ev["structured_diff"]["actor"]["is_creator"] is True
+        assert set((await _numbers(c)).values()) == {180.0}
+    run(monkeypatch, scenario)
+
+
+def test_r73_a_creator_who_lost_the_right_to_enter_labor_cannot_act(monkeypatch):
+    """The creator path still needs the R16 right on the row's project (a Technician who is
+    not a member of the project gets 403)."""
+    async def scenario(c, op):
+        await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"created_by": "w1"}})
+        r = await c.post("/api/labor-entries/le-man/reject", json=_decision(reason="x"), headers=_key("w1"))
+        assert r.status_code == 403, r.text
+        assert (await op.labor_entries.find_one({"id": "le-man"}))["approval_status"] == "pending"
     run(monkeypatch, scenario)

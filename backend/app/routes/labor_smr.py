@@ -329,6 +329,7 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
                 "code": "DUPLICATE_MANUAL_ROW",
                 "message": "За този работник, обект и ден вече има одобрен ръчен ред — часовете не се броят два пъти"})
         role = user.get("role") or ""
+        past = {"approve": "approved", "reject": "rejected", "reverse": "reversed"}[kind]
         now = datetime.now(timezone.utc).isoformat()
 
         async def body(session):
@@ -367,8 +368,12 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
                 structured_diff={"before": {"approval_status": row.get("approval_status"), "version": version,
                                             "labor_cost": row.get("labor_cost")},
                                  "after": {"approval_status": to, "version": version + 1,
-                                           "reversal_entry_id": reversal_id}},
-                reason=reason or f"R62: manual labor row approved by {user['id']} (role {role})",
+                                           "reversal_entry_id": reversal_id},
+                                 # R73: who decided, in which role, and whether it was the creator
+                                 "actor": {"user_id": user["id"], "role": role,
+                                           "is_creator": bool(row.get("created_by")) and row.get("created_by") == user["id"]}},
+                reason=(f"{reason} — {past} by {user['id']} (role {role})" if reason
+                        else f"R62: manual labor row {past} by {user['id']} (role {role})"),
                 tool_or_endpoint=f"POST /labor-entries/{{id}}/{kind}", idempotency_key=key)
             await record_event(db, event, session=session)
 
@@ -391,6 +396,29 @@ def _owner_decision():
                                        resource_type="labor_entry", roles=MANUAL_ROW_DECIDERS))
 
 
+def _decider_or_creator():
+    """R73 (Krum, canon a11a4c41): the creator of a manual row MAY reject or reverse his OWN
+    row (he still needs the right to enter labor on its project — R16, the Permission Service
+    in enforce); anyone else needs the R66 decision right (Owner / Accountant). Approval is
+    never the creator's (R66, in _decide_manual_row). Decided before the handler runs."""
+    from app.permissions.money_write import check_field_cost_write, check_role_action
+
+    async def dependency(entry_id: str, request: Request, user: dict = Depends(require_m2)) -> dict:
+        row = await _tenant(user).labor_entries.find_one(
+            {"org_id": user["org_id"], "id": entry_id}, {"_id": 0, "created_by": 1, "project_id": 1})
+        if row and row.get("created_by") and row["created_by"] == user["id"]:
+            await check_field_cost_write(request, user, "labor.entry.create", module="M2",
+                                         resource_type="labor_entry", project_id=row.get("project_id"))
+            request.state.r73_creator = True
+            return user
+        await check_role_action(request, user, MANUAL_ROW_APPROVE_ACTION, module="M2",
+                                resource_type="labor_entry", roles=MANUAL_ROW_DECIDERS)
+        return user
+
+    dependency.sec01_action = MANUAL_ROW_APPROVE_ACTION
+    return Depends(dependency)
+
+
 @router.post("/labor-entries/{entry_id}/approve")
 async def approve_manual_labor_entry(
     entry_id: str, data: ManualDecision,
@@ -406,22 +434,22 @@ async def approve_manual_labor_entry(
 @router.post("/labor-entries/{entry_id}/reject")
 async def reject_manual_labor_entry(
     entry_id: str, data: ManualDecision,
-    _owner: dict = _owner_decision(),
+    _owner: dict = _decider_or_creator(),   # R73: Owner / Accountant, or the row's creator
     user: dict = Depends(require_m2),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
-    """FG-424: the Owner rejects a pending manual row (with a reason); it never counts."""
+    """FG-424 / R73: the Owner / Accountant or the row's creator rejects a pending manual row (with a reason); it never counts."""
     return await _decide_manual_row(entry_id, data, user, "reject", idempotency_key)
 
 
 @router.post("/labor-entries/{entry_id}/reverse")
 async def reverse_manual_labor_entry(
     entry_id: str, data: ManualDecision,
-    _owner: dict = _owner_decision(),
+    _owner: dict = _decider_or_creator(),   # R73: Owner / Accountant, or the row's creator
     user: dict = Depends(require_m2),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
-    """FG-424: the Owner reverses an APPROVED manual row (with a reason): a reversal row is
+    """FG-424 / R73: the Owner / Accountant or the row's creator reverses an APPROVED manual row (with a reason): a reversal row is
     appended (no delete) and the row stops counting."""
     return await _decide_manual_row(entry_id, data, user, "reverse", idempotency_key)
 

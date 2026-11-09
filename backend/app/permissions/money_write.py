@@ -205,6 +205,45 @@ def require_field_cost_write(action: str, *, module: str, resource_type: str,
     return dependency
 
 
+async def check_field_cost_write(request: Request, user: dict, action: str, *, module: str,
+                                 resource_type: str, project_id: Optional[str],
+                                 member_roles=FIELD_MEMBER_ROLES) -> dict:
+    """The require_field_cost_write (R16) decision for a project known only inside the
+    handler / dependency (e.g. the project of a stored row), called BEFORE any write."""
+    member_roles = tuple(member_roles)
+
+    async def legacy_check(u: dict, _request: Request) -> bool:
+        role = u.get("role")
+        if role in FINANCE_WRITE_ROLES:
+            return True
+        if role not in member_roles or not project_id:
+            return False
+        from app.tenancy import project_team
+        return await project_team.is_member(project_team.tenant_for(db, u), u["id"], project_id)
+
+    permission = require_permission(
+        action, module=module, scope="project", resource_type=resource_type,
+        scope_id_getter=lambda _r: project_id, legacy_check=legacy_check,
+    )
+    ctx = await permission(request, user)
+    await _legacy_data_path_guard(ctx)
+    return ctx.user
+
+
+async def check_role_action(request: Request, user: dict, action: str, *, module: str,
+                            resource_type: str, roles) -> dict:
+    """The require_money_write decision with its own legacy roles, called from inside a
+    dependency (e.g. after a row lookup decided which rule applies)."""
+    permission = require_permission(
+        action, module=module, scope="company", resource_type=resource_type,
+        legacy_check=_legacy_role_check(tuple(roles)),
+    )
+    ctx = await permission(request, user)
+    await _legacy_data_path_guard(ctx)
+    request.state.sec_money_ctx = ctx
+    return ctx.user
+
+
 # ── SEC-02 (R20): reading money ─────────────────────────────────────────────────
 # The registry (endpoint -> action -> rule -> canon) is app/permissions/finance_read.py.
 # Nothing below is a second mechanism: R20-1/R20-2 IS require_money_write with a read
