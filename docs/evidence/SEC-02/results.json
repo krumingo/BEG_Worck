@@ -885,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 188.7,
+ "seconds": 194.7,
  "rows": [
   {
    "mode": "off",
@@ -16702,12 +16702,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -16721,12 +16716,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -16768,12 +16758,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -16830,11 +16815,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -16850,11 +16831,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -16898,11 +16875,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -16960,12 +16933,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -16981,12 +16949,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -17030,12 +16993,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -41401,12 +41359,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -41420,12 +41373,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -41467,12 +41415,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -41529,11 +41472,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -41549,11 +41488,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -41597,11 +41532,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -41659,12 +41590,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -41680,12 +41606,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -41729,12 +41650,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -69502,12 +69418,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -69521,12 +69432,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -69568,12 +69474,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -69630,11 +69531,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -69650,11 +69547,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -69698,11 +69591,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -69760,12 +69649,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -69781,12 +69665,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -69830,12 +69709,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -94201,12 +94075,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -94220,12 +94089,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -94267,12 +94131,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -94329,11 +94188,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -94349,11 +94204,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -94397,11 +94248,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -94459,12 +94306,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -94480,12 +94322,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -94529,12 +94366,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -122342,12 +122174,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -122361,12 +122188,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -122408,12 +122230,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -122470,11 +122287,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -122490,11 +122303,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -122538,11 +122347,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -122600,12 +122405,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -122621,12 +122421,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -122670,12 +122465,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -147257,12 +147047,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -147276,12 +147061,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -147323,12 +147103,7 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "labor_cost"
-   ],
+   "money_keys": [],
    "leaks_7777": false
   },
   {
@@ -147385,11 +147160,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -147405,11 +147176,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -147453,11 +147220,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "approved_labor_cost",
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "total_cost"
+    "approved_labor_cost"
    ],
    "leaks_7777": false
   },
@@ -147515,12 +147278,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -147536,12 +147294,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -147585,12 +147338,7 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
-    "cost_basis",
-    "cost_is_official",
-    "cost_note",
-    "overtime_cost",
-    "total",
-    "total_cost"
+    "total"
    ],
    "leaks_7777": false
   },
@@ -159902,7 +159650,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -159911,13 +159659,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "scope_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -159932,8 +159680,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
-     "sequence": 17,
-     "integrity_hash": "e3668b5760b348d476970073d2b531fa24ff2b77467eb19bee3a354f3c0b51dc"
+     "sequence": 26,
+     "integrity_hash": "5a19c38a2d3f911f1e884cbcff50902a5a57064520c6f69d6dfaebfc3d0715c8"
     }
    ]
   },
@@ -159944,7 +159692,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -159953,7 +159701,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159977,8 +159725,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
-     "sequence": 18,
-     "integrity_hash": "f8ba249ce5b1a7a2c624f0d2db61392cb33ca9bf0c9e51ec63477df46a7ec7c8"
+     "sequence": 27,
+     "integrity_hash": "e81e5a4d335a9859767bdadf38f7e19a77092bdb5e5cc89faf938cd6533abd8e"
     }
    ]
   },
@@ -159989,7 +159737,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -160001,7 +159749,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -160010,7 +159758,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160035,8 +159783,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
-     "sequence": 19,
-     "integrity_hash": "50bb8eace9fa258b21894c94b75a49c6d547af4a243972c4902cafda9357054f"
+     "sequence": 28,
+     "integrity_hash": "253c3c93986ba9db3ff712c4a69f93d9752a3189f3e604540ea095a22a3e0e05"
     }
    ]
   },
@@ -160047,7 +159795,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -160059,7 +159807,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -160071,7 +159819,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -160080,13 +159828,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "scope_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -160103,8 +159851,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
-     "sequence": 20,
-     "integrity_hash": "6106013d88f93d07f2df837c090dfa86acc83943b7b68c65f2dd7a1a1b63a2af"
+     "sequence": 29,
+     "integrity_hash": "273d759a3d06fa9b0db36d0651b667947e291cc58128d8edd7ab19c00698f974"
     }
    ]
   },
@@ -160115,7 +159863,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -160124,7 +159872,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160149,8 +159897,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
-     "sequence": 21,
-     "integrity_hash": "ad4a39f374a1fb115bd1d28a80fd53701272ddbc84187788529f675daaf8a5b3"
+     "sequence": 30,
+     "integrity_hash": "b128a9b7630b3a2f392f8b63c074837e18cb3f7e569e9ace063bdf3c4be8f40f"
     }
    ]
   },
@@ -160161,7 +159909,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -160173,7 +159921,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -160182,7 +159930,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160207,8 +159955,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
-     "sequence": 22,
-     "integrity_hash": "30099fe0f3e3a2dd795fab273f0098e107470c8818289ebeeedcca068e81053d"
+     "sequence": 31,
+     "integrity_hash": "7fb7aba68cecb1dc8ca2eb2973707b884333eab615fbb4a70c6f07963060b8c4"
     }
    ]
   },
@@ -160219,7 +159967,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -160231,7 +159979,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -160243,7 +159991,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -160252,13 +160000,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "scope_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -160275,8 +160023,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
-     "sequence": 23,
-     "integrity_hash": "00693def5aa3bba3ce3b196ec81c7db4ce1ed6ff2cfdd5867f86d9d27ae6781c"
+     "sequence": 32,
+     "integrity_hash": "243d231a734aa993783692c61aa86081974e362a72bf2a40a40894f88e0a2703"
     }
    ]
   },
@@ -160287,7 +160035,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -160296,7 +160044,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160321,8 +160069,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
-     "sequence": 24,
-     "integrity_hash": "5a4c6e69f8c2a1cc07a3434eb409139fef209cb261e04050b3693fbb55acef29"
+     "sequence": 33,
+     "integrity_hash": "23b61ca454eca4cb186efbe5d9b8bc0f8c8f50742753f78855fb9a20aaeecba2"
     }
    ]
   },
@@ -160333,7 +160081,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -160345,7 +160093,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -160354,7 +160102,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+     "tenant_id": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160379,8 +160127,8 @@
      },
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
-     "sequence": 26,
-     "integrity_hash": "60b382d9b1f209eaacc156c57e36967563b52d2f3a73acb1edb8af58d6a67775"
+     "sequence": 35,
+     "integrity_hash": "3e37b55d0824e2b055ad986356c313eba8009fe6419641296267fc355725e6e3"
     }
    ]
   },
@@ -160391,7 +160139,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -160403,7 +160151,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "fa938c93-3c65-40f9-aa19-e3c8637c9c08",
+   "expected_tenant": "af35c250-9fca-4476-a2bb-7ddd32baa7c3",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []

@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 29.7,
+ "seconds": 30.6,
  "amount_rows": [
   {
    "mode": "off",
@@ -3666,6 +3666,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_events",
     "op.audit_idempotency",
     "op.labor_day_locks",
     "op.labor_entries"
@@ -3718,6 +3719,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_events",
     "op.audit_idempotency",
     "op.labor_day_locks",
     "op.labor_entries"
@@ -3770,6 +3772,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_events",
     "op.audit_idempotency",
     "op.labor_day_locks",
     "op.labor_entries"
@@ -3822,6 +3825,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_events",
     "op.audit_idempotency",
     "op.labor_day_locks",
     "op.labor_entries"
@@ -3874,6 +3878,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_events",
     "op.audit_idempotency",
     "op.labor_day_locks",
     "op.labor_entries"
@@ -3930,6 +3935,7 @@
     "op.labor_entries"
    ],
    "written": [
+    "op.audit_events",
     "op.audit_idempotency",
     "op.labor_day_locks",
     "op.labor_entries"
@@ -4512,7 +4518,7 @@
     409
    ],
    "retry_payment_ids": [
-    "9b2d667f-080a-5f37-923e-1e5479ceed8b"
+    "fdc9640b-b9dc-5451-9127-db7b92cab738"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4536,7 +4542,7 @@
     409
    ],
    "retry_payment_ids": [
-    "d3af96e7-6d68-5381-b60d-16f401d374bf"
+    "6aa16cdb-3247-5ba1-b4a9-84e076f560db"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4560,7 +4566,7 @@
     409
    ],
    "retry_payment_ids": [
-    "0e2ae3d8-ac48-5129-b085-f281e7b7762a"
+    "bdc64acb-6fa2-5160-a9d4-97ad77a93226"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,

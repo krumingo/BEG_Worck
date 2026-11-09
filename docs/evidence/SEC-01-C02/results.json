@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.6,
+ "seconds": 28.4,
  "rows": [
   {
    "mode": "off",
@@ -2116,12 +2116,12 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
-    "A",
-    "None"
+    "A"
    ],
    "deleted": []
   },
@@ -2137,6 +2137,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2157,6 +2158,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2177,6 +2179,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2197,6 +2200,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2262,6 +2266,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2282,6 +2287,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2332,6 +2338,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4600,6 +4607,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4620,6 +4628,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4640,6 +4649,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4660,6 +4670,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4680,6 +4691,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4745,6 +4757,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4765,6 +4778,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -4815,6 +4829,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7779,6 +7794,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7799,6 +7815,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7819,6 +7836,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7839,6 +7857,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7859,6 +7878,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7924,6 +7944,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7944,6 +7965,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -7994,6 +8016,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10262,6 +10285,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10282,6 +10306,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10302,6 +10327,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10322,6 +10348,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10342,6 +10369,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10407,6 +10435,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10427,6 +10456,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -10477,6 +10507,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13587,6 +13618,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13607,6 +13639,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13627,6 +13660,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13647,6 +13681,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13667,6 +13702,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13738,6 +13774,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13758,6 +13795,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -13812,6 +13850,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16248,6 +16287,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16268,6 +16308,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16288,6 +16329,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16308,6 +16350,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16328,6 +16371,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16399,6 +16443,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16419,6 +16464,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -16473,6 +16519,7 @@
    "status": 201,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],

@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 32.9,
+ "seconds": 35.7,
  "rows": [
   {
    "mode": "off",
@@ -2245,12 +2245,12 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written_orgs": [
-    "A",
-    "None"
+    "A"
    ]
   },
   {
@@ -2264,6 +2264,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2282,6 +2283,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2300,6 +2302,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2318,6 +2321,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2375,6 +2379,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2393,6 +2398,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -2437,6 +2443,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5257,6 +5264,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5275,6 +5283,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5293,6 +5302,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5311,6 +5321,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5329,6 +5340,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5386,6 +5398,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5404,6 +5417,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -5448,6 +5462,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -8853,6 +8868,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -8871,6 +8887,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -8889,6 +8906,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -8907,6 +8925,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -8925,6 +8944,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -8982,6 +9002,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -9000,6 +9021,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -9044,6 +9066,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -11864,6 +11887,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -11882,6 +11906,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -11900,6 +11925,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -11918,6 +11944,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -11936,6 +11963,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -11993,6 +12021,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -12011,6 +12040,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -12055,6 +12085,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15586,6 +15617,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15604,6 +15636,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15622,6 +15655,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15640,6 +15674,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15658,6 +15693,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15721,6 +15757,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15739,6 +15776,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -15787,6 +15825,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18787,6 +18826,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18805,6 +18845,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18823,6 +18864,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18841,6 +18883,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18859,6 +18902,7 @@
    "target": "P1",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18922,6 +18966,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18940,6 +18985,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
@@ -18988,6 +19034,7 @@
    "target": "P2",
    "status": 201,
    "written": [
+    "op.audit_events",
     "op.labor_day_locks",
     "op.labor_entries"
    ],
