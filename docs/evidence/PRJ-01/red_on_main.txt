@@ -1,0 +1,28 @@
+# PRJ-01 tests on main 0750d75 — real MongoDB 7.0 rs0 (W0_03_REAL_MONGO_URL set), before any fix
+E           AssertionError: ('offer', {'error_code': None, 'links': None, 'project_kept': False, 'row_kept': True, ...})
+E           assert 200 == 409
+tests/test_prj_01_project_lifecycle.py:549: AssertionError
+E       assert (200 == 409)
+tests/test_prj_01_project_lifecycle.py:558: AssertionError
+E       assert 404 == 400
+tests/test_prj_01_project_lifecycle.py:573: AssertionError
+E       assert (404 == 400)
+tests/test_prj_01_project_lifecycle.py:597: AssertionError
+E       assert (403 == 403 and 200 == 400)
+tests/test_prj_01_project_lifecycle.py:623: AssertionError
+E       AssertionError: assert {'error_code'... 'written': 1} == {'error_code'... 'written': 0}
+E         
+E         Differing items:
+E         {'written': 1} != {'written': 0}
+E         {'status': 201} != {'status': 409}
+E         {'error_code': None} != {'error_code': 'WARRANTY_IN_ORIGINAL_PROJECT'}
+E         Use -v to get more diff
+tests/test_prj_01_project_lifecycle.py:634: AssertionError
+E       AssertionError: {'available': False, 'error': 'ImportError'}
+E       assert False is True
+tests/test_prj_01_project_lifecycle.py:647: AssertionError
+E           AssertionError: viewer
+E           assert 201 == 403
+tests/test_prj_01_project_lifecycle.py:666: AssertionError
+E       FileNotFoundError: [Errno 2] No such file or directory: '/home/user/BEG_Worck/docs/evidence/PRJ-01/results.json'
+9 failed, 2 warnings in 9.94s

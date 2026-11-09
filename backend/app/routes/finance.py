@@ -108,6 +108,9 @@ async def _require_tenant_project(user: dict, project_id) -> None:
     of THIS tenant — otherwise 422 before anything is written (no row, no key record)."""
     if project_id is None or project_id == "":
         return
+    if isinstance(project_id, str) and not await _tenant(user).projects.get(project_id, {"_id": 0, "id": 1}):
+        from app.services.project_guards import refuse_if_deleted
+        await refuse_if_deleted(_tenant(user), project_id)   # PRJ-01 / D14: a tombstone → 409
     if not isinstance(project_id, str) or not await _tenant(user).projects.get(project_id, {"_id": 0, "id": 1}):
         raise HTTPException(status_code=422, detail={
             "error_code": "PROJECT_NOT_FOUND",

@@ -15,6 +15,20 @@ STATUS_BG = {
 }
 
 
+PROJECT_DELETED = "PROJECT_DELETED"
+
+
+async def refuse_if_deleted(tenant: TenantData, project_id) -> None:
+    """PRJ-01 / D14: an empty Draft that was "deleted" stays as a tombstone (CLAUDE.md §2
+    rule 9). A new record that names it is refused — 409 ``PROJECT_DELETED`` — by the
+    shared project lookups writers use (this guard, ``money_input.project_in_tenant``,
+    ``finance._require_tenant_project``)."""
+    if project_id and await tenant.projects.tombstone(project_id, {"_id": 0, "id": 1}):
+        raise HTTPException(status_code=409, detail={
+            "error_code": PROJECT_DELETED,
+            "message": "Обектът е изтрит (празна чернова) — не може да получава нови записи"})
+
+
 async def check_project_writable(project_id: str, org_id: str, action: str = "запис"):
     """
     Raises 400 if project is Completed/Cancelled/Archived.
@@ -28,6 +42,8 @@ async def check_project_writable(project_id: str, org_id: str, action: str = "з
         {"_id": 0, "status": 1, "name": 1},
     )
     if not project:
+        # PRJ-01 / D14: a deleted (tombstoned) project takes no new record → 409
+        await refuse_if_deleted(tenant, project_id)
         return  # Project not found — let the caller handle
     status = project.get("status", "")
     if status in BLOCKED_STATUSES:

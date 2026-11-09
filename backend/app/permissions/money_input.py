@@ -89,6 +89,8 @@ async def project_in_tenant(tenant, project_id: Any) -> None:
         raise HTTPException(status_code=422, detail={
             "error_code": "PROJECT_REQUIRED", "message": "Обектът (project_id) е задължителен"})
     if not await tenant.projects.find_one({"id": project_id}, {"_id": 0, "id": 1}):
+        from app.services.project_guards import refuse_if_deleted
+        await refuse_if_deleted(tenant, project_id)   # PRJ-01 / D14: a tombstone → 409
         raise HTTPException(status_code=404, detail="Project not found")
 
 
