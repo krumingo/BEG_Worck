@@ -5803,3 +5803,9 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - The 6 remaining cells are `POST /api/pay-runs` Owner/Admin × 3 modes: 428 (key required) instead of LAB-01's 400. LAB-02's own base already had 428, so this is LAB-02's R29 key rule kept by the merge. Stricter, not weaker.
   - Role-union 0 (22:27 entry). The stale-matrix note is RESOLVED.
 - **Gates for #73 / #75 / #86 `8e8be48` / #88:** still blocked by the disk (~0.9 GB free; a warehouse suite needs more), pending Krum's cleanup approval.
+
+## 2026-11-09 00:26 UTC: periodic pass. #73 `fdcb5ac`, #79 `25c9ae8` (no code changes)
+
+- **#79 `25c9ae8`** = `f526182` (PASS 22:59) + OFF-01 merge evidence only. The verdict stands.
+- **#73 `fdcb5ac`** = `7ee87f8` + test-harness bindings in 3 warehouse canonical tests (c20, c21, c22): the `app.services.labor_cost` / `report_normalizer` modules are bound to the test db, as LAB-01 now reads through them. Fixture only, 0 assertion lines changed. Plus evidence.
+- **Gates for #73 / #75 / #86 `8e8be48` / #88:** still blocked by the disk (~0.9 GB free).
