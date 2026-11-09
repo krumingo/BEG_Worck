@@ -176,9 +176,8 @@ async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hou
                 "labor_formula": f"{q} × {float(piece)} = {round(q * float(piece), 2)}"}
     rate = profile.get("hourly_rate")
     cost = round(hours * float(rate), 2) if rate else None
-    return {"pay_type": pay_type, "quantity": None, "piece_rate": None, "labor_terms_version": None,
-            "hourly_rate": rate if rate else None, "labor_cost": cost,
-            "labor_formula": f"{hours}ч × {rate}" if rate else "няма ставка → без стойност"}
+    # an hourly row carries only its rate and cost (the akord fields belong to akord rows)
+    return {"pay_type": pay_type, "hourly_rate": rate if rate else None, "labor_cost": cost}
 
 
 async def _approved_report_hours_exist(org_id: str, project_id: str, employee_id: str, date: str) -> bool:
