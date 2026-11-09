@@ -194,6 +194,8 @@ def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mo
 def _ui_invoice(project_id=None):
     body = {"direction": "Received", "invoice_no": "UI-1", "issue_date": "2026-11-05",
             "due_date": "2099-12-31", "counterparty_name": "Доставчик", "currency": "EUR",
+            # INV-CN-01 Р55(1) / FG-249: a supplier invoice needs the supplier's ЕИК
+            "counterparty_eik": "175074752",
             "vat_percent": 20, "lines": [{"description": "Пясък", "unit": "t", "qty": 4,
                                           "unit_price": 25}]}
     if project_id:

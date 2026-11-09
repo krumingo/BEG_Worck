@@ -1733,6 +1733,35 @@ def test_fg278_every_company_result_reader_uses_one_project_status_scope(monkeyp
     run(monkeypatch, mode, scenario)
 
 
+def test_wh_fix_01_merge_a_locked_supplier_invoice_changes_only_its_line_destination(monkeypatch, mode):
+    async def scenario(c, op):
+        bill = await sent(c, direction="Received")
+        assert bill["status"] not in ("Draft",)
+        url = "/api/finance/invoices/%s/lines" % bill["id"]
+        cur = bill["lines"]
+        same = [{k: l.get(k) for k in ("description", "unit", "qty", "unit_price", "cost_category")}
+                for l in cur]
+        # a money change on a locked invoice → 409 INVOICE_LOCKED, nothing written
+        more = [dict(same[0], qty=same[0]["qty"] + 1)] + same[1:]
+        r = await c.put(url, headers=hdr("acct-a"), json={"lines": more})
+        assert r.status_code == 409 and code(r) == "INVOICE_LOCKED", r.text
+        # the destination only (Р45) → allowed; the line ids and every amount are kept
+        moved = [dict(same[0], project_id="prj-2")] + same[1:]
+        r = await c.put(url, headers=hdr("acct-a"), json={"lines": moved})
+        assert r.status_code == 200, r.text
+        after = r.json()
+        assert [l["id"] for l in after["lines"]] == [l["id"] for l in cur]
+        assert after["lines"][0]["project_id"] == "prj-2"
+        assert (after["total"], after["subtotal"]) == (bill["total"], bill["subtotal"])
+        # our own (outgoing) issued invoice stays fully locked, even for a destination
+        ours = await sent(c)
+        r = await c.put("/api/finance/invoices/%s/lines" % ours["id"], headers=hdr("acct-a"), json={
+            "lines": [dict({k: l.get(k) for k in ("description", "unit", "qty", "unit_price")},
+                           project_id="prj-2") for l in ours["lines"]]})
+        assert r.status_code == 409 and code(r) == "INVOICE_LOCKED", r.text
+    run(monkeypatch, mode, scenario)
+
+
 def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
     async def scenario(c, op):
         body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",

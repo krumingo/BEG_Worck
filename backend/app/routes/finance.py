@@ -1298,12 +1298,26 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     
     # INV-CN-01 / Р49.1: only a Draft's lines are edited; an issued invoice → 409
     # INVOICE_LOCKED (correction = credit / debit note), nothing written.
-    from app.services.invoice_corrections import DRAFT, INVOICE_LOCKED, is_locked, locked_refusal
-    if is_locked(invoice):
+    from app.services.invoice_corrections import (CANCELLED, DRAFT, INVOICE_LOCKED, is_locked,
+                                                  locked_refusal, same_line_money)
+    # WH-FIX-01 merge (Р45 + Р49.1): on a LOCKED supplier invoice only the DESTINATION of its
+    # lines may change (the WHFIX81-06 correction rules below still apply); the lines, their
+    # ids and every amount stay exactly as they are. Anything else → 409 INVOICE_LOCKED.
+    destination_only = is_locked(invoice)
+    if destination_only and not (invoice.get("direction") == "Received"
+                                 and invoice.get("status") != CANCELLED
+                                 and same_line_money(invoice.get("lines") or [], data.lines)):
         raise locked_refusal(invoice, ["lines"])
     
     lines = []
     for i, line in enumerate(data.lines):
+        if destination_only:
+            kept = dict(invoice["lines"][i])
+            if kept.get("project_id") != line.project_id:
+                kept["project_id"] = line.project_id
+                kept.pop("allocations", None)          # re-derived from the new destination
+            lines.append(kept)
+            continue
         l = {
             "id": str(uuid.uuid4()),
             "description": line.description,
@@ -1321,10 +1335,13 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
     async def _body(session):
         # FG-140: status decided in the transaction (CAS on the invoice);
         # totals and remaining computed from the CURRENT paid amount.
-        current = await claim_invoice(tenant, invoice_id, session=session,
-                                      allowed=(DRAFT,), code=INVOICE_LOCKED)
+        current = await claim_invoice(
+            tenant, invoice_id, session=session, code=INVOICE_LOCKED,
+            **({"forbidden": (DRAFT, CANCELLED)} if destination_only else {"allowed": (DRAFT,)}))
         if current is None:
             raise HTTPException(status_code=404, detail="Invoice not found")
+        if destination_only and not same_line_money(current.get("lines") or [], data.lines):
+            raise locked_refusal(current, ["lines"])       # changed since the read
         # WHFIX81-06: on an invoice with money paid, changing a line's
         # destination is a correction: reason required, the previous document
         # kept as a version (invoice_versions), AuditEvent — else 409.
