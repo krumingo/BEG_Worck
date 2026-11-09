@@ -15,6 +15,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `ai_cache` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `ai_calibration_events` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `ai_calibrations` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `ai_usage_ledger` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `alarm_events` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `alarm_rules` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `asset_counters` | asset types / items / units | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
