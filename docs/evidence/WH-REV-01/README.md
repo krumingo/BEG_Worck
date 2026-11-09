@@ -98,3 +98,23 @@
 - PM-01 регенериран с harness-а срещу реален Mongo: **6 passed, 0 skipped**.
 - Inventories: A1 379 достъпа, 0 UNSCOPED; A2B добавя `expected_credit_notes` (TenantData).
 - Frontend: 170 passed, build OK.
+
+## Допълнение B (09.11) — merge на `main` @ `1525a1e` (#81)
+
+`main` е слят с merge commit (двете страни запазени). WH-REV-01 приема механизмите на #81:
+
+- **FG-213 — една корекция:**
+  - сторнираният ред вече използва полето на #81 `correction_reason` (в allocate и PUT); собственото `reason` и записът в `invoice_versions` отпадат;
+  - версията е в `invoice_line_allocation_versions` (id `{line}:v{n}`, брояч `allocation_version`), с `reversed_receipts`;
+  - събитието е едно — `finance.invoice_line.allocation_corrected` (`audit_allocation_change`, разширено с `extra`: сторнирани получавания и промени в qty / мярка / цена);
+  - без причина → 409 `ALLOCATION_CORRECTION_REQUIRED`. При Paid фактура първа отговаря проверката на #81 (същият код).
+  - `@staticmethod` е запазен на `_plan_receipt_reversal` / `_expect_credit_note` / `_bind_invoice_line_price`.
+- **FG-214 — DQ в `dq_issues`:**
+  - `expected_credit_notes` пази само очакването;
+  - задачата „очаква кредитно известие“ е един отворен `dq_issues` (`dq-credit-note-{invoice}`, тип `INVOICE_AWAITS_CREDIT_NOTE`, owner accountant) + `alarm_events`;
+  - AuditEvent `dq.credit_note.opened` в транзакцията на сторното (`invoice_allocation.sync_credit_note_issue`);
+  - replay не добавя втори запис.
+- **FG-216:** тестовете засяват `md_item` (Master вече е strict в route-а).
+- **#81 заключване на доставната фактура:** сторното взема и увеличава същото `link_lock_seq` на доставната фактура, което получаването е взело.
+- **Р45 (разпределение по ред)** идва от `main` без промяна.
+- Inventories (A1: 394 достъпа, 0 UNSCOPED; A2B) и PM-01 са регенерирани с инструментите им.

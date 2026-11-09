@@ -16,6 +16,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
+from app.permissions.money_write import require_money_write
 # LIVE-OPS-01 / TASK 5C — Legacy warehouse writer fail-close guard.
 # The four writer endpoints below (post-to-warehouse, warehouse-issue,
 # warehouse-return, project-consumption) are retired physical writers per
@@ -396,7 +397,14 @@ async def get_supplier_invoice(inv_id: str, user: dict = Depends(require_m2)):
 
 
 @router.put("/supplier-invoices/{inv_id}")
-async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(require_m2)):
+async def update_supplier_invoice(
+    inv_id: str,
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "procurement.supplier_invoice.update", module='M2',
+        resource_type="supplier_invoice")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     """Update invoice header and lines (review/correction)"""
     tenant = _tenant(user)
     inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
@@ -429,9 +437,114 @@ async def update_supplier_invoice(inv_id: str, data: dict, user: dict = Depends(
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
     if "lines" in update and inv["status"] == "uploaded":
         update["status"] = "reviewed"
-    
-    await tenant.supplier_invoices.update_one({"id": inv_id}, {"$set": update})
+
+    # WH-FIX-01 (FG-157, FLOW-006 / FLOW-009 / D-04; CLAUDE.md §2.9, §7, §14):
+    #   * a status is not set by an edit beyond the review states;
+    #   * an invoice past review (sent / posted / paid …) is corrected through
+    #     a correction, never edited → 409;
+    #   * once a canonical warehouse movement links the invoice or one of its
+    #     lines, its lines / amounts / project / status are locked (as the
+    #     invoice-line lock of #55) → 409, nothing written;
+    #   * every accepted edit writes a canonical AuditEvent in the SAME
+    #     transaction as the change.
+    changed = {k for k in update if k != "updated_at" and update[k] != inv.get(k)}
+    if "status" in data and data.get("status") not in SUPPLIER_INVOICE_EDIT_STATUSES:
+        raise HTTPException(status_code=422, detail={
+            "error_code": "SUPPLIER_INVOICE_STATUS_NOT_EDITABLE",
+            "message": "the status is not set by an edit",
+            "allowed": sorted(SUPPLIER_INVOICE_EDIT_STATUSES)})
+    if inv.get("status") not in SUPPLIER_INVOICE_EDIT_STATUSES \
+            and changed & SUPPLIER_INVOICE_LOCKED_WHEN_LINKED:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "SUPPLIER_INVOICE_CORRECTION_ONLY",
+            "message": "the invoice is past review — correct it, do not edit it",
+            "status": inv.get("status")})
+    locked = changed & SUPPLIER_INVOICE_LOCKED_WHEN_LINKED
+    if locked:
+        movement = await _supplier_invoice_link(tenant, user["org_id"], inv)
+        if movement:
+            raise HTTPException(status_code=409, detail={
+                "error_code": "SUPPLIER_INVOICE_LINKED",
+                "message": "a canonical warehouse movement links this invoice",
+                "movement_id": movement, "locked_fields": sorted(locked)})
+    if not changed:
+        return {k: v for k, v in inv.items() if k != "_id"}
+
+    from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+    from app.audit.store import record_event
+    from app.services.auth_tx import run_in_transaction
+    diff = {k: {"before": _audit_value(inv.get(k)), "after": _audit_value(update[k])}
+            for k in sorted(changed)}
+    event = build_event(
+        tenant_id=user["org_id"], actor_type=ACTOR_HUMAN, actor_id=user["id"],
+        action="procurement.supplier_invoice.updated", source_flow="FLOW-006",
+        retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+        entity_type="supplier_invoice", entity_id=inv_id, structured_diff=diff,
+        effective_role_assignments=[user.get("role") or ""], source_channel="api",
+        tool_or_endpoint="PUT /supplier-invoices/{inv_id}")
+    tdb = tenant._db                                   # pylint: disable=protected-access
+
+    from app.services.invoice_line_lock import (
+        bump_supplier_invoice_lock, ensure_supplier_invoice_lock,
+    )
+    await ensure_supplier_invoice_lock(tenant, inv_id)
+
+    async def _body(session):
+        # WH-FIX-01 (WHFIX81-01): the decision is taken HERE, under the
+        # supplier-invoice lock that every linking receipt also writes in its
+        # transaction — a receipt committed after the pre-check makes this
+        # transaction conflict and re-run, and then it is seen → 409.
+        await bump_supplier_invoice_lock(tenant, inv_id, session=session)
+        if locked:
+            movement = await _supplier_invoice_link(tenant, user["org_id"], inv, session=session)
+            if movement:
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "SUPPLIER_INVOICE_LINKED",
+                    "message": "a canonical warehouse movement links this invoice",
+                    "movement_id": movement, "locked_fields": sorted(locked)})
+        current = await tenant.supplier_invoices.find_one(
+            {"id": inv_id, "org_id": user["org_id"]}, {"_id": 0, "updated_at": 1},
+            session=session)
+        if (current or {}).get("updated_at") != inv.get("updated_at"):
+            raise HTTPException(status_code=409, detail={
+                "error_code": "SUPPLIER_INVOICE_CHANGED",
+                "message": "the invoice changed meanwhile — reload and retry"})
+        await tenant.supplier_invoices.update_one(
+            {"id": inv_id, "org_id": user["org_id"]}, {"$set": update}, session=session)
+        await record_event(tdb, event, session=session)
+
+    await run_in_transaction(tdb, _body)
     return await tenant.supplier_invoices.find_one({"id": inv_id}, {"_id": 0})
+
+
+# WH-FIX-01 (FG-157) — the review states an edit may leave / set.
+SUPPLIER_INVOICE_EDIT_STATUSES = frozenset({"uploaded", "reviewed"})
+SUPPLIER_INVOICE_LOCKED_WHEN_LINKED = frozenset({
+    "lines", "subtotal", "vat_amount", "total", "vat_percent", "project_id", "status"})
+
+
+def _audit_value(v):
+    """A diff value: lines are summarized (count + total), not copied."""
+    if isinstance(v, list):
+        return {"count": len(v),
+                "total_price": round(sum(float((x or {}).get("total_price") or 0)
+                                         for x in v if isinstance(x, dict)), 2)}
+    return v
+
+
+async def _supplier_invoice_link(tenant, org_id: str, inv: dict, *, session=None):
+    """The id of a canonical movement linked to the invoice or a line, else None.
+    Debt (WH-REV-01 / #82): a REVERSED receipt should not lock the invoice —
+    the reversal field is not on this base; whichever PR merges second carries
+    that rule."""
+    line_ids = [l.get("id") for l in inv.get("lines") or [] if isinstance(l, dict) and l.get("id")]
+    ors = [{"invoice_id": inv["id"]}]
+    if line_ids:
+        ors.append({"invoice_line_id": {"$in": line_ids}})
+    row = await tenant.warehouse_transactions.find_one(
+        {"org_id": org_id, "action": {"$exists": True}, "$or": ors},
+        {"_id": 0, "movement_id": 1}, session=session)
+    return (row or {}).get("movement_id")
 
 
 # ── Post to Warehouse ──────────────────────────────────────────────
@@ -473,6 +586,10 @@ async def list_warehouse_transactions(
     if warehouse_id: query["warehouse_id"] = warehouse_id
     
     txns = await tenant.warehouse_transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(None)
+    # WH-FIX-01 (FG-161, Р20 / Р32 / Р34 / Р35): money (unit_value,
+    # layer_allocations[*].unit_value, legacy totals) only where the role sees it.
+    from app.routes.warehouse_canonical_queries import mask_rows_for_user
+    txns, _hidden = await mask_rows_for_user(user, tenant, txns)
     return txns
 
 
@@ -516,13 +633,82 @@ async def get_warehouse_stock(org_id: str, warehouse_id: str = None) -> dict:
     return stock
 
 
+CANONICAL_STOCK_LOCATION_TYPES = ("central_warehouse", "small_warehouse")
+
+
+async def canonical_warehouse_stock(tenant, org_id: str) -> list:
+    """WH-FIX-01 (FG-164) — free stock of every warehouse from the canonical
+    projection (`warehouse_batches` rows of the canonical command service,
+    remaining quantity × the layer's unit value), per item × warehouse."""
+    from decimal import Decimal
+    out: dict = {}
+    async for b in tenant.warehouse_batches.find(
+            {"org_id": org_id, "projection_source": "canonical_warehouse_service",
+             "location.location_type": {"$in": list(CANONICAL_STOCK_LOCATION_TYPES)}},
+            {"_id": 0, "item_id": 1, "unit": 1, "remaining_quantity": 1,
+             "unit_value": 1, "location": 1, "state": 1}):
+        loc = b.get("location") or {}
+        state = b.get("state") or loc.get("state") or "free"
+        if state != "free":
+            continue
+        try:
+            qty = Decimal(str(b.get("remaining_quantity") or "0"))
+            val = qty * Decimal(str(b.get("unit_value") or "0"))
+        except Exception:
+            continue
+        if qty <= 0:
+            continue
+        key = (b.get("item_id"), b.get("unit"), loc.get("location_type"), loc.get("location_id"))
+        row = out.setdefault(key, {"item_id": key[0], "unit": key[1] or "",
+                                   "location": {"location_type": key[2], "location_id": key[3]},
+                                   "qty": Decimal("0"), "value": Decimal("0")})
+        row["qty"] += qty
+        row["value"] += val
+    names = {}
+    ids = sorted({k[0] for k in out if k[0]})
+    if ids:
+        async for it in tenant._db["md_item"].find(        # pylint: disable=protected-access
+                {"tenant_id": org_id, "id": {"$in": ids}}, {"_id": 0, "id": 1, "display_name": 1}):
+            names[it["id"]] = it.get("display_name")
+    items = []
+    for row in out.values():
+        items.append({"material_name": names.get(row["item_id"]) or row["item_id"] or "",
+                      "item_id": row["item_id"], "unit": row["unit"],
+                      "location": row["location"],
+                      "qty": round(float(row["qty"]), 2), "value": round(float(row["value"]), 2),
+                      "source": "canonical"})
+    return items
+
+
+async def warehouse_stock_items(user: dict) -> list:
+    """WH-FIX-01 (FG-164) — the stock screen: the canonical warehouses AND the
+    frozen pre-canon main-warehouse balance (legacy writers are retired),
+    each row labelled with its source."""
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    items = await canonical_warehouse_stock(tenant, org_id)
+    legacy = await get_warehouse_stock(org_id)
+    main = await tenant.warehouses.find_one({"org_id": org_id, "type": "main"}, {"_id": 0, "id": 1})
+    for v in legacy.values():
+        if v["qty"] > 0.001:
+            items.append({"material_name": v["material_name"], "unit": v["unit"],
+                          "warehouse_id": (main or {}).get("id"),
+                          "location": {"location_type": "central_warehouse",
+                                       "location_id": (main or {}).get("id")},
+                          "qty": round(v["qty"], 2), "value": round(v["value"], 2),
+                          "source": "legacy"})
+    items.sort(key=lambda x: (x["material_name"], x.get("source", "")))
+    return items
+
+
 @router.get("/warehouse-stock")
 async def get_stock_balance(user: dict = Depends(require_m2)):
-    """Get current stock levels in Main Warehouse"""
-    stock = await get_warehouse_stock(user["org_id"])
-    items = [{"material_name": v["material_name"], "unit": v["unit"], "qty": round(v["qty"], 2), "value": round(v["value"], 2)}
-             for v in stock.values() if v["qty"] > 0.001]
-    items.sort(key=lambda x: x["material_name"])
+    """Current stock of the warehouses — WH-FIX-01 (FG-164): from the
+    canonical projections (plus the labelled frozen legacy main-warehouse
+    balance); FG-161: money per row only for the roles that see it."""
+    from app.routes.warehouse_canonical_queries import mask_rows_for_user
+    items = await warehouse_stock_items(user)
+    items, _hidden = await mask_rows_for_user(user, _tenant(user), items)
     return items
 
 
@@ -744,8 +930,12 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     org_id = user["org_id"]
     
-    # Current warehouse stock
-    stock = await get_warehouse_stock(org_id)
+    # WH-FIX-01 (FG-164): the canonical warehouses (+ the labelled legacy
+    # main-warehouse balance), not only the legacy main warehouse.
+    stock = {}
+    for it in await warehouse_stock_items(user):
+        key = f"{it['material_name']}|{it['unit']}"
+        stock[key + "|" + it.get("source", "") + "|" + str((it.get("location") or {}).get("location_id"))] = dict(it, _threshold_key=key)
     stock_items = []
     total_value = 0
     low_stock_count = 0
@@ -759,19 +949,26 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     for key, v in stock.items():
         if v["qty"] < 0.001:
             continue
-        threshold = thresholds.get(key, DEFAULT_LOW_STOCK_THRESHOLD)
+        threshold = thresholds.get(v["_threshold_key"], DEFAULT_LOW_STOCK_THRESHOLD)
         is_low = v["qty"] <= threshold
         if is_low:
             low_stock_count += 1
-        total_value += v["value"]
         stock_items.append({
             "material_name": v["material_name"],
+            "item_id": v.get("item_id"),
             "unit": v["unit"],
+            "location": v.get("location"),
+            "source": v.get("source"),
             "qty": round(v["qty"], 2),
             "value": round(v["value"], 2),
             "low_stock_threshold": threshold,
             "is_low_stock": is_low,
         })
+    # WH-FIX-01 (FG-161, Р20 / Р32 / Р34 / Р35): money per stock row only for
+    # the roles that see it; the overview total sums only what is visible.
+    from app.routes.warehouse_canonical_queries import mask_rows_for_user
+    stock_items, values_hidden = await mask_rows_for_user(user, tenant, stock_items)
+    total_value = sum(i.get("value", 0) or 0 for i in stock_items)
     
     stock_items.sort(key=lambda x: x["material_name"])
     
@@ -779,13 +976,18 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     from datetime import timedelta
     cutoff = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
     recent_txns = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "created_at": {"$gte": cutoff}},
+        {"org_id": org_id, "created_at": {"$gte": cutoff}, "action": {"$exists": False}},
         {"_id": 0, "type": 1, "lines": 1, "created_at": 1}
     ).to_list(None)
-    
-    intake_count = sum(1 for t in recent_txns if t["type"] == "intake")
-    issue_count = sum(1 for t in recent_txns if t["type"] == "issue")
-    return_count = sum(1 for t in recent_txns if t["type"] == "return")
+    # WH-FIX-01 (FG-190): the canonical movements of the period, read through
+    # the shared helper (legacy rows above carry `type` + `lines`; canonical
+    # rows carry `action` + item / quantity and were invisible here).
+    from app.services.canonical_material_cost import canonical_movement_lines
+    recent_txns = recent_txns + await canonical_movement_lines(tenant, org_id, since_iso=cutoff)
+
+    intake_count = sum(1 for t in recent_txns if t.get("type") == "intake")
+    issue_count = sum(1 for t in recent_txns if t.get("type") == "issue")
+    return_count = sum(1 for t in recent_txns if t.get("type") == "return")
     
     # Top moved materials
     movement_map = {}
@@ -795,11 +997,11 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
             if mat not in movement_map:
                 movement_map[mat] = {"material_name": mat, "intake_qty": 0, "issue_qty": 0, "return_qty": 0, "moves": 0}
             qty = float(line.get("qty_received", 0) or line.get("qty_issued", 0) or line.get("qty_returned", 0) or 0)
-            if txn["type"] == "intake":
+            if txn.get("type") == "intake":
                 movement_map[mat]["intake_qty"] += qty
-            elif txn["type"] == "issue":
+            elif txn.get("type") == "issue":
                 movement_map[mat]["issue_qty"] += qty
-            elif txn["type"] == "return":
+            elif txn.get("type") == "return":
                 movement_map[mat]["return_qty"] += qty
             movement_map[mat]["moves"] += 1
     
@@ -835,10 +1037,12 @@ async def get_inventory_dashboard(user: dict = Depends(require_m2)):
     
     project_remainders.sort(key=lambda x: x["remaining"], reverse=True)
     
+    overview_value = round(total_value, 2)
     return {
+        "values_hidden": values_hidden,
         "overview": {
             "total_materials": len(stock_items),
-            "total_value": round(total_value, 2),
+            **({} if values_hidden and not overview_value else {"total_value": overview_value}),
             "low_stock_count": low_stock_count,
             "on_projects_count": total_on_projects,
             "recent_intakes": intake_count,

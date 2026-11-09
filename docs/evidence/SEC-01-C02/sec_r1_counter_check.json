@@ -1,0 +1,581 @@
+{
+ "what": "SEC-R1 counter-check: the same C02 harness with membership_date_window and membership_validity disabled (= aee3169 behaviour) vs with the fix. P2: Technician membership expired yesterday, SiteManager membership starts tomorrow.",
+ "cells": [
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": [
+     "op.audit_events"
+    ]
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "SiteManager",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "Technician",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "SiteManager",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "labor_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.labor_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "labor_sync",
+   "without_fix": {
+    "status": 200,
+    "written": []
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "Technician",
+   "probe": "waste_create",
+   "without_fix": {
+    "status": 201,
+    "written": [
+     "op.material_waste_entries"
+    ]
+   },
+   "with_fix": {
+    "status": 403,
+    "written": []
+   }
+  }
+ ]
+}

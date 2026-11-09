@@ -1,0 +1,88 @@
+# WH-FIX-01 gates — code at e5f6e40 (branch claude/wh-fix-01-post-55, after merging main 4bca18a), baseline main 4bca18a
+# local disposable mongo:7.0 replica set rs0 (docker); from backend/: PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfEs
+# W0_03_REAL_MONGO_URL=MONGO_URL=mongodb://127.0.0.1:27017 WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1
+
+## main 4bca18a
+## main4bca R0
+814 passed in 150.49s (0:02:30)
+skipped: 0
+## main4bca W0
+15 failed, 1177 passed in 125.38s (0:02:05)
+skipped: 0
+## main4bca PAY-01
+630 passed in 148.08s (0:02:28)
+skipped: 0
+## main4bca SEC-01
+30 passed in 98.54s (0:01:38)
+skipped: 0
+## main4bca warehouse
+4 failed, 1120 passed, 16 errors in 594.56s (0:09:54)
+skipped: 0
+
+## fix
+## fix R0
+814 passed in 145.73s (0:02:25)
+skipped: 0
+## fix W0
+15 failed, 1177 passed in 122.32s (0:02:02)
+skipped: 0
+## fix PAY-01
+630 passed in 139.11s (0:02:19)
+skipped: 0
+## fix SEC-01
+30 passed in 88.21s (0:01:28)
+skipped: 0
+## fix PM-01
+6 passed in 139.40s (0:02:19)
+skipped: 0
+## fix WH-FIX-01 new
+185 passed in 40.41s
+skipped: 0
+## fix warehouse
+4 failed, 1120 passed, 16 errors in 552.49s (0:09:12)
+skipped: 0
+
+## guards (fix)
+W0-03E-A2C tenant boundary guard: 237 module(s) checked, 0 violation(s)
+W0-03E-A1 tenant access guard: 478 unit(s) checked, 0 violation(s)
+
+## W0 failures fix vs main 4bca18a — IDENTICAL set (15, all test_w0_03e_legacy_routes)
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
+FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+
+## warehouse suite failures fix vs main 4bca18a — IDENTICAL set (4 c13 env-order + 16 material_ledger need a live server)
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_get_warehouse_stock_returns_positive_quantities
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_get_warehouse_stock_success
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_consumption_requires_project_id
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_consumption_success
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_consumption_validates_remaining
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_material_ledger_404_invalid_project
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_material_ledger_has_warnings
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_material_ledger_remaining_calculation
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_project_material_ledger_success
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_stock_computation_after_operations
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_warehouse_issue_insufficient_stock_returns_400
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_warehouse_issue_requires_lines
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_warehouse_issue_requires_project_id
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_warehouse_issue_success
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_warehouse_return_success
+ERROR tests/test_warehouse_material_ledger.py::TestWarehouseAndMaterialLedger::test_warehouse_return_validates_remaining
+FAILED tests/test_warehouse_canonical_c13_mongo.py::test_c13_1_audit_failure_rolls_back_movement_and_counters
+FAILED tests/test_warehouse_canonical_c13_mongo.py::test_c13_1_cross_item_audit_chain_no_fork_under_ten_concurrent_writes
+FAILED tests/test_warehouse_canonical_c13_mongo.py::test_c13_2_rule_b_10_3_4_3_zero_unresolved_at_close
+FAILED tests/test_warehouse_canonical_c13_mongo.py::test_c13_4_material_entries_rebuild_twice_byte_parity
+
+## frontend (jest): MaterialWastePanel.c23 + whfix01 — 6 passed

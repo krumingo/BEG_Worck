@@ -1,0 +1,133 @@
+FFFFFFFFFFFFFFFFFF.FFFFFFFFFFFFFF                                        [100%]
+=================================== FAILURES ===================================
+E   assert []
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:89: assert []
+E   AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+    assert []
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:101: AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+E   AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+    assert []
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:101: AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+E   AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+    assert []
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:101: AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+E   AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+    assert []
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:101: AssertionError: {'__capped_canonical_reads__': [], '__permission_bypass__': [], '__permission_mode_mutation__': [], '__random_idempotency_key__': [], ...}
+E   AssertionError: assert [{'accepted_q...'u-c22', ...}] == [{'accepted_q...'u-c22', ...}]
+      
+      At index 1 diff: {'movement_id': 'mv_dc2108c521be46a6bfaf8b7022a6ab7d', 'tenant_id': 'org_c22', 'action': 'dispatch_warehouse_to_project', 'recorded_at': '2026-11-08T07:50:48.351634+00:00', 'occurred_at': '2026-11-08T07:50:48.351640+00:00', 'item_id': 'item_c22', 'unit': 'bag', 'quantity': '10', 'unit_value': '10.0000', 'currency': 'BGN', 'source': {'location_type': 'central_warehouse', 'location_id': 'wh_1', 'state': 'free'}, 'destination': {'location_type': 'in_transit', 'location_id': 'mv_dc2108c521be46a6bfaf8b7022a6ab7d', 'state': 'in_transit'}, 'lot_id': None, 'lay...
+      
+      ...Full output truncated (2 lines hidden), use '-vv' to show
+------------------------------ Captured log call -------------------------------
+WARNING  app.utils.crypto:crypto.py:21 Using development JWT secret. Set JWT_SECRET env var for production.
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:117: AssertionError: assert [{'accepted_q...'u-c22', ...}] == [{'accepted_q...'u-c22', ...}]
+E   Failed: DID NOT RAISE <class 'app.services.warehouse_movements.errors.MasterIdentityMissingError'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:131: Failed: DID NOT RAISE <class 'app.services.warehouse_movements.errors.MasterIdentityMissingError'>
+E   AssertionError: assert False is True
+     +  where False = <app.services.warehouse_movements.service.CommandService object at 0x7ff3c048bc50>._strict_master
+     +    where <app.services.warehouse_movements.service.CommandService object at 0x7ff3c048bc50> = <function _service at 0x7ff3c0491b20>()
+     +      where <function _service at 0x7ff3c0491b20> = <module 'app.routes.warehouse_canonical' from '/tmp/claude-0/main-wt/backend/app/routes/warehouse_canonical.py'>._service
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:150: AssertionError: assert False is True
+E   Failed: DID NOT RAISE <class 'app.services.warehouse_movements.errors.WarehouseMovementError'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:168: Failed: DID NOT RAISE <class 'app.services.warehouse_movements.errors.WarehouseMovementError'>
+E   AssertionError: assert Decimal('0') == Decimal('12.5')
+     +  where Decimal('0') = Decimal('0')
+     +    where '0' = str('0')
+     +  and   Decimal('12.5') = Decimal('12.5')
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:184: AssertionError: assert Decimal('0') == Decimal('12.5')
+E   ValueError: not enough values to unpack (expected 1, got 0)
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:200: ValueError: not enough values to unpack (expected 1, got 0)
+E   assert 0 == 100.0
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:215: assert 0 == 100.0
+E   AssertionError: assert {'p-1': 1200.0, 'p-2': 1200.0} == {'p-1': 480.0, 'p-2': 720.0}
+      
+      Differing items:
+      {'p-2': 1200.0} != {'p-2': 720.0}
+      {'p-1': 1200.0} != {'p-1': 480.0}
+      Use -v to get more diff
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:248: AssertionError: assert {'p-1': 1200.0, 'p-2': 1200.0} == {'p-1': 480.0, 'p-2': 720.0}
+E   AssertionError: ('Viewer', 'dispatch_warehouse_to_project')
+    assert not ['unit_value']
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:276: AssertionError: ('Viewer', 'dispatch_warehouse_to_project')
+E   AssertionError: ('Driver', 'dispatch_warehouse_to_project')
+    assert not ['unit_value']
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:276: AssertionError: ('Driver', 'dispatch_warehouse_to_project')
+E   AssertionError: ('Technician', 'dispatch_warehouse_to_project')
+    assert not ['unit_value']
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:276: AssertionError: ('Technician', 'dispatch_warehouse_to_project')
+E   AssertionError: ('SiteManager', 'dispatch_warehouse_to_project')
+    assert not ['unit_value']
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:276: AssertionError: ('SiteManager', 'dispatch_warehouse_to_project')
+E   AssertionError: ('Warehousekeeper', 'dispatch_warehouse_to_project')
+    assert not ['unit_value']
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:276: AssertionError: ('Warehousekeeper', 'dispatch_warehouse_to_project')
+E   AssertionError: assert ([{'batch_number': 'CWS-mv_358f0e1504904becb591092f2656d200-1', 'consumed_quantity': '10', 'currency': 'BGN', 'item_id'...ber': 'CWS-mv_a7417f5d45cc41e5aa2035b92ea889ec-1', 'currency': 'BGN', 'item_id': 'item_c22', 'layer_sequence': 1, ...}] and False)
+     +  where False = all(<generator object test_fg161_batches_and_stock_hide_money_from_a_viewer.<locals>.<genexpr> at 0x7ff3c0347ed0>)
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:304: AssertionError: assert ([{'batch_number': 'CWS-mv_358f0e1504904becb591092f2656d200-1', 'consumed_quantity': '10', 'currency': 'BGN', 'item_id'...ber': 'CWS-mv_a7417f5d45cc41e5aa2035b92ea889ec-1', 'currency': 'BGN', 'item_id': 'item_c22', 'layer_sequence': 1, ...}] and False)
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:341: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   ValueError: not enough values to unpack (expected 1, got 0)
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:361: ValueError: not enough values to unpack (expected 1, got 0)
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:376: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:376: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   AssertionError: no canonical movement was written
+    assert None is not None
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:415: AssertionError: no canonical movement was written
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:436: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:436: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:436: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:457: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:457: Failed: DID NOT RAISE <class 'fastapi.exceptions.HTTPException'>
+E   ValueError: not enough values to unpack (expected 1, got 0)
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:481: ValueError: not enough values to unpack (expected 1, got 0)
+E   AssertionError: assert not [{'material_name': 'Лепило', 'message': 'Лепило: закупено 20.0, не е отпуснато към обект', 'purchased_qty': 20.0, 'severity': 'info', ...}]
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:510: AssertionError: assert not [{'material_name': 'Лепило', 'message': 'Лепило: закупено 20.0, не е отпуснато към обект', 'purchased_qty': 20.0, 'severity': 'info', ...}]
+E   AssertionError: assert set() == {('wh_1', 10....', 4.0, 20.0)}
+      
+      Extra items in the right set:
+      ('wh_b', 4.0, 20.0)
+      ('wh_1', 10.0, 100.0)
+      Use -v to get more diff
+/tmp/claude-0/main-wt/backend/tests/test_wh_fix_01_post_55.py:531: AssertionError: assert set() == {('wh_1', 10....', 4.0, 20.0)}
+=========================== short test summary info ============================
+FAILED tests/test_wh_fix_01_post_55.py::test_fg193_scanner_catches_the_main_create_sub_project_rewrite
+FAILED tests/test_wh_fix_01_post_55.py::test_fg193_scanner_catches_indirect_handles[db["warehouse_transactions"].update_one({"a": 1}, {"$set": {}})\n-warehouse_transactions]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg193_scanner_catches_indirect_handles[tenant.collection("material_entries").delete_many({})\n-material_entries]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg193_scanner_catches_indirect_handles[c = db["warehouse_batches"]\nawait c.replace_one({}, {})\n-warehouse_batches]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg193_scanner_catches_indirect_handles[NAME = "warehouse_in_transit"\nc = tenant.collection(NAME)\nc.update_many({}, {})\n-warehouse_in_transit]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg193_create_sub_project_leaves_the_canonical_ledger_alone
+FAILED tests/test_wh_fix_01_post_55.py::test_fg192_unknown_item_is_refused_by_default
+FAILED tests/test_wh_fix_01_post_55.py::test_fg192_production_route_is_strict_even_if_the_default_is_lowered
+FAILED tests/test_wh_fix_01_post_55.py::test_fg191_linked_receipt_price_differs_from_the_line_422
+FAILED tests/test_wh_fix_01_post_55.py::test_fg191_linked_receipt_takes_the_line_price
+FAILED tests/test_wh_fix_01_post_55.py::test_fg191_manual_price_without_line_is_data_quality
+FAILED tests/test_wh_fix_01_post_55.py::test_fg150_project_dashboard_and_aggregate_show_the_canonical_cost
+FAILED tests/test_wh_fix_01_post_55.py::test_fg154_finance_by_project_splits_by_the_line_allocation
+FAILED tests/test_wh_fix_01_post_55.py::test_fg161_warehouse_transactions_hide_money_on_project_rows[Viewer]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg161_warehouse_transactions_hide_money_on_project_rows[Driver]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg161_warehouse_transactions_hide_money_on_project_rows[Technician]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg161_warehouse_transactions_hide_money_on_project_rows[SiteManager]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg161_warehouse_transactions_hide_money_on_project_rows[Warehousekeeper]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg161_batches_and_stock_hide_money_from_a_viewer
+FAILED tests/test_wh_fix_01_post_55.py::test_fg157_linked_invoice_lines_are_locked
+FAILED tests/test_wh_fix_01_post_55.py::test_fg157_unlinked_edit_writes_an_audit_event
+FAILED tests/test_wh_fix_01_post_55.py::test_fg157_paid_or_status_jump_is_correction_only[payload0-422-SUPPLIER_INVOICE_STATUS_NOT_EDITABLE]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg157_paid_or_status_jump_is_correction_only[payload1-409-SUPPLIER_INVOICE_CORRECTION_ONLY]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg159_material_waste_is_a_canonical_write_off
+FAILED tests/test_wh_fix_01_post_55.py::test_fg159_material_waste_refusals[Viewer-item_c22-k-403]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg159_material_waste_refusals[Owner-None-k-422]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg159_material_waste_refusals[Owner-item_c22-None-428]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg163_put_warehouse_with_stock_is_refused_like_delete[change0]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg163_put_warehouse_with_stock_is_refused_like_delete[change1]
+FAILED tests/test_wh_fix_01_post_55.py::test_fg190_quantity_reports_read_the_canonical_ledger
+FAILED tests/test_wh_fix_01_post_55.py::test_fg190_procurement_alerts_count_canonical_issues
+FAILED tests/test_wh_fix_01_post_55.py::test_fg164_stock_screen_shows_the_canonical_warehouses
+32 failed, 1 passed in 6.55s

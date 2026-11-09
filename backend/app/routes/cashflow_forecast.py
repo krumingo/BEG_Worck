@@ -5,18 +5,25 @@ from fastapi import APIRouter, Depends
 from typing import Optional
 
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.services.cashflow_forecast import build_cashflow_forecast
 
 router = APIRouter(tags=["Cash Flow"])
 
 
 @router.get("/cashflow/forecast")
-async def get_cashflow_forecast(days: int = 30, start_date: Optional[str] = None, user: dict = Depends(get_current_user)):
+async def get_cashflow_forecast(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.cashflow_forecast.read", module=None, resource_type="cashflow_forecast")),  # SEC-02 (R20-1): before any read
+    days: int = 30, start_date: Optional[str] = None, user: dict = Depends(get_current_user)):
     return await build_cashflow_forecast(user["org_id"], days, start_date)
 
 
 @router.get("/cashflow/forecast/compact")
-async def get_compact_forecast(days: int = 30, user: dict = Depends(get_current_user)):
+async def get_compact_forecast(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.cashflow_forecast_compact.read", module=None, resource_type="cashflow_forecast_compact")),  # SEC-02 (R20-1): before any read
+    days: int = 30, user: dict = Depends(get_current_user)):
     full = await build_cashflow_forecast(user["org_id"], days)
     return {
         "warning_level": full["summary"]["warning_level"],

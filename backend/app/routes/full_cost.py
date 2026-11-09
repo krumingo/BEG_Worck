@@ -8,7 +8,7 @@ Phase 5: Profit by period + expected vs actual
 Phase 6: Core financial alerts
 Phase 7: Project risk summary
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -18,6 +18,9 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import EMPLOYEE_COST_CONFIG, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write, require_finance_read
+from app.permissions.money_input import MoneyWrite, money_value  # SEC-01-C03
+from app.routes.labor_smr import ACTIVE_LABOR_ROW
 
 router = APIRouter(tags=["Full Cost / Overhead / Margin"])
 
@@ -32,7 +35,11 @@ def _tenant(user: dict) -> TenantData:
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/employee-cost/{user_id}")
-async def get_employee_cost_basis(user_id: str, user: dict = Depends(require_m2)):
+async def get_employee_cost_basis(
+    user_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.employee_cost.read", module="M2", resource_type="employee_cost")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(require_m2)):
     """Employee full cost model — net salary untouched, additional layers separate"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -103,17 +110,27 @@ async def update_employee_cost_config(data: dict, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-snapshots", status_code=201)
-async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2)):
+async def create_overhead_snapshot(
+    data: dict,
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_snapshot.create", module="M2", resource_type="overhead_snapshot")),  # SEC-01: before any read/write
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
     """Create an overhead period snapshot entry"""
     tenant = _tenant(user)
+    amount = money_value(data.get("amount"))  # SEC-01-C03: finite > 0, else 422 before any write
+    mw = await MoneyWrite.begin(user, "finance.overhead_snapshot.create", idempotency_key, data)
+    if mw.replay_id:
+        return await tenant.overhead_snapshots.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     entry = {
-        "id": str(uuid.uuid4()),
+        "id": mw.new_id("overhead_snapshot"),
         "org_id": user["org_id"],
         "category_code": data.get("category_code", "general"),
         "category_name": data.get("category_name", ""),
         "period_key": data.get("period_key", datetime.now().strftime("%Y-%m")),
-        "amount": float(data.get("amount", 0)),
+        "amount": amount,
         "currency": "EUR",
         "allocation_basis": data.get("allocation_basis", "labor_hours"),
         "notes": data.get("notes", ""),
@@ -121,12 +138,18 @@ async def create_overhead_snapshot(data: dict, user: dict = Depends(require_m2))
         "created_at": now,
         "created_by": user["id"],
     }
-    await tenant.overhead_snapshots.insert_one(entry)
+    async with mw:
+        async with mw.insert_once():
+            await tenant.overhead_snapshots.insert_one(mw.unique(entry))
+        mw.result_id = entry["id"]
     return {k: v for k, v in entry.items() if k != "_id"}
 
 
 @router.get("/overhead-snapshots")
-async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+async def list_overhead_snapshots(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_snapshot.read", module="M2", resource_type="overhead_snapshot")),  # SEC-02 (R20-1): before any read
+    period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     q = {"org_id": user["org_id"]}
     if period_key: q["period_key"] = period_key
@@ -134,7 +157,10 @@ async def list_overhead_snapshots(period_key: Optional[str] = None, user: dict =
 
 
 @router.get("/overhead-snapshots/aggregate")
-async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depends(require_m2)):
+async def aggregate_overhead(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.overhead_snapshot_aggregate.read", module="M2", resource_type="overhead_snapshot_aggregate")),  # SEC-02 (R20-1): before any read
+    period_key: Optional[str] = None, user: dict = Depends(require_m2)):
     """Aggregate overhead by period and category"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -183,69 +209,30 @@ async def aggregate_overhead(period_key: Optional[str] = None, user: dict = Depe
 # ═══════════════════════════════════════════════════════════════════
 
 @router.post("/overhead-allocation/compute/{project_id}")
-async def compute_overhead_allocation(project_id: str, data: dict = {}, user: dict = Depends(require_m2)):
+async def compute_overhead_allocation(
+    project_id: str,
+    data: dict = {},
+    _sec01: dict = Depends(require_money_write(
+        "finance.overhead_allocation.execute", module='M2',
+        resource_type="project_overhead_alloc")),  # SEC-01-C02 (R14, FG-30): before any read
+    user: dict = Depends(require_m2),
+):
     """Compute overhead allocation for a project based on labor hours share"""
     tenant = _tenant(user)
     org_id = user["org_id"]
     period_key = data.get("period_key", datetime.now().strftime("%Y-%m"))
 
-    # Total overhead for period
-    snapshots = await tenant.overhead_snapshots.find(
-        {"org_id": org_id, "period_key": period_key, "status": "active"}, {"_id": 0, "amount": 1}
-    ).to_list(100)
-    total_overhead = sum(s.get("amount", 0) for s in snapshots)
-
-    # Add legacy overhead for the period
-    legacy = await tenant.overhead_transactions.find(
-        {"org_id": org_id, "date": {"$regex": f"^{period_key}"}}, {"_id": 0, "amount": 1}
-    ).to_list(500)
-    total_overhead += sum(lt.get("amount", 0) for lt in legacy)
-
-    if total_overhead <= 0:
-        return {"ok": True, "allocated": 0, "reason": "no_overhead_data", "period": period_key}
-
-    # Labor hours by project for allocation basis
-    all_entries = await tenant.labor_entries.find(
-        {"org_id": org_id, "date": {"$regex": f"^{period_key}"}}, {"_id": 0, "project_id": 1, "hours": 1}
-    ).to_list(5000)
-    total_hours = sum(float(e.get("hours", 0)) for e in all_entries)
-    project_hours = sum(float(e.get("hours", 0)) for e in all_entries if e.get("project_id") == project_id)
-
-    if total_hours <= 0:
-        return {"ok": True, "allocated": 0, "reason": "no_labor_hours", "period": period_key}
-
-    share = project_hours / total_hours
-    allocated = round(total_overhead * share, 2)
-
-    now = datetime.now(timezone.utc).isoformat()
-    # Upsert allocation
-    await tenant.project_overhead_alloc.update_one(
-        {"org_id": org_id, "project_id": project_id, "period": period_key},
-        {"$set": {
-            "org_id": org_id, "project_id": project_id, "period": period_key,
-            "allocated_amount": allocated, "total_overhead": round(total_overhead, 2),
-            "allocation_basis": "labor_hours", "project_hours": round(project_hours, 1),
-            "total_hours": round(total_hours, 1), "share_percent": round(share * 100, 1),
-            "currency": "EUR", "updated_at": now,
-        }},
-        upsert=True,
-    )
-
-    # Also allocate to execution packages by their labor hours
-    pkgs = await tenant.execution_packages.find(
-        {"org_id": org_id, "project_id": project_id}, {"_id": 0, "id": 1, "used_hours": 1}
-    ).to_list(200)
-    pkg_total_hours = sum(p.get("used_hours", 0) for p in pkgs)
-
-    for pkg in pkgs:
-        pkg_hours = pkg.get("used_hours", 0)
-        pkg_share = pkg_hours / pkg_total_hours if pkg_total_hours > 0 else 0
-        pkg_alloc = round(allocated * pkg_share, 2)
-        await tenant.execution_packages.update_one({"id": pkg["id"]}, {"$set": {
-            "overhead_actual_allocated": pkg_alloc, "updated_at": now,
-        }})
-
-    return {"ok": True, "allocated": allocated, "period": period_key, "share_percent": round(share * 100, 1)}
+    # FG-89 (CLAUDE.md §16: no second source of truth): this route no longer computes or
+    # stores its own allocation. Overhead is allocated ONLY by FLOW-024 / OH-01
+    # (/overhead/snapshots/{id}/allocate: versioned, keyed, audited); this answer is a
+    # read-only projection of the project's current (published) OH-01 allocation.
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    cur = await project_overhead_current(tenant, project_id)
+    return {"ok": True, "allocated": cur["amount"], "period": period_key,
+            "source": "overhead_allocation_oh01", "recalculating": cur["recalculating"],
+            **recalculating_fields(cur["recalculating"]),  # FG-116 (R38)
+            "read_only": True,
+            "message": "Режийните се разпределят от модул Режийни (snapshot → разпределение)"}
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -254,7 +241,11 @@ async def compute_overhead_allocation(project_id: str, data: dict = {}, user: di
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/execution-packages/{pkg_id}/net-financial")
-async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2)):
+async def get_package_net_financial(
+    pkg_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.package_net_financial.read", module="M2", resource_type="package_net_financial")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Package net financial with overhead and net margin"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -268,7 +259,17 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
     split = await package_material_split(tenant, org_id, pkg)
     mat = split["total"]          # consumption + фира, once
     lab = pkg.get("actual_labor_cost", 0)
-    overhead = pkg.get("overhead_actual_allocated", 0)
+    # FG-89: the package's share of the project's CURRENT OH-01 allocation, by used hours,
+    # computed on read (no stored second figure)
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    _cur = (await project_overhead_current(tenant, pkg.get("project_id"))) \
+        if pkg.get("project_id") else {"amount": 0, "recalculating": False}
+    project_oh = _cur["amount"]
+    siblings = await tenant.execution_packages.find(
+        {"org_id": org_id, "project_id": pkg.get("project_id")}, {"_id": 0, "used_hours": 1}
+    ).to_list(200) if pkg.get("project_id") else []
+    sib_hours = sum(p.get("used_hours", 0) or 0 for p in siblings)
+    overhead = round(project_oh * (pkg.get("used_hours", 0) or 0) / sib_hours, 2) if sib_hours > 0 else 0
 
     sub_lines = await tenant.subcontractor_package_lines.find(
         {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0, "certified_total": 1}
@@ -295,6 +296,7 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
             "material": split["material"], "waste": split["waste"],
             "labor": lab, "subcontract": round(sub, 2),
             "gross_cost": gross_cost, "overhead": overhead, "total_cost": total_cost,
+            **recalculating_fields(_cur["recalculating"]),  # FG-116 (R38)
         },
         "margin": {
             "gross_margin": gross_margin, "gross_margin_percent": gross_pct,
@@ -311,7 +313,11 @@ async def get_package_net_financial(pkg_id: str, user: dict = Depends(require_m2
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-net-profit/{project_id}")
-async def get_project_net_profit(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_net_profit(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_net_profit.read", module="M2", resource_type="project_net_profit")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Extended project profit with overhead, gross vs net margin, expected vs actual"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -347,8 +353,11 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
     sub_certified = sub_metrics.get("certified", 0) if sub_metrics.get("available") else 0
 
     # Overhead
-    allocs = await tenant.project_overhead_alloc.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "allocated_amount": 1}).to_list(50)
-    overhead = sum(a.get("allocated_amount", 0) for a in allocs)
+    # FG-89: the project's current OH-01 allocation — the single overhead source
+    from app.services.overhead_lifecycle import project_overhead_current
+    _oh = await project_overhead_current(tenant, project_id)
+    overhead, allocs = _oh["amount"], _oh["rows"]
+    from app.services.overhead_lifecycle import recalculating_fields
 
     # Budget from execution packages
     pkgs = await tenant.execution_packages.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "budget_total": 1}).to_list(200)
@@ -373,7 +382,8 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
         "project_code": project.get("code", ""), "project_name": project.get("name", ""),
         "currency": "EUR",
         "revenue": {"contracted": round(contracted, 2), "earned": round(earned, 2), "billed": round(billed, 2), "collected": round(collected, 2), "receivables": round(billed - collected, 2), "basis": basis_label},
-        "costs": {"material": round(mat_cost - mat_waste, 2), "waste": round(mat_waste, 2), "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost},
+        "costs": {"material": round(mat_cost - mat_waste, 2), "waste": round(mat_waste, 2), "labor": lab_cost, "subcontract": round(sub_certified, 2), "gross_cost": gross_cost, "overhead": round(overhead, 2), "total_cost": total_cost,
+                  **recalculating_fields(_oh["recalculating"])},  # FG-116 (R38)
         "profit": {
             "gross_profit": gross_profit, "gross_margin_percent": gross_pct,
             "net_profit": net_profit, "net_margin_percent": net_pct,
@@ -394,14 +404,19 @@ async def get_project_net_profit(project_id: str, user: dict = Depends(require_m
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/financial-alerts/{project_id}")
-async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)):
+async def get_financial_alerts(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_financial_alert.read", module="M2", resource_type="project_financial_alert")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Core financial alerts for a project"""
     tenant = _tenant(user)
     org_id = user["org_id"]
     alerts = []
 
     # Overhead
-    allocs = await tenant.project_overhead_alloc.count_documents({"org_id": org_id, "project_id": project_id})
+    from app.services.overhead_lifecycle import project_overhead_current  # FG-89
+    allocs = len((await project_overhead_current(tenant, project_id))["rows"])
     if allocs == 0:
         alerts.append({"type": "overhead_not_allocated", "severity": "warning", "message": "Режийни разходи не са разпределени към проекта"})
 
@@ -428,7 +443,7 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
         alerts.append({"type": "unmapped_material", "severity": "warning", "count": mat_warn, "message": f"{mat_warn} материални записа без връзка към СМР"})
 
     # Labor warnings
-    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None})
+    lab_unmapped = await tenant.labor_entries.count_documents({"org_id": org_id, "project_id": project_id, "execution_package_id": None, **ACTIVE_LABOR_ROW})
     if lab_unmapped > 0:
         alerts.append({"type": "unmapped_labor", "severity": "warning", "count": lab_unmapped, "message": f"{lab_unmapped} записа за труд без връзка към СМР"})
 
@@ -452,7 +467,11 @@ async def get_financial_alerts(project_id: str, user: dict = Depends(require_m2)
 # ═══════════════════════════════════════════════════════════════════
 
 @router.get("/project-risk/{project_id}")
-async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
+async def get_project_risk(
+    project_id: str,
+    _sec02: dict = Depends(require_finance_read(
+        "finance.project_risk.read", module="M2", resource_type="project_risk")),  # SEC-02 (R20-2): before any read
+    user: dict = Depends(require_m2)):
     """Consolidated project risk summary"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -495,7 +514,8 @@ async def get_project_risk(project_id: str, user: dict = Depends(require_m2)):
         explanations.append("Забавено плащане към подизпълнители")
 
     # Overhead risk
-    allocs = await tenant.project_overhead_alloc.count_documents({"org_id": org_id, "project_id": project_id})
+    from app.services.overhead_lifecycle import project_overhead_current  # FG-89
+    allocs = len((await project_overhead_current(tenant, project_id))["rows"])
     if allocs == 0:
         flags.append("overhead_not_allocated")
         explanations.append("Режийни не са разпределени")

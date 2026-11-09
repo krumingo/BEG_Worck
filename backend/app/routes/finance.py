@@ -880,8 +880,12 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
             "unit": line.unit,
             "qty": line.qty,
             "unit_price": line.unit_price,
+            # FG-200: the line's own destination is kept (it was dropped).
+            "project_id": getattr(line, "project_id", None),
             "sort_order": i,
         }
+        if not l["project_id"]:
+            l.pop("project_id")
         lines.append(compute_invoice_line(l))
     
     invoice = {
@@ -913,7 +917,25 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     invoice = compute_invoice_totals(invoice)
     invoice["remaining_amount"] = invoice["total"]
     
-    await _tenant(user).invoices.insert_one(invoice)
+    # FG-200 / A4 #9 (Р45): ONE header destination of a supplier invoice is
+    # written on every embedded line (AuditEvent per line), and its DQ issue
+    # (FG-201) is opened when it is pending — one transaction with the insert.
+    from app.audit.store import ensure_chain_index
+    from app.services.invoice_allocation import (
+        audit_allocation_change, refresh_invoice_dq, stamp_embedded_lines,
+    )
+    tenant = _tenant(user)
+    stamped = stamp_embedded_lines(invoice) if invoice.get("direction") == "Received" else []
+    await ensure_chain_index(tenant._db)
+
+    async def _create(session):
+        await tenant.invoices.insert_one(dict(invoice), session=session)
+        for ch in stamped:
+            await audit_allocation_change(tenant, user, ch["line_id"], ch["before"], ch["after"],
+                                          session=session,
+                                          reason="Р45: заглавната дестинация е записана на реда")
+        await refresh_invoice_dq(tenant, invoice["id"], actor=user, session=session)
+    await run_transaction(tenant, _create)
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
                     {"invoice_no": data.invoice_no, "direction": data.direction})
     
@@ -1043,9 +1065,26 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             }}, session=session)
             # Recalculate status
             await update_invoice_status(tenant, invoice_id, session=session)
+        await _stamp_and_refresh(tenant, user, invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
+
+
+async def _stamp_and_refresh(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
+    """FG-200 / FG-201 (A4 #9, Р45): after a write of a supplier invoice's
+    header or embedded lines — its ONE header destination on every embedded
+    line without one (AuditEvent per line), then its DQ issue opened / resolved
+    (AuditEvent), all in the caller's transaction."""
+    from app.services.invoice_allocation import apply_header_destination, refresh_invoice_dq
+    inv = await tenant.invoices.find_one({"id": invoice_id},
+                                         {"_id": 0, "id": 1, "direction": 1, "allocations": 1,
+                                          "project_id": 1}, session=session)
+    if inv and inv.get("direction") == "Received":
+        await apply_header_destination(tenant, user, inv, session=session)
+    await refresh_invoice_dq(tenant, invoice_id, actor=user, session=session)
 
 
 @router.put("/finance/invoices/{invoice_id}/lines")
@@ -1088,6 +1127,54 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
                                       forbidden=("Cancelled", "Paid"), code=STATUS_CHANGED)
         if current is None:
             raise HTTPException(status_code=404, detail="Invoice not found")
+        # WHFIX81-06: on an invoice with money paid, changing a line's
+        # destination is a correction: reason required, the previous document
+        # kept as a version (invoice_versions), AuditEvent — else 409.
+        from app.services.invoice_allocation import embedded_as_line, stamp_embedded_lines
+        import copy
+
+        def _dests(doc):
+            # the EFFECTIVE destination of each line, after the header stamp
+            # (A4 #9) a save would apply — a UI re-save is not a change.
+            doc = copy.deepcopy(doc)
+            if doc.get("direction") == "Received":
+                stamp_embedded_lines(doc)
+            out = []
+            for l in doc.get("lines") or []:
+                eff = embedded_as_line(l)["allocations"]
+                def _q(a, l=l):
+                    try:
+                        whole = a.get("qty") is None or float(a["qty"]) == float(l.get("qty") or 0)
+                    except (TypeError, ValueError):
+                        whole = False
+                    return "whole" if whole else str(a.get("qty"))
+                out.append(sorted([str(a.get("type")), str(a.get("ref_id")), _q(a)] for a in eff))
+            return out
+        paid = current.get("status") in ("Paid", "PartiallyPaid") or \
+            float(current.get("paid_amount") or 0) > 0
+        before_d = _dests(current)
+        after_d = _dests({**current, "lines": lines})
+        if paid and before_d != after_d:
+            reason = (data.correction_reason or "").strip()
+            if not reason:
+                raise HTTPException(status_code=409, detail={
+                    "error_code": "ALLOCATION_CORRECTION_REQUIRED", "invoice_id": invoice_id,
+                    "message": "Фактурата е платена — разпределението се променя само с "
+                               "корекция (посочете причина)."})
+            check_reason(reason)
+            vcount = await tenant.invoice_versions.count({"invoice_id": invoice_id},
+                                                         session=session)
+            await tenant.invoice_versions.insert_one({
+                "id": str(uuid.uuid4()), "org_id": user["org_id"], "invoice_id": invoice_id,
+                "version_no": vcount + 1,
+                "snapshot": {k: v for k, v in current.items() if k != "_id"},
+                "edited_by": user.get("id"), "edited_at": now, "reason": reason,
+                "kind": "allocation_correction"}, session=session)
+            from app.services.invoice_allocation import audit_allocation_change
+            await audit_allocation_change(tenant, user, invoice_id,
+                                          [{"embedded_lines": before_d}],
+                                          [{"embedded_lines": after_d}],
+                                          session=session, reason=reason)
         computed = compute_invoice_totals({**{k: v for k, v in current.items() if k != "_id"},
                                            "lines": lines})
         paid = computed.get("paid_amount", 0) or 0
@@ -1102,6 +1189,9 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
         }}, session=session)
         # Recalculate status after total changes
         await update_invoice_status(tenant, invoice_id, session=session)
+        await _stamp_and_refresh(tenant, user, invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
     
     return await tenant.invoices.get(invoice_id, {"_id": 0})
@@ -1279,6 +1369,10 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
     invoice = await tenant.invoices.get(invoice_id)
     if invoice["status"] in ["Draft", "Cancelled"]:
         raise HTTPException(status_code=400, detail="Не може да се добави плащане към чернова или анулирана фактура")
+    # Р44 (WH-FIX-01 A3, FG-155): no payment of a supplier invoice with a line
+    # that is not 100 % allocated — 409 INVOICE_NOT_FULLY_ALLOCATED, nothing written.
+    from app.services.invoice_allocation import ensure_payable
+    await ensure_payable(tenant, invoice)
 
     payment_id = str(uuid.uuid5(uuid.NAMESPACE_URL, "beg-quick-pay:%s:%s:%s" % (org_id, invoice_id, key)))
     allocation_id = _allocation_id(org_id, payment_id, key, 0)
@@ -1874,6 +1968,9 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                     raise HTTPException(status_code=404, detail=f"Invoice {alloc.invoice_id} not found")
                 if invoice["status"] == "Cancelled":
                     raise HTTPException(status_code=400, detail="Cannot allocate to cancelled invoice")
+                # Р44 (WH-FIX-01 A3): every payment path — validated before the first write.
+                from app.services.invoice_allocation import ensure_payable
+                await ensure_payable(tenant, invoice)
                 expected_dir = "Inflow" if invoice["direction"] == "Issued" else "Outflow"
                 if payment["direction"] != expected_dir:
                     raise HTTPException(status_code=400, detail="Payment direction doesn't match invoice type")

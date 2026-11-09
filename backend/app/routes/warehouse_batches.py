@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from app.db import db
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
 from app.services.fifo_service import (
     add_batch, consume_fifo, get_current_stock, get_stock_value,
     InsufficientStockError,
@@ -70,6 +71,7 @@ class ConsumeRequest(BaseModel):
 # ── List batches ──
 
 @router.get("/warehouse/batches")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def list_batches(
     item_id: str = "", warehouse_id: str = "", status: str = "",
     page: int = 1, page_size: int = 50,
@@ -92,10 +94,18 @@ async def list_batches(
         "received_at", 1
     ).skip((page - 1) * page_size).limit(page_size).to_list(page_size)
 
-    return {"items": batches, "total": total, "page": page}
+    # WH-FIX-01 (FG-161, Р20 / Р32 / Р34 / Р35): money per batch row only
+    # where the role sees it (a keeper / SM / technician never on a project).
+    from app.routes.warehouse_canonical_queries import mask_rows_for_user
+    batches, hidden = await mask_rows_for_user(user, tenant, batches)
+    out = {"items": batches, "total": total, "page": page}
+    if hidden:
+        out["values_hidden"] = True
+    return out
 
 
 @router.get("/warehouse/batches/{batch_id}")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     batch = await tenant.warehouse_batches.find_one(
@@ -103,17 +113,26 @@ async def get_batch(batch_id: str, user: dict = Depends(get_current_user)):
     )
     if not batch:
         raise HTTPException(status_code=404, detail="Batch not found")
-    return batch
+    from app.routes.warehouse_canonical_queries import mask_doc_for_user
+    return await mask_doc_for_user(user, tenant, batch)       # WH-FIX-01 FG-161
 
 
 # ── Item stock & batches ──
 
 @router.get("/warehouse/items/{item_id}/stock-summary")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def item_stock_summary(item_id: str, warehouse_id: str = "", user: dict = Depends(get_current_user)):
-    return await get_current_stock(user["org_id"], item_id, warehouse_id or None)
+    from app.routes.warehouse_canonical_queries import mask_doc_for_user
+    summary = await get_current_stock(user["org_id"], item_id, warehouse_id or None)
+    # WH-FIX-01 (FG-161): located at the warehouse asked for; across every
+    # warehouse (no id) only the roles that see all money see the value.
+    if warehouse_id:
+        return await mask_doc_for_user(user, _tenant(user), dict(summary, warehouse_id=warehouse_id))
+    return await mask_doc_for_user(user, _tenant(user), summary, location_type="__all__")
 
 
 @router.get("/warehouse/items/{item_id}/batches")
+@strip_money_for_non_finance   # SEC-02-B (R20-5M)
 async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     cursor = tenant.warehouse_batches.find(
@@ -122,12 +141,18 @@ async def item_batches(item_id: str, user: dict = Depends(get_current_user)):
     ).sort("received_at", 1)
     # CODEX C12.10 — no silent cap on canonical/projection reads.
     batches = [row async for row in cursor]
-    return {"batches": batches, "total": len(batches)}
+    from app.routes.warehouse_canonical_queries import mask_rows_for_user
+    batches, hidden = await mask_rows_for_user(user, tenant, batches)   # WH-FIX-01 FG-161
+    out = {"batches": batches, "total": len(batches)}
+    if hidden:
+        out["values_hidden"] = True
+    return out
 
 
 # ── Create batch ──
 
 @router.post("/warehouse/batches", status_code=201)
+@strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
 async def create_batch(data: BatchCreate, user: dict = Depends(get_current_user)):
     """LIVE-OPS-01 / TASK 5C — **RETIRED** (v6 §12.1).
     ``warehouse_batches`` is a projector over the canonical ledger;
@@ -177,7 +202,10 @@ async def block_batch(batch_id: str, user: dict = Depends(get_current_user)):
 # ── Warehouse total value ──
 
 @router.get("/warehouse/value")
-async def warehouse_value(warehouse_id: str = "", user: dict = Depends(get_current_user)):
+async def warehouse_value(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.warehouse_value.read", module=None, resource_type="warehouse_value")),  # SEC-02 (R20-1): before any read
+    warehouse_id: str = "", user: dict = Depends(get_current_user)):
     tenant = _tenant(user)
     if not warehouse_id:
         # All warehouses
@@ -188,5 +216,15 @@ async def warehouse_value(warehouse_id: str = "", user: dict = Depends(get_curre
             val = await get_stock_value(user["org_id"], wh["id"])
             results.append({"warehouse_id": wh["id"], "name": wh["name"], **val})
             grand_total += val["total_value"]
-        return {"warehouses": results, "grand_total": round(grand_total, 2)}
-    return await get_stock_value(user["org_id"], warehouse_id)
+        # WH-FIX-01 (FG-161): per warehouse row by its type; the grand total
+        # only for the roles that see every value.
+        from app.routes.warehouse_canonical_queries import (
+            mask_rows_for_user, value_scope_for_user,
+        )
+        results, hidden = await mask_rows_for_user(user, tenant, results)
+        if await value_scope_for_user(user) == "all":
+            return {"warehouses": results, "grand_total": round(grand_total, 2)}
+        return {"warehouses": results, "values_hidden": True}
+    from app.routes.warehouse_canonical_queries import mask_doc_for_user
+    value = await get_stock_value(user["org_id"], warehouse_id)
+    return await mask_doc_for_user(user, tenant, dict(value, warehouse_id=warehouse_id))

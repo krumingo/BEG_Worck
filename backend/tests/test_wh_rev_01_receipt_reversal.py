@@ -53,6 +53,11 @@ def _wc(monkeypatch, client, db):
 async def _reverse(wc, mode, movement_id, *, key="k-rev", reason="грешно засичане",
                    role="Owner"):
     user = {"id": USER, "org_id": T, "role": role, "email": "e@x"}
+    # FG-216: #81 made the route's Master identity strict — the item is a
+    # confirmed md_item of the tenant (seeded once, idempotent).
+    await wc.db["md_item"].update_one(
+        {"id": ITEM}, {"$setOnInsert": {"id": ITEM, "tenant_id": T, "canonical_unit": "bag",
+                                        "display_name": "Лепило"}}, upsert=True)
     return await wc.post_receipt_reversal(
         movement_id, wc.ReceiptReversalBody(reason=reason), None,
         user=user, ctx=_ctx(mode, role), idempotency_key=key)
@@ -83,7 +88,7 @@ def _allocate_to(routes, project, reason="корекция след сторно
     from app.models.invoice_lines import InvoiceLineAllocationsUpdate
     return routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
         allocations=[{"type": "project", "ref_id": project, "qty": 10}],
-        reason=reason), user=OWNER)
+        correction_reason=reason), user=OWNER)
 
 
 # ═══════════════════════ the gap (fails on main) ═══════════════════════
@@ -382,36 +387,38 @@ async def test_fg195_reallocation_after_a_reversal_on_a_paid_invoice_is_a_correc
     receipt = await _book(svc, mode, db, run, PRJ)
     await _reverse(wc, mode, receipt)
     before = await db["invoice_lines"].find_one({"id": IL}, {"_id": 0})
-    audits = await db["audit_events"].count_documents({"action": "invoice_line.allocation_corrected"})
+    audits = await db["audit_events"].count_documents({"action": "finance.invoice_line.allocation_corrected"})
     to_q = [{"type": "project", "ref_id": Q, "qty": 10}]
     with pytest.raises(HTTPException) as exc:
         await routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
-            allocations=to_q, reason="   "), user=OWNER)
+            allocations=to_q, correction_reason="   "), user=OWNER)
     assert (exc.value.status_code, exc.value.detail["error_code"]) == (409, "ALLOCATION_CORRECTION_REQUIRED")
-    assert exc.value.detail["reversed_receipts"] == [receipt]
+    # FG-213: on a Paid invoice #81's own check answers first — the same code.
+    assert exc.value.detail["invoice_id"] == "inv-c26"
     with pytest.raises(HTTPException) as exc:          # PUT: a Paid invoice's lines stay
         await routes.update_invoice_line(IL, InvoiceLineUpdate(allocations=to_q),
                                          user=OWNER)
     assert exc.value.status_code == 400                # the Draft-only rule (unchanged)
     assert await db["invoice_lines"].find_one({"id": IL}, {"_id": 0}) == before
-    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 0
+    assert await db["invoice_line_allocation_versions"].count_documents({"invoice_line_id": IL}) == 0
     assert await db["audit_events"].count_documents(
-        {"action": "invoice_line.allocation_corrected"}) == audits
+        {"action": "finance.invoice_line.allocation_corrected"}) == audits
 
     await routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
-        allocations=to_q, reason="грешен обект при засичане"), user=OWNER)
-    version = await db["invoice_versions"].find_one({"invoice_line_id": IL}, {"_id": 0})
-    assert version["kind"] == "invoice_line_correction" and version["version_no"] == 1
-    assert version["snapshot"]["allocations"] == before["allocations"]
+        allocations=to_q, correction_reason="грешен обект при засичане"), user=OWNER)
+    version = await db["invoice_line_allocation_versions"].find_one(
+        {"invoice_line_id": IL}, {"_id": 0})                 # FG-213: #81's version store
+    assert version["id"] == f"{IL}:v{int(before.get('allocation_version') or 0)}"
+    assert version["allocations"] == before["allocations"]
     assert version["reason"] == "грешен обект при засичане"
     assert version["reversed_receipts"] == [receipt]
     events = await db["audit_events"].find(
-        {"action": "invoice_line.allocation_corrected", "entity_id": IL}).to_list(None)
+        {"action": "finance.invoice_line.allocation_corrected", "entity_id": IL}).to_list(None)
     assert len(events) == 1
     diff = events[0]["structured_diff"]
     assert diff["allocations"]["before"][0]["ref_id"] == PROJECT
     assert diff["allocations"]["after"][0]["ref_id"] == Q
-    assert diff["invoice_status"] == "Paid" and diff["reversed_receipts"] == [receipt]
+    assert diff["reversed_receipts"] == [receipt] and events[0]["reason"] == "грешен обект при засичане"
 
     async def check(i):
         assert await _costs(run) == (pytest.approx(0.0), pytest.approx(100.0)), i
@@ -427,7 +434,7 @@ async def test_fg195_a_never_linked_line_keeps_the_plain_rule(
     routes = _routes(monkeypatch, client, db)
     await routes.allocate_invoice_line(IL, InvoiceLineAllocationsUpdate(
         allocations=[{"type": "project", "ref_id": Q, "qty": 10}]), user=OWNER)
-    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 0
+    assert await db["invoice_line_allocation_versions"].count_documents({"invoice_line_id": IL}) == 0
 
 
 
@@ -445,13 +452,13 @@ async def test_fg195_put_of_the_allocation_after_a_reversal_needs_a_reason(
     with pytest.raises(HTTPException) as exc:
         await routes.update_invoice_line(IL, InvoiceLineUpdate(allocations=to_q), user=OWNER)
     assert (exc.value.status_code, exc.value.detail["error_code"]) == (409, "ALLOCATION_CORRECTION_REQUIRED")
-    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 0
+    assert await db["invoice_line_allocation_versions"].count_documents({"invoice_line_id": IL}) == 0
     out = await routes.update_invoice_line(
-        IL, InvoiceLineUpdate(allocations=to_q, reason="грешен обект"), user=OWNER)
+        IL, InvoiceLineUpdate(allocations=to_q, correction_reason="грешен обект"), user=OWNER)
     assert out["allocations"][0]["ref_id"] == Q and "reason" not in out
-    assert await db["invoice_versions"].count_documents({"invoice_line_id": IL}) == 1
+    assert await db["invoice_line_allocation_versions"].count_documents({"invoice_line_id": IL}) == 1
     assert await db["audit_events"].count_documents(
-        {"action": "invoice_line.allocation_corrected", "entity_id": IL}) == 1
+        {"action": "finance.invoice_line.allocation_corrected", "entity_id": IL}) == 1
 
 
 
@@ -509,8 +516,16 @@ async def test_r47_reversal_makes_the_invoice_await_a_credit_note(
     assert len(credits) == 1
     c = credits[0]
     assert (c["invoice_id"], c["amount"], c["receipt_movement_id"]) == ("inv-c26", 48.0, receipt)
-    assert c["dq_task"] == {"assignee_role": "accountant",
-                            "title": "очаква кредитно известие", "status": "open"}
+    assert "dq_task" not in c                    # FG-214: the expectation only
+    issues = await db["dq_issues"].find({"type": "INVOICE_AWAITS_CREDIT_NOTE"},
+                                        {"_id": 0}).to_list(None)
+    assert len(issues) == 1
+    assert (issues[0]["entity_id"], issues[0]["owner_role"], issues[0]["title"],
+            issues[0]["status"], issues[0]["awaited_credit"]) == (
+        "inv-c26", "accountant", "очаква кредитно известие", "open", 48.0)
+    assert await db["alarm_events"].count_documents(
+        {"rule_id": "INVOICE_AWAITS_CREDIT_NOTE", "status": "active"}) == 1
+    assert await db["audit_events"].count_documents({"action": "dq.credit_note.opened"}) == 1
     assert (await db["invoices"].find_one({"id": "inv-c26"}))["awaiting_credit_note"] is True
 
     await _pay(finance, 72.0, "k-pay-1")

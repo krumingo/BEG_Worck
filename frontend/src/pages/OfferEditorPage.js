@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { createKeyHolder, idempotencyHeaders, apiErrorText } from "@/lib/idempotency";
 import { formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +75,10 @@ export default function OfferEditorPage() {
   const projectIdParam = searchParams.get("projectId") || "";
 
   const isNew = !offerId || offerId === "new";
-  const canManage = ["Admin", "Owner", "SiteManager"].includes(user?.role);
+  // SEC-02-A (R20): the backend strips client prices for roles without the finance right;
+  // editing an offer whose prices you cannot see would save it without them. So only
+  // Admin/Owner manage offers here (SiteManager reads quantities/statuses).
+  const canManage = ["Admin", "Owner"].includes(user?.role);
   const canAcceptReject = ["Admin", "Owner"].includes(user?.role);
 
   const [offer, setOffer] = useState(null);
@@ -470,44 +474,62 @@ export default function OfferEditorPage() {
     }
   };
 
+  // OFF-01: accept / new version are contractual writes — one Idempotency-Key per click
+  const acceptKey = useMemo(() => createKeyHolder(), []);
+  const newVersionKey = useMemo(() => createKeyHolder(), []);
+
   const handleAccept = async () => {
     setSaving(true);
+    let failure = null;
     try {
-      await API.post(`/offers/${offerId}/accept`);
+      await API.post(`/offers/${offerId}/accept`, undefined, idempotencyHeaders(acceptKey.get()));
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      failure = err;
+      alert(apiErrorText(err, t("toast.errorOccurred")));
     } finally {
+      acceptKey.settle(failure);
       setSaving(false);
     }
   };
 
+  const rejectKey = useMemo(() => createKeyHolder(), []);
+
   const handleReject = async () => {
     const reason = prompt(t("offers.rejectionReasonPrompt"));
     setSaving(true);
+    let failure = null;
     try {
-      await API.post(`/offers/${offerId}/reject`, { reason });
+      // FG-144: the reject is a contractual write too — one Idempotency-Key per click
+      await API.post(`/offers/${offerId}/reject`, { reason }, idempotencyHeaders(rejectKey.get()));
       await fetchData();
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      failure = err;
+      alert(apiErrorText(err, t("toast.errorOccurred")));
     } finally {
+      rejectKey.settle(failure);
       setSaving(false);
     }
   };
 
   const handleNewVersion = async () => {
     setSaving(true);
+    let failure = null;
     try {
-      const res = await API.post(`/offers/${offerId}/new-version`);
+      const res = await API.post(`/offers/${offerId}/new-version`, undefined,
+        idempotencyHeaders(newVersionKey.get()));
       navigate(`/offers/${res.data.id}`, { replace: true });
     } catch (err) {
-      alert(err.response?.data?.detail || t("toast.errorOccurred"));
+      failure = err;
+      alert(apiErrorText(err, t("toast.errorOccurred")));
     } finally {
+      newVersionKey.settle(failure);
       setSaving(false);
     }
   };
 
   const formatCurrency = (amount) => {
+    if (amount === undefined || Number.isNaN(amount)) return "—";   // SEC-02-A: hidden money
     return new Intl.NumberFormat("en-US", { style: "currency", currency: currency || "EUR" }).format(amount || 0);
   };
 

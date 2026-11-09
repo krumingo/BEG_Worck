@@ -1138,3 +1138,92 @@ async def canonical_project_trail(tenant, org_id: str, project_id: str) -> Dict[
             else:
                 mat["returned"] += qty
     return out
+
+
+# ─────────────── WH-FIX-01 (FG-190) — quantity readers, one helper ───────────────
+
+TRAIL_QTY_KEYS = ("dispatched_to_project", "issued_to_project", "consumed",
+                  "written_off", "returned")
+
+
+async def canonical_trail_by_name(tenant, org_id: str, project_id: str) -> Dict[str, dict]:
+    """``canonical_project_trail`` keyed by material name (the key the legacy
+    quantity reports use), items of one name summed. The canonical rows carry
+    ``action`` + item / quantity, never the legacy ``type`` + ``lines``, so a
+    report that reads only ``type`` saw none of them (FG-190). The two ledgers
+    record different physical movements (legacy writers are retired) — their
+    quantities add up without double counting (as compute_project_ledger)."""
+    out: Dict[str, dict] = {}
+    for c in (await canonical_project_trail(tenant, org_id, project_id)).values():
+        name = c.get("material_name") or ""
+        row = out.setdefault(name, {"material_name": name, "unit": c.get("unit") or "",
+                                    "item_id": c.get("item_id"),
+                                    **{k: 0.0 for k in TRAIL_QTY_KEYS}})
+        for k in TRAIL_QTY_KEYS:
+            row[k] += float(c.get(k) or 0)
+    return out
+
+
+_INTAKE_ACTIONS = ("receive_from_supplier", "receive_from_supplier_to_project")
+
+
+async def canonical_movement_lines(tenant, org_id: str, *, since_iso: Optional[str] = None) -> List[dict]:
+    """Canonical ledger rows of the tenant shaped like the legacy movement
+    rows the inventory dashboard counts (FG-190): ``type`` intake (supplier
+    receipts), issue (accepted on / delivered into a project, Р17), return
+    (project → warehouse), other; one line with ``material_name`` (Master
+    display name, else item id) and the quantity."""
+    query: Dict[str, Any] = {"org_id": org_id, "action": {"$exists": True}}
+    if since_iso:
+        query["recorded_at"] = {"$gte": since_iso}
+    rows = [r async for r in tenant.warehouse_transactions.find(
+        query, {"_id": 0, "action": 1, "item_id": 1, "unit": 1, "quantity": 1,
+                "accepted_quantity": 1, "destination": 1, "recorded_at": 1})]
+    ids = sorted({r.get("item_id") for r in rows if r.get("item_id")})
+    names: Dict[str, str] = {}
+    if ids:
+        async for it in tenant._db["md_item"].find(            # pylint: disable=protected-access
+                {"tenant_id": org_id, "id": {"$in": ids}}, {"_id": 0, "id": 1, "display_name": 1}):
+            names[it["id"]] = it.get("display_name")
+    out = []
+    for r in rows:
+        act = r.get("action")
+        if act in _INTAKE_ACTIONS:
+            kind, field = "intake", "qty_received"
+        elif act == "accept_project_delivery" and is_project_location(r.get("destination")):
+            kind, field = "issue", "qty_issued"
+        elif act == "transfer_project_to_warehouse":
+            kind, field = "return", "qty_returned"
+        else:
+            kind, field = "other", "qty"
+        qty = _f(r.get("accepted_quantity")) if act == "accept_project_delivery" else None
+        if qty is None:
+            qty = _f(r.get("quantity")) or 0.0
+        out.append({"type": kind, "created_at": r.get("recorded_at"), "source": "canonical",
+                    "lines": [{"material_name": names.get(r.get("item_id")) or r.get("item_id") or "",
+                               "unit": r.get("unit") or "", field: qty}]})
+    return out
+
+
+async def canonical_trail_index(tenant, org_id: str, project_id: str) -> Dict[str, Dict[str, dict]]:
+    """FG-202 — the canonical trail keyed by ITEM_ID (``by_item``); rows with
+    no item id (none from the canonical writer) fall back to the name."""
+    by_item: Dict[str, dict] = {}
+    by_name: Dict[str, dict] = {}
+    for c in (await canonical_project_trail(tenant, org_id, project_id)).values():
+        if c.get("item_id"):
+            by_item[c["item_id"]] = c
+        else:
+            by_name[c.get("material_name") or ""] = c
+    return {"by_item": by_item, "by_name": by_name}
+
+
+def canonical_qty(index: Dict[str, Dict[str, dict]], item_id: Optional[str], name: str,
+                  key: str) -> float:
+    """The canonical quantity of one planned material: joined by its item_id;
+    only a planned row WITHOUT an item id is joined by name (FG-202)."""
+    if item_id:
+        row = index["by_item"].get(item_id)
+    else:
+        row = index["by_name"].get(name)
+    return float((row or {}).get(key) or 0)

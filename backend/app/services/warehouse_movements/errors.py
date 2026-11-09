@@ -70,6 +70,13 @@ class InvoiceLineUnitMismatchError(InvariantViolationError):
     error_code = "INVOICE_LINE_UNIT_MISMATCH"
 
 
+class InvoiceLinePriceMismatchError(InvariantViolationError):
+    """WH-FIX-01 (FG-191, FLOW-009 / D-04): a receipt linked to an invoice
+    line takes its unit price FROM THE LINE. A client unit_value that differs
+    from the line's unit price is refused (422); nothing is written."""
+    error_code = "INVOICE_LINE_PRICE_MISMATCH"
+
+
 class NegativeStockError(InvariantViolationError):
     """Normal stock cannot silently become negative (FLOW-009)."""
     error_code = "NEGATIVE_STOCK"

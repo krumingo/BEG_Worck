@@ -99,6 +99,9 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
         await ensure_audit_indexes(op_db)
     except AuditIndexError as exc:
         raise OnboardingRefused("audit indexes unavailable: %s" % exc, "AUDIT_INDEXES_UNAVAILABLE")
+    # OFF79-05: the collections the offer transactions write exist before the first offer
+    from app.services.offer_txn import ensure_offer_collections
+    await ensure_offer_collections(op_db)
 
     now = _now()
     tenant_id = str(uuid.uuid4())          # server-generated; the only tenant value
@@ -146,6 +149,10 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
         "max_amount": None, "valid_from": now, "valid_to": None, "status": "active",
         "created_by": ONBOARDING_SOURCE, "approved_by": None, "revision": 1,
         "created_at": now, "updated_at": now})
+    # OH-01 (OH01-3): the overhead unique indexes in this tenant's database, before its
+    # first overhead record (placed after the writes so no inventoried line moves).
+    from app.services.overhead_lifecycle import ensure_overhead_indexes
+    await ensure_overhead_indexes(op_db)
     for doc in (organization, owner, tenant):
         doc.pop("_id", None)
     owner.pop("password_hash", None)

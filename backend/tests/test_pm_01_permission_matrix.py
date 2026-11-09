@@ -167,6 +167,21 @@ def path_values(fx: Dict[str, Any]) -> Dict[str, str]:
             "user_id": a["users"]["denied"]["id"], "org_id": a["tenant_id"]}
 
 
+# WH-FIX-01 (WHFIX81-05): routes whose generated body cannot reach the rights
+# decision get a VALID body, so their cells test the permissions, not a 422.
+# The Master item is seeded for tenant A by the harness (PM01_ITEM_ID).
+PM01_ITEM_ID = "pm01-item-a"
+BODY_OVERRIDES = {
+    ("POST", "/api/projects/{project_id}/material-waste"): {
+        "material_name": "PM01", "item_id": PM01_ITEM_ID, "qty": 1, "unit": "бр",
+        "reason": "PM01", "file_ids": ["pm01-file"]},
+}
+# No Idempotency-Key is sent (as on main): an ALLOWED caller passes the rights and
+# gets 428 (R29), a refused one 403 — the cell tests the permission (WHFIX81-M1:
+# SEC-01's matrix check reads these cells).
+HEADER_OVERRIDES: set = set()
+
+
 def build_request(method: str, path: str, spec: Dict[str, Any], values: Dict[str, str]):
     op = spec.get("paths", {}).get(path, {}).get(method.lower(), {})
     url = re.sub(r"\{([^}:]+)(:[^}]*)?\}",
@@ -181,6 +196,8 @@ def build_request(method: str, path: str, spec: Dict[str, Any], values: Dict[str
         body = sample(content["application/json"].get("schema", {}), spec)
     # multipart/form-data: no body is generated (no file is uploaded anywhere); the
     # route answers 422 unless its authorization refuses first.
+    if (method.upper(), path) in BODY_OVERRIDES:
+        body = dict(BODY_OVERRIDES[(method.upper(), path)])
     return url, query, body
 
 
@@ -278,6 +295,13 @@ def run_harness(mongo_url: str, out_csv: Path, out_meta: Path,
             return await seed_mod.seed(client[op_name], client[sys_name], SYNTH_PASSWORD)
         report = tc.portal.call(_seed)
 
+        async def _seed_item():
+            tenant_a = next(t["tenant_id"] for t in report["tenants"] if t["key"] == "A")
+            await client[op_name]["md_item"].insert_one(
+                {"id": PM01_ITEM_ID, "tenant_id": tenant_a, "canonical_unit": "бр",
+                 "display_name": "PM01 item"})
+        tc.portal.call(_seed_item)
+
         fx: Dict[str, Any] = {}
         for t in report["tenants"]:
             fx[t["key"]] = {"tenant_id": t["tenant_id"], "project_id": t["project_id"],
@@ -304,6 +328,8 @@ def run_harness(mongo_url: str, out_csv: Path, out_meta: Path,
                     t0 = time.time()
                     kwargs: Dict[str, Any] = {"params": query,
                                               "headers": {"Authorization": "Bearer " + tokens[key]}}
+                    if (method.upper(), path) in HEADER_OVERRIDES:
+                        kwargs["headers"]["Idempotency-Key"] = "pm01-%s-%s" % (mode, key)
                     if body is not None:
                         kwargs["json"] = body
                     try:
@@ -422,6 +448,103 @@ def main(argv: Optional[List[str]] = None) -> int:
     return 2
 
 
+# ═══════════════════════════════════════════ existing-record probes (SEC-01-C01)
+# The matrix above calls every route with nonexistent ids and empty bodies, so a
+# DELETE-by-id or a "sync from existing data" route answers 404/400 and never shows a
+# write (audit #69, SEC-S1/S2). These helpers create REAL records first (as the seed /
+# an Admin would) so a probe acts on data that exists. Used by
+# tests/test_sec_01_c01_all_money_writes.py; they do not change the matrix above.
+PROBE_PROJECT2 = "P2"          # a second project per tenant where nobody is a member
+
+
+def probe_id(tkey: str, *parts: str) -> str:
+    return "pm01probe-%s-%s" % (tkey, "-".join(parts))
+
+
+async def seed_existing_records(op_db, fx: Dict[str, Any]) -> None:
+    """Per tenant: a second project (P2, nobody a member), two client companies (P1 and
+    P2 are linked to the first), project + company price modifiers, an Approved work
+    report and an execution package on P1, an hourly rate, and one existing record in
+    every SEC-01 money collection. Every row carries the tenant's own org_id."""
+    now = "2026-11-06T08:00:00+00:00"
+    for tkey, t in fx.items():
+        org, p1 = t["tenant_id"], t["project_id"]
+        p2 = probe_id(tkey, "project2")
+        c1, c2 = probe_id(tkey, "company1"), probe_id(tkey, "company2")
+        tech = t["users"]["technician"]["id"]
+        t.update({"project2_id": p2, "company1_id": c1, "company2_id": c2})
+        await op_db.projects.update_one({"id": p1, "org_id": org}, {"$set": {
+            "owner_type": "company", "owner_id": c1}})
+        await op_db.projects.insert_one({
+            "id": p2, "org_id": org, "code": "PRB-%s-2" % tkey, "name": "Probe P2 " + tkey,
+            "status": "Active", "type": "Billable", "owner_type": "company", "owner_id": c1,
+            "created_at": now, "updated_at": now})
+        for cid, name in ((c1, "Probe Client 1"), (c2, "Probe Client 2")):
+            await op_db.companies.insert_one({"id": cid, "org_id": org, "name": name,
+                                              "created_at": now})
+        await op_db.price_modifiers_config.insert_many([
+            {"id": probe_id(tkey, "pm-org"), "org_id": org, "scope": "org_default",
+             "project_id": None, "line_id": None, "modifiers": {}, "auto_rules": {},
+             "created_at": now, "updated_at": now},
+            {"id": probe_id(tkey, "pm-p1"), "org_id": org, "scope": "project",
+             "project_id": p1, "line_id": None, "modifiers": {"risk_percent": 5},
+             "auto_rules": {}, "created_at": now, "updated_at": now}])
+        await op_db.work_reports.insert_one({
+            "id": probe_id(tkey, "wr1"), "org_id": org, "project_id": p1, "user_id": tech,
+            "date": "2026-11-02", "status": "Approved", "total_hours": 2,
+            "lines": [{"activity_name": "Probe activity", "hours": 2}], "created_at": now})
+        await op_db.execution_packages.insert_one({
+            "id": probe_id(tkey, "ep1"), "org_id": org, "project_id": p1,
+            "activity_name": "Probe activity", "qty": 1, "labor_budget_total": 100,
+            "created_at": now})
+        await op_db.employee_profiles.insert_one({"org_id": org, "user_id": tech,
+                                                  "hourly_rate": 20})
+        await op_db.labor_entries.insert_one({
+            "id": probe_id(tkey, "le1"), "org_id": org, "project_id": p1,
+            "employee_id": tech, "execution_package_id": probe_id(tkey, "ep1"),
+            "work_report_id": probe_id(tkey, "wr1"), "date": "2026-11-02", "hours": 2,
+            "activity_name": "Probe activity", "hourly_rate": 20, "labor_cost": 40,
+            "source": "work_report_sync", "created_at": now})
+        await op_db.material_waste_entries.insert_one({
+            "id": probe_id(tkey, "mw1"), "org_id": org, "project_id": p1,
+            "material_name": "Probe", "qty": 1, "unit": "бр", "waste_type": "damaged",
+            "date": "2026-11-02", "created_at": now, "updated_at": now})
+        for coll in ("cash_transactions", "overhead_transactions", "bonus_payments",
+                     "overhead_snapshots"):
+            await op_db[coll].insert_one({"id": probe_id(tkey, coll), "org_id": org,
+                                          "amount": 1, "date": "2026-11-02",
+                                          "created_at": now})
+
+
+async def writes_with_org(client, oplog, ts, dbs, snap) -> List[Tuple[str, Optional[str]]]:
+    """(namespace, org_id of the written row) for every write since ``ts``. The org of
+    an updated/deleted row is read from the row now, or from the snapshot."""
+    query = {"ts": {"$gt": ts}, "op": {"$in": ["i", "u", "d", "c"]}}
+    entries: List[Dict[str, Any]] = []
+    async for entry in oplog.find(query):
+        o = entry.get("o") or {}
+        inner = o.get("applyOps") if entry.get("op") == "c" and isinstance(o, dict) else None
+        entries.extend(inner if inner else [entry])
+    out = set()
+    for e in entries:
+        ns = e.get("ns", "")
+        dbname, _, coll = ns.partition(".")
+        if dbname not in dbs or e.get("op") not in ("i", "u", "d"):
+            for n in _namespaces(e, dbs):
+                out.add((n, None))
+            continue
+        o = e.get("o") or {}
+        _id = (e.get("o2") or {}).get("_id") if e.get("op") == "u" else o.get("_id")
+        org = o.get("org_id") if e.get("op") == "i" else None
+        if org is None and _id is not None:
+            row = await client[dbname][coll].find_one({"_id": _id}, {"org_id": 1})
+            if row is None:
+                row = next((r for r in snap.get(ns, []) if r.get("_id") == _id), None)
+            org = (row or {}).get("org_id")
+        out.add((ns, org))
+    return sorted(out, key=lambda x: (x[0], str(x[1])))
+
+
 # ═════════════════════════════════════════════════════════════════════════════ tests
 def load_matrix(path: Path = MATRIX_CSV) -> List[Dict[str, str]]:
     with open(path, encoding="utf-8") as fh:
@@ -490,7 +613,7 @@ def test_shadow_answers_like_off_and_writes_like_off_except_the_role_sync():
                for extra in write_diff.values()), write_diff
 
 
-# The only cells where enforce does something off does not (as of main @ 07da9ab): the
+# The only cells where enforce does something off does not (main @ 07da9ab + SEC-01): the
 # Permission Service refuses exactly as the legacy check did and writes a denial
 # AuditEvent, or (Owner/Admin creating a user) the FLOW-002 RoleAssignment and the
 # canonical AuditEvent are written next to the legacy user row.
@@ -498,9 +621,66 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/assets/intake/{intake_id}/approve"): "denial",
     ("POST", "/api/users"): "denial+create",
     ("PUT", "/api/users/{user_id}"): "denial",
+    # SEC-01 (R14): the eight money writes refuse every non-finance role in all three
+    # modes; in enforce the refusal is audited (app/permissions/money_write.py).
+    ("POST", "/api/finance/cash-transactions"): "denial",
+    ("POST", "/api/finance/bonus-payments"): "denial",
+    ("POST", "/api/finance/overhead-transactions"): "denial",
+    ("POST", "/api/overhead-snapshots"): "denial",
+    ("PUT", "/api/price-modifiers/project/{project_id}"): "denial",
+    ("POST", "/api/labor-entries"): "denial",
+    ("POST", "/api/projects/{project_id}/material-waste"): "denial",
+    ("PATCH", "/api/projects/{project_id}/client-link"): "denial",
+    # SEC-01-C01 (R14/R16): the other write routes on the same resources.
+    ("POST", "/api/overhead/snapshots/compute"): "denial",
+    ("PUT", "/api/price-modifiers/org"): "denial",
+    ("DELETE", "/api/price-modifiers/project/{project_id}"): "denial",
+    ("POST", "/api/labor-entries/sync-from-work-reports"): "denial",
+    ("POST", "/api/execution-packages/recompute-labor/{project_id}"): "denial",
+    # SEC-01-C02 (R14; FLOW Guard FG-27, FG-30): the remaining money writes.
+    ("POST", "/api/subcontractor-payments"): "denial",
+    ("POST", "/api/client-acts/{act_id}/confirm"): "denial",
+    ("POST", "/api/subcontractor-acts/{act_id}/confirm"): "denial",
+    ("PUT", "/api/supplier-invoices/{inv_id}"): "denial",
+    ("POST", "/api/worker-calendar"): "denial",
+    ("PUT", "/api/worker-calendar/{entry_id}"): "denial",
+    ("POST", "/api/worker-calendar/bulk"): "denial",
+    ("POST", "/api/worker-calendar/sync-from-sessions"): "denial",
+    ("POST", "/api/overhead-allocation/compute/{project_id}"): "denial",
+    ("PUT", "/api/ocr-invoice/{intake_id}/approve"): "denial",
+    ("POST", "/api/sales/commit"): "denial",
+    ("POST", "/api/pricing/refresh"): "denial",
+    # SUB-ADV-01 (R39): the advance (Owner/Accountant) and its deduction on an act.
+    ("POST", "/api/subcontractor-packages/{pkg_id}/advances"): "denial",
+    ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"): "denial",
+    # SEC-02 (R20): reads are not audited on denial, except the export (significant verb).
+    ("GET", "/api/reports/company-finance-export"): "denial",
+    # SEC-02-A (D1): the money-only file exports (significant verb "export").
+    ("GET", "/api/smr-analyses/{analysis_id}/export-excel"): "denial",
+    ("GET", "/api/offers/{offer_id}/pdf"): "denial",
+    ("GET", "/api/offers/{offer_id}/xlsx"): "denial",
+    # SEC-02-E (audit SEC02D-1 + POST/PUT money sweep): execute / update denials are audited.
+    ("POST", "/api/budget-freezes/{project_id}"): "denial",
+    ("POST", "/api/client-acts/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/price-modifiers/calculate"): "denial",
+    ("POST", "/api/pulse/generate-all"): "denial",
+    ("POST", "/api/resource-model/subcontractor-burden-preview"): "denial",
+    ("POST", "/api/resource-model/worker-cost-preview"): "denial",
+    ("POST", "/api/revenue-snapshots/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/sites/{site_id}/pulse/generate"): "denial",
+    # SEC-02-G (audit SEC71-05): evaluating every alarm rule is finance only
+    ("POST", "/api/alarms/evaluate"): "denial",
+    ("POST", "/api/smr-analyses/from-offer/{offer_id}"): "denial",
+    ("POST", "/api/smr-analyses/{analysis_id}/recalculate"): "denial",
+    ("POST", "/api/smr-analyses/{analysis_id}/recalculate-with-modifiers"): "denial",
+    ("PUT", "/api/client-acts/{act_id}"): "denial",
+    ("PUT", "/api/execution-packages/{pkg_id}"): "denial",
     # LIVE-OPS-01 / TASK 5C (#55, Р28): the refused migration execute writes the
     # enforce "access denied" AuditEvent — 403 in every mode, nothing else written.
     ("POST", "/api/warehouse/migration-readiness/execute"): "denial",
+    # ACT-01 (#77, R14): creating a client act is a money write (require_money_write);
+    # confirm / PUT / from-offer are listed above under SEC-01-C02 / SEC-02-E.
+    ("POST", "/api/client-acts"): "denial",
 }
 
 

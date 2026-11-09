@@ -37,6 +37,15 @@ from tests.test_w0_03e_c03_isolation import (
 from tests.test_w0_03e_legacy_migration import ORG_A, ORG_B, run
 from tests.test_w0_03e_legacy_routes import ADMIN, client_for
 
+
+@pytest.fixture(autouse=True)
+def _permission_service_mode_off(monkeypatch):
+    """SEC-02: the finance reports here now pass the W0-02 permission dependency, which
+    reads PERMISSION_SERVICE_MODE. These tests are about MASTER_DATA_MODE and assume the
+    permission mode off (as ``enforce_with`` already pins); an earlier test file leaves
+    ``enforce`` in os.environ, so pin it for every test, not only the enforce ones."""
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+
 #: B-only strings added by this module, on top of the C03 markers.
 R1_MARKERS = B_MARKERS + ("B-SECRET-PROJECT", "B-CODE-PRX", "B-CODE-ONLY", "B-SECRET-OFFER",
                           "B-SECRET-EVENT", "B-SECRET-ADDRESS")
@@ -282,8 +291,22 @@ def test_finance_detail_drilldowns_name_only_tenant_a_records(monkeypatch, mode)
     assert names == {"cp1": "Baumit Bulgaria", "cp-only-b": "Unknown"}
     assert sum(r["total"] for r in by_cp["items"]) == 15       # A's 10 + 5; B's 999999 never
     by_project = c.get("/api/reports/finance-details/by-project?" + PERIOD).json()
+    # WH-FIX-01 A4 (Р45, oracle Q002) + FG-215: Р45 is for SUPPLIER invoices —
+    # inv-shared (Received) is counted by its LINE (FLOW-020 L54/L73: the line is
+    # the unit), which is allocated to warehouses → on no project; the INCOME
+    # invoice inv-a-foreign (Issued) keeps main's header counting.
     projects = {r["project_id"]: (r["project_code"], r["project_name"]) for r in by_project["items"]}
-    assert projects == {"pr-x": ("A-CODE-PRX", "A-OWN-PROJECT"), "pr-only-b": ("", "Unknown")}
+    assert projects == {"pr-only-b": ("", "Unknown")}
+
+    # WHFIX81 (restored check): once A's line on the SHARED invoice id is
+    # allocated to the SHARED project id pr-x, the report names A's own project
+    # (B's pr-x / B's invoice under the same ids never reach A).
+    run(db["invoice_lines"].update_one({"id": "line-a", "org_id": ORG_A}, {"$set": {
+        "allocations": [{"type": "project", "ref_id": "pr-x"}]}}))
+    shared = c.get("/api/reports/finance-details/by-project?" + PERIOD).json()
+    assert {r["project_id"]: (r["project_code"], r["project_name"]) for r in shared["items"]} == {
+        "pr-x": ("A-CODE-PRX", "A-OWN-PROJECT"), "pr-only-b": ("", "Unknown")}
+    assert_no_b(db, shared)
     top = {}
     for direction in ("expense", "income"):
         body = c.get("/api/reports/finance-details/top-counterparties?direction=%s&%s"

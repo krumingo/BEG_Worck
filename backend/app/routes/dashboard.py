@@ -10,7 +10,9 @@ import re
 from app.db import db
 from app.tenancy.data_access import TenantData
 from app.services.paid_labor import paid_labor_v3
+from app.services.invoice_allocation import RECEIVED_LINE_FIELDS
 from app.deps.auth import get_current_user
+from app.permissions.money_write import require_finance_read
 from app.deps.modules import require_m5
 
 router = APIRouter(tags=["Dashboard"])
@@ -24,7 +26,10 @@ def _tenant(user: dict) -> TenantData:
 # ── Pending Payments ──────────────────────────────────────────────
 
 @router.get("/dashboard/pending-payments")
-async def get_pending_payments(user: dict = Depends(get_current_user)):
+async def get_pending_payments(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.pending_payment.read", module=None, resource_type="pending_payment")),  # SEC-02 (R20-1): before any read
+    user: dict = Depends(get_current_user)):
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
@@ -297,6 +302,8 @@ async def get_dashboard_activity(
 
 @router.get("/reports/company-finance-series")
 async def get_finance_series(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.company_finance_series.read", module="M5", resource_type="company_finance_series")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     months: int = Query(3, ge=1, le=24),
 ):
@@ -353,8 +360,9 @@ async def get_finance_series(
             "org_id": org_id,
             "direction": "Received",
             "issue_date": {"$gte": date_from, "$lte": date_to}
-        }, {"_id": 0, "total": 1, "subtotal": 1}).to_list(1000)
-        expenses_invoices = sum((inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)) for inv in received_invoices)
+        }, {"_id": 0, "total": 1, "subtotal": 1, **RECEIVED_LINE_FIELDS}).to_list(1000)
+        # F-81-01 / Р45: only the part allocated by the lines (ex VAT)
+        expenses_invoices = (await _received_in_result(tenant, org_id, received_invoices))[0]
         
         # Expenses from cash
         cash_expense = await tenant.cash_transactions.find({
@@ -423,6 +431,42 @@ async def get_finance_series(
     }
 
 
+# ── F-81-01 — supplier invoices in the official result (Р45) ─────────
+
+async def _received_in_result(tenant, org_id: str, received: list, *, basis: str = "ex",
+                              project_id: Optional[str] = None,
+                              warehouse_id: Optional[str] = None):
+    """(amount in the result, invoices counted, amount to allocate, invoices to
+    allocate) for supplier invoices: the per-line projection, never the
+    invoice header / whole subtotal. A project / warehouse filter reads only
+    the part allocated to it (and lists nothing to allocate)."""
+    from app.services.invoice_allocation import received_line_allocations, allocated_amount
+    parts = await received_line_allocations(tenant, org_id, received)
+    if warehouse_id:
+        dest = ("warehouse", warehouse_id)
+    elif project_id:
+        dest = ("project", project_id)
+    else:
+        dest = (None, None)
+    amount, count, rest, rest_count = 0.0, 0, 0.0, 0
+    for inv in received:
+        plist = parts.get(inv.get("id"), [])
+        part = allocated_amount(plist, basis=basis, dest_type=dest[0], ref_id=dest[1])
+        if part:
+            amount += part
+            count += 1
+        if dest[0] is None and inv.get("status") != "Cancelled":
+            if basis == "ex":
+                whole = inv.get("subtotal") if inv.get("subtotal") is not None else inv.get("total", 0)
+            else:
+                whole = inv.get("total", 0)
+            left = float(whole or 0) - allocated_amount(plist, basis=basis)
+            if left > 0.005:
+                rest += left
+                rest_count += 1
+    return amount, count, rest, rest_count
+
+
 # ── Finance Details Endpoints ──────────────────────────────────────
 
 def parse_date_preset(preset: str) -> tuple:
@@ -459,6 +503,8 @@ def parse_date_preset(preset: str) -> tuple:
 
 @router.get("/reports/finance-details/summary")
 async def get_finance_details_summary(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_summary.read", module="M5", resource_type="finance_details_summary")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -500,11 +546,17 @@ async def get_finance_details_summary(
     income_invoices = sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in issued)
     income_count = len(issued)
     
-    # Received invoices (expenses)
-    received_query = {**inv_query, "direction": "Received"}
-    received = await _tenant(user).invoices.find(received_query, {"_id": 0, "total": 1, "subtotal": 1, "vat": 1}).to_list(10000)
-    expenses_invoices = sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in received)
-    expenses_invoice_count = len(received)
+    # Received invoices (expenses) — F-81-01 / Р45: only the part allocated by
+    # the lines (ex VAT) is in the result; a project / warehouse filter reads
+    # the part allocated to it. The rest is listed separately (to_allocate).
+    received_query = {k: v for k, v in inv_query.items() if k != "allocations"}
+    received_query["direction"] = "Received"
+    received = await _tenant(user).invoices.find(
+        received_query, {"_id": 0, "total": 1, "subtotal": 1, "vat": 1,
+                         "status": 1, **RECEIVED_LINE_FIELDS}).to_list(10000)
+    expenses_invoices, expenses_invoice_count, to_allocate_amount, to_allocate_count = \
+        await _received_in_result(_tenant(user), org_id, received,
+                                  project_id=project_id, warehouse_id=warehouse_id)
     
     # Cash transactions
     cash_query = {"org_id": org_id, "date": {"$gte": date_from, "$lte": date_to}}
@@ -557,10 +609,13 @@ async def get_finance_details_summary(
             "expenses_overhead": round(expenses_overhead, 2),
             "expenses_payroll": round(expenses_payroll, 2),
             "expenses_bonus": round(expenses_bonus, 2),
+            # F-81-01: the unallocated part of the supplier invoices (not in the result)
+            "expenses_invoices_to_allocate": round(to_allocate_amount, 2),
         },
         "counts": {
             "income_invoice_count": income_count,
             "expenses_invoice_count": expenses_invoice_count,
+            "expenses_invoices_to_allocate_count": to_allocate_count,
             "cash_count": len(cash_txns),
             "overhead_count": len(overhead),
             "payroll_count": len(payroll),
@@ -581,6 +636,8 @@ async def get_finance_details_summary(
 
 @router.get("/reports/finance-details/by-counterparty")
 async def get_finance_by_counterparty(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_by_counterparty.read", module="M5", resource_type="finance_details_by_counterparty")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -666,6 +723,8 @@ async def get_finance_by_counterparty(
 
 @router.get("/reports/finance-details/by-project")
 async def get_finance_by_project(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_by_project.read", module="M5", resource_type="finance_details_by_project")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -684,51 +743,17 @@ async def get_finance_by_project(
         date_to = today.strftime("%Y-%m-%d")
         date_from = (today - timedelta(days=90)).strftime("%Y-%m-%d")
     
-    # Aggregate by project allocation
-    pipeline = [
-        {"$match": {
-            "org_id": org_id,
-            "issue_date": {"$gte": date_from, "$lte": date_to},
-            "allocations": {"$exists": True, "$ne": []}
-        }},
-        {"$unwind": "$allocations"},
-        {"$match": {"allocations.type": "project"}},
-        {"$group": {
-            "_id": "$allocations.ref_id",
-            "total_expenses": {"$sum": {"$cond": [{"$eq": ["$direction", "Received"]}, "$total", 0]}},
-            "total_income": {"$sum": {"$cond": [{"$eq": ["$direction", "Issued"]}, "$total", 0]}},
-            "invoice_count": {"$sum": 1},
-        }},
-        {"$project": {
-            "_id": 0,
-            "project_id": "$_id",
-            "total_expenses": 1,
-            "total_income": 1,
-            "total": {"$add": ["$total_expenses", "$total_income"]},
-            "invoice_count": 1,
-        }},
-        {"$sort": {"total": -1}},
-        {"$skip": (page - 1) * page_size},
-        {"$limit": page_size},
-    ]
-    
-    results = await _tenant(user).invoices.aggregate(pipeline).to_list(page_size)
-    
-    # Count total
-    count_pipeline = [
-        {"$match": {
-            "org_id": org_id,
-            "issue_date": {"$gte": date_from, "$lte": date_to},
-            "allocations": {"$exists": True, "$ne": []}
-        }},
-        {"$unwind": "$allocations"},
-        {"$match": {"allocations.type": "project"}},
-        {"$group": {"_id": "$allocations.ref_id"}},
-        {"$count": "total"}
-    ]
-    count_result = await _tenant(user).invoices.aggregate(count_pipeline).to_list(1)
-    total = count_result[0]["total"] if count_result else 0
-    
+    # WH-FIX-01 (FG-154): each project gets ITS share of an invoice — the
+    # per-line allocation (invoice line ``allocations[]``, or the deprecated
+    # single allocation for the whole line; the same reading as Path B /
+    # ``canonical_material_cost.effective_allocations``): share of the line =
+    # allocated qty / line qty × the line's amount incl. VAT. Before, the
+    # WHOLE invoice total was added to every allocated project.
+    results, unsplit = await _finance_by_project_rows(
+        _tenant(user), org_id, date_from, date_to)
+    total = len(results)
+    results = results[(page - 1) * page_size:(page - 1) * page_size + page_size]
+
     # Enrich with project names
     project_ids = [r["project_id"] for r in results]
     projects = await _tenant(user).projects.find(
@@ -741,6 +766,18 @@ async def get_finance_by_project(
         proj = proj_map.get(r["project_id"], {})
         r["project_code"] = proj.get("code", "")
         r["project_name"] = proj.get("name", "Unknown")
+    # the bucket's header destinations get this tenant's names only
+    dest_ids = sorted({d["ref_id"] for u in unsplit for d in u["header_destinations"]
+                       if d["type"] == "project" and d["ref_id"]})
+    if dest_ids:
+        dest_map = {p["id"]: p async for p in _tenant(user).projects.find(
+            {"id": {"$in": dest_ids}, "org_id": org_id}, {"_id": 0, "id": 1, "code": 1, "name": 1})}
+        for u in unsplit:
+            for d in u["header_destinations"]:
+                if d["type"] == "project":
+                    proj = dest_map.get(d["ref_id"], {})
+                    d["project_code"] = proj.get("code", "")
+                    d["project_name"] = proj.get("name", "Unknown")
     
     return {
         "items": results,
@@ -749,11 +786,87 @@ async def get_finance_by_project(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size,
         "period": {"date_from": date_from, "date_to": date_to},
+        # A4 #8 — „фактури за разпределяне": every invoice of the period that
+        # is not finally allocated by lines (counted on no project, never dropped).
+        "to_allocate": unsplit,
     }
+
+
+async def _finance_by_project_rows(tenant, org_id: str, date_from: str, date_to: str):
+    """WH-FIX-01 (FG-154) — {project: expenses / income / invoices} from the
+    per-line allocations of the period's invoices."""
+    invoices = {}
+    async for inv in tenant.invoices.find(
+            {"org_id": org_id, "issue_date": {"$gte": date_from, "$lte": date_to}},
+            {"_id": 0, "id": 1, "direction": 1, "total": 1, "allocations": 1,
+             "invoice_no": 1, "status": 1, "project_id": 1, "lines": 1, "vat_percent": 1}):
+        invoices[inv["id"]] = inv
+    agg: dict = {}
+    unsplit = []
+
+    def _add(pid, inv, amount):
+        row = agg.setdefault(pid, {"project_id": pid, "total_expenses": 0.0,
+                                   "total_income": 0.0, "_invoices": set()})
+        if inv.get("direction") == "Received":
+            row["total_expenses"] += amount
+        elif inv.get("direction") == "Issued":
+            row["total_income"] += amount
+        row["_invoices"].add(inv["id"])
+
+    # A4 / Р45 (oracle Q002): the allocation unit of a SUPPLIER (Received)
+    # invoice is its LINE. Only line allocations reach a project (FG-154:
+    # allocated qty / line qty × the line amount) — the one per-line projection
+    # `received_line_allocations` (F-81-01, also read by the summary / series).
+    # No provisional split by header / percentage (A4 #12). An invoice that is
+    # not finally allocated by lines is NEVER dropped: it is listed in
+    # `to_allocate` („фактури за разпределяне", A4 #8).
+    from app.services.invoice_allocation import (
+        ALLOCATED, header_destinations, invoice_final_state, received_line_allocations,
+        under_r45,
+    )
+    parts = await received_line_allocations(tenant, org_id, list(invoices.values()))
+    for iid, plist in parts.items():
+        for p in plist:
+            if p["type"] == "project":
+                _add(p["ref_id"], invoices[iid], p["inc"])
+    # FG-215 / F-81-02: an INCOME (Issued) invoice keeps main's behaviour
+    # exactly — its header allocation is counted (every header project gets the
+    # total) and its lines' allocations are not read at all: R45 / the
+    # per-line share applies to supplier invoices only.
+    for inv in invoices.values():
+        if under_r45(inv):
+            continue
+        for a in inv.get("allocations") or []:
+            if isinstance(a, dict) and a.get("type") == "project" and a.get("ref_id"):
+                _add(a["ref_id"], inv, float(inv.get("total") or 0))
+    for inv in invoices.values():
+        if not under_r45(inv):
+            continue
+        state = await invoice_final_state(tenant, inv)
+        if state["status"] != ALLOCATED:
+            unsplit.append({"invoice_id": inv["id"], "invoice_no": inv.get("invoice_no"),
+                            "direction": inv.get("direction"), "total": inv.get("total"),
+                            "allocation_status": state["status"],
+                            "header_destinations": [
+                                {"type": d.get("type"), "ref_id": d.get("ref_id") or d.get("refId")}
+                                for d in header_destinations(inv)],
+                            "pending_lines": [{"line_id": p["line_id"],
+                                               "unallocated_qty": p["unallocated_qty"]}
+                                              for p in state["pending_lines"]]})
+    results = []
+    for row in agg.values():
+        exp, inc = round(row["total_expenses"], 2), round(row["total_income"], 2)
+        results.append({"project_id": row["project_id"], "total_expenses": exp,
+                        "total_income": inc, "total": round(exp + inc, 2),
+                        "invoice_count": len(row["_invoices"])})
+    results.sort(key=lambda r: (-r["total"], r["project_id"]))
+    return results, unsplit
 
 
 @router.get("/reports/finance-details/transactions")
 async def get_finance_transactions(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_transactions.read", module="M5", resource_type="finance_details_transactions")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,
@@ -909,6 +1022,8 @@ async def get_finance_transactions(
 
 @router.get("/reports/finance-details/top-counterparties")
 async def get_top_counterparties(
+    _sec02: dict = Depends(require_finance_read(
+        "finance.finance_details_top_counterparties.read", module="M5", resource_type="finance_details_top_counterparties")),  # SEC-02 (R20-1): before any read
     user: dict = Depends(require_m5),
     date_from: Optional[str] = None,
     date_to: Optional[str] = None,

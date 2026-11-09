@@ -29,7 +29,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Cash in: actual payments received
     invoices = await tenant.invoices.find(
-        {"org_id": org_id, "project_id": project_id},
+        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(500)
     cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
@@ -82,11 +82,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     material_cost_basis = cost_basis(_mat)
 
     # Subcontractor payments
-    sub_payments = await tenant.subcontractor_payments.find(
-        {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
-        {"_id": 0, "amount": 1},
-    ).to_list(200)
-    paid_subcontractors = round(sum(p.get("amount", 0) for p in sub_payments), 2)
+    # SUB-ADV-01-A (FG-115, FLOW-006: cash and result are not mixed): the CASH result counts
+    # every subcontractor payment, advances included; the operating / fully loaded results
+    # count the recognised cost (ordinary payments + advance deducted on acts).
+    from app.services.subcontract_cost import (subcontractor_cash_out,
+                                               subcontractor_cost_recognized)
+    paid_subcontractors = await subcontractor_cash_out(tenant, org_id, project_id)
+    subcontractor_cost = await subcontractor_cost_recognized(tenant, org_id, project_id)
 
     # Contract payments (external workers)
     contract_docs = await tenant.contract_payments.find(
@@ -186,7 +188,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     direct_labor = round(direct_labor, 2)
     direct_labor_insurance = round(direct_labor_insurance, 2)
 
-    operating_cost = round(direct_labor + paid_materials + paid_subcontractors + paid_contracts, 2)
+    operating_cost = round(direct_labor + paid_materials + subcontractor_cost + paid_contracts, 2)
     operating_result_val = round(earned_revenue - operating_cost, 2)
     operating_margin = round(operating_result_val / earned_revenue * 100, 1) if earned_revenue > 0 else 0
 
@@ -196,7 +198,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "revenue_mode": revenue_mode,
         "direct_labor": direct_labor,
         "materials": paid_materials,
-        "subcontractor_direct": paid_subcontractors,
+        "subcontractor_direct": subcontractor_cost,
         "contract_direct": paid_contracts,
         "operating_cost": operating_cost,
         "operating_result": operating_result_val,
@@ -211,10 +213,10 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     insurance_burden = direct_labor_insurance
 
     # Overhead allocation from pools
-    allocs = await tenant.project_overhead_allocations.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "allocated_amount": 1, "pool": 1},
-    ).to_list(50)
+    # OH74-03: the published (current) version of each period — never 0, never both
+    # FG-127: the ONE project-overhead helper every reader uses (same legacy fallback, label)
+    from app.services.overhead_lifecycle import project_overhead_current, recalculating_fields
+    allocs = (await project_overhead_current(tenant, project_id))["rows"]
     overhead_by_pool = {"administration": 0, "base_warehouse": 0, "transport": 0, "general": 0}
     for a in allocs:
         pool = a.get("pool", "general")
@@ -238,7 +240,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Subcontractor burden
     weights = config.get("burden_weights", DEFAULT_BURDEN_WEIGHTS)
-    sub_burden = round(paid_subcontractors * weights.get("subcontractor_company", 0.3), 2)
+    sub_burden = round(subcontractor_cost * weights.get("subcontractor_company", 0.3), 2)
     contract_burden = round(paid_contracts * weights.get("subcontractor_crew", 0.6), 2)
 
     fully_loaded_cost = round(
@@ -251,6 +253,8 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
         "operating_result": operating_result_val,
         "insurance_burden": insurance_burden,
         "overhead_allocation": total_overhead_alloc,
+        # R38: the old allocation still counts while its period is recomputed
+        **recalculating_fields(any(a.get("recalculating") for a in allocs)),  # FG-127
         "overhead_by_pool": {k: round(v, 2) for k, v in overhead_by_pool.items()},
         "subcontractor_burden": sub_burden,
         "contract_burden": contract_burden,
