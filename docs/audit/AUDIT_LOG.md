@@ -6297,3 +6297,47 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | analytics-check, test key | 18 / 18 |
 
 - **Pre-existing D5:** `assets.emergent.sh` script in `index.html`. Krum's decision.
+
+## 2026-11-09 13:30 UTC: #83 CP-01 `a30a059`: PASS, no blocking finding
+
+- **Closed:**
+  - CP83-M3 (`6709453`): validation → replay → guards; same key + another body → 409.
+  - CP83-M5 (`b4a775f`): literal `tenant_id` in the replay lookup; A2C 0.
+  - CP83-M4 (`a30a059`): PM-01 regenerated. Both `vat/reveal` routes are Owner / Accountant only (others 403, nothing written, 3 modes).
+
+| Gate | Result |
+|---|---|
+| probe | 84 |
+| cp_01 | 666 (+12) |
+| sub_adv_01 | 9 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | within main's 16 |
+| A2C / A1 | 0/247, 0/498 |
+| **warehouse** | **44 / 1121** (run spanned `6709453` → `a30a059`; one-line diff outside the warehouse path) |
+| wh_fix_01 | 138 / 132 / 47 |
+
+- Contains main `1525a1e`.
+
+## 2026-11-09 13:35 UTC: #75 LAB-02 `11b55c1` (merge `415cf71` of #73 `4d1f5a3` + FG-464): PASS on base `44e8d97`
+
+- **Merge `415cf71`:** = merge-tree except `ownership.py` (correct union) and `run_meta`. Role-union 0.
+- **FG-464:** the answer and the replay come from the history row of the written version.
+
+| Gate | Result |
+|---|---|
+| lab_0* | 251 |
+| probes lab02 / retake / f75_01 / race | 4 / 1 / 51 / 20 |
+| SEC-01 | 30 |
+| SEC-02 | 31; regen 0 cells |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/245, 0/494 |
+| **warehouse** | **44 / 1121** |
+
+- **Next:** it must re-merge #73 `af22870` (which contains main `1525a1e`) and regenerate the generated files.
