@@ -472,26 +472,50 @@ async def flag_rows_of_changed_quantities(tenant: TenantData, org_id: str, appro
     ids = [a for a in (approval_ids or []) if a]
     if not ids:
         return 0
+    # FG-531: a row is found by its own approval OR by any approval of its correction chain
+    # (a second correction, or a later void of a replacement, reaches the flagged row)
     rows = await tenant.labor_entries.find(
-        {"org_id": org_id, "quantity_approval_id": {"$in": ids}, "approval_status": MANUAL_APPROVED,
-         "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}, {"_id": 0},
-        session=session).to_list(500)
+        {"org_id": org_id, "approval_status": MANUAL_APPROVED,
+         "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None,
+         "$or": [{"quantity_approval_id": {"$in": ids}}, {"correction_required.chain": {"$in": ids}}]},
+        {"_id": 0}, session=session).to_list(500)
     now = datetime.now(timezone.utc).isoformat()
     for row in rows:
+        prev = row.get("correction_required") or None
+        chain = list((prev or {}).get("chain") or [row.get("quantity_approval_id")])
+        if replacement and replacement.get("id") and replacement["id"] not in chain:
+            chain.append(replacement["id"])
+        # FG-531: the proposal follows the LATEST approved quantity of the chain (a void with
+        # no replacement leaves the newest one still approved, or none — a new approval)
+        latest = None
+        if replacement and replacement.get("status") == "approved":
+            latest = replacement
+        else:
+            for qa_id in reversed(chain):
+                if qa_id in ids:
+                    continue
+                latest = await tenant.labor_quantity_approvals.find_one(
+                    {"org_id": org_id, "id": qa_id, "status": "approved"}, {"_id": 0}, session=session)
+                if latest:
+                    break
         proposal = {"action": "reverse_and_reenter", "approved_by_second_person": True,
                     "replacement_approval_id": None, "quantity": None, "piece_rate": None, "labor_cost": None}
-        if replacement and replacement.get("status") == "approved":
-            q = float(replacement.get("approved_quantity") or 0)
-            rate = float(replacement.get("piece_rate") or 0)
-            proposal.update({"replacement_approval_id": replacement.get("id"), "quantity": q,
+        if latest:
+            q = float(latest.get("approved_quantity") or 0)
+            rate = float(latest.get("piece_rate") or 0)
+            proposal.update({"replacement_approval_id": latest.get("id"), "quantity": q,
                              "piece_rate": rate, "labor_cost": round(q * rate, 2)})
         flag = {"status": R77_FLAG, "at": now, "by": actor_id, "reason": reason,
-                "changed_approval_id": row.get("quantity_approval_id"),
+                "changed_approval_id": ([a for a in ids if a in chain] or ids)[0],
+                "changed_approval_ids": [a for a in ids if a in chain] or ids,
+                "chain": chain, "sequence": int((prev or {}).get("sequence") or 0) + 1,
                 "old": {"quantity": row.get("quantity"), "piece_rate": row.get("piece_rate"),
                         "labor_cost": row.get("labor_cost")},
                 "proposal": proposal}
-        await tenant.labor_entries.update_one(
-            {"org_id": org_id, "id": row["id"]}, {"$set": {"correction_required": flag}}, session=session)
+        upd = {"$set": {"correction_required": flag}}
+        if prev:
+            upd["$push"] = {"correction_history": prev}     # FG-531: the earlier flag is kept
+        await tenant.labor_entries.update_one({"org_id": org_id, "id": row["id"]}, upd, session=session)
         await record_event(db, build_event(
             tenant_id=org_id, actor_type="human", actor_id=actor_id,
             action="labor.manual_entry.correction_required", source_flow="FLOW-028",

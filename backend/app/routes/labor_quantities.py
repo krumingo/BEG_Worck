@@ -74,10 +74,10 @@ async def ensure_labor_indexes(raw_db) -> int:
     return len(LABOR_INDEXES)
 
 
-async def _insert_decision(collection, rec: dict):
+async def _insert_decision(collection, rec: dict, session=None):
     """Insert the one active decision of a line; a concurrent winner → 409, nothing written."""
     try:
-        await collection.insert_one(dict(rec))
+        await collection.insert_one(dict(rec), session=session)
     except Exception as exc:
         if type(exc).__name__ == "DuplicateKeyError" or "duplicate key" in str(exc).lower():
             raise HTTPException(status_code=409, detail=(
@@ -472,13 +472,6 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
         if not prev and data.replaces_approval_id:
             raise HTTPException(status_code=409, detail=(
                 "Одобрението, което коригирате, вече не е активно — презаредете"))
-        for p in prev:  # a correction of the decision: the old record is kept, marked void
-            res = await tenant.labor_quantity_approvals.update_one(
-                {"org_id": org_id, "id": p["id"], "status": "approved"},
-                {"$set": {"status": "void", "voided_at": now, "voided_by": user["id"], "void_reason": "re-approved"}})
-            if not res.modified_count:  # another correction won the race
-                raise HTTPException(status_code=409, detail=(
-                    "Одобрението току-що беше променено от друг човек — презаредете"))
         rec = {
             "id": str(uuid.uuid4()), "org_id": org_id, "report_id": data.report_id,
             "entry_id": data.entry_id or None, "report_version": line["report_version"],
@@ -491,21 +484,37 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
             "status": "approved", "approved_by": user["id"], "approved_at": now, "note": data.note,
             "replaces": [p["id"] for p in prev], "idempotency_key": key,
         }
-        await ensure_labor_indexes(db)
-        await _insert_decision(tenant.labor_quantity_approvals, rec)
-        if prev:
-            # R77 (FG-507): a corrected quantity flags the approved manual akord rows of the
-            # replaced approval, with the new quantity as the proposal
-            from app.services.labor_cost import flag_rows_of_changed_quantities
-            await flag_rows_of_changed_quantities(tenant, org_id, [p["id"] for p in prev], user["id"],
-                                                  "corrected (re-approved)", replacement=rec)
-        await _audit(user, action="labor_quantity.corrected" if prev else "labor_quantity.approved",
-                     entity_type="labor_quantity_approval", entity_id=rec["id"], version=line["report_version"],
-                     before={"approved_quantity": prev[-1].get("approved_quantity")} if prev else None,
-                     after={"approved_quantity": qty, "unit": rec["unit"], "execution_package_id": pkg["id"],
-                            "entered_quantity": line.get("quantity")},
-                     reason=data.note or "quantity approval (LAB-02)",
-                     endpoint="POST /labor-quantities/approve", idempotency_key=key)
+        await ensure_labor_indexes(db)       # indexes cannot be created inside a transaction
+        from app.services.labor_cost import ensure_labor_day_locks, flag_rows_of_changed_quantities
+        await ensure_labor_day_locks(db)
+
+        async def body(session):
+            # FG-534: the void of the old record, the new record, the R77 flags of the rows
+            # that used the old one and the AuditEvent — ONE transaction, all or nothing
+            for p in prev:  # a correction of the decision: the old record is kept, marked void
+                res = await tenant.labor_quantity_approvals.update_one(
+                    {"org_id": org_id, "id": p["id"], "status": "approved"},
+                    {"$set": {"status": "void", "voided_at": now, "voided_by": user["id"],
+                              "void_reason": "re-approved"}}, session=session)
+                if not res.modified_count:  # another correction won the race
+                    raise HTTPException(status_code=409, detail=(
+                        "Одобрението току-що беше променено от друг човек — презаредете"))
+            await _insert_decision(tenant.labor_quantity_approvals, rec, session=session)
+            if prev:
+                # R77 (FG-507 / FG-531): the approved manual akord rows of the replaced
+                # approval (or of its correction chain) are flagged, the new quantity proposed
+                await flag_rows_of_changed_quantities(tenant, org_id, [p["id"] for p in prev], user["id"],
+                                                      "corrected (re-approved)", replacement=rec,
+                                                      session=session)
+            await _audit(user, action="labor_quantity.corrected" if prev else "labor_quantity.approved",
+                         entity_type="labor_quantity_approval", entity_id=rec["id"], version=line["report_version"],
+                         before={"approved_quantity": prev[-1].get("approved_quantity")} if prev else None,
+                         after={"approved_quantity": qty, "unit": rec["unit"], "execution_package_id": pkg["id"],
+                                "entered_quantity": line.get("quantity")},
+                         reason=data.note or "quantity approval (LAB-02)",
+                         endpoint="POST /labor-quantities/approve", idempotency_key=key, session=session)
+
+        await _run_tx(body)
         rec.pop("_id", None)
         return rec, rec["id"]
 

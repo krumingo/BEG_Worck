@@ -785,9 +785,11 @@ async def list_labor_entries(
     project_id: Optional[str] = None,
     execution_package_id: Optional[str] = None,
     employee_id: Optional[str] = None,
+    correction_required: Optional[bool] = None,
     user: dict = Depends(require_m2),
 ):
     """SEC-02 (FG-1 GET; R20-5, R16, FLOW-037 §3.4).
+    R77 / FG-533: ``correction_required=true`` — the live approved rows flagged "изисква корекция".
 
     Finance roles: every row, with rate and cost (as before). Every other role: only the
     rows of projects they are a CURRENT member of (date-aware project_team membership,
@@ -811,6 +813,9 @@ async def list_labor_entries(
     if project_id: q["project_id"] = project_id
     if execution_package_id: q["execution_package_id"] = execution_package_id
     if employee_id: q["employee_id"] = employee_id
+    if correction_required:
+        q.update({"correction_required": {"$ne": None}, "reversed_by_entry_id": None,
+                  "approval_status": MANUAL_APPROVED})
     entries = await tenant.labor_entries.find(q, {"_id": 0}).sort("date", -1).to_list(500)
     if not show_money:
         entries = without_keys(entries, LABOR_MONEY_FIELDS)
