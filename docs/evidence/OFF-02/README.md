@@ -192,3 +192,34 @@ UI: `OffersListPage` / `OfferEditorPage` show the write buttons to Owner / Admin
 | W0 | 1176 + **the same 16 as main** |
 | Warehouse canonical | **44 files / 1121** |
 | A2C / A1 | 242 / 488, 0 violations; inventories unchanged |
+
+## F-89-01 [P1] (Codex, PR #89) — the bearer review link in staff responses
+
+**The leak:** `GET /offers/{id}` hid the prices from a SiteManager (SEC-02 strip) but kept `review_token`. With it he opened the public `GET /offers/review/{token}` (prices, against R20) and `POST /offers/review/{token}/respond` approve (Accepted, against R67).
+
+**Every surface, enumerated twice:**
+1. **By the code.** `review_token` / `review_url` are written only in `app/routes/offers.py`. The snapshots (`create_snapshot`, the send snapshot), `offer_events`, `audit_logs` and the AuditEvent diffs do not copy them. PDF and XLSX are finance-only, and their code never reads the token. Of the other modules that read `offers`, only `projects.py` (the project dashboard) projects `review_token` into a response: `extra_offers`.
+2. **By a scan of the running app.** `backend/tools/off02_review_token_scan.py` covers every GET route of `server.app` (389). It calls each one as the five non-finance roles (SiteManager/requester, Technician, Warehousekeeper, Driver, Viewer) in off, shadow and enforce, 6984 calls, and searches the raw body (JSON, PDF, XLSX alike) for the two seeded tokens, the keys `review_token` / `review_url` and `/offers/review/`.
+   - **Before the fix:** 3 leaking routes, in every mode — `/api/offers`, `/api/offers/{offer_id}`, and `/api/projects/{project_id}/dashboard` (the dashboard also leaks to a Warehousekeeper and a Driver). Evidence: `scan_review_link_before_fix.json`.
+   - **After the fix:** **0 hits** (`scan_review_link.json`).
+   - **Control:** the Owner still sees the link on the same 3 routes.
+
+**Red first:** `28cbfa5` (tests only). `test_11` and `test_12` fail in 3 of 3 modes.
+
+**Fix `007c2cc`:**
+- `finance_read.strip_money` is the one strip every non-finance view goes through: `strip_money_for_non_finance` on the offer reads and writes, the versions, the events and the project dashboard. It now also removes `BEARER_LINK_KEYS = {review_token, review_url}`, at any depth, and `keep` never brings them back.
+- **Not removed:** `review_token_version` and `review_token_status` / `revoked_*` stay. They are metadata (which version the link is bound to, whether it was revoked), not the link.
+- **Finance:** keeps the link in the offer editor (GET) and in the send answer.
+- **The public client flow:** unchanged.
+
+**Tests (`test_off_02`), real rs0, off, shadow and enforce:**
+- **`test_11`:** a SiteManager, Technician, Viewer and Driver get no token, key or `/offers/review/` from the single offer, the lists (all, by project, by status), the versions, version 1, the events or the project dashboard. The SiteManager's reads really answered 200, so the surfaces were exercised. The offer stays Sent. Owner and Admin still get the token. The client's public GET and approve still work, and the offer ends Accepted.
+- **`test_12`:** the send answer gives the Accountant `review_url` and the token. With `money_values_visible` forced to False, it carries neither (defence in depth).
+
+**Harness evidence:** re-running PM-01, SEC-01-C02 and SEC-02 gives **no semantic change**. The matrix is byte-identical; the other files differ only in seconds and run-specific tenant ids, which are not committed. The A1 and A2B inventories are unchanged.
+
+**Note:** the code commits were pushed before this evidence commit, because the session's stop hook requires a push.
+
+| ID | Debt |
+|---|---|
+| D-OFF02-5 | The project dashboard answers a Warehousekeeper and a Driver who are not members of the project (the money and the link are stripped, the rest is not). Who may read the dashboard is for Krum to decide. |

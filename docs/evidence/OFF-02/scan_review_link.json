@@ -1,0 +1,32 @@
+{
+ "calls": 6984,
+ "roles": [
+  "requester",
+  "technician",
+  "warehousekeeper",
+  "driver",
+  "viewer"
+ ],
+ "control": [
+  "owner"
+ ],
+ "modes": [
+  "off",
+  "shadow",
+  "enforce"
+ ],
+ "get_routes": 389,
+ "answered_200_per_role_all_modes": {
+  "requester": 561,
+  "technician": 513,
+  "warehousekeeper": 474,
+  "driver": 495,
+  "viewer": 492
+ },
+ "hits": {},
+ "finance_sees": [
+  "/api/offers",
+  "/api/offers/{offer_id}",
+  "/api/projects/{project_id}/dashboard"
+ ]
+}

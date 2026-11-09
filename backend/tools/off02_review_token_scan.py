@@ -6,7 +6,7 @@ response body (JSON, PDF, XLSX alike).
 The offer of P1 (the SEC-02 seed) is made Sent with a live review link, and a Sent EXTRA offer
 with its own link is added (the project dashboard lists the extra offers). A finance role
 (owner) is scanned too, as the control that the seeded link is reachable at all.
-Output: docs/evidence/OFF-02/scan_review_token.json ({"hits": {...}, "finance_sees": [...]}).
+Output: docs/evidence/OFF-02/scan_review_link.json ({"hits": {...}, "finance_sees": [...]}).
 Expected: hits == {} for every non-finance role and mode.
 
 Reuses the SEC-02 harness setup (ST-01 tenants, PM-01/C02/SEC-02 seeds, P1 team via the
@@ -26,7 +26,7 @@ T = importlib.util.module_from_spec(spec); sys.modules["sec02t"] = T; spec.loade
 ROLES = ("requester", "technician", "warehousekeeper", "driver", "viewer")
 CONTROL = ("owner",)
 MODES = ("off", "shadow", "enforce")
-OUT = BACKEND.parent / "docs" / "evidence" / "OFF-02" / "scan_review_token.json"
+OUT = BACKEND.parent / "docs" / "evidence" / "OFF-02" / "scan_review_link.json"
 MAIN_TOKEN, EXTRA_TOKEN = "f89rt" + "m" * 19, "f89rt" + "x" * 19
 
 
