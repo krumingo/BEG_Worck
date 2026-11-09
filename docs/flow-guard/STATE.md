@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **39** — 09.11.2026 10:50–12:00 UTC; бавният преглед FLOW-029 — отложен (натоварване на тестовата база).
+Последен проход: **40** — 09.11.2026 12:50 UTC (#83, #73+#75 — в проверка).
 
 ## Последно проверен SHA по клон
 
@@ -24,9 +24,9 @@
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `3028304` | 37 | слят в main (`1525a1e`);  FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `108afc0` | 39 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `a5176b2` | 39 | FLOW-010, Р48 |
-| #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `b0e72cf` | 39 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
+| #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `faaa2d0` | 40 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
 | #86 `claude/prj-01-project-lifecycle` (PRJ-01) | `49eb546` | 38 | FLOW-001, FLOW-018/039, Р54 |
-| #88 `claude/pwa-01-installable-shell` (PWA-01) | `131d945` | 39 | FLOW-037, Р61, MFE; FG-315..321 |
+| #88 `claude/pwa-01-installable-shell` (PWA-01) | `62f898a` | 40 | FLOW-037, Р61, MFE; FG-315..321 |
 | `claude/off-02-offer-money-strip` (OFF-02) | `7cfeae5` | 39 | FLOW-003, Р67; FG-350, FG-471, FG-472 |
 | пакети (`claude/happy-meitner-bmcnel`) | `a11a4c4` | 39 | Р71–Р74; Р69, Р70 (Q010); Р64–Р68; Р62, Р63; Р61 (Q008), Р60; Р55, Р54, Р53, Р52 (в main след #85);  Р50, Р51; Р48, Р49, CP-01, INV-CN-01; Р46, Р47; Р44, Р45, WH-FIX-01, WH-REV-01; по-рано Р43; OFF-01; Р42; D-17, ACT-01; Р39–Р41, SUB-ADV-01; Р37, Р38; Р33–Р36, LAB-02; OH-01; 5C-C26 I; 5C-C26 G/H; по-рано LAB-01, W0-04-C01 + добавки; по-рано Р28–Р32; по-рано Р25–Р27, 5C-C26, SEC-01-C03, PAY-01-C01, ST-02-C03, SEC-02-A; по-рано Р21–Р24, D-16, PAY-01; преди това Р17–Р20, 5C-C24/C25, AUTH-02, SEC-01-C02, ST-02-C02, добавка SEC-02 |
 
