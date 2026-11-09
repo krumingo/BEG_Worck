@@ -5866,3 +5866,12 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | PM-01 | 6 |
 
 - **#83:** final head `4929451` = `a35417f` + regenerated evidence (no code change).
+
+## 2026-11-09 07:14 UTC: #86 `8e8be48` run stopped again (disk); audit PAUSED
+
+- **Partial #86 `8e8be48` results:** prj_01 9, SEC-01 30. Warehouse files 1–23 of 44 all passed (650 cases; c26l_* etc. not reached). The watchdog stopped the run at 119 MB free.
+- **Measurement:** even with quiet logging, a warehouse suite grows a replica set's `/data/db` by ~400–450 MB (journal + drop-pending idents; rs3 → 942 MB). That space is only slowly returned after `dropDatabase` + `fsync` (rs3 857 MB a few minutes later). With ~0.3–0.6 GB free, one whole warehouse suite does not fit reliably.
+- **Status:**
+  - **PASS:** #81 `3028304`.
+  - **Blocked:** #86 `8e8be48`, #84 `5242cba`, #83 `4929451`, #89 `1b13d11`, #73/#75 (also LAB73-M1), #88 frontend.
+- **To continue:** Krum must approve `docker volume prune -f` (~20 GB) or truncating the audit containers' json logs (~5.7 GB), directly in this session or by a Bash permission rule.
