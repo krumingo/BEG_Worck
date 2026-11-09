@@ -45,7 +45,7 @@ def test_start_session(auth_headers, project_id):
     d = r.json()
     assert d["site_id"] == project_id
     assert d["ended_at"] is None
-    assert d["hourly_rate_at_date"] is not None
+    assert "hourly_rate_at_date" not in d     # R62 / FG-502: hours only, no session money
     assert d["started_at"] is not None
 
 
@@ -60,7 +60,7 @@ def test_end_session(auth_headers):
     assert d["ended_at"] is not None
     assert d["duration_hours"] is not None
     assert d["duration_hours"] >= 0
-    assert d["labor_cost"] is not None
+    assert "labor_cost" not in d              # R62 / FG-502: hours only, no session money
 
 
 # ── Test 3: Start with existing open → auto-close ─────────────────
@@ -99,10 +99,9 @@ def test_hourly_rate_snapshot(auth_headers, project_id):
     # Start and immediately end
     r = httpx.post(f"{API}/work-sessions/start", json={"site_id": project_id}, headers=auth_headers)
     assert r.status_code == 201
-    rate = r.json()["hourly_rate_at_date"]
-    assert rate is not None
-    # Rate should be a reasonable number (0 if no profile, or > 0 if profile exists)
-    assert rate >= 0
+    # R62 / FG-502: the rate is snapshotted on the stored session (the time record), but a
+    # time screen answers with hours only — the snapshot is not in the response
+    assert "hourly_rate_at_date" not in r.json() and "labor_cost" not in r.json()
     httpx.post(f"{API}/work-sessions/end", json={}, headers=auth_headers)
 
 
