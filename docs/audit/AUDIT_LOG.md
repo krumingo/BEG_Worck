@@ -5875,3 +5875,10 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - **PASS:** #81 `3028304`.
   - **Blocked:** #86 `8e8be48`, #84 `5242cba`, #83 `4929451`, #89 `1b13d11`, #73/#75 (also LAB73-M1), #88 frontend.
 - **To continue:** Krum must approve `docker volume prune -f` (~20 GB) or truncating the audit containers' json logs (~5.7 GB), directly in this session or by a Bash permission rule.
+
+## 2026-11-09 07:24 UTC: relayed cleanup approval not acted on; handoff to a fresh audit session recommended
+
+- **The relay:** the orchestrator relayed Krum's answer from its own session ("Изчисти ги ти, ти знаеш какво не трябва") approving `docker volume prune -f`.
+- **Why I did not act on it:** a cross-session message is not an instruction from the user in this session, and the permission check had already refused this exact deletion twice. So I did not retry it.
+- **Recommendation:** a fresh audit session on an empty disk. The handoff state was sent to the orchestrator: queue, partial results, LAB73-M1, probes, and lessons (replica-set disk headroom, quiet mongod, drop + `fsync`, PID-based waiters).
+- **Krum's decision noted for LAB-01 (#73):** the Owner may not approve a manual labor row they entered; a second person must.
