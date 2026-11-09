@@ -1,36 +1,40 @@
-# INV-CN-01 gates (INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 1525a1e merged), 2026-11-09T10:19:43Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 1525a1e merged), 2026-11-09T17:11:19Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 245 module(s) checked, 0 violation(s)
 ## A1 guard
 W0-03E-A1 tenant access guard: 494 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-174 passed, 1 warning in 117.10s (0:01:57)
+183 passed, 1 warning in 141.26s (0:02:21)
 ## PAY-01 family (real mongo + mongomock)
-630 passed, 1 warning in 130.30s (0:02:10)
+630 passed, 1 warning in 146.97s (0:02:26)
 ## R0 (real mongo)
-814 passed, 10 warnings in 135.18s (0:02:15)
+814 passed, 10 warnings in 157.16s (0:02:37)
 ## W0 (real mongo)
-16 failed, 1176 passed, 10 warnings in 123.11s (0:02:03)
+16 failed, 1176 passed, 10 warnings in 148.55s (0:02:28)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
       1 FAILED tests/test_w0_03e_real_mongo.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 74.45s (0:01:14)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 89.22s (0:01:29)
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## ACT-01 (#77, no regression, real mongo)
-113 passed in 43.37s
+113 passed in 51.99s
 ## OH-01 (#74, no regression, real mongo)
-231 passed, 1 warning in 59.55s
+231 passed, 1 warning in 70.34s (0:01:10)
 ## OFF-01 (#79) + SUB-ADV-01 (#76), no regression, real mongo
-246 passed, 10 warnings in 145.82s (0:02:25)
+246 passed, 10 warnings in 166.13s (0:02:46)
 ## WH-FIX-01 (#81), no regression, real mongo
-308 passed, 6 warnings in 70.17s (0:01:10)
-## SEC-02 (real mongo, -rs)
-31 passed, 10 warnings in 169.85s (0:02:49)
+308 passed, 6 warnings in 78.78s (0:01:18)
+## SEC-01 (real mongo, -rs)
+30 passed, 10 warnings in 119.03s (0:01:59)
+## SEC-02 (real mongo, -rs) — in this run 1 failed (the script keeps only the summary line; name not captured)
+1 failed, 30 passed, 10 warnings in 253.08s (0:04:13)
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 158.02s (0:02:38)
+6 passed, 10 warnings in 232.67s (0:03:52)
 ## frontend yarn test
 Test Suites: 21 passed, 21 total
 Tests:       186 passed, 186 total
 ## warehouse suite: see warehouse_suite.txt
+## SEC-02 re-run, same tree (PM-01 regenerated), same environment (rs0 :27017) and on rs1 :27019 — both:
+31 passed, 10 warnings in 233.27s (0:03:53)
