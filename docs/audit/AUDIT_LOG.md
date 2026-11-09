@@ -6050,3 +6050,84 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - the reversal takes / bumps #81's supplier-invoice lock by line;
   - Р47's DQ issue moves into #81's `dq_issues` (`sync_credit_note_issue`);
   - `reason` → `correction_reason` (no frontend user).
+
+## 2026-11-09 10:15 UTC: #84 INV-CN-01 `6871bc0`: PASS, no blocking finding
+
+- **INV84-R64-1 fixed (`f6e0c90`):** `rebooking_projects` reads `effective_allocations` and fails closed. Probe R64 9 / 9.
+- **INV84-M1 fixed (`ec5e085`):** SEC-02 regenerated; my harness regen = committed (0 cells).
+- **`6871bc0`:** three #81 tests take a real-Mongo-only fixture; 0 assertion lines changed.
+- **`052e845` review:** a locked supplier invoice may change only its lines' destination. The stored line is kept as is except `project_id`, and money equality is re-checked inside the claim transaction. Correct.
+- **INV84-N2 (non-blocking, SUSPICION):** `ensure_indexes` now swallows a failed build of every planned index (credit notes, offsets, counters), with only a log warning. Suggest a DQ / health flag.
+
+| Gate | Result |
+|---|---|
+| probe R64 | 9 |
+| probe invcn01 | 99 |
+| inv_cn_01 | 159 |
+| fg233 | 9 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/245, 0/494 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 | a3_r44 129, post_55 47, f81 132 |
+
+- Contains main `1525a1e`.
+
+## 2026-11-09 10:35 UTC: #82 WH-REV-01 `108afc0`: PASS, no blocking finding
+
+- **WHREV82-M1 fixed:** `_supplier_invoice_link` drops reversed receipts and reversal rows (`without_reversed`) in the lock transaction. Probe silock 3 / 3.
+- **Gates:** the full suite on `e07320d`, plus everything `108afc0` touches (`procurement.py` only).
+
+| Gate | Result |
+|---|---|
+| probe whrev01 | 144 |
+| probe silock | 3 |
+| wh_rev_01 | 104 |
+| wh_fix_01 | post_55 47, a3_r44 138, f81 132 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/243, 0/490 |
+| **warehouse** | **44 / 1121** (`e07320d`) |
+
+- Contains main `1525a1e`.
+
+## 2026-11-09 10:50 UTC: #73 LAB-01-T `b766f34` (R62 FG-460..463, R66, R73): FAIL, 2 blocking (warehouse still running)
+
+- **LAB73-M2 (blocking, gate):** SEC-01 **4 failed / 26**.
+  - Failing: the "fresh real Mongo" tests of `money_write_permissions`, `c01`, `c02` and `c03`.
+  - `POST /api/labor-entries` → 422 (expected 201; C03's no-key probe expected 428). FG-461 (`ad557c7`) made `execution_package_id` mandatory, and the SEC-01 harness bodies were not adapted. The PR's gate file is from `1efa8cf`.
+- **LAB73-R1 (blocking, PROVED, probe `lab01/test_probe_lab01t_fg463_race.py`, real Mongo):** FG-463 is not atomic.
+  - **T1:** concurrent Owner / Accountant approvals of two overlapping pending rows → 10 / 10 both approved.
+  - **T2:** two concurrent creates for the same worker / project / day → 7 / 10 two live rows.
+  - Nothing serialises (tenant, project, worker, day).
+- **Green so far:**
+
+| Gate | Result |
+|---|---|
+| lab_01* | 154 |
+| probe lab01e | 4 |
+| probe lab01f | 5 |
+| probe lab01h | 3 (needs `MONGO_URL`) |
+| SEC-02 | 31 |
+| PM-01 | 6 |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0 / 0 |
+
+- **Earlier heads:**
+  - `b395f0d`: all gates green, warehouse 44 / 1121; PM-01 regen 0 cells.
+  - `102e0fd`: SEC-02 54 cells stale (work-session `cost_*` keys, finance roles only); fixed in `fc97a2c`.
+- **R62 / R66 / R73 review:**
+  - Creator ≠ approver; a row with no creator is approved by the Owner only.
+  - Each decision is bound to the row's version and value, takes an Idempotency-Key, does a CAS on the row and writes the AuditEvent, all in one transaction.
+  - R73: the creator may reject or reverse only with `labor.entry.create` on the row's project.
+- **LAB73-N1 (non-blocking):** a reversal drops the original from every period instead of booking a negative in the reversal's own period. Design question.
