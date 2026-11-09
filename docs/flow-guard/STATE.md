@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **42** — 09.11.2026 16:10 UTC (#90 SEC-03).
+Последен проход: **43** — 09.11.2026 16:30 UTC (#83 CP-01).
 
 ## Последно проверен SHA по клон
 
@@ -23,7 +23,7 @@
 | #79 `claude/off-01-offer-version-accept` (OFF-01) | `25c9ae8` | 33 | слят в main (`44e8d97`);  FLOW-003, FLOW-002 magic link |
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `3028304` | 37 | слят в main (`1525a1e`);  FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `108afc0` | 39 | FLOW-009/006, Р46, Р47 |
-| #83 `claude/cp-01-counterparty-iban` (CP-01) | `2415b5f` | 41 | FLOW-010, Р48 |
+| #83 `claude/cp-01-counterparty-iban` (CP-01) | `781d185` | 43 | FLOW-010, Р48 |
 | #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `faaa2d0` | 40 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
 | #86 `claude/prj-01-project-lifecycle` (PRJ-01) | `49eb546` | 38 | FLOW-001, FLOW-018/039, Р54 |
 | #88 `claude/pwa-01-installable-shell` (PWA-01) | `62f898a` | 40 | FLOW-037, Р61, MFE; FG-315..321 |
