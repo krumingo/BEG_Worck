@@ -140,6 +140,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         for t in report["tenants"]:
             fx[t["key"]] = {"tenant_id": t["tenant_id"], "project_id": t["project_id"],
                             "users": {u["key"]: u for u in t["users"]}}
+            # LAB73-R1: the day-lock collection exists as after startup (skipped here)
+            from app.services.labor_cost import ensure_labor_day_locks
+            tc.portal.call(lambda: ensure_labor_day_locks(client[op_name]))
             # R62 / FG-461: a manual labor row names an SMR package of its project
             tc.portal.call(lambda t=t: client[op_name].execution_packages.insert_one({
                 "id": t["project_id"] + "-r62pkg", "org_id": t["tenant_id"],

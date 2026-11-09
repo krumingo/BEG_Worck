@@ -476,6 +476,10 @@ async def seed_existing_records(op_db, fx: Dict[str, Any]) -> None:
             "created_at": now})
         # R62 / FG-461: a manual labor row names an SMR package of its project — one per
         # project (id = project id + R62_PKG_SUFFIX), for the SEC-01 labor probes
+        # LAB73-R1: the day-lock collection exists as after startup (its index is created at
+        # startup, which the harness skips) — no collection creation inside a probed request
+        from app.services.labor_cost import ensure_labor_day_locks
+        await ensure_labor_day_locks(op_db)
         for pid_ in (p1, p2):
             await op_db.execution_packages.insert_one({
                 "id": pid_ + R62_PKG_SUFFIX, "org_id": org, "project_id": pid_,
