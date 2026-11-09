@@ -154,7 +154,9 @@ def body_for(key: str, t: Dict[str, Any], project_id: Optional[str]) -> Optional
                 "owner_type": "company", "owner_id": t["company1_id"]}
     if key == "project_create_plain":
         return {"code": "C01-" + uuid.uuid4().hex[:8], "name": "C01", "status": "Active"}
-    if key in ("labor_create", "labor_sync"):
+    if key == "labor_create":          # R62 / FG-461: the project's SMR package, no free text
+        return {"project_id": project_id, "hours": 1, "execution_package_id": (project_id or "") + "-r62pkg"}
+    if key == "labor_sync":
         return {"project_id": project_id, "hours": 1, "activity_name": "C01"}
     if key == "labor_recompute":
         return None
@@ -175,6 +177,10 @@ def expected(key: str, legacy_role: str, target: Optional[str]) -> Dict[str, Any
     success = {"status": ok, "writes": True}
     if key in WRITES_ONLY_WITH_SOURCE_DATA and target in ("P2", "XA"):
         success = {"status": ok, "writes": False}
+    if key == "labor_recompute" and target == "P2":
+        # R62 / FG-461: P2 now has an SMR package (a manual labor row names one) — the
+        # recompute updates it; A's project seen from B (XA) still writes nothing
+        success = {"status": ok, "writes": True}
     if key in UNCHANGED_RESYNC:
         success = {"status": ok, "writes": False}
     if rule == "finance":

@@ -257,7 +257,9 @@ def body_for(key: str, t: Dict[str, Any], rec_tkey: str, project_id: Optional[st
         return {"item_id": rid(rec_tkey, "item"), "warehouse_id": rid(rec_tkey, "wh"),
                 "quantity": 1, "unit_sale_price": 2.0, "currency": "EUR",
                 "snapshot_token": sale_token(rec_tkey)}
-    if key in ("labor_sync", "labor_create"):
+    if key == "labor_create":          # R62 / FG-461: the project's SMR package, no free text
+        return {"project_id": project_id, "hours": 1, "execution_package_id": (project_id or "") + "-r62pkg"}
+    if key == "labor_sync":
         return {"project_id": project_id, "hours": 1, "activity_name": "C02"}
     if key == "waste_create":
         return {"material_name": "C02", "qty": 1}

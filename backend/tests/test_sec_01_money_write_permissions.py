@@ -93,7 +93,8 @@ def _body(path: str, fx_t: Dict[str, Any]) -> Dict[str, Any]:
     if "price-modifiers" in path:
         return {"modifiers": {}}
     if path.endswith("labor-entries"):
-        return {"project_id": fx_t["project_id"], "hours": 1, "activity_name": "SEC-01"}
+        return {"project_id": fx_t["project_id"], "hours": 1,          # R62 / FG-461: its SMR package
+                "execution_package_id": fx_t["project_id"] + "-r62pkg"}
     if path.endswith("material-waste"):
         return {"material_name": "SEC-01", "qty": 1}
     if path.endswith("client-link"):
@@ -139,6 +140,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         for t in report["tenants"]:
             fx[t["key"]] = {"tenant_id": t["tenant_id"], "project_id": t["project_id"],
                             "users": {u["key"]: u for u in t["users"]}}
+            # R62 / FG-461: a manual labor row names an SMR package of its project
+            tc.portal.call(lambda t=t: client[op_name].execution_packages.insert_one({
+                "id": t["project_id"] + "-r62pkg", "org_id": t["tenant_id"],
+                "project_id": t["project_id"], "activity_name": "Probe manual SMR", "qty": 1}))
         tokens: Dict[tuple, str] = {}
         for tkey in ("A", "B"):
             for key in ROLE_KEYS:

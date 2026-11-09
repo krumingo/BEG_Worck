@@ -116,12 +116,6 @@ async def create_labor_entry(
         raise HTTPException(status_code=422, detail=(
             "Източник „work_report_sync“ се записва само от синхронизацията на одобрени отчети"))
 
-    # FG-461 (R62): the row's SMR is its execution package's SMR — a package of this project
-    # is required and no free-text SMR is taken
-    pkg_ref = await _manual_row_package(tenant, org_id, entry["project_id"],
-                                        entry["execution_package_id"], data.get("activity_name"))
-    entry["activity_name"] = pkg_ref.get("activity_name") or ""
-
     # FG-423 (R62): priced as R62 prices labor — akord = quantity × the package's piece rate,
     # otherwise hours × the profile's hourly rate (no rate → no cost, never a default)
     entry.update(await _manual_row_pricing(tenant, org_id, entry["employee_id"],
@@ -137,6 +131,11 @@ async def create_labor_entry(
     async with mw:
         # after the replay (a retried key returns its row) and inside the idempotent write
         # (a refusal fails the key, so the same request may be sent again)
+        # FG-461 (R62): the row's SMR is its execution package's SMR — a package of this
+        # project is required and no free-text SMR is taken
+        pkg_ref = await _manual_row_package(tenant, org_id, entry["project_id"],
+                                            entry["execution_package_id"], data.get("activity_name"))
+        entry["activity_name"] = pkg_ref.get("activity_name") or ""
         # FG-423: never the hours an approved report already carries (counted twice)
         if await _approved_report_hours_exist(org_id, entry["project_id"], entry["employee_id"], entry["date"]):
             raise HTTPException(status_code=409, detail={
