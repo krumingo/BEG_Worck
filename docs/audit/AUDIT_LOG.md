@@ -7,6 +7,14 @@
 
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
+| #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
+| #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
+| #83 CP-01 | `2415b5f` | **PASS** (CP83-M1..M5 closed; pass 40) | 2026-11-09 |
+| #89 OFF-02 | `7cfeae5` | **PASS** (R67 closes OFF89-N1; FG-472) | 2026-11-09 |
+| #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
+| #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
+| #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
+| #82 WH-REV-01 | `108afc0` | **PASS** (WHREV82-M1 closed) | 2026-11-09 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
@@ -6385,3 +6393,44 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | wh_fix_01 | 138 / 132 / 47 |
 
 - **`2415b5f`:** evidence only; SEC-01 / PM-01 re-check running.
+
+## 2026-11-09 15:45 UTC: #75 LAB-02 `4fa4957` (merge `fe743f4` of #73 `d34d41b` + R62 / R33 akord): PASS, no blocking finding
+
+- **Merge `fe743f4`:** = merge-tree except generated evidence. Role-union 0. No unclassified collection. Contains main `1525a1e`.
+- **R62 / R33:** a manual akord row is priced only from a LAB-02 approved quantity of the same worker / package / project / day.
+  - Second quantity → 422.
+  - One approval backs one live row → 409.
+  - A voided approval → 409 at approve.
+  - The pre-tx "in use" check is serialised by the FG-463 day lock.
+
+| Gate | Result |
+|---|---|
+| lab_0* | 261 |
+| probes lab02 / retake / f75_01 / race | 4 / 1 / 51 / 20 |
+| SEC-01 | 30 |
+| SEC-02 | 31; regen 0 cells |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/246, 0/496 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 | 138 / 132 / 47 |
+
+## 2026-11-09 15:45 UTC: queue status (main still `1525a1e`)
+
+- **PASS on the latest heads, each containing main `1525a1e`:**
+  - #86 `49eb546`
+  - #84 `faaa2d0`
+  - #83 `2415b5f`
+  - #89 `7cfeae5`
+  - #73 `d34d41b`
+  - #75 `4fa4957`
+  - #88 `62f898a`
+  - #82 `108afc0`
+- **Each was audited against main only, not against the others.** After the first merge, the rest must re-merge main and be re-audited. Shared hotspots: `routes/finance.py`, `tenancy/ownership.py`, `dq_issues`, and the PM-01 / SEC-01 / SEC-02 evidence.
+- **Open non-blocking items:**
+  - LAB73-N1: reversal period (design).
+  - SEC-02 `leaks_7777` substring flake (debt).
+  - #88 D5: `assets.emergent.sh` script in `index.html` (Krum).
+- **Environment:** three or more audit mongods on volumes `audit2_db*` (created by this session), quiet logs; ~20 GB free. `pytest-asyncio` and `pypdf` are needed by the suites but are missing from `requirements*.txt` (debt).
