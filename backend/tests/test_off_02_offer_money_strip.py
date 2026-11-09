@@ -31,7 +31,9 @@ from tests.test_off_01_offer_version_accept import (  # noqa: F401  (fixtures)
 #: The money keys of an offer and its lines (R20-5M) that must never reach a non-finance
 #: caller. ``total`` / ``subtotal`` / ``vat_amount`` / ``line_total`` / unit prices.
 OFFER_MONEY_KEYS = ("subtotal", "vat_amount", "total", "line_total", "material_unit_cost",
-                    "labor_unit_cost", "line_material_cost", "line_labor_cost", "unit_price")
+                    "labor_unit_cost", "line_material_cost", "line_labor_cost", "unit_price",
+                    # the import preview's parsed lines
+                    "material_price", "labor_price")
 
 
 def money_keys_in(payload) -> set:
@@ -185,6 +187,5 @@ def test_04_import_preview_answers_like_the_read(monkeypatch, backend, mode):
         assert "Мазилка" in site.text                         # the quantities / names stay
         fin = await c.post("/api/offers/import-preview", headers=T.hdr("admin-a"), files=files)
         assert fin.status_code == 200, fin.text[:300]
-        assert money_keys_in(fin.json()) & {"material_unit_cost", "labor_unit_cost",
-                                             "line_total"}, fin.text[:400]
+        assert {"material_price", "labor_price"} <= money_keys_in(fin.json()), fin.text[:400]
     run(monkeypatch, backend, mode, scenario)
