@@ -455,3 +455,35 @@ Gates for this head: `gates_r65.txt`.
   Red on `7750f4e`: 27 of 27 (`r71_red_on_7750f4e_real_mongo.txt`).
 
 Gates for this head: `gates_r71.txt`.
+
+## 19. FLOW Guard pass 39 (FG-480..484)
+
+- **FG-480: the method comes from the account.** The advance row's `payment_method` is `cash` / `bank` according to the account the money leaves (`is_cash_account`), the same as the ledger row. The request's `payment_method` is ignored. The ordinary subcontractor payment row now follows the same rule (FG-225).
+- **FG-481 (R29): a replay comes before any guard.** `MoneyWrite.completed_replay` is a read-only look at the key registry: no reservation, no write.
+  - When the key has already **completed** with the same request, the advance and the subcontractor-payment routes return the stored row first, before any lifecycle / IBAN / receipt check.
+  - So a retry after the subcontractor was archived still gets its original result; a **new** key is refused (422).
+  - A different body, a key in progress, or a new key goes on to the checks and `begin` as before.
+  - The finance payment routes already replayed before their guards (`_once`).
+- **FG-482: a client company's BG + ЕГН VAT number.**
+  - It is masked for **every role** in:
+    - `/clients/search/unified`;
+    - `/projects/{id}/client-info` and `/projects/{id}/invoice-context`;
+    - `/companies`, `/companies/{id}` and `/companies/find-by-eik`, plus the company create / update responses;
+    - the project card's owner data and the `import-client-invoice` response.
+  - The helper is `cr.mask_vat_egn`, which also masks a 10-digit `tax_id`.
+  - Its digits match a search (client search, counterparty list) **only for Owner / Accountant**. For other roles a BG + 10-digit VAT number does not match.
+  - A masked value sent back by the company form keeps the stored one.
+  - The full value only from **`POST /companies/{id}/vat/reveal`**: Owner / Accountant only, AuditEvent `company.vat_egn.revealed` before the value is returned.
+- **FG-483:** **`POST /counterparties/{id}/vat/reveal`**: Owner / Accountant only, AuditEvent `counterparty.vat_egn.revealed`.
+  - 404 when the VAT number is not BG + ЕГН, or the record is another tenant's.
+  - The shared helper is `master_records.reveal_vat_egn`.
+- **FG-484:** `gates_r71.txt` exists since `f91b423` and is the gates file of that head. The gates of this round's final head are in `gates_pass39.txt`, which covers the whole suite with real Mongo too.
+- **Open question (not changed):** the same receipt can still be used for a second advance or payment. This is for Krum, together with R72.
+- **Tests:**
+  - `test_fg482_a_client_company_bg_egn_vat_is_masked_searched_and_revealed_by_rule`
+  - `test_fg483_a_counterparty_bg_egn_vat_has_an_audited_reveal`
+  - `test_fg480_fg481_advance_method_from_the_account_and_replay_before_the_guards`
+
+  Red on `f91b423`: 15 of 15 (`pass39_red_on_f91b423_real_mongo.txt`).
+
+Gates for this head: `gates_pass39.txt`.
