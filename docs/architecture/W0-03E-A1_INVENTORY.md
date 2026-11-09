@@ -1,3 +1,4 @@
+
 | path | route | entity (collection) | access (lookup key) | tenant predicate | risk | action |
 |---|---|---|---|---|---|---|
 | app/routes/finance.py:_require_tenant_project | (helper) | projects | get(id = project_id) | TenantData org_id (session) | new read | SAFE |
@@ -382,5 +383,3 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
 Totals: 380 accesses — FIXED 123, SAFE 257
-
-Totals: 392 accesses — FIXED 131, SAFE 261

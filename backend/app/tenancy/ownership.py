@@ -133,7 +133,9 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),
     **_family(FAMILY_AUDIT,
-              "audit_logs", "dq_issues"),  # CP-01: minimal Data Quality rows (until W0-07)
+              "audit_logs"),
+              # CP-01 writes its DQ rows into the one ``dq_issues`` registered by WH-FIX-01
+              # (#81, FAMILY_TASKS above) — same schema, one registration
     **_family(FAMILY_SETTINGS,
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",

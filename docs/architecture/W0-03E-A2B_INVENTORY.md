@@ -45,7 +45,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `counterparty_eik_claims` | companies / clients / counterparties / subcontractors | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `daily_work_logs` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `deliveries` | warehouses / locations | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
-| `dq_issues` | audit / business history | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `dq_issues` | tasks / schedules / alarms | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `employee_daily_reports` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `employee_profiles` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | scripts/create_company.py:61 |
 | `equipment_assignments` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
