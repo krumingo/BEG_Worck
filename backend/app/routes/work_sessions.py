@@ -25,22 +25,20 @@ DEFAULT_OT = {"over_8h": 1.5, "after_20": 1.5, "weekend": 2.0}
 DEFAULT_MAX_SESSION = 12
 DEFAULT_WORK_HOURS = 8
 
-# R62 (Krum, canon 6f29205) — "one labor-cost number in every reader": these are TIME
-# screens. Hours come from the time sessions; the money a session carries is hours × the
-# snapshot rate, NOT the approved labor cost (project_labor_cost: approved reports + approved
-# manual rows). It is shown only as an estimate, labelled as such — never a second official
-# cost. The official figure, where it can be computed, is ``approved_labor_cost``.
-SESSION_COST_BASIS = "оценка, неодобрено"
-SESSION_COST_NOTE = ("Сумите от работните сесии са оценка (часове × ставка) и не са одобрен "
-                     "разход за труд; официалният разход е от одобрените отчети.")
+# R62 (Krum, canon 6f29205: "Едно число навсякъде") / FG-462: these are TIME screens. They
+# show the hours of the time sessions and — where it applies — THE approved labor cost
+# (project_labor_cost: approved reports + approved manual rows). The money a session row
+# carries (hours × the snapshot rate) is never shown, not even as a labelled estimate.
+SESSION_MONEY_FIELDS = ("labor_cost", "hourly_rate_at_date", "overtime_coefficient_cost")
 
 
-def _label_session_costs(result: dict) -> dict:
-    """R62: mark the session money in a time-screen response as an unapproved estimate."""
-    result["cost_basis"] = SESSION_COST_BASIS
-    result["cost_is_official"] = False
-    result["cost_note"] = SESSION_COST_NOTE
-    return result
+def _hours_only(items):
+    """The session rows of a time screen without their money (R62 / FG-462)."""
+    for it in items or []:
+        if isinstance(it, dict):
+            for k in SESSION_MONEY_FIELDS:
+                it.pop(k, None)
+    return items
 
 
 # ── Pydantic Models ────────────────────────────────────────────────
@@ -293,8 +291,9 @@ async def list_sessions(
         query["is_overtime"] = is_overtime
 
     tenant = _tenant(user)
-    return _label_session_costs(
-        await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1))
+    page_ = await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1)
+    _hours_only(page_.get("items") if isinstance(page_, dict) else page_)
+    return page_
 
 
 # ── Active Sessions ────────────────────────────────────────────────
@@ -312,7 +311,7 @@ async def get_active_sessions(
     now = datetime.now(timezone.utc).isoformat()
     for s in items:
         s["elapsed_hours"] = round(compute_duration(s["started_at"], now), 2)
-    return _label_session_costs({"items": items, "total": len(items)})
+    return {"items": _hours_only(items), "total": len(items)}
 
 
 # ── My Today ───────────────────────────────────────────────────────
@@ -330,26 +329,23 @@ async def get_my_today(user: dict = Depends(get_current_user)):
 
     now_iso = datetime.now(timezone.utc).isoformat()
     total_hours = 0
-    total_cost = 0
     has_open = False
     for s in items:
         if s.get("ended_at"):
             total_hours += s.get("duration_hours", 0)
-            total_cost += s.get("labor_cost", 0)
         else:
             elapsed = compute_duration(s["started_at"], now_iso)
             s["elapsed_hours"] = round(elapsed, 2)
             total_hours += elapsed
             has_open = True
 
-    return _label_session_costs({
-        "items": items,
+    return {
+        "items": _hours_only(items),
         "total_sessions": len(items),
         "total_hours": round(total_hours, 2),
-        "total_cost": round(total_cost, 2),          # R62: estimate (cost_basis), not approved
         "has_open_session": has_open,
         "is_overtime": total_hours > DEFAULT_WORK_HOURS,
-    })
+    }
 
 
 # ── Summary ────────────────────────────────────────────────────────
@@ -378,7 +374,6 @@ async def get_summary(
 
     items = await tenant.work_sessions.find(query, {"_id": 0}).to_list(1000)
     total_hours = sum(s.get("duration_hours", 0) for s in items)
-    total_cost = sum(s.get("labor_cost", 0) for s in items)
     overtime_hours = sum(s.get("duration_hours", 0) for s in items if s.get("is_overtime"))
     workers = set(s["worker_id"] for s in items)
 
@@ -390,14 +385,13 @@ async def get_summary(
         lc = await project_labor_cost(user["org_id"], site_id,
                                       date_from=date or date_from, date_to=date or date_to)
         approved = round(lc["total"], 2)
-    return _label_session_costs({
+    return {
         "total_hours": round(total_hours, 2),
-        "total_cost": round(total_cost, 2),          # R62: estimate (cost_basis), not approved
-        "approved_labor_cost": approved,
+        "approved_labor_cost": approved,             # R62: THE number (one site), else None
         "workers_count": len(workers),
         "overtime_hours": round(overtime_hours, 2),
         "sessions_count": len(items),
-    })
+    }
 
 
 # ── Split Session ──────────────────────────────────────────────────
@@ -496,13 +490,10 @@ async def get_overtime_report(
     for s in items:
         wid = s["worker_id"]
         if wid not in workers:
-            workers[wid] = {"name": s.get("worker_name", ""), "regular_hours": 0, "overtime_hours": 0, "overtime_cost": 0, "total_cost": 0}
-        cost = s.get("labor_cost", 0)
+            workers[wid] = {"name": s.get("worker_name", ""), "regular_hours": 0, "overtime_hours": 0}
         hours = s.get("duration_hours", 0)
-        workers[wid]["total_cost"] += cost
         if s.get("is_overtime"):
             workers[wid]["overtime_hours"] += hours
-            workers[wid]["overtime_cost"] += cost
         else:
             workers[wid]["regular_hours"] += hours
 
@@ -511,11 +502,9 @@ async def get_overtime_report(
         w["worker_id"] = wid
         w["regular_hours"] = round(w["regular_hours"], 2)
         w["overtime_hours"] = round(w["overtime_hours"], 2)
-        w["overtime_cost"] = round(w["overtime_cost"], 2)
-        w["total_cost"] = round(w["total_cost"], 2)
         result.append(w)
 
-    return _label_session_costs({"workers": result, "total": len(result)})
+    return {"workers": result, "total": len(result)}      # R62 / FG-462: hours only
 
 
 # ── Update (Admin/Manager) ────────────────────────────────────────

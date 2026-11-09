@@ -25,6 +25,7 @@ from app.permissions.money_input import (MoneyWrite, money_value, project_in_ten
 from app.services.labor_cost import (compute_person_labor, load_smr_terms, project_labor_cost,
                                      package_labor_split, overlapping_manual_rows,
                                      bump_labor_day_lock, live_report_claims,
+                                     normalize_labor_date, strict_iso_date,
                                      MANUAL_APPROVED, MANUAL_PENDING, SYNC_SOURCE)
 from app.services.report_normalizer import LABOR_LINE_FIELDS
 
@@ -98,7 +99,7 @@ async def create_labor_entry(
         "execution_package_id": data.get("execution_package_id"),
         "offer_line_id": data.get("offer_line_id"),
         "work_report_id": data.get("work_report_id"),
-        "date": data.get("date", now[:10]),
+        "date": data.get("date", now[:10]),     # FG-491: validated (ISO day) below
         "hours": hours,
         "activity_name": data.get("activity_name", ""),
         "note": data.get("note", ""),
@@ -109,6 +110,7 @@ async def create_labor_entry(
         # the Owner approved it (POST /labor-entries/{id}/approve)
         "approval_status": MANUAL_PENDING,
         "created_by": user["id"],
+        "created_by_role": user.get("role"),
         "version": 1,
         "created_at": now,
     }
@@ -137,6 +139,15 @@ async def create_labor_entry(
         pkg_ref = await _manual_row_package(tenant, org_id, entry["project_id"],
                                             entry["execution_package_id"], data.get("activity_name"))
         entry["activity_name"] = pkg_ref.get("activity_name") or ""
+        # FG-491: the day is an ISO date YYYY-MM-DD — nothing else ("2026-10-05T00:00",
+        # "05.10.2026", a trailing space) is taken, so the same day is never two days
+        if not strict_iso_date(entry["date"]):
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_DATE", "message": "Датата трябва да е във формат ГГГГ-ММ-ДД"})
+        # FG-492: a row that replaces a rejected / reversed row of the same worker, project
+        # and day names it (corrects_entry_id) — never an unlinked second row
+        entry["corrects_entry_id"] = await _correction_link(
+            tenant, org_id, entry, (data.get("corrects_entry_id") or "").strip() or None)
         # FG-423: never the hours an approved report already carries (counted twice)
         if await _approved_report_hours_exist(org_id, entry["project_id"], entry["employee_id"], entry["date"]):
             raise HTTPException(status_code=409, detail={
@@ -145,12 +156,12 @@ async def create_labor_entry(
 
         async def body(session):
             # LAB73-R1: the day's lock, then the overlap re-read — in ONE transaction
-            lock = await bump_labor_day_lock(tenant, org_id, entry["project_id"], entry["employee_id"],
-                                             entry["date"], session=session)
+            lock = await bump_labor_day_lock(tenant, org_id, entry["employee_id"], entry["date"],
+                                             session=session)
             if await tenant.labor_entries.find_one({"org_id": org_id, "id": entry["id"]}, {"_id": 0, "id": 1},
                                                    session=session):
                 return                       # this key's row is already there (a concurrent retry)
-            if await live_report_claims(tenant, org_id, lock, session=session):
+            if await live_report_claims(tenant, org_id, lock, entry["project_id"], session=session):
                 raise HTTPException(status_code=409, detail={
                     "code": "DUPLICATE_OF_APPROVED_REPORT",
                     "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
@@ -165,6 +176,24 @@ async def create_labor_entry(
             # committed row of this key; the lock serialises concurrent attempts)
             async with mw.insert_once():
                 await tenant.labor_entries.insert_one(mw.unique(entry), session=session)
+            # FG-492: the creation is an AuditEvent (who, role, when) in the same transaction
+            from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
+            from app.audit.store import record_event
+            await record_event(db, build_event(
+                tenant_id=org_id, actor_type="human", actor_id=user["id"],
+                action="labor.manual_entry.created", source_flow="FLOW-028",
+                retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+                entity_type="labor_entry", entity_id=entry["id"], entity_version="1",
+                structured_diff={"before": None,
+                                 "after": {k: entry.get(k) for k in (
+                                     "project_id", "employee_id", "execution_package_id", "date",
+                                     "hours", "pay_type", "quantity", "labor_cost",
+                                     "approval_status", "corrects_entry_id")},
+                                 "actor": {"user_id": user["id"], "role": user.get("role")}},
+                reason=("R62: manual labor row entered" + (
+                    f" — corrects {entry['corrects_entry_id']}" if entry.get("corrects_entry_id") else "")
+                        + f" by {user['id']} (role {user.get('role')})"),
+                tool_or_endpoint="POST /labor-entries", idempotency_key=mw.key), session=session)
 
         await _run_manual_tx(body)
         mw.result_id = entry["id"]
@@ -232,13 +261,39 @@ async def _manual_row_package(tenant, org_id: str, project_id, pkg_id, activity_
 
 async def _approved_report_hours_exist(org_id: str, project_id: str, employee_id: str, date: str) -> bool:
     """FG-423: does an APPROVED report already carry this worker's work on this project
-    and date? Then a manual row would count the hours twice."""
+    and date? Then a manual row would count the hours twice. FG-490: a report line with no
+    project (an old-style batch report) carries the worker's day on every project."""
     from app.services.report_normalizer import fetch_normalized_report_lines
-    if not (project_id and employee_id and date):
+    day = normalize_labor_date(date)
+    if not (project_id and employee_id and day):
         return False
     lines = await fetch_normalized_report_lines(
-        org_id=org_id, date_from=date, date_to=date, worker_id=employee_id, status_filter="APPROVED")
-    return any(ln.get("project_id") == project_id for ln in lines)
+        org_id=org_id, date_from=day, date_to=day, worker_id=employee_id, status_filter="APPROVED")
+    return any(ln.get("project_id") in (project_id, None, "") for ln in lines)
+
+
+async def _correction_link(tenant, org_id: str, entry: dict, corrects: Optional[str]) -> Optional[str]:
+    """FG-492: the rejected / reversed manual row a new row replaces. When the worker has
+    such a row on this project and day, the new row must name it (422
+    CORRECTION_LINK_REQUIRED); a named row must be one of them (422 CORRECTION_LINK_INVALID)."""
+    day = normalize_labor_date(entry.get("date"))
+    replaced = await tenant.labor_entries.find(
+        {"org_id": org_id, "project_id": entry.get("project_id"), "employee_id": entry.get("employee_id"),
+         "source": {"$ne": SYNC_SOURCE}, "entry_kind": {"$ne": "reversal"},
+         "approval_status": {"$in": [MANUAL_REJECTED, MANUAL_REVERSED]}},
+        {"_id": 0, "id": 1, "date": 1}).to_list(500)
+    ids = {r["id"] for r in replaced if normalize_labor_date(r.get("date")) == day}
+    if corrects is None:
+        if ids:
+            raise HTTPException(status_code=422, detail={
+                "code": "CORRECTION_LINK_REQUIRED", "replaces": sorted(ids),
+                "message": "За този ден има отхвърлен/сторниран ред — посочете кой ред поправяте (corrects_entry_id)"})
+        return None
+    if corrects not in ids:
+        raise HTTPException(status_code=422, detail={
+            "code": "CORRECTION_LINK_INVALID",
+            "message": "corrects_entry_id трябва да е отхвърлен/сторниран ред на същия работник, обект и ден"})
+    return corrects
 
 
 async def _run_manual_tx(body):
@@ -356,9 +411,9 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
             from app.audit.store import record_event
             if kind == "approve":
                 # LAB73-R1: the day's lock, then the overlap re-read — in THIS transaction
-                lock = await bump_labor_day_lock(tenant, org_id, row.get("project_id"), row.get("employee_id"),
-                                                 row.get("date"), session=session)
-                if await live_report_claims(tenant, org_id, lock, session=session):
+                lock = await bump_labor_day_lock(tenant, org_id, row.get("employee_id"), row.get("date"),
+                                                 session=session)
+                if await live_report_claims(tenant, org_id, lock, row.get("project_id"), session=session):
                     raise HTTPException(status_code=409, detail={
                         "code": "DUPLICATE_OF_APPROVED_REPORT",
                         "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})

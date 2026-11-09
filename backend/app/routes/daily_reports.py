@@ -428,19 +428,27 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     # concurrent manual-row approval / create of that day then sees the claim → 409).
     from app.services.labor_cost import MANUAL_APPROVED, bump_labor_day_lock, overlapping_manual_rows
     from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    # FG-490: an old-style batch report (employee_id + day_entries) is the worker's day too;
+    # its projects are those of its entries — none at all = every project of the tenant
     day_worker = report.get("worker_id") or report.get("employee_id") or ""
     day_date = report.get("date") or report.get("report_date") or ""
+    if report.get("day_entries") is not None:
+        day_projects = sorted({e.get("project_id") for e in report.get("day_entries") or []
+                               if isinstance(e, dict) and e.get("project_id")})
+    else:
+        day_projects = [project_id] if project_id else []
 
     class _ApprovedManualRow(Exception):
         pass
 
     async def claim_day(session):
-        await bump_labor_day_lock(tenant, org_id, project_id, day_worker, day_date,
-                                  session=session, report_claim=rid)
-        if await overlapping_manual_rows(tenant, org_id, project_id, day_worker, day_date,
-                                         (MANUAL_APPROVED,), session=session):
-            raise _ApprovedManualRow()
-    if project_id and day_worker and day_date:
+        await bump_labor_day_lock(tenant, org_id, day_worker, day_date, session=session,
+                                  report_claim=rid, claim_projects=day_projects or None)
+        for pid_ in (day_projects or [None]):
+            if await overlapping_manual_rows(tenant, org_id, pid_, day_worker, day_date,
+                                             (MANUAL_APPROVED,), session=session):
+                raise _ApprovedManualRow()
+    if day_worker and day_date:
         try:
             try:
                 from app.services.labor_cost import ensure_labor_day_locks
