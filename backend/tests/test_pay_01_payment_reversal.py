@@ -114,6 +114,10 @@ async def _seed(op, sysdb):
     for prj_id, org in (("prj-1", ORG_A), ("prj-a", ORG_A), ("prj-b", ORG_B)):
         await op.projects.insert_one({"id": prj_id, "org_id": org, "code": prj_id, "name": prj_id,
                                       "status": "Active"})
+    # CP-01 FG-290: a cash till receipt is a file record of the tenant (legacy media_files
+    # until W0-06 — the File Registry — lands)
+    await op.media_files.insert_one({"id": "file_till_receipt", "org_id": ORG_A,
+                                     "filename": "bon.jpg", "context_type": "finance_payment"})
     for acc_id, org, typ in ((CASH_A, ORG_A, "Cash"), (BANK_A, ORG_A, "Bank"), (BANK_B, ORG_B, "Bank")):
         await op.financial_accounts.insert_one({
             "id": acc_id, "org_id": org, "name": acc_id, "type": typ, "currency": "EUR",

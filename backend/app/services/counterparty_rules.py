@@ -190,6 +190,33 @@ def mask_for_log(value: Any) -> Any:
     return value
 
 
+#: FG-294: the invoice fields that may hold a person's ЕГН (an invoice to a natural person)
+INVOICE_EGN_KEYS = ("counterparty_eik", "egn")
+
+
+def mask_invoice_egn(value: Any) -> Any:
+    """FG-294 (R48.3): an invoice (or a list of them, or a version snapshot — recursively)
+    with every possible ЕГН masked — a 10-digit ``counterparty_eik`` (a Bulgarian ЕИК has 9 or
+    13 digits) or an ``egn`` field — for EVERY role. The full value only via the audited
+    invoice reveal."""
+    if isinstance(value, list):
+        return [mask_invoice_egn(v) for v in value]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if k in INVOICE_EGN_KEYS and isinstance(v, (str, int)) and v \
+                    and not str(v).startswith(EGN_MASK_PREFIX) and (k == "egn" or possible_egn(v)):
+                out[k] = mask_egn(v)
+            else:
+                out[k] = mask_invoice_egn(v)
+        return out
+    return value
+
+
+def is_masked_egn(value: Any) -> bool:
+    return isinstance(value, str) and value.startswith(EGN_MASK_PREFIX)
+
+
 def same_egn(a: Any, b: Any) -> bool:
     da, db_ = re.sub(r"\D", "", str(a or "")), re.sub(r"\D", "", str(b or ""))
     return bool(da) and da == db_

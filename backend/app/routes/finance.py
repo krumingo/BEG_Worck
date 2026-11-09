@@ -787,7 +787,8 @@ async def list_invoices(
         query.setdefault("issue_date", {})["$lte"] = to_date
     
     invoices = await tenant.invoices.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
-    invoices = cr.mask_iban_fields(invoices, await cr.full_iban_allowed(user))   # FG-245
+    invoices = cr.mask_invoice_egn(                                               # FG-294
+        cr.mask_iban_fields(invoices, await cr.full_iban_allowed(user)))           # FG-245
     # W0-03E-A1: the related projects come from the caller's tenant only, in one
     # read; a project id that does not resolve here enriches to empty strings.
     projects_by_id = await tenant.projects.get_many(
@@ -974,14 +975,15 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
                     {"invoice_no": data.invoice_no, "direction": data.direction})
     
-    return {k: v for k, v in invoice.items() if k != "_id"}
+    return cr.mask_invoice_egn({k: v for k, v in invoice.items() if k != "_id"})   # FG-294
 
 
 @router.get("/finance/invoices/{invoice_id}")
 async def get_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     tenant = _tenant(user)
     invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
-    invoice = cr.mask_iban_fields(invoice, await cr.full_iban_allowed(user))      # FG-245
+    invoice = cr.mask_invoice_egn(                                                # FG-294
+        cr.mask_iban_fields(invoice, await cr.full_iban_allowed(user)))            # FG-245
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -1025,7 +1027,39 @@ async def list_invoice_versions(invoice_id: str, user: dict = Depends(require_m5
         {"invoice_id": invoice_id},
         {"_id": 0},
     ).sort("version_no", -1).to_list(100)
-    return versions
+    return cr.mask_invoice_egn(                                                    # FG-294
+        cr.mask_iban_fields(versions, await cr.full_iban_allowed(user)))
+
+
+@router.post("/finance/invoices/{invoice_id}/egn/reveal")
+async def reveal_invoice_egn(invoice_id: str, user: dict = Depends(require_m5),
+                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-294 (R48.3): the full ЕГН printed on an invoice to a natural person — Owner /
+    Accountant only; every reveal is an AuditEvent ``invoice.egn.revealed`` (who, when, which
+    invoice) committed before the value is returned. Every other read shows it masked."""
+    if not cr.can_reveal_egn(user):
+        from app.services.master_write import forbidden
+        raise forbidden("Пълното ЕГН се вижда само от Собственик и Счетоводител (Р48.3)")
+    from app.services.master_write import audit as mw_audit, kw, run_tx
+    tenant = _tenant(user)
+    key = idempotency_key.strip() if isinstance(idempotency_key, str) and idempotency_key.strip() \
+        else "reveal-" + uuid.uuid4().hex
+
+    async def tx(session):
+        invoice = await tenant.invoices.find_one({"id": invoice_id},
+                                                 {"_id": 0, "id": 1, "counterparty_eik": 1},
+                                                 **kw(session))
+        if not invoice:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+        value = invoice.get("counterparty_eik") or ""
+        await mw_audit(db, session, user, "invoice.egn.revealed", entity_type="invoice",
+                       entity_id=invoice_id, key=key,
+                       diff={"egn_masked": cr.mask_egn(value),
+                             "revealed_by": user["id"], "role": user.get("role")})
+        return value
+
+    value = await run_tx(db, tx)
+    return {"id": invoice_id, "counterparty_eik": value, "revealed": True}
 
 
 @router.put("/finance/invoices/{invoice_id}")
@@ -1044,6 +1078,9 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     if invoice["status"] == "Paid":
         raise HTTPException(status_code=400, detail="Платени фактури не могат да се редактират. Премахнете плащанията първо.")
 
+    # FG-294: the edit form shows the ЕГН masked — sending it back keeps the stored value
+    if cr.is_masked_egn(data.counterparty_eik):
+        data.counterparty_eik = None
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
     eik_check = validate_eik(data.counterparty_eik or "" if data.counterparty_eik is not None else "")
@@ -1108,8 +1145,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             await update_invoice_status(tenant, invoice_id, session=session)
     await run_transaction(tenant, _body)
     
-    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
-                               await cr.full_iban_allowed(user))            # FG-245
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.put("/finance/invoices/{invoice_id}/lines")
@@ -1168,8 +1205,8 @@ async def update_invoice_lines(invoice_id: str, data: InvoiceLinesUpdate, user: 
         await update_invoice_status(tenant, invoice_id, session=session)
     await run_transaction(tenant, _body)
     
-    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
-                               await cr.full_iban_allowed(user))            # FG-245
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.post("/finance/invoices/{invoice_id}/send")
@@ -1206,8 +1243,8 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_sent", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
-                               await cr.full_iban_allowed(user))            # FG-245
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.post("/finance/invoices/{invoice_id}/cancel")
@@ -1243,8 +1280,8 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
                     {"invoice_no": invoice["invoice_no"]})
     
-    return cr.mask_iban_fields(await tenant.invoices.get(invoice_id, {"_id": 0}),
-                               await cr.full_iban_allowed(user))            # FG-245
+    return cr.mask_invoice_egn(cr.mask_iban_fields(                                # FG-294
+        await tenant.invoices.get(invoice_id, {"_id": 0}), await cr.full_iban_allowed(user)))  # FG-245
 
 
 @router.delete("/finance/invoices/{invoice_id}")
@@ -1328,7 +1365,8 @@ async def add_invoice_payment(invoice_id: str, data: dict, user: dict = Depends(
         async with _invoice_lock(tenant, invoice_id):
             ids = await _quick_pay_locked(tenant, user, invoice_id, data, amount, key, bank_stamp)
         updated_invoice = await tenant.invoices.get(invoice_id, {"_id": 0})   # read after the unlock
-        updated_invoice = cr.mask_iban_fields(updated_invoice, await cr.full_iban_allowed(user))
+        updated_invoice = cr.mask_invoice_egn(                                     # FG-294
+            cr.mask_iban_fields(updated_invoice, await cr.full_iban_allowed(user)))
         return {
             "ok": True,
             "payment_id": ids["payment_id"],

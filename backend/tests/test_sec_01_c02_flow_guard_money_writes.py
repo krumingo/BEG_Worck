@@ -160,6 +160,10 @@ async def seed_c02_records(op_db, fx: Dict[str, Any]) -> None:
         org, p1 = t["tenant_id"], t["project_id"]
         tech = t["users"]["technician"]["id"]
         if tkey == "A":
+            # CP-01 FG-290: the cash receipt is a file record of tenant A (legacy media_files
+            # until W0-06 — the File Registry — lands)
+            await op_db.media_files.insert_one({"id": "file_cash_receipt", "org_id": org,
+                                                "filename": "bon.jpg", "created_at": now})
             await op_db.financial_accounts.insert_one({
                 "id": rid(tkey, "cash"), "org_id": org, "name": "Каса", "account_type": "Cash",
                 "currency": "EUR", "created_at": now})

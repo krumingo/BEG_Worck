@@ -72,7 +72,30 @@ def _receipt_id(receipt_file_id) -> str:
     return fid
 
 
-async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient_name,
+CASH_RECEIPT_NOT_REGISTERED = "CASH_RECEIPT_NOT_REGISTERED"
+#: a file record in one of these states is not evidence any more
+_INACTIVE_FILE_STATES = frozenset({"deleted", "archived", "quarantined", "rejected", "superseded"})
+
+
+async def _require_registered_receipt(tenant, fid: str) -> str:
+    """FG-290: the receipt ``file_id`` must be a file record of THIS tenant, in an active
+    state — an invented id, another tenant's file or a deleted one → 422, nothing written.
+
+    W0-06 (File Registry, FLOW-016) is NOT STARTED (Gate Matrix); until it lands the
+    tenant's file records are the legacy ``media_files`` (TenantData scopes the read to the
+    active tenant). D10: switch this lookup to the File Registry when W0-06 lands."""
+    doc = await tenant.media_files.get(fid, {"_id": 0, "id": 1, "status": 1, "deleted_at": 1,
+                                             "is_deleted": 1})
+    state = str((doc or {}).get("status") or "").strip().lower()
+    if not doc or state in _INACTIVE_FILE_STATES or doc.get("deleted_at") or doc.get("is_deleted"):
+        raise HTTPException(status_code=422, detail={
+            "error_code": CASH_RECEIPT_NOT_REGISTERED,
+            "message": "Касовият бон / разписката трябва да е качен файл на тази фирма "
+                       "(file_id от регистъра на файловете), в активно състояние (FG-290)"})
+    return fid
+
+
+async def _check_cash(tenant, accounts, party_type, party_id, receipt_file_id, recipient_name,
                       payee_named: bool = False):
     """Cash out — R59 (Krum, 08.11.2026, FG-268) + R50.1:
     * to a company or person: ONLY with a counterparty chosen from the list
@@ -93,6 +116,7 @@ async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient
                 "error_code": CASH_RECEIPT_REQUIRED,
                 "message": "Дребен разход без контрагент — само с касов бон "
                            "(cash_receipt_file_id) (Р59)"})
+        await _require_registered_receipt(tenant, fid)
         return {"cash_receipt_file_id": fid, "cash_expense_without_payee": True}
     pending = await accounts.count({"party_type": party_type, "counterparty_id": party_id,
                                     "status": cr.BA_PENDING})
@@ -108,6 +132,7 @@ async def _check_cash(accounts, party_type, party_id, receipt_file_id, recipient
             "error_code": CASH_RECEIPT_REQUIRED,
             "message": "Плащане в брой към контрагент — само срещу разписка/касов документ "
                        "(cash_receipt_file_id) с име на получателя (cash_recipient_name)"})
+    await _require_registered_receipt(tenant, fid)
     return {"cash_receipt_file_id": fid, "cash_recipient_name": name}
 
 
@@ -232,7 +257,7 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
         if match is None:
             await _iban_mismatch(tenant, user, party_type, party_id, iban, path)
         if cr.is_cash_method(method):          # cash: the receipt rule still applies (R50.1)
-            return await _check_cash(accounts, party_type, None if eik_resolved else party_id,
+            return await _check_cash(tenant, accounts, party_type, None if eik_resolved else party_id,
                                      cash_receipt_file_id, cash_recipient_name,
                                      payee_named or bool(party_id))
         if not auto_resolve:
@@ -242,7 +267,7 @@ async def check_payment_target(tenant, user: Dict[str, Any], *, direction: str, 
         return _stamp(match)
 
     if cr.is_cash_method(method):
-        return await _check_cash(accounts, party_type, None if eik_resolved else party_id,
+        return await _check_cash(tenant, accounts, party_type, None if eik_resolved else party_id,
                                  cash_receipt_file_id, cash_recipient_name, payee_named)
 
     if party_id:

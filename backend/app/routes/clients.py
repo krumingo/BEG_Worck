@@ -848,4 +848,6 @@ async def get_client_invoices(
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": {"$in": pids}}, {"_id": 0}
     ).sort("issue_date", -1).to_list(200)
+    # CP-01 FG-294 / FG-245: the ЕГН masked for every role; the IBAN by the reader's right
+    invoices = cr.mask_invoice_egn(cr.mask_iban_fields(invoices, await cr.full_iban_allowed(user)))
     return {"items": invoices, "total": len(invoices)}

@@ -98,6 +98,9 @@ class _Dbs:
             self.client.close()
 
 
+RECEIPTS_A = ("file_rcpt_1", "file_r", "file_r1", "file_r2", "file_bon", "file_x", "f")
+
+
 async def _seed(op, sysdb):
     from app.permissions.catalog import LEGACY_ROLE_MAP
     for org in (ORG_A, ORG_B):
@@ -115,6 +118,12 @@ async def _seed(op, sysdb):
             "id": "ra_" + uid, "user_id": uid, "tenant_id": org, "role_id": LEGACY_ROLE_MAP[role],
             "scope_type": "company", "scope_id": None, "module": None, "permissions": [],
             "status": "active", "sync_source": "users.role"})
+    # FG-290: the receipts the tests use are file records of tenant A (legacy media_files
+    # until W0-06 — the File Registry — lands); "file_b" belongs to tenant B
+    for fid in RECEIPTS_A:
+        await op.media_files.insert_one({"id": fid, "org_id": ORG_A, "filename": fid + ".jpg",
+                                         "context_type": "finance_payment"})
+    await op.media_files.insert_one({"id": "file_b", "org_id": ORG_B, "filename": "b.jpg"})
     for acc_id, typ in ((BANK_A, "Bank"), (CASH_A, "Cash")):
         await op.financial_accounts.insert_one({
             "id": acc_id, "org_id": ORG_A, "name": acc_id, "type": typ, "account_type": typ,
@@ -1454,4 +1463,95 @@ def test_fg268_r59_the_eik_stays_a_defence(monkeypatch, backend, mode):
         r = await manual_pay(c, counterparty_name="X", counterparty_eik="111 111 111")   # bank
         assert r.status_code == 409 and r.json()["detail"]["reason"] == "BANK_ACCOUNT_PENDING"
         assert await rows(op, "finance_payments") == []
+    run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 30 (#83 @ 1e455e3)
+def test_fg290_the_cash_receipt_is_a_file_of_this_tenant(monkeypatch, backend, mode):
+    """FG-290: the till receipt / cash document ``file_id`` must be a file record of THIS
+    tenant in an active state (legacy media_files until W0-06) — an invented id ("zzz"),
+    another tenant's file or a deleted one → 422 CASH_RECEIPT_NOT_REGISTERED, nothing written."""
+    async def scenario(c, op):
+        await seed_account(op, "ba-ok", IBAN_OLD, "verified")
+        await op.media_files.insert_one({"id": "file_gone", "org_id": ORG_A, "filename": "g.jpg",
+                                         "status": "deleted"})
+        before = await rows(op, "finance_payments")
+        for fid in ("zzz", "file_b", "file_gone"):
+            # a small expense with no payee
+            r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+                "amount": 3.0, "project_id": "prj-1", "method": "Cash", "cash_receipt_file_id": fid})
+            assert r.status_code == 422 and \
+                r.json()["detail"]["error_code"] == "CASH_RECEIPT_NOT_REGISTERED", (fid, r.text)
+            r = await manual_pay(c, method="Cash", account_id=CASH_A, counterparty_name=None,
+                                 cash_receipt_file_id=fid)
+            assert r.status_code == 422, (fid, r.text)
+            # a counterparty from the list
+            r = await manual_pay(c, counterparty_id="cp1", method="Cash", account_id=CASH_A,
+                                 cash_receipt_file_id=fid, cash_recipient_name="Иван")
+            assert r.status_code == 422 and \
+                r.json()["detail"]["error_code"] == "CASH_RECEIPT_NOT_REGISTERED", (fid, r.text)
+        assert await rows(op, "finance_payments") == before
+        # the tenant's own active file → paid
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+            "amount": 3.0, "project_id": "prj-1", "method": "Cash", "cash_receipt_file_id": "file_bon"})
+        assert r.status_code == 201, r.text
+        if backend != "real":       # #69's cap reservation uses $round: real Mongo only
+            return
+        body = {"package_id": "pkg1", "amount": 5.0, "payment_method": "cash", "account_id": CASH_A,
+                "cash_receipt_file_id": "zzz", "cash_recipient_name": "Бригадир"}
+        r = await c.post("/api/subcontractor-payments", headers=hdr("acct-a"), json=body)
+        assert r.status_code == 422 and \
+            r.json()["detail"]["error_code"] == "CASH_RECEIPT_NOT_REGISTERED", r.text
+        assert await rows(op, "subcontractor_payments") == []
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg294_an_invoice_egn_is_masked_for_every_role_and_revealed_with_an_audit(monkeypatch, backend, mode):
+    """FG-294 (R48.3): an invoice to a natural person carries the ЕГН in ``counterparty_eik``.
+    Every invoice read / write response masks it for EVERY role (Admin, Owner, Accountant);
+    the full value only via POST /finance/invoices/{id}/egn/reveal (Owner / Accountant), which
+    writes ``invoice.egn.revealed`` first. A masked value sent back by the form keeps it."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({
+            "id": "inv-p", "org_id": ORG_A, "invoice_no": "I-P", "direction": "Issued", "kind": "Invoice",
+            "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31", "currency": "EUR",
+            "project_id": "prj-1", "counterparty_name": "Мария П", "counterparty_eik": TYPED,
+            "lines": [], "subtotal": 10.0, "vat_percent": 0, "vat_amount": 0, "total": 10.0,
+            "paid_amount": 0, "remaining_amount": 10.0})
+        await op.invoice_versions.insert_one({"id": "iv-1", "org_id": ORG_A, "invoice_id": "inv-p",
+                                              "version_no": 1, "snapshot": {"counterparty_eik": TYPED}})
+        readers = ["/api/finance/invoices", "/api/finance/invoices/inv-p",
+                   "/api/finance/invoices/inv-p/versions", "/api/clients/pe1/invoices"]
+        for who in ("owner-a", "acct-a", "admin-a"):
+            seen = 0
+            for url in readers:
+                r = await c.get(url, headers=hdr(who))
+                if r.status_code != 200:
+                    continue
+                seen += 1
+                assert no_full(r.json(), TYPED), (who, url)
+            assert seen >= 3, (who, seen)
+        # a write response (the API refuses a NEW 10-digit ЕИК — 9 or 13 digits — so an ЕГН
+        # reaches an invoice only from legacy / imported data, as seeded here)
+        shown = (await c.get("/api/finance/invoices/inv-p", headers=hdr("acct-a"))).json()
+        r = await c.put("/api/finance/invoices/inv-p", headers=hdr("acct-a"), json={
+            "counterparty_eik": shown["counterparty_eik"], "notes": "ново"})
+        assert r.status_code == 200 and no_full(r.json(), TYPED), r.text
+        stored = (await rows(op, "invoices", {"id": "inv-p"}))[0]
+        assert stored["counterparty_eik"] == TYPED and stored["notes"] == "ново"   # not overwritten
+        # no reveal yet → no AuditEvent; then the reveal: Owner / Accountant, audited
+        assert await rows(op, "audit_events", {"action": "invoice.egn.revealed"}) == []
+        for who in ("admin-a", "site-a", "viewer-a"):
+            r = await c.post("/api/finance/invoices/inv-p/egn/reveal", headers=hdr(who))
+            assert r.status_code == 403, (who, r.text)
+        for who in ("owner-a", "acct-a"):
+            r = await c.post("/api/finance/invoices/inv-p/egn/reveal", headers=hdr(who))
+            assert r.status_code == 200 and r.json()["counterparty_eik"] == TYPED, r.text
+        ev = await rows(op, "audit_events", {"action": "invoice.egn.revealed"})
+        assert len(ev) == 2 and {e["entity_id"] for e in ev} == {"inv-p"} and no_full(ev, TYPED)
+        r = await c.post("/api/finance/invoices/inv-missing/egn/reveal", headers=hdr("owner-a"))
+        assert r.status_code == 404
+        # a company's 9-digit ЕИК is not an ЕГН — shown as it is
+        r = await c.get("/api/finance/invoices/inv-r1", headers=hdr("acct-a"))
+        assert r.json().get("counterparty_eik") in (None, "111111111")
     run(monkeypatch, backend, mode, scenario)
