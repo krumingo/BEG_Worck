@@ -690,3 +690,92 @@
 Комисионната, отстъпката, трудовият коефициент и прогнозната стойност не са реализирани.
 
 Следващ FLOW в бавния преглед: FLOW-024 (режийни — подава към FLOW-023).
+
+---
+
+## Проход 33 — FLOW-024 (повторно, след OH-01)
+
+- main @ `ea57121`, 09.11.2026. OH-01 (#74) е в main от `1ea98fe2`. Проба с реален Mongo (`fg33sw_*`, режим `enforce`, базите са изтрити след пробата, `dbs_left: []`):
+  - `scratchpad/fg33_024/test_probe_024.py` → `out.json` (P1–P7, нови находки);
+  - `scratchpad/fg33_024/test_probe_024b.py` → `out_b.json` (проверка на старите FG).
+  - Пробите ползват harness-а и seed-а на `tests/test_oh_01_overhead_no_hard_delete.py`. Seed: 2 обекта, 3 човекодни на A и 1 на B през октомври.
+  - Тестовете на OH-01 на main минават: 117 passed (mongomock). Real частта е пропусната, защото префиксът `oh_01_*` не е разрешен в този проход. Real пробите са моите.
+  - Предупреждение: `dockerd` и `fgmongo` бяха спрени. Пуснах ги отново и изчаках primary.
+- Канон:
+  - FLOW-024 (BUSINESS LOCK). Implementation Gate L5: „изисква единен chart of accounts и правила за разпределение“;
+  - FLOW-043 няма D-решение за FLOW-024. L30 (cost center) засяга само подизпълнителите;
+  - решения на Крум: Р14 (запис на режийни — само Owner/Admin/Accountant), Р20 (фирмените финанси — само финансовите роли), Р29 (без `Idempotency-Key` → отказ), Р38 (старото разпределение се показва с „преизчислява се“), Р45 т.4 (неразпределеното не изчезва, FLOW-024 L205);
+  - Gate Matrix: FLOW-024 няма ред. Waves: FLOW-024 е в Wave 2 (`IMPLEMENTATION_WAVES.md:219`).
+- Пакетът OH-01 (`docs/architecture/tasks/OH-01_OVERHEAD_NO_HARD_DELETE.md`) не противоречи на FLOW-024. Той прилага L139 (версията) и §2.9 / §7 на CLAUDE.md. Добавки 1–3 прилагат Р38 и един четец. Пакетът не покрива: създаването на разход, правилото за разпределение, разделянето обектов/фирмен overhead, престоя и алармите.
+- Прочетени:
+  - `routes/overhead.py`, `services/overhead_lifecycle.py`;
+  - `routes/full_cost.py`, `routes/overhead_realtime.py` + `services/overhead_realtime.py`;
+  - `services/project_pnl.py`, `services/project_financial_results.py`, `services/pnl_aggregator.py`;
+  - `routes/revenue_expense.py`, `routes/revenue_snapshot.py`, `routes/reports.py` (overhead-transactions), `routes/dashboard.py`;
+  - `services/centralized_reports.py`, `services/alarm_engine.py`, `models/overhead.py`;
+  - UI: `OverheadPage.js`, `OverheadSnapshotDetailPage.js`, `ProjectOperationsPage.js`, `WorkerCalendarPage.js`.
+
+| Правило във FLOW-024 | Състояние | Къде / бележка |
+|---|---|---|
+| Директен / обектов / фирмен overhead — отделни, L11-54 | ❌ | Няма тип „обектов overhead“. Всички `overhead_costs` са фирмени и се разпределят по обекти по човекодни или часове. `allocation_type` (`CompanyWide`/`PerPerson`/`PerAssetAmortized`) и `frequency` се записват, но compute ги пренебрегва (`overhead.py:516-523`). Виж FG-375 |
+| Компонентите на трудовия коефициент — видими и версионирани, L56-71 | ⏳ / ❌ | Няма трудов коефициент (виж FLOW-023, Проход 32). `PUT /employee-cost-config` (`full_cost.py:87-105`) пази „overhead % на час“ без версия и без AuditEvent. Само показва, не влиза в P&L |
+| Транспортът не е постоянен процент, L73-88 | ❌ | FG-189 (FLOW-012), без промяна |
+| Престой `DOWNTIME` / `DOWNTIME_UNCLASSIFIED` + DQ, recovery claim, L90-117 | ⏳ | На main няма `DOWNTIME` (grep: 0). Wave 2 |
+| Разпределение чрез предварително одобрено правило, L121 | ❌ SUSPECTED | Методът се избира при всяко `allocate`, без Approval и без версия на правилото. Може да е различен от метода на snapshot-а. Методите са само PersonDays и Hours — FG-375 |
+| Пази метод, период, база, източник, версия, сума, остатък, L133-141 | ✅ / ❌ | ✅ метод, период, замразена база (`allocation_basis`), версия (`allocation_version` + `superseded_by`), сума. Проба b: 3 разпределения → версии [1,2,3], 6 реда, P&L 400 (не се удвоява). ❌ остатъкът се пази само в `current_unallocated_amount` на snapshot-а и не се показва никъде — FG-372 |
+| Версия при повторно разпределение (FG-77) | ✅ PROVEN | `_write_allocation_version` (`overhead.py:829-943`): staged → publish → supersede. Нищо не се трие |
+| Без hard delete на използвани записи (FG-77) | ✅ PROVEN | DELETE на категория, разход и актив → 409, ако записът е използван, иначе архив (`overhead.py:259-276`, `:365-382`, `:449-466`). В `overhead.py`, `full_cost.py`, `overhead_lifecycle.py` и `overhead_realtime.py` няма `delete_one`/`delete_many`. Проба b: неизползван → 200 `archived`, остава в базата. Без ключ → 428 |
+| Използван запис не се редактира тихо (FG-87) | ✅ PROVEN | `_guarded_update` (`overhead.py:184-211`). Проба b: PUT на използван разход → 409 |
+| Един разход не се брои два пъти; един активен snapshot на период (FG-86) | ✅ / ❌ | ✅ застъпващ се период → 409, заменен snapshot → 409 (проба b). ❌ същият фирмен разход може да е в 3–4 отделни регистъра с различни четци — FG-371. ❌ амортизацията се брои преди покупката и след края на полезния живот — FG-370 |
+| Неразпределен разход да не изчезва, L205 / аларма L215 | ❌ PROVEN | P1: 1000 → 600 + 200 разпределени, 200 неразпределени. Фирменият резултат (`/org/pnl-attribution`) показва overhead 800. Сводката на финансите показва 0. Разход, добавен след разпределението, не влиза никъде и няма етикет — FG-372 |
+| Промяна на историческия метод без версия, L202 | ✅ | Ново изчисление → нов snapshot и нова версия на разпределението. Старите остават (`include_superseded`) |
+| Фирменият overhead да не се скрива; без скрит коефициент, L9 / L203 | ❌ PROVEN | Fully loaded взима приблизителна оценка от `fixed_expenses` с 30% „компенсация“ от подизпълнителите. Показва я като `overhead_allocation`, без етикет и без предупреждение. Слепи коефициенти 0.3 / 0.6 — FG-373 |
+| Forecast да не се представя като реален разход, L207 | ❌ PROVEN | FG-373 (оценката за текущия месец се показва като разпределени режийни) |
+| План / реално / ангажирано / прогноза по обект и пакет, L156-168 | ⏳ / ⚠️ | Има само `overhead_budget_total` на пакета (`budget_progress.py:83`). Има и ръчно `actual_overhead_cost` (`revenue_expense.py:394-420`), което дава втори марж на пакета — FG-376. Няма прогноза, отклонение и причина |
+| Обектова срещу фирмена печалба (марж преди/след, разпределени фирмени, крайна), L170-180 | ⚠️ | `project_financial_results` има operating / fully loaded, а `get_package_net_financial` има gross/net. Фирменият краен резултат смесва обхвати — FG-278/FG-262 (reference). Неразпределеното липсва — FG-372. Приходът брои и входящи фактури — FG-282 (reference) |
+| Какво вижда Крум (категории, месечен/годишен, по обект/пакет, метод, неразпределени, ефект върху коефициента), L182-195 | ⚠️ | `OverheadPage` показва категории, разходи, активи, snapshot-и, ставка на човекоден/час и разпределение по обекти. Няма неразпределени (в frontend няма `unallocated`), годишен изглед, ефект върху коефициента и минимален коефициент |
+| AI да не променя коефициенти без човек, L206 | — | В модула за режийни няма AI |
+| Комисионна отделно от overhead, L204 | — | Няма комисионна (FLOW-023) |
+| Аларми, L212-222 | ❌ / ⏳ | Единствената аларма е за промяна на realtime ставката на човекоден (`alarm_engine.py:137-150`), която се смята от `fixed_expenses`, не от FLOW-024. Липсват: над бюджета, неразпределени, разпределен два пъти, отрицателен краен резултат на пакет, престой (FLOW-026) |
+| Р14 запис само за финансови роли | ✅ PROVEN | `check_overhead_access` (`overhead.py:42-48`). Проба b: SiteManager POST → 403 |
+| Р20 четене само за финансови роли | ✅ PROVEN | SEC-02 (#71) е в main. Проба b: SiteManager, Technician и Viewer GET → 403, Accountant → 200 |
+| Р29 Idempotency-Key | ✅ / ❌ | ✅ compute, allocate и archive → 428 без ключ (проба b). ❌ създаването на разход, категория и актив и PUT `fixed-expenses` са без ключ. Два еднакви POST-а → два разхода — FG-374 |
+| Canonical AuditEvent | ✅ / ❌ | ✅ `overhead.snapshot.computed`, `overhead.allocation.version_created`, `*.archived`, `*.updated`. ❌ създаването на разход, категория и актив пише само legacy `log_audit` (P5: Δ0 canonical) — FG-374 |
+| Р38 „преизчислява се“ (FG-97/116/127) | ✅ PROVEN | Проба b: P&L 400 по време на преизчисляването (не 0). Един четец — `project_overhead_current` във всички P&L четци |
+| Tenant Guard | ✅ | Всички пътища минават през `TenantData.for_user` / `for_resolved_org`. Индексите на OH-01 са във всяка tenant база (`server.py:431-433`, `onboarding.py:151-152`) |
+| Плащания / ledger | ⚠️ | FLOW-024 не прави плащания. `overhead_transactions` е отделна колекция извън `finance_payments` — FG-35 (reference, open, W0-05). Режийните регистри са повече от един — FG-371 |
+
+Извод: OH-01 затвори всичко, за което беше отворен — без изтриване, версии, един активен snapshot, един четец, Р38, ключ и AuditEvent за compute, allocate и archive. Всичко е доказано на реален Mongo на main. Останалото от FLOW-024 обаче не е изпълнено:
+- фирменият overhead живее в няколко регистъра с различни четци — проектите четат M9, а фирменият резултат чете M5;
+- неразпределеното изчезва;
+- амортизацията се брои преди покупката и безкрайно;
+- fully loaded показва оценка с невидим 30% коефициент като реално разпределение;
+- разходите се създават без ключ, без canonical AuditEvent, с отрицателна сума и със смесена валута;
+- няма обектов overhead, одобрено правило за разпределение, престой, план/прогноза и аларми (Wave 2).
+
+Следващ FLOW в бавния преглед: FLOW-026 (аларми за риск / загуба / кеш — FLOW-024 L212-222 подава аларми към него; след него FLOW-025).
+
+---
+
+### Предишни FG по FLOW-024
+
+- **FG-77** (режийни: изтриване и презаписване без версия) → **resolved (main `ea57121`, проход 33, PROVEN)**.
+  - Код: `overhead.py:259-276`, `:365-382` и `:449-466` архивират или връщат 409. В 4-те файла на режийните няма `delete_one`/`delete_many`.
+  - Проба b (real Mongo, enforce):
+    - неизползван разход → 200 `archived:true, deleted:false`, остава в базата със `status=archived`;
+    - без ключ → 428;
+    - 3 разпределения → версии [1,2,3] (6 реда, нищо не е изтрито), P&L 400 (не се удвоява).
+  - Тестовете на OH-01: 117 passed на main.
+- **FG-86** (два snapshot-а за един период се разпределят двойно) → **resolved, потвърдено на main (проход 33, PROVEN)**: разпределение на заменен snapshot → 409 `SNAPSHOT_SUPERSEDED`; застъпващ се период → 409 `PERIOD_OVERLAP`; P&L 400.
+- **FG-87** (тиха промяна на използван разход) → **resolved, потвърдено на main (PROVEN)**: PUT `amount=99999` на използван разход → 409.
+- **FG-88** (compute без Idempotency-Key) → **resolved, потвърдено на main (PROVEN)**: без ключ → 428.
+- **FG-89** (втори път `full_cost.py` → `project_overhead_alloc`) → **resolved, потвърдено на main (четене)**. `full_cost.py:211-235` вече е read-only проекция на `project_overhead_current`. Всички четци ползват един helper. Отделен проблем е, че `full_cost.py:112-204` още пише ръчни „snapshot“ суми в същата колекция → FG-371.
+- **FG-97** (P&L пада на 0 при преизчисляване) → **resolved по Р38, потвърдено на main (PROVEN)**: P&L 400 между новото изчисление и разпределението.
+- **FG-98** (tenant базите без индексите на OH-01) → **resolved, потвърдено на main (четене)**: `server.py:431-433` (всички бази от регистъра) и `onboarding.py:151-152`.
+- **FG-116** (липсва етикетът „преизчислява се“) → **resolved, потвърдено на main (четене)**: `recalculating_fields` е в `full_cost.py:233`, `:299`, `revenue_snapshot.py:233`, `project_pnl.py:169` и `project_financial_results.py:257`.
+- **FG-127** (P&L 323.25 срещу печалба 823.25) → **resolved, потвърдено на main (четене)**. Един helper `project_overhead_current` (`overhead_lifecycle.py:389-412`) в `project_pnl.py:117` и `project_financial_results.py:219`. Изключение: когато няма разпределение, `project_financial_results` минава към друга оценка → FG-373.
+- **FG-189** (транспортът е фиксиран процент) → **open, без промяна** (FLOW-012 / FLOW-023).
+- Reference, без нов запис:
+  - **FG-35** (`overhead_transactions` извън `finance_payments`) — open, W0-05;
+  - **FG-282** (приходът на обекта брои Received фактури) — open. В `revenue_expense.py:508-515` Received фактурите са и fallback за подизпълнителския разход;
+  - **FG-278 / FG-262** (обхватът на фирмения резултат) — open. Свързано с FG-372: неразпределеният фирмен overhead не влиза в нито един фирмен резултат.
