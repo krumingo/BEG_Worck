@@ -57,8 +57,8 @@
         "active": "activated",
         "scriptURL": "http://localhost:4173/service-worker.js",
         "version": {
-          "build_sha": "01f90296fcf693d43f82e789774b24b6a938cbfc",
-          "cache": "bw-shell-01f90296fcf6-b84f0bdb"
+          "build_sha": "349622aba78527c9b7cb8954a6d410fab350f2d8",
+          "cache": "bw-shell-349622aba785-c40d5ef9"
         }
       }
     },
@@ -66,8 +66,8 @@
       "name": "SW version = RC-01 build identity",
       "ok": true,
       "detail": {
-        "build_sha": "01f90296fcf693d43f82e789774b24b6a938cbfc",
-        "cache": "bw-shell-01f90296fcf6-b84f0bdb"
+        "build_sha": "349622aba78527c9b7cb8954a6d410fab350f2d8",
+        "cache": "bw-shell-349622aba785-c40d5ef9"
       }
     },
     {
@@ -83,7 +83,7 @@
       "name": "Cache Storage: only the app-shell cache exists",
       "ok": true,
       "detail": [
-        "bw-shell-01f90296fcf6-b84f0bdb"
+        "bw-shell-349622aba785-c40d5ef9"
       ]
     },
     {
@@ -138,7 +138,7 @@
       "name": "logout: only the app-shell cache remains",
       "ok": true,
       "detail": [
-        "bw-shell-01f90296fcf6-b84f0bdb"
+        "bw-shell-349622aba785-c40d5ef9"
       ]
     },
     {
@@ -153,7 +153,7 @@
       "name": "tenant switch: only the app-shell cache remains",
       "ok": true,
       "detail": [
-        "bw-shell-01f90296fcf6-b84f0bdb"
+        "bw-shell-349622aba785-c40d5ef9"
       ]
     },
     {
@@ -187,14 +187,14 @@
   ],
   "cache_snapshots": {
     "after_login_online": {
-      "bw-shell-01f90296fcf6-b84f0bdb": [
+      "bw-shell-349622aba785-c40d5ef9": [
         "/index.html",
         "/static/css/main.32922fdb.css",
         "/manifest.webmanifest",
         "/icons/icon.svg",
+        "/static/js/main.5dbff3d0.js",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
-        "/static/js/main.2511192b.js",
         "/icons/icon-maskable-192.png",
         "/icons/icon-maskable-512.png",
         "/icons/apple-touch-icon.png",
@@ -202,14 +202,14 @@
       ]
     },
     "after_logout": {
-      "bw-shell-01f90296fcf6-b84f0bdb": [
+      "bw-shell-349622aba785-c40d5ef9": [
         "/index.html",
         "/static/css/main.32922fdb.css",
         "/manifest.webmanifest",
         "/icons/icon.svg",
+        "/static/js/main.5dbff3d0.js",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
-        "/static/js/main.2511192b.js",
         "/icons/icon-maskable-192.png",
         "/icons/icon-maskable-512.png",
         "/icons/apple-touch-icon.png",
@@ -217,12 +217,12 @@
       ]
     },
     "phone_offline": {
-      "bw-shell-01f90296fcf6-b84f0bdb": [
+      "bw-shell-349622aba785-c40d5ef9": [
         "/index.html",
         "/static/css/main.32922fdb.css",
         "/manifest.webmanifest",
         "/icons/icon.svg",
-        "/static/js/main.2511192b.js",
+        "/static/js/main.5dbff3d0.js",
         "/icons/icon-192.png",
         "/icons/icon-512.png",
         "/icons/icon-maskable-192.png",
@@ -291,8 +291,8 @@
     "active": "activated",
     "scriptURL": "http://localhost:4173/service-worker.js",
     "version": {
-      "build_sha": "01f90296fcf693d43f82e789774b24b6a938cbfc",
-      "cache": "bw-shell-01f90296fcf6-b84f0bdb"
+      "build_sha": "349622aba78527c9b7cb8954a6d410fab350f2d8",
+      "cache": "bw-shell-349622aba785-c40d5ef9"
     }
   },
   "installability_errors": [],
@@ -303,7 +303,7 @@
     ],
     "session": [],
     "caches": [
-      "bw-shell-01f90296fcf6-b84f0bdb"
+      "bw-shell-349622aba785-c40d5ef9"
     ]
   },
   "after_tenant_switch": {
@@ -315,7 +315,7 @@
     ],
     "session": [],
     "caches": [
-      "bw-shell-01f90296fcf6-b84f0bdb"
+      "bw-shell-349622aba785-c40d5ef9"
     ]
   },
   "summary": {

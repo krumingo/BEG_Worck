@@ -1,0 +1,51 @@
+{
+  "expect": "off",
+  "checks": [
+    {
+      "name": "no key: window.posthog absent and no analytics script",
+      "ok": true,
+      "detail": {
+        "loaded": false,
+        "scriptTag": false
+      }
+    },
+    {
+      "name": "no key: no request to any PostHog host",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "review_page": {
+    "posthog": false,
+    "script": false
+  },
+  "reset_page": {
+    "posthog": false,
+    "script": false
+  },
+  "referrer_seen_by_page": "http://localhost:4173/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+  "client_state": {
+    "loaded": false,
+    "scriptTag": false
+  },
+  "requests": [],
+  "events": [],
+  "external_requests": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 0
+  }
+}

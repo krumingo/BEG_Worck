@@ -121,3 +121,32 @@ node e2e/analytics-check.js http://localhost:4174 out.json on
 **Отворена точка за Крум:** вписаният ключ е махнат. За да продължи анонимната статистика, при
 production build трябва да се подаде `REACT_APP_POSTHOG_KEY` (и по желание `REACT_APP_POSTHOG_HOST`).
 Без него статистиката е изключена.
+
+## FG-470 — токенът на клиентския линк за оферта изтичаше към PostHog (поправено)
+Находка (FLOW Guard, PROVEN): всеки `$pageview` пращаше `$current_url` и `$pathname` =
+`/offers/review/<token>`. Този токен е bearer достъп до оферта с цени и с приемане или отказ.
+Това нарушава R68.
+
+Промяна (commit `349622a`):
+- На маршрути с токен (`/offers/review/*`, `/reset-password`) аналитиката **не се зарежда**.
+  Събитие от такъв път се изхвърля в `before_send`, включително след SPA навигация.
+- `$current_url` и `$pathname` стават **шаблон на маршрута** (`/projects/:projectId`);
+  непознат път става `/:unknown`.
+  - `$referrer`, `$initial_*` и всяко друго URL свойство остават извън allow-list-а.
+  - jest тест следи всеки `<Route path>` в `App.js` да има шаблон, за да не изтече нов маршрут
+    с id или токен.
+- При logout `clearTenantLocalData` изтрива и бисквитките `ph_*`.
+
+| | Резултат |
+|---|---|
+| jest на кода от `d59bcca` | 15 ✕ (`fg470/jest-red-d59bcca.log`) |
+| jest на `349622a` | 26 suites / 246 tests pass (`fg470/jest-green.log`) |
+| Playwright, тестов ключ, build на `d59bcca` | 9 PASS / **6 FAIL** — токенът и id на обекта са в заявките (`fg470/red-d59bcca.*`) |
+| Playwright, тестов ключ, build на `349622a` | **15/15** (`fg470/green-on.*`) |
+| Playwright, без ключ | 2/2 · `run.js` 35/35 |
+
+Сценарии в зелената проверка:
+- Клиентът отваря линка за преглед на офертата → няма PostHog.
+- Отваря се линк за смяна на парола → няма PostHog.
+- Влизане в приложението с referrer от линка → токенът не е в нито една заявка.
+- SPA преход към линка или към `/projects/<id>` → изпращат се само шаблони.
