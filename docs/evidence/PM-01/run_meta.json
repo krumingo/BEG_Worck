@@ -25,8 +25,8 @@
     "shadow",
     "enforce"
   ],
-  "routes": 774,
-  "cells": 18576,
+  "routes": 776,
+  "cells": 18624,
   "caller_tenant": "A (ST-01 synthetic)",
   "path_values": {
     "project_id": "<tenant A project_id>",
@@ -34,7 +34,7 @@
     "user_id": "<tenant A user_id>",
     "org_id": "<tenant A org_id>"
   },
-  "seconds": 199.8,
+  "seconds": 210.3,
   "slow_calls": [],
   "mongo": "local replica set (oplog)",
   "outbound_http": "closed local port"

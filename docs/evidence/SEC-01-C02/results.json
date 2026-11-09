@@ -150,7 +150,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.4,
+ "seconds": 31.2,
  "rows": [
   {
    "mode": "off",
@@ -701,6 +701,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -720,6 +721,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -769,6 +771,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -2401,14 +2404,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2420,14 +2419,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2439,14 +2434,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2458,14 +2449,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2477,14 +2464,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2541,14 +2524,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2560,14 +2539,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -2609,14 +2584,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -3192,6 +3163,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -3211,6 +3183,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -3260,6 +3233,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -4892,14 +4866,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4911,14 +4881,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4930,14 +4896,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4949,14 +4911,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -4968,14 +4926,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -5032,14 +4986,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -5051,14 +5001,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -5100,14 +5046,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -6379,6 +6321,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -6398,6 +6341,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -6447,6 +6391,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -8079,14 +8024,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8098,14 +8039,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8117,14 +8054,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8136,14 +8069,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8155,14 +8084,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8219,14 +8144,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8238,14 +8159,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8287,14 +8204,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -8870,6 +8783,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -8889,6 +8803,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -8938,6 +8853,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -10570,14 +10486,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10589,14 +10501,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10608,14 +10516,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10627,14 +10531,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10646,14 +10546,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10710,14 +10606,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10729,14 +10621,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -10778,14 +10666,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -12097,6 +11981,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -12116,6 +12001,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -12169,6 +12055,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -13919,14 +13806,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13938,14 +13821,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13957,14 +13836,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13976,14 +13851,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -13995,14 +13866,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -14065,14 +13932,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -14084,14 +13947,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -14137,14 +13996,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -14766,6 +14621,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -14785,6 +14641,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -14838,6 +14695,7 @@
    "status": 200,
    "error_code": null,
    "written": [
+    "op.audit_events",
     "op.supplier_invoices"
    ],
    "written_orgs": [
@@ -16588,14 +16446,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16607,14 +16461,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16626,14 +16476,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16645,14 +16491,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16664,14 +16506,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16734,14 +16572,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16753,14 +16587,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {
@@ -16806,14 +16636,10 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "error_code": null,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ],
+   "status": 422,
+   "error_code": "MASTER_IDENTITY_MISSING",
+   "written": [],
+   "written_orgs": [],
    "deleted": []
   },
   {

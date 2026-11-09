@@ -1,0 +1,7 @@
+      1 34 failed, 100 passed in 30.95s
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a2_pending_dq_alarm_then_allocation_resolves_and_payment_passes
+     12 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_a3_deadline_per_tenant_and_escalation_to_owner
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_fg200_ui_invoice_with_one_header_project_is_stamped_and_payable
+      6 FAILED tests/test_wh_fix_01_a3_r44_allocation.py::test_fg200_ui_invoice_without_destination_is_pending_and_not_payable
+      3 FAILED tests/test_wh_fix_01_post_55.py::test_fg193_scanner_catches_indirect_handles
+      1 FAILED tests/test_wh_fix_01_post_55.py::test_fg202_planned_rows_join_canonical_quantities_by_item_id

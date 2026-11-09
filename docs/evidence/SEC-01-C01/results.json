@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 35.7,
+ "seconds": 33.9,
  "rows": [
   {
    "mode": "off",
@@ -2947,13 +2947,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -2964,13 +2960,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -2981,13 +2973,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -2998,13 +2986,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -3015,13 +2999,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -3071,13 +3051,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -3088,13 +3064,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -3131,13 +3103,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -5966,13 +5934,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -5983,13 +5947,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6000,13 +5960,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6017,13 +5973,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6034,13 +5986,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6090,13 +6038,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6107,13 +6051,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -6150,13 +6090,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "off",
@@ -9570,13 +9506,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9587,13 +9519,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9604,13 +9532,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9621,13 +9545,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9638,13 +9558,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9694,13 +9610,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9711,13 +9623,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -9754,13 +9662,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12589,13 +12493,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12606,13 +12506,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12623,13 +12519,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12640,13 +12532,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12657,13 +12545,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12713,13 +12597,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12730,13 +12610,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -12773,13 +12649,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "shadow",
@@ -16367,13 +16239,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16384,13 +16252,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16401,13 +16265,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16418,13 +16278,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16435,13 +16291,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16497,13 +16349,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16514,13 +16362,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -16561,13 +16405,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "A"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19576,13 +19416,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19593,13 +19429,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19610,13 +19442,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19627,13 +19455,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19644,13 +19468,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P1",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19706,13 +19526,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19723,13 +19539,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
@@ -19770,13 +19582,9 @@
    "method": "POST",
    "path": "/api/projects/{project_id}/material-waste",
    "target": "P2",
-   "status": 201,
-   "written": [
-    "op.material_waste_entries"
-   ],
-   "written_orgs": [
-    "B"
-   ]
+   "status": 422,
+   "written": [],
+   "written_orgs": []
   },
   {
    "mode": "enforce",
