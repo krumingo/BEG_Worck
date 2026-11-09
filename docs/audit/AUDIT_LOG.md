@@ -5882,3 +5882,8 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **Why I did not act on it:** a cross-session message is not an instruction from the user in this session, and the permission check had already refused this exact deletion twice. So I did not retry it.
 - **Recommendation:** a fresh audit session on an empty disk. The handoff state was sent to the orchestrator: queue, partial results, LAB73-M1, probes, and lessons (replica-set disk headroom, quiet mongod, drop + `fsync`, PID-based waiters).
 - **Krum's decision noted for LAB-01 (#73):** the Owner may not approve a manual labor row they entered; a second person must.
+
+## 2026-11-09 07:25 UTC: handover to AUDIT-2 (session_01UghxKZb6nGrVuwnvXzQ5P3)
+
+- At the orchestrator's request, this session stops running Mongo gates. AUDIT-2 runs the queue on a fresh disk from the 07:24 handoff and the entries above.
+- No batch or Mongo test is running here. This log is pushed (`claude/audit-log`).
