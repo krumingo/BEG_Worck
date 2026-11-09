@@ -4,7 +4,8 @@
 // * No autocapture: no clicks, no element text, no input values, no heatmaps.
 // * Only two events may leave the app: "$pageview" and "app_error". Every other event
 //   is dropped in before_send. Their properties are reduced to an allow-list, the URL
-//   loses its query string and hash, and an error carries only its type (Error.name) —
+//   and pathname become the route TEMPLATE (no ids or tokens, no query, no hash — FG-470),
+//   nothing is loaded or sent on token routes (/offers/review/*, /reset-password), and an error carries only its type (Error.name) —
 //   never its message, which could hold field content (ЕГН, IBAN, amounts, names).
 // * No user is identified (person_profiles: "identified_only" and identify is never called).
 // * Without REACT_APP_POSTHOG_KEY nothing is loaded at all.
@@ -13,6 +14,51 @@
 const DEFAULT_HOST = "https://us.i.posthog.com";
 
 export const ALLOWED_EVENTS = ["$pageview", "app_error"];
+
+// FG-470: public routes whose URL carries a credential (the client's offer magic link,
+// the password-reset token). Analytics is never loaded there and any event from such a
+// path is dropped.
+export const NO_ANALYTICS_ROUTES = [/^\/offers\/review(\/|$)/, /^\/reset-password(\/|$)/];
+
+export function isNoAnalyticsPath(pathname) {
+  return NO_ANALYTICS_ROUTES.some((re) => re.test(pathname || ""));
+}
+
+// FG-470: only route TEMPLATES leave the app, never ids or tokens from the path.
+// Must list every <Route path> in App.js (guarded by analytics.test.js).
+export const ROUTE_TEMPLATES = [
+  "/", "/login", "/signup", "/forgot-password", "/reset-password", "/plans", "/billing", "/billing/success", "/billing/cancel",
+  "/offers/review/:reviewToken", "/projects", "/projects/:projectId", "/projects/:projectId/financial",
+  "/projects/:projectId/novo-smr", "/projects/:projectId/operations", "/projects/:projectId/progress",
+  "/projects/:projectId/smr-analysis/:analysisId", "/sites", "/sites/:siteId", "/my-day", "/attendance-history",
+  "/my-payslips", "/tech", "/tech/tools", "/tech/my-money", "/s/:qrId", "/notifications", "/site-attendance",
+  "/work-reports/new", "/work-reports/:reportId", "/review-reports", "/reports", "/reports/finance-details", "/reminders",
+  "/offers", "/offers/new", "/offers/:offerId", "/historical-offers", "/activity-catalog", "/employees",
+  "/employees/:userId", "/brigades", "/advances", "/pay-runs", "/finance", "/finance/accounts", "/finance/analysis",
+  "/finance/invoices", "/finance/invoices/new", "/finance/invoices/:invoiceId", "/finance/invoices/:invoiceId/lines",
+  "/finance/payments", "/finance/payments/new", "/overhead", "/overhead/snapshots/:snapshotId", "/data/warehouses",
+  "/data/counterparties", "/data/items", "/data/clients", "/data/prices", "/data/turnover", "/data/master-data",
+  "/assets/qr", "/assets/items", "/assets/units", "/assets/units/:unitId", "/assets/batch-intake",
+  "/assets/intake-review", "/warehouse/canonical", "/sales", "/clients/:clientId", "/daily-logs", "/change-orders",
+  "/ai-calibration", "/procurement", "/inventory", "/missing-smr", "/smr-analyses", "/contract-payments",
+  "/worker-calendar", "/alarms", "/all-reports", "/ocr-invoices", "/pricing", "/users", "/settings", "/modules",
+  "/mobile-settings", "/audit-log", "/platform", "/platform/login", "/platform/logout", "/platform/billing",
+  "/platform/modules", "/platform/audit-log", "/platform/mobile-settings",
+];
+const TEMPLATE_SEGMENTS = ROUTE_TEMPLATES.map((t) => t.split("/").filter(Boolean));
+
+export function templatePath(pathname) {
+  const segs = String(pathname || "/").split("/").filter(Boolean);
+  // Static routes win over parameter routes (/offers/new before /offers/:offerId).
+  let best = null;
+  for (const tpl of TEMPLATE_SEGMENTS) {
+    if (tpl.length !== segs.length) continue;
+    if (!tpl.every((t, i) => t.startsWith(":") || t === segs[i])) continue;
+    const params = tpl.filter((t) => t.startsWith(":")).length;
+    if (!best || params < best.params) best = { tpl, params };
+  }
+  return best ? `/${best.tpl.join("/")}` : "/:unknown";
+}
 
 // Properties kept on an allowed event. Everything else is removed.
 const ALLOWED_PROPS = new Set([
@@ -50,23 +96,35 @@ export function analyticsOptions({ host = DEFAULT_HOST } = {}) {
   };
 }
 
-function stripUrl(u) {
-  if (typeof u !== "string") return undefined;
+function originOf(u) {
+  if (typeof u !== "string") return null;
   try {
-    const url = new URL(u);
-    return `${url.origin}${url.pathname}`;
+    return new URL(u).origin;
   } catch {
-    return undefined;
+    return null;
   }
+}
+
+function pathOf(u) {
+  try { return new URL(u).pathname; } catch { return null; }
 }
 
 export function sanitizeEvent(event) {
   if (!event || !ALLOWED_EVENTS.includes(event.event)) return null;
+  const raw = event.properties || {};
+  const rawPath = raw.$pathname || pathOf(raw.$current_url) || "";
+  // FG-470: never from a token route (checked on both the pathname and the full URL).
+  if (isNoAnalyticsPath(rawPath) || isNoAnalyticsPath(pathOf(raw.$current_url))) return null;
   const props = {};
-  Object.entries(event.properties || {}).forEach(([k, v]) => {
+  Object.entries(raw).forEach(([k, v]) => {
     if (ALLOWED_PROPS.has(k)) props[k] = v;
   });
-  if (props.$current_url) props.$current_url = stripUrl(props.$current_url);
+  const tpl = templatePath(rawPath);
+  if (props.$current_url) {
+    const origin = originOf(props.$current_url);
+    props.$current_url = origin ? `${origin}${tpl}` : undefined;
+  }
+  if (props.$pathname) props.$pathname = tpl;
   if (event.event === "app_error") {
     props.error_kind = /^[A-Za-z]{1,40}$/.test(props.error_kind || "") ? props.error_kind : "Error";
   }
@@ -109,6 +167,8 @@ export function initAnalytics({
   doc = typeof document !== "undefined" ? document : undefined,
 } = {}) {
   if (!key || !win || !doc) return null; // no key → nothing loads
+  // FG-470: a client opening an offer link or a reset link never loads analytics.
+  if (isNoAnalyticsPath(win.location && win.location.pathname)) return null;
   const options = analyticsOptions({ host });
   const ph = installSnippet(win, doc, host);
   ph.init(key, options);

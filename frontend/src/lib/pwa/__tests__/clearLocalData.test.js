@@ -77,3 +77,12 @@ test("no tenant id: no-op", async () => {
 test("works without Cache Storage (old browser / jsdom)", async () => {
   await expect(clearTenantLocalData({ cacheStorage: undefined })).resolves.toMatchObject({ deletedCaches: [] });
 });
+
+test("logout expires the analytics cookies (ph_*) and leaves others", async () => {
+  document.cookie = "ph_phc_test_posthog=%7B%22distinct_id%22%3A%22x%22%7D; path=/";
+  document.cookie = "other=keep; path=/";
+  const res = await clearTenantLocalData({ cacheStorage: undefined });
+  expect(document.cookie).not.toMatch(/ph_/);
+  expect(document.cookie).toMatch(/other=keep/);
+  expect(res.removed).toContain("cookie:ph_phc_test_posthog");
+});

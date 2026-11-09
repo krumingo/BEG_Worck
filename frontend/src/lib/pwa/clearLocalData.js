@@ -4,7 +4,7 @@
 // * Cache Storage: every cache except the app shell (static build files only) is
 //   deleted. PWA-01 itself never caches /api, so normally there is nothing else; this
 //   also removes anything an older build or a future step might have left.
-// * sessionStorage: cleared completely.
+// * sessionStorage: cleared completely; analytics cookies (ph_*) are expired.
 // * localStorage: an ALLOW-LIST is kept (device preferences + the separate platform
 //   admin session); everything else, including keys added later, is removed.
 import { SHELL_PREFIX } from "./constants";
@@ -27,6 +27,7 @@ export async function clearTenantLocalData({
   session = typeof sessionStorage !== "undefined" ? sessionStorage : undefined,
   cacheStorage = typeof caches !== "undefined" ? caches : undefined,
   win = typeof window !== "undefined" ? window : undefined,
+  doc = typeof document !== "undefined" ? document : undefined,
 } = {}) {
   const keep = new Set([...DEVICE_KEYS, ...(keepSession ? [...SESSION_KEYS, TENANT_MARKER_KEY] : [])]);
   const removed = [];
@@ -42,6 +43,20 @@ export async function clearTenantLocalData({
   } catch { /* storage blocked: nothing stored either */ }
   try {
     if (session) session.clear();
+  } catch { /* ignore */ }
+  // FG-470/R68: analytics cookies (ph_*) go too — they hold the anonymous id.
+  try {
+    if (doc && typeof doc.cookie === "string") {
+      const host = (win && win.location && win.location.hostname) || "";
+      const parts = host.split(".");
+      const domains = ["", host, ...parts.map((_, i) => `.${parts.slice(i).join(".")}`).filter((d) => d.split(".").length > 2)];
+      doc.cookie.split(";").map((c) => c.split("=")[0].trim()).filter((n) => n.startsWith("ph_")).forEach((n) => {
+        domains.forEach((d) => {
+          doc.cookie = `${n}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/${d ? `; domain=${d}` : ""}`;
+        });
+        removed.push(`cookie:${n}`);
+      });
+    }
   } catch { /* ignore */ }
   // In-memory state (e.g. the active project) listens for this.
   try {

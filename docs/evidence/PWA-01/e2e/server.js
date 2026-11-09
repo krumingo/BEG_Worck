@@ -71,6 +71,8 @@ function api(req, res, url) {
     return;
   }
   if (p === "/version") return json(res, 200, { build_sha: "unknown" });
+  // Public client offer link (FG-470 check): an expired link, answered without login.
+  if (p.startsWith("/offers/review/")) return json(res, 404, { detail: "Линкът е изтекъл" });
   if (!org || !TENANTS[org]) return json(res, 401, { detail: "Not authenticated" });
   if (p === "/auth/me") return json(res, 200, userFor(org));
   if (p === "/organization") return json(res, 200, TENANTS[org]);

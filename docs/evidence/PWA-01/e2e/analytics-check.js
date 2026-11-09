@@ -9,7 +9,10 @@ const fs = require("fs");
 const BASE = process.argv[2];
 const OUT = process.argv[3];
 const EXPECT = process.argv[4] || "off";
-const SECRETS = ["BG80BNBG96611020345678", "7501010010", "Иван", "Петров", "1234.56", "12345,67", "Test-Passw0rd"];
+const REVIEW_TOKEN = "rvTOKEN_9f3Kq2xY7pL0aB4cD8eF";
+const RESET_TOKEN = "rsTOKEN_Zz81Qw";
+const PROJECT_ID = "p-SECRET-4711";
+const SECRETS = ["BG80BNBG96611020345678", "7501010010", "Иван", "Петров", "1234.56", "12345,67", "Test-Passw0rd", REVIEW_TOKEN, RESET_TOKEN, PROJECT_ID];
 const res = { expect: EXPECT, checks: [] };
 let failed = 0;
 const check = (name, ok, detail) => {
@@ -36,6 +39,22 @@ const check = (name, ok, detail) => {
   });
   const external = [];
   await ctx.route((u) => !u.href.startsWith(BASE), (r) => { external.push(r.request().url()); r.abort(); });
+  // ── FG-470: the client opens the offer magic link / a reset link ──────────────────
+  const review = await ctx.newPage();
+  await review.goto(`${BASE}/offers/review/${REVIEW_TOKEN}`);
+  await review.waitForTimeout(2500);
+  res.review_page = await review.evaluate(() => ({ posthog: !!window.posthog, script: !!document.querySelector('script[data-analytics="posthog"]') }));
+  await review.goto(`${BASE}/reset-password?token=${RESET_TOKEN}`);
+  await review.waitForTimeout(1500);
+  res.reset_page = await review.evaluate(() => ({ posthog: !!window.posthog, script: !!document.querySelector('script[data-analytics="posthog"]') }));
+  await review.close();
+  // Arriving at the app FROM the review link (referrer carries the token).
+  const fromLink = await ctx.newPage();
+  await fromLink.goto(`${BASE}/login`, { referer: `${BASE}/offers/review/${REVIEW_TOKEN}` });
+  await fromLink.waitForTimeout(2500);
+  res.referrer_seen_by_page = await fromLink.evaluate(() => document.referrer);
+  await fromLink.close();
+
   const page = await ctx.newPage();
   await page.goto(`${BASE}/login?iban=BG80BNBG96611020345678#egn=7501010010`);
   // Field content that must never leave the app.
@@ -49,6 +68,19 @@ const check = (name, ok, detail) => {
   await page.getByTestId("dashboard-layout").waitFor();
   await page.getByText("Иван Петров").first().click().catch(() => {});
   await page.evaluate(() => setTimeout(() => { throw new TypeError("IBAN BG80BNBG96611020345678 ЕГН 7501010010"); }, 0));
+  // An id in the path: a page view on a project URL (the Technician test user would be
+  // redirected on a full load, so the SPA route is entered the way the router does it).
+  await page.evaluate((id) => {
+    window.history.pushState({}, "", `/projects/${id}`);
+    if (window.posthog && window.posthog.capture) window.posthog.capture("$pageview");
+    window.history.pushState({}, "", "/tech");
+  }, PROJECT_ID);
+  // SPA navigation onto the review route after analytics is loaded: a page view there is dropped.
+  await page.evaluate((t) => {
+    window.history.pushState({}, "", `/offers/review/${t}`);
+    if (window.posthog && window.posthog.capture) window.posthog.capture("$pageview");
+    window.history.pushState({}, "", "/tech");
+  }, REVIEW_TOKEN);
   await page.waitForTimeout(4000);
   const state = await page.evaluate(() => {
     const ph = window.posthog;
@@ -96,6 +128,12 @@ const check = (name, ok, detail) => {
     check("events: no $snapshot / $autocapture / $exception", !events.some((e) => /\$snapshot|\$autocapture|\$exception|\$rageclick/.test(e.event)));
     const leaked = SECRETS.filter((s) => everything.includes(s));
     check("no field content (ЕГН / IBAN / amounts / names / password) in any request", leaked.length === 0, leaked);
+    check("FG-470: review link page loads no analytics", res.review_page && !res.review_page.posthog && !res.review_page.script, res.review_page);
+    check("FG-470: reset-password page loads no analytics", res.reset_page && !res.reset_page.posthog && !res.reset_page.script, res.reset_page);
+    check("FG-470: review token in no request (page, referrer, SPA, decide, cookies)", !everything.includes(REVIEW_TOKEN), res.referrer_seen_by_page ? "referrer was set" : "referrer not set");
+    check("FG-470: reset token / project id in no request", !everything.includes(RESET_TOKEN) && !everything.includes(PROJECT_ID));
+    const paths = events.map((e) => e.properties && e.properties.$pathname).filter(Boolean);
+    check("FG-470: only route templates are sent", paths.length > 0 && paths.every((p) => /^\/[a-z\-/:A-Za-z]*$/.test(p)) && paths.includes("/projects/:projectId"), [...new Set(paths)]);
     const urls = events.map((e) => e.properties && e.properties.$current_url).filter(Boolean);
     check("page URLs carry no query string or hash", urls.every((u) => !/[?#]/.test(u)), urls);
     const errs = events.filter((e) => e.event === "app_error");
