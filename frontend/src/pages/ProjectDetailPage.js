@@ -976,7 +976,7 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
                 <div className="grid grid-cols-3 gap-1 text-[10px]">
                   <div><span className="text-gray-500">Часове: </span><span className="text-white font-mono">{cd.work?.hours || cd.team?.count || 0}</span></div>
                   <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.paid || 0)}</span></div>
-                  <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.paid_labor?.gross_labor || 0)}</span></div>
+                  <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.work?.labor_cost || 0)}</span></div>{/* FG-505 (R62): approved labor */}
                 </div>
               )}
             </button>
@@ -1028,7 +1028,7 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               <BarChart data={childrenData.map(c => ({
                 name: c.code?.split("-").pop() || c.name,
                 Приходи: c.invoices?.paid || 0,
-                Разходи: (c.paid_labor?.gross_labor || 0) + (c.materials?.ex_vat || 0),
+                Разходи: (c.work?.labor_cost || 0) + (c.materials?.ex_vat || 0),   // FG-505 (R62): approved labor
               }))} barGap={2}>
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#666" }} axisLine={false} tickLine={false} />

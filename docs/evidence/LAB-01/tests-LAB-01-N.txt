@@ -1,4 +1,4 @@
-# L01N gates (2026-11-09) — head 749ccd6 — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
+# L01N gates (2026-11-09) — head fda314e — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
 ## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness exit=0
   changed cells vs. the branch before the merge:
     changed cells: 0
@@ -16,52 +16,35 @@
     - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
 ## W0-03E-A2B inventory regenerated: scripts/w0_03e_a2b_inventory.py exit=0
 ## PM-01 tests
-6 passed, 10 warnings in 235.66s (0:03:55)
+6 passed, 10 warnings in 199.64s (0:03:19)
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 245 module(s) checked, 0 violation(s)
 ## A1 guard
 W0-03E-A1 tenant access guard: 494 unit(s) checked, 0 violation(s)
 ## LAB suites
-201 passed, 1 warning in 29.47s
+205 passed, 1 warning in 28.22s
 ## SEC-01 (money_write_permissions + c01 + c02 + c03)
-30 passed, 10 warnings in 128.34s (0:02:08)
+30 passed, 10 warnings in 124.52s (0:02:04)
 ## SEC-02 (test_sec_02_finance_read.py)
-31 passed, 10 warnings in 242.64s (0:04:02)
+31 passed, 10 warnings in 219.89s (0:03:39)
 ## PAY-01
-630 passed, 1 warning in 167.89s (0:02:47)
+630 passed, 1 warning in 161.12s (0:02:41)
 ## W0-04 (real)
-74 passed, 1 warning in 15.49s
+74 passed, 1 warning in 15.80s
 ## AUTH-01/02
-122 passed, 10 warnings in 178.52s (0:02:58)
+122 passed, 10 warnings in 175.73s (0:02:55)
 ## R0 tests/test_r0_0*.py (real)
-814 passed, 10 warnings in 172.84s (0:02:52)
+814 passed, 10 warnings in 167.02s (0:02:47)
 ## W0 DB-free (no real Mongo URL)
-15 failed, 1094 passed, 83 skipped, 10 warnings in 95.92s (0:01:35)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 85.81s (0:01:25)
   non-legacy_routes failures: 0
-## frontend (head 749ccd6)
+## frontend (head fda314e)
 Test Suites: 20 passed, 20 total
 Tests:       182 passed, 182 total
-Done in 34.29s.
+Done in 37.32s.
 
-## live server, BEFORE the test update (3 old assertions expected session money in start/end — FG-502 removed it):
-  login token: yes; project: d0aaf534-564f-460d-b2ba-a8d04f501603
-PASSED tests/test_work_sessions.py::test_auto_close_on_new_start
-PASSED tests/test_work_sessions.py::test_my_today
-PASSED tests/test_work_sessions.py::test_summary
-PASSED tests/test_work_sessions.py::test_active_sessions
-PASSED tests/test_work_sessions.py::test_split_session
-PASSED tests/test_work_sessions.py::test_overtime_report
-PASSED tests/test_work_sessions.py::test_update_session
-PASSED tests/test_work_sessions.py::test_end_no_open
-PASSED tests/test_work_sessions.py::test_list_sessions
-FAILED tests/test_work_sessions.py::test_start_session
-FAILED tests/test_work_sessions.py::test_end_session
-FAILED tests/test_work_sessions.py::test_hourly_rate_snapshot
-3 failed, 9 passed in 2.17s
-
-## live server, AFTER the 3 assertions were changed to 'no session money' (tests/test_work_sessions.py, this commit):
-## tests/test_work_sessions.py — LIVE server (uvicorn :8012, head 749ccd6, fresh mongo:7.0 rs0, seeded admin, one project)
-  login token: yes; project: 0a52a3f3-53f2-42eb-9b89-5ddd2c3cd9f7
+## tests/test_work_sessions.py — LIVE server (uvicorn :8012, head fda314e, fresh mongo:7.0 rs0, seeded admin, one project)
+  login token: yes; project: 4e3599eb-3640-47c4-bd03-fa9b833927fd
 PASSED tests/test_work_sessions.py::test_start_session
 PASSED tests/test_work_sessions.py::test_end_session
 PASSED tests/test_work_sessions.py::test_auto_close_on_new_start
@@ -74,4 +57,4 @@ PASSED tests/test_work_sessions.py::test_overtime_report
 PASSED tests/test_work_sessions.py::test_update_session
 PASSED tests/test_work_sessions.py::test_end_no_open
 PASSED tests/test_work_sessions.py::test_list_sessions
-12 passed in 1.69s
+12 passed in 1.59s
