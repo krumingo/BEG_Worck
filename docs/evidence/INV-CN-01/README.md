@@ -98,6 +98,9 @@ Invoices issued meanwhile have status `Issued`, which the previous code does not
 
 ## Overlap with open PRs: "whichever merges second"
 
+**FG-465 shim (#82):** `backend/app/services/invoice_allocation.py` in #84 carries #82's `_dq_event(…, entity_id=)` change and its `sync_credit_note_issue` / `CREDIT_DQ_TYPE` / `CREDIT_DQ_TITLE` block **verbatim**, at the same place (the end of the file). Whichever merges second gets a clean or identical-hunk merge of that file. Keep ONE copy of the block; #82's other change there (`audit_allocation_change(extra=…)`) merges in unchanged. #84 calls the helper only through `invoice_corrections.sync_awaited_credit_issue`.
+
+
 | PR | Overlap | Who resolves it |
 |---|---|---|
 | #82 WH-REV-01 | Both add `expected_credit_notes` to `ownership.py` (keep one entry). | Whichever merges second. |
@@ -229,6 +232,8 @@ Red proofs against cdd3dc8: `r63_fg278_red_on_cdd3dc8.txt`.
 | **#81 on mongomock → real Mongo only (orchestrator decision (d), 09.11)** | `test_fg200_ui_*` (2) and `test_whfix81_06_embedded_lines_…` (1) create a numbered supplier invoice and send it. Those are money writes inside `auth_tx.run_in_transaction`, which has no fallback by design. They now take the `real_backend` fixture: the same bodies and assertions, real MongoDB only. With `W0_03_REAL_MONGO_URL` they **run** (9 cases, 0 skipped). Without it they skip with the reason "requires transactions (auth_tx)". Confirmed (b): on a locked supplier invoice only the destination may change. | WH-FIX-01 with real Mongo: **308 passed, 0 failed, 0 skipped** |
 
 | **INV84-R64-1 (AUDIT-2)** | `rebooking_projects` and `classify_difference_line` now read the line's allocation through `canonical_material_cost.effective_allocations`, which covers `allocations[].ref_id`, `allocations[].refId` and the deprecated single `allocation_type` / `allocation_ref_id`. This is the same reading as the cost source. The rule **fails closed**: a project destination whose project cannot be resolved counts as closed, so it becomes a proposal. | `test_inv84_r64_1_back_to_own_allocation_on_a_closed_project_is_a_proposal` covers the probe's 3 shapes plus "none", in 3 modes. Red: `inv84_r64_1_red_on_052e845.txt` |
+
+| **FG-465 (#82 × #84)** | **ONE `dq_issues` schema:** the one #81 / #82 use (`type`, `title`, `entity_type`/`entity_id`, `status` open → resolved, `owner_role`, `opened_at`/`resolved_at`, one `alarm_events` row per issue, an AuditEvent per transition through `invoice_allocation._dq_event`, deterministic `dq-<type>-<entity>` ids). Our issues use it: `SUPPLIER_TAX_ID_MISSING`, `CREDIT_NOTE_DIFFERENCE`, `ACCEPTED_DIFFERENCE_LINE_UNDETERMINED`, `ACCEPTED_DIFFERENCE_LINE_REVERSED`. The `kind`/`assignee_role`/`closed` shape is gone. **No `dq_task` or `dq_mismatch`** is written on `expected_credit_notes` any more. **The Р47 issue „очаква кредитно известие“ closes through #82's own path:** a registration that fulfils the awaited rows, and an Owner's accept-difference, call `sync_credit_note_issue`, which is #82's function, **inside the registration transaction**. A mismatch opens `CREDIT_NOTE_DIFFERENCE`; a corrected note or the Owner's acceptance resolves it. | `test_r47_registration_releases_the_pr82_cap` (the issue is opened by #82's `sync_credit_note_issue`; after the registration the issue + alarm are resolved, the AuditEvent exists, no old-shape record); `test_incoming_credit_note_matches_…`, `test_r52_d7_…`, `test_fg249_…`. Red: `fg465_red_on_6871bc0_with_pr82_helper.txt` |
 
 Red proofs against 5242cba: `r64_fg416_fg282_red_on_5242cba.txt`.
 

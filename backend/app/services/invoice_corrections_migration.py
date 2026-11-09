@@ -59,7 +59,7 @@ async def plan(database) -> Dict:
                                                "counterparty_foreign_tax_no": 1}):
             key = ic.supplier_key(inv)
             if ic.supplier_tax_id_refusal(inv) is not None and not await tenant.dq_issues.find_one(
-                    {"id": ic.dq_issue_id(org_id, ic.DQ_SUPPLIER_TAX_ID_MISSING, inv["id"])},
+                    {"id": ic.dq_issue_id(ic.DQ_SUPPLIER_TAX_ID_MISSING, inv["id"]), "status": "open"},
                     {"_id": 0, "id": 1}):
                 no_tax_id.append(inv["id"])                       # Р55(1): DQ to the Accountant
             if inv.get("supplier_key") != key:
@@ -104,10 +104,10 @@ async def apply(database, *, actor_id: str) -> Dict:
         for inv_id in t["supplier_tax_id_missing"]:
             # Р55(1) / FG-249: a legacy supplier invoice without ЕИК / tax number → one
             # canonical dq_issues record for the Accountant (idempotent, deterministic id)
-            await ic.open_dq_issue(tenant, kind=ic.DQ_SUPPLIER_TAX_ID_MISSING,
-                                   entity_type="finance.invoice", entity_id=inv_id,
-                                   title="липсва ЕИК / данъчен номер на доставчика",
-                                   assignee_role="accountant", source="inv_cn_01_migrate")
+            await ic.open_dq_issue(tenant, dq_type=ic.DQ_SUPPLIER_TAX_ID_MISSING,
+                                   entity_type="invoice", entity_id=inv_id,
+                                   actor={"id": actor_id},
+                                   details={"source": "inv_cn_01_migrate"})
         for row in t["supplier_keys_to_set"]:
             await tenant.invoices.update_one({"id": row["id"], "direction": "Received"},
                                              {"$set": {"supplier_key": row["supplier_key"]}})

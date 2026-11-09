@@ -194,7 +194,7 @@ async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
             if direction == ic.INCOMING and kind == ic.KIND_CREDIT:
                 rows = await ic.check_expected_link(tenant, invoice_id, link_ids, session=session)
                 link = await ic.match_expected_credit(tenant, invoice_id, totals["gross"], note_id,
-                                                      rows, session=session)
+                                                      rows, session=session, actor=user)
                 row.update({"applied": link["applied"], "expected_link": link})
             await tenant.credit_debit_notes.insert_one(row, session=session)
             if row["applied"]:
@@ -402,7 +402,7 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
             at = ic.now_iso()
             diff_gross = ic.cents(link.get("expected")) - ic.cents(note.get("gross"))
             # Р58 / FG-265: a warehouse-received line → company cost; other → project (FG-251)
-            split = await ic.split_accepted_difference(tenant, note, diff_gross, session=session)
+            split = await ic.split_accepted_difference(tenant, note, diff_gross, session=session, actor=user)
             company_cost = sum((ic.cents(s["net"]) for s in split if s["target"] == ic.COST_TARGET_COMPANY),
                                Decimal(0))
             await tenant.credit_debit_notes.update_one(
@@ -417,9 +417,16 @@ async def accept_difference(note_id: str, body: dict = Body(...), user: dict = D
             await tenant.expected_credit_notes.update_many(
                 {"id": {"$in": rows}, "status": "open"},
                 {"$set": {"status": "fulfilled_with_difference", "credit_note_id": note_id,
-                          "fulfilled_at": at, "dq_task.status": "closed", "dq_task.closed_at": at,
-                          "dq_mismatch.status": "accepted_by_owner", "dq_mismatch.closed_at": at}},
+                          "fulfilled_at": at}},
                 session=session)
+            # FG-465: the mismatch issue resolves (accepted by the Owner); the Р47 issue
+            # „очаква кредитно известие“ (#82) follows the open rows
+            await ic.resolve_dq_issue(tenant, dq_type=ic.DQ_CREDIT_NOTE_DIFFERENCE, entity_id=note_id,
+                                      notes="difference accepted by the Owner",
+                                      resolution={"accepted_by": user["id"], "reason": reason},
+                                      actor=user, session=session)
+            await ic.sync_awaited_credit_issue(tenant, note["original_invoice_id"], actor=user,
+                                               session=session)
             if not await tenant.expected_credit_notes.find_one(
                     {"invoice_id": note["original_invoice_id"], "status": "open"}, {"_id": 0, "id": 1},
                     session=session):
@@ -560,14 +567,19 @@ async def resolve_difference_line(note_id: str, line_id: str, body: dict = Body(
 
 
 async def _close_line_dq(tenant, note: dict, line_id: str, user: dict, at: str, posting: dict, session) -> None:
-    for kind in (ic.DQ_DIFFERENCE_LINE_UNDETERMINED, ic.DQ_DIFFERENCE_LINE_REVERSED):
-        await tenant.dq_issues.update_many(
-            {"kind": kind, "entity_id": {"$regex": "^%s:%s(:|$)" % (re.escape(note["id"]), re.escape(line_id))},
-             "status": "open"},
-            {"$set": {"status": "closed", "closed_at": at, "closed_by": user["id"],
-                      "resolution": {"target": posting["target"], "project_id": posting.get("project_id"),
-                                     "posting_id": posting["id"]}}},
-            session=session)
+    """FG-277 / FG-276: the line's open DQ issues resolve (the #81 / #82 schema)."""
+    resolution = {"target": posting["target"], "project_id": posting.get("project_id"),
+                  "posting_id": posting["id"]}
+    await ic.resolve_dq_issue(tenant, dq_type=ic.DQ_DIFFERENCE_LINE_UNDETERMINED,
+                              entity_id="%s:%s" % (note["id"], line_id), notes="line booked",
+                              resolution=resolution, actor=user, session=session)
+    async for issue in tenant.dq_issues.find(
+            {"type": ic.DQ_DIFFERENCE_LINE_REVERSED, "status": "open",
+             "entity_id": {"$regex": "^%s:%s:" % (re.escape(note["id"]), re.escape(line_id))}},
+            {"_id": 0, "entity_id": 1}, session=session):
+        await ic.resolve_dq_issue(tenant, dq_type=ic.DQ_DIFFERENCE_LINE_REVERSED,
+                                  entity_id=issue["entity_id"], notes="line re-booked",
+                                  resolution=resolution, actor=user, session=session)
 
 
 def _pending_proposal(note: dict, proposal_id: str) -> dict:
@@ -679,10 +691,9 @@ async def reverse_difference(note_id: str, body: dict = Body(...), user: dict = 
             raise ic.conflict(ic.NOT_PENDING, "Няма осчетоводена разлика за сторниране")
         for line in sorted({p["original_line_id"] for p in new}):
             await ic.open_dq_issue(
-                tenant, kind=ic.DQ_DIFFERENCE_LINE_REVERSED, entity_type="finance.credit_note_line",
-                entity_id="%s:%s:%s" % (note["id"], line, new[0]["id"]),
-                title="сторнирана приета разлика: изберете обект или фирма",
-                assignee_role="accountant", source="finance.credit_note.reverse_difference", session=session)
+                tenant, dq_type=ic.DQ_DIFFERENCE_LINE_REVERSED, entity_type="finance.credit_note_line",
+                entity_id="%s:%s:%s" % (note["id"], line, new[0]["id"]), actor=user, session=session,
+                details={"reversal_posting_ids": [p["id"] for p in new if p["original_line_id"] == line]})
         return new, {"reversed_net": ic.money(sum((ic.cents(p["net"]) for p in new), Decimal(0))),
                      "cost_period": at[:7]}, reason, None
 

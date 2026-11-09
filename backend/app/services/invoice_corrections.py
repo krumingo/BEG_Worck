@@ -298,26 +298,93 @@ async def lock_supplier_number(tenant, invoice: dict, number: str, *, session) -
         session=session)
 
 
-# ── FG-249 note: the canonical data-quality issue record ─────────────────────────
-DQ_SUPPLIER_TAX_ID_MISSING = "supplier_tax_id_missing"
+# ── FG-249 / FG-465: ONE canonical data-quality issue schema ─────────────────────────
+# The SAME dq_issues / alarm_events shape as #81 (sync_invoice_issue) and #82
+# (sync_credit_note_issue): ``type``, ``title``, ``entity_type`` / ``entity_id``,
+# ``status`` open → resolved, ``owner_role``, ``opened_at`` / ``resolved_at``, one alarm per
+# issue, an AuditEvent per transition in the caller's transaction; deterministic ids.
+DQ_SUPPLIER_TAX_ID_MISSING = "SUPPLIER_TAX_ID_MISSING"
+DQ_CREDIT_NOTE_DIFFERENCE = "CREDIT_NOTE_DIFFERENCE"
+DQ_DIFFERENCE_LINE_UNDETERMINED = "ACCEPTED_DIFFERENCE_LINE_UNDETERMINED"
+DQ_DIFFERENCE_LINE_REVERSED = "ACCEPTED_DIFFERENCE_LINE_REVERSED"
+DQ_TITLES = {
+    DQ_SUPPLIER_TAX_ID_MISSING: "липсва ЕИК / данъчен номер на доставчика",
+    DQ_CREDIT_NOTE_DIFFERENCE: "разлика в кредитно известие",
+    DQ_DIFFERENCE_LINE_UNDETERMINED: "приета разлика: не може да се определи склад или обект за реда",
+    DQ_DIFFERENCE_LINE_REVERSED: "сторнирана приета разлика: изберете обект или фирма",
+}
 
 
-def dq_issue_id(org_id: str, kind: str, entity_id: str) -> str:
-    return "dq:%s:%s:%s" % (org_id, kind, entity_id)
+def _dq_slug(dq_type: str) -> str:
+    return dq_type.lower().replace("_", "-")
 
 
-async def open_dq_issue(tenant, *, kind: str, entity_type: str, entity_id: str, title: str,
-                        assignee_role: str, source: str, session=None) -> bool:
-    """One OPEN ``dq_issues`` record per (kind, entity) — deterministic id, upsert, so a
-    re-run never duplicates it. Returns True when it was created now."""
+def dq_issue_id(dq_type: str, entity_id: str) -> str:
+    return "dq-%s-%s" % (_dq_slug(dq_type), entity_id)
+
+
+async def open_dq_issue(tenant, *, dq_type: str, entity_type: str, entity_id: str,
+                        details: Optional[dict] = None, actor: Optional[dict] = None,
+                        session=None) -> bool:
+    """Open ONE issue + its alarm per (type, entity) — the #81 / #82 schema. A re-run while
+    it is open changes nothing. Returns True when it was opened now."""
+    from app.services.invoice_allocation import DQ_OWNER_ROLE, _dq_event
+    issue_id, alarm_id = dq_issue_id(dq_type, entity_id), "alarm-%s-%s" % (_dq_slug(dq_type), entity_id)
+    existing = await tenant.dq_issues.find_one({"id": issue_id}, {"_id": 0}, session=session)
+    if existing and existing.get("status") == "open":
+        return False
+    at, title = now_iso(), DQ_TITLES.get(dq_type, dq_type)
+    await tenant.dq_issues.update_one({"id": issue_id}, {"$set": {
+        "id": issue_id, "org_id": tenant.org_id, "type": dq_type, "title": title,
+        "entity_type": entity_type, "entity_id": entity_id, "status": "open",
+        "owner_role": DQ_OWNER_ROLE, "opened_at": at, "resolved_at": None,
+        "details": details or {}, "updated_at": at}}, upsert=True, session=session)
+    await tenant.alarm_events.update_one({"id": alarm_id}, {"$set": {
+        "id": alarm_id, "org_id": tenant.org_id, "rule_id": dq_type, "rule_name": title,
+        "type": "data_quality", "severity": "warning", "status": "active", "triggered_at": at,
+        "message": "%s: %s" % (title, entity_id),
+        "context": {"entity_id": entity_id, "entity_type": entity_type, "dq_issue_id": issue_id,
+                    "details": details or {}},
+        "acknowledged_by": None, "acknowledged_at": None, "resolved_by": None,
+        "resolved_at": None, "resolve_notes": None}}, upsert=True, session=session)
+    await _dq_event(tenant, actor, "dq.%s.opened" % dq_type.lower(), entity_id,
+                    {"status": {"before": (existing or {}).get("status"), "after": "open"},
+                     "owner_role": DQ_OWNER_ROLE, "details": details or {}},
+                    session=session, entity_id=issue_id)
+    return True
+
+
+async def resolve_dq_issue(tenant, *, dq_type: str, entity_id: str, notes: str,
+                           resolution: Optional[dict] = None, actor: Optional[dict] = None,
+                           session=None) -> bool:
+    """Resolve the open issue + alarm (never deleted); AuditEvent. False when none is open."""
+    from app.services.invoice_allocation import _dq_event
+    issue_id, alarm_id = dq_issue_id(dq_type, entity_id), "alarm-%s-%s" % (_dq_slug(dq_type), entity_id)
+    at = now_iso()
     res = await tenant.dq_issues.update_one(
-        {"id": dq_issue_id(tenant.org_id, kind, entity_id)},
-        {"$setOnInsert": {"id": dq_issue_id(tenant.org_id, kind, entity_id), "kind": kind,
-                          "entity_type": entity_type, "entity_id": entity_id, "title": title,
-                          "assignee_role": assignee_role, "status": "open", "source": source,
-                          "created_at": now_iso()}},
-        upsert=True, session=session)
-    return bool(getattr(res, "upserted_id", None))
+        {"id": issue_id, "status": "open"},
+        {"$set": {"status": "resolved", "resolved_at": at, "resolution": resolution or {},
+                  "updated_at": at}}, session=session)
+    if not res.modified_count:
+        return False
+    await tenant.alarm_events.update_one(
+        {"id": alarm_id}, {"$set": {"status": "resolved", "resolved_at": at,
+                                    "resolved_by": (actor or {}).get("id"), "resolve_notes": notes}},
+        session=session)
+    await _dq_event(tenant, actor, "dq.%s.resolved" % dq_type.lower(), entity_id,
+                    {"status": {"before": "open", "after": "resolved"}, "resolution": resolution or {}},
+                    session=session, entity_id=issue_id)
+    return True
+
+
+async def sync_awaited_credit_issue(tenant, invoice_id: str, *, actor: Optional[dict] = None,
+                                    session=None) -> None:
+    """FG-465: the Р47 issue „очаква кредитно известие“ of #82 follows the open
+    expected_credit_notes — resolved when the registration closes the last one. The
+    helper is #82's own ``invoice_allocation.sync_credit_note_issue`` (carried here
+    verbatim until #82 merges — whichever merges second keeps ONE copy)."""
+    from app.services.invoice_allocation import sync_credit_note_issue
+    await sync_credit_note_issue(tenant, invoice_id, actor=actor, session=session)
 
 
 async def number_taken(tenant, number: str, *, session=None, exclude_invoice_id=None) -> bool:
@@ -756,7 +823,7 @@ async def check_expected_link(tenant, invoice_id: str, ids, *, session=None) -> 
 
 
 async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, rows: List[dict], *,
-                                session) -> dict:
+                                session, actor: Optional[dict] = None) -> dict:
     """Р47 + Р49.8 (FG-219, FG-220): the registered supplier credit note is linked by the
     Accountant with the NAMED awaited rows (``expected_credit_notes`` of PR #82).
 
@@ -773,16 +840,19 @@ async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, ro
     if expected - cents(gross) == MATCH_TOLERANCE:
         res = await tenant.expected_credit_notes.update_many(
             {"id": {"$in": ids}, "invoice_id": invoice_id, "status": "open"},
-            {"$set": {"status": "fulfilled", "credit_note_id": note_id, "fulfilled_at": at,
-                      "dq_task.status": "closed", "dq_task.closed_at": at}}, session=session)
+            {"$set": {"status": "fulfilled", "credit_note_id": note_id, "fulfilled_at": at}},
+            session=session)
         if res.modified_count != len(ids):
             raise conflict(EXPECTED_LINK_INVALID, "Очакваното известие вече е покрито")
-        # Р52(2a): a corrected note closes the earlier mismatch; the mismatched note stays
-        # registered (never applied) and is marked superseded by this one.
-        await tenant.expected_credit_notes.update_many(
-            {"id": {"$in": ids}, "dq_mismatch": {"$exists": True}},
-            {"$set": {"dq_mismatch.status": "closed", "dq_mismatch.closed_by_credit_note_id": note_id,
-                      "dq_mismatch.closed_at": at}}, session=session)
+        # Р52(2a): a corrected note resolves the earlier mismatch issue(s); the mismatched
+        # note stays registered (never applied) and is marked superseded by this one.
+        async for old in tenant.credit_debit_notes.find(
+                {"expected_link.rows": {"$in": ids}, "applied": False, "id": {"$ne": note_id}},
+                {"_id": 0, "id": 1}, session=session):
+            await resolve_dq_issue(tenant, dq_type=DQ_CREDIT_NOTE_DIFFERENCE, entity_id=old["id"],
+                                   notes="corrected credit note registered",
+                                   resolution={"corrected_by_credit_note_id": note_id},
+                                   actor=actor, session=session)
         await tenant.credit_debit_notes.update_many(
             {"expected_link.rows": {"$in": ids}, "applied": False, "id": {"$ne": note_id}},
             {"$set": {"superseded_by": note_id, "updated_at": at}}, session=session)
@@ -790,14 +860,16 @@ async def match_expected_credit(tenant, invoice_id: str, gross, note_id: str, ro
                 {"invoice_id": invoice_id, "status": "open"}, {"_id": 0, "id": 1}, session=session):
             await tenant.invoices.update_one({"id": invoice_id},
                                              {"$set": {"awaiting_credit_note": False}}, session=session)
+        # FG-465: the Р47 issue „очаква кредитно известие“ (#82) follows the open rows
+        await sync_awaited_credit_issue(tenant, invoice_id, actor=actor, session=session)
         return {"applied": True, "expected": money(expected), "matched": True, "rows": ids}
-    await tenant.expected_credit_notes.update_many(
-        {"id": {"$in": ids}, "invoice_id": invoice_id, "status": "open"},
-        {"$set": {"dq_mismatch": {"title": "разлика в кредитно известие", "status": "open",
-                                  "credit_note_id": note_id, "expected": money(expected),
-                                  "registered": money(cents(gross)), "at": at}}}, session=session)
+    await open_dq_issue(tenant, dq_type=DQ_CREDIT_NOTE_DIFFERENCE, entity_type="finance.credit_note",
+                        entity_id=note_id, actor=actor, session=session,
+                        details={"invoice_id": invoice_id, "rows": ids, "expected": money(expected),
+                                 "registered": money(cents(gross))})
     return {"applied": False, "expected": money(expected), "matched": False, "rows": ids,
-            "dq": "разлика в кредитно известие"}
+            "dq": DQ_TITLES[DQ_CREDIT_NOTE_DIFFERENCE],
+            "dq_issue_id": dq_issue_id(DQ_CREDIT_NOTE_DIFFERENCE, note_id)}
 
 
 async def linked_to_warehouse(tenant, invoice: dict, *, session=None) -> bool:
@@ -992,8 +1064,6 @@ async def _legacy_accepted_difference_lines(tenant, project_id: str, note: dict,
 COST_TARGET_COMPANY = "company"
 COST_TARGET_PROJECT = "project"
 COST_TARGET_UNDETERMINED = "undetermined"
-DQ_DIFFERENCE_LINE_UNDETERMINED = "accepted_difference_line_undetermined"
-DQ_DIFFERENCE_LINE_REVERSED = "accepted_difference_line_reversed"
 # Р64 (D20 / FG-415): a project NOT in one of these statuses (closed technically or
 # financially, warranty, archived, cancelled, finished, stopped …) — every Р63 re-booking
 # onto it needs the Owner, even to the same place; re-checked at the approval.
@@ -1089,7 +1159,8 @@ async def classify_difference_line(tenant, invoice_id: str, line_id: str, *, ses
     return {"target": COST_TARGET_PROJECT, "basis": "no_receipt"}
 
 
-async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, session=None) -> List[dict]:
+async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, session=None,
+                                    actor: Optional[dict] = None) -> List[dict]:
     """Р55(3) + Р58: split the accepted (uncredited) difference over the note's lines, net
     of VAT by the note's own VAT ratio, and say WHERE each part is a cost — frozen at the
     moment of acceptance (``classify_difference_line``). An ``undetermined`` line opens a
@@ -1109,10 +1180,9 @@ async def split_accepted_difference(tenant, note: dict, diff_gross: Decimal, *, 
         entry = {"original_line_id": l.get("original_line_id"), "net": money(part), **cls}
         if cls["target"] == COST_TARGET_UNDETERMINED:
             await open_dq_issue(
-                tenant, kind=DQ_DIFFERENCE_LINE_UNDETERMINED, entity_type="finance.credit_note_line",
-                entity_id="%s:%s" % (note["id"], l.get("original_line_id")),
-                title="приета разлика: не може да се определи склад или обект за реда",
-                assignee_role="accountant", source="finance.credit_note.accept_difference", session=session)
+                tenant, dq_type=DQ_DIFFERENCE_LINE_UNDETERMINED, entity_type="finance.credit_note_line",
+                entity_id="%s:%s" % (note["id"], l.get("original_line_id")), actor=actor,
+                details={"net": entry["net"], "basis": cls.get("basis")}, session=session)
         out.append(entry)
     return out
 

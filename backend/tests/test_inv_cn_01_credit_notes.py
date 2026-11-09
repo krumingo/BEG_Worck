@@ -453,7 +453,7 @@ def test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit(monkeyp
         old = (datetime.now(timezone.utc) - timedelta(days=15)).isoformat()
         await op.expected_credit_notes.insert_many([            # the PR #82 (WH-REV-01) record
             {"id": "ecn_1", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
-             "created_at": old, "dq_task": {"title": "очаква кредитно известие", "status": "open"}}])
+             "created_at": old}])
         corr = (await c.get("/api/finance/invoices/%s/corrections" % bill["id"], headers=hdr("acct-a"))).json()
         assert corr["expected_credit_notes"][0]["escalate_to_owner"] is True   # 14 days passed
         assert await op.expected_credit_notes.count_documents({"escalate_to_owner": {"$exists": True}}) == 0
@@ -468,7 +468,11 @@ def test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit(monkeyp
         assert r.status_code == 201, r.text
         assert (r.json()["gross"], r.json()["status"], r.json()["applied"]) == (35.99, "registered", False)
         ecn = await op.expected_credit_notes.find_one({"id": "ecn_1"})
-        assert ecn["status"] == "open" and ecn["dq_mismatch"]["title"] == "разлика в кредитно известие"
+        assert ecn["status"] == "open" and "dq_mismatch" not in ecn
+        mism = await op.dq_issues.find_one({"id": "dq-credit-note-difference-" + r.json()["id"]})
+        assert (mism["type"], mism["title"], mism["status"], mism["owner_role"]) == (
+            "CREDIT_NOTE_DIFFERENCE", "разлика в кредитно известие", "open", "accountant")
+        cn77_id = r.json()["id"]
         assert (await get_inv(c, bill["id"]))["remaining_amount"] == 240.0
         # a duplicate (same supplier, same number) → 409
         r = await note(c, bill, number="CN-77", expected_credit_note_ids=["ecn_1"])
@@ -477,9 +481,11 @@ def test_incoming_credit_note_matches_awaited_credit_and_lifts_the_limit(monkeyp
         r = await note(c, bill, number="CN-78", expected_credit_note_ids=["ecn_1"])   # qty 3 → 36.00
         assert r.status_code == 201 and r.json()["applied"] is True, r.text
         ecn = await op.expected_credit_notes.find_one({"id": "ecn_1"})
-        assert ecn["status"] == "fulfilled" and ecn["dq_task"]["status"] == "closed"
-        # Р52(2a): the corrected note closed the mismatch DQ; the mismatched note is superseded
-        assert ecn["dq_mismatch"]["status"] == "closed"
+        assert ecn["status"] == "fulfilled" and "dq_task" not in ecn
+        # Р52(2a): the corrected note resolved the mismatch DQ issue + alarm; superseded note
+        mism = await op.dq_issues.find_one({"id": "dq-credit-note-difference-" + cn77_id})
+        assert mism["status"] == "resolved" and mism["resolution"]["corrected_by_credit_note_id"] == r.json()["id"]
+        assert (await op.alarm_events.find_one({"id": "alarm-credit-note-difference-" + cn77_id}))["status"] == "resolved"
         cn77 = await op.credit_debit_notes.find_one({"number": "CN-77"})
         assert (cn77["applied"], cn77["superseded_by"]) == (False, r.json()["id"])
         after = await get_inv(c, bill["id"])
@@ -711,17 +717,26 @@ def test_r47_registration_releases_the_pr82_cap(monkeypatch, mode):
             "invoice_line_id": bill["lines"][0]["id"], "reversal_movement_id": "mv-1",
             "receipt_movement_id": "mv-0", "quantity": "3", "unit": "m2", "amount": 36.0,
             "currency": "EUR", "status": "open", "reason": "сторно",
-            "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "acct-a",
-            "dq_task": {"assignee_role": "accountant", "title": "очаква кредитно известие",
-                        "status": "open"}})
+            "created_at": datetime.now(timezone.utc).isoformat(), "created_by": "acct-a"})
+        # FG-465: the Р47 issue „очаква кредитно известие“ + alarm, opened by #82's own path
+        from app.services.invoice_allocation import sync_credit_note_issue
+        from app.tenancy.data_access import TenantData
+        await sync_credit_note_issue(TenantData.for_resolved_org(op, ORG_A), bill["id"])
+        r47 = await op.dq_issues.find_one({"id": "dq-credit-note-" + bill["id"]})
+        assert (r47["type"], r47["status"], r47["awaited_credit"]) == ("INVOICE_AWAITS_CREDIT_NOTE", "open", 36.0)
         if pr82:
             r = await quick_pay(c, bill["id"], 205.0)
             assert r.status_code == 409 and code(r) == "INVOICE_AWAITS_CREDIT_NOTE", r.text
         r = await note(c, bill, number="CN-R47", expected_credit_note_ids=["ecn_mv-1"])   # 36.00
         assert r.status_code == 201 and r.json()["applied"] is True, r.text
         ecn = await op.expected_credit_notes.find_one({"id": "ecn_mv-1"})
-        assert (ecn["status"], ecn["dq_task"]["status"], ecn["credit_note_id"]) == (
-            "fulfilled", "closed", r.json()["id"])
+        assert (ecn["status"], ecn["credit_note_id"]) == ("fulfilled", r.json()["id"])
+        # FG-465: the registration resolved the Р47 issue + its alarm (same transaction), AuditEvent
+        r47 = await op.dq_issues.find_one({"id": "dq-credit-note-" + bill["id"]})
+        assert r47["status"] == "resolved" and r47["resolved_at"]
+        assert (await op.alarm_events.find_one({"id": "alarm-credit-note-" + bill["id"]}))["status"] == "resolved"
+        assert await op.audit_events.find_one({"action": "dq.credit_note.resolved"})
+        assert await op.dq_issues.count_documents({"kind": {"$exists": True}}) == 0       # ONE schema
         inv = await get_inv(c, bill["id"])
         assert (inv["remaining_amount"], inv["awaiting_credit_note"]) == (204.0, False)
         assert (await quick_pay(c, bill["id"], 204.0)).status_code == 201
@@ -940,8 +955,7 @@ def test_r52_d7_owner_accepts_the_difference_limit_uses_the_real_amount(monkeypa
         bill = await sent(c, direction="Received")                                     # 240
         await op.expected_credit_notes.insert_one({
             "id": "ecn_d7", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-            "dq_task": {"title": "очаква кредитно известие", "status": "open"}})
+            "created_at": datetime.now(timezone.utc).isoformat()})
         r = await note(c, bill, number="CN-D7", expected_credit_note_ids=["ecn_d7"],
                        lines=[{"original_line_id": bill["lines"][0]["id"], "amount": 25.0}])   # 30.00
         assert r.status_code == 201 and r.json()["applied"] is False, r.text
@@ -953,7 +967,9 @@ def test_r52_d7_owner_accepts_the_difference_limit_uses_the_real_amount(monkeypa
         assert r.status_code == 200, r.text
         assert r.json()["applied"] is True and r.json()["difference_accepted"]["by"] == "owner-a"
         ecn = await op.expected_credit_notes.find_one({"id": "ecn_d7"})
-        assert (ecn["status"], ecn["dq_mismatch"]["status"]) == ("fulfilled_with_difference", "accepted_by_owner")
+        assert ecn["status"] == "fulfilled_with_difference" and "dq_mismatch" not in ecn
+        mism = await op.dq_issues.find_one({"id": "dq-credit-note-difference-" + n["id"]})
+        assert (mism["status"], mism["resolution"]["accepted_by"]) == ("resolved", "owner-a")
         inv = await get_inv(c, bill["id"])
         assert (inv["remaining_amount"], inv["awaiting_credit_note"]) == (210.0, False)   # 240 − 30.00
         assert "finance.credit_note.difference_accepted" in await audit_actions(op)
@@ -1025,7 +1041,7 @@ def test_r52_d8_unlinked_supplier_credit_reduces_project_cost_once_linked_does_n
             "allocations": [{"type": "project", "ref_id": "prj-1", "qty": 10}]})
         await op.expected_credit_notes.insert_one({
             "id": "ecn_pb2", "org_id": ORG_A, "invoice_id": pb2["id"], "amount": 60.0, "status": "open",
-            "created_at": datetime.now(timezone.utc).isoformat(), "dq_task": {"status": "open"}})
+            "created_at": datetime.now(timezone.utc).isoformat()})
         pre = await readers()
         r = await note(c, pb2, number="CN-LNK", expected_credit_note_ids=["ecn_pb2"],
                        lines=[{"original_line_id": "il-pb2", "amount": 50}])
@@ -1225,8 +1241,9 @@ def test_fg249_supplier_tax_id_is_mandatory_duplicates_by_put_are_409_legacy_get
         assert [i for t in plan["tenants"] for i in t["supplier_tax_id_missing"]] == ["leg-noeik"]
         await mig.apply(op, actor_id="owner-a")
         dq = await op.dq_issues.find({"entity_id": "leg-noeik"}, {"_id": 0}).to_list(None)
-        assert [(d["kind"], d["assignee_role"], d["status"], d["entity_type"]) for d in dq] == [
-            ("supplier_tax_id_missing", "accountant", "open", "finance.invoice")]
+        assert [(d["type"], d["owner_role"], d["status"], d["entity_type"]) for d in dq] == [
+            ("SUPPLIER_TAX_ID_MISSING", "accountant", "open", "invoice")]
+        assert (await op.alarm_events.find_one({"id": "alarm-supplier-tax-id-missing-leg-noeik"}))["status"] == "active"
         assert (await mig.plan(op))["changes"] == 0
         await mig.apply(op, actor_id="owner-a")                                  # idempotent
         assert await op.dq_issues.count_documents({"entity_id": "leg-noeik"}) == 1
@@ -1241,7 +1258,7 @@ def test_fg250_accountant_registers_owner_accepts_never_the_same_person(monkeypa
             assert r.status_code == 403 and code(r) == "REGISTRAR_ROLE_REQUIRED", (who, r.text)
         await op.expected_credit_notes.insert_one({
             "id": "ecn_250", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
-            "created_at": datetime.now(timezone.utc).isoformat(), "dq_task": {"status": "open"}})
+            "created_at": datetime.now(timezone.utc).isoformat()})
         n = (await note(c, bill, number="CN-250", expected_credit_note_ids=["ecn_250"],
                         lines=[{"original_line_id": bill["lines"][0]["id"], "amount": 25.0}])).json()
         # a registrant who is (also) the acceptor → 409 (two different people, Р55(2))
@@ -1274,8 +1291,7 @@ def test_fg251_an_accepted_difference_after_a_reversal_is_project_cost_in_the_ac
         # the reversal (#82) awaits 36.00 (3 × 10 + VAT); the supplier credits only 30.00
         await op.expected_credit_notes.insert_one({
             "id": "ecn_251", "org_id": ORG_A, "invoice_id": bill["id"], "invoice_line_id": "il-251",
-            "amount": 36.0, "status": "open", "created_at": "2026-10-05T08:00:00+00:00",
-            "dq_task": {"status": "open"}})
+            "amount": 36.0, "status": "open", "created_at": "2026-10-05T08:00:00+00:00"})
         n = (await note(c, bill, number="CN-251", expected_credit_note_ids=["ecn_251"],
                         lines=[{"original_line_id": "il-251", "amount": 25.0}])).json()
         assert (n["gross"], n["applied"]) == (30.0, False)
@@ -1324,8 +1340,7 @@ def test_r58_an_accepted_difference_on_a_warehouse_line_is_a_company_cost_fifo_u
         # the awaited credit 72.00 (3 × 10 + VAT on each line); the supplier credits 60.00
         await op.expected_credit_notes.insert_one({
             "id": "ecn_58", "org_id": ORG_A, "invoice_id": bill["id"], "invoice_line_id": "il-58w",
-            "amount": 72.0, "status": "open", "created_at": "2026-10-05T08:00:00+00:00",
-            "dq_task": {"status": "open"}})
+            "amount": 72.0, "status": "open", "created_at": "2026-10-05T08:00:00+00:00"})
         n = (await note(c, bill, number="CN-58", expected_credit_note_ids=["ecn_58"],
                         lines=[{"original_line_id": "il-58w", "amount": 25.0},
                                {"original_line_id": "il-58p", "amount": 25.0}])).json()
@@ -1410,7 +1425,7 @@ def test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination(
         async def accepted(bill, number, lines, expected):
             await op.expected_credit_notes.insert_one({
                 "id": "ecn_" + number, "org_id": ORG_A, "invoice_id": bill["id"], "amount": expected,
-                "status": "open", "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+                "status": "open", "created_at": "2026-10-05T08:00:00+00:00"})
             n = (await note(c, bill, number=number, expected_credit_note_ids=["ecn_" + number],
                             lines=lines)).json()
             r = await c.post("/api/finance/credit-notes/%s/accept-difference" % n["id"],
@@ -1461,8 +1476,8 @@ def test_fg269_fg270_the_difference_follows_each_line_s_own_receipt_destination(
         assert (await ic.company_losses_block(tenant))["amount"] == 0.0          # no automatic company cost
         after = await project_material_cost(tenant, ORG_A, "prj-1")
         assert round(after["total_cost"] - before["total_cost"], 2) == 5.0       # only the allocated line
-        dq = await op.dq_issues.find_one({"kind": "accepted_difference_line_undetermined"}, {"_id": 0})
-        assert dq and (dq["entity_id"], dq["assignee_role"], dq["status"]) == (
+        dq = await op.dq_issues.find_one({"type": "ACCEPTED_DIFFERENCE_LINE_UNDETERMINED"}, {"_id": 0})
+        assert dq and (dq["entity_id"], dq["owner_role"], dq["status"]) == (
             "%s:il-270x" % n2["id"], "accountant", "open")
     run(monkeypatch, mode, scenario)
 
@@ -1486,7 +1501,7 @@ def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(m
             "invoice_id": bill["id"], "qty": 10, "destination": {"location_type": "central_warehouse"}})
         await op.expected_credit_notes.insert_one({
             "id": "ecn_27", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 72.0, "status": "open",
-            "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+            "created_at": "2026-10-05T08:00:00+00:00"})
         n = (await note(c, bill, number="CN-27", expected_credit_note_ids=["ecn_27"],
                         lines=[{"original_line_id": "il-27p", "amount": 25.0},
                                {"original_line_id": "il-27x", "amount": 25.0}])).json()
@@ -1521,8 +1536,8 @@ def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(m
         assert [(ln["invoice_line_id"], ln["value"], ln["period"]) for ln in res_lines] == [
             ("il-27x", 5.0, accepted_at[:7])]
         assert round(after["total_cost"] - base["total_cost"], 2) == 5.0
-        dq = await op.dq_issues.find_one({"kind": "accepted_difference_line_undetermined"}, {"_id": 0})
-        assert dq["status"] == "closed" and dq["resolution"]["target"] == "project"
+        dq = await op.dq_issues.find_one({"type": "ACCEPTED_DIFFERENCE_LINE_UNDETERMINED"}, {"_id": 0})
+        assert dq["status"] == "resolved" and dq["resolution"]["target"] == "project"
         ev = await op.audit_events.find_one({"action": "finance.credit_note.difference_line_resolved"})
         assert ev and ev["structured_diff"]["cost_period"] == accepted_at[:7]
 
@@ -1540,7 +1555,7 @@ def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(m
         assert ic.booked_by_line(postings) == {"il-27p": 0, "il-27x": 0}
         reversed_cost = await project_material_cost(tenant, ORG_A, "prj-1")
         assert round(reversed_cost["total_cost"] - base["total_cost"], 2) == -5.0  # both lines out
-        assert await op.dq_issues.count_documents({"kind": "accepted_difference_line_reversed",
+        assert await op.dq_issues.count_documents({"type": "ACCEPTED_DIFFERENCE_LINE_REVERSED",
                                                    "status": "open"}) == 2
         assert await op.audit_events.find_one({"action": "finance.credit_note.difference_reversed"})
         assert (await c.post(rev, headers=hdr("owner-a"), json={"reason": "пак"})).status_code == 409
@@ -1554,7 +1569,7 @@ def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(m
         assert r.status_code == 200, r.text
         block = await ic.company_losses_block(tenant)
         assert block["amount"] == 5.0
-        assert await op.dq_issues.count_documents({"kind": "accepted_difference_line_reversed",
+        assert await op.dq_issues.count_documents({"type": "ACCEPTED_DIFFERENCE_LINE_REVERSED",
                                                    "entity_id": {"$regex": ":il-27x:"}, "status": "open"}) == 0
 
         # FG-278: every company-result reader uses the same (cumulative) scope as its
@@ -1603,7 +1618,7 @@ def test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner(mo
             "destination": {"location_type": "project", "location_id": "prj-2"}})
         await op.expected_credit_notes.insert_one({
             "id": "ecn_63", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 72.0, "status": "open",
-            "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+            "created_at": "2026-10-05T08:00:00+00:00"})
         n = (await note(c, bill, number="CN-63", expected_credit_note_ids=["ecn_63"],
                         lines=[{"original_line_id": "il-63p", "amount": 25.0},
                                {"original_line_id": "il-63d", "amount": 25.0}])).json()
@@ -1660,7 +1675,7 @@ def test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner(mo
         last = (await postings())[-1]
         assert (last["original_line_id"], last["target"], last["basis"]) == (
             "il-63d", "company", "rebooking_approved_by_owner")
-        assert await op.dq_issues.count_documents({"kind": "accepted_difference_line_reversed",
+        assert await op.dq_issues.count_documents({"type": "ACCEPTED_DIFFERENCE_LINE_REVERSED",
                                                    "status": "open"}) == 0
         for action in ("proposed", "approved", "rejected"):
             assert await op.audit_events.find_one(
@@ -1780,7 +1795,7 @@ def test_inv84_r64_1_back_to_own_allocation_on_a_closed_project_is_a_proposal(mo
             "created_at": "2026-10-02T08:00:00+00:00", **R64_SHAPES[shape]})
         await op.expected_credit_notes.insert_one({
             "id": "ecn_p", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 36.0, "status": "open",
-            "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+            "created_at": "2026-10-05T08:00:00+00:00"})
         n = (await note(c, bill, number="CN-P", expected_credit_note_ids=["ecn_p"],
                         lines=[{"original_line_id": "il-p", "amount": 25.0}])).json()
         base = "/api/finance/credit-notes/%s" % n["id"]
