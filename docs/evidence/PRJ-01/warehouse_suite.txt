@@ -1,4 +1,4 @@
-# Warehouse canonical suite on PRJ-01 24ffe07 (round 6), file by file, local real MongoDB 7.0 rs0, PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, -rfs: 44 files / 1121 passed, 0 failed, 0 skipped (= main)
+# Warehouse canonical suite on PRJ-01 after merging main 1525a1e (2d6421a), file by file, local real MongoDB 7.0 rs0, PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, -rfs: 44 files / 1121 passed (= main)
 tests/test_warehouse_canonical_actions.py: 7 passed
 tests/test_warehouse_canonical_c12_regressions.py: 14 passed
 tests/test_warehouse_canonical_c13_mongo.py: 6 passed
@@ -24,7 +24,7 @@ tests/test_warehouse_canonical_c26e_r28_all_modes.py: 272 passed
 tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed
 tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed
 tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed
-tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed
+tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed (re-run alone: in the batch 57 passed + 1 error — connection failure while the Mongo container crashed, WiredTiger fatal 08:14)
 tests/test_warehouse_canonical_c26k_subproject_link.py: 6 passed
 tests/test_warehouse_canonical_c26l_cross_project_link.py: 11 passed
 tests/test_warehouse_canonical_c26l_k_line_race.py: 63 passed
