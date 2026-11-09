@@ -111,11 +111,10 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     supplier_notes_cost = -float(wh.get("supplier_note_cost", 0.0) or 0.0)
 
     # ── e. SUBCONTRACTOR COST ──────────────────────────────────────
-    sub_payments = await tenant.subcontractor_payments.find(
-        {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
-        {"_id": 0, "amount": 1},
-    ).to_list(200)
-    subcontractor_cost = round(sum(p.get("amount", 0) for p in sub_payments), 2)
+    # SUB-ADV-01-A (FG-115, FLOW-006): an advance is cash, not cost — the cost is recognised
+    # when the advance is deducted on an act (ordinary payments + advance deducted).
+    from app.services.subcontract_cost import subcontractor_cost_recognized
+    subcontractor_cost = await subcontractor_cost_recognized(tenant, org_id, project_id)
 
     # Contract payments (external workers)
     contract_docs = await tenant.contract_payments.find(

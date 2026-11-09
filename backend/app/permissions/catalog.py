@@ -102,6 +102,10 @@ ACTIONS: Set[str] = {
     "ocr_invoice.intake.approve",            # PUT  /api/ocr-invoice/{intake_id}/approve
     "sales.sale_commit.execute",             # POST /api/sales/commit
     "pricing.material_price_refresh.execute",  # POST /api/pricing/refresh
+    # SUB-ADV-01 (R39 + R40, Krum 07.11.2026; FLOW-021 "аванс без прихващане/остатък"):
+    # the advance to a subcontractor and its explicit deduction on an act.
+    "finance.subcontractor_advance.create",     # POST /api/subcontractor-packages/{pkg_id}/advances
+    "subcontract.advance_deduction.execute",    # POST /api/subcontractor-acts/{act_id}/advance-deduction
     # ------------------------------------------------------------------
     # LIVE-OPS-01 / TASK 5C — Canonical warehouse/stock core (FLOW-009).
     # Every canonical movement command is denied by default and granted
@@ -215,6 +219,14 @@ MONEY_WRITE_ACTIONS_C02: Set[str] = {
 }
 MONEY_WRITE_ACTIONS |= MONEY_WRITE_ACTIONS_C02
 
+# SUB-ADV-01 (R39, Krum 07.11.2026): "Дава го само Owner или Accountant" — the advance is
+# granted to Owner and Accountant ONLY; Admin is taken out of its full set below (the one
+# action Admin does not hold). Kept apart from MONEY_WRITE_ACTIONS (Owner/Admin/Accountant).
+SUBCONTRACTOR_ADVANCE_ACTIONS: Set[str] = {"finance.subcontractor_advance.create"}
+# The deduction of an advance on an act settles part of what is owed for that act — the
+# same holders as the subcontractor payment it accompanies (Owner/Admin/Accountant, R14).
+SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS: Set[str] = {"subcontract.advance_deduction.execute"}
+
 # SEC-01-C01 (R16, Krum 06.11.2026): labor entries and material waste. Owner/Admin/
 # Accountant everywhere (company scope, above); SiteManager and Technician ONLY on the
 # projects they are members of — granted on the project-scope assignment that mirrors
@@ -269,7 +281,7 @@ _ALL = set(ACTIONS)
 # company-wide — R20 gives the finance roles every project's money.
 CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
-    "admin":           {"label_bg": "Администратор",          "actions": set(_ALL)},
+    "admin":           {"label_bg": "Администратор",          "actions": set(_ALL) - SUBCONTRACTOR_ADVANCE_ACTIONS},
     "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
@@ -329,7 +341,10 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       # finance role reads every
                                                                       # project's budget — company
                                                                       # scope, read only.
-                                                                      "budget.read"}},
+                                                                      "budget.read",
+                                                                      # SUB-ADV-01 (R39): the advance and its deduction
+                                                                      *SUBCONTRACTOR_ADVANCE_ACTIONS,
+                                                                      *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read",
