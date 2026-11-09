@@ -140,11 +140,10 @@ async def get_profit_by_period(
         {"_id": 0, "issue_date": 1, "subtotal": 1, "total": 1, "paid_amount": 1}
     ).to_list(500)
 
-    # Labor by month
-    labor_entries = await tenant.labor_entries.find(
-        {"org_id": org_id, "project_id": project_id},
-        {"_id": 0, "date": 1, "labor_cost": 1, "hours": 1}
-    ).to_list(5000)
+    # Labor by month — R62 (FG-420): THE labor cost's lines (approved reports + Owner-approved
+    # manual rows), never the raw labor_entries (pending manual rows / synced projection)
+    from app.services.labor_cost import project_labor_cost
+    labor_lines = (await project_labor_cost(org_id, project_id))["lines"]
 
     # Material by month — 5C-C22: the ONE shared helper (canonical
     # consumption + „фира" + legacy issues dated before the tenant cutover,
@@ -189,13 +188,12 @@ async def get_profit_by_period(
             periods[pk]["billed"] += inv.get("subtotal", 0) or inv.get("total", 0)
             periods[pk]["collected"] += inv.get("paid_amount", 0)
 
-    for le in labor_entries:
+    for le in labor_lines:
         pk = (le.get("date") or "")[:7]
         if pk:
             ensure_period(pk)
-            if le.get("labor_cost") is not None:
-                periods[pk]["labor"] += le["labor_cost"]
-            periods[pk]["labor_hours"] += float(le.get("hours", 0))
+            periods[pk]["labor"] += float(le.get("amount") or 0)
+            periods[pk]["labor_hours"] += float(le.get("hours") or 0)
 
     # 5C-C23 F-14: ``material`` = consumption (+ pre-cutover legacy) and
     # ``waste`` = „фира", the same meaning as in every other report; the

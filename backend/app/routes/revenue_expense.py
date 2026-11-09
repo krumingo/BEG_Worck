@@ -239,74 +239,41 @@ async def get_labor_cost_by_project(
     _sec02: dict = Depends(require_finance_read(
         "finance.project_labor_cost.read", module="M2", resource_type="project_labor_cost")),  # SEC-02 (R20-2): before any read
     date_from: Optional[str] = None, date_to: Optional[str] = None, user: dict = Depends(require_m2)):
-    """Aggregate labor cost by project from work reports × employee rates"""
+    """R62 (FG-420): the project's labor cost from THE labor cost (approved reports priced by
+    the one labor calculation + Owner-approved manual rows) — not work_reports × rate."""
+    from app.services.labor_cost import project_labor_cost
     tenant = _tenant(user)
     org_id = user["org_id"]
+    lc = await project_labor_cost(org_id, project_id, date_from, date_to)
 
-    # Load employee rates
-    profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1, "daily_rate": 1, "monthly_salary": 1, "working_days_per_month": 1, "standard_hours_per_day": 1}).to_list(200)
-    rate_map = {}
-    for p in profiles:
-        hr = p.get("hourly_rate") or 0
-        if not hr and p.get("monthly_salary") and p.get("working_days_per_month") and p.get("standard_hours_per_day"):
-            hr = round(p["monthly_salary"] / p["working_days_per_month"] / p["standard_hours_per_day"], 2)
-        rate_map[p["user_id"]] = hr
-
-    # Load user names
     users = await tenant.users.find({"org_id": org_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(200)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
 
-    # Query work reports
-    wr_query = {"org_id": org_id, "project_id": project_id}
-    if date_from:
-        wr_query["date"] = {"$gte": date_from}
-    if date_to:
-        wr_query.setdefault("date", {})["$lte"] = date_to
-
-    reports = await tenant.work_reports.find(wr_query, {"_id": 0}).to_list(1000)
-
-    # Aggregate
-    by_employee = {}
-    by_activity = {}
-    total_hours = 0
-    total_cost = 0
-
-    for wr in reports:
-        uid = wr["user_id"]
-        rate = rate_map.get(uid, 0)
-        for line in wr.get("lines", []):
-            hours = float(line.get("hours", 0))
-            cost = round(hours * rate, 2)
-            total_hours += hours
-            total_cost += cost
-
-            if uid not in by_employee:
-                by_employee[uid] = {"user_id": uid, "name": name_map.get(uid, ""), "hourly_rate": rate, "hours": 0, "cost": 0}
-            by_employee[uid]["hours"] += hours
-            by_employee[uid]["cost"] += cost
-
-            act_name = line.get("activity_name", "Общо")
-            if act_name not in by_activity:
-                by_activity[act_name] = {"activity_name": act_name, "hours": 0, "cost": 0}
-            by_activity[act_name]["hours"] += hours
-            by_activity[act_name]["cost"] += cost
-
-    for v in by_employee.values():
-        v["hours"] = round(v["hours"], 1)
-        v["cost"] = round(v["cost"], 2)
-    for v in by_activity.values():
+    by_employee, by_activity = {}, {}
+    for rec in lc["lines"]:
+        uid, hours, cost = rec.get("worker_id"), float(rec.get("hours") or 0), float(rec.get("amount") or 0)
+        e = by_employee.setdefault(uid, {"user_id": uid, "name": name_map.get(uid, ""),
+                                          "hourly_rate": rec.get("rate"), "hours": 0, "cost": 0})
+        e["hours"] += hours
+        e["cost"] += cost
+        act = rec.get("smr_type") or "Общо"
+        a_ = by_activity.setdefault(act, {"activity_name": act, "hours": 0, "cost": 0})
+        a_["hours"] += hours
+        a_["cost"] += cost
+    for v in list(by_employee.values()) + list(by_activity.values()):
         v["hours"] = round(v["hours"], 1)
         v["cost"] = round(v["cost"], 2)
 
     return {
         "project_id": project_id,
-        "total_hours": round(total_hours, 1),
-        "total_cost": round(total_cost, 2),
+        "total_hours": round(lc["approved_hours"] + lc.get("downtime_hours", 0), 1),
+        "total_cost": lc["total"],
         "currency": "EUR",
         "by_employee": sorted(by_employee.values(), key=lambda x: x["cost"], reverse=True),
         "by_activity": sorted(by_activity.values(), key=lambda x: x["cost"], reverse=True),
-        "data_source": "work_reports × employee_profiles.hourly_rate",
-        "reports_count": len(reports),
+        "data_source": "project_labor_cost (R62: approved reports + Owner-approved manual rows)",
+        "reports_count": len(lc["lines"]),
+        "dq_warnings": lc["dq_warnings"],
     }
 
 
@@ -376,6 +343,30 @@ async def generate_execution_packages(offer_id: str, user: dict = Depends(requir
     return {"ok": True, "count": len(packages), "offer_id": offer_id, "project_id": offer["project_id"]}
 
 
+async def live_package_actuals(tenant, org_id: str, pkgs: list) -> list:
+    """R62 (FG-420): the package actuals at READ time — material from the one shared material
+    helper, labor from THE labor cost; subcontract / overhead as stored. The cached
+    ``actual_material_cost`` / ``actual_labor_cost`` / ``actual_total_cost`` are never shown."""
+    from app.services.canonical_material_cost import project_material_cost, split_for_package
+    from app.services.labor_cost import package_labor_split
+    by_project = {}
+    for p in pkgs:
+        by_project.setdefault(p.get("project_id"), []).append(p)
+    out = []
+    for project_id, group in by_project.items():
+        mat = await project_material_cost(tenant, org_id, project_id) if project_id else None
+        lab = await package_labor_split(org_id, project_id) if project_id else {}
+        for p in group:
+            m = split_for_package(mat, p["id"])["total"] if mat is not None else 0.0
+            l_ = (lab.get(p["id"]) or {}).get("cost", 0.0)
+            sub = float(p.get("actual_subcontract_cost", 0) or 0)
+            ovh = float(p.get("actual_overhead_cost", 0) or 0)
+            out.append(dict(p, actual_material_cost=round(m, 2), actual_labor_cost=round(l_, 2),
+                            actual_total_cost=round(m + l_ + sub + ovh, 2), actuals_at_read_time=True))
+    order = {p["id"]: i for i, p in enumerate(pkgs)}
+    return sorted(out, key=lambda x: order.get(x["id"], 0))
+
+
 @router.get("/execution-packages")
 async def list_execution_packages(
     _sec02: dict = Depends(require_finance_read(
@@ -388,7 +379,7 @@ async def list_execution_packages(
     if offer_id:
         query["source_offer_id"] = offer_id
     pkgs = await tenant.execution_packages.find(query, {"_id": 0}).sort("created_at", 1).to_list(500)
-    return pkgs
+    return await live_package_actuals(tenant, user["org_id"], pkgs)   # R62 (FG-420): no stale cache
 
 
 @router.put("/execution-packages/{pkg_id}")
@@ -527,6 +518,7 @@ async def get_project_profit_summary(
         {"org_id": org_id, "project_id": project_id},
         {"_id": 0}
     ).to_list(200)
+    exec_pkgs = await live_package_actuals(tenant, org_id, exec_pkgs)   # R62 (FG-420): no stale cache
 
     pkg_breakdown = []
     for p in exec_pkgs:

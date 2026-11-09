@@ -462,7 +462,9 @@ def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
         ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"),
         # R62 / FG-58 (Owner-only approval of a manual labor row; checked in
         # tests/test_lab_01_s_r62_one_labor_cost.py)
-        ("POST", "/api/labor-entries/{entry_id}/approve")}
+        ("POST", "/api/labor-entries/{entry_id}/approve"),
+        ("POST", "/api/labor-entries/{entry_id}/reject"),
+        ("POST", "/api/labor-entries/{entry_id}/reverse")}
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]

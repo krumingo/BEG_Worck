@@ -396,7 +396,7 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
     budgets = await tenant.activity_budgets.find(
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(100)
-    total_session_cost = (await project_labor_cost(org_id, project_id))["labor_total"]
+    total_session_cost = (await project_labor_cost(org_id, project_id))["total"]   # R62 / FG-422: one figure
     total_labor_budget = sum(b.get("labor_budget", 0) for b in budgets)
     if total_labor_budget > 0:
         burn_pct = total_session_cost / total_labor_budget * 100

@@ -1945,7 +1945,7 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
                 wd["total_hours"] += float(entry.get("hours_worked", 0))
                 wd["report_count"] += 1
 
-    # C) From work_sessions (approved labor)
+    # C) From work_sessions (presence) — R62 (FG-421): the MONEY is THE labor cost below
     sessions = await tenant.work_sessions.find(
         {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
         {"_id": 0, "worker_id": 1, "worker_name": 1, "started_at": 1,
@@ -1956,7 +1956,6 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
         if not wid:
             continue
         wd = worker_data[wid]
-        wd["total_earned"] += float(s.get("labor_cost", 0))
         d = (s.get("started_at") or "")[:10]
         if d:
             wd["days"].add(d)
@@ -1966,6 +1965,12 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
                 wd["last_date"] = d
         if s.get("worker_name"):
             wd["name"] = s["worker_name"]
+
+    # R62 (FG-421): what a worker earned on the project = THE labor cost's lines of him
+    from app.services.labor_cost import project_labor_cost
+    for rec in (await project_labor_cost(org_id, project_id))["lines"]:
+        if rec.get("worker_id"):
+            worker_data[rec["worker_id"]]["total_earned"] += float(rec.get("amount") or 0)
 
     # D) From attendance_entries
     att_entries = await tenant.attendance_entries.find(
@@ -2130,15 +2135,20 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     for c in children:
         per_child[c["id"]]["reports"] = await count_report_hours([c["id"]])
 
-    # ── Work Sessions (часове + labor cost) ──
+    # ── Work Sessions (часове) + labor cost — R62 (FG-421): the cost is THE labor cost of
+    # each project (approved reports + Owner-approved manual rows), not the sessions
+    from app.services.labor_cost import project_labor_cost
+
     async def count_work(pids):
         sessions = await tenant.work_sessions.find(
             {"org_id": org_id, "site_id": {"$in": pids}},
-            {"_id": 0, "duration_hours": 1, "labor_cost": 1},
+            {"_id": 0, "duration_hours": 1},
         ).to_list(5000)
         hours = round(sum(s.get("duration_hours", 0) for s in sessions), 1)
-        cost = round(sum(s.get("labor_cost", 0) for s in sessions), 2)
-        return {"hours": hours, "labor_cost": cost, "sessions": len(sessions)}
+        cost = 0.0
+        for pid_ in pids:
+            cost += (await project_labor_cost(org_id, pid_))["total"]
+        return {"hours": hours, "labor_cost": round(cost, 2), "sessions": len(sessions)}
 
     own_work = await count_work([project_id])
     child_work = await count_work(child_ids) if child_ids else {"hours": 0, "labor_cost": 0, "sessions": 0}

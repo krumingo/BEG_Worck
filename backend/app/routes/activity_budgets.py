@@ -232,12 +232,12 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
     # a missing rate is a DQ warning with 0. DOWNTIME is its own row, not inside an SMR.
     labor = await project_labor_cost(org_id, project_id)
     for smr, v in labor["by_smr"].items():
-        if not (v["labor"] or v["hours"]):
+        if not (v["labor"] or v["hours"] or v["downtime"] or v["downtime_hours"]):
             continue
         key = (smr, "")
         if key not in spent_map:
             spent_map[key] = {"labor": 0, "materials": 0}
-        spent_map[key]["labor"] += v["labor"]
+        spent_map[key]["labor"] += v["labor"] + v["downtime"]   # R62 / FG-422: one figure
     
     # 4. Combine budgets and spent
     all_keys = set(budget_map.keys()) | set(spent_map.keys())
@@ -292,7 +292,7 @@ async def get_activity_budget_summary(project_id: str, user: dict = Depends(get_
     totals["percent_labor_used"] = round((totals["labor_spent"] / totals["labor_budget"] * 100), 1) if totals["labor_budget"] > 0 else 0
     totals["percent_materials_used"] = round((totals["materials_spent"] / totals["materials_budget"] * 100), 1) if totals["materials_budget"] > 0 else 0
     
-    totals["downtime_spent"] = labor["downtime_total"]  # LAB-01: apart from the SMR rows
+    totals["downtime_spent"] = labor["downtime_total"]  # R62: of which downtime (inside labor_spent)
     totals["labor_dq_warning_count"] = len(labor["dq_warnings"])
     return {
         "items": result,
@@ -353,12 +353,16 @@ async def get_work_session_burn(org_id: str, project_id: str, activity_type: str
     # LAB-01 / R31: real labor from APPROVED report lines via the one labor calculation
     # (was work_sessions incl. unapproved time). DOWNTIME is not burn of an SMR budget;
     # it is returned apart as downtime_cost (project level only).
+    # R62 / FG-422: ONE figure — THE labor cost "total" (labor + downtime) for the project,
+    # and labor + downtime of the SMR for an SMR, so the SMR rows add up to the total.
     labor = await project_labor_cost(org_id, project_id)
     if activity_type:
         v = labor["by_smr"].get(activity_type) or {}
-        return {"actual_hours": round(v.get("hours", 0), 2), "actual_cost": round(v.get("labor", 0), 2)}
-    return {"actual_hours": round(labor["approved_hours"], 2), "actual_cost": labor["labor_total"],
-            "downtime_cost": labor["downtime_total"]}
+        return {"actual_hours": round(v.get("hours", 0) + v.get("downtime_hours", 0), 2),
+                "actual_cost": round(v.get("labor", 0) + v.get("downtime", 0), 2),
+                "downtime_cost": round(v.get("downtime", 0), 2)}
+    return {"actual_hours": round(labor["approved_hours"] + labor.get("downtime_hours", 0), 2),
+            "actual_cost": labor["total"], "downtime_cost": labor["downtime_total"]}
 
 
 # ── Forecast Endpoint ──────────────────────────────────────────────
@@ -546,7 +550,6 @@ async def get_budget_health(project_id: str, user: dict = Depends(get_current_us
         total_budget += lb
         burn = await get_work_session_burn(org_id, project_id, b.get("type"))
         spent = burn["actual_cost"]
-        total_spent += spent
         bp = round(spent / lb * 100, 1) if lb > 0 else 0
         status = "on_track" if bp <= 80 else ("warning" if bp <= 100 else "over_budget")
         activities.append({
@@ -558,6 +561,9 @@ async def get_budget_health(project_id: str, user: dict = Depends(get_current_us
             "status": status,
         })
 
+    # R62 / FG-422: the project's "spent" is THE labor cost total (also labor of an SMR
+    # without a budget line), the same number as the alarm and every other reader
+    total_spent = all_burn["actual_cost"]
     total_remaining = round(total_budget - total_spent, 2)
     total_burn = round(total_spent / total_budget * 100, 1) if total_budget > 0 else 0
 
@@ -675,21 +681,17 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
         {"org_id": org_id, "project_id": project_id}, {"_id": 0}
     ).to_list(200)
 
-    # 2. Actual hours/cost from work_sessions grouped by smr_type
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "smr_type_id": 1, "duration_hours": 1, "labor_cost": 1},
-    ).to_list(5000)
-
+    # 2. Actual hours/cost per SMR — R62 (FG-421): THE labor cost (approved reports +
+    # Owner-approved manual rows; labor + downtime), not the work_sessions
+    labor = await project_labor_cost(org_id, project_id)
     actuals_by_type = {}
-    for s in sessions:
-        key = (s.get("smr_type_id") or "").lower().strip()
+    for smr, v in labor["by_smr"].items():
+        key = (smr or "").lower().strip()
         if not key:
             continue
-        if key not in actuals_by_type:
-            actuals_by_type[key] = {"hours": 0, "cost": 0}
-        actuals_by_type[key]["hours"] += s.get("duration_hours", 0)
-        actuals_by_type[key]["cost"] += s.get("labor_cost", 0)
+        a_ = actuals_by_type.setdefault(key, {"hours": 0, "cost": 0})
+        a_["hours"] += v["hours"] + v["downtime_hours"]
+        a_["cost"] += v["labor"] + v["downtime"]
 
     # 3. Extra work (missing_smr + extra_work_drafts)
     missing = await tenant.missing_smr.find(
@@ -779,6 +781,20 @@ async def get_activities_overview(project_id: str, user: dict = Depends(get_curr
             "notes": m.get("notes", ""),
         })
 
+    # C) R62 (one number): approved labor of an SMR without a budget line / extra work is shown
+    # too, so the table's total is THE labor cost of the project
+    for key, actual in actuals_by_type.items():
+        if key in seen_types or not (actual["cost"] or actual["hours"]):
+            continue
+        seen_types.add(key)
+        activities.append({
+            "budget_id": None, "category": "Без бюджет", "activity_name": key, "unit": "", "qty": 0,
+            "material_budget": 0, "labor_budget": 0, "total_budget": 0, "planned_man_hours": 0,
+            "actual_hours": round(actual["hours"], 1), "actual_cost": round(actual["cost"], 2),
+            "burn_pct": 0, "status": "yellow", "subcontractor_price": None, "is_extra": False,
+            "source": "labor_without_budget", "notes": "",
+        })
+
     # 5. Totals
     total_planned = round(sum(a["planned_man_hours"] for a in activities), 1)
     total_actual = round(sum(a["actual_hours"] for a in activities), 1)
@@ -837,6 +853,16 @@ async def get_activity_reports(
 
     sessions = await tenant.work_sessions.find(ws_query, {"_id": 0}).sort("started_at", -1).to_list(2000)
 
+    # R62 (FG-421): the money of a worker-day is THE labor cost of that SMR (approved report
+    # lines + Owner-approved manual rows); the sessions are only the time records
+    labor = await project_labor_cost(org_id, project_id, date_from, date_to)
+    canon = {}
+    for rec in labor["lines"]:
+        if (rec.get("smr_type") or "").lower().strip() != smr_lower:
+            continue
+        c = canon.setdefault(f"{rec.get('worker_id')}|{rec.get('date')}", {"cost": 0.0, "rate": rec.get("rate")})
+        c["cost"] += float(rec.get("amount") or 0)
+
     # Group by worker_id + date
     from collections import defaultdict
     grouped = defaultdict(lambda: {"hours": 0, "cost": 0, "sessions": [], "rate": 0})
@@ -881,8 +907,8 @@ async def get_activity_reports(
             "worker_name": g["worker_name"],
             "date": g["date"],
             "total_hours": round(g["hours"], 2),
-            "total_cost": round(g["cost"], 2),
-            "hourly_rate": round(g["rate"], 2),
+            "total_cost": round((canon.get(key) or {}).get("cost", 0.0), 2),     # R62
+            "hourly_rate": (canon.get(key) or {}).get("rate"),
             "status": report_status,
             "slip_number": slip,
             "created_by": created_by,
@@ -905,7 +931,8 @@ async def get_activity_reports(
         "reports": paged,
         "totals": {
             "total_hours": round(sum(r["total_hours"] for r in reports), 2),
-            "total_cost": round(sum(r["total_cost"] for r in reports), 2),
+            # R62: the SMR's whole labor cost (also worker-days without a session)
+            "total_cost": round(sum(c["cost"] for c in canon.values()), 2),
             "reports_count": total,
         },
         "pagination": {"page": page, "page_size": page_size, "total": total},
@@ -966,6 +993,14 @@ async def get_session_detail(session_id: str, user: dict = Depends(get_current_u
 
     # Project name
     project = await tenant.projects.find_one({"id": session.get("site_id")}, {"_id": 0, "name": 1})
+    # R62 (FG-421): the money of this worker-day is THE labor cost (approved lines), not the session's
+    day = session.get("started_at", "")[:10]
+    day_cost = 0.0
+    if session.get("site_id") and day:
+        lc = await project_labor_cost(org_id, session["site_id"], day, day)
+        day_cost = round(sum(float(r.get("amount") or 0) for r in lc["lines"]
+                             if r.get("worker_id") == wid
+                             and (r.get("smr_type") or "").lower() == (session.get("smr_type_id") or "").lower()), 2)
 
     return {
         "session_id": session_id,
@@ -978,7 +1013,7 @@ async def get_session_detail(session_id: str, user: dict = Depends(get_current_u
         "pay_type": pay_type_display,
         "hourly_rate": session.get("hourly_rate_at_date", 0),
         "hours": session.get("duration_hours", 0),
-        "total_cost": session.get("labor_cost", 0),
+        "total_cost": day_cost,          # R62: approved worker-day cost of this SMR
         "slip_number": slip,
         "status": report_status,
         "approved_by_name": approved_by_name,

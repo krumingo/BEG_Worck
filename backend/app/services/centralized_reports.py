@@ -27,7 +27,7 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
     """
     Build unified reports from:
     - employee_daily_reports (Draft/Submitted entries)
-    - work_sessions (Approved entries, source of truth for cost)
+    - project_labor_cost (R62: approved report lines + Owner-approved manual rows — the cost)
     Returns: unified entries list + three projections.
     """
     tenant = TenantData.for_resolved_org(db, org_id)
@@ -44,104 +44,77 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         {"_id": 0},
     ).to_list(2000)
 
-    # Cache resolved rates per worker
-    rate_cache = {}
-
+    # R62 (FG-421): a draft / submitted (not approved) report is LISTED for visibility but
+    # never counts — no rate, no money. The money is THE labor cost below.
     for d in drafts:
         hours = d.get("hours") or d.get("hours_worked", 0)
-        wid = d.get("worker_id", "")
-
-        # Resolve rate using shared helper (cached)
-        if wid not in rate_cache:
-            rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
-        resolved = rate_cache[wid]
-        rate = resolved["rate"]
-
-        clean = round(hours * rate, 2)
-        oh_amount = round(hours * overhead_hourly, 2)
-
         entries.append({
             "id": d.get("id"),
-            "worker_id": wid,
+            "worker_id": d.get("worker_id", ""),
             "worker_name": d.get("worker_name", ""),
             "project_id": project_id,
             "report_date": d.get("date", ""),
             "smr_type": d.get("smr_type") or d.get("activity_type", ""),
             "hours": round(hours, 2),
-            "hourly_rate": rate,
+            "hourly_rate": None,
             "approval_status": "draft",
-            "amount_clean_labor": clean,
-            "amount_overhead": oh_amount,
-            "amount_labor_with_overhead": round(clean + oh_amount, 2),
+            "amount_clean_labor": 0.0,
+            "amount_overhead": 0.0,
+            "amount_labor_with_overhead": 0.0,
+            "counted": False,
+            "not_counted_reason": "R62: неодобрен отчет не влиза в разхода",
             "slip_number": d.get("slip_number"),
             "created_by": d.get("submitted_by") or d.get("created_by"),
             "approved_by": None,
             "payroll_ready": False,
             "source": "employee_daily_reports",
-            "missing_rate": resolved["missing_rate"],
-            "rate_source": resolved["source"],
+            "missing_rate": False,
+            "rate_source": None,
         })
 
-    # B) Approved entries from work_sessions
-    sessions = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": project_id, "ended_at": {"$ne": None},
-         "is_flagged": {"$ne": True}},
-        {"_id": 0},
-    ).to_list(5000)
-
-    for s in sessions:
-        hours = s.get("duration_hours", 0)
-        rate = s.get("hourly_rate_at_date", 0)
-        wid = s.get("worker_id", "")
-
-        # If stored rate is 0, resolve from profile
-        missing_rate = False
-        rate_source = "work_session"
-        if rate == 0 and wid:
-            if wid not in rate_cache:
-                rate_cache[wid] = await resolve_worker_hourly_rate(wid, org_id)
-            resolved = rate_cache[wid]
-            rate = resolved["rate"]
-            missing_rate = resolved["missing_rate"]
-            rate_source = resolved["source"]
-
-        clean = round(hours * rate, 2) if rate > 0 else s.get("labor_cost", 0)
+    # B) Approved entries — R62 (FG-421): THE labor cost's lines (approved reports priced by
+    # the one labor calculation + Owner-approved manual rows), not the work_sessions
+    from app.services.labor_cost import project_labor_cost
+    lc = await project_labor_cost(org_id, project_id)
+    names = {}
+    wids = sorted({r.get("worker_id") for r in lc["lines"] if r.get("worker_id")})
+    if wids:
+        for u in await tenant.users.find({"org_id": org_id, "id": {"$in": wids}},
+                                         {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(len(wids)):
+            names[u["id"]] = f"{u.get('first_name', '')} {u.get('last_name', '')}".strip()
+    for rec in lc["lines"]:
+        hours = float(rec.get("hours") or 0)
+        clean = round(float(rec.get("amount") or 0), 2)
         oh_amount = round(hours * overhead_hourly, 2)
-
-        # Get report info
-        rid = s.get("approved_report_id")
-        slip = None
-        approved_by = None
-        payroll_ready = False
-        if rid:
+        rid = str(rec.get("report_id") or "")
+        doc_id = rid.split("_")[0] if rid and not rid.startswith("manual:") else None
+        rep = None
+        if doc_id:
             rep = await tenant.employee_daily_reports.find_one(
-                {"id": rid}, {"_id": 0, "slip_number": 1, "approved_by": 1, "payroll_ready": 1}
-            )
-            if rep:
-                slip = rep.get("slip_number")
-                approved_by = rep.get("approved_by")
-                payroll_ready = rep.get("payroll_ready", False)
-
+                {"id": doc_id}, {"_id": 0, "slip_number": 1, "approved_by": 1, "payroll_ready": 1,
+                                 "submitted_by": 1})
         entries.append({
-            "id": s.get("id"),
-            "worker_id": wid,
-            "worker_name": s.get("worker_name", ""),
+            "id": rid,
+            "worker_id": rec.get("worker_id"),
+            "worker_name": names.get(rec.get("worker_id"), ""),
             "project_id": project_id,
-            "report_date": s.get("started_at", "")[:10],
-            "smr_type": s.get("smr_type_id", ""),
+            "report_date": rec.get("date", ""),
+            "smr_type": rec.get("smr_type", ""),
             "hours": round(hours, 2),
-            "hourly_rate": rate,
+            "hourly_rate": rec.get("rate"),
             "approval_status": "approved",
-            "amount_clean_labor": round(clean, 2),
+            "amount_clean_labor": clean,
             "amount_overhead": oh_amount,
             "amount_labor_with_overhead": round(clean + oh_amount, 2),
-            "slip_number": slip,
-            "created_by": None,
-            "approved_by": approved_by,
-            "payroll_ready": payroll_ready,
-            "source": "work_sessions",
-            "missing_rate": missing_rate,
-            "rate_source": rate_source,
+            "counted": True,
+            "cost_type": rec.get("cost_type"),
+            "slip_number": (rep or {}).get("slip_number"),
+            "created_by": (rep or {}).get("submitted_by"),
+            "approved_by": (rep or {}).get("approved_by"),
+            "payroll_ready": (rep or {}).get("payroll_ready", False),
+            "source": "project_labor_cost",
+            "missing_rate": "MISSING_RATE" in (rec.get("dq") or []),
+            "rate_source": rec.get("pay_type_source"),
         })
 
     # ── PROJECTION 1: Activities ────────────────────────────────
@@ -205,7 +178,7 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         burn_total = round(total_h / planned * 100, 1) if planned > 0 else 0
         status = "green" if burn_total < 80 else ("yellow" if burn_total <= 100 else "red")
 
-        # Include BOTH draft AND approved costs
+        # R62: drafts carry 0 — the cost is the approved (counted) labor only
         total_clean = round(smr.get("draft_clean", 0) + smr.get("approved_clean", 0), 2)
         total_oh = round(smr.get("draft_oh", 0) + smr.get("approved_oh", 0), 2)
 
