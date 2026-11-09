@@ -1,0 +1,7 @@
+# FG-539 negative control: the analytics build (REACT_APP_POSTHOG_KEY set) behind an nginx whose CSP header ADDS a fixed connect-src 'self'
+# (what the merged header deliberately does NOT do). Chromium console on /login:
+CONSOLE error Connecting to 'http://127.0.0.1:8081/api/version' violates the following Content Security Policy directive: "connect-src 'self'". The action has been blocked.
+CONSOLE error Connecting to 'https://us.i.posthog.com/e/?ip=1&_=…&ver=1.200.0&compression=gzip-js' violates the following Content Security Policy directive: "connect-src 'self'". The action has been
+CONSOLE error Connecting to 'https://us.i.posthog.com/e/?retry_count=1&ip=1&_=…&ver=1.200.0&compression=gzip-js' violates the following Content Security Policy directive: "connect-src 'self'". The a
+CONSOLE error Fetch API cannot load http://127.0.0.1:8081/api/version. Refused to connect because it violates the document's Content Security Policy.
+# => a fixed connect-src in nginx would block both the API origin of this build and PostHog; the merged header leaves connect-src to the build-templated meta CSP.

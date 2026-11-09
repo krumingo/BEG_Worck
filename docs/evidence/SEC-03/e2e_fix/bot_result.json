@@ -1,5 +1,5 @@
 {
- "started_at": "2026-11-09T16:42:21.675Z",
+ "started_at": "2026-11-09T17:32:00.545Z",
  "app": "http://127.0.0.1:8080",
  "steps": [
   {
@@ -45,37 +45,37 @@
   {
    "step": "screen /projects renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "screen /employees renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "screen /pay-runs renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "screen /offers renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "screen /assets/items renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "screen /finance renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "screen /settings renders",
    "pass": true,
-   "detail": 1
+   "detail": 2
   },
   {
    "step": "photo AI -> 503 'изисква файлов регистър' (FG-522)",
@@ -102,6 +102,14 @@
    ]
   },
   {
+   "step": "the switch needs an Idempotency-Key (428) and a reason (422) (FG-538)",
+   "pass": true,
+   "detail": [
+    428,
+    422
+   ]
+  },
+  {
    "step": "reminder trigger without credentials -> 401",
    "pass": true,
    "detail": 401
@@ -123,10 +131,10 @@
    "pass": true,
    "detail": {
     "hosts": {
-     "127.0.0.1:8080": 122,
+     "127.0.0.1:8080": 145,
      "fonts.googleapis.com": 8,
      "fonts.gstatic.com": 8,
-     "localhost:35313": 1
+     "localhost:45151": 1
     }
    }
   },
@@ -136,22 +144,43 @@
    "detail": null
   },
   {
-   "step": "no request to cdn.tailwindcss.com or posthog",
+   "step": "no request to cdn.tailwindcss.com",
    "pass": true,
    "detail": null
+  },
+  {
+   "step": "no request to any PostHog ASSET host (no remote script, #88 no-external build)",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "no analytics key -> no request to PostHog",
+   "pass": true,
+   "detail": null
+  },
+  {
+   "step": "NO CSP violation at all (FG-539: analytics allowed by the templated CSP when configured)",
+   "pass": true,
+   "detail": []
+  },
+  {
+   "step": "no CSP violation reported on ANY page (console)",
+   "pass": true,
+   "detail": []
   },
   {
    "step": "every script came from the app origin",
    "pass": true,
    "detail": [
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
-    "http://127.0.0.1:8080/static/js/main.2ef4fac2.js"
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/service-worker.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+    "http://127.0.0.1:8080/static/js/main.fc4d668e.js"
    ]
   }
  ],
@@ -161,11 +190,11 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -173,12 +202,64 @@
    "type": "stylesheet"
   },
   {
-   "url": "http://127.0.0.1:8080/api/version",
+   "url": "http://127.0.0.1:8080/service-worker.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8080/index.html",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/62.4726be9e.chunk.js",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/manifest.webmanifest",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon.svg",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-192.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-512.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-maskable-192.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/icon-maskable-512.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/apple-touch-icon.png",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/icons/favicon-32.png",
    "type": "fetch"
   },
   {
    "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
    "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/version",
+   "type": "fetch"
   },
   {
    "url": "http://127.0.0.1:8080/api/auth/login",
@@ -289,20 +370,20 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/projects",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
    "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
    "type": "stylesheet"
-  },
-  {
-   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
-   "type": "font"
   },
   {
    "url": "http://127.0.0.1:8080/api/auth/me",
@@ -341,19 +422,27 @@
    "type": "xhr"
   },
   {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
    "url": "http://127.0.0.1:8080/employees",
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/employees",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
    "type": "stylesheet"
   },
   {
-   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -397,7 +486,11 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/pay-runs",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
@@ -405,7 +498,7 @@
    "type": "stylesheet"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -453,15 +546,19 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/offers",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
    "type": "stylesheet"
   },
   {
-   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -509,15 +606,19 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/assets/items",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
    "type": "stylesheet"
   },
   {
-   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -561,7 +662,11 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/finance",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
@@ -569,7 +674,7 @@
    "type": "stylesheet"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -617,11 +722,15 @@
    "type": "document"
   },
   {
-   "url": "http://127.0.0.1:8080/static/js/main.2ef4fac2.js",
+   "url": "http://127.0.0.1:8080/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/static/js/main.fc4d668e.js",
    "type": "script"
   },
   {
-   "url": "http://127.0.0.1:8080/static/css/main.cd034429.css",
+   "url": "http://127.0.0.1:8080/static/css/main.32922fdb.css",
    "type": "stylesheet"
   },
   {
@@ -697,7 +806,11 @@
    "type": "fetch"
   },
   {
-   "url": "http://127.0.0.1:8080/api/internal/run-reminder-jobs?all_tenants=true",
+   "url": "http://127.0.0.1:8080/api/ai/settings",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8080/api/ai/settings",
    "type": "fetch"
   },
   {
@@ -705,68 +818,51 @@
    "type": "fetch"
   },
   {
-   "url": "http://localhost:35313/",
+   "url": "http://127.0.0.1:8080/api/internal/run-reminder-jobs?all_tenants=true",
+   "type": "fetch"
+  },
+  {
+   "url": "http://localhost:45151/",
    "type": "document"
   },
   {
    "url": "http://127.0.0.1:8080/login",
    "type": "document"
-  }
- ],
- "csp_violations": [
-  {
-   "directive": "script-src-elem",
-   "blocked": "inline",
-   "sample": ""
   },
   {
-   "directive": "script-src-elem",
-   "blocked": "inline",
-   "sample": ""
+   "url": "http://127.0.0.1:8080/login",
+   "type": "fetch"
   }
  ],
+ "csp_violations": [],
  "console_errors": [
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to fetch finance series: H",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "H",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
   "Failed to load resource: the server responded with a status of 404 (Not Found)",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
-  "H",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "H",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
-  "Executing inline script violates the following Content Security Policy directive 'script-src 'self''. Either the 'unsafe-inline' keyword, a hash ('sha256-/Qa38UvokY0AcGv8nH4/muk+L0pCc6He1hhepA9S6ms='), or a nonce ('nonce-...') is required to enable inline execution. The action has been blocked.",
+  "H",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)",
   "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "Failed to load resource: the server responded with a status of 428 (Precondition Required)",
+  "Failed to load resource: the server responded with a status of 422 (Unprocessable Content)",
   "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
  ],
  "hosts": {
-  "127.0.0.1:8080": 122,
+  "127.0.0.1:8080": 145,
   "fonts.googleapis.com": 8,
   "fonts.gstatic.com": 8,
-  "localhost:35313": 1
+  "localhost:45151": 1
  },
- "finished_at": "2026-11-09T16:42:32.566Z",
- "request_count": 139
+ "finished_at": "2026-11-09T17:32:11.592Z",
+ "request_count": 162
 }
