@@ -572,8 +572,9 @@ def test_11_f89_01_no_internal_response_gives_staff_the_review_link(
             r = await c.get(_staff_surfaces()[name], headers=T.hdr("site-a", key=False))
             assert r.status_code == 200, (name, r.status_code, r.text[:200])
         assert (await get(op, "rt1"))["status"] == "Sent"
-        # finance keeps the link where it is shown today (the offer editor, the send answer)
-        for who in ALLOWED:
+        # finance keeps the link where it is shown today (the offer editor, the send answer —
+        # test_12). The Accountant has no project access to GET /offers/{id} (unchanged).
+        for who in ("owner-a", "admin-a"):
             r = await c.get("/api/offers/rt1", headers=T.hdr(who, key=False))
             assert r.status_code == 200 and r.json()["review_token"] == TOKEN, (who, r.text[:200])
         # the client's link still works end to end

@@ -428,16 +428,27 @@ def is_money_key(key: str, siblings=(), keep=()) -> bool:
     return bool(_MONEY_WORDS.search(k)) and not _NOT_MONEY.search(k)
 
 
+#: OFF-02 F-89-01 [P1] (Codex, PR #89; R20, R67): the public review link of an offer is a
+#: BEARER secret — whoever holds ``/offers/review/{review_token}`` sees the client prices
+#: (public GET) and can make the offer Accepted (public approve). A caller who may not see
+#: the money may not hold the link: every non-finance view loses these keys, at any depth,
+#: whatever the route (the offer, a list, a version, the project dashboard ...). Finance
+#: keeps them (the offer editor, the send answer); ``keep`` never brings them back.
+BEARER_LINK_KEYS: FrozenSet[str] = frozenset({"review_token", "review_url"})
+
+
 def strip_money(value, keep=()):
     """A copy of a JSON-like value with every money key removed, at any depth.
 
     ``keep``: key names that are NOT money in this one response (e.g. a ``total`` that
     counts warnings), declared next to the route.
-    SEC-02-G (SEC71-03): alert / warning texts lose their amounts too (``money_free_alert``)."""
+    SEC-02-G (SEC71-03): alert / warning texts lose their amounts too (``money_free_alert``).
+    OFF-02 F-89-01: the bearer review link (``BEARER_LINK_KEYS``) goes too."""
     if isinstance(value, dict):
         keys = list(value)
         return money_free_alert({k: strip_money(v, keep) for k, v in value.items()
-                                 if not (isinstance(k, str) and is_money_key(k, keys, keep))})
+                                 if not (isinstance(k, str) and (k in BEARER_LINK_KEYS
+                                                                 or is_money_key(k, keys, keep)))})
     if isinstance(value, list):
         return [strip_money(v, keep) for v in value]
     return value
