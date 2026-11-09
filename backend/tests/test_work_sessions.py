@@ -114,7 +114,7 @@ def test_my_today(auth_headers):
     d = r.json()
     assert "items" in d
     assert "total_hours" in d
-    assert "total_cost" in d
+    assert "total_cost" not in d          # R62 / FG-462: a time screen, no session money
     assert "has_open_session" in d
     assert "is_overtime" in d
 
@@ -127,7 +127,8 @@ def test_summary(auth_headers, project_id):
     assert r.status_code == 200
     d = r.json()
     assert "total_hours" in d
-    assert "total_cost" in d
+    assert "total_cost" not in d          # R62 / FG-462: hours + approved_labor_cost only
+    assert "approved_labor_cost" in d
     assert "workers_count" in d
 
 

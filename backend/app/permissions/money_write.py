@@ -205,6 +205,45 @@ def require_field_cost_write(action: str, *, module: str, resource_type: str,
     return dependency
 
 
+async def check_field_cost_write(request: Request, user: dict, action: str, *, module: str,
+                                 resource_type: str, project_id: Optional[str],
+                                 member_roles=FIELD_MEMBER_ROLES) -> dict:
+    """The require_field_cost_write (R16) decision for a project known only inside the
+    handler / dependency (e.g. the project of a stored row), called BEFORE any write."""
+    member_roles = tuple(member_roles)
+
+    async def legacy_check(u: dict, _request: Request) -> bool:
+        role = u.get("role")
+        if role in FINANCE_WRITE_ROLES:
+            return True
+        if role not in member_roles or not project_id:
+            return False
+        from app.tenancy import project_team
+        return await project_team.is_member(project_team.tenant_for(db, u), u["id"], project_id)
+
+    permission = require_permission(
+        action, module=module, scope="project", resource_type=resource_type,
+        scope_id_getter=lambda _r: project_id, legacy_check=legacy_check,
+    )
+    ctx = await permission(request, user)
+    await _legacy_data_path_guard(ctx)
+    return ctx.user
+
+
+async def check_role_action(request: Request, user: dict, action: str, *, module: str,
+                            resource_type: str, roles) -> dict:
+    """The require_money_write decision with its own legacy roles, called from inside a
+    dependency (e.g. after a row lookup decided which rule applies)."""
+    permission = require_permission(
+        action, module=module, scope="company", resource_type=resource_type,
+        legacy_check=_legacy_role_check(tuple(roles)),
+    )
+    ctx = await permission(request, user)
+    await _legacy_data_path_guard(ctx)
+    request.state.sec_money_ctx = ctx
+    return ctx.user
+
+
 # ── SEC-02 (R20): reading money ─────────────────────────────────────────────────
 # The registry (endpoint -> action -> rule -> canon) is app/permissions/finance_read.py.
 # Nothing below is a second mechanism: R20-1/R20-2 IS require_money_write with a read
@@ -517,8 +556,10 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
     """Distinct PAID workers per SMR, and of the whole project, behind a "spent" figure.
 
     ``source`` — what the screen sums (same filters and the same pay as its handler):
-      sessions     ended work sessions of the site, pay = ``labor_cost`` (expected-actual,
-                   activities-overview, budget-health, the activity burn);
+      sessions     R62 / FG-462: THE labor cost lines of the site (project_labor_cost —
+                   approved reports + approved manual rows), pay = ``amount``; the raw
+                   work-session money is never used (expected-actual, activities-overview,
+                   budget-health, the activity burn);
       centralized  the entries of ``build_centralized_reports`` — Draft/Submitted daily
                    reports + ended, unflagged work sessions, pay = ``amount_clean_labor``
                    (centralized-reports/activities); ``entries`` passes the handler's own;
@@ -551,13 +592,13 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
             pay_by_smr[_norm(smr)][worker] += amount
 
     if source == "sessions":
-        q = {"org_id": org, "site_id": project_id, "ended_at": {"$ne": None},
-             **_window("started_at", date_from, date_to)}
-        async for s_ in tenant.work_sessions.find(
-                q, {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1,
-                    "labor_cost": 1}):
-            add(s_.get("worker_id"), s_.get("smr_type_id") or s_.get("smr_type"),
-                s_.get("labor_cost", 0))
+        # R62 / FG-462: the screens behind this source show THE labor cost (approved report
+        # lines + approved manual rows), not the raw work-session money — the paid workers
+        # are counted on the same lines, so the count matches the money it protects
+        from app.services.labor_cost import project_labor_cost
+        lc = await project_labor_cost(org, project_id, date_from, date_to)
+        for rec in lc["lines"]:
+            add(rec.get("worker_id"), rec.get("smr_type"), rec.get("amount", 0))
     if source == "centralized":
         if entries is None:
             from app.services.centralized_reports import build_centralized_reports
@@ -588,8 +629,8 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
 
 
 async def single_paid_sites(user: dict, site_ids) -> set:
-    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (ended work
-    sessions — what the pulse snapshot status and the budget alarm compare to the budget)
+    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (THE labor cost,
+    R62 — what the pulse snapshot status and the budget alarm compare to the budget)
     comes from fewer than 2 paid workers. Their band (status / severity / alert) is not
     shown to a caller without the finance right: moving the budget and watching the band
     flip would bisect that one worker's pay."""

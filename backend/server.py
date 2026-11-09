@@ -419,6 +419,10 @@ async def startup():
     await ensure_warehouse_canonical_indexes(db)
 
     await db.users.create_index("email")
+    # R62 / LAB73-R1: the per-(project, worker, day) labor lock — at startup, never on a
+    # request path (a request creates it lazily only in a database that missed startup)
+    from app.services.labor_cost import ensure_labor_day_locks
+    await ensure_labor_day_locks(db)
     await db.users.create_index("org_id")
     await db.organizations.create_index("id", unique=True)
     await db.feature_flags.create_index([("org_id", 1), ("module_code", 1)])

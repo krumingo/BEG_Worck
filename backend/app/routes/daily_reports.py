@@ -433,6 +433,48 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
         regular_hours = hours
         overtime_hours = 0
 
+    # FG-463 / LAB73-R1 (R62): an approved manual labor row already carries this worker's hours
+    # on this project and day — approving the report would count them twice. Checked in ONE
+    # transaction with the day's lock, which this approval claims before any side effect (a
+    # concurrent manual-row approval / create of that day then sees the claim → 409).
+    from app.services.labor_cost import MANUAL_APPROVED, bump_labor_day_lock, overlapping_manual_rows
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    # FG-490: an old-style batch report (employee_id + day_entries) is the worker's day too;
+    # its projects are those of its entries — none at all = every project of the tenant
+    day_worker = report.get("worker_id") or report.get("employee_id") or ""
+    day_date = report.get("date") or report.get("report_date") or ""
+    if report.get("day_entries") is not None:
+        day_projects = sorted({e.get("project_id") for e in report.get("day_entries") or []
+                               if isinstance(e, dict) and e.get("project_id")})
+    else:
+        day_projects = [project_id] if project_id else []
+
+    class _ApprovedManualRow(Exception):
+        pass
+
+    async def claim_day(session):
+        await bump_labor_day_lock(tenant, org_id, day_worker, day_date, session=session,
+                                  report_claim=rid, claim_projects=day_projects or None)
+        for pid_ in (day_projects or [None]):
+            if await overlapping_manual_rows(tenant, org_id, pid_, day_worker, day_date,
+                                             (MANUAL_APPROVED,), session=session):
+                raise _ApprovedManualRow()
+    if day_worker and day_date:
+        try:
+            try:
+                from app.services.labor_cost import ensure_labor_day_locks
+                await ensure_labor_day_locks(db)   # never created inside a transaction
+                await run_in_transaction(db, claim_day)
+            except TransactionsUnavailable:
+                # a deployment without transactions approved reports before LAB73-R1 and still
+                # does: the same claim and check, without the cross-request atomicity
+                import logging
+                logging.getLogger(__name__).warning(
+                    "LAB73-R1: no MongoDB transactions — the report/manual-row day check is not atomic")
+                await claim_day(None)
+        except _ApprovedManualRow:
+            return {"status": "failed", "report_id": rid, "reason": "duplicate_of_approved_manual_row"}
+
     # A) Slip number — canonical counter_type sequence (shared by single + bulk)
     slip_number = report.get("slip_number")
     if not slip_number:
@@ -572,6 +614,7 @@ _APPROVE_FAIL_MSG = {
     "coefficient_must_be_at_least_1": "Коефициентът за извънреден труд трябва да е поне 1.",
     "reason_required": "Изисква се причина за override на извънреден труд.",
     "self_approval": "Не можете да одобрите отчет, който сте създали или поправили — одобрява друг човек.",
+    "duplicate_of_approved_manual_row": "За този работник, обект и ден има одобрен ръчен ред за труд — часовете не се броят два пъти (сторнирайте реда или поправете отчета).",
 }
 
 
@@ -593,7 +636,7 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     res = await approve_report_one(report, user, override=(data or {}).get("override"),
                                    block_overtime_without_override=False)
     if res["status"] == "failed":
-        code = 403 if res["reason"] == "self_approval" else 400
+        code = {"self_approval": 403, "duplicate_of_approved_manual_row": 409}.get(res["reason"], 400)
         raise HTTPException(status_code=code, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
     if res["status"] == "blocked":  # not expected on single path
         raise HTTPException(status_code=409, detail="overtime_requires_override")

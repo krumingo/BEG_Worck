@@ -23,7 +23,10 @@ from app.permissions.finance_read import LABOR_MONEY_FIELDS
 from app.permissions.money_input import (MoneyWrite, money_value, project_in_tenant,  # SEC-01-C03
                                          labor_money_visible, without_labor_money)
 from app.services.labor_cost import (compute_person_labor, load_smr_terms, project_labor_cost,
-                                     package_labor_split, MANUAL_APPROVED, MANUAL_PENDING, SYNC_SOURCE)
+                                     package_labor_split, overlapping_manual_rows,
+                                     bump_labor_day_lock, live_report_claims,
+                                     normalize_labor_date, strict_iso_date,
+                                     MANUAL_APPROVED, MANUAL_PENDING, SYNC_SOURCE)
 from app.services.report_normalizer import LABOR_LINE_FIELDS
 
 
@@ -96,7 +99,7 @@ async def create_labor_entry(
         "execution_package_id": data.get("execution_package_id"),
         "offer_line_id": data.get("offer_line_id"),
         "work_report_id": data.get("work_report_id"),
-        "date": data.get("date", now[:10]),
+        "date": data.get("date", now[:10]),     # FG-491: validated (ISO day) below
         "hours": hours,
         "activity_name": data.get("activity_name", ""),
         "note": data.get("note", ""),
@@ -107,6 +110,7 @@ async def create_labor_entry(
         # the Owner approved it (POST /labor-entries/{id}/approve)
         "approval_status": MANUAL_PENDING,
         "created_by": user["id"],
+        "created_by_role": user.get("role"),
         "version": 1,
         "created_at": now,
     }
@@ -119,12 +123,6 @@ async def create_labor_entry(
     # otherwise hours × the profile's hourly rate (no rate → no cost, never a default)
     entry.update(await _manual_row_pricing(tenant, org_id, entry["employee_id"],
                                            entry["execution_package_id"], hours, data.get("quantity")))
-    # FG-423: never the hours an approved report already carries (counted twice)
-    if await _approved_report_hours_exist(org_id, entry["project_id"], entry["employee_id"], entry["date"]):
-        raise HTTPException(status_code=409, detail={
-            "code": "DUPLICATE_OF_APPROVED_REPORT",
-            "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
-
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
     # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
     # a replay shows them to a caller without the finance right (an R16 member).
@@ -134,8 +132,70 @@ async def create_labor_entry(
         return replay if show_money else without_labor_money(replay)
     entry["id"] = mw.new_id("labor_entry")
     async with mw:
-        async with mw.insert_once():
-            await tenant.labor_entries.insert_one(mw.unique(entry))
+        # after the replay (a retried key returns its row) and inside the idempotent write
+        # (a refusal fails the key, so the same request may be sent again)
+        # FG-461 (R62): the row's SMR is its execution package's SMR — a package of this
+        # project is required and no free-text SMR is taken
+        pkg_ref = await _manual_row_package(tenant, org_id, entry["project_id"],
+                                            entry["execution_package_id"], data.get("activity_name"))
+        entry["activity_name"] = pkg_ref.get("activity_name") or ""
+        # FG-491: the day is an ISO date YYYY-MM-DD — nothing else ("2026-10-05T00:00",
+        # "05.10.2026", a trailing space) is taken, so the same day is never two days
+        if not strict_iso_date(entry["date"]):
+            raise HTTPException(status_code=422, detail={
+                "code": "INVALID_DATE", "message": "Датата трябва да е във формат ГГГГ-ММ-ДД"})
+        # FG-492: a row that replaces a rejected / reversed row of the same worker, project
+        # and day names it (corrects_entry_id) — never an unlinked second row
+        entry["corrects_entry_id"] = await _correction_link(
+            tenant, org_id, entry, (data.get("corrects_entry_id") or "").strip() or None)
+        # FG-423: never the hours an approved report already carries (counted twice)
+        if await _approved_report_hours_exist(org_id, entry["project_id"], entry["employee_id"], entry["date"]):
+            raise HTTPException(status_code=409, detail={
+                "code": "DUPLICATE_OF_APPROVED_REPORT",
+                "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
+
+        async def body(session):
+            # LAB73-R1: the day's lock, then the overlap re-read — in ONE transaction
+            lock = await bump_labor_day_lock(tenant, org_id, entry["employee_id"], entry["date"],
+                                             session=session)
+            if await tenant.labor_entries.find_one({"org_id": org_id, "id": entry["id"]}, {"_id": 0, "id": 1},
+                                                   session=session):
+                return                       # this key's row is already there (a concurrent retry)
+            if await live_report_claims(tenant, org_id, lock, entry["project_id"], session=session):
+                raise HTTPException(status_code=409, detail={
+                    "code": "DUPLICATE_OF_APPROVED_REPORT",
+                    "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
+            # FG-463: nor the hours of another live manual row (pending or approved) of the day
+            if await overlapping_manual_rows(tenant, org_id, entry["project_id"], entry["employee_id"],
+                                             entry["date"], (MANUAL_PENDING, MANUAL_APPROVED),
+                                             exclude_id=entry["id"], session=session):
+                raise HTTPException(status_code=409, detail={
+                    "code": "DUPLICATE_MANUAL_ROW",
+                    "message": "За този работник, обект и ден вече има ръчен ред — поправете него, не добавяйте втори"})
+            # F-69-01: the key-derived _id, once per key (the read above already returns a
+            # committed row of this key; the lock serialises concurrent attempts)
+            async with mw.insert_once():
+                await tenant.labor_entries.insert_one(mw.unique(entry), session=session)
+            # FG-492: the creation is an AuditEvent (who, role, when) in the same transaction
+            from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
+            from app.audit.store import record_event
+            await record_event(db, build_event(
+                tenant_id=org_id, actor_type="human", actor_id=user["id"],
+                action="labor.manual_entry.created", source_flow="FLOW-028",
+                retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+                entity_type="labor_entry", entity_id=entry["id"], entity_version="1",
+                structured_diff={"before": None,
+                                 "after": {k: entry.get(k) for k in (
+                                     "project_id", "employee_id", "execution_package_id", "date",
+                                     "hours", "pay_type", "quantity", "labor_cost",
+                                     "approval_status", "corrects_entry_id")},
+                                 "actor": {"user_id": user["id"], "role": user.get("role")}},
+                reason=("R62: manual labor row entered" + (
+                    f" — corrects {entry['corrects_entry_id']}" if entry.get("corrects_entry_id") else "")
+                        + f" by {user['id']} (role {user.get('role')})"),
+                tool_or_endpoint="POST /labor-entries", idempotency_key=mw.key), session=session)
+
+        await _run_manual_tx(body)
         mw.result_id = entry["id"]
     out = {k: v for k, v in entry.items() if k != "_id"}
     return out if show_money else without_labor_money(out)
@@ -180,22 +240,69 @@ async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hou
     return {"pay_type": pay_type, "hourly_rate": rate if rate else None, "labor_cost": cost}
 
 
+async def _manual_row_package(tenant, org_id: str, project_id, pkg_id, activity_name) -> dict:
+    """FG-461: the execution package (SMR) a new manual row must name — of this project; a
+    free-text SMR different from the package's is refused (422), never stored."""
+    if not pkg_id:
+        raise HTTPException(status_code=422, detail={
+            "code": "SMR_REFERENCE_REQUIRED",
+            "message": "Изберете СМР пакет — ръчен ред без СМР не се приема (без свободен текст)"})
+    pkg = await tenant.execution_packages.find_one(
+        {"org_id": org_id, "id": pkg_id, "project_id": project_id}, {"_id": 0, "id": 1, "activity_name": 1})
+    if not pkg:
+        raise HTTPException(status_code=422, detail={
+            "code": "SMR_REFERENCE_INVALID", "message": "СМР пакетът не е от този обект"})
+    text = (activity_name or "").strip()
+    if text and text.lower() != (pkg.get("activity_name") or "").strip().lower():
+        raise HTTPException(status_code=422, detail={
+            "code": "FREE_TEXT_SMR", "message": "СМР се взима от пакета — свободен текст не се приема"})
+    return pkg
+
+
 async def _approved_report_hours_exist(org_id: str, project_id: str, employee_id: str, date: str) -> bool:
     """FG-423: does an APPROVED report already carry this worker's work on this project
-    and date? Then a manual row would count the hours twice."""
+    and date? Then a manual row would count the hours twice. FG-490: a report line with no
+    project (an old-style batch report) carries the worker's day on every project."""
     from app.services.report_normalizer import fetch_normalized_report_lines
-    if not (project_id and employee_id and date):
+    day = normalize_labor_date(date)
+    if not (project_id and employee_id and day):
         return False
     lines = await fetch_normalized_report_lines(
-        org_id=org_id, date_from=date, date_to=date, worker_id=employee_id, status_filter="APPROVED")
-    return any(ln.get("project_id") == project_id for ln in lines)
+        org_id=org_id, date_from=day, date_to=day, worker_id=employee_id, status_filter="APPROVED")
+    return any(ln.get("project_id") in (project_id, None, "") for ln in lines)
+
+
+async def _correction_link(tenant, org_id: str, entry: dict, corrects: Optional[str]) -> Optional[str]:
+    """FG-492: the rejected / reversed manual row a new row replaces. When the worker has
+    such a row on this project and day, the new row must name it (422
+    CORRECTION_LINK_REQUIRED); a named row must be one of them (422 CORRECTION_LINK_INVALID)."""
+    day = normalize_labor_date(entry.get("date"))
+    replaced = await tenant.labor_entries.find(
+        {"org_id": org_id, "project_id": entry.get("project_id"), "employee_id": entry.get("employee_id"),
+         "source": {"$ne": SYNC_SOURCE}, "entry_kind": {"$ne": "reversal"},
+         "approval_status": {"$in": [MANUAL_REJECTED, MANUAL_REVERSED]}},
+        {"_id": 0, "id": 1, "date": 1}).to_list(500)
+    ids = {r["id"] for r in replaced if normalize_labor_date(r.get("date")) == day}
+    if corrects is None:
+        if ids:
+            raise HTTPException(status_code=422, detail={
+                "code": "CORRECTION_LINK_REQUIRED", "replaces": sorted(ids),
+                "message": "За този ден има отхвърлен/сторниран ред — посочете кой ред поправяте (corrects_entry_id)"})
+        return None
+    if corrects not in ids:
+        raise HTTPException(status_code=422, detail={
+            "code": "CORRECTION_LINK_INVALID",
+            "message": "corrects_entry_id трябва да е отхвърлен/сторниран ред на същия работник, обект и ден"})
+    return corrects
 
 
 async def _run_manual_tx(body):
     """ONE MongoDB transaction (auth_tx.run_in_transaction); no transactions → 503, nothing
     written. (The DB-free tests replace this function explicitly.)"""
     from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    from app.services.labor_cost import ensure_labor_day_locks
     try:
+        await ensure_labor_day_locks(db)     # LAB73-R1: never created inside a transaction
         return await run_in_transaction(db, body)
     except TransactionsUnavailable:
         raise HTTPException(status_code=503, detail=(
@@ -265,6 +372,11 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
             raise HTTPException(status_code=403, detail={
                 "code": "SAME_PERSON_APPROVAL",
                 "message": "Въвеждащият и одобряващият са двама различни души — одобрява друг Собственик/Управител или Счетоводителят"})
+        # FG-424: a legacy row with no creator has an UNKNOWN creator — only an Owner approves it
+        if kind == "approve" and not row.get("created_by") and user.get("role") != "Owner":
+            raise HTTPException(status_code=403, detail={
+                "code": "UNKNOWN_CREATOR_OWNER_ONLY",
+                "message": "Редът няма записан въвеждащ — одобрява само Собственик/Управител"})
         version = int(row.get("version") or 1)
         if int(data.version) != version or (data.labor_cost is not None and row.get("labor_cost") is not None
                                             and round(float(data.labor_cost), 2) != round(float(row["labor_cost"]), 2)) \
@@ -283,16 +395,39 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
             raise HTTPException(status_code=409, detail={
                 "code": "DUPLICATE_OF_APPROVED_REPORT",
                 "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})
+        # FG-463: nor another approved manual row of the same worker, project and day
+        if kind == "approve" and await overlapping_manual_rows(
+                tenant, org_id, row.get("project_id"), row.get("employee_id"), row.get("date"),
+                (MANUAL_APPROVED,), exclude_id=entry_id):
+            raise HTTPException(status_code=409, detail={
+                "code": "DUPLICATE_MANUAL_ROW",
+                "message": "За този работник, обект и ден вече има одобрен ръчен ред — часовете не се броят два пъти"})
+        role = user.get("role") or ""
+        past = {"approve": "approved", "reject": "rejected", "reverse": "reversed"}[kind]
         now = datetime.now(timezone.utc).isoformat()
 
         async def body(session):
             from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
             from app.audit.store import record_event
+            if kind == "approve":
+                # LAB73-R1: the day's lock, then the overlap re-read — in THIS transaction
+                lock = await bump_labor_day_lock(tenant, org_id, row.get("employee_id"), row.get("date"),
+                                                 session=session)
+                if await live_report_claims(tenant, org_id, lock, row.get("project_id"), session=session):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "DUPLICATE_OF_APPROVED_REPORT",
+                        "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})
+                if await overlapping_manual_rows(tenant, org_id, row.get("project_id"), row.get("employee_id"),
+                                                 row.get("date"), (MANUAL_APPROVED,), exclude_id=entry_id,
+                                                 session=session):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "DUPLICATE_MANUAL_ROW",
+                        "message": "За този работник, обект и ден вече има одобрен ръчен ред — часовете не се броят два пъти"})
             res = await tenant.labor_entries.update_one(
                 {"org_id": org_id, "id": entry_id, "version": row.get("version"),
                  "approval_status": row.get("approval_status")},
                 {"$set": {"approval_status": to, "version": version + 1,
-                          f"{to}_by": user["id"], f"{to}_at": now,
+                          f"{to}_by": user["id"], f"{to}_by_role": role, f"{to}_at": now,
                           **({"decision_reason": reason} if reason else {})}}, session=session)
             if not getattr(res, "modified_count", 0):
                 raise HTTPException(status_code=409, detail={
@@ -321,8 +456,12 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
                 structured_diff={"before": {"approval_status": row.get("approval_status"), "version": version,
                                             "labor_cost": row.get("labor_cost")},
                                  "after": {"approval_status": to, "version": version + 1,
-                                           "reversal_entry_id": reversal_id}},
-                reason=reason or "R62: manual labor row approved by the Owner",
+                                           "reversal_entry_id": reversal_id},
+                                 # R73: who decided, in which role, and whether it was the creator
+                                 "actor": {"user_id": user["id"], "role": role,
+                                           "is_creator": bool(row.get("created_by")) and row.get("created_by") == user["id"]}},
+                reason=(f"{reason} — {past} by {user['id']} (role {role})" if reason
+                        else f"R62: manual labor row {past} by {user['id']} (role {role})"),
                 tool_or_endpoint=f"POST /labor-entries/{{id}}/{kind}", idempotency_key=key)
             await record_event(db, event, session=session)
 
@@ -345,6 +484,29 @@ def _owner_decision():
                                        resource_type="labor_entry", roles=MANUAL_ROW_DECIDERS))
 
 
+def _decider_or_creator():
+    """R73 (Krum, canon a11a4c41): the creator of a manual row MAY reject or reverse his OWN
+    row (he still needs the right to enter labor on its project — R16, the Permission Service
+    in enforce); anyone else needs the R66 decision right (Owner / Accountant). Approval is
+    never the creator's (R66, in _decide_manual_row). Decided before the handler runs."""
+    from app.permissions.money_write import check_field_cost_write, check_role_action
+
+    async def dependency(entry_id: str, request: Request, user: dict = Depends(require_m2)) -> dict:
+        row = await _tenant(user).labor_entries.find_one(
+            {"org_id": user["org_id"], "id": entry_id}, {"_id": 0, "created_by": 1, "project_id": 1})
+        if row and row.get("created_by") and row["created_by"] == user["id"]:
+            await check_field_cost_write(request, user, "labor.entry.create", module="M2",
+                                         resource_type="labor_entry", project_id=row.get("project_id"))
+            request.state.r73_creator = True
+            return user
+        await check_role_action(request, user, MANUAL_ROW_APPROVE_ACTION, module="M2",
+                                resource_type="labor_entry", roles=MANUAL_ROW_DECIDERS)
+        return user
+
+    dependency.sec01_action = MANUAL_ROW_APPROVE_ACTION
+    return Depends(dependency)
+
+
 @router.post("/labor-entries/{entry_id}/approve")
 async def approve_manual_labor_entry(
     entry_id: str, data: ManualDecision,
@@ -360,22 +522,22 @@ async def approve_manual_labor_entry(
 @router.post("/labor-entries/{entry_id}/reject")
 async def reject_manual_labor_entry(
     entry_id: str, data: ManualDecision,
-    _owner: dict = _owner_decision(),
+    _owner: dict = _decider_or_creator(),   # R73: Owner / Accountant, or the row's creator
     user: dict = Depends(require_m2),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
-    """FG-424: the Owner rejects a pending manual row (with a reason); it never counts."""
+    """FG-424 / R73: the Owner / Accountant or the row's creator rejects a pending manual row (with a reason); it never counts."""
     return await _decide_manual_row(entry_id, data, user, "reject", idempotency_key)
 
 
 @router.post("/labor-entries/{entry_id}/reverse")
 async def reverse_manual_labor_entry(
     entry_id: str, data: ManualDecision,
-    _owner: dict = _owner_decision(),
+    _owner: dict = _decider_or_creator(),   # R73: Owner / Accountant, or the row's creator
     user: dict = Depends(require_m2),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
-    """FG-424: the Owner reverses an APPROVED manual row (with a reason): a reversal row is
+    """FG-424 / R73: the Owner / Accountant or the row's creator reverses an APPROVED manual row (with a reason): a reversal row is
     appended (no delete) and the row stops counting."""
     return await _decide_manual_row(entry_id, data, user, "reverse", idempotency_key)
 

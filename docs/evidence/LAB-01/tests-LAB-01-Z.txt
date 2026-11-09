@@ -1,0 +1,48 @@
+# L01Z gates (2026-11-09) — head 205c7d6 — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
+## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness exit=0
+  changed cells vs. the branch before the merge:
+    changed cells: 0
+  changed cells vs. main's committed matrix:
+    changed cells: 78
+    - POST /api/labor-entries/{entry_id}/approve: status —→428, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/approve: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/approve: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/{entry_id}/reject: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/reject: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/reject: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/labor-entries/{entry_id}/reverse: status —→422, wrote —→no — 6 cells: roles accountant, owner × modes enforce, off, shadow
+    - POST /api/labor-entries/{entry_id}/reverse: status —→403, wrote —→audit_only — 6 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes enforce
+    - POST /api/labor-entries/{entry_id}/reverse: status —→403, wrote —→no — 12 cells: roles admin, driver, requester, technician, viewer, warehousekeeper × modes off, shadow
+    - POST /api/pay-runs: status 400→428, wrote no→no — 6 cells: roles admin, owner × modes enforce, off, shadow
+## W0-03E-A2B inventory regenerated: scripts/w0_03e_a2b_inventory.py exit=0
+## PM-01 tests
+6 passed, 10 warnings in 211.83s (0:03:31)
+## A2C guard
+W0-03E-A2C tenant boundary guard: 244 module(s) checked, 0 violation(s)
+## A1 guard
+W0-03E-A1 tenant access guard: 492 unit(s) checked, 0 violation(s)
+## LAB suites
+199 passed, 1 warning in 28.77s
+## SEC-01 (money_write_permissions + c01 + c02 + c03)
+30 passed, 10 warnings in 127.54s (0:02:07)
+## SEC-02 (test_sec_02_finance_read.py)
+1 failed, 30 passed, 10 warnings in 234.99s (0:03:54)
+## PAY-01
+630 passed, 1 warning in 169.34s (0:02:49)
+## W0-04 (real)
+74 passed, 1 warning in 15.93s
+## AUTH-01/02
+122 passed, 10 warnings in 179.29s (0:02:59)
+## R0 tests/test_r0_0*.py (real)
+814 passed, 10 warnings in 175.29s (0:02:55)
+## W0 DB-free (no real Mongo URL)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 94.39s (0:01:34)
+  non-legacy_routes failures: 0
+## SEC-02 reruns on the same head (fresh mongo:7.0 rs0 each) — the one failure above did not repeat
+  full file: 31 passed
+  fresh-run test ×2: 1 passed, 30 deselected in 192.22s (0:03:12) / 1 passed, 30 deselected in 192.31s (0:03:12)
+  (a known run-order-dependent row: GET /sites/{id}/pulse leaks_7777 for the shadow Accountant — a finance role — flips between runs)
+## frontend (head 205c7d6)
+Test Suites: 19 passed, 19 total
+Tests:       179 passed, 179 total
+Done in 34.61s.

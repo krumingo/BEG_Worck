@@ -44,7 +44,9 @@ Sum rule: the per-line amounts of one person add up exactly (to the cent) to
 that person's total — so a Pay Run row and the sum over SMR rows of the same
 person and period are one number.
 """
+import re
 from collections import defaultdict
+from typing import Optional
 
 from app.db import db
 from app.tenancy.data_access import TenantData
@@ -495,6 +497,127 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
     return await tenant.labor_entries.find(flt, {"_id": 0}).to_list(5000)
 
 
+_ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def strict_iso_date(value) -> Optional[str]:
+    """FG-491: the value when it is exactly a valid ISO date YYYY-MM-DD, else None."""
+    from datetime import date as _date
+    if not isinstance(value, str) or not _ISO_DAY.match(value):
+        return None
+    try:
+        _date.fromisoformat(value)
+    except ValueError:
+        return None
+    return value
+
+
+def normalize_labor_date(value) -> Optional[str]:
+    """FG-491: the ISO day of a STORED date, legacy spellings included ("2026-10-05",
+    "2026-10-05T00:00:00", "2026-10-05 ", "05.10.2026"); None when it is not a day. Used to
+    READ legacy rows — an official record is never rewritten by it."""
+    raw = str(value or "").strip()
+    m = re.match(r"^(\d{4}-\d{2}-\d{2})(?:[T ].*)?$", raw)
+    if m:
+        return strict_iso_date(m.group(1))
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$", raw)
+    if m:
+        return strict_iso_date("%s-%02d-%02d" % (m.group(3), int(m.group(2)), int(m.group(1))))
+    return None
+
+
+async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: Optional[str],
+                                  employee_id: str, date: str, statuses,
+                                  exclude_id: str = None, session=None) -> list:
+    """FG-463 (R62): the live manual rows (``statuses``; not reversed, not a reversal) of one
+    worker on one day — hours that would be counted a second time. ``project_id`` None =
+    every project of the tenant (FG-490: a report without a project). FG-491: the day is
+    compared normalised, so a legacy "05.10.2026" row is the same day as "2026-10-05"."""
+    day = normalize_labor_date(date)
+    if not (employee_id and day):
+        return []
+    flt = {"org_id": org_id, "employee_id": employee_id,
+           "source": {"$ne": SYNC_SOURCE}, "approval_status": {"$in": list(statuses)},
+           "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
+    if project_id:
+        flt["project_id"] = project_id
+    if exclude_id:
+        flt["id"] = {"$ne": exclude_id}
+    rows = await tenant.labor_entries.find(
+        flt, {"_id": 0, "id": 1, "approval_status": 1, "date": 1, "project_id": 1},
+        session=session).to_list(5000)
+    return [r for r in rows if normalize_labor_date(r.get("date")) == day]
+
+
+# LAB73-R1 (AUDIT-2, FG-463 race) / FG-490: ONE lock document per (tenant, worker, day). Every
+# write that adds hours of that day — a manual row created, a manual row approved, a report
+# approved — bumps it INSIDE its transaction and re-reads the overlap there. Two concurrent
+# transactions write the same document: one gets a write conflict, is retried by the driver
+# and then sees the other's committed row (→ 409). A report approval claims the day on the
+# lock (with its projects; none = the whole tenant) before its side effects; a claim counts
+# while the report is APPROVED or still fresh.
+LABOR_DAY_LOCKS = "labor_day_locks"
+REPORT_CLAIM_FRESH_SECONDS = 600
+_day_lock_indexed: set = set()
+
+
+async def ensure_labor_day_locks(raw_db) -> None:
+    """Create the lock collection's unique index BEFORE a transaction opens (a collection or
+    an index cannot be created by two concurrent transactions). Idempotent, once per db."""
+    key = (id(raw_db), raw_db.name)
+    if key in _day_lock_indexed:
+        return
+    # A2C: a statically visible collection (ownership ORG_KEYED, labor family)
+    await raw_db.labor_day_locks.create_index([("org_id", 1), ("id", 1)], unique=True,
+                                              name="one_lock_per_labor_day")
+    _day_lock_indexed.add(key)
+
+
+def labor_day_lock_id(employee_id: str, date: str) -> str:
+    return "%s|%s" % (employee_id, normalize_labor_date(date) or date)
+
+
+async def bump_labor_day_lock(tenant: TenantData, org_id: str, employee_id: str, date: str,
+                              session=None, report_claim: str = None,
+                              claim_projects=None) -> dict:
+    """Bump (create) the worker-day lock document in the caller's transaction; returns it.
+    ``report_claim``: a report id that claims the day for ``claim_projects`` (None = all)."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    lid = labor_day_lock_id(employee_id, date)
+    upd = {"$inc": {"seq": 1}, "$set": {"updated_at": now},
+           "$setOnInsert": {"org_id": org_id, "employee_id": employee_id,
+                            "date": normalize_labor_date(date) or date}}
+    if report_claim:
+        upd["$set"]["report_claims." + report_claim] = {
+            "at": now, "projects": sorted(claim_projects) if claim_projects else None}
+    coll = tenant.collection(LABOR_DAY_LOCKS)
+    await coll.update_one({"org_id": org_id, "id": lid}, upd, upsert=True, session=session)
+    return await coll.find_one({"org_id": org_id, "id": lid}, {"_id": 0}, session=session) or {}
+
+
+async def live_report_claims(tenant: TenantData, org_id: str, lock: dict, project_id: str,
+                             session=None) -> list:
+    """The report claims of a worker-day lock that cover ``project_id`` (a claim without
+    projects covers all) and still count: the report is APPROVED, or its approval started
+    less than REPORT_CLAIM_FRESH_SECONDS ago (still running)."""
+    from datetime import datetime, timezone, timedelta
+    out = []
+    fresh_after = (datetime.now(timezone.utc) - timedelta(seconds=REPORT_CLAIM_FRESH_SECONDS)).isoformat()
+    for rid, claim in (lock.get("report_claims") or {}).items():
+        claim = claim if isinstance(claim, dict) else {"at": claim, "projects": None}
+        projects = claim.get("projects")
+        if projects and project_id not in projects:
+            continue
+        rep = await tenant.employee_daily_reports.find_one(
+            {"org_id": org_id, "id": rid}, {"_id": 0, "status": 1, "approval_status": 1}, session=session)
+        status = ((rep or {}).get("approval_status") or (rep or {}).get("status") or "").upper()
+        if status == "APPROVED" or (rep is not None and str(claim.get("at")) >= fresh_after
+                                    and status != "REJECTED"):
+            out.append(rid)
+    return out
+
+
 async def project_labor_cost(org_id: str, project_id: str, date_from: str = None,
                              date_to: str = None) -> dict:
     """THE labor cost of one project ("изхарчено" труд, R31; R62: one number in every
@@ -546,20 +669,53 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
                       if any(r["report_id"] == w["report_id"] and r["project_id"] == project_id
                              for r in res["lines"]))
 
-    # R62 / FG-58: the Owner-approved manual rows, each at its own stored cost
+    # R62 / FG-58: the approved manual rows, each at its own stored cost.
+    # FG-461: a row's SMR is its execution package's SMR (activity_name), never free text; a
+    # legacy row without a package is mapped to the ONE package of the project whose SMR has
+    # that name, otherwise it keeps its text with DQ MANUAL_ROW_NO_SMR_REF.
+    pkgs = {}
+    if manual:
+        for p in await tenant.execution_packages.find(
+                {"org_id": org_id, "project_id": project_id},
+                {"_id": 0, "id": 1, "activity_name": 1}).to_list(2000):
+            pkgs[p["id"]] = p
+    by_name = {}
+    for p in pkgs.values():
+        by_name.setdefault((p.get("activity_name") or "").lower().strip(), []).append(p)
     for row in manual:
         cost = row.get("labor_cost")
+        row_dq = [] if cost is not None else ["MANUAL_ROW_NO_COST"]
+        pkg = pkgs.get(row.get("execution_package_id") or "")
+        if pkg is None and not row.get("execution_package_id"):
+            cands = by_name.get((row.get("activity_name") or "").lower().strip(), [])
+            pkg = cands[0] if len(cands) == 1 else None
+        if pkg is not None:
+            smr_name, pkg_id = pkg.get("activity_name") or "", pkg["id"]
+        else:
+            smr_name, pkg_id = row.get("activity_name") or "", row.get("execution_package_id") or None
+            row_dq.append("MANUAL_ROW_NO_SMR_REF")
+            dq.append({"code": "MANUAL_ROW_NO_SMR_REF", "report_id": "manual:" + str(row.get("id")),
+                       "message": "Ръчен ред без пакет/СМР — СМР бюджетът не може да го отнесе."})
+        if not strict_iso_date(row.get("date")):
+            # FG-491: a legacy non-ISO date is read as its day but never rewritten here —
+            # the row is flagged for a manual correction
+            row_dq.append("MANUAL_ROW_NON_ISO_DATE")
+            dq.append({"code": "MANUAL_ROW_NON_ISO_DATE", "report_id": "manual:" + str(row.get("id")),
+                       "date": row.get("date"), "normalized": normalize_labor_date(row.get("date")),
+                       "message": "Ръчен ред с дата не във формат ГГГГ-ММ-ДД — коригирайте ръчно (сторно + нов ред)."})
+        role = {"Owner": "Собственика", "Accountant": "Счетоводителя"}.get(
+            row.get("approved_by_role") or "", row.get("approved_by_role") or "одобряващия")
         rec = {"report_id": "manual:" + str(row.get("id")), "worker_id": row.get("employee_id"),
                "date": row.get("date", ""), "project_id": project_id,
-               "smr_type": row.get("activity_name") or "", "hours": float(row.get("hours") or 0),
+               "smr_type": smr_name, "hours": float(row.get("hours") or 0),
                "cost_type": LABOR, "pay_type": row.get("pay_type") or "Manual",
                "pay_type_source": "manual_row",
                "rate": row.get("hourly_rate"), "approved_quantity": row.get("quantity"),
                "piece_rate": row.get("piece_rate"),
                "amount": round(float(cost), 2) if cost is not None else 0.0,
-               "formula": (row.get("labor_formula") or "") + " (ръчен ред, одобрен от Собственика)",
-               "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
-               "execution_package_id": row.get("execution_package_id") or None,
+               "formula": (row.get("labor_formula") or "") + f" (ръчен ред, одобрен от {role})",
+               "dq": row_dq,
+               "execution_package_id": pkg_id,
                "manual_entry_id": row.get("id")}
         kept.append(rec)
         if cost is None:
