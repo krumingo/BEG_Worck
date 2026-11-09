@@ -1280,6 +1280,15 @@ async def deduct_advance_on_act(
     and as an AuditEvent. No ledger row: no money moves. Idempotency-Key required (R29)."""
     amount = round(money_value(data.get("amount")), 2)
     reason = _reason(data.get("reason"), required=False)
+    # CP-01 FG-499 (R29, CP83-M3 order): role check → pure validation (above) → the replay →
+    # the state guards (act confirmed, package). A completed key → the stored act; the same
+    # key with another body → 409.
+    replay = await MoneyWrite.completed_replay(user, "subcontract.advance_deduction.execute",
+                                               idempotency_key, {**data, "act_id": act_id})
+    if replay:
+        stored = await _tenant(user).subcontractor_acts.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
     tenant = _tenant(user)
     act_row = await tenant.subcontractor_acts.find_one({"id": act_id, "org_id": user["org_id"]},
                                                        {"_id": 0, "package_id": 1})

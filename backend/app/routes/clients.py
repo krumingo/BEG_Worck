@@ -166,7 +166,7 @@ async def list_clients(
         client["linked_counterparties_count"] = len(cp_ids)
     
     return {
-        "items": clients,
+        "items": cr.mask_vat_egn(clients),       # FG-498: legacy vat_number masked on read
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -217,7 +217,7 @@ async def get_client(client_id: str, user: dict = Depends(require_m5)):
     
     client["linked_counterparties"] = linked_counterparties
     
-    return client
+    return cr.mask_vat_egn(client)               # FG-498
 
 
 @router.put("/clients/{client_id}")
@@ -254,7 +254,8 @@ async def update_client(client_id: str, data: ClientUpdate, user: dict = Depends
 
     return await mr.update(db, user, idempotency_key, collection="clients", record_id=client_id,
                            changes=changes, check=check,
-                           fingerprint={"id": client_id, "body": data.model_dump()})
+                           fingerprint={"id": client_id, "body": data.model_dump()},
+                           result=cr.mask_vat_egn)                      # FG-498
 
 
 @router.delete("/clients/{client_id}")
@@ -329,7 +330,7 @@ async def get_client_by_phone(phone: str, user: dict = Depends(require_m5)):
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     
-    return client
+    return cr.mask_vat_egn(client)               # FG-498
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -383,6 +384,7 @@ async def unified_client_search(
     results = []
     
     q = (query or "").strip()
+    egn_hits = 0                                  # R48.3: ЕГН-digit matches to audit
     q_normalized = normalize_phone(q) if q else ""
     q_lower = q.lower() if q else ""
     
@@ -396,8 +398,18 @@ async def unified_client_search(
                 eik_match = normalize_eik(q) and normalize_eik(q) in normalize_eik(c.get("eik") or "")
                 # FG-482 (R48.3): a BG + ЕГН VAT number is an ЕГН — matched by its digits only
                 # for the roles that may see it in full (Owner / Accountant)
-                vat_match = q_lower in (c.get("vat_number") or "").lower() and (
-                    not cr.vat_is_egn(c.get("vat_number")) or cr.can_reveal_egn(user))
+                vat_raw = c.get("vat_number") or ""
+                vat_norm = cr.normalize_vat(vat_raw) or ""
+                q_digits = cr.egn_digits_query(q)
+                if cr.vat_is_egn(vat_raw):
+                    # FG-482 / FG-496: a BG + ЕГН VAT number (in any spelling) matches — also by a
+                    # partial digit run — only for Owner / Accountant, and then it is audited
+                    vat_match = cr.can_reveal_egn(user) and bool(
+                        (q_digits and q_digits in vat_norm) or q_lower in vat_raw.lower())
+                    egn_hits += 1 if vat_match and not (name_match or eik_match) else 0
+                else:
+                    vat_match = q_lower in vat_raw.lower() or bool(
+                        q_digits and q_digits in vat_norm)
                 phone_match = q_normalized and q_normalized in normalize_phone(c.get("phone") or "")
                 mol_match = q_lower in (c.get("mol") or "").lower()
                 
@@ -431,6 +443,8 @@ async def unified_client_search(
                 # that may see it in full (Owner / Accountant) may search by it
                 egn_match = cr.can_reveal_egn(user) and normalize_egn(q) and \
                     normalize_egn(q) in normalize_egn(p.get("egn") or "")
+                if egn_match and not name_match:
+                    egn_hits += 1
                 phone_match = q_normalized and q_normalized in normalize_phone(p.get("phone") or "")
                 
                 if not (name_match or egn_match or phone_match):
@@ -449,6 +463,7 @@ async def unified_client_search(
             })
     
     results.sort(key=lambda x: x["display_name"].lower())
+    await mr.audit_egn_search(db, user, q, egn_hits, "clients.search.unified")   # R48.3
     
     return {
         "items": results[:limit],
@@ -496,7 +511,7 @@ async def create_company_client(
     company = {
         "name": data.company_name.strip(),
         "eik": eik,
-        "vat_number": data.vat_number.strip() if data.vat_number else None,
+        "vat_number": cr.normalize_vat(data.vat_number) if data.vat_number else None,   # FG-496
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip().lower() if data.email else None,
@@ -808,7 +823,7 @@ async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
             })
 
     return {
-        "client": client,
+        "client": cr.mask_vat_egn(client),       # FG-498
         "projects": project_summaries,
         "totals": {
             "projects_count": len(projects),

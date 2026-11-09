@@ -1949,3 +1949,118 @@ def test_cp83_m3_same_key_other_body_is_409_and_a_completed_replay_survives_arch
             assert (len(await rows(op, "finance_payments")),
                     len(await rows(op, "subcontractor_payments"))) == before
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 40 (#83 @ b4a775f)
+def test_fg496_vat_is_normalised_on_input_and_partial_digit_search_is_owner_accountant_audited(monkeypatch, backend, mode):
+    """FG-496: a VAT number is stored trimmed / upper-case / without separators, and then
+    classified — BG-7501011111 and bg.7501011111 are BG + ЕГН. A search by a partial digit
+    run matches such a record only for Owner / Accountant, and each such search is audited
+    with the query masked (R48.3)."""
+    async def scenario(c, op):
+        r = await c.post("/api/counterparties", headers=hdr("acct-a"),
+                         json={"name": "Физ лице", "type": "supplier", "vat_number": "BG-" + TYPED})
+        assert r.status_code == 201, r.text
+        cp = (await rows(op, "counterparties", {"name": "Физ лице"}))[0]
+        assert cp["vat_number"] == VAT_EGN
+        r = await c.post("/api/companies", headers=hdr("acct-a"),
+                         json={"eik": "565656565", "name": "Фирма 2", "vat_number": " bg.%s " % TYPED})
+        assert r.status_code == 201 and no_full(r.json(), TYPED), r.text
+        assert (await rows(op, "companies", {"eik": "565656565"}))[0]["vat_number"] == VAT_EGN
+        r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json={
+            "direction": "Issued", "counterparty_name": "Мария", "counterparty_vat_no": "bg " + TYPED,
+            "issue_date": "2026-11-09", "due_date": "2026-11-30", "lines": []})
+        assert r.status_code == 201 and no_full(r.json(), TYPED), r.text
+        assert (await rows(op, "invoices", {"id": r.json()["id"]}))[0]["counterparty_vat_no"] == VAT_EGN
+        part = TYPED[:6]
+        for who in ("admin-a", "viewer-a", "site-a"):
+            r = await c.get("/api/counterparties?active_only=false&search=" + part, headers=hdr(who))
+            if r.status_code == 200:
+                assert cp["id"] not in {x["id"] for x in r.json()["items"]}, who
+            r = await c.get("/api/clients/search/unified?type=company&query=" + part, headers=hdr(who))
+            assert r.status_code == 200 and r.json()["total"] == 0, (who, r.text)
+        assert await rows(op, "audit_events", {"action": "party.egn_search"}) == []
+        r = await c.get("/api/counterparties?active_only=false&search=" + part, headers=hdr("acct-a"))
+        assert cp["id"] in {x["id"] for x in r.json()["items"]} and no_full(r.json(), TYPED)
+        r = await c.get("/api/clients/search/unified?type=company&query=" + part, headers=hdr("owner-a"))
+        assert r.json()["total"] == 1 and no_full(r.json(), TYPED)
+        ev = await rows(op, "audit_events", {"action": "party.egn_search"})
+        assert len(ev) == 2 and no_full(ev, TYPED) and no_full(ev, part), ev
+        assert {e["entity_id"] for e in ev} == {"counterparties.list", "clients.search.unified"}
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg497_import_client_invoice_stores_the_bg_egn_vat_masked(monkeypatch, backend, mode):
+    """FG-497: the invoice details copied from the client company keep its BG + ЕГН VAT
+    number masked; the full value stays only in the company record. A typed copy with no
+    canonical record is kept and gets a DQ issue."""
+    async def scenario(c, op):
+        await op.companies.update_one({"id": "co1"}, {"$set": {"vat_number": VAT_EGN}})
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"owner_type": "company", "owner_id": "co1"}})
+        r = await c.post("/api/projects/prj-1/import-client-invoice", headers=hdr("owner-a"))
+        assert r.status_code == 200 and no_full(r.json(), TYPED), r.text
+        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+        assert prj["invoice_details"]["vat_number"] == "BG******" + TYPED[-4:]
+        assert (await rows(op, "companies", {"id": "co1"}))[0]["vat_number"] == VAT_EGN
+        # a typed BG + ЕГН that the owner's record does not hold: kept + DQ
+        other = "BG7502022222"
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": {"company_name": "X", "vat_number": "BG-7502022222"}})
+        assert r.status_code == 200 and no_full(r.json(), "7502022222"), r.text
+        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+        assert prj["invoice_details"]["vat_number"] == other
+        dq = await rows(op, "dq_issues", {"type": "EGN_COPY_WITHOUT_CANONICAL"})
+        assert dq and dq[-1]["data"]["fields"] == ["vat_number"]
+        # the same as the canonical company: stored masked
+        r = await c.put("/api/projects/prj-1", headers=hdr("admin-a"),
+                        json={"invoice_details": {"company_name": "X", "vat_number": VAT_EGN}})
+        assert r.status_code == 200
+        prj = (await rows(op, "projects", {"id": "prj-1"}))[0]
+        assert prj["invoice_details"]["vat_number"] == "BG******" + TYPED[-4:]
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg498_a_legacy_client_vat_is_masked_on_read_and_not_rewritten(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.clients.update_one({"id": "cl1"}, {"$set": {"vat_number": "BG " + TYPED}})
+        for who in ("owner-a", "acct-a", "admin-a"):
+            for url in ("/api/clients", "/api/clients/cl1", "/api/clients/by-phone/0888111222",
+                        "/api/clients/cl1/summary"):
+                r = await c.get(url, headers=hdr(who))
+                if r.status_code == 200:
+                    assert no_full(r.json(), TYPED), (who, url)
+        assert (await rows(op, "clients", {"id": "cl1"}))[0]["vat_number"] == "BG " + TYPED   # not rewritten
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg499_advance_deduction_replays_before_the_guards(monkeypatch, backend, mode):
+    """FG-499 (R29): the advance-deduction route: role → pure validation → replay → state
+    guards; a completed key replays the stored act even after the act changed state; the
+    same key with another body → 409."""
+    import inspect
+    from app.routes import subcontractors as s
+    src = inspect.getsource(s.deduct_advance_on_act)
+    assert src.index("money_value(") < src.index("completed_replay(") < src.index("_confirmed_act(") \
+        < src.index("MoneyWrite.begin(")
+    if backend != "real":
+        return
+
+    async def scenario(c, op):
+        await op.subcontractor_packages.update_one({"id": "pkg1"}, {"$set": {"contract_total": 9000.0}})
+        await op.subcontractor_acts.insert_one({
+            "id": "sact1", "org_id": ORG_A, "project_id": "prj-1", "package_id": "pkg1",
+            "act_no": "SA-1", "status": "confirmed", "certified_total": 500.0, "lines": []})
+        r = await c.post("/api/subcontractor-packages/pkg1/advances", headers=hdr("acct-a"), json={
+            "amount": 300.0, "reason": "Аванс", "account_id": CASH_A,
+            "cash_receipt_file_id": "file_r", "cash_recipient_name": "Бригадир"})
+        assert r.status_code == 201, r.text
+        url = "/api/subcontractor-acts/sact1/advance-deduction"
+        h = dict(hdr("acct-a"), **{"Idempotency-Key": "ded-fg499"})
+        r = await c.post(url, headers=h, json={"amount": 100.0})
+        assert r.status_code == 201, r.text
+        await op.subcontractor_acts.update_one({"id": "sact1"}, {"$set": {"status": "cancelled"}})
+        r = await c.post(url, headers=h, json={"amount": 100.0})
+        assert r.status_code in (200, 201) and r.json()["id"] == "sact1", r.text
+        r = await c.post(url, headers=h, json={"amount": 120.0})
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_CONFLICT"
+    run(monkeypatch, backend, mode, scenario)

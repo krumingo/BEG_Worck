@@ -338,3 +338,22 @@ async def reveal_vat_egn(db, user, idem: Optional[str], *, collection: str, reco
     from app.services.master_write import run_tx
     vat = await run_tx(db, tx)
     return {"id": record_id, "vat_number": vat, "revealed": True}
+
+
+
+async def audit_egn_search(db, user, query: Any, hits: int, where: str) -> None:
+    """R48.3 ("with audit"): an Owner / Accountant search whose digits matched an ЕГН (a
+    person's ЕГН, or a BG + ЕГН VAT number) is an AuditEvent ``party.egn_search`` — who,
+    when, where, how many matches, and the query MASKED (never the digits searched)."""
+    if hits <= 0:
+        return
+    tenant = TenantData.for_user(db, user)          # noqa: F841 (tenant-scoped caller)
+
+    async def tx(session):
+        await audit(db, session, user, "party.egn_search", entity_type="search",
+                    entity_id=where, key="egn-search-" + uuid.uuid4().hex,
+                    diff={"query_masked": cr.mask_egn(cr.egn_digits_query(query)),
+                          "matches": hits, "where": where, "role": user.get("role")})
+
+    from app.services.master_write import run_tx
+    await run_tx(db, tx)

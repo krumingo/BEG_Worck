@@ -287,11 +287,44 @@ async def _mask_invoice_details(tenant, details, owner_type, owner_id=None):
                                        tenant, owner_type, owner_id))
 
 
+async def _store_vat_copy(tenant, user, details, owner_type, owner_id):
+    """FG-496 / FG-497 (R48.3, CP83-03): ``invoice_details.vat_number`` is normalised; a
+    BG + ЕГН value is stored MASKED when its canonical record holds the same value (the
+    owner company's ``vat_number``, or the owner person's ``egn``) — the full value stays
+    only there. Without such a record it is kept as typed (readers mask it) and a DQ issue
+    „ЕГН копие без каноничен запис“ is opened."""
+    if not isinstance(details, dict) or not details.get("vat_number"):
+        return details
+    out = dict(details)
+    if cr.is_masked_vat(out["vat_number"]):
+        return out
+    out["vat_number"] = cr.normalize_vat(out["vat_number"])
+    if not cr.vat_is_egn(out["vat_number"]):
+        return out
+    canonical = None
+    if owner_type == "company" and owner_id:
+        co = await tenant.companies.get(owner_id, {"_id": 0, "vat_number": 1})
+        canonical = co and cr.normalize_vat(co.get("vat_number")) == out["vat_number"]
+    elif owner_type == "person" and owner_id:
+        pe = await tenant.persons.get(owner_id, {"_id": 0, "egn": 1})
+        canonical = pe and cr.same_egn(pe.get("egn"), out["vat_number"][2:])
+    if canonical:
+        out["vat_number"] = cr.mask_vat(out["vat_number"])
+        return out
+    from app.services.master_write import dq_issue
+    await dq_issue(tenant, None, code="EGN_COPY_WITHOUT_CANONICAL", severity="warning",
+                   entity_type="project_invoice_details", entity_id=owner_id or None,
+                   message="ЕГН копие без каноничен запис", data={"fields": ["vat_number"]},
+                   created_by=user.get("id"))
+    return out
+
+
 async def _store_invoice_details(tenant, user, details, owner_type, owner_id):
     """CP83-03 (CLAUDE.md §2: no data destroyed): a full ЕГН typed into ``invoice_details`` is
     stored masked only when the canonical ``persons`` record of the owner holds the SAME ЕГН
     (the copy is redundant). Otherwise it is kept as typed — readers still mask it — and a DQ
     issue „ЕГН копие без каноничен запис“ is opened for the Accountant."""
+    details = await _store_vat_copy(tenant, user, details, owner_type, owner_id)   # FG-496/497
     fields = cr.egn_copy_fields(details, owner_type, owner_id,   # incl. a possible ЕГН (FG-267)
                                 company_confirmed=await _company_confirmed(tenant, owner_type, owner_id))
     if not fields:
@@ -501,6 +534,10 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
     if not invoice:
         raise HTTPException(status_code=404, detail="Client data not found")
 
+    # FG-497 (R48.3): the copy is taken FROM the canonical record — a BG + ЕГН VAT number is
+    # stored masked here; the full value stays only in that record
+    if cr.vat_is_egn(invoice.get("vat_number")):
+        invoice["vat_number"] = cr.mask_vat(cr.normalize_vat(invoice["vat_number"]))
     now = datetime.now(timezone.utc).isoformat()
     await _tenant(user).projects.update_one({"id": project_id, "org_id": user["org_id"]},
                                  {"$set": {"invoice_details": invoice, "updated_at": now}})
@@ -902,7 +939,7 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
     company = {
         "eik": eik,
         "name": data.name.strip(),
-        "vat_number": data.vat_number.strip() if data.vat_number else None,
+        "vat_number": cr.normalize_vat(data.vat_number) if data.vat_number else None,   # FG-496
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip() if data.email else None,
@@ -961,6 +998,8 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
                 update[k] = v
     if cr.is_masked_vat(update.get("vat_number")):   # FG-482: a masked value keeps the stored one
         update.pop("vat_number")
+    elif update.get("vat_number"):
+        update["vat_number"] = cr.normalize_vat(update["vat_number"])        # FG-496
     return await mr.update(db, user, idempotency_key, collection="companies", record_id=company_id,
                            changes=update, fingerprint={"id": company_id, "body": data.model_dump()},
                            result=cr.mask_vat_egn)

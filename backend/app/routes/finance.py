@@ -902,6 +902,7 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
     
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
+    data.counterparty_vat_no = cr.normalize_vat(data.counterparty_vat_no)   # FG-496
     eik_check = validate_eik(data.counterparty_eik or "")
     if not eik_check["valid"]:
         raise HTTPException(status_code=400, detail=eik_check["message"])
@@ -1111,6 +1112,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         data.counterparty_eik = None
     if cr.is_masked_vat(data.counterparty_vat_no):        # FG-429: the same for BG + ЕГН
         data.counterparty_vat_no = None
+    elif data.counterparty_vat_no:
+        data.counterparty_vat_no = cr.normalize_vat(data.counterparty_vat_no)   # FG-496
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
     eik_check = validate_eik(data.counterparty_eik or "" if data.counterparty_eik is not None else "")

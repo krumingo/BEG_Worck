@@ -166,7 +166,9 @@ async def list_counterparties(
             {"vat_number": {"$regex": re.escape(search), "$options": "i"}}
             if cr.can_reveal_egn(user) else
             {"$and": [{"vat_number": {"$regex": re.escape(search), "$options": "i"}},
-                      {"vat_number": {"$not": re.compile(r"^\s*BG\s*\d{10}\s*$", re.I)}}]},
+                      # FG-496: in any spelling (BG-…, bg.…, with spaces / slashes)
+                      {"vat_number": {"$not": re.compile(r"^\s*BG[\s\-./]*(\d[\s\-./]*){10}$",
+                                                         re.I)}}]},
             {"email": {"$regex": re.escape(search), "$options": "i"}},
             {"phone": {"$regex": re.escape(search), "$options": "i"}},
         ]
@@ -180,6 +182,11 @@ async def list_counterparties(
     # Paginate
     skip = (page - 1) * page_size
     counterparties = await tenant.counterparties.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
+    if search and cr.can_reveal_egn(user):        # R48.3: an ЕГН-digit search is audited
+        digits = cr.egn_digits_query(search)
+        hits = sum(1 for cp in counterparties if digits and cr.vat_is_egn(cp.get("vat_number"))
+                   and digits in (cr.normalize_vat(cp.get("vat_number")) or ""))
+        await mr.audit_egn_search(db, user, search, hits, "counterparties.list")
     
     # Add invoice counts
     for cp in counterparties:
@@ -213,7 +220,8 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
         raise HTTPException(status_code=422, detail={"error_code": "EIK_INVALID",
                                                      "message": "ЕИК съдържа само цифри"})
     counterparty = {
-        "name": data.name, "type": data.type, "vat_number": data.vat_number,
+        "name": data.name, "type": data.type,
+        "vat_number": cr.normalize_vat(data.vat_number),          # FG-496
         "address": data.address, "phone": data.phone, "email": data.email,
         "contact_person": data.contact_person, "payment_terms_days": data.payment_terms_days,
         "notes": data.notes, "active": True,
@@ -288,6 +296,8 @@ async def update_counterparty(counterparty_id: str, data: CounterpartyUpdate, us
     new_eik = cr.normalize_eik(raw.pop("eik", None)) if data.eik else ""
     old_eik = cr.normalize_eik(counterparty.get("eik"))
     changes = {k: v for k, v in raw.items() if v is not None}
+    if "vat_number" in changes:                                   # FG-496
+        changes["vat_number"] = cr.normalize_vat(changes["vat_number"])
     # FG-429: the form shows a BG + ЕГН VAT number masked — sending it back keeps the stored one
     changes = {k: v for k, v in cr.keep_stored_if_masked(changes, counterparty,
                                                           keys=("vat_number", "iban")).items()

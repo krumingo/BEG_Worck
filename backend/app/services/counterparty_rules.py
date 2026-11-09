@@ -198,13 +198,34 @@ INVOICE_EGN_KEYS = ("counterparty_eik", "egn")
 VAT_KEYS = ("counterparty_vat_no", "vat_number", "vat_no")
 
 
+_VAT_SEPARATORS = re.compile(r"[\s\-./]")
+
+
+def normalize_vat(value: Any) -> Any:
+    """FG-496: a VAT number as stored and classified — trimmed, upper-case, without the
+    separators space - . /  (``bg.750101-1111`` → ``BG7501011111``). ``None`` / empty and a
+    masked value (``BG******1234``) are returned unchanged."""
+    if not isinstance(value, str):
+        return value
+    if is_masked_vat(value.strip()):
+        return value.strip()
+    v = _VAT_SEPARATORS.sub("", value).upper()
+    return v or None if value.strip() == "" else v
+
+
 def vat_is_egn(value: Any) -> bool:
-    """FG-429: ``BG`` + 10 digits — a natural person's VAT number, i.e. an ЕГН (a company's
-    is BG + its 9 / 13-digit ЕИК). An already masked value is not one."""
+    """FG-429 / FG-496: ``BG`` + 10 digits after normalisation — a natural person's VAT
+    number, i.e. an ЕГН (a company's is BG + its 9 / 13-digit ЕИК). A masked value is not."""
     if not isinstance(value, str):
         return False
-    v = re.sub(r"[\s.-]", "", value).upper()
-    return v.startswith("BG") and v[2:].isdigit() and len(v) == 12
+    v = normalize_vat(value)
+    return isinstance(v, str) and v.startswith("BG") and v[2:].isdigit() and len(v) == 12
+
+
+def egn_digits_query(query: Any) -> str:
+    """FG-496: the digit run of a search text (≥ 4 digits), the part that may match an ЕГН."""
+    d = re.sub(r"\D", "", str(query or ""))
+    return d if len(d) >= 4 else ""
 
 
 def mask_vat(value: Any) -> str:
