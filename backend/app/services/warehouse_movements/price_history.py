@@ -36,7 +36,11 @@ def _dec(value: Any) -> Optional[Decimal]:
 async def _project_buckets(tenant, project_id: str) -> List[str]:
     subs = [p["id"] async for p in tenant.projects.find(
         {"parent_project_id": project_id}, {"_id": 0, "id": 1})]
-    return [project_id] + subs
+    # PRJ-01 / FG-280 (R60): a legacy warranty project one level below a sub-project (the
+    # only second level allowed) belongs to the same project's purchases.
+    warranty = [p["id"] async for p in tenant.projects.find(
+        {"parent_project_id": {"$in": subs}, "type": "Warranty"}, {"_id": 0, "id": 1})] if subs else []
+    return [project_id] + subs + warranty
 
 
 async def project_purchases(tenant, org_id: str, project_id: str) -> List[dict]:

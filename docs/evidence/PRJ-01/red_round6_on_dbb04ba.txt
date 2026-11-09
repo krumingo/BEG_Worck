@@ -1,0 +1,6 @@
+# PRJ-01 round 6 (FG-279 structure only via structure commands; FG-280 second-level warranty roll-up in every reader) — the extended test on dbb04ba, real MongoDB rs0
+E       AssertionError: assert [200, None] == [409, 'PARENT..._NOT_ALLOWED']
+E         
+E         At index 0 diff: 200 != 409
+E         Use -v to get more diff
+1 failed, 8 passed in 13.94s
