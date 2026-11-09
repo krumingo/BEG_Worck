@@ -493,11 +493,12 @@ _day_lock_indexed: set = set()
 async def ensure_labor_day_locks(raw_db) -> None:
     """Create the lock collection's unique index BEFORE a transaction opens (a collection or
     an index cannot be created by two concurrent transactions). Idempotent, once per db."""
-    key = (id(raw_db), getattr(raw_db, "name", ""))
+    key = (id(raw_db), raw_db.name)
     if key in _day_lock_indexed:
         return
-    await raw_db[LABOR_DAY_LOCKS].create_index([("org_id", 1), ("id", 1)], unique=True,
-                                               name="one_lock_per_labor_day")
+    # A2C: a statically visible collection (ownership ORG_KEYED, labor family)
+    await raw_db.labor_day_locks.create_index([("org_id", 1), ("id", 1)], unique=True,
+                                              name="one_lock_per_labor_day")
     _day_lock_indexed.add(key)
 
 
