@@ -363,24 +363,18 @@ def test_r62_reject_and_reverse(monkeypatch):
     run(monkeypatch, scenario)
 
 
-def test_r62_a_manual_akord_row_is_quantity_times_the_piece_rate(monkeypatch):
-    """FG-423: akord = quantity × the package's piece rate — never hours × rate."""
+def test_r62_a_manual_akord_row_without_an_approved_quantity_is_refused(monkeypatch):
+    """R62 + R33 (FLOW Guard): the akord quantity is the LAB-02 APPROVED quantity — a manual
+    row never brings a second, typed quantity. Without a LAB-02 source (this branch) a
+    manual akord row is refused, with or without a quantity; nothing is stored."""
     async def scenario(c, op):
         await op.execution_packages.insert_one({"id": "pkg-ak", "org_id": ORG, "project_id": P, "activity_name": "Боя",
                                                 "labor_pay_type": "Akord", "labor_piece_rate": 5, "labor_terms_version": 3})
         body = {"project_id": P, "employee_id": "w1", "hours": 8, "date": "2026-11-09", "execution_package_id": "pkg-ak"}
-        r = await c.post("/api/labor-entries", json=body, headers=_key("admin"))
-        assert r.status_code == 422, r.text                 # akord without a quantity
-        r = await c.post("/api/labor-entries", json=dict(body, quantity=12), headers=_key("admin"))
-        assert r.status_code == 201, r.text
-        row = r.json()
-        assert (row["labor_cost"], row["pay_type"], row["quantity"], row["piece_rate"], row["labor_terms_version"]) == (60.0, "Akord", 12.0, 5.0, 3)
-        assert row["hourly_rate"] is None                   # not 8 h × 20
-        await op.execution_packages.insert_one({"id": "pkg-ak0", "org_id": ORG, "project_id": P,
-                                                "activity_name": "Без цена", "labor_pay_type": "Akord"})
-        r = await c.post("/api/labor-entries", json=dict(body, quantity=12, execution_package_id="pkg-ak0"),
-                         headers=_key("admin"))
-        assert r.status_code == 422                          # no piece rate → no default
+        for b in (body, dict(body, quantity=12)):
+            r = await c.post("/api/labor-entries", json=b, headers=_key("admin"))
+            assert r.status_code == 422 and r.json()["detail"]["code"] == "AKORD_NEEDS_APPROVED_QUANTITY", r.text
+        assert await op.labor_entries.count_documents({"execution_package_id": "pkg-ak"}) == 0
     run(monkeypatch, scenario)
 
 
@@ -891,4 +885,48 @@ def test_fg492_a_correction_names_the_row_it_replaces_and_every_create_is_audite
         r = await c.post("/api/labor-entries", json=dict(body, date="2026-11-20"), headers=_key("admin"))
         assert r.status_code == 201 and r.json()["corrects_entry_id"] is None, r.text
         assert await op.audit_events.count_documents({"action": "labor.manual_entry.created"}) == 2
+    run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 40 (FG-500, FG-502)
+
+def test_fg502_the_work_session_writes_answer_with_hours_only(monkeypatch):
+    """start / end / split / PUT answer with the session's hours — no labor_cost and no
+    hourly_rate_at_date, to the worker or anyone (R62 / R20)."""
+    async def scenario(c, op):
+        await op.employee_profiles.update_one({"user_id": "owner"}, {"$set": {
+            "org_id": ORG, "user_id": "owner", "hourly_rate": 30, "pay_type": "Hourly"}}, upsert=True)
+        money = {"labor_cost", "hourly_rate_at_date"}
+        s1 = await c.post("/api/work-sessions/start", json={"site_id": P}, headers=_token("owner"))
+        assert s1.status_code == 201 and not money & set(s1.json()), s1.text
+        e1 = await c.post("/api/work-sessions/end", json={}, headers=_token("owner"))
+        assert e1.status_code == 200 and not money & set(e1.json()), e1.text
+        sid = e1.json()["id"]
+        stored = await op.work_sessions.find_one({"id": sid})
+        assert "labor_cost" in stored                            # the time record keeps its fields
+        await op.work_sessions.update_one({"id": sid}, {"$set": {
+            "started_at": "2026-11-03T07:00:00+00:00", "ended_at": "2026-11-03T15:00:00+00:00"}})
+        u = await c.put(f"/api/work-sessions/{sid}", json={"notes": "x", "ended_at": "2026-11-03T16:00:00+00:00"},
+                        headers=_token("owner"))
+        assert u.status_code == 200 and not money & set(u.json()), u.text
+        sp = await c.post(f"/api/work-sessions/{sid}/split", json={"splits": [{"hours": 4}, {"hours": 5}]},
+                          headers=_token("owner"))
+        assert sp.status_code == 200, sp.text
+        assert all(not money & set(n) for n in sp.json()["new_sessions"]), sp.json()
+    run(monkeypatch, scenario)
+
+
+def test_fg500_a_legacy_non_iso_approved_row_stays_in_its_date_window(monkeypatch):
+    from app.services.labor_cost import project_labor_cost
+
+    async def scenario(c, op):
+        await _legacy_manual(op, "le-old", date="06.11.2026", employee_id="sm", execution_package_id=PKG,
+                             approval_status="approved", approved_by="owner", approved_by_role="Owner")
+        win = await project_labor_cost(ORG, P, "2026-11-06", "2026-11-06")
+        rec = [x for x in win["lines"] if x.get("manual_entry_id") == "le-old"]
+        assert rec and rec[0]["date"] == "2026-11-06" and rec[0]["amount"] == 30.0, win["lines"]
+        assert "MANUAL_ROW_NON_ISO_DATE" in rec[0]["dq"]                     # still flagged for a human
+        assert not [x for x in (await project_labor_cost(ORG, P, "2026-11-07", "2026-11-30"))["lines"]
+                    if x.get("manual_entry_id") == "le-old"]
+        assert (await op.labor_entries.find_one({"id": "le-old"}))["date"] == "06.11.2026"   # never rewritten
     run(monkeypatch, scenario)

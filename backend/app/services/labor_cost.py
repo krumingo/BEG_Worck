@@ -458,9 +458,15 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
     flt = {"org_id": org_id, "project_id": project_id, "source": {"$ne": SYNC_SOURCE},
            "approval_status": MANUAL_APPROVED, "entry_kind": {"$ne": "reversal"},
            "reversed_by_entry_id": None}
+    rows = await tenant.labor_entries.find(flt, {"_id": 0}).to_list(5000)
     if date_from or date_to:
-        flt["date"] = {k: v for k, v in (("$gte", date_from), ("$lte", date_to)) if v}
-    return await tenant.labor_entries.find(flt, {"_id": 0}).to_list(5000)
+        # FG-500: the window compares the NORMALISED day (read-only) — a legacy approved row
+        # dated "05.10.2026" stays in its window; the row itself is never rewritten here
+        def inside(row):
+            day = normalize_labor_date(row.get("date"))
+            return bool(day) and (not date_from or day >= date_from) and (not date_to or day <= date_to)
+        rows = [r for r in rows if inside(r)]
+    return rows
 
 
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -672,7 +678,8 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
         role = {"Owner": "Собственика", "Accountant": "Счетоводителя"}.get(
             row.get("approved_by_role") or "", row.get("approved_by_role") or "одобряващия")
         rec = {"report_id": "manual:" + str(row.get("id")), "worker_id": row.get("employee_id"),
-               "date": row.get("date", ""), "project_id": project_id,
+               "date": normalize_labor_date(row.get("date")) or row.get("date", ""),   # FG-500: read normalised
+               "project_id": project_id,
                "smr_type": smr_name, "hours": float(row.get("hours") or 0),
                "cost_type": LABOR, "pay_type": row.get("pay_type") or "Manual",
                "pay_type_source": "manual_row",
