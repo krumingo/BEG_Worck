@@ -1,0 +1,10 @@
+# PRJ-01 round 3 (R56 + R39 paid) — the extended test on the round-2 head 718bac7, real MongoDB rs0
+E           AssertionError: ('draft_team', {'error_code': None, 'links': None, 'project_kept': False, 'status': 200})
+E           assert (200 == 409)
+E       assert (404 == 403)
+E       AssertionError: assert None == 'prj01-A-completed2'
+E       assert [201, 201, 422, 201, 201] == [422, 422, 422, 422, 422]
+E         
+E         At index 0 diff: 201 != 422
+E         Use -v to get more diff
+4 failed, 5 passed in 14.44s

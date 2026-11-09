@@ -1,4 +1,6 @@
 import axios from "axios";
+import { markNetworkFailure, markNetworkOk, isNetworkError } from "@/lib/pwa/connectivity";
+import { clearTenantLocalData } from "@/lib/pwa/clearLocalData";
 
 const API = axios.create({
   baseURL: `${process.env.REACT_APP_BACKEND_URL}/api`,
@@ -12,12 +14,21 @@ API.interceptors.request.use((config) => {
 });
 
 API.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    markNetworkOk();
+    return res;
+  },
   (err) => {
+    // PWA-01: a request that never reached the server shows the "Без връзка" bar.
+    if (isNetworkError(err)) markNetworkFailure();
+    else if (err.response) markNetworkOk();
     if (err.response?.status === 401) {
       localStorage.removeItem("bw_token");
       localStorage.removeItem("bw_user");
-      window.location.href = "/login";
+      // PWA-01: an ended session is a logout — clear tenant data before leaving.
+      clearTenantLocalData().finally(() => {
+        window.location.href = "/login";
+      });
     }
     return Promise.reject(err);
   }

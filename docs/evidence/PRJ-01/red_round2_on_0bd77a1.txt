@@ -1,0 +1,22 @@
+# PRJ-01 round 2 — the extended test on the previous head 0bd77a1 (before the FG-252..256 / D3 / D6 fixes), real MongoDB rs0
+E           AssertionError: ('media_context', {'error_code': None, 'links': None, 'project_kept': False, 'row_kept': True, ...})
+E           assert 200 == 409
+E       assert (200 == 400)
+E       AssertionError: assert {'error_code'...'status': 200} == {'error_code'...'status': 409}
+E         
+E         Differing items:
+E         {'status': 200} != {'status': 409}
+E         {'error_code': None} != {'error_code': 'WARRANTY_IN_ORIGINAL_PROJECT'}
+E         {'project_status': 'Active'} != {'project_status': 'Completed'}
+E         Use -v to get more diff
+E       assert (200 == 404)
+E       AssertionError: {'add_sub': None, 'create_sub': None, 'new_projects': 3, 'warranty_projects': 5, ...}
+E       assert None == 'WARRANTY_IN_ORIGINAL_PROJECT'
+E       AssertionError: assert {'already': 0... 0, 'link': 2} == {'already': 0... 0, 'link': 2}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'dq': 5} != {'dq': 2}
+E         Use -v to get more diff
+E       assert 200 == 422
+7 failed, 2 passed in 14.07s

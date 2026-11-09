@@ -1,0 +1,7 @@
+PASS  PWA88-N1: no script loaded from any PostHog host  []
+INFO  other third-party scripts (pre-existing, D5): ["https://assets.emergent.sh/scripts/emergent-main.js"]
+PASS  PWA88-N1: nothing fetched from a PostHog static/CDN path (array.js, recorder, surveys, toolbar)  []
+PASS  no key: window.posthog absent and no analytics script  {"loaded":false,"scriptTag":false}
+PASS  no key: no request to any PostHog host  []
+
+4 passed, 0 failed

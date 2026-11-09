@@ -1,0 +1,8 @@
+# PRJ-01 round 4 (FG-272 nested refs, FG-273 code change AuditEvent) — the extended test on 6479cf1, real MongoDB rs0
+E           AssertionError: ('invoice_line_alloc', {'error_code': None, 'links': None, 'project_kept': False, 'row_kept': True, ...})
+E           assert 200 == 409
+E       AssertionError: assert [] == [['PRB-A-warr...T01-A-001-А']]
+E         
+E         Right contains one more item: ['PRB-A-warr_parent', 'ST01-A-001-А']
+E         Use -v to get more diff
+2 failed, 7 passed in 14.53s
