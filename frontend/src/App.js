@@ -7,6 +7,7 @@ import PlatformAdminGuard from "@/components/PlatformAdminGuard";
 import { canReadFinance } from "@/lib/financeAccess";
 import PlatformLayout from "@/components/PlatformLayout";
 import PwaBanners from "@/components/pwa/PwaBanners";
+import { MyUnsentPage, DeviceBlockedPage } from "@/components/offline/OfflineQueueUI";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
@@ -242,6 +243,9 @@ function AppRoutes() {
       <Route path="/tech/tools" element={<FieldProtectedRoute><MyToolsPage /></FieldProtectedRoute>} />
       <Route path="/tech/my-money" element={<FieldProtectedRoute><MyMoneyPage /></FieldProtectedRoute>} />
       <Route path="/notifications" element={<CompanyProtectedRoute><NotificationsPage /></CompanyProtectedRoute>} />
+      {/* PWA-02: the field user's unsent records; the page a blocked device lands on */}
+      <Route path="/my-unsent" element={<CompanyProtectedRoute><MyUnsentPage /></CompanyProtectedRoute>} />
+      <Route path="/device-blocked" element={<DeviceBlockedPage />} />
 
       {/* Admin-only routes — Technician/Worker/Driver redirected to /tech */}
       <Route path="/site-attendance" element={<AdminRoute><SiteAttendancePage /></AdminRoute>} />

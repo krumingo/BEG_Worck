@@ -46,7 +46,7 @@ export const ROUTE_TEMPLATES = [
   "/assets/intake-review", "/warehouse/canonical", "/sales", "/clients/:clientId", "/daily-logs", "/change-orders",
   "/ai-calibration", "/procurement", "/inventory", "/missing-smr", "/smr-analyses", "/contract-payments",
   "/worker-calendar", "/alarms", "/all-reports", "/ocr-invoices", "/pricing", "/users", "/settings", "/modules",
-  "/mobile-settings", "/audit-log", "/platform", "/platform/login", "/platform/logout", "/platform/billing",
+  "/mobile-settings", "/audit-log", "/my-unsent", "/device-blocked", "/platform", "/platform/login", "/platform/logout", "/platform/billing",
   "/platform/modules", "/platform/audit-log", "/platform/mobile-settings",
 ];
 const TEMPLATE_SEGMENTS = ROUTE_TEMPLATES.map((t) => t.split("/").filter(Boolean));
