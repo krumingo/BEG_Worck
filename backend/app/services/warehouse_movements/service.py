@@ -2044,7 +2044,8 @@ class CommandService:
         if not line or not line.get("invoice_id"):
             return
         invoice_id = line["invoice_id"]
-        invoice = await tenant.invoices.find_one({"id": invoice_id}, {"_id": 0, "id": 1},
+        invoice = await tenant.invoices.find_one({"id": invoice_id},
+                                                 {"_id": 0, "id": 1, "total": 1},
                                                  session=session)
         if not invoice:
             return
@@ -2067,8 +2068,36 @@ class CommandService:
         gross = Decimal(str(gross))
         share = (qty / line_qty) if line_qty > 0 else Decimal("1")
         amount = (gross * min(share, Decimal("1"))).quantize(Decimal("0.01"))
+        # F-82-01 (Р47: paid ≤ net received) — decided AFTER the invoice CAS in
+        # this transaction: the CAS write conflicts with any payment that takes
+        # or releases the PAY-01 row lock meanwhile, so the active allocations
+        # read here are those of the committed payments. A reversal that would
+        # leave the invoice paid above total − awaited credits is refused, and
+        # nothing is written; no payment is cancelled automatically.
+        from app.services.credit_note_rule import credit_exceeds_unpaid
+        from app.services.payment_state import active_allocations
+        ecn_id = f"ecn_{env.movement_id}"
+        allocs = await tenant.payment_allocations.find(
+            active_allocations({"invoice_id": invoice_id}),
+            {"_id": 0, "amount_allocated": 1}, session=session).to_list(None)
+        paid = sum(float(a.get("amount_allocated") or 0) for a in allocs)
+        open_credits = await tenant.expected_credit_notes.find(
+            {"invoice_id": invoice_id, "status": "open", "id": {"$ne": ecn_id}},
+            {"_id": 0, "amount": 1}, session=session).to_list(None)
+        others = sum(float(r.get("amount") or 0) for r in open_credits)
+        total = invoice.get("total") or 0
+        credit = Decimal(str(others)) + amount
+        if credit_exceeds_unpaid(total, paid, credit):
+            from app.services.warehouse_movements.errors import InvoicePaidAboveNetError
+            raise InvoicePaidAboveNetError(
+                "the supplier invoice is already paid above the net value this reversal "
+                "would leave — reverse the payment first",
+                context={"invoice_id": invoice_id, "paid": round(paid, 2),
+                         "invoice_total": total, "awaited_credit": float(credit),
+                         "payable_after_reversal": round(float(Decimal(str(total))
+                                                               - credit) - paid, 2)})
         await tenant.expected_credit_notes.update_one(
-            {"id": f"ecn_{env.movement_id}"},
+            {"id": ecn_id},
             {"$setOnInsert": {
                 "invoice_id": invoice_id, "invoice_line_id": invoice_line_id,
                 "reversal_movement_id": env.movement_id,

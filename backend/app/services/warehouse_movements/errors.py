@@ -188,3 +188,11 @@ class InvoiceBusyError(WarehouseMovementError):
     lock) — the reversal that would make it await a credit note is refused,
     nothing written; retry. 409."""
     error_code = "INVOICE_BUSY"
+
+
+class InvoicePaidAboveNetError(WarehouseMovementError):
+    """WH-REV-01 / Р47 (F-82-01): the supplier invoice is already paid above the
+    net value this reversal would leave (total − awaited credits) — refused,
+    nothing written; a payment is never cancelled automatically (reverse the
+    payment in FLOW-006 first). 409."""
+    error_code = "INVOICE_PAID_ABOVE_NET"

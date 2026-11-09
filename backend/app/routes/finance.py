@@ -1380,8 +1380,9 @@ async def _quick_pay_locked(tenant: TenantData, user: dict, invoice_id: str, dat
     if amount > remaining + 0.01:  # small tolerance for rounding
         raise HTTPException(status_code=400, detail=f"Сумата надвишава остатъка ({remaining})")
     credit = await _awaited_credit(tenant, invoice_id)            # Р47
-    if credit and amount > remaining - credit + 0.01:
-        raise _awaits_credit_refusal(invoice_id, credit, remaining - credit)
+    refusal = _r47_refusal(invoice_id, amount, remaining, credit)  # F-82-02: cents, no allowance
+    if refusal is not None:
+        raise refusal
 
     method = data.get("method") or data.get("payment_method", "BankTransfer")
     # Route to the correct account: cash → Каса, otherwise the chosen/Bank default account.
@@ -1600,6 +1601,20 @@ def _awaits_credit_refusal(invoice_id: str, credit: float, payable: float) -> HT
                    "плащане над нетно полученото не се записва",
         "invoice_id": invoice_id, "awaited_credit": credit,
         "payable_until_credit_note": round(max(payable, 0), 2)})
+
+
+def _r47_refusal(invoice_id: str, amount: float, remaining: float,
+                 credit: float) -> Optional[HTTPException]:
+    """Р47 — the ONE check of every FLOW-006 path to an invoice (quick-pay,
+    allocate): with an awaited credit, ``amount`` must not exceed
+    ``remaining − credit`` — canonical integer cents, NO allowance (F-82-02)."""
+    from app.services.credit_note_rule import cents, payment_exceeds_net
+    if not cents(credit):
+        return None
+    # remaining = total − paid, so payable = remaining − credit.
+    if payment_exceeds_net(amount, remaining, 0, credit):
+        return _awaits_credit_refusal(invoice_id, credit, remaining - credit)
+    return None
 
 
 async def _invoice_remaining(tenant: TenantData, invoice: dict, exclude_ids=()) -> float:
@@ -1982,9 +1997,10 @@ async def allocate_payment(payment_id: str, data: AllocatePaymentRequest, user: 
                     raise HTTPException(status_code=400, detail=f"Allocation exceeds invoice remaining ({round(remaining, 2)})")
                 if "_credit" not in invoice:                                  # Р47
                     invoice["_credit"] = await _awaited_credit(tenant, alloc.invoice_id)
-                if invoice["_credit"] and amount > remaining - invoice["_credit"] + 1e-9:
-                    raise _awaits_credit_refusal(alloc.invoice_id, invoice["_credit"],
-                                                 remaining - invoice["_credit"])
+                refusal = _r47_refusal(alloc.invoice_id, amount, remaining,
+                                       invoice["_credit"])                 # F-82-02
+                if refusal is not None:
+                    raise refusal
                 planned_by_invoice[alloc.invoice_id] = planned_by_invoice.get(alloc.invoice_id, 0) + amount
                 available -= amount
 
