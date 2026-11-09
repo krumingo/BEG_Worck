@@ -6131,3 +6131,63 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - Each decision is bound to the row's version and value, takes an Idempotency-Key, does a CAS on the row and writes the AuditEvent, all in one transaction.
   - R73: the creator may reject or reverse only with `labor.entry.create` on the row's project.
 - **LAB73-N1 (non-blocking):** a reversal drops the original from every period instead of booking a negative in the reversal's own period. Design question.
+
+## 2026-11-09 11:20 UTC: #73 LAB-01-T `f1c46c6` (LAB73-R1 fix): FAIL (fixed in `8b72647`, under audit)
+
+- **LAB73-R1 fixed:** probe T1 + T2 20 / 20. One lock document per (tenant, project, worker, day), bumped and re-read inside create / approve / report-approve.
+- **LAB73-M3 (blocking):** the new `labor_day_locks` is not classified in `tenancy/ownership.py`.
+  - The A2B backfill inventory marks a non-empty unclassified collection `BLOCKED_UNCLASSIFIED_COLLECTION` (`legacy_backfill.py:364`), and execute is refused (`:641`).
+  - A2C = 2 violations (`labor_cost.py:496` dynamic getattr; `:499` unclassified).
+  - W0: 2 new failures (`a2b_static_guard::test_every_collection_the_application_names_is_classified`, `a2c_static_guard::test_the_whole_active_backend_is_clean`).
+- **SEC-01: 4 failed.**
+  - `written_orgs` has `None`: the unclassified lock collection.
+  - C03 static rule: an `insert_one` outside `mw.insert_once()`.
+  - C01 evidence stale.
+- **SEC-02: 1 failed.** Stale evidence: the PM-01 seed gives P2 an SMR package.
+- **My scan of every collection the app names:** no unclassified collection on main, #84, #83 or #89.
+
+## 2026-11-09 11:40 UTC: #84 INV-CN-01 `faaa2d0`: PASS, no blocking finding
+
+- **`faaa2d0`** = `b0e72cf` + evidence.
+- **New code:**
+  - FG-465: one `dq_issues` schema with #81 / #82.
+  - R74: offsets follow the payment rules.
+  - INV84-N2: number / note decisions are serialised by lock documents in `org_counters`; a failed index build becomes a DQ issue + alarm. INV84-N2 closed.
+
+| Gate | Result |
+|---|---|
+| probe R64 | 9 |
+| probe invcn01 | 99 |
+| inv_cn_01 | 165 |
+| fg233 | 9 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/245, 0/494 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 | 47 / 129 / 132 |
+
+## 2026-11-09 11:40 UTC: #83 CP-01 `a5176b2` (R71): FAIL, 1 blocking
+
+- **CP83-M2 (blocking):** main's own `tests/test_wh_fix_01_f81_readers.py::test_f81_03_subcontractor_advance_is_not_project_income[real-off|shadow|enforce]` → 3 failed / 129.
+  - `POST /api/subcontractor-packages/pkg-f81/advances` → 422 `COUNTERPARTY_NOT_FOUND` (expected 201).
+  - R71 sends the advance through the payment guards, and #81's fixture has no counterparty. Fix: setup only.
+- **Rest green:**
+
+| Gate | Result |
+|---|---|
+| probe K1–K3 | 84 |
+| cp_01 | 647 (+6 skips) |
+| sub_adv_01 | 9 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6 |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | within main's 16 |
+| A2C / A1 | 0/247, 0/498 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 a3_r44 | 138 |
