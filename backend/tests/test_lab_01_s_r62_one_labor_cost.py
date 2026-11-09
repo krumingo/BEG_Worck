@@ -5,7 +5,8 @@ project_labor_cost):
 
 * only APPROVED reports count, priced hourly × rate or akord (approved quantity × piece
   rate); drafts / unapproved reports never count anywhere;
-* a manual labor row counts only after the Owner approved it (FG-58); any other role → 403;
+* a manual labor row counts only after it is approved by a SECOND person — the Owner /
+  Управител or the Accountant, never the one who entered it (FG-58, R66); other roles → 403;
 * the readers: P&L, /project-profit (no hours × rate fallback over all work_reports),
   /project-net-profit, the package actual labor cost (no labor_entries / cached field) and
   the budget alarm's "spent" (FG-390, no work_sessions).
@@ -280,8 +281,8 @@ def test_r62_an_owner_approved_manual_row_counts_everywhere(monkeypatch, backend
     run(monkeypatch, scenario, backend)
 
 
-@pytest.mark.parametrize("who", ["admin", "acct", "sm", "w1"])
-def test_r62_only_the_owner_decides_a_manual_row(monkeypatch, who):
+@pytest.mark.parametrize("who", ["admin", "sm", "w1"])
+def test_r62_only_the_owner_or_the_accountant_decides_a_manual_row(monkeypatch, who):
     async def scenario(c, op):
         for kind in ("approve", "reject"):
             r = await c.post(f"/api/labor-entries/le-man/{kind}", json=_decision(reason="x"), headers=_key(who))
@@ -291,13 +292,28 @@ def test_r62_only_the_owner_decides_a_manual_row(monkeypatch, who):
     run(monkeypatch, scenario)
 
 
-def test_r62_the_creator_cannot_approve_his_own_row(monkeypatch):
-    """Until Krum decides: the approver differs from the creator (here the Owner made it)."""
+@pytest.mark.parametrize("creator,approver", [("owner", "owner"), ("acct", "acct")])
+def test_r66_the_one_who_entered_the_row_never_approves_it(monkeypatch, creator, approver):
+    """R66 (Krum 09.11.2026): creator ≠ approver, always — 403 SAME_PERSON_APPROVAL."""
     async def scenario(c, op):
-        await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"created_by": "owner"}})
-        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("owner"))
-        assert r.status_code == 403 and r.json()["detail"]["code"] == "SELF_APPROVAL", r.text
+        await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"created_by": creator}})
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key(approver))
+        assert r.status_code == 403 and r.json()["detail"]["code"] == "SAME_PERSON_APPROVAL", r.text
         assert (await op.labor_entries.find_one({"id": "le-man"}))["approval_status"] == "pending"
+        assert await op.audit_events.count_documents({"entity_id": "le-man"}) == 0
+        assert set((await _numbers(c)).values()) == {180.0}
+    run(monkeypatch, scenario)
+
+
+@pytest.mark.parametrize("creator,approver", [("owner", "acct"), ("acct", "owner")])
+def test_r66_a_second_person_approves(monkeypatch, creator, approver):
+    """R66: a row the Owner entered is approved by the Accountant (and the other way round)."""
+    async def scenario(c, op):
+        await op.labor_entries.update_one({"id": "le-man"}, {"$set": {"created_by": creator}})
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key(approver))
+        assert r.status_code == 200, r.text
+        assert r.json()["approved_by"] == approver
+        assert set((await _numbers(c)).values()) == {230.0}
     run(monkeypatch, scenario)
 
 
@@ -435,7 +451,7 @@ def test_r62_the_package_labor_actual_is_not_typed_in(monkeypatch):
     run(monkeypatch, scenario)
 
 
-def test_r62_the_decision_routes_carry_the_owner_only_action_first():
+def test_r62_the_decision_routes_carry_their_action_first():
     """SEC-01 style: the money-write dependency is each route's first and only marked one."""
     from app.permissions.catalog import CANONICAL_ROLES
     from app.routes.labor_smr import router
@@ -446,4 +462,4 @@ def test_r62_the_decision_routes_carry_the_owner_only_action_first():
         assert len(marked) == 1 and calls[0] is marked[0], kind
         assert marked[0].sec01_action == "labor.manual_entry.approve"
     holders = {k for k, v in CANONICAL_ROLES.items() if "labor.manual_entry.approve" in v["actions"]}
-    assert holders == {"owner"}
+    assert holders == {"owner", "accountant"}         # R66: Owner / Управител or the Accountant

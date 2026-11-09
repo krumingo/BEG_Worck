@@ -260,9 +260,12 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
         if row.get("source") == SYNC_SOURCE or row.get("entry_kind") == "reversal":
             raise HTTPException(status_code=409, detail=(
                 "Това не е ръчен ред — редовете от одобрени отчети не се решават отделно"))
+        # R66 (Krum 09.11.2026): the one who entered the row never approves it — a second
+        # person does (another Owner / Управител or the Accountant)
         if kind == "approve" and row.get("created_by") and row.get("created_by") == user["id"]:
             raise HTTPException(status_code=403, detail={
-                "code": "SELF_APPROVAL", "message": "Създателят на реда не може да го одобри"})
+                "code": "SAME_PERSON_APPROVAL",
+                "message": "Въвеждащият и одобряващият са двама различни души — одобрява друг Собственик/Управител или Счетоводителят"})
         version = int(row.get("version") or 1)
         if int(data.version) != version or (data.labor_cost is not None and row.get("labor_cost") is not None
                                             and round(float(data.labor_cost), 2) != round(float(row["labor_cost"]), 2)) \
@@ -334,15 +337,19 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
                                     {"entry_id": entry_id, **data.model_dump()}, perform, replay)
 
 
+# R66: the decision belongs to the Owner / Управител or the Accountant (never the creator)
+MANUAL_ROW_DECIDERS = ("Owner", "Accountant")
+
+
 def _owner_decision():
     return Depends(require_money_write(MANUAL_ROW_APPROVE_ACTION, module="M2",
-                                       resource_type="labor_entry", roles=("Owner",)))
+                                       resource_type="labor_entry", roles=MANUAL_ROW_DECIDERS))
 
 
 @router.post("/labor-entries/{entry_id}/approve")
 async def approve_manual_labor_entry(
     entry_id: str, data: ManualDecision,
-    _owner: dict = _owner_decision(),   # R62: Owner only (off/shadow: the legacy role; enforce: the action)
+    _owner: dict = _owner_decision(),   # R62/R66: Owner or Accountant (off/shadow: legacy role; enforce: the action)
     user: dict = Depends(require_m2),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
