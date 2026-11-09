@@ -885,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 206.6,
+ "seconds": 180.4,
  "rows": [
   {
    "mode": "off",
@@ -159722,7 +159722,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -159731,13 +159731,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "scope_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -159753,7 +159753,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 26,
-     "integrity_hash": "57312062378d42c2f11fc4da39bbbd6c441e0c11a7b492e9ffa38280aaab1d00"
+     "integrity_hash": "3d4f1552b08cf060fd16894c8eebbfc57f37aca87e76a842485709de0aa5eb8d"
     }
    ]
   },
@@ -159764,7 +159764,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -159773,7 +159773,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159798,7 +159798,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 27,
-     "integrity_hash": "dddc23026b1697ae33051636138ab26d10e5e32ea519dbea7ca63fd3f657e356"
+     "integrity_hash": "003830c1786ce60c97d947d4b8c66386ecc94dedf85d4de39afcd098a00ed149"
     }
    ]
   },
@@ -159809,7 +159809,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -159821,7 +159821,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -159830,7 +159830,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159856,7 +159856,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 28,
-     "integrity_hash": "7a8d67bae59d81ccf7c2e6c79669ee09696280e75d00438db7235798d377bfed"
+     "integrity_hash": "df9cace92129c3bc98cba534aa36aecdfde1cbd9077a0b5b0bd8c0465e63f228"
     }
    ]
   },
@@ -159867,7 +159867,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -159879,7 +159879,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -159891,7 +159891,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -159900,13 +159900,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "scope_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159924,7 +159924,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 29,
-     "integrity_hash": "b38a8774915b15dc990b3ce569c2a3d659cf38c8270d3d5d600d0cbca2cc44e7"
+     "integrity_hash": "2d6d3536997b299831ef629330c53d111b06de196798006aae0173fac5d2be08"
     }
    ]
   },
@@ -159935,7 +159935,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -159944,7 +159944,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159970,7 +159970,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 30,
-     "integrity_hash": "8a0471009b2e5efa093c6dfa261093b8aa41c15594a6422237b84d100492f5dc"
+     "integrity_hash": "a6740f119eddafab5db8189ab82ee4e1b0838726a27e2d79bcdb9e665f9a783d"
     }
    ]
   },
@@ -159981,7 +159981,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -159993,7 +159993,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -160002,7 +160002,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160028,7 +160028,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 31,
-     "integrity_hash": "ba14a1d6b23de24f4891b4d2767ad6ba1442b1bc7e4493ae6a23829625209dbc"
+     "integrity_hash": "2264aca4befe1e13c1b48807a976a44d263f951e3a690d7d78689c465bda0eb6"
     }
    ]
   },
@@ -160039,7 +160039,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -160051,7 +160051,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -160063,7 +160063,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -160072,13 +160072,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "scope_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -160096,7 +160096,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 32,
-     "integrity_hash": "8bb5db42377b2aa6361ee40c4d3584878cb6ad1fce9592d57d2639c1cdc65665"
+     "integrity_hash": "5154a816972eed0b4d29792d5c2ce0e0de17c75005f8d7a60e700576495e5d01"
     }
    ]
   },
@@ -160107,7 +160107,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -160116,7 +160116,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160142,7 +160142,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 33,
-     "integrity_hash": "1798807ef75ee3e353bdbb4bc30bc9cb51f9a85875f79011ceb330a06bd22552"
+     "integrity_hash": "894c9dbe667aee6e16e883c92eee3ff3799f89c4ad10a160d073e98fad615112"
     }
    ]
   },
@@ -160153,7 +160153,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -160165,7 +160165,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -160174,7 +160174,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "152df601-2012-4b79-a1cf-c616f6e9f420",
+     "tenant_id": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160200,7 +160200,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 35,
-     "integrity_hash": "619738a5226224d7c1df8f0044acf5effdcaa688deb1800cf1bf00cc6220b821"
+     "integrity_hash": "1cff891640d747773eac5f67fafcc6c262e7321fb0cf3baf8cee93bcc175a0ba"
     }
    ]
   },
@@ -160211,7 +160211,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -160223,7 +160223,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "152df601-2012-4b79-a1cf-c616f6e9f420",
+   "expected_tenant": "655d61e1-4340-47c3-bc1c-d594e0e49c52",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
