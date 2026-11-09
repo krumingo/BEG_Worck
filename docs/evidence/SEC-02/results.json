@@ -885,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 123.5,
+ "seconds": 135.3,
  "rows": [
   {
    "mode": "off",
@@ -15096,6 +15096,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -15134,6 +15135,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -15200,6 +15202,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -15280,6 +15283,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -15318,6 +15322,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -15384,6 +15389,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -39701,6 +39707,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -39739,6 +39746,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -39805,6 +39813,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -39885,6 +39894,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -39923,6 +39933,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -39989,6 +40000,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -67692,6 +67704,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -67730,6 +67743,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -67796,6 +67810,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -67876,6 +67891,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -67914,6 +67930,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -67980,6 +67997,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -92297,6 +92315,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -92335,6 +92354,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -92401,6 +92421,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -92481,6 +92502,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -92519,6 +92541,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -92585,6 +92608,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -120328,6 +120352,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -120366,6 +120391,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -120432,6 +120458,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -120512,6 +120539,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -120550,6 +120578,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -120616,6 +120645,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -145149,6 +145179,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -145187,6 +145218,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -145253,6 +145285,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -145333,6 +145366,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -145371,6 +145405,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -145437,6 +145472,7 @@
     "purchased_value",
     "returned_cost",
     "returned_value",
+    "supplier_note_cost",
     "total_cost",
     "total_value",
     "unallocated_cost",
@@ -159290,7 +159326,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -159299,13 +159335,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "scope_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -159321,7 +159357,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "935d36df0a762b6dd469e40589bb9626f29c0a7f69f2865dde8b50a39422f793"
+     "integrity_hash": "1ac8a732b7d596c022f34f0a6b17d96b8a44c4c36e099308f035355abd2f2a85"
     }
    ]
   },
@@ -159332,7 +159368,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -159341,7 +159377,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159366,7 +159402,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "085b624671f7b975cb59b075e40aff34ef3f6aa0074377a12d9e18b0b45d3eea"
+     "integrity_hash": "df9ff29c12e46315bde0fa5d193c334e5d822f2ea2bdd8fcda7e7de105b80c74"
     }
    ]
   },
@@ -159377,7 +159413,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -159389,7 +159425,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -159398,7 +159434,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159424,7 +159460,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "30feb55da364c2316e16ada9461bc8991650a6c8d45e5f0d0c2627eb79765044"
+     "integrity_hash": "709600388075865ad95cbae42c99f15f49cbb80f7c6cb11a933f8bcb17749610"
     }
    ]
   },
@@ -159435,7 +159471,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -159447,7 +159483,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -159459,7 +159495,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -159468,13 +159504,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "scope_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159492,7 +159528,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "9e77735b3e0c32bfe7434c78718b07ba9adaa446b50b9eb543858d00adcead61"
+     "integrity_hash": "71cbaadfa173e7639191e9966705b527167a43d08ace98fabf52d4aa2e852b86"
     }
    ]
   },
@@ -159503,7 +159539,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -159512,7 +159548,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159538,7 +159574,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "592409496cd0ba627bb1f489a2c0df9e6e8c104deadf647e511b865051bbe495"
+     "integrity_hash": "cb31368fdab8887a37eb4489989e4a8741be811af90d06f180a46e8a63dc272e"
     }
    ]
   },
@@ -159549,7 +159585,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -159561,7 +159597,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -159570,7 +159606,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159596,7 +159632,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "ad430bff999ea93fb8ddcfa38c5f454dba3cde3085bdfd9484b40c3987aa8296"
+     "integrity_hash": "90c210c92515b6182176c4f33431ee9691dc8d35e366bd7986799bbde9630771"
     }
    ]
   },
@@ -159607,7 +159643,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -159619,7 +159655,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -159631,7 +159667,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -159640,13 +159676,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "scope_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159664,7 +159700,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "013ccac0cc359ec6ec175a19981b7e550426898bd58e4cfdde7f991cf0339015"
+     "integrity_hash": "95c831ef73c0589fb0c724f7bf50c78d3cea3bcf5ec29c4f8c0a72404f7d648b"
     }
    ]
   },
@@ -159675,7 +159711,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -159684,7 +159720,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159710,7 +159746,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "e904560bf7144bb06fbbf0b01a21656a0ba42a7947791db63a7605ccce351ae3"
+     "integrity_hash": "7a89c34d1b5d46816f4ca82e2e28a4fbc92b8941885568d7a50c594d1022392b"
     }
    ]
   },
@@ -159721,7 +159757,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -159733,7 +159769,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -159742,7 +159778,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+     "tenant_id": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159768,7 +159804,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "62805773ee9091ff5aaa8739ea239e2c1a6e79d9d965418c3b3248207da9bfcb"
+     "integrity_hash": "6e7c1096c46a9d418207ee11220abe1132cbb2e1e261abba7bae936a19217894"
     }
    ]
   },
@@ -159779,7 +159815,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -159791,7 +159827,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "e2fea674-698e-44ec-a61b-2d1efa0799f6",
+   "expected_tenant": "b11ec143-ab1b-4ae8-b700-4d393bbb6836",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
