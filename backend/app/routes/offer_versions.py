@@ -136,6 +136,7 @@ async def list_offer_versions(offer_id: str, user: dict = Depends(get_current_us
 
 
 @router.post("/offers/{offer_id}/versions", status_code=201)
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def create_offer_version(offer_id: str, data: VersionCreate, user: dict = Depends(get_current_user)):
     """Create a new version (snapshot) of the current offer state."""
     tenant = _tenant(user)
@@ -210,6 +211,7 @@ async def get_offer_version(offer_id: str, version_number: int, user: dict = Dep
 
 
 @router.post("/offers/{offer_id}/versions/{version_number}/restore")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def restore_offer_version(offer_id: str, version_number: int, user: dict = Depends(get_current_user)):
     """
     Restore an offer to a specific version.

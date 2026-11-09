@@ -341,6 +341,7 @@ async def _offer_event(session, *, tenant_id: str, actor_type: str, actor_id: st
 # ── Offer CRUD ─────────────────────────────────────────────────────
 
 @router.post("/offers", status_code=201)
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def create_offer(data: OfferCreate, user: dict = Depends(require_m2)):
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:
         raise HTTPException(status_code=403, detail="Insufficient permissions")
@@ -486,6 +487,7 @@ async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(re
 
 
 @router.put("/offers/{offer_id}/lines")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict = Depends(require_m2)):
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
@@ -612,6 +614,7 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
 
 
 @router.post("/offers/{offer_id}/accept")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
                        user: dict = Depends(require_m2),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
@@ -685,6 +688,7 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
 
 
 @router.post("/offers/{offer_id}/reject")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(require_m2),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Internal rejection of the CURRENT version. FG-144: one transaction — a CAS on
@@ -737,6 +741,7 @@ async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(re
 
 
 @router.post("/offers/{offer_id}/new-version")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
                                idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """A new version (Draft) of a non-draft offer. OFF-01: the old version is superseded
@@ -830,6 +835,7 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
 
 
 @router.post("/offers/{offer_id}/cancel")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def cancel_offer(offer_id: str, data: Optional[OfferCancel] = None,
                        user: dict = Depends(require_m2),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
@@ -1237,6 +1243,7 @@ async def export_offer_xlsx(
 # ── Offer Import from XLSX ─────────────────────────────────────────
 
 @router.post("/offers/import-preview")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def import_offer_preview(file: UploadFile = File(...), user: dict = Depends(require_m2)):
     """Parse uploaded XLSX and return preview of lines for review"""
     if not file.filename.endswith(('.xlsx', '.xls')):
@@ -1369,6 +1376,7 @@ async def import_offer_preview(file: UploadFile = File(...), user: dict = Depend
 
 
 @router.post("/offers/import-confirm", status_code=201)
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
     """Create offer from imported/previewed lines"""
     if user["role"] not in ["Admin", "Owner", "SiteManager"]:

@@ -157,3 +157,34 @@ def test_03_admin_only_transitions_strip_for_a_caller_without_the_finance_right(
                      "update_offer_lines", "create_offer_version", "import_offer_confirm"):
             assert getattr(getattr(r_offers, name), "sec02_strips_money", False), name
     run(monkeypatch, backend, mode, scenario)
+
+
+def _xlsx() -> bytes:
+    """A one-line import file in the template's layout (Описание, Мярка, К-во, Мат., Труд)."""
+    import io
+    import openpyxl
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.append(["Описание / Вид СМР", "Мярка", "Количество", "Цена материал", "Цена труд",
+               "Обща цена"])
+    ws.append(["Мазилка", "м2", 10, 8, 12, 200])
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+def test_04_import_preview_answers_like_the_read(monkeypatch, backend, mode):
+    """POST /offers/import-preview echoes the parsed prices: stripped for a SiteManager like
+    every other offer response; a finance role still sees them."""
+    async def scenario(c, op):
+        files = {"file": ("offer.xlsx", _xlsx(),
+                          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")}
+        site = await c.post("/api/offers/import-preview", headers=T.hdr("site-a"), files=files)
+        assert site.status_code == 200, site.text[:300]
+        assert money_keys_in(site.json()) == set(), site.text[:400]
+        assert "Мазилка" in site.text                         # the quantities / names stay
+        fin = await c.post("/api/offers/import-preview", headers=T.hdr("admin-a"), files=files)
+        assert fin.status_code == 200, fin.text[:300]
+        assert money_keys_in(fin.json()) & {"material_unit_cost", "labor_unit_cost",
+                                             "line_total"}, fin.text[:400]
+    run(monkeypatch, backend, mode, scenario)

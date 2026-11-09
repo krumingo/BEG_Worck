@@ -444,6 +444,7 @@ async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dic
 # ── Create Offer from Draft Rows ───────────────────────────────────
 
 @router.post("/extra-works/create-offer", status_code=201)
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Depends(require_m2)):
     """Create a new offer from selected draft extra work rows"""
     tenant = _tenant(user)
@@ -774,6 +775,7 @@ async def get_smr_aggregated(project_id: str, user: dict = Depends(get_current_u
 
 
 @router.post("/projects/{project_id}/smr-to-offer")
+@strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depends(get_current_user)):
     """Create an offer from selected SMR rows."""
     tenant = _tenant(user)
