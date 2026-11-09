@@ -118,3 +118,11 @@
 - **#81 заключване на доставната фактура:** сторното взема и увеличава същото `link_lock_seq` на доставната фактура, което получаването е взело.
 - **Р45 (разпределение по ред)** идва от `main` без промяна.
 - Inventories (A1: 394 достъпа, 0 UNSCOPED; A2B) и PM-01 са регенерирани с инструментите им.
+
+### Gates след merge-а (реален Mongo rs, fresh per file)
+- WH-REV-01 **101**; R0 **814**; PAY-01 **630**; SEC-01 **30**; SEC-02 **31**; warehouse canonical (44 файла) **1121** — всички passed, 0 failed.
+- PM-01 (harness): **6 passed, 0 skipped**.
+- W0: **1176 / 16** — същите 16 failure-а като `main` @ `1525a1e` (пуснат отделно за сравнение).
+- Guards: A2C **0** (243 модула), A1 **0** (490 единици).
+- Frontend: `yarn test` **182 passed**, `yarn build` OK.
+- `@staticmethod` проверен с AST на `_plan_receipt_reversal`, `_expect_credit_note`, `_bind_invoice_line_price`, `_lock_invoice_line`.
