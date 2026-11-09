@@ -25,8 +25,8 @@
     "shadow",
     "enforce"
   ],
-  "routes": 799,
-  "cells": 19176,
+  "routes": 801,
+  "cells": 19224,
   "caller_tenant": "A (ST-01 synthetic)",
   "path_values": {
     "project_id": "<tenant A project_id>",
@@ -34,15 +34,8 @@
     "user_id": "<tenant A user_id>",
     "org_id": "<tenant A org_id>"
   },
-  "seconds": 165.3,
-  "slow_calls": [
-    {
-      "route": "GET /api/warehouse/migration-readiness/legacy-writer-inventory",
-      "role": "owner",
-      "mode": "off",
-      "seconds": 2.14
-    }
-  ],
+  "seconds": 160.3,
+  "slow_calls": [],
   "mongo": "local replica set (oplog)",
   "outbound_http": "closed local port"
 }
