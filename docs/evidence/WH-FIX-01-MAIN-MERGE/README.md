@@ -80,3 +80,40 @@ Gates against main `3699c3b`, both run on real Mongo rs0 with `-rs` (main → fi
 
 Other checks on the fix side: WH-FIX-01 suites 311 passed; jest 15 passed; A1 484/0 (inventory
 unchanged); A2C 240/0. Nothing was skipped in any run.
+
+## Third merge: main `44e8d97` (#76 SUB-ADV-01, #79 OFF-01) — merge commit `f31fe92`
+
+Both sides were kept, and all code merged automatically. The only conflicts were in generated
+evidence. Each file was regenerated on the merge by its own tool or `--harness` (`61cef41`):
+* **A1 inventory:** regenerated with its tool.
+* **PM-01:** no matrix cell changed.
+* **SEC-02:** it differs from main's committed copy in two ways only:
+  * 36 rows: the F-81-03 dashboard keys `paid_issued` / `paid_received` (finance roles only; both
+    are money keys and are stripped for everyone else);
+  * 18 rows: `POST /offers/{offer_id}/send` now also writes `op.audit_events`. That is main's
+    OFF-01 code, so main's committed SEC-02 copy is older than it.
+
+**F-81-03 × SUB-ADV-01:** a subcontractor advance is never project income
+(`test_f81_03_subcontractor_advance_is_not_project_income`):
+* The advance is paid through `POST /subcontractor-packages/{id}/advances` → 201, writing an
+  Outflow ledger row. On mongomock, which has no `$round`, the test writes the same two rows
+  directly instead of calling the endpoint.
+* None of these readers moves: dashboard income and `paid_issued`, P&L revenue/paid, `cash_in`,
+  centralized revenue, aggregate paid, forecast incoming.
+* An advance is cash out (FLOW-006). SUB-ADV-01 counts it as cost only when it is deducted on
+  an act.
+
+Gates against main `44e8d97`, both run on real Mongo rs0 with `-rs` (main → fix):
+
+| Gate | main | fix |
+|---|---|---|
+| R0 | 814 | 814 |
+| W0 | 16 failed | the same 16 (identical set) |
+| PAY-01 | 630 | 630 |
+| SEC-01 | 30 | 30 |
+| SEC-02 | 31 | 31 |
+| PM-01 | 6 | 6 |
+| warehouse | 4 failed + 16 errors (1120 passed) | identical set |
+
+Other checks on the fix side: WH-FIX-01 suites 317 passed; A1 488/0; A2C 242/0. Nothing was
+skipped in any run.
