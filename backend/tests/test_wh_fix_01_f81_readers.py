@@ -322,3 +322,78 @@ def test_f81_03_paying_a_supplier_is_not_project_income(monkeypatch, backend, mo
         assert totals["paid_received"] == 1200.0 and totals["paid_issued"] == sale
         assert totals["paid"] == 1200.0 + sale                    # document turnover kept
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══ F-81-03 × SUB-ADV-01 (main 44e8d97): a subcontractor ADVANCE is never project income ═══
+# The advance is paid through its real endpoint (one Outflow ledger row + the
+# subcontractor_payments advance). No reader of project income / revenue / cash in
+# moves: the dashboard, P&L, financial results, centralized report, the aggregate
+# and the cash-flow forecast incoming.
+
+def test_f81_03_subcontractor_advance_is_not_project_income(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        import sys
+        from app.routes import projects, subcontractors
+        from app.services import (project_pnl, centralized_reports, project_financial_results,
+                                  cashflow_forecast)
+        app_ = c._transport.app
+        app_.include_router(projects.router, prefix="/api")
+        app_.include_router(subcontractors.router, prefix="/api")
+        for name, mod in list(sys.modules.items()):
+            if name.startswith("app.") and getattr(mod, "db", None) not in (None, op):
+                monkeypatch.setattr(mod, "db", op)
+        now = TODAY.isoformat()
+        await op.subcontractor_packages.insert_one({
+            "id": "pkg-f81", "org_id": ORG_A, "project_id": "prj-1",
+            "subcontractor_id": "sub-f81", "subcontractor_name": "Подизпълнител",
+            "package_no": "SP-81", "title": "Пакет", "currency": "EUR",
+            "status": "partially_certified", "contract_total": 5000, "certified_total": 0,
+            "paid_total": 0, "created_at": now})
+        await op.projects.insert_one({"id": "prj-1-c81", "org_id": ORG_A, "code": "C81",
+                                      "name": "C81", "parent_project_id": "prj-1",
+                                      "status": "Active"})
+
+        async def income():
+            r = await c.get("/api/projects/prj-1/dashboard", headers=hdr("owner-a"))
+            assert r.status_code == 200, r.text
+            pnl = await project_pnl.compute_project_pnl(ORG_A, "prj-1")
+            fin = await project_financial_results.compute_financial_results(ORG_A, "prj-1")
+            cent = await centralized_reports.build_centralized_reports(ORG_A, "prj-1")
+            agg = await projects.get_project_aggregate("prj-1", user=OWNER)
+            flow = await cashflow_forecast.build_cashflow_forecast(ORG_A, 30)
+            return {"dashboard_income": r.json()["balance"]["income"],
+                    "dashboard_paid_issued": r.json()["invoices"]["totals"]["paid_issued"],
+                    "pnl_revenue": pnl["revenue"]["invoiced_net"],
+                    "pnl_paid": pnl["revenue"].get("paid_total"),
+                    "cash_in": fin["cash"]["cash_in"],
+                    "centralized_revenue": cent["finance"]["total_revenue"],
+                    "aggregate_paid": agg["invoices"]["own"]["paid"],
+                    "forecast_incoming": flow["summary"]["total_incoming"]}
+
+        before = await income()
+        if backend == "real":                   # the real endpoint (it aggregates with $round)
+            r = await c.post("/api/subcontractor-packages/pkg-f81/advances",
+                             headers=hdr("owner-a"),
+                             json={"amount": 1000, "reason": "Аванс по договор",
+                                   "advance_date": DAY, "account_id": h.BANK_A})
+            assert r.status_code == 201, r.text
+        else:                                   # mongomock has no $round: the same two rows
+            await op.finance_payments.insert_one({
+                "id": "fp-adv-f81", "org_id": ORG_A, "direction": "Outflow", "amount": 1000,
+                "currency": "EUR", "date": DAY, "method": "BankTransfer",
+                "account_id": h.BANK_A, "counterparty_name": "Подизпълнител",
+                "note": "Аванс към подизпълнител: Аванс по договор", "project_id": "prj-1",
+                "subcontractor_payment_id": "adv-f81", "subcontractor_advance": True,
+                "created_at": now, "updated_at": now})
+            await op.subcontractor_payments.insert_one({
+                "id": "adv-f81", "org_id": ORG_A, "project_id": "prj-1",
+                "subcontractor_id": "sub-f81", "package_id": "pkg-f81", "act_id": None,
+                "kind": "advance", "payment_type": "advance", "payment_date": DAY,
+                "amount": 1000, "vat_amount": 0.0, "currency": "EUR", "status": "completed",
+                "account_id": h.BANK_A, "finance_payment_id": "fp-adv-f81",
+                "reason": "Аванс по договор", "created_at": now})
+        ledger = await op.finance_payments.find_one({"subcontractor_advance": True,
+                                                     "project_id": "prj-1"})
+        assert ledger["direction"] == "Outflow" and ledger["amount"] == 1000
+        assert await income() == before          # no income / revenue / cash-in moved
+    run(monkeypatch, backend, mode, scenario)
