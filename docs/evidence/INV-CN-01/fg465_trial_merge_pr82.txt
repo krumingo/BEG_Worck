@@ -1,0 +1,8 @@
+# Trial merge #84 (611111c3) × #82 (e07320d) — FG-465, 2026-11-09T10:00:50Z, real Mongo rs1 (:27019)
+# conflicts (whichever merges second): finance.py keep both (_refuse_unapproved_debit + _awaited_credit/_awaits_credit_refusal);
+#   service.py keep both (_lock_invoice, _plan_receipt_reversal … each its own @staticmethod); ownership.py ONE expected_credit_notes entry;
+#   invoice_allocation.py: NO conflict (#84 carries #82's sync_credit_note_issue verbatim); generated files regenerated.
+## INV-CN-01 + FG-233 race + WH-REV-01 on the trial merge
+269 passed, 0 skipped
+## the trial-only D8 / FG-465 end-to-end test (r52_d8_trial_merge_pr82.md): #82 reversal opens dq-credit-note-<inv> + alarm; #84 registration resolves both; no old-shape DQ record
+3 passed (off / shadow / enforce)

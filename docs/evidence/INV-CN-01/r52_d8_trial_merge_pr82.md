@@ -42,12 +42,19 @@ async def test_r52_d8_linked_credit_after_a_real_reversal_has_no_second_cost_eff
     await _reverse(wc, mode, receipt)                                   # #82: awaits a credit of 48
     ecn = (await finance.list_expected_credit_notes(user=OWNER))[0]
     assert ecn["amount"] == 48.0
+    # FG-465: #82's reversal opened the Р47 issue „очаква кредитно известие“ + its alarm
+    r47 = await db["dq_issues"].find_one({"id": "dq-credit-note-inv-c26"})
+    assert (r47["type"], r47["status"], r47["awaited_credit"]) == ("INVOICE_AWAITS_CREDIT_NOTE", "open", 48.0)
     before = await project_pnl.compute_project_pnl(T, PROJECT)
     note = await corr.create_note(body={
         "kind": "credit", "original_invoice_id": "inv-c26", "number": "CN-REV-1",
         "expected_credit_note_ids": [ecn["id"]], "reason": "сторно на доставка",
         "lines": [{"original_line_id": IL, "qty": 4}]}, user=ACCOUNTANT, idempotency_key="k-cn-1")
     assert (note["gross"], note["applied"], note["expected_link"]["matched"]) == (48.0, True, True)
+    # FG-465: #84's registration resolved it through #82's sync_credit_note_issue (same tx)
+    assert (await db["dq_issues"].find_one({"id": "dq-credit-note-inv-c26"}))["status"] == "resolved"
+    assert (await db["alarm_events"].find_one({"id": "alarm-credit-note-inv-c26"}))["status"] == "resolved"
+    assert await db["dq_issues"].count_documents({"kind": {"$exists": True}}) == 0          # ONE schema
     linked = await project_pnl.compute_project_pnl(T, PROJECT)
     assert linked["expense"]["material_cost"] == before["expense"]["material_cost"]   # no 2nd effect
     assert linked["expense"]["supplier_notes_cost_reduction"] == 0.0
