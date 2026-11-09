@@ -162,7 +162,11 @@ async def list_counterparties(
         query["$or"] = [
             {"name": {"$regex": re.escape(search), "$options": "i"}},
             {"eik": {"$regex": re.escape(search), "$options": "i"}},
-            {"vat_number": {"$regex": re.escape(search), "$options": "i"}},
+            # FG-482 (R48.3): a BG + ЕГН VAT number is matched only for Owner / Accountant
+            {"vat_number": {"$regex": re.escape(search), "$options": "i"}}
+            if cr.can_reveal_egn(user) else
+            {"$and": [{"vat_number": {"$regex": re.escape(search), "$options": "i"}},
+                      {"vat_number": {"$not": re.compile(r"^\s*BG\s*\d{10}\s*$", re.I)}}]},
             {"email": {"$regex": re.escape(search), "$options": "i"}},
             {"phone": {"$regex": re.escape(search), "$options": "i"}},
         ]
@@ -225,6 +229,15 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
     return await _masked(user, _with_duplicate_dq(tenant, user, eik_value, None, lambda: mr.create(
         db, user, idempotency_key, collection="counterparties", doc=counterparty,
         fingerprint=data.model_dump(), check=check, result=_public)))
+
+
+@router.post("/counterparties/{counterparty_id}/vat/reveal")
+async def reveal_counterparty_vat(counterparty_id: str, user: dict = Depends(require_m5),
+                                  idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-483 (R48.3): the full BG + ЕГН VAT number of a counterparty — Owner / Accountant,
+    AuditEvent ``counterparty.vat_egn.revealed`` before the value is returned."""
+    return await mr.reveal_vat_egn(db, user, idempotency_key, collection="counterparties",
+                                   record_id=counterparty_id, entity_type="counterparty")
 
 
 @router.get("/counterparties/{counterparty_id}")

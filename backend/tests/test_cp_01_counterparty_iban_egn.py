@@ -1795,3 +1795,111 @@ def test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build
         assert ("ЕГН: " + TYPED) in text and ("ЕИК: " + TYPED) not in text, text[:500]
         assert len(await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"})) == 1
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 39 (#83 @ a5176b2)
+def test_fg482_a_client_company_bg_egn_vat_is_masked_searched_and_revealed_by_rule(monkeypatch, backend, mode):
+    """FG-482 (R48.3): a client company's BG + ЕГН VAT number is masked for every role in
+    the client search, /projects/{id}/client-info, /projects/{id}/invoice-context, the
+    company readers and the project card; its digits match a search only for Owner /
+    Accountant; the full value via the audited company reveal (Owner / Accountant)."""
+    async def scenario(c, op):
+        await op.companies.update_one({"id": "co1"}, {"$set": {"vat_number": VAT_EGN}})
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"owner_type": "company",
+                                                                 "owner_id": "co1"}})
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": VAT_EGN}})
+        readers = ["/api/clients/search/unified?type=company&query=Фирма",
+                   "/api/projects/prj-1/client-info", "/api/projects/prj-1/invoice-context",
+                   "/api/companies", "/api/companies/co1", "/api/companies/find-by-eik?eik=333333333",
+                   "/api/counterparties?active_only=false"]
+        for who in ("owner-a", "acct-a", "admin-a", "site-a", "viewer-a"):
+            for url in readers:
+                r = await c.get(url, headers=hdr(who))
+                if r.status_code == 200:
+                    assert no_full(r.json(), TYPED), (who, url)
+        # the ЕГН digits match only for Owner / Accountant
+        for who, hit in (("owner-a", 1), ("acct-a", 1), ("admin-a", 0), ("site-a", 0), ("viewer-a", 0)):
+            r = await c.get("/api/clients/search/unified?type=company&query=" + TYPED, headers=hdr(who))
+            assert r.status_code == 200 and r.json()["total"] == hit, (who, r.text)
+            r = await c.get("/api/counterparties?active_only=false&search=" + TYPED, headers=hdr(who))
+            if r.status_code == 200:
+                assert ("cp2" in {x["id"] for x in r.json()["items"]}) == bool(hit), (who, r.text[:300])
+        # a masked value sent back by the company form keeps the stored one
+        shown = (await c.get("/api/companies/co1", headers=hdr("acct-a"))).json()
+        r = await c.put("/api/companies/co1", headers=hdr("acct-a"),
+                        json={"name": shown["name"], "vat_number": shown["vat_number"]})
+        assert r.status_code == 200 and no_full(r.json(), TYPED), r.text
+        assert (await rows(op, "companies", {"id": "co1"}))[0]["vat_number"] == VAT_EGN
+        # the audited reveal
+        for who in ("admin-a", "site-a", "viewer-a"):
+            r = await c.post("/api/companies/co1/vat/reveal", headers=hdr(who))
+            assert r.status_code == 403, (who, r.text)
+        assert await rows(op, "audit_events", {"action": "company.vat_egn.revealed"}) == []
+        for who in ("owner-a", "acct-a"):
+            r = await c.post("/api/companies/co1/vat/reveal", headers=hdr(who))
+            assert r.status_code == 200 and r.json()["vat_number"] == VAT_EGN, r.text
+        ev = await rows(op, "audit_events", {"action": "company.vat_egn.revealed"})
+        assert len(ev) == 2 and no_full(ev, TYPED)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg483_a_counterparty_bg_egn_vat_has_an_audited_reveal(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": VAT_EGN}})
+        for who in ("admin-a", "viewer-a", "site-a"):
+            r = await c.post("/api/counterparties/cp2/vat/reveal", headers=hdr(who))
+            assert r.status_code == 403, (who, r.text)
+        assert await rows(op, "audit_events", {"action": "counterparty.vat_egn.revealed"}) == []
+        for who in ("owner-a", "acct-a"):
+            r = await c.post("/api/counterparties/cp2/vat/reveal", headers=hdr(who))
+            assert r.status_code == 200 and r.json()["vat_number"] == VAT_EGN, r.text
+        ev = await rows(op, "audit_events", {"action": "counterparty.vat_egn.revealed"})
+        assert len(ev) == 2 and {e["entity_id"] for e in ev} == {"cp2"} and no_full(ev, TYPED)
+        # nothing to reveal for a company VAT number; another tenant's record is not found
+        await op.counterparties.update_one({"id": "cp1"}, {"$set": {"vat_number": "BG111111111"}})
+        assert (await c.post("/api/counterparties/cp1/vat/reveal", headers=hdr("acct-a"))).status_code == 404
+        assert (await c.post("/api/counterparties/cp-b/vat/reveal", headers=hdr("acct-a"))).status_code == 404
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg480_fg481_advance_method_from_the_account_and_replay_before_the_guards(monkeypatch, backend, mode):
+    """FG-480: the advance's payment_method comes from the account (as the ledger row), not
+    the request. FG-481 (R29): a replay of a completed key returns the stored 201 BEFORE any
+    guard — also after the subcontractor was archived; a NEW key is refused."""
+    if backend != "real":
+        pytest.skip("SUB-ADV-01's package reservation runs on a real MongoDB only")
+
+    async def scenario(c, op):
+        await op.subcontractor_packages.update_one({"id": "pkg1"}, {"$set": {"contract_total": 9000.0}})
+        url = "/api/subcontractor-packages/pkg1/advances"
+        body = {"amount": 100.0, "reason": "Аванс по договор", "account_id": CASH_A,
+                "payment_method": "bank",                      # the request's word is ignored
+                "cash_receipt_file_id": "file_r", "cash_recipient_name": "Бригадир"}
+        h1 = dict(hdr("acct-a"), **{"Idempotency-Key": "adv-fg481"})
+        r = await c.post(url, headers=h1, json=body)
+        assert r.status_code == 201, r.text
+        first = r.json()
+        assert first["payment_method"] == "cash"
+        [led] = await rows(op, "finance_payments")
+        assert str(led["method"]).lower() == "cash"
+        await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "archived",
+                                                                      "active": False}})
+        r = await c.post(url, headers=h1, json=body)              # the replay
+        assert r.status_code in (200, 201) and r.json()["id"] == first["id"], r.text
+        assert len(await rows(op, "finance_payments")) == 1
+        r = await c.post(url, headers=dict(hdr("acct-a"), **{"Idempotency-Key": "adv-new"}), json=body)
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_NOT_SELECTABLE"
+        # the ordinary subcontractor payment: the same replay rule
+        await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "active",
+                                                                      "active": True}})
+        pbody = {"package_id": "pkg1", "amount": 10.0, "payment_method": "bank", "account_id": CASH_A,
+                 "cash_receipt_file_id": "file_r2", "cash_recipient_name": "Бригадир"}
+        h2 = dict(hdr("acct-a"), **{"Idempotency-Key": "pay-fg481"})
+        r = await c.post("/api/subcontractor-payments", headers=h2, json=pbody)
+        assert r.status_code == 201 and r.json()["payment_method"] == "cash", r.text
+        pid = r.json()["id"]
+        await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "archived",
+                                                                      "active": False}})
+        r = await c.post("/api/subcontractor-payments", headers=h2, json=pbody)
+        assert r.status_code in (200, 201) and r.json()["id"] == pid, r.text
+    run(monkeypatch, backend, mode, scenario)

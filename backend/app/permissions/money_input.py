@@ -181,6 +181,29 @@ class MoneyWrite:
                 **mw.wf.record_ref})
         return mw
 
+    @classmethod
+    async def completed_replay(cls, user: Dict[str, Any], action: str, raw_key: Optional[str],
+                               body: Any) -> Optional[str]:
+        """CP-01 FG-481 (R29): a READ-ONLY look at the key registry. When this key already
+        COMPLETED with the same request, the stored result's reference — so a route answers
+        the replay with the original result BEFORE any guard runs (a retry after the payee
+        was archived still gets its 201). Reserves nothing, writes nothing; anything else
+        (no key, a new key, a different body, in progress) → None and the route goes on to
+        its checks and ``begin`` as usual."""
+        from app.audit.idempotency import (IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED,
+                                           _record_id)
+        key = (raw_key or "").strip()
+        if not key or len(key) > MAX_KEY_LENGTH:
+            return None
+        rec = await db[IDEMPOTENCY_COLLECTION].find_one(
+            {"id": _record_id(user["org_id"], action, "%s:%s" % (user["id"], key))},
+            {"_id": 0, "status": 1, "request_fingerprint": 1, "result_reference": 1})
+        if not rec or rec.get("status") != IDEMPOTENCY_COMPLETED:
+            return None
+        if rec.get("request_fingerprint") not in (None, request_fingerprint(body)):
+            return None                      # a different body: begin() answers 409
+        return rec.get("result_reference")
+
     def new_id(self, name: str) -> str:
         """A fresh id, or — under a key — the SAME id on every attempt of that key."""
         if self.key is None:

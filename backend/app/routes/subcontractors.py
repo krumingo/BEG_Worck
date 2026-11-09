@@ -21,7 +21,8 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.services import master_records as mr
-from app.services.bank_account_guard import check_payment_target, require_selectable_party
+from app.services.bank_account_guard import (check_payment_target, is_cash_account,
+                                             require_selectable_party)
 from app.permissions.money_write import require_money_write, require_finance_read, strip_money_for_non_finance
 from app.permissions.money_input import MoneyWrite, money_value, project_in_tenant  # SEC-01-C03
 
@@ -636,6 +637,15 @@ async def create_subcontractor_payment(
     Debt SEC-01-C02-D1 (remaining): not yet through a W0-05 write service, no Approval,
     no reversal API (W0-05 / R1 Payment).
     """
+    # CP-01 FG-481 (R29): a replay of a completed key answers with the stored payment
+    # BEFORE any check — a later guard (an archived payee, a changed IBAN) never turns the
+    # original 201 into a refusal.
+    replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_payment.create",
+                                               idempotency_key, data)
+    if replay:
+        stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
     amount = money_value(data.get("amount"))
     vat_raw = data.get("vat_amount")
     vat_amount = round(money_value(vat_raw, "vat_amount", allow_zero=True), 2) \
@@ -716,7 +726,8 @@ async def create_subcontractor_payment(
         "payment_date": data.get("payment_date", now[:10]),
         "amount": amount, "vat_amount": vat_amount, "currency": pkg.get("currency", "EUR"),
         "payment_type": data.get("payment_type", "partial"),
-        "payment_method": data.get("payment_method", "bank"),
+        # CP-01 FG-480 / FG-225: the account decides the method, as for the ledger row
+        "payment_method": "cash" if is_cash_account(account) else "bank",
         "notes": data.get("notes", ""),
         "status": "completed",
         "kind": PAYMENT_KIND,
@@ -1131,6 +1142,13 @@ async def create_subcontractor_advance(
     ``committed_paid_total``; it is deducted later, explicitly, on acts.
     Idempotency-Key required (R29); AuditEvent ``subcontractor_advance_created``.
     """
+    # CP-01 FG-481 (R29): a replay of a completed key → the stored advance, BEFORE any check
+    replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_advance.create",
+                                               idempotency_key, {**data, "package_id": pkg_id})
+    if replay:
+        stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
     amount = round(money_value(data.get("amount")), 2)
     reason = _reason(data.get("reason"))
     tenant = _tenant(user)
@@ -1192,7 +1210,9 @@ async def create_subcontractor_advance(
         "payment_no": await _get_next_pay_no(org_id),
         "payment_date": data.get("advance_date") or now[:10],
         "amount": amount, "vat_amount": 0.0, "currency": pkg.get("currency", "EUR"),
-        "payment_method": data.get("payment_method", "bank"),
+        # CP-01 FG-480: the ACCOUNT decides the method (FG-225), as for the ledger row —
+        # never the request's word
+        "payment_method": "cash" if is_cash_account(account) else "bank",
         "reason": reason, "notes": data.get("notes", ""),
         "status": "completed", "account_id": account["id"],
         "created_by": user["id"], "created_at": now,

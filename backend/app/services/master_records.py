@@ -304,3 +304,37 @@ def hide_archived(query: Dict[str, Any], include_archived: bool = False) -> Dict
         query = dict(query)
         query["lifecycle_status"] = {"$ne": cr.LIFECYCLE_ARCHIVED}
     return query
+
+
+
+async def reveal_vat_egn(db, user, idem: Optional[str], *, collection: str, record_id: str,
+                         entity_type: str) -> Dict[str, Any]:
+    """FG-482 / FG-483 (R48.3): the full BG + ЕГН VAT number of a company / counterparty —
+    Owner / Accountant only; every reveal is an AuditEvent ``<entity>.vat_egn.revealed``
+    (who, when, whose, the masked value) committed before the value is returned. A record
+    whose VAT number is not a BG + ЕГН has nothing to reveal (404)."""
+    if not cr.can_reveal_egn(user):
+        raise forbidden("Пълното ЕГН (и ДДС номер BG + ЕГН) се вижда само от Собственик и "
+                        "Счетоводител (Р48.3)")
+    tenant = TenantData.for_user(db, user)
+    key = idem.strip() if isinstance(idem, str) and idem.strip() else "reveal-" + uuid.uuid4().hex
+
+    async def tx(session):
+        doc = await tenant.collection(collection).find_one(
+            {"id": record_id}, {"_id": 0, "id": 1, "vat_number": 1}, **kw(session))
+        if not doc:
+            raise HTTPException(status_code=404, detail="Записът не е намерен")
+        vat = doc.get("vat_number")
+        if not cr.vat_is_egn(vat):
+            raise HTTPException(status_code=404, detail={
+                "error_code": "NO_EGN_TO_REVEAL",
+                "message": "ДДС номерът не е BG + ЕГН — няма какво да се разкрие"})
+        await audit(db, session, user, "%s.vat_egn.revealed" % entity_type,
+                    entity_type=entity_type, entity_id=record_id, key=key,
+                    diff={"vat_masked": cr.mask_vat(vat), "revealed_by": user["id"],
+                          "role": user.get("role")})
+        return vat
+
+    from app.services.master_write import run_tx
+    vat = await run_tx(db, tx)
+    return {"id": record_id, "vat_number": vat, "revealed": True}

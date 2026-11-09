@@ -212,6 +212,25 @@ def mask_vat(value: Any) -> str:
     return "BG" + mask_egn(str(value)[2:])
 
 
+def mask_vat_egn(value: Any) -> Any:
+    """FG-482: a copy of ``value`` (dict / list, recursively) with every BG + ЕГН VAT number
+    masked, for every reader; a 10-digit ``tax_id`` (a natural person's ЕГН) as well."""
+    if isinstance(value, list):
+        return [mask_vat_egn(v) for v in value]
+    if isinstance(value, dict):
+        out = {}
+        for k, v in value.items():
+            if k in VAT_KEYS and vat_is_egn(v):
+                out[k] = mask_vat(v)
+            elif k == "tax_id" and isinstance(v, (str, int)) and v and \
+                    not str(v).startswith(EGN_MASK_PREFIX) and possible_egn(v):
+                out[k] = mask_egn(v)
+            else:
+                out[k] = mask_vat_egn(v)
+        return out
+    return value
+
+
 def mask_invoice_egn(value: Any) -> Any:
     """FG-294 (R48.3): an invoice (or a list of them, or a version snapshot — recursively)
     with every possible ЕГН masked — a 10-digit ``counterparty_eik`` (a Bulgarian ЕИК has 9 or

@@ -394,7 +394,10 @@ async def unified_client_search(
             if q:
                 name_match = q_lower in (c.get("name") or "").lower()
                 eik_match = normalize_eik(q) and normalize_eik(q) in normalize_eik(c.get("eik") or "")
-                vat_match = q_lower in (c.get("vat_number") or "").lower()
+                # FG-482 (R48.3): a BG + ЕГН VAT number is an ЕГН — matched by its digits only
+                # for the roles that may see it in full (Owner / Accountant)
+                vat_match = q_lower in (c.get("vat_number") or "").lower() and (
+                    not cr.vat_is_egn(c.get("vat_number")) or cr.can_reveal_egn(user))
                 phone_match = q_normalized and q_normalized in normalize_phone(c.get("phone") or "")
                 mol_match = q_lower in (c.get("mol") or "").lower()
                 
@@ -411,7 +414,7 @@ async def unified_client_search(
                 "email": c.get("email", ""),
                 "address": c.get("address", ""),
                 "mol": c.get("mol", ""),
-                "vat_number": c.get("vat_number", ""),
+                "vat_number": cr.mask_vat_egn({"vat_number": c.get("vat_number", "")})["vat_number"],
                 "is_active": c.get("is_active", True),
             })
     
@@ -636,7 +639,8 @@ async def get_project_client_info(
                     "email": company.get("email", ""),
                     "address": company.get("address", ""),
                     "mol": company.get("mol", ""),
-                    "vat_number": company.get("vat_number", ""),
+                    # FG-482: BG + ЕГН masked for every role
+                    "vat_number": cr.mask_vat_egn({"vat_number": company.get("vat_number", "")})["vat_number"],
                 }
             }
     elif owner_type == "person":

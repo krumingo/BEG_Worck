@@ -504,7 +504,7 @@ async def import_client_invoice(project_id: str, user: dict = Depends(get_curren
     now = datetime.now(timezone.utc).isoformat()
     await _tenant(user).projects.update_one({"id": project_id, "org_id": user["org_id"]},
                                  {"$set": {"invoice_details": invoice, "updated_at": now}})
-    result = {"ok": True, "invoice_details": invoice}
+    result = {"ok": True, "invoice_details": cr.mask_vat_egn(invoice)}   # FG-482
     # W0-03E: in enforce the imported owner identity also names its Master record.
     from app.master_data.legacy_adapter import annotate_refs
     owner = [{"owner_id": owner_id}]
@@ -880,7 +880,7 @@ async def list_companies(user: dict = Depends(get_current_user), q: Optional[str
     if q:
         q_lower = q.lower()
         companies = [c for c in companies if q_lower in c.get("name", "").lower() or q_lower in c.get("eik", "").lower()]
-    return companies
+    return cr.mask_vat_egn(companies)            # FG-482
 
 
 @router.post("/companies", status_code=201)
@@ -912,7 +912,7 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
     }
     return await company_duplicate_dq(_tenant(user), user, eik, lambda: mr.create(
         db, user, idempotency_key, collection="companies", doc=company,
-        fingerprint=data.model_dump(), check=check))
+        fingerprint=data.model_dump(), check=check, result=cr.mask_vat_egn))   # FG-482
 
 
 @router.get("/companies/find-by-eik")
@@ -923,7 +923,7 @@ async def find_company_by_eik(eik: str, user: dict = Depends(get_current_user)):
     company = await tenant.companies.find_one({"org_id": user["org_id"], "eik": normalized}, {"_id": 0})
     if not company:
         return {"found": False, "company": None}
-    return {"found": True, "company": company}
+    return {"found": True, "company": cr.mask_vat_egn(company)}      # FG-482
 
 
 @router.get("/companies/{company_id}")
@@ -933,7 +933,15 @@ async def get_company(company_id: str, user: dict = Depends(get_current_user)):
     company = await tenant.companies.find_one({"id": company_id, "org_id": user["org_id"]}, {"_id": 0})
     if not company:
         raise HTTPException(status_code=404, detail="Company not found")
-    return company
+    return cr.mask_vat_egn(company)              # FG-482
+
+
+@router.post("/companies/{company_id}/vat/reveal")
+async def reveal_company_vat(company_id: str, user: dict = Depends(get_current_user),
+                             idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-482 (R48.3): the full BG + ЕГН VAT number — Owner / Accountant, audited."""
+    return await mr.reveal_vat_egn(db, user, idempotency_key, collection="companies",
+                                   record_id=company_id, entity_type="company")
 
 
 @router.put("/companies/{company_id}")
@@ -951,8 +959,11 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
                 update[k] = v.strip()
             else:
                 update[k] = v
+    if cr.is_masked_vat(update.get("vat_number")):   # FG-482: a masked value keeps the stored one
+        update.pop("vat_number")
     return await mr.update(db, user, idempotency_key, collection="companies", record_id=company_id,
-                           changes=update, fingerprint={"id": company_id, "body": data.model_dump()})
+                           changes=update, fingerprint={"id": company_id, "body": data.model_dump()},
+                           result=cr.mask_vat_egn)
 
 
 @router.delete("/companies/{company_id}")
@@ -1157,7 +1168,7 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
 
     return {
         "project": {"id": project["id"], "code": project.get("code", ""), "name": project.get("name", "")},
-        "client": client_data,
+        "client": cr.mask_vat_egn(client_data),                      # FG-482
         "default_currency": "EUR",
         "default_vat_rate": 20,
     }
@@ -1264,7 +1275,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 "type": "company",
                 "name": company.get("name", ""),
                 "eik": company.get("eik", ""),
-                "vat_number": company.get("vat_number", ""),
+                # FG-482: BG + ЕГН masked for every role
+                "vat_number": cr.mask_vat_egn({"vat_number": company.get("vat_number", "")})["vat_number"],
                 "mol": company.get("mol", ""),
                 "phone": company.get("phone", ""),
                 "email": company.get("email", ""),
