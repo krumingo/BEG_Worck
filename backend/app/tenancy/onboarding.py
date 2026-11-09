@@ -99,6 +99,9 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
         await ensure_audit_indexes(op_db)
     except AuditIndexError as exc:
         raise OnboardingRefused("audit indexes unavailable: %s" % exc, "AUDIT_INDEXES_UNAVAILABLE")
+    # OFF79-05: the collections the offer transactions write exist before the first offer
+    from app.services.offer_txn import ensure_offer_collections
+    await ensure_offer_collections(op_db)
 
     now = _now()
     tenant_id = str(uuid.uuid4())          # server-generated; the only tenant value

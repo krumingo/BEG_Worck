@@ -1299,6 +1299,8 @@ const OFFER_STATUS = {
   Accepted: { label: "Одобрена", cls: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" },
   Rejected: { label: "Отхвърлена", cls: "bg-red-500/20 text-red-400 border-red-500/30" },
   NeedsRevision: { label: "За преработка", cls: "bg-amber-500/20 text-amber-400 border-amber-500/30" },
+  Superseded: { label: "Заменена", cls: "bg-gray-500/20 text-gray-400 border-gray-500/30" },
+  Cancelled: { label: "Анулирана", cls: "bg-gray-500/20 text-gray-500 border-gray-500/30" },
 };
 
 function ProjectOffersTab({ projectId, projectName }) {
