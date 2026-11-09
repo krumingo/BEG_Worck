@@ -8,6 +8,7 @@ import { canReadFinance } from "@/lib/financeAccess";
 import PlatformLayout from "@/components/PlatformLayout";
 import PwaBanners from "@/components/pwa/PwaBanners";
 import { MyUnsentPage, DeviceBlockedPage } from "@/components/offline/OfflineQueueUI";
+import SyncConsolePage from "@/pages/SyncConsolePage";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
@@ -129,6 +130,14 @@ function RoleLanding({ children }) {
   if (user && !ADMIN_ROLES.includes(user.role)) return <Navigate to="/tech" replace />;
   return children;
 }
+// PWA-02: the offline-sync console is Owner/Admin only (R61-2/3/6).
+function OwnerAdminRoute({ children }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!["Owner", "Admin"].includes(user.role)) return <Navigate to="/" replace />;
+  return <DashboardLayout>{children}</DashboardLayout>;
+}
 function AdminRoute({ children }) {
   const { user, loading } = useAuth();
   if (loading) {
@@ -246,6 +255,7 @@ function AppRoutes() {
       {/* PWA-02: the field user's unsent records; the page a blocked device lands on */}
       <Route path="/my-unsent" element={<CompanyProtectedRoute><MyUnsentPage /></CompanyProtectedRoute>} />
       <Route path="/device-blocked" element={<DeviceBlockedPage />} />
+      <Route path="/sync-console" element={<OwnerAdminRoute><SyncConsolePage /></OwnerAdminRoute>} />
 
       {/* Admin-only routes — Technician/Worker/Driver redirected to /tech */}
       <Route path="/site-attendance" element={<AdminRoute><SiteAttendancePage /></AdminRoute>} />

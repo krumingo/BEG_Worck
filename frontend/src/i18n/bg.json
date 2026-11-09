@@ -252,7 +252,8 @@
     "techView": "Терен",
     "techDashboard": "Моят работен ден",
     "fieldPortal": "Теренен портал",
-    "ocrInvoices": "OCR Фактури"
+    "ocrInvoices": "OCR Фактури",
+    "syncConsole": "Работа без интернет"
   },
   "dashboard": {
     "title": "Табло",

@@ -115,6 +115,8 @@ const NAV_GROUPS = [
     children: [
       { to: "/settings", icon: Settings, labelKey: "nav.companySettings" },
       { to: "/users", icon: Users, labelKey: "nav.users" },
+      // PWA-02: the offline-sync console (Owner/Admin only)
+      { to: "/sync-console", icon: Smartphone, labelKey: "nav.syncConsole", ownerAdminOnly: true },
     ],
   },
 ];
@@ -258,7 +260,8 @@ export default function DashboardLayout({ children }) {
   const seesFinance = canReadFinance(user?.role);
   const getGroups = () => {
     return NAV_GROUPS.filter(g => seesFinance || !g.finance).map(g => {
-      const children = g.children ? g.children.filter(c => seesFinance || !c.finance) : g.children;
+      const children = g.children ? g.children.filter(c => (seesFinance || !c.finance)
+        && (!c.ownerAdminOnly || ["Owner", "Admin"].includes(user?.role))) : g.children;
       if (g.id === "settings" && isPlatformAdmin) {
         return { ...g, children: [...(children || []), ...PLATFORM_ADMIN_CHILDREN] };
       }

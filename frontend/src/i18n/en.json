@@ -238,7 +238,8 @@
     "techView": "Field",
     "techDashboard": "My Workday",
     "fieldPortal": "Field Portal",
-    "ocrInvoices": "OCR Invoices"
+    "ocrInvoices": "OCR Invoices",
+    "syncConsole": "Offline work"
   },
   "dashboard": {
     "title": "Dashboard",
