@@ -154,3 +154,41 @@ UI: `OffersListPage` / `OfferEditorPage` show the write buttons to Owner / Admin
 | A2C / A1 guards | 242 modules / 488 units, 0 violations |
 
 **Environment:** the sandbox caps open files at 20 000, and mongod hit EMFILE (WiredTiger `__posix_directory_sync` fassert) after tens of thousands of test collections. The gates were run on a fresh replica set per suite, on a tmpfs data dir, with idle WiredTiger file handles closed quickly (`wiredTigerFileHandleCloseIdleTime=5`).
+
+## FLOW Guard FG-472 (R67 + R20) — the offer execution budget
+
+`app/routes/offer_budget.py`:
+- `PUT /offer-budgets/{offer_id}` let any M2 role write budget unit costs and margin %, with no AuditEvent.
+- `GET /offer-budgets/{offer_id}` returned sale, budget and margin to every role.
+
+**Red first:** `d3d6548` (tests only). `test_09` and `test_10` fail in 3 of 3 modes on `56913a4`.
+
+**Fix `82312a2`:**
+- **PUT:** `require_money_write("offers.offer_budget.update")` is the first dependency, so Owner/Admin/Accountant write and every other role gets 403 before any read or write. The budget rows and ONE canonical AuditEvent `offers.offer_budget.updated` (each line with its new cost / margin values) are written in one transaction. `offer_line_budgets` joins the collections created outside transactions.
+- **GET:** `strip_money_for_non_finance`, plus an explicit non-finance view (`line_id, activity_name, unit, qty, planned_labor_hours, notes, has_budget`). The keys `sale_*` / `sale` are not money words for the generic strip, hence the allow-list. Finance roles see everything as before.
+
+**Important:** this router is **not mounted** in `server.py`: no served route, no PM-01 cell, no frontend caller. FG-472 is therefore **not reachable in the running app today**; the module is hardened in case it is ever mounted.
+- The action is in `OFFER_WRITE_ACTIONS` and is checked on the router itself (`test_08`, `UNMOUNTED_R67_ROUTES`), not in the served-route registries.
+- Re-running the PM-01 and SEC-02 harnesses gives **no semantic change**: the matrix is byte-identical, and the SEC-02 results differ only in run-specific tenant ids, hashes and seconds, which are not committed.
+
+| ID | Debt |
+|---|---|
+| D-OFF02-3 | Is `offer_budget.py` meant to be served? Mount it (it is protected now) or remove it: a decision for Krum. |
+| D-OFF02-4 | R20 lets the Technical Manager see per-SMR **budgets** on his own projects (R20-5B). FG-472's instruction strips budget money for every non-finance role. Whether this offer-level budget counts as his "budget per СМР" is for Krum to decide. |
+
+### Gates on `82312a2` (real `mongo:7.0` rs0, sequential, a fresh Mongo per suite)
+
+| Gate | Result |
+|---|---|
+| OFF-02 | **28 passed, 0 skipped** |
+| OFF-01 + probe | **237** |
+| ACT-01 | **113** |
+| PM-01 | **6 / 0 skipped** |
+| PAY | **630** |
+| SEC-01 | **30** |
+| SUB-ADV-01 | **9** |
+| SEC-02 | **31** |
+| R0 | **814** |
+| W0 | 1176 + **the same 16 as main** |
+| Warehouse canonical | **44 files / 1121** |
+| A2C / A1 | 242 / 488, 0 violations; inventories unchanged |
