@@ -534,17 +534,21 @@ def _audit_value(v):
 
 async def _supplier_invoice_link(tenant, org_id: str, inv: dict, *, session=None):
     """The id of a canonical movement linked to the invoice or a line, else None.
-    Debt (WH-REV-01 / #82): a REVERSED receipt should not lock the invoice —
-    the reversal field is not on this base; whichever PR merges second carries
-    that rule."""
+    WH-REV-01 / #82 (WHREV82-M1): a REVERSED receipt (and the reversal row
+    itself) does not lock the invoice — the one rule
+    ``warehouse_movements.reversal.without_reversed``, read in the caller's
+    lock transaction (``session``)."""
+    from app.services.warehouse_movements.reversal import without_reversed
     line_ids = [l.get("id") for l in inv.get("lines") or [] if isinstance(l, dict) and l.get("id")]
     ors = [{"invoice_id": inv["id"]}]
     if line_ids:
         ors.append({"invoice_line_id": {"$in": line_ids}})
-    row = await tenant.warehouse_transactions.find_one(
+    rows = await tenant.warehouse_transactions.find(
         {"org_id": org_id, "action": {"$exists": True}, "$or": ors},
-        {"_id": 0, "movement_id": 1}, session=session)
-    return (row or {}).get("movement_id")
+        {"_id": 0, "movement_id": 1, "action": 1}, session=session).sort(
+        "movement_id", 1).to_list(None)
+    rows = await without_reversed(tenant.warehouse_transactions, rows, session=session)
+    return rows[0]["movement_id"] if rows else None
 
 
 # ── Post to Warehouse ──────────────────────────────────────────────

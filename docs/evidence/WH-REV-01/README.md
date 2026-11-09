@@ -126,3 +126,12 @@
 - Guards: A2C **0** (243 модула), A1 **0** (490 единици).
 - Frontend: `yarn test` **182 passed**, `yarn build` OK.
 - `@staticmethod` проверен с AST на `_plan_receipt_reversal`, `_expect_credit_note`, `_bind_invoice_line_price`, `_lock_invoice_line`.
+
+## Допълнение C (09.11) — WHREV82-M1 (AUDIT-2): сторнирано получаване отключва доставната фактура
+- **Проблем (probe `docs/audit/probes/whrev01/test_probe_whrev01_silock.py` на `claude/audit-log`):** `procurement._supplier_invoice_link` броеше и сторнирано получаване. След сторно 201 редакцията на редовете на доставната фактура оставаше 409 `SUPPLIER_INVOICE_LINKED` завинаги.
+- **Поправка:** същото правило `warehouse_movements.reversal.without_reversed` в транзакцията на заключването. Сторнираното получаване и редът на сторното не заключват. Ново, живо получаване заключва отново.
+- **Red на `e07320d`:** probe 3 failed (off / shadow / enforce); новият тест `test_whrev82_m1_*` 3 failed — 409 `SUPPLIER_INVOICE_LINKED` след сторното.
+- **Green:**
+  - probe 3 passed; `test_wh_rev_01_receipt_reversal.py` **104 passed**;
+  - WH-FIX-01 a3 138, f81 132, post_55 47; SEC-01 30; SEC-02 31 — всички passed;
+  - A2C 0 / A1 0; inventories регенерирани — без промяна.

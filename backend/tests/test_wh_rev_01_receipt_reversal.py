@@ -572,3 +572,45 @@ async def test_r47_a_reversal_while_the_invoice_is_being_paid_is_409(
     await db["invoices"].update_one({"id": "inv-c26"}, {"$unset": {ROW_LOCK_FIELD: ""}})
     await _reverse(wc, mode, receipt)
     assert await db["expected_credit_notes"].count_documents({}) == 1
+
+
+# ═══════════ WHREV82-M1 — a reversed receipt unlocks the supplier invoice ═══════════
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_whrev82_m1_reversed_receipt_unlocks_the_supplier_invoice(
+        canonical_mongo_db, allow_always_gate, monkeypatch, mode):
+    """AUDIT-2 probe (claude/audit-log, test_probe_whrev01_silock.py): #81's
+    FG-157 lock refuses an edit of a supplier invoice whose line a canonical
+    receipt names (409 SUPPLIER_INVOICE_LINKED). After the receipt is
+    REVERSED, neither it nor the reversal row locks the invoice — the edit
+    passes. A second, live receipt locks it again."""
+    from tests.test_wh_fix_01_post_55 import _patch_all, _user
+    client, db, run, svc = await _prepare(canonical_mongo_db, allow_always_gate,
+                                          monkeypatch, mode, allocations=ONLY_P)
+    wc = _wc(monkeypatch, client, db)
+    _patch_all(monkeypatch, db)
+    await db["supplier_invoices"].insert_one({
+        "id": "si-rev", "org_id": T, "status": "reviewed", "vat_percent": 20,
+        "updated_at": "2026-11-01T00:00:00+00:00",
+        "lines": [{"id": IL, "material_name": "Лепило", "qty": 10, "unit_price": 10,
+                   "total_price": 100}], "subtotal": 100, "total": 120})
+    from app.routes import procurement
+
+    async def edit(price):
+        try:
+            await procurement.update_supplier_invoice("si-rev", {"lines": [
+                {"id": IL, "material_name": "Лепило", "qty": 10, "unit_price": price}]},
+                user=_user())
+            return 200, None
+        except HTTPException as exc:
+            d = exc.detail
+            return exc.status_code, d.get("error_code") if isinstance(d, dict) else d
+
+    receipt = await _book(svc, mode, db, run, WH)
+    assert await edit(7) == (409, "SUPPLIER_INVOICE_LINKED")
+    await _reverse(wc, mode, receipt)
+    assert await edit(8) == (200, None)
+    inv = await db["supplier_invoices"].find_one({"id": "si-rev"}, {"_id": 0})
+    assert inv["lines"][0]["unit_price"] == 8
+    await _book(svc, mode, db, run, WH, key="k-book-2")             # a live receipt again
+    assert await edit(9) == (409, "SUPPLIER_INVOICE_LINKED")
