@@ -930,3 +930,45 @@ def test_fg500_a_legacy_non_iso_approved_row_stays_in_its_date_window(monkeypatc
                     if x.get("manual_entry_id") == "le-old"]
         assert (await op.labor_entries.find_one({"id": "le-old"}))["date"] == "06.11.2026"   # never rewritten
     run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 41 (FG-505, FG-506)
+
+async def _paid_money(op):
+    """A PAID pay run allocating 999 of paid salary to P (the ONE pay-run ledger) and a
+    legacy payroll_entries row of 4444 (a second, older source that must not be read)."""
+    await op.pay_runs.insert_one({
+        "id": "pr-1", "org_id": ORG, "status": "paid",
+        "employee_rows": [{"employee_id": "w1", "first_name": "W", "last_name": "1",
+                           "paid_now_amount": 999.0, "sites": ["R62 обект"],
+                           "approved_hours": 8, "earned_amount": 999.0}]})
+    await op.payroll_entries.insert_one({"id": "pe-1", "org_id": ORG, "project_id": P,
+                                         "status": "Paid", "net_pay": 4444.0})
+
+
+def test_fg505_the_project_aggregate_pnl_uses_the_approved_labor(monkeypatch, backend):
+    """FG-505 (R62): the aggregate P&L labor is THE approved labor cost (180), not the paid
+    labor (999) — the paid labor is still shown apart, as a cash fact."""
+    async def scenario(c, op):
+        await _paid_money(op)
+        r = await c.get(f"/api/projects/{P}/aggregate", headers=_token("owner"))
+        assert r.status_code == 200, r.text
+        a = r.json()
+        assert a["pnl"]["labor"] == 180.0 == a["work"]["total"]["labor_cost"], a["pnl"]
+        mat = a["materials"]["total"]["ex_vat"]
+        assert a["pnl"]["expenses"] == round(180.0 + mat, 2), a["pnl"]
+        assert a["pnl"]["profit"] == round(a["pnl"]["revenue"] - 180.0 - mat, 2)
+        assert a["paid_labor"]["total"]["gross_labor"] == 999.0          # the cash fact, apart
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg506_the_cash_balance_reads_paid_salaries_from_the_pay_run_ledger_only(monkeypatch, backend):
+    async def scenario(c, op):
+        await _paid_money(op)
+        r = await c.get(f"/api/projects/{P}/dashboard", headers=_token("owner"))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["team"]["total_salaries_paid"] == 999.0, d["team"]      # not the legacy 4444
+        # cash expenses = the paid salaries (999, the ledger) + materials (none in this seed)
+        assert d["balance"]["expenses"] == 999.0, d["balance"]
+    run(monkeypatch, scenario, backend)

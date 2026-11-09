@@ -1212,16 +1212,9 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             "system_role": u.get("role", ""),
         })
     
-    # Calculate total paid salaries for this project (from payroll if exists)
-    total_salaries_paid = 0
-    try:
-        payroll_entries = await tenant.payroll_entries.find(
-            {"project_id": project_id, "org_id": org_id, "status": "Paid"},
-            {"_id": 0, "net_pay": 1}
-        ).to_list(1000)
-        total_salaries_paid = sum(e.get("net_pay", 0) for e in payroll_entries)
-    except Exception as e:
-        logger.warning(f"projects.py calc error: {e}")
+    # FG-506: the salaries PAID for this project (a cash fact for the cash balance card) from
+    # the ONE pay-run ledger (paid pay runs, allocated per project) — not legacy payroll_entries
+    total_salaries_paid = (await paid_labor_for_projects_v3(org_id, [project_id]))["gross_labor"]
     
     card_team = {
         "members": team_list,
@@ -2261,14 +2254,18 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
             "own": own_paid, "children": child_paid,
             "total": {"gross_labor": round(own_paid["gross_labor"] + child_paid["gross_labor"], 2)},
         },
+        # FG-505 (R62): the P&L labor is THE approved labor cost (project_labor_cost, the
+        # "work" block) — not the PAID labor (a cash fact, shown apart as paid_labor)
         "pnl": {
             "revenue": round(own_inv["paid"] + child_inv["paid"], 2),
+            "labor": round(own_work["labor_cost"] + child_work["labor_cost"], 2),
+            "labor_basis": "approved (project_labor_cost)",
             "expenses": round(
-                own_paid["gross_labor"] + child_paid["gross_labor"] +
+                own_work["labor_cost"] + child_work["labor_cost"] +
                 own_mat["ex_vat"] + child_mat["ex_vat"], 2),
             "profit": round(
                 (own_inv["paid"] + child_inv["paid"]) -
-                (own_paid["gross_labor"] + child_paid["gross_labor"] +
+                (own_work["labor_cost"] + child_work["labor_cost"] +
                  own_mat["ex_vat"] + child_mat["ex_vat"]), 2),
         },
     }
