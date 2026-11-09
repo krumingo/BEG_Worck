@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **37** — 09.11.2026 06:50 UTC (LAB-01, CP-01, WH-FIX-01 — в проверка).
+Последен проход: **37** — 09.11.2026 06:50–08:00 UTC.
 
 ## Последно проверен SHA по клон
 
@@ -21,7 +21,7 @@
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `aa369d8` | 31 | слят в main (`ea57121`);  FLOW-021, Р39/Р40 |
 | `claude/act-01-client-act-from-offer` (ACT-01) | `c7df7ca` | 27 | слят в main (`fddb0185`);  FLOW-004 |
 | #79 `claude/off-01-offer-version-accept` (OFF-01) | `25c9ae8` | 33 | слят в main (`44e8d97`);  FLOW-003, FLOW-002 magic link |
-| #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `72e7e87` | 32 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
+| #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `3028304` | 37 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `4929451` | 37 | FLOW-010, Р48 |
 | #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `5242cba` | 36 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
