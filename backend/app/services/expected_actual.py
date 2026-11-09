@@ -61,11 +61,12 @@ async def build_expected_actual(org_id: str, project_id: str, date_from: str = N
     # ── Actual data (LAB-01: approved report lines, one labor calculation) ──
     labor = await project_labor_cost(org_id, project_id, date_from, date_to)
     actual_by_type = {}
+    # R62 / FG-422: ONE figure — labor + downtime per SMR, THE labor cost "total" overall
     for key, v in labor["by_smr"].items():
-        if v["hours"] or v["labor"]:
-            actual_by_type[key] = {"hours": v["hours"], "cost": v["labor"]}
-    total_labor_actual_h = labor["approved_hours"]
-    total_labor_actual_c = labor["labor_total"]
+        if v["hours"] or v["labor"] or v["downtime"] or v["downtime_hours"]:
+            actual_by_type[key] = {"hours": v["hours"] + v["downtime_hours"], "cost": v["labor"] + v["downtime"]}
+    total_labor_actual_h = labor["approved_hours"] + labor.get("downtime_hours", 0)
+    total_labor_actual_c = labor["total"]
 
     # ── A. By Activity ──────────────────────────────────────────
     all_types = set(list(planned_by_type.keys()) + list(actual_by_type.keys()))

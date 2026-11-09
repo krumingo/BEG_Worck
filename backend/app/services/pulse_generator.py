@@ -22,12 +22,22 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         {"_id": 0},
     ).to_list(1000)
 
+    # R62 (FG-421): the day's labor MONEY is THE labor cost of the day (approved report lines +
+    # Owner-approved manual rows); the sessions give presence and hours only
+    from app.services.labor_cost import project_labor_cost
+    day_lines = (await project_labor_cost(org_id, site_id, date, date))["lines"]
+    day_cost_by_worker, day_cost_by_smr = defaultdict(float), defaultdict(float)
+    for rec in day_lines:
+        day_cost_by_worker[rec.get("worker_id")] += float(rec.get("amount") or 0)
+        day_cost_by_smr[rec.get("smr_type") or "general"] += float(rec.get("amount") or 0)
+
     by_worker = defaultdict(lambda: {"hours": 0, "sessions": 0, "smr_types": set(), "ot": 0, "cost": 0})
+    for wid_ in day_cost_by_worker:
+        by_worker[wid_]["cost"] = day_cost_by_worker[wid_]
     for s in sessions:
         wid = s["worker_id"]
         by_worker[wid]["hours"] += s.get("duration_hours", 0)
         by_worker[wid]["sessions"] += 1
-        by_worker[wid]["cost"] += s.get("labor_cost", 0)
         if s.get("is_overtime"):
             by_worker[wid]["ot"] += s.get("duration_hours", 0)
         if s.get("smr_type_id"):
@@ -37,7 +47,7 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     workers = []
     for wid, d in by_worker.items():
         workers.append({
-            "worker_id": wid, "worker_name": d["name"],
+            "worker_id": wid, "worker_name": d.get("name", ""),
             "hours": round(d["hours"], 2), "sessions_count": d["sessions"],
             "smr_types": list(d["smr_types"]), "overtime_hours": round(d["ot"], 2),
             "labor_cost": round(d["cost"], 2),
@@ -52,8 +62,9 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
     for s in sessions:
         st = s.get("smr_type_id") or "general"
         smr_map[st]["hours"] += s.get("duration_hours", 0)
-        smr_map[st]["cost"] += s.get("labor_cost", 0)
         smr_map[st]["workers"].add(s["worker_id"])
+    for st, c in day_cost_by_smr.items():
+        smr_map[st]["cost"] = c   # R62: THE labor cost of the day per SMR
     smr_summary = [{"smr_type": k, "total_hours": round(v["hours"], 2), "total_cost": round(v["cost"], 2), "workers_count": len(v["workers"])} for k, v in smr_map.items()]
 
     # c. Materials of the day — 5C-C22: the counted cost lines of the ONE
@@ -78,12 +89,9 @@ async def generate_pulse(org_id: str, site_id: str, date: str) -> dict:
         {"org_id": org_id, "project_id": site_id}, {"_id": 0, "labor_budget": 1}
     ).to_list(100)
     total_budget = sum(b.get("labor_budget", 0) for b in budgets)
-    all_sessions_cost = 0
-    all_sess = await tenant.work_sessions.find(
-        {"org_id": org_id, "site_id": site_id, "ended_at": {"$ne": None}},
-        {"_id": 0, "labor_cost": 1},
-    ).to_list(5000)
-    all_sessions_cost = sum(s.get("labor_cost", 0) for s in all_sess)
+    # R62 / FG-207: the budget's "spent" is THE labor cost of the project, not the sessions
+    from app.services.labor_cost import project_labor_cost
+    all_sessions_cost = (await project_labor_cost(org_id, site_id))["total"]
     burn_pct = round(all_sessions_cost / total_budget * 100, 1) if total_budget > 0 else 0
     budget_status = "on_track" if burn_pct <= 80 else ("warning" if burn_pct <= 100 else "over_budget")
     budget_snapshot = {

@@ -266,9 +266,9 @@ def is_significant_action(action: str) -> bool:
     return verb in SIGNIFICANT_VERBS
 
 
-# R62 / FG-58 (Krum 09.11.2026): "Ръчно добавен ред за труд се брои само след одобрение от
-# Собственика" — the approval of a manual labor row is the Owner's ONLY (Admin is taken out
-# of its full set below, as for the R39 advance; Accountant does not hold it).
+# R62 / FG-58 + R66 (Krum 09.11.2026): a manual labor row counts only after it is approved
+# by a SECOND person — the Owner / Управител or the Accountant, never the one who entered it
+# (checked in the route). Admin is taken out of its full set below (as for the R39 advance).
 MANUAL_LABOR_APPROVE_ACTIONS: Set[str] = {"labor.manual_entry.approve"}  # POST /api/labor-entries/{id}/approve
 ACTIONS |= MANUAL_LABOR_APPROVE_ACTIONS
 
@@ -350,7 +350,9 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "budget.read",
                                                                       # SUB-ADV-01 (R39): the advance and its deduction
                                                                       *SUBCONTRACTOR_ADVANCE_ACTIONS,
-                                                                      *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS}},
+                                                                      *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS,
+                                                                      # R66: the second person who approves a manual labor row
+                                                                      *MANUAL_LABOR_APPROVE_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read",

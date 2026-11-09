@@ -457,10 +457,13 @@ def test_pay_run_and_spent_by_smr_are_one_number(monkeypatch, backend):
         assert p1["downtime_total"] == 25.0
         assert p2["total"] == 50.0
         ea = await build_expected_actual(ORG, "prj-1", P_START, P_END)
-        assert ea["summary"]["labor_actual_cost"] == p1["labor_total"] == 825.0
+        # R62 / FG-422 (Krum 09.11.2026): ONE figure — "spent" is THE labor cost total
+        # (labor + downtime); an SMR row is its labor + its downtime, so the rows add up to
+        # the total; the downtime stays visible as "of which" (was: labor_total 825, R31).
+        assert ea["summary"]["labor_actual_cost"] == p1["total"] == 850.0
         assert ea["summary"]["downtime_cost"] == 25.0
         assert ea["downtime"]["actual_cost"] == 25.0
-        assert {a["name"]: a["actual_cost"] for a in ea["activities"]} == {"Шпакловка": 750.0, "Боя": 75.0}
+        assert {a["name"]: a["actual_cost"] for a in ea["activities"]} == {"Шпакловка": 775.0, "Боя": 75.0}
         # "изхарчено" exposes no per-person money (R31)
         assert "lines" not in ea
     run(monkeypatch, scenario, backend)

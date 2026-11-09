@@ -8,6 +8,7 @@ Phase 5: Project/profit integration
 """
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from typing import Optional
+from pydantic import BaseModel
 from datetime import datetime, timezone
 import uuid
 
@@ -106,6 +107,7 @@ async def create_labor_entry(
         # the Owner approved it (POST /labor-entries/{id}/approve)
         "approval_status": MANUAL_PENDING,
         "created_by": user["id"],
+        "version": 1,
         "created_at": now,
     }
     if entry["source"] == SYNC_SOURCE:
@@ -113,11 +115,15 @@ async def create_labor_entry(
         raise HTTPException(status_code=422, detail=(
             "Източник „work_report_sync“ се записва само от синхронизацията на одобрени отчети"))
 
-    # Resolve hourly rate
-    profile = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": entry["employee_id"]}, {"_id": 0, "hourly_rate": 1})
-    if profile and profile.get("hourly_rate"):
-        entry["hourly_rate"] = profile["hourly_rate"]
-        entry["labor_cost"] = round(entry["hours"] * profile["hourly_rate"], 2)
+    # FG-423 (R62): priced as R62 prices labor — akord = quantity × the package's piece rate,
+    # otherwise hours × the profile's hourly rate (no rate → no cost, never a default)
+    entry.update(await _manual_row_pricing(tenant, org_id, entry["employee_id"],
+                                           entry["execution_package_id"], hours, data.get("quantity")))
+    # FG-423: never the hours an approved report already carries (counted twice)
+    if await _approved_report_hours_exist(org_id, entry["project_id"], entry["employee_id"], entry["date"]):
+        raise HTTPException(status_code=409, detail={
+            "code": "DUPLICATE_OF_APPROVED_REPORT",
+            "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
 
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
     # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
@@ -135,45 +141,243 @@ async def create_labor_entry(
     return out if show_money else without_labor_money(out)
 
 
-# R62 / FG-58 (Krum 09.11.2026): only the Owner approves a manual labor row.
+# ═══════════════════════════════════════════════════════════════ R62 / FG-58: manual rows
+# Krum 09.11.2026: a manual labor row counts in THE project labor cost only after the
+# Owner approved it. FG-423: it is priced as R62 prices labor (akord = quantity × the
+# package's piece rate; otherwise hours × the profile's hourly rate; no rate → no cost)
+# and it may not repeat hours an approved report already carries. FG-424: approve /
+# reject / reverse are Owner decisions with an Idempotency-Key, bound to the row's exact
+# version and value, the write and the canonical AuditEvent in ONE transaction; until
+# Krum decides otherwise the approver must differ from the creator.
 MANUAL_ROW_APPROVE_ACTION = "labor.manual_entry.approve"
+MANUAL_REJECTED = "rejected"
+MANUAL_REVERSED = "reversed"
+
+
+async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hours: float,
+                              quantity) -> dict:
+    """FG-423: the R62 price of a manual row — the package's pay type first, then the
+    profile's; akord = quantity × the package's piece rate (never hours × rate)."""
+    pkg = None
+    if pkg_id:
+        pkg = await tenant.execution_packages.find_one({"org_id": org_id, "id": pkg_id}, {"_id": 0})
+    profile = await tenant.employee_profiles.find_one(
+        {"org_id": org_id, "user_id": employee_id}, {"_id": 0}) or {}
+    pay_type = (pkg or {}).get("labor_pay_type") or profile.get("pay_type") or "Hourly"
+    if pay_type == "Akord":
+        q = money_value(quantity, "quantity", places=None)        # finite > 0, else 422
+        piece = (pkg or {}).get("labor_piece_rate")
+        if not piece or float(piece) <= 0:
+            raise HTTPException(status_code=422, detail=(
+                "Акордният ред изисква СМР пакет с акордна цена — няма цена по подразбиране"))
+        return {"pay_type": "Akord", "quantity": q, "piece_rate": float(piece),
+                "labor_terms_version": (pkg or {}).get("labor_terms_version") or 0,
+                "hourly_rate": None, "labor_cost": round(q * float(piece), 2),
+                "labor_formula": f"{q} × {float(piece)} = {round(q * float(piece), 2)}"}
+    rate = profile.get("hourly_rate")
+    cost = round(hours * float(rate), 2) if rate else None
+    # an hourly row carries only its rate and cost (the akord fields belong to akord rows)
+    return {"pay_type": pay_type, "hourly_rate": rate if rate else None, "labor_cost": cost}
+
+
+async def _approved_report_hours_exist(org_id: str, project_id: str, employee_id: str, date: str) -> bool:
+    """FG-423: does an APPROVED report already carry this worker's work on this project
+    and date? Then a manual row would count the hours twice."""
+    from app.services.report_normalizer import fetch_normalized_report_lines
+    if not (project_id and employee_id and date):
+        return False
+    lines = await fetch_normalized_report_lines(
+        org_id=org_id, date_from=date, date_to=date, worker_id=employee_id, status_filter="APPROVED")
+    return any(ln.get("project_id") == project_id for ln in lines)
+
+
+async def _run_manual_tx(body):
+    """ONE MongoDB transaction (auth_tx.run_in_transaction); no transactions → 503, nothing
+    written. (The DB-free tests replace this function explicitly.)"""
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        return await run_in_transaction(db, body)
+    except TransactionsUnavailable:
+        raise HTTPException(status_code=503, detail=(
+            "Базата данни не поддържа транзакции — решението не е записано"))
+
+
+async def _manual_idempotent(user: dict, key: Optional[str], action: str, payload: dict, perform, replay):
+    """R29 / FG-424: one decision per Idempotency-Key (W0-04 registry); only an explicit
+    STARTED reservation writes; a completed key replays the stored row."""
+    from app.audit.idempotency import (
+        IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_STARTED, IdempotencyConflict,
+        begin_idempotent, complete_idempotent, fail_idempotent, request_fingerprint)
+    k = (key or "").strip()
+    if not k:
+        raise HTTPException(status_code=428, detail="Липсва ключ за еднократност (Idempotency-Key) — презаредете и опитайте пак")
+    if len(k) > 200:
+        raise HTTPException(status_code=400, detail="Ключът за еднократност е твърде дълъг (до 200 знака)")
+    try:
+        state = await begin_idempotent(db, tenant_id=user["org_id"], key=k, action=action,
+                                       request_fingerprint=request_fingerprint(payload))
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail="Този ключ за еднократност вече е използван за друга заявка")
+    if state.get("status") == IDEMPOTENCY_DUPLICATE:
+        if state.get("prior_status") == IDEMPOTENCY_COMPLETED and state.get("result_reference"):
+            found = await replay(state["result_reference"])
+            if found is not None:
+                return dict(found, idempotent_replay=True)
+        raise HTTPException(status_code=409, detail="Същата заявка още се обработва — изчакайте")
+    if state.get("status") != IDEMPOTENCY_STARTED:
+        raise HTTPException(status_code=409, detail="Същата заявка още се обработва — изчакайте")
+    try:
+        result = await perform(k)
+    except HTTPException as exc:
+        await fail_idempotent(db, tenant_id=user["org_id"], key=k, action=action, error_code=f"http_{exc.status_code}")
+        raise
+    except Exception as exc:
+        await fail_idempotent(db, tenant_id=user["org_id"], key=k, action=action, error_code=type(exc).__name__)
+        raise
+    await complete_idempotent(db, tenant_id=user["org_id"], key=k, action=action, result_reference=result["id"])
+    return result
+
+
+class ManualDecision(BaseModel):
+    version: int                         # the row version the Owner saw (binding)
+    labor_cost: Optional[float] = None   # the row value the Owner saw (binding)
+    reason: str = ""
+
+
+async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, kind: str,
+                             idempotency_key: Optional[str]):
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    reason = (data.reason or "").strip()
+    if kind in ("reject", "reverse") and not reason:
+        raise HTTPException(status_code=422, detail="Посочете причина")
+
+    async def perform(key):
+        row = await tenant.labor_entries.find_one({"org_id": org_id, "id": entry_id}, {"_id": 0})
+        if not row:
+            raise HTTPException(status_code=404, detail="Редът за труд не е намерен")
+        if row.get("source") == SYNC_SOURCE or row.get("entry_kind") == "reversal":
+            raise HTTPException(status_code=409, detail=(
+                "Това не е ръчен ред — редовете от одобрени отчети не се решават отделно"))
+        # R66 (Krum 09.11.2026): the one who entered the row never approves it — a second
+        # person does (another Owner / Управител or the Accountant)
+        if kind == "approve" and row.get("created_by") and row.get("created_by") == user["id"]:
+            raise HTTPException(status_code=403, detail={
+                "code": "SAME_PERSON_APPROVAL",
+                "message": "Въвеждащият и одобряващият са двама различни души — одобрява друг Собственик/Управител или Счетоводителят"})
+        version = int(row.get("version") or 1)
+        if int(data.version) != version or (data.labor_cost is not None and row.get("labor_cost") is not None
+                                            and round(float(data.labor_cost), 2) != round(float(row["labor_cost"]), 2)) \
+                or ((data.labor_cost is None) != (row.get("labor_cost") is None)):
+            raise HTTPException(status_code=409, detail={
+                "code": "STALE_VERSION", "version": version, "labor_cost": row.get("labor_cost"),
+                "message": "Редът е променен — презаредете и решете отново"})
+        frm = {"approve": MANUAL_PENDING, "reject": MANUAL_PENDING, "reverse": MANUAL_APPROVED}[kind]
+        to = {"approve": MANUAL_APPROVED, "reject": MANUAL_REJECTED, "reverse": MANUAL_REVERSED}[kind]
+        if (row.get("approval_status") or MANUAL_PENDING) != frm or row.get("reversed_by_entry_id"):
+            code = "ALREADY_APPROVED" if row.get("approval_status") == MANUAL_APPROVED and kind == "approve" else "INVALID_STATE"
+            raise HTTPException(status_code=409, detail={
+                "code": code, "message": f"Редът е „{row.get('approval_status') or MANUAL_PENDING}“ — не може да бъде {kind}"})
+        if kind == "approve" and await _approved_report_hours_exist(
+                org_id, row.get("project_id"), row.get("employee_id"), row.get("date")):
+            raise HTTPException(status_code=409, detail={
+                "code": "DUPLICATE_OF_APPROVED_REPORT",
+                "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})
+        now = datetime.now(timezone.utc).isoformat()
+
+        async def body(session):
+            from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
+            from app.audit.store import record_event
+            res = await tenant.labor_entries.update_one(
+                {"org_id": org_id, "id": entry_id, "version": row.get("version"),
+                 "approval_status": row.get("approval_status")},
+                {"$set": {"approval_status": to, "version": version + 1,
+                          f"{to}_by": user["id"], f"{to}_at": now,
+                          **({"decision_reason": reason} if reason else {})}}, session=session)
+            if not getattr(res, "modified_count", 0):
+                raise HTTPException(status_code=409, detail={
+                    "code": "STALE_VERSION", "message": "Редът току-що беше решен от друг — презаредете"})
+            reversal_id = None
+            if kind == "reverse":
+                reversal_id = str(uuid.uuid4())
+                await tenant.labor_entries.insert_one({
+                    "id": reversal_id, "org_id": org_id, "project_id": row.get("project_id"),
+                    "employee_id": row.get("employee_id"), "execution_package_id": row.get("execution_package_id"),
+                    "date": row.get("date"), "hours": -float(row.get("hours") or 0),
+                    "labor_cost": (-float(row["labor_cost"]) if row.get("labor_cost") is not None else None),
+                    "quantity": (-float(row["quantity"]) if row.get("quantity") is not None else None),
+                    "source": row.get("source") or "manual", "entry_kind": "reversal",
+                    "reverses_entry_id": entry_id, "approval_status": "reversal",
+                    "note": "Сторно на ръчен ред: " + reason, "created_by": user["id"], "created_at": now},
+                    session=session)
+                await tenant.labor_entries.update_one(
+                    {"org_id": org_id, "id": entry_id},
+                    {"$set": {"reversed_by_entry_id": reversal_id, "reversed_at": now}}, session=session)
+            event = build_event(
+                tenant_id=org_id, actor_type="human", actor_id=user["id"],
+                action=f"labor.manual_entry.{ {'approve': 'approved', 'reject': 'rejected', 'reverse': 'reversed'}[kind] }",
+                source_flow="FLOW-028", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+                entity_type="labor_entry", entity_id=entry_id, entity_version=str(version + 1),
+                structured_diff={"before": {"approval_status": row.get("approval_status"), "version": version,
+                                            "labor_cost": row.get("labor_cost")},
+                                 "after": {"approval_status": to, "version": version + 1,
+                                           "reversal_entry_id": reversal_id}},
+                reason=reason or "R62: manual labor row approved by the Owner",
+                tool_or_endpoint=f"POST /labor-entries/{{id}}/{kind}", idempotency_key=key)
+            await record_event(db, event, session=session)
+
+        await _run_manual_tx(body)
+        return await tenant.labor_entries.find_one({"org_id": org_id, "id": entry_id}, {"_id": 0})
+
+    async def replay(ref):
+        return await tenant.labor_entries.find_one({"org_id": org_id, "id": ref}, {"_id": 0})
+
+    return await _manual_idempotent(user, idempotency_key, f"labor.manual_entry.{kind}",
+                                    {"entry_id": entry_id, **data.model_dump()}, perform, replay)
+
+
+# R66: the decision belongs to the Owner / Управител or the Accountant (never the creator)
+MANUAL_ROW_DECIDERS = ("Owner", "Accountant")
+
+
+def _owner_decision():
+    return Depends(require_money_write(MANUAL_ROW_APPROVE_ACTION, module="M2",
+                                       resource_type="labor_entry", roles=MANUAL_ROW_DECIDERS))
 
 
 @router.post("/labor-entries/{entry_id}/approve")
 async def approve_manual_labor_entry(
-    entry_id: str,
-    request: Request,
-    _owner: dict = Depends(require_money_write(
-        MANUAL_ROW_APPROVE_ACTION, module="M2", resource_type="labor_entry",
-        roles=("Owner",))),   # R62: Owner only (off/shadow: the legacy role; enforce: the action)
+    entry_id: str, data: ManualDecision,
+    _owner: dict = _owner_decision(),   # R62/R66: Owner or Accountant (off/shadow: legacy role; enforce: the action)
     user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
-    """R62 / FG-58: the Owner approves a manual labor row; from then on it counts in THE
-    project labor cost (``project_labor_cost``). Once only: a second approval → 409. A
-    synced or reversal row is not a manual row → 409. Canonical AuditEvent (before/after)."""
-    tenant = _tenant(user)
-    org_id = user["org_id"]
-    row = await tenant.labor_entries.find_one({"org_id": org_id, "id": entry_id}, {"_id": 0})
-    if not row:
-        raise HTTPException(status_code=404, detail="Редът за труд не е намерен")
-    if row.get("source") == SYNC_SOURCE or row.get("entry_kind") == "reversal" or row.get("reversed_by_entry_id"):
-        raise HTTPException(status_code=409, detail=(
-            "Това не е активен ръчен ред — редовете от одобрени отчети не се одобряват отделно"))
-    now = datetime.now(timezone.utc).isoformat()
-    res = await tenant.labor_entries.update_one(
-        {"org_id": org_id, "id": entry_id, "approval_status": {"$ne": MANUAL_APPROVED}},
-        {"$set": {"approval_status": MANUAL_APPROVED, "approved_by": user["id"], "approved_at": now}})
-    if not getattr(res, "modified_count", 0):
-        raise HTTPException(status_code=409, detail={"code": "ALREADY_APPROVED",
-                                                     "message": "Редът вече е одобрен"})
-    await audit_money_write(
-        request, user, action=MANUAL_ROW_APPROVE_ACTION, source_flow="FLOW-028",
-        entity_type="labor_entry", entity_id=entry_id,
-        before={"approval_status": row.get("approval_status")},
-        after={"approval_status": MANUAL_APPROVED, "approved_by": user["id"]},
-        scope_type="project", scope_id=row.get("project_id"),
-        reason="R62: manual labor row approved by the Owner — counts in the project labor cost")
-    return await tenant.labor_entries.find_one({"org_id": org_id, "id": entry_id}, {"_id": 0})
+    """R62 / FG-58 / FG-424: the Owner approves a manual labor row (bound to its version and
+    value); from then on it counts in THE project labor cost."""
+    return await _decide_manual_row(entry_id, data, user, "approve", idempotency_key)
+
+
+@router.post("/labor-entries/{entry_id}/reject")
+async def reject_manual_labor_entry(
+    entry_id: str, data: ManualDecision,
+    _owner: dict = _owner_decision(),
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """FG-424: the Owner rejects a pending manual row (with a reason); it never counts."""
+    return await _decide_manual_row(entry_id, data, user, "reject", idempotency_key)
+
+
+@router.post("/labor-entries/{entry_id}/reverse")
+async def reverse_manual_labor_entry(
+    entry_id: str, data: ManualDecision,
+    _owner: dict = _owner_decision(),
+    user: dict = Depends(require_m2),
+    idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
+):
+    """FG-424: the Owner reverses an APPROVED manual row (with a reason): a reversal row is
+    appended (no delete) and the row stops counting."""
+    return await _decide_manual_row(entry_id, data, user, "reverse", idempotency_key)
 
 
 @router.post("/labor-entries/sync-from-work-reports")
