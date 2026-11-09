@@ -760,6 +760,12 @@ def check_result(result: Dict[str, Any]) -> None:
         assert s["valid_no_key"] == {"status": 428, "error_code": "IDEMPOTENCY_KEY_REQUIRED",
                                      "business_written": []}, s
         assert s["rows_added_no_key"] == 0, s               # R29: no key, no row
+        if s["probe"] == "waste":
+            # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+            assert s["same_key_first"]["status"] == 422, s
+            assert s["same_key_first"]["business_written"] == [], s
+            assert s["rows_added_with_key"] == 0, s
+            continue
         assert s["same_key_first"]["status"] == 201, s
         assert s["same_key_first"]["business_written"], s
         assert s["same_key_replay"] == {"status": 201, "business_written": []}, s
@@ -779,7 +785,10 @@ def check_result(result: Dict[str, Any]) -> None:
         (m, u, p, k) for m in MODES for u in ("technician", "requester")
         for p in ("P1", "P2") for k in ("labor", "waste")}
     for r in r1:
-        if r["project"] == "P1":
+        if r["project"] == "P1" and r["probe"] == "waste":
+            # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+            assert r["status"] == 422 and r["business_written"] == [], r
+        elif r["project"] == "P1":
             assert r["status"] == 201 and r["business_written"], r
         else:
             assert r["status"] == 403 and r["business_written"] == [], r
@@ -941,6 +950,12 @@ def test_every_money_post_validates_before_its_first_write_and_takes_the_key():
         hdr = sig.parameters.get("idempotency_key")
         assert hdr is not None, key
         assert getattr(hdr.default, "alias", None) == "Idempotency-Key", key
+        if key == "waste":
+            # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+            assert src.index("money_value(") < src.index("post_project_writeoff("), key
+            assert src.index("IDEMPOTENCY_KEY_REQUIRED") < src.index("post_project_writeoff("), key
+            assert ".insert_one(" not in src and ".update_one(" not in src, key
+            continue
         check = src.index("money_value(")
         begin = src.index("MoneyWrite.begin(")
         assert check < begin, key

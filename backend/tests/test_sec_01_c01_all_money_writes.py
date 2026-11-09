@@ -177,6 +177,9 @@ def expected(key: str, legacy_role: str, target: Optional[str]) -> Dict[str, Any
         success = {"status": ok, "writes": False}
     if key in UNCHANGED_RESYNC:
         success = {"status": ok, "writes": False}
+    if key == "waste_create":
+        # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+        success = {"status": 422, "writes": False}
     if rule == "finance":
         if legacy_role not in FINANCE:
             return deny
@@ -454,8 +457,11 @@ def _c02_routes():
 
 
 def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
-    """C01's routes; the only other marked routes are SEC-01-C02's (R14, FG-27/FG-30)."""
-    c02 = _c02_routes()
+    """C01's routes; the only other marked routes are SEC-01-C02's (R14, FG-27/FG-30) and
+    SUB-ADV-01's (R39; checked in tests/test_sub_adv_01_subcontractor_advance.py)."""
+    c02 = set(_c02_routes()) | {
+        ("POST", "/api/subcontractor-packages/{pkg_id}/advances"),
+        ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction")}
     found = {}
     for route in _routes():
         calls = [d.call for d in route.dependant.dependencies]

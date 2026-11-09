@@ -1,0 +1,67 @@
+# SUB-ADV-01 test summaries (branch claude/sub-adv-01-advance, base #69 @ ccab244, local real MongoDB 7.0 replica set rs0)
+## SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo (W0_03_REAL_MONGO_URL set)
+44 passed
+## SUB-ADV-01 harness (docs/evidence/SUB-ADV-01/results.json), 3 modes
+roles: Owner, Accountant -> 201; Admin, SiteManager, Technician, Viewer, Driver -> 403, 0 business writes (R39)
+advance 1000 -> act 3000 paid amount 2000 + advance_deducted 1000 -> paid 2000, advance outstanding 0, committed 3000, payable 200 (package certified 3200), cash out 3000; ledger +1000 +2000; act advance_deducted 1000
+ordinary 200.01 over the per-package cap -> 409 PAYMENT_EXCEEDS_CERTIFIED; deduction > outstanding -> 409 ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING; deduction > act -> 409 ADVANCE_DEDUCTION_EXCEEDS_ACT; all 0 writes
+deduction without cash on act2 (200, Admin) -> 201, committed 3200, then ordinary 0.01 -> 409; C02 package 101 > 100 -> 409 (unchanged)
+6 concurrent advances with ONE key -> 1 advance row, 1 ledger row, advance_total 1000
+no key -> 428; no reason / nan -> 422; deduction without act -> 422; payment_type advance -> 422; unknown package -> 404; 0 writes
+DELETE /finance/payments/{advance ledger row} -> 409 SOURCE_MODULE_REVERSAL_REQUIRED, 0 writes
+## tests/test_r0_0*.py (real Mongo)
+814 passed (baseline 814)
+## W0 DB-free (tests/test_w0_*.py --noconftest)
+15 failed, 1085 passed, 50 skipped (baseline identical; the same 15 test_w0_03e_legacy_routes failures)
+## Guards
+W0-03E-A1 tenant access guard: 420 unit(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 207 module(s) checked, 0 violation(s)
+A1 inventory: regenerated table identical to the committed one
+## PM-01 matrix re-run
+48 cells added (2 new routes x 8 roles x 3 modes, pm01_cells_added.csv), 0 existing cells changed; Admin -> 403 on advances
+## Frontend
+yarn test: 6 suites, 96 tests passed; yarn build: Compiled with warnings (none in ProjectOperationsPage.js)
+
+## Addendum A (07.11) — merge of #69 @ 3fb55f2 + FG-114 + FG-115
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo: 44 passed (C03 includes #69's F-69-03 tests)
+FG-114, 3 modes: 1 000 000 on contract 5000 -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE, 0 writes; at taken 3500/5000: 1500.01 -> 409, 1500 -> 201;
+  6 concurrent advances of 1000 with DIFFERENT keys on contract 5000 -> [201 x5, 409], 5 advance rows, 5 ledger rows, advance_total 5000;
+  package without contract value -> 422 ADVANCE_PACKAGE_VALUE_REQUIRED, 0 writes
+FG-115, 3 modes (package 2: contract 1000, act 400): advance 1000 -> P&L subcontractor_cost +0, operating subcontractor_direct +0, cash paid_subcontractors +1000;
+  deduction 400 on the act -> P&L +400, operating +400, cash still +1000; then advance 0.01 -> 409 (600 + 400 = 1000)
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15 test_w0_03e_legacy_routes)
+Guards: A1 422 units / 0 violations; A2C 208 modules / 0 violations; A1 inventory table unchanged
+PM-01 fresh real-Mongo run reproduces the committed matrix (no route added in addendum A)
+
+## Addendum B (07.11) — FG-103 crash safety + FG-128 visibility
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PM-01, real Mongo: 44 passed
+FG-103, 3 modes (crash injected after the write, before its step is recorded):
+  A) advance crash after reservation -> pending 1000, 0 rows, 0 ledger; deduction 100 / payment deducting 1000 -> 409 ADVANCE_DEDUCTION_EXCEEDS_OUTSTANDING, 0 writes; retry -> 201 once (1 row, 1 ledger, advance_total 1000); again -> replay
+  B) advance crash after rows + audit -> not deductible (pending 500); retry confirms once (1500)
+  C) deduction crash after reservation -> pending 200, nothing on the act, no cost; retry -> act 200, deducted 200, once
+  D) deduction crash after the act update -> retry: 1 act entry, deducted 150 (no double)
+FG-128, 3 modes: Owner/Admin/Accountant see advance {given 1000, deducted 100, outstanding 900, pending 0} in package list/detail, act fields, advance rows, project-profit subcontract_advances (outside expenses); SiteManager/Technician: none of it
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1085 passed, 50 skipped (the same 15)
+Guards: A1 422 / 0; A2C 208 / 0; A1 inventory table unchanged
+Frontend: yarn test 96 passed; yarn build compiled (no warning in ProjectOperationsPage.js)
+
+## Codex F-76-01 / F-76-02 + merge of main d226c49 (#70, #72)
+F-76-01, 3 modes: contract 5000 / certified 3200:
+  order 1: advance 5000 -> 201; ordinary payment 100 (act, no deduction) -> 409 PAYMENT_EXCEEDS_PACKAGE_VALUE, 0 writes; payment 100 + deduction 100 -> 409 (new cash); deduction 100 without cash -> 201; taken = 5000
+  order 2: payment 3000 -> 201; advance 2000.01 -> 409 ADVANCE_EXCEEDS_PACKAGE_VALUE; advance 2000 -> 201; payment 0.01 -> 409 PAYMENT_EXCEEDS_PACKAGE_VALUE; taken = 5000
+  race x3 rounds: advance 1000 || payment 1000 at taken 4000 -> [201, 409] each round, taken never above 5000
+F-76-02, 3 modes: crash right after the audit insert, then 2 same-key retries -> [500, 201, 201], exactly 1 audit_logs row (advance and deduction), 1 advance / 1 act entry
+SUB-ADV-01 + SEC-01 C03/C02/C01/SEC-01 + PAY-01 (all) + W0-04-C01, real Mongo: 706 passed
+tests/test_r0_0*.py (real Mongo): 814 passed
+W0 DB-free: 15 failed, 1094 passed, 79 skipped — identical to main d226c49 (same 15 failures)
+Guards: A1 438 / 0; A2C 217 / 0; A1 inventory = script output (main + #69 rows); A2B inventory §1 regenerated (audit.py writer line 80 -> 88)
+PM-01 fresh run on the merged tree reproduces the committed (merged) matrix: 0 added / 0 removed / 0 changed
+Frontend: yarn test 7 suites, 117 tests passed; yarn build compiled (no warning in changed files)
+
+## F-76-02 follow-up (audit after c4de7c9): the ordinary payment's audit row
+log_audit "subcontractor_payment_created" (the #69 step) now has entry_id=mw.new_id("audit_payment"), as #69 does
+3 modes: crash right after the payment audit, then 2 same-key retries -> [500, 201, 201], 1 audit row, 1 payment, paid 500
+counter-check without the entry_id (f76_02_payment_counter_check.json): 2 audit rows in every mode
+real Mongo SUB-ADV-01 + SEC-01 + PAY-01 + W0-04-C01: 706 passed; R0 814; W0 15/1094/79 (= main); A1 438/0; A2C 217/0
