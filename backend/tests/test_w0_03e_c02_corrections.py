@@ -334,6 +334,9 @@ def test_ai_batch_recognition_match_stays_a_suggestion_with_a_master_ref(monkeyp
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-only")
     monkeypatch.setenv("ANTHROPIC_MODEL", "test-only-model")
     monkeypatch.setattr(ai_provider, "db", db)
+    # SEC-03 FG-522: photo AI is off until the File Registry stores the original;
+    # this test covers the match logic downstream of that switch.
+    monkeypatch.setattr(ai_provider, "PHOTO_AI_FILE_REGISTRY_READY", True)
     run(db["feature_flags"].insert_one({"org_id": ADMIN["org_id"], "module_code": "ai_enabled", "enabled": True}))
     answer = json.dumps({"name": "Bosch GBH", "brand": "Bosch", "model": "GBH",
                          "type_label": "Бормашини", "confidence": 90})

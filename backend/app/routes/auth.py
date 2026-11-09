@@ -628,17 +628,56 @@ async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_p
     if data.module_code == "M0":
         raise HTTPException(status_code=400, detail="Core module cannot be disabled")
     from app.services.ai_provider import AI_FLAG
+    if data.module_code == AI_FLAG:
+        # SEC-03 FG-519: the AI switch is the tenant Owner's, through PUT /ai/settings.
+        raise HTTPException(status_code=400, detail="ai_enabled is changed by the Owner via /api/ai/settings")
     result = await tenant.feature_flags.update_one(
         {"org_id": user["org_id"], "module_code": data.module_code},
-        {"$set": {"enabled": data.enabled, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}},
-        # SEC-03 / Р76: the per-tenant AI switch has no seeded row (absent = off);
-        # the first toggle by a Platform Admin creates it. Modules still 404.
-        upsert=(data.module_code == AI_FLAG),
+        {"$set": {"enabled": data.enabled, "updated_at": datetime.now(timezone.utc).isoformat(), "updated_by": user["id"]}}
     )
-    if result.matched_count == 0 and result.upserted_id is None:
+    if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Module not found")
     await log_audit(user["org_id"], user["id"], user["email"], "toggled", "feature_flag", data.module_code, {"enabled": data.enabled})
     return await tenant.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
+
+# ── SEC-03 / Р76 FG-519: per-tenant AI switch (Owner only, canonical AuditEvent) ──
+class AISettingsUpdate(BaseModel):
+    enabled: bool
+
+
+@router.get("/ai/settings")
+async def get_ai_settings(user: dict = Depends(get_current_user)):
+    from app.services import ai_provider
+    return {"enabled": await ai_provider.ai_enabled_for_tenant(user["org_id"]),
+            "configured": ai_provider.is_configured()}
+
+
+@router.put("/ai/settings")
+async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict = Depends(get_current_user)):
+    from app.audit.envelope import RETENTION_R3_SECURITY_ACCESS, build_event
+    from app.audit.store import record_event
+    from app.services import ai_provider
+    from app.services.user_role_policy import RANK_OWNER, actor_rank
+    mode, tenant_id = await _admin_mode_and_tenant(request, user)
+    if await actor_rank(user, mode, tenant_id) < RANK_OWNER:
+        raise HTTPException(status_code=403, detail={"error_code": "OWNER_ONLY",
+                                                     "message": "Only the Owner switches AI on or off"})
+    tenant = _tenant(user)
+    before = await ai_provider.ai_enabled_for_tenant(user["org_id"])
+    now = datetime.now(timezone.utc).isoformat()
+    await tenant.feature_flags.update_one(
+        {"org_id": user["org_id"], "module_code": ai_provider.AI_FLAG},
+        {"$set": {"enabled": data.enabled, "updated_at": now, "updated_by": user["id"]}},
+        upsert=True)
+    await record_event(db, build_event(
+        tenant_id=user["org_id"], actor_type="human", actor_id=user["id"],
+        action="ai.settings.changed", source_flow="FLOW-050",
+        retention_class=RETENTION_R3_SECURITY_ACCESS, entity_type="feature_flag",
+        entity_id=ai_provider.AI_FLAG,
+        structured_diff={"before": {"enabled": before}, "after": {"enabled": data.enabled}},
+        source_channel="api", tool_or_endpoint="PUT /api/ai/settings"))
+    return {"enabled": data.enabled, "configured": ai_provider.is_configured()}
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # Admin Set Password (for forgotten passwords)

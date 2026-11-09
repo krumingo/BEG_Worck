@@ -136,6 +136,8 @@ ORG_KEYED: Dict[str, str] = {
               "settings", "org_counters", "org_mobile_settings", "mobile_view_configs",
               "feature_flags", "subscriptions", "ai_calibrations", "ai_calibration_events",
               "ai_cache",
+              # SEC-03 FG-519: one row per completed AI action (FLOW-050 AI budget).
+              "ai_usage_ledger",
               # R0-01: the checkout record a Stripe webhook resolves its tenant
               # from, and the processed-event ledger (unique stripe_event_id).
               "billing_checkout_sessions", "billing_webhook_events"),

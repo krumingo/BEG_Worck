@@ -9,7 +9,7 @@
 //   * the document carries CSP (script-src 'self', frame-ancestors 'none'), X-Frame-Options DENY,
 //     nosniff, Referrer-Policy;
 //   * the app can NOT be framed by another origin;
-//   * AI without key/model -> 503 "AI не е настроен" (not 500);
+//   * photo AI -> 503 "... изисква файлов регистър ..." (FG-522; never 500); AI settings: off, Owner-only switch;
 //   * /api/internal/run-reminder-jobs: no credentials -> 401, tenant Owner -> 403.
 // Exit code 0 only when every assertion holds.
 const fs = require("fs");
@@ -81,12 +81,18 @@ function check(step, cond, detail) {
     const ai = await fetch("/api/assets/ai-intake", { method: "POST",
       headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" },
       body: JSON.stringify({ image_base64: "/9j/" + "A".repeat(300) }) });
+    const settings = await fetch("/api/ai/settings", { headers: { Authorization: "Bearer " + t } });
+    const put = (v) => fetch("/api/ai/settings", { method: "PUT",
+      headers: { Authorization: "Bearer " + t, "Content-Type": "application/json" }, body: JSON.stringify({ enabled: v }) });
+    const on = await put(true); const off = await put(false);
     const anon = await fetch("/api/internal/run-reminder-jobs?all_tenants=true", { method: "POST" });
     const owner = await fetch("/api/internal/run-reminder-jobs?all_tenants=true", { method: "POST",
       headers: { Authorization: "Bearer " + t } });
-    return { ai: [ai.status, (await ai.json()).detail], anon: anon.status, owner: owner.status };
+    return { ai: [ai.status, (await ai.json()).detail], settings: await settings.json(), owner_switch: [on.status, off.status], anon: anon.status, owner: owner.status };
   });
-  check("AI not configured -> 503 'AI не е настроен'", api.ai[0] === 503 && api.ai[1] === "AI не е настроен", api.ai);
+  check("photo AI -> 503 'изисква файлов регистър' (FG-522)", api.ai[0] === 503 && /изисква файлов регистър/.test(api.ai[1]), api.ai);
+  check("AI is off for the tenant by default", api.settings.enabled === false, api.settings);
+  check("the Owner switches AI on and off (FG-519)", api.owner_switch[0] === 200 && api.owner_switch[1] === 200, api.owner_switch);
   check("reminder trigger without credentials -> 401", api.anon === 401, api.anon);
   check("reminder trigger as tenant Owner -> 403", api.owner === 403, api.owner);
   results.csp_violations = await page.evaluate(() => window.__csp || []);

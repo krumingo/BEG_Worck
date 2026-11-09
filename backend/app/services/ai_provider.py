@@ -93,18 +93,79 @@ async def require_ai(org_id: Optional[str]) -> None:
 
 # ── data minimisation ─────────────────────────────────────────────
 
-# IBAN: 2 letters, 2 check digits, 11–30 alphanumerics (spaces allowed in groups).
-_IBAN_RE = re.compile(r"\b[A-Z]{2}\d{2}(?:[ ]?[A-Z0-9]){11,30}\b")
-# ЕГН: exactly 10 digits, not part of a longer number.
-_EGN_RE = re.compile(r"(?<!\d)\d{10}(?!\d)")
+# SEC-03 FG-517: a broad candidate pattern, then the real checksum decides, so
+# lowercase / spaced / dashed forms are caught and plain amounts or ids are not.
+# IBAN: 2 letters, 2 digits, then 11–30 alphanumerics, optionally grouped by
+# single spaces or dashes; any case. Valid only if ISO 13616 mod-97 == 1.
+_IBAN_START = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}\d{2}")
+# ЕГН: 10 digits, optionally separated by single spaces or dashes, not part of a
+# longer number or a decimal amount. Valid only with a real month and checksum.
+_EGN_CANDIDATE = re.compile(r"(?<![\d.,])\d(?:[ \-]?\d){9}(?!\d|[.,]\d|[ \-]\d)")
+_EGN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+
+
+def _iban_valid(compact: str) -> bool:
+    compact = compact.upper()
+    if not 15 <= len(compact) <= 34 or not compact.isalnum():
+        return False
+    moved = compact[4:] + compact[:4]
+    try:
+        return int("".join(str(int(ch, 36)) for ch in moved)) % 97 == 1
+    except ValueError:
+        return False
+
+
+def _egn_valid(digits: str) -> bool:
+    if len(digits) != 10 or not digits.isdigit():
+        return False
+    month = int(digits[2:4])
+    if not (1 <= month <= 12 or 21 <= month <= 32 or 41 <= month <= 52):
+        return False
+    check = sum(int(d) * w for d, w in zip(digits, _EGN_WEIGHTS)) % 11
+    return (0 if check == 10 else check) == int(digits[9])
+
+
+def _sub_valid(pattern, valid, text: str) -> str:
+    def repl(m):
+        compact = re.sub(r"[ \-]", "", m.group(0))
+        return REDACTED if valid(compact) else m.group(0)
+    return pattern.sub(repl, text)
+
+
+def _redact_ibans(text: str) -> str:
+    """Scan from every possible IBAN start; extend over alphanumerics (single
+    space/dash between them allowed) and redact the LONGEST prefix that is a valid
+    IBAN — so words after the IBAN neither hide it nor get redacted with it."""
+    out, pos = [], 0
+    for m in _IBAN_START.finditer(text):
+        if m.start() < pos:
+            continue
+        compact, ends, i = m.group(0), [], m.end()
+        while i < len(text) and len(compact) < 34:
+            j = i + 1 if text[i] in " -" and i + 1 < len(text) and text[i + 1].isascii() \
+                and text[i + 1].isalnum() else i
+            if j < len(text) and text[j].isascii() and text[j].isalnum():
+                compact += text[j]
+                i = j + 1
+                ends.append((i, compact))
+            else:
+                break
+        best = next((end for end, c in reversed(ends) if _iban_valid(c)
+                     and not (end < len(text) and text[end].isascii() and text[end].isalnum())), None)
+        if best is not None:
+            out.append(text[pos:m.start()])
+            out.append(REDACTED)
+            pos = best
+    out.append(text[pos:])
+    return "".join(out)
 
 
 def redact_personal(text: str) -> str:
     """Replace IBAN and ЕГН in text that is about to leave for the model."""
     if not text:
         return text
-    text = _IBAN_RE.sub(REDACTED, text)
-    return _EGN_RE.sub(REDACTED, text)
+    text = _redact_ibans(text)
+    return _sub_valid(_EGN_CANDIDATE, _egn_valid, text)
 
 
 _DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,", re.IGNORECASE)
@@ -152,14 +213,85 @@ def _default_client_factory(api_key: str):
 client_factory: Callable[[str], object] = _default_client_factory
 
 
-async def complete(org_id: Optional[str], *, system: str, text: str,
-                   images: Optional[List[str]] = None,
+class AIPhotoNeedsFileRegistry(RuntimeError):
+    """SEC-03 FG-522 (CLAUDE.md §4): the original photo must be stored before any AI
+    processing, and the canonical File Registry (W0-06) does not exist yet."""
+
+    def __init__(self):
+        super().__init__(AI_PHOTO_NEEDS_FILE_REGISTRY_MESSAGE)
+
+
+AI_PHOTO_NEEDS_FILE_REGISTRY_MESSAGE = (
+    "AI по снимка изисква файлов регистър (W0-06): оригиналът трябва да се запази преди обработка")
+#: Flipped only when W0-06 stores the original through the File Registry first.
+PHOTO_AI_FILE_REGISTRY_READY = False
+
+#: SEC-03 FG-519 (FLOW-050): one row per completed AI action, per tenant — the
+#: count the monthly AI budget (Start 100 / Control 500 / Pro 2000 + add-ons)
+#: is measured against. No ledger existed on main; this is the one.
+AI_USAGE_LEDGER = "ai_usage_ledger"
+
+
+def require_photo_ai() -> None:
+    if not PHOTO_AI_FILE_REGISTRY_READY:
+        raise AIPhotoNeedsFileRegistry()
+
+
+def _usage(response) -> dict:
+    u = getattr(response, "usage", None)
+    def _n(name):
+        try:
+            return int(getattr(u, name, 0) or 0)
+        except (TypeError, ValueError):
+            return 0
+    return {"input_tokens": _n("input_tokens"), "output_tokens": _n("output_tokens")}
+
+
+async def _record_call(org_id: str, user_id: Optional[str], feature: str, outcome: str,
+                       usage: dict, error_type: Optional[str] = None) -> None:
+    """Canonical AuditEvent of one AI call (+ the ledger row when it completed).
+    Metadata only: no prompt, no response, no personal data, no key."""
+    from datetime import datetime, timezone
+    import uuid
+    from app.audit.envelope import (ACTOR_HUMAN, RESULT_FAILURE, RESULT_SUCCESS,
+                                    RETENTION_R4_AI_CONTENT, build_event)
+    from app.audit.store import record_event
+    now = datetime.now(timezone.utc)
+    if outcome == "completed":
+        await TenantData.for_resolved_org(db, org_id).collection(AI_USAGE_LEDGER).insert_one({
+            "id": str(uuid.uuid4()), "org_id": org_id, "user_id": user_id, "feature": feature,
+            "model_and_version": model_and_version(), "actions": 1,
+            "input_tokens": usage["input_tokens"], "output_tokens": usage["output_tokens"],
+            "period": now.strftime("%Y-%m"), "occurred_at": now.isoformat(),
+        })
+    event = build_event(
+        tenant_id=org_id, actor_type=ACTOR_HUMAN, actor_id=user_id or "unknown",
+        action="ai.call.%s" % outcome, source_flow="FLOW-050",
+        retention_class=RETENTION_R4_AI_CONTENT,
+        result=RESULT_SUCCESS if outcome == "completed" else RESULT_FAILURE,
+        entity_type="ai_call", entity_id=feature,
+        # "usage_in"/"usage_out", not "*_tokens": the AuditEvent masker treats any key
+        # containing "token" as a credential, and these are plain counts.
+        structured_diff={"feature": feature, "outcome": outcome,
+                         "usage_in": usage["input_tokens"], "usage_out": usage["output_tokens"]},
+        model_and_version=model_and_version(), source_channel="api",
+        tool_or_endpoint="ai_provider.complete:%s" % feature, error_code=error_type,
+    )
+    await record_event(db, event)
+
+
+async def complete(org_id: Optional[str], *, user_id: Optional[str], feature: str,
+                   system: str, text: str, images: Optional[List[str]] = None,
                    max_tokens: int = DEFAULT_MAX_TOKENS) -> str:
     """One model call; returns the text of the answer.
 
     Raises :class:`AINotConfigured` (caller falls back / answers "AI не е
-    настроен") or :class:`AIProviderError` (the call itself failed).
+    настроен"), :class:`AIPhotoNeedsFileRegistry` (photos, until W0-06) or
+    :class:`AIProviderError` (the call itself failed). Every call that reaches
+    the provider writes an AuditEvent; a completed one also a ledger row.
     """
+    if images:
+        require_photo_ai()
     await require_ai(org_id)
     content: List[dict] = [image_block(b) for b in (images or []) if b]
     content.append({"type": "text", "text": redact_personal(text)})
@@ -174,7 +306,10 @@ async def complete(org_id: Optional[str], *, system: str, text: str,
     except Exception as exc:
         # Type only: an SDK error text can echo request details.
         logger.warning("AI provider call failed: %s", type(exc).__name__)
+        await _record_call(org_id, user_id, feature, "failed",
+                           {"input_tokens": 0, "output_tokens": 0}, type(exc).__name__)
         raise AIProviderError("AI provider call failed (%s)" % type(exc).__name__) from None
+    await _record_call(org_id, user_id, feature, "completed", _usage(response))
     parts = []
     for block in getattr(response, "content", None) or []:
         if getattr(block, "type", None) == "text":

@@ -27,7 +27,7 @@ No blocking issues found. 6 recommended indexes, 0 required crons.
 | `JWT_SECRET` | backend/.env | YES | Set | **ROTATE for production** — current is dev secret |
 | `CORS_ORIGINS` | backend/.env | YES | `*` | **RESTRICT** to production domain |
 | `REACT_APP_BACKEND_URL` | frontend/.env | YES | preview URL | Change to production URL |
-| `EMERGENT_LLM_KEY` | backend/.env | OPTIONAL | Set | Only if AI features used |
+| `ANTHROPIC_API_KEY` / `ANTHROPIC_MODEL` | backend/.env | OPTIONAL | — | SEC-03 / Р76: AI directly with Anthropic; without them AI is off ("AI не е настроен"). Per firm also the Owner switch `ai_enabled` (off by default). |
 | `PLATFORM_BOOTSTRAP_TOKEN` | backend/.env | REMOVE | Set | **DELETE after admin promotion** |
 
 **Payroll-specific settings: NONE required.** All payroll config is in-code (NORMAL_DAY=8, pay_type defaults, etc.)
@@ -152,4 +152,4 @@ Future enhancements (non-blocking):
 
 ---
 
-**Reference WEB route**: https://client-registry-17.preview.emergentagent.com/pay-runs
+**Reference WEB route**: `<PUBLIC_URL>/pay-runs`

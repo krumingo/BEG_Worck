@@ -333,13 +333,14 @@ class TestInternalReminderJobs:
     """Test internal reminder job trigger"""
     
     def test_trigger_reminder_jobs(self):
-        """POST /api/internal/run-reminder-jobs - Trigger reminder job"""
+        """POST /api/internal/run-reminder-jobs - SEC-03 (M-3): never runs without a
+        credential (service key or Platform Admin); the positive paths are covered in
+        tests/test_sec_03_emergent_removal.py."""
         response = requests.post(f"{BASE_URL}/api/internal/run-reminder-jobs")
-        assert response.status_code == 200
-        data = response.json()
-        assert data.get("ok") == True
-        assert "ran_at" in data
-        print(f"Reminder jobs ran at: {data['ran_at']}")
+        assert response.status_code == 401
+        response = requests.post(f"{BASE_URL}/api/internal/run-reminder-jobs?all_tenants=true",
+                                 headers={"X-Internal-Job-Key": "guess"})
+        assert response.status_code == 401
 
 
 class TestHealthEndpoint:

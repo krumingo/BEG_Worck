@@ -285,7 +285,7 @@ async def delete_extra_work(draft_id: str, user: dict = Depends(require_m2)):
 async def get_ai_proposal_endpoint(data: AIProposalRequest, user: dict = Depends(require_m2)):
     """Generate AI proposal using hybrid provider (LLM → rule-based fallback)"""
     org_rates = await get_org_worker_rates(user["org_id"])
-    proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city, user["org_id"])
+    proposal = await hybrid_ai_proposal(data.title, data.unit, data.qty, data.city, user["org_id"], user.get("id"))
     proposal = apply_hourly_pricing(proposal, data.qty, org_rates)
     return proposal
 
@@ -298,7 +298,7 @@ async def batch_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_m
     combined_materials = {}
     
     for line in data.lines:
-        proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"])
+        proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"], user.get("id"))
         proposal = apply_hourly_pricing(proposal, line.qty, org_rates)
         proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
                               "location_floor": line.location_floor, "location_room": line.location_room,
@@ -380,7 +380,7 @@ async def refine_ai_proposal(data: BatchAIRequest, user: dict = Depends(require_
     combined_materials = {}
     
     for line in data.lines:
-        proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"])
+        proposal = await hybrid_ai_proposal(line.title, line.unit, line.qty, data.city, user["org_id"], user.get("id"))
         proposal = apply_hourly_pricing(proposal, line.qty, org_rates)
         proposal["_input"] = {"title": line.title, "unit": line.unit, "qty": line.qty,
                               "location_floor": line.location_floor, "location_room": line.location_room,
@@ -418,7 +418,7 @@ async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dic
     if not draft:
         raise HTTPException(status_code=404, detail="Draft not found")
     
-    proposal = await hybrid_ai_proposal(draft["title"], draft["unit"], draft["qty"], city, user["org_id"])
+    proposal = await hybrid_ai_proposal(draft["title"], draft["unit"], draft["qty"], city, user["org_id"], user.get("id"))
     
     update = {
         "normalized_activity_type": proposal["recognized"]["activity_type"],

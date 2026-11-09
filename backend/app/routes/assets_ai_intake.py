@@ -63,11 +63,16 @@ async def ai_intake(data: AIIntakeRequest, user: dict = Depends(get_current_user
         raise HTTPException(status_code=400, detail="Image too large")
 
     from app.services import ai_provider
+    try:
+        # SEC-03 FG-522 (§4): no photo goes to AI before the File Registry can keep the original.
+        ai_provider.require_photo_ai()
+    except ai_provider.AIPhotoNeedsFileRegistry:
+        raise HTTPException(status_code=503, detail=ai_provider.AI_PHOTO_NEEDS_FILE_REGISTRY_MESSAGE)
     images = [data.image_base64] + ([data.plate_image_base64] if data.plate_image_base64 else [])
     session_id = f"asset-intake-{uuid.uuid4().hex[:8]}"
     try:
         text = await ai_provider.complete(
-            user.get("org_id"), system=SYSTEM_PROMPT,
+            user.get("org_id"), user_id=user.get("id"), feature="assets_ai_intake", system=SYSTEM_PROMPT,
             text="Разпознай машината/инструмента от снимката и върни JSON.",
             images=images)
         parsed = json.loads(ai_provider.strip_code_fences(text))

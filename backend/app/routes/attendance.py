@@ -905,13 +905,17 @@ async def excuse_reminder(data: ExcuseRequest, user: dict = Depends(get_current_
     await log_audit(user["org_id"], user["id"], user["email"], "reminder_excused", "reminder", "", {"type": data.type, "user_id": data.user_id, "reason": data.reason})
     return {"ok": True}
 
-# SEC-03 (M-3): the internal trigger is no longer public. A caller is either a
-# service holding the internal job key (env ``INTERNAL_JOB_KEY``, header
-# ``X-Internal-Job-Key``, constant-time comparison; no key configured → that
-# path is closed) or a Platform Admin. The scope is explicit: one ``tenant_id``,
-# or ``all_tenants=true`` — never "every tenant" by omission. Each tenant run is
-# one canonical AuditEvent in that tenant. The in-process scheduler
-# (server.py ``reminder_loop``) does not use this route.
+# SEC-03 (M-3, FG-521): the internal trigger is no longer public.
+# * A service holding the internal job key (env ``INTERNAL_JOB_KEY`` ≥ 32 bytes,
+#   header ``X-Internal-Job-Key``, constant-time comparison; no key configured →
+#   that path is closed) may run ONE named tenant or, explicitly, ``all_tenants``.
+# * A human Platform Admin may run only the tenant of their own session: running
+#   another tenant (or all of them) is cross-tenant access, which needs a Support
+#   Access Grant (CLAUDE.md §3) — those do not exist yet, so it is refused.
+# * Each tenant run is bracketed by canonical AuditEvents in that tenant:
+#   ``reminder_jobs.started`` BEFORE the run, then ``reminder_jobs.completed`` or
+#   ``reminder_jobs.failed`` (same correlation id). The in-process scheduler
+#   (server.py ``reminder_loop``) does not use this route.
 INTERNAL_JOB_KEY_ENV = "INTERNAL_JOB_KEY"
 INTERNAL_JOB_KEY_HEADER = "X-Internal-Job-Key"
 INTERNAL_JOB_KEY_MIN_BYTES = 32
@@ -926,28 +930,37 @@ async def _internal_job_caller(request: Request,
         if (len(expected.encode("utf-8")) < INTERNAL_JOB_KEY_MIN_BYTES
                 or not hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))):
             raise HTTPException(status_code=401, detail="Invalid internal job key")
-        return {"actor_type": "system", "actor_id": "internal-job-key", "channel": "internal_job_key"}
+        return {"actor_type": "system", "actor_id": "internal-job-key", "channel": "internal_job_key",
+                "own_tenant": None}
     if credentials is None:
         raise HTTPException(status_code=401, detail="Not authenticated")
     user = await get_current_user(credentials)
     if not user.get("is_platform_admin", False):
         raise HTTPException(status_code=403, detail={"error_code": "PLATFORM_ADMIN_REQUIRED",
                                                      "message": "Platform administrator access required"})
-    return {"actor_type": "human", "actor_id": user["id"], "channel": "platform_admin"}
+    return {"actor_type": "human", "actor_id": user["id"], "channel": "platform_admin",
+            "own_tenant": user.get("org_id")}
 
 
-async def _reminder_trigger_event(tenant_id: str, caller: dict, scope: str) -> None:
-    from app.audit.envelope import RETENTION_R3_SECURITY_ACCESS, build_event
+async def _reminder_event(tenant_id: str, caller: dict, scope: str, phase: str,
+                          correlation_id: str, error_code: Optional[str] = None) -> None:
+    from app.audit.envelope import RESULT_FAILURE, RESULT_SUCCESS, RETENTION_R3_SECURITY_ACCESS, build_event
     from app.audit.store import record_event
     event = build_event(
         tenant_id=tenant_id, actor_type=caller["actor_type"], actor_id=caller["actor_id"],
-        action="reminder_jobs.triggered", source_flow="FLOW-013",
+        action="reminder_jobs.%s" % phase, source_flow="FLOW-013",
         retention_class=RETENTION_R3_SECURITY_ACCESS,
+        result=RESULT_FAILURE if phase == "failed" else RESULT_SUCCESS,
         entity_type="reminder_jobs", entity_id=tenant_id,
-        structured_diff={"scope": scope}, source_channel=caller["channel"],
+        structured_diff={"scope": scope, "phase": phase}, source_channel=caller["channel"],
         tool_or_endpoint="POST /api/internal/run-reminder-jobs",
+        correlation_id=correlation_id, error_code=error_code,
     )
     await record_event(db, event)
+
+
+_SUPPORT_GRANT_REQUIRED = {"error_code": "SUPPORT_ACCESS_GRANT_REQUIRED",
+                           "message": "Running another tenant needs a Support Access Grant (not available yet)"}
 
 
 @router.post("/internal/run-reminder-jobs")
@@ -955,18 +968,27 @@ async def trigger_reminder_jobs(tenant_id: Optional[str] = None, all_tenants: bo
                                 caller: dict = Depends(_internal_job_caller)):
     if tenant_id and all_tenants:
         raise HTTPException(status_code=400, detail="Give tenant_id or all_tenants=true, not both")
+    if not tenant_id and not all_tenants:
+        raise HTTPException(status_code=400, detail="tenant_id or all_tenants=true is required")
+    human = caller["actor_type"] == "human"
+    if human and (all_tenants or tenant_id != caller["own_tenant"]):
+        raise HTTPException(status_code=403, detail=_SUPPORT_GRANT_REQUIRED)
     known = await all_tenant_ids(db)
     if tenant_id:
         if tenant_id not in known:
             raise HTTPException(status_code=404, detail="Tenant not found")
         targets, scope = [tenant_id], "tenant"
-    elif all_tenants:
-        targets, scope = known, "all_tenants"
     else:
-        raise HTTPException(status_code=400, detail="tenant_id or all_tenants=true is required")
+        targets, scope = known, "all_tenants"
     for org_id in targets:
-        await run_reminder_jobs_for_org(org_id)
-        await _reminder_trigger_event(org_id, caller, scope)
+        correlation_id = "rj_%s" % uuid.uuid4()
+        await _reminder_event(org_id, caller, scope, "started", correlation_id)
+        try:
+            await run_reminder_jobs_for_org(org_id)
+        except Exception as exc:
+            await _reminder_event(org_id, caller, scope, "failed", correlation_id, type(exc).__name__)
+            raise
+        await _reminder_event(org_id, caller, scope, "completed", correlation_id)
     return {"ok": True, "tenants": len(targets), "ran_at": datetime.now(timezone.utc).isoformat()}
 
 # ══════════════════════════════════════════════════════════════════

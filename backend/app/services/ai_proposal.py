@@ -1,6 +1,6 @@
 """
 AI Proposal Service - Hybrid Provider Architecture.
-Supports: LLM (OpenAI via Emergent) + Rule-Based fallback.
+Supports: LLM (Anthropic via app/services/ai_provider.py, SEC-03 / Р76) + Rule-Based fallback.
 """
 import os
 import json
@@ -243,7 +243,7 @@ LLM_SYSTEM_PROMPT = """Ти си експерт по строително-мон
 
 
 async def llm_proposal(title: str, unit: str, qty: float, city: str = None,
-                       org_id: str = None) -> dict:
+                       org_id: str = None, user_id: str = None) -> dict:
     """Generate a proposal with the configured AI provider (SEC-03 / Р76:
     Anthropic directly, key and model from configuration, tenant flag
     ``ai_enabled``). Raises ``AINotConfigured`` when AI is not set up."""
@@ -257,7 +257,8 @@ async def llm_proposal(title: str, unit: str, qty: float, city: str = None,
 
 Върни JSON предложение за цена, материали и свързани работи."""
 
-    response_text = await ai_provider.complete(org_id, system=LLM_SYSTEM_PROMPT, text=user_text)
+    response_text = await ai_provider.complete(org_id, user_id=user_id, feature="smr_ai_proposal",
+                                               system=LLM_SYSTEM_PROMPT, text=user_text)
 
     # Parse JSON from response
     response_text = response_text.strip()
@@ -321,7 +322,8 @@ async def llm_proposal(title: str, unit: str, qty: float, city: str = None,
 
 # ── Hybrid Provider ────────────────────────────────────────────────
 
-async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, org_id: str = None) -> dict:
+async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, org_id: str = None,
+                          user_id: str = None) -> dict:
     """
     Hybrid AI proposal: tries LLM first, falls back to rule-based.
     Applies approved calibration factors if available.
@@ -329,7 +331,7 @@ async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, o
     # Try LLM first
     from app.services.ai_provider import AINotConfigured, AI_NOT_CONFIGURED_MESSAGE
     try:
-        result = await llm_proposal(title, unit, qty, city, org_id)
+        result = await llm_proposal(title, unit, qty, city, org_id, user_id)
         logger.info("LLM proposal succeeded")
     except AINotConfigured:
         result = rule_based_proposal(title, unit, qty, city)
