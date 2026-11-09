@@ -193,19 +193,22 @@ def _iban(bban: str) -> str:
     return "BG%02d%s" % (98 - int(digits) % 97, bban)
 
 
-async def verified_supplier(monkeypatch, op, cp_id="cp-sup", eik="818181818"):
+async def verified_supplier(monkeypatch, op, cp_id="cp-sup", eik="818181818", kind="counterparty"):
     """CP-01 (FLOW-006 / FLOW-010 §8, R48.1; as CP83-04): an outgoing bank payment goes only to
     a VERIFIED account of its payee. The supplier gets one through the real register —
     entered by the Accountant, verified by the Owner (a different person) from two
     independent sources. The guard itself stays on (production = enforce)."""
     from app.routes import bank_accounts
     monkeypatch.setattr(bank_accounts, "db", op)
-    if not await op.counterparties.find_one({"id": cp_id}):
-        await op.counterparties.insert_one({"id": cp_id, "org_id": ORG_A, "name": "Доставчик",
-                                            "type": "supplier", "eik": eik, "active": True})
+    coll = op.counterparties if kind == "counterparty" else op.subcontractors
+    if not await coll.find_one({"id": cp_id}):
+        await coll.insert_one({"id": cp_id, "org_id": ORG_A, "name": "Доставчик",
+                               "type": "supplier", "eik": eik, "active": True})
     acct = {"id": "acct-a", "org_id": ORG_A, "role": "Accountant", "email": "acct-a@pay01.example"}
     owner = {"id": "owner-a", "org_id": ORG_A, "role": "Owner", "email": "owner-a@pay01.example"}
-    acc = await bank_accounts.register_counterparty_bank_account(
+    register = (bank_accounts.register_counterparty_bank_account if kind == "counterparty"
+                else bank_accounts.register_subcontractor_bank_account)
+    acc = await register(
         cp_id, {"iban": _iban("UNCR7000152" + eik[:7])}, user=acct,
         idempotency_key="reg-" + cp_id)
     verified = await bank_accounts.verify_bank_account(acc["id"], {

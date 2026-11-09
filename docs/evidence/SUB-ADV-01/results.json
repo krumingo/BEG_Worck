@@ -7,7 +7,7 @@
   "enforce"
  ],
  "mongo": "local replica set (oplog)",
- "seconds": 16.5,
+ "seconds": 18.0,
  "roles": [
   {
    "mode": "off",
@@ -719,7 +719,7 @@
     409
    ],
    "ids_201": [
-    "9ade159c-697b-51ee-9afa-a39ed24305bf"
+    "e8bd8c5c-89fd-53e5-9bd1-4dcd9267e47b"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -736,7 +736,7 @@
     409
    ],
    "ids_201": [
-    "e1cdeb46-65e0-5a75-a6ed-b4011e6cab10"
+    "4808f36e-6bfe-53f0-b272-bb484ecfff35"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -753,7 +753,7 @@
     409
    ],
    "ids_201": [
-    "e46eec6a-110f-5c01-a7c2-baca1330df4e"
+    "777bf0d5-4be4-573b-a53f-d84eb1ed6f3e"
    ],
    "advance_rows": 1,
    "ledger_rows_added": 1,
@@ -2115,7 +2115,7 @@
       409
      ],
      "codes_409": [
-      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0
@@ -2126,7 +2126,7 @@
       409
      ],
      "codes_409": [
-      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0
@@ -2216,29 +2216,29 @@
       409
      ],
      "codes_409": [
-      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
-     ],
-     "taken": 5000.0,
-     "contract": 5000.0
-    },
-    {
-     "statuses": [
-      201,
-      409
-     ],
-     "codes_409": [
-      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
-     ],
-     "taken": 5000.0,
-     "contract": 5000.0
-    },
-    {
-     "statuses": [
-      201,
-      409
-     ],
-     "codes_409": [
       "ADVANCE_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
+     ],
+     "taken": 5000.0,
+     "contract": 5000.0
+    },
+    {
+     "statuses": [
+      201,
+      409
+     ],
+     "codes_409": [
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0
@@ -2317,7 +2317,7 @@
       409
      ],
      "codes_409": [
-      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0
@@ -2328,7 +2328,7 @@
       409
      ],
      "codes_409": [
-      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0
@@ -2339,7 +2339,7 @@
       409
      ],
      "codes_409": [
-      "ADVANCE_EXCEEDS_PACKAGE_VALUE"
+      "PAYMENT_EXCEEDS_PACKAGE_VALUE"
      ],
      "taken": 5000.0,
      "contract": 5000.0
