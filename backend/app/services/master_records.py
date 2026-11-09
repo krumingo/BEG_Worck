@@ -341,7 +341,8 @@ async def reveal_vat_egn(db, user, idem: Optional[str], *, collection: str, reco
 
 
 
-async def audit_egn_search(db, user, query: Any, hits: int, where: str) -> None:
+async def audit_egn_search(db, user, query: Any, hits: int, where: str,
+                           matched_ids: Optional[list] = None) -> None:
     """R48.3 ("with audit"): an Owner / Accountant search whose digits matched an ЕГН (a
     person's ЕГН, or a BG + ЕГН VAT number) is an AuditEvent ``party.egn_search`` — who,
     when, where, how many matches, and the query MASKED (never the digits searched)."""
@@ -353,7 +354,9 @@ async def audit_egn_search(db, user, query: Any, hits: int, where: str) -> None:
         await audit(db, session, user, "party.egn_search", entity_type="search",
                     entity_id=where, key="egn-search-" + uuid.uuid4().hex,
                     diff={"query_masked": cr.mask_egn(cr.egn_digits_query(query)),
-                          "matches": hits, "where": where, "role": user.get("role")})
+                          "matches": hits, "where": where, "role": user.get("role"),
+                          # FG-513: which records matched — their ids, never the ЕГН
+                          "matched_ids": sorted(set(matched_ids or []))[:50]})
 
     from app.services.master_write import run_tx
     await run_tx(db, tx)

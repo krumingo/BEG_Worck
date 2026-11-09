@@ -385,6 +385,7 @@ async def unified_client_search(
     
     q = (query or "").strip()
     egn_hits = 0                                  # R48.3: ЕГН-digit matches to audit
+    egn_ids: list = []                            # FG-513: their record ids
     q_normalized = normalize_phone(q) if q else ""
     q_lower = q.lower() if q else ""
     
@@ -406,7 +407,9 @@ async def unified_client_search(
                     # partial digit run — only for Owner / Accountant, and then it is audited
                     vat_match = cr.can_reveal_egn(user) and bool(
                         (q_digits and q_digits in vat_norm) or q_lower in vat_raw.lower())
-                    egn_hits += 1 if vat_match and not (name_match or eik_match) else 0
+                    if vat_match and not (name_match or eik_match):
+                        egn_hits += 1
+                        egn_ids.append(c["id"])
                 else:
                     vat_match = q_lower in vat_raw.lower() or bool(
                         q_digits and q_digits in vat_norm)
@@ -445,6 +448,7 @@ async def unified_client_search(
                     normalize_egn(q) in normalize_egn(p.get("egn") or "")
                 if egn_match and not name_match:
                     egn_hits += 1
+                    egn_ids.append(p["id"])
                 phone_match = q_normalized and q_normalized in normalize_phone(p.get("phone") or "")
                 
                 if not (name_match or egn_match or phone_match):
@@ -463,7 +467,7 @@ async def unified_client_search(
             })
     
     results.sort(key=lambda x: x["display_name"].lower())
-    await mr.audit_egn_search(db, user, q, egn_hits, "clients.search.unified")   # R48.3
+    await mr.audit_egn_search(db, user, q, egn_hits, "clients.search.unified", egn_ids)   # R48.3
     
     return {
         "items": results[:limit],

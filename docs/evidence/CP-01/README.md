@@ -523,3 +523,33 @@ Gates: see §20 (`gates_pass40.txt`, final head).
   - Pass 40 red on `a30a059`: 24 of 24 (`pass40_red_on_a30a059_real_mongo.txt`).
 
 Gates for the final head: **`gates_pass40.txt`**.
+
+## 21. FLOW Guard pass 41 (FG-510, FG-498 remainder, FG-511, FG-513)
+
+- **FG-510: one VAT normalisation everywhere.** `cr.normalize_vat` is the only function, and storing, classifying, masking and searching all use it. It applies, in order:
+  1. NFKC (full-width digits and letters, compatibility forms);
+  2. every format / zero-width character removed (Unicode category Cf);
+  3. Cyrillic homoglyphs to Latin, upper and lower case (`В→B`, `Г→G`, `ВГ→BG`, `А→A`, `Е→E`, …);
+  4. every non-alphanumeric character removed (space - . / _ : – — , …);
+  5. upper-case.
+
+  BG + 10 digits after normalisation = ЕГН (R71). The normalised value is stored (counterparty, company, invoice, project `invoice_details`). `mask_vat` masks the normalised value.
+
+  The counterparty-list search runs on the raw and the normalised query. For any role other than Owner / Accountant, a query with a digit run (≥ 4) does not match on `vat_number` at all. A legacy record in an odd spelling (e.g. `вг 7501011111`) cannot be found by its digits, and the ЕИК clause still matches company ЕИК digits.
+- **FG-498 (remainder):**
+  - The legacy camelCase `vatNumber` is masked like `vat_number` (`cr.VAT_KEYS`).
+  - `master_data.uniqueness.mask_value` masks a VAT key that is BG + ЕГН (`vat:BG******1234`), whether the caller passes `kind="vat"` or an organisation identifier key without a sensitive kind. This covers the uniqueness report and the legacy plan output (`legacy_plan._mask`).
+- **FG-511 (R29): a replay returns the original response.** The advance, subcontractor-payment and advance-deduction routes store their response with the key (`mw.result_payload`, a `json:` result reference). The first answer is that stored JSON (`MoneyWrite.as_stored`), and a replay, whether through `completed_replay` or `begin`, returns it **byte for byte** (`MoneyWrite.stored_response`), even after the record changed. An older key that stored only a row id still answers with the row.
+- **FG-513:** the `party.egn_search` AuditEvent also records `matched_ids`: the ids of the matched records, never the ЕГН.
+- **Not done here:** FG-512 (replay-first on the 7 other money routes) stays D12, as the orchestrator directed.
+- **Tests:**
+  - `test_fg510_one_vat_normalisation_for_every_spelling` (12 spellings)
+  - `test_fg510_stored_and_searched_normalised`
+  - `test_fg498_legacy_camelcase_vat_and_master_data_masks`
+  - `test_fg498_legacy_client_camelcase_vat_masked_on_read`
+  - `test_fg513_the_egn_search_audit_names_the_matched_records`
+  - `test_fg511_a_replay_returns_the_original_response_byte_for_byte`
+
+  Red on `2415b5f`: 32 (`pass41_red_on_2415b5f_real_mongo.txt`). The 8 that pass there are spellings pass 40 already handled, plus the skips.
+
+Gates for the final head: **`gates_pass41.txt`**.

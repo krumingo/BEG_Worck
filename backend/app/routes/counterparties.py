@@ -119,6 +119,17 @@ async def _with_duplicate_dq(tenant, user, eik: str, attempted_for: Optional[str
         raise
 
 
+def _vat_clauses(search: str, may_reveal: bool) -> list:
+    """FG-510: the VAT part of the counterparty search, on the NORMALISED form."""
+    norm = cr.normalize_vat(search) or ""
+    if not may_reveal and cr.egn_digits_query(search):
+        return []
+    out = [{"vat_number": {"$regex": re.escape(search), "$options": "i"}}]
+    if norm and norm != search:
+        out.append({"vat_number": {"$regex": re.escape(norm), "$options": "i"}})
+    return out
+
+
 async def _masked(user, awaitable):
     """FG-245: a counterparty in a write response shows its legacy IBAN masked as in the readers."""
     return cr.mask_iban_fields(await awaitable, await cr.full_iban_allowed(user))
@@ -162,13 +173,10 @@ async def list_counterparties(
         query["$or"] = [
             {"name": {"$regex": re.escape(search), "$options": "i"}},
             {"eik": {"$regex": re.escape(search), "$options": "i"}},
-            # FG-482 (R48.3): a BG + ЕГН VAT number is matched only for Owner / Accountant
-            {"vat_number": {"$regex": re.escape(search), "$options": "i"}}
-            if cr.can_reveal_egn(user) else
-            {"$and": [{"vat_number": {"$regex": re.escape(search), "$options": "i"}},
-                      # FG-496: in any spelling (BG-…, bg.…, with spaces / slashes)
-                      {"vat_number": {"$not": re.compile(r"^\s*BG[\s\-./]*(\d[\s\-./]*){10}$",
-                                                         re.I)}}]},
+            # FG-482 / FG-510 (R48.3): VAT digits may be an ЕГН (BG + ЕГН, in any spelling of
+            # a legacy record) — for any other role than Owner / Accountant a query with a digit
+            # run (≥ 4) does not match on vat_number at all (the ЕИК clause still does)
+            *_vat_clauses(search, cr.can_reveal_egn(user)),
             {"email": {"$regex": re.escape(search), "$options": "i"}},
             {"phone": {"$regex": re.escape(search), "$options": "i"}},
         ]
@@ -184,9 +192,9 @@ async def list_counterparties(
     counterparties = await tenant.counterparties.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
     if search and cr.can_reveal_egn(user):        # R48.3: an ЕГН-digit search is audited
         digits = cr.egn_digits_query(search)
-        hits = sum(1 for cp in counterparties if digits and cr.vat_is_egn(cp.get("vat_number"))
-                   and digits in (cr.normalize_vat(cp.get("vat_number")) or ""))
-        await mr.audit_egn_search(db, user, search, hits, "counterparties.list")
+        ids = [cp["id"] for cp in counterparties if digits and cr.vat_is_egn(cp.get("vat_number"))
+               and digits in (cr.normalize_vat(cp.get("vat_number")) or "")]
+        await mr.audit_egn_search(db, user, search, len(ids), "counterparties.list", ids)
     
     # Add invoice counts
     for cp in counterparties:

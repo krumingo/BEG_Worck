@@ -240,6 +240,21 @@ class MoneyWrite:
             if set(pattern) != {"_id"}:
                 raise
 
+    @staticmethod
+    def stored_response(reference: Optional[str]) -> Any:
+        """CP-01 FG-511 (R29): the ORIGINAL response stored with a completed key (a
+        ``json:`` reference), or None for a key that stored only a row id (older keys)."""
+        ref = reference or ""
+        if not ref.startswith(_PAYLOAD_PREFIX):
+            return None
+        return json.loads(ref[len(_PAYLOAD_PREFIX):])
+
+    @staticmethod
+    def as_stored(payload: Any) -> Any:
+        """The response exactly as ``__aexit__`` stores it — the first answer then equals
+        every replay byte for byte."""
+        return json.loads(json.dumps(payload, default=str, ensure_ascii=False, sort_keys=True))
+
     def replay_payload(self) -> Any:
         """The stored response of a completed computed write (``result_payload``)."""
         ref = self.replay_id or ""

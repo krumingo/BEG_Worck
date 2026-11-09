@@ -665,7 +665,10 @@ async def create_subcontractor_payment(
     replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_payment.create",
                                                idempotency_key, data)
     if replay:
-        stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        # FG-511: the ORIGINAL response stored with the key; an older key → the row
+        stored = MoneyWrite.stored_response(replay)
+        if stored is None:
+            stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
         if stored:
             return stored
 
@@ -718,7 +721,9 @@ async def create_subcontractor_payment(
 
     mw = await MoneyWrite.begin(user, "finance.subcontractor_payment.create", idempotency_key, data)
     if mw.replay_id:            # the same request again: the original payment, no new row
-        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
+        stored = MoneyWrite.stored_response(mw.replay_id)          # FG-511
+        return stored if stored is not None else \
+            await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
 
     payment = {
         "id": mw.new_id("subcontractor_payment"), "org_id": org_id,
@@ -747,9 +752,12 @@ async def create_subcontractor_payment(
         await _write_subcontractor_payment(mw, tenant, user, pkg, account, payment, ledger_id, now,
                                            act=act)
         mw.result_id = payment["id"]
-    # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost the
-    # insert answers with the same payment (same payment_no) as the one that won it.
-    return await tenant.subcontractor_payments.find_one({"id": payment["id"]}, {"_id": 0})
+        # F-69-01: the STORED allocation row — a concurrent retry of the same key that lost
+        # the insert answers with the same payment (same payment_no) as the one that won it.
+        # FG-511 (R29): that response is stored with the key; every replay returns it as is.
+        mw.result_payload = await tenant.subcontractor_payments.find_one({"id": payment["id"]},
+                                                                         {"_id": 0})
+    return MoneyWrite.as_stored(mw.result_payload)
 
 
 _COMMITTED = {"$ifNull": ["$committed_paid_total", {"$ifNull": ["$paid_total", 0]}]}
@@ -1152,7 +1160,10 @@ async def create_subcontractor_advance(
     replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_advance.create",
                                                idempotency_key, {**data, "package_id": pkg_id})
     if replay:
-        stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        # FG-511: the ORIGINAL response stored with the key; an older key → the row
+        stored = MoneyWrite.stored_response(replay)
+        if stored is None:
+            stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
         if stored:
             return stored
     tenant = _tenant(user)
@@ -1203,7 +1214,9 @@ async def create_subcontractor_advance(
     mw = await MoneyWrite.begin(user, "finance.subcontractor_advance.create", idempotency_key,
                                 {**data, "package_id": pkg_id})
     if mw.replay_id:
-        return await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
+        stored = MoneyWrite.stored_response(mw.replay_id)          # FG-511
+        return stored if stored is not None else \
+            await tenant.subcontractor_payments.find_one({"id": mw.replay_id}, {"_id": 0})
 
     now = datetime.now(timezone.utc).isoformat()
     advance = {
@@ -1260,7 +1273,10 @@ async def create_subcontractor_advance(
                                                                   advance["id"]))
         await _refresh_package_totals(tenant, pkg_id, now)
         mw.result_id = advance["id"]
-    return await tenant.subcontractor_payments.find_one({"id": advance["id"]}, {"_id": 0})
+        # FG-511 (R29): the response is stored with the key; every replay returns it as is
+        mw.result_payload = await tenant.subcontractor_payments.find_one({"id": advance["id"]},
+                                                                         {"_id": 0})
+    return MoneyWrite.as_stored(mw.result_payload)
 
 
 @router.post("/subcontractor-acts/{act_id}/advance-deduction", status_code=201)
@@ -1286,7 +1302,10 @@ async def deduct_advance_on_act(
     replay = await MoneyWrite.completed_replay(user, "subcontract.advance_deduction.execute",
                                                idempotency_key, {**data, "act_id": act_id})
     if replay:
-        stored = await _tenant(user).subcontractor_acts.find_one({"id": replay}, {"_id": 0})
+        # FG-511: the ORIGINAL response stored with the key; an older key → the row
+        stored = MoneyWrite.stored_response(replay)
+        if stored is None:
+            stored = await _tenant(user).subcontractor_acts.find_one({"id": replay}, {"_id": 0})
         if stored:
             return stored
     tenant = _tenant(user)
@@ -1305,7 +1324,9 @@ async def deduct_advance_on_act(
     mw = await MoneyWrite.begin(user, "subcontract.advance_deduction.execute", idempotency_key,
                                 {**data, "act_id": act_id})
     if mw.replay_id:
-        return await tenant.subcontractor_acts.find_one({"id": mw.replay_id}, {"_id": 0})
+        stored = MoneyWrite.stored_response(mw.replay_id)          # FG-511
+        return stored if stored is not None else \
+            await tenant.subcontractor_acts.find_one({"id": mw.replay_id}, {"_id": 0})
     now = datetime.now(timezone.utc).isoformat()
     async with mw:
         reservation_id = mw.new_id("advance_deduction_reservation")
@@ -1315,7 +1336,9 @@ async def deduct_advance_on_act(
                                     reservation_id=reservation_id)
         await _refresh_package_totals(tenant, pkg_id, now)
         mw.result_id = act_id
-    return await tenant.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
+        # FG-511 (R29): the response is stored with the key; every replay returns it as is
+        mw.result_payload = await tenant.subcontractor_acts.find_one({"id": act_id}, {"_id": 0})
+    return MoneyWrite.as_stored(mw.result_payload)
 
 
 # ═══════════════════════════════════════════════════════════════════

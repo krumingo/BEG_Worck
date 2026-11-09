@@ -195,22 +195,35 @@ def mask_for_log(value: Any) -> Any:
 #: FG-294: the invoice fields that may hold a person's ЕГН (an invoice to a natural person)
 INVOICE_EGN_KEYS = ("counterparty_eik", "egn")
 #: FG-429 (R71): VAT number fields — a natural person's Bulgarian VAT number is BG + ЕГН
-VAT_KEYS = ("counterparty_vat_no", "vat_number", "vat_no")
+VAT_KEYS = ("counterparty_vat_no", "vat_number", "vat_no", "vatNumber")   # FG-498: legacy camelCase
 
 
-_VAT_SEPARATORS = re.compile(r"[\s\-./]")
+#: FG-510: Cyrillic letters that look like / stand for the Latin ones of a VAT prefix
+_CYRILLIC_TO_LATIN = str.maketrans({
+    "А": "A", "В": "B", "Г": "G", "Е": "E", "К": "K", "М": "M", "Н": "H", "О": "O", "Р": "P",
+    "С": "C", "Т": "T", "Х": "X", "У": "Y", "І": "I", "Ј": "J", "Ѕ": "S",
+    "а": "A", "в": "B", "г": "G", "е": "E", "к": "K", "м": "M", "н": "H", "о": "O", "р": "P",
+    "с": "C", "т": "T", "х": "X", "у": "Y", "і": "I", "ј": "J", "ѕ": "S"})
 
 
 def normalize_vat(value: Any) -> Any:
-    """FG-496: a VAT number as stored and classified — trimmed, upper-case, without the
-    separators space - . /  (``bg.750101-1111`` → ``BG7501011111``). ``None`` / empty and a
-    masked value (``BG******1234``) are returned unchanged."""
+    """FG-496 / FG-510: THE one VAT normalisation — stored, classified and searched on:
+    NFKC (full-width digits, compatibility forms) → every format / zero-width character
+    removed (Unicode category Cf) → Cyrillic homoglyphs to Latin (``ВГ`` → ``BG``) → every
+    non-alphanumeric character removed (space - . / _ : – — , …) → upper-case.
+    ``bg.750101-1111``, ``ВГ 7501011111`` and ``BG\u200b7501011111`` → ``BG7501011111``.
+    ``None`` stays ``None``; an empty result is ``None``; a masked value (``BG******1234``)
+    is returned trimmed and unchanged."""
     if not isinstance(value, str):
         return value
     if is_masked_vat(value.strip()):
         return value.strip()
-    v = _VAT_SEPARATORS.sub("", value).upper()
-    return v or None if value.strip() == "" else v
+    import unicodedata
+    v = unicodedata.normalize("NFKC", value)
+    v = "".join(ch for ch in v if unicodedata.category(ch) != "Cf")
+    v = v.translate(_CYRILLIC_TO_LATIN)
+    v = "".join(ch for ch in v if ch.isascii() and ch.isalnum()).upper()
+    return v or None
 
 
 def vat_is_egn(value: Any) -> bool:
@@ -229,8 +242,9 @@ def egn_digits_query(query: Any) -> str:
 
 
 def mask_vat(value: Any) -> str:
-    """``BG******1234``."""
-    return "BG" + mask_egn(str(value)[2:])
+    """``BG******1234`` (FG-510: of the normalised value, whatever the spelling)."""
+    v = normalize_vat(value) if isinstance(value, str) else value
+    return "BG" + mask_egn(str(v or "")[2:])
 
 
 def mask_vat_egn(value: Any) -> Any:

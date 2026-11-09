@@ -2064,3 +2064,93 @@ def test_fg499_advance_deduction_replays_before_the_guards(monkeypatch, backend,
         r = await c.post(url, headers=h, json={"amount": 120.0})
         assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_CONFLICT"
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 41 (#83 @ 2415b5f)
+@pytest.mark.parametrize("spelling", [
+    "BG-" + TYPED, "bg." + TYPED, "ВГ " + TYPED, "вг" + TYPED, "BG​" + TYPED,
+    "B‍G" + TYPED, "ＢＧ" + "".join(chr(ord(d) + 0xFEE0) for d in TYPED),
+    "BG_" + TYPED, "BG:" + TYPED, "BG–" + TYPED, "BG—" + TYPED, "BG," + TYPED])
+def test_fg510_one_vat_normalisation_for_every_spelling(spelling):
+    from app.services import counterparty_rules as cr
+    assert cr.normalize_vat(spelling) == VAT_EGN, spelling
+    assert cr.vat_is_egn(spelling), spelling
+    assert cr.mask_vat(spelling) == "BG******" + TYPED[-4:]
+    assert TYPED not in json.dumps(cr.mask_vat_egn({"vat_number": spelling}), ensure_ascii=False)
+    assert TYPED not in json.dumps(cr.mask_iban_fields({"vat_number": spelling}, True), ensure_ascii=False)
+
+
+def test_fg510_stored_and_searched_normalised(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        r = await c.post("/api/counterparties", headers=hdr("acct-a"),
+                         json={"name": "Хомоглиф", "type": "supplier", "vat_number": "ВГ​" + TYPED})
+        assert r.status_code == 201, r.text
+        cp = (await rows(op, "counterparties", {"name": "Хомоглиф"}))[0]
+        assert cp["vat_number"] == VAT_EGN
+        # a legacy record in an odd spelling: masked on read, excluded from others' digit search
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": "вг " + TYPED}})
+        for who in ("admin-a", "viewer-a"):
+            r = await c.get("/api/counterparties?active_only=false&search=" + TYPED[:5], headers=hdr(who))
+            if r.status_code == 200:
+                ids = {x["id"] for x in r.json()["items"]}
+                assert cp["id"] not in ids and "cp2" not in ids and no_full(r.json(), TYPED), who
+        r = await c.get("/api/counterparties?active_only=false&search=" + "ВГ" + TYPED, headers=hdr("acct-a"))
+        assert cp["id"] in {x["id"] for x in r.json()["items"]} and no_full(r.json(), TYPED)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg498_legacy_camelcase_vat_and_master_data_masks():
+    from app.services import counterparty_rules as cr
+    from app.master_data.uniqueness import mask_value
+    assert cr.mask_vat_egn({"vatNumber": "BG " + TYPED})["vatNumber"] == "BG******" + TYPED[-4:]
+    assert mask_value("vat", "vat:" + VAT_EGN) == "vat:BG******" + TYPED[-4:]
+    assert mask_value(None, "vat:" + VAT_EGN) == "vat:BG******" + TYPED[-4:]   # an org key
+    assert mask_value("vat", "BG111111111") == "BG111111111"                    # a company
+    assert mask_value("egn", "egn:" + TYPED) == "egn:******" + TYPED[-4:]
+
+
+def test_fg498_legacy_client_camelcase_vat_masked_on_read(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.clients.update_one({"id": "cl1"}, {"$set": {"vatNumber": "BG" + TYPED}})
+        for url in ("/api/clients", "/api/clients/cl1", "/api/clients/cl1/summary"):
+            r = await c.get(url, headers=hdr("owner-a"))
+            if r.status_code == 200:
+                assert no_full(r.json(), TYPED), url
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg513_the_egn_search_audit_names_the_matched_records(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": VAT_EGN}})
+        await op.companies.update_one({"id": "co1"}, {"$set": {"vat_number": VAT_EGN}})
+        await c.get("/api/counterparties?active_only=false&search=" + TYPED[:6], headers=hdr("acct-a"))
+        await c.get("/api/clients/search/unified?query=" + TYPED[:6], headers=hdr("owner-a"))
+        ev = {e["entity_id"]: e for e in await rows(op, "audit_events", {"action": "party.egn_search"})}
+        assert ev["counterparties.list"]["structured_diff"]["matched_ids"] == ["cp2"]
+        assert ev["clients.search.unified"]["structured_diff"]["matched_ids"] == ["co1"]
+        assert no_full(list(ev.values()), TYPED) and no_full(list(ev.values()), TYPED[:6])
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg511_a_replay_returns_the_original_response_byte_for_byte(monkeypatch, backend, mode):
+    """FG-511 (R29): the replay of a completed key returns the ORIGINAL stored response, not
+    the current record — the record changing afterwards does not change the replay."""
+    if backend != "real":
+        pytest.skip("SUB-ADV-01's package reservation runs on a real MongoDB only")
+
+    async def scenario(c, op):
+        await op.subcontractor_packages.update_one({"id": "pkg1"}, {"$set": {"contract_total": 9000.0}})
+        cash = {"account_id": CASH_A, "cash_receipt_file_id": "file_r", "cash_recipient_name": "Бригадир"}
+        for url, body, coll in (
+                ("/api/subcontractor-packages/pkg1/advances", dict(cash, amount=100.0, reason="Аванс"),
+                 "subcontractor_payments"),
+                ("/api/subcontractor-payments", dict(cash, package_id="pkg1", amount=10.0),
+                 "subcontractor_payments")):
+            h = dict(hdr("acct-a"), **{"Idempotency-Key": "fg511-" + url[-8:]})
+            first = await c.post(url, headers=h, json=body)
+            assert first.status_code == 201, first.text
+            await op[coll].update_one({"id": first.json()["id"]}, {"$set": {"notes": "променено по-късно"}})
+            again = await c.post(url, headers=h, json=body)
+            assert again.status_code == 201 and again.content == first.content, (again.text, first.text)
+            assert "променено по-късно" not in again.text
+    run(monkeypatch, backend, mode, scenario)
