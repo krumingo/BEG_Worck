@@ -1,0 +1,1 @@
+A2C tenant boundary guard on 6709453: 1 violation (app/permissions/money_input.py:198 A2C-READ); with the fix: 0 violation(s)

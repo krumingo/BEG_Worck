@@ -195,8 +195,10 @@ class MoneyWrite:
         key = (raw_key or "").strip()
         if not key or len(key) > MAX_KEY_LENGTH:
             return None
+        # CP83-M5 (A2C): the literal tenant filter, as the registry stores it (tenant_id)
         rec = await db[IDEMPOTENCY_COLLECTION].find_one(
-            {"id": _record_id(user["org_id"], action, "%s:%s" % (user["id"], key))},
+            {"tenant_id": user["org_id"],
+             "id": _record_id(user["org_id"], action, "%s:%s" % (user["id"], key))},
             {"_id": 0, "status": 1, "request_fingerprint": 1, "result_reference": 1})
         if not rec:
             return None
