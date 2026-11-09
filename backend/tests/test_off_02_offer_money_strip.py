@@ -365,3 +365,93 @@ def test_08_r67_every_offer_write_carries_its_action_first_and_only_finance_hold
     assert all(is_significant_action(a) for a in OFFER_WRITE_ACTIONS)     # denials audited
     holders = {rid for rid, acts in PERMISSION_MATRIX.items() if acts & OFFER_WRITE_ACTIONS}
     assert holders == {"owner", "admin", "accountant"}
+
+
+# ═════════ FLOW Guard FG-472 (R67 + R20): the offer execution budget (cost / margin)
+BUDGET_MONEY = ("sale_material_unit", "sale_labor_unit", "sale_total", "sale",
+                "budget_material_unit_cost", "budget_labor_unit_cost", "budget_material_total",
+                "budget_labor_total", "budget_total", "budget", "material_margin_percent",
+                "labor_margin_percent", "margin_value", "margin_percent")
+
+
+@pytest.fixture
+def _with_budget_router(monkeypatch):
+    real_app = T._app
+
+    def app(mp, op, sysdb, mode_):
+        a = real_app(mp, op, sysdb, mode_)
+        from app.routes import offer_budget as ob
+        mp.setattr(ob, "db", op, raising=False)
+        a.include_router(ob.router, prefix="/api")
+        return a
+    monkeypatch.setattr(T, "_app", app)
+
+
+def _budget_keys(payload) -> set:
+    found = set()
+
+    def walk(v):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if k in BUDGET_MONEY:
+                    found.add(k)
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(payload)
+    return found
+
+
+BUDGET_BODY = {"lines": [{"line_id": "ln-b1", "budget_material_unit_cost": 30,
+                          "budget_labor_unit_cost": 45, "material_margin_percent": 25,
+                          "labor_margin_percent": 25, "planned_labor_hours": 3, "notes": "n"}]}
+
+
+def test_09_fg472_only_finance_writes_the_offer_budget(monkeypatch, _with_budget_router, backend, mode):
+    """FG-472: PUT /offer-budgets/{id} was open to every M2 role and wrote no AuditEvent.
+    R67: Owner / Admin / Accountant only (403 before any read or write); each save writes
+    one canonical AuditEvent with what changed."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("b1", status="Draft"))
+        before = await T.snap(op, ("offer_line_budgets", "offers"))
+        for who in FORBIDDEN:
+            r = await c.put("/api/offer-budgets/b1", headers=T.hdr(who), json=BUDGET_BODY)
+            assert r.status_code == 403, (who, r.text)
+        assert await T.snap(op, ("offer_line_budgets", "offers")) == before
+        for who in ALLOWED:
+            r = await c.put("/api/offer-budgets/b1", headers=T.hdr(who), json=BUDGET_BODY)
+            assert r.status_code == 200 and r.json()["saved"] == 1, (who, r.text)
+        row = await op.offer_line_budgets.find_one({"offer_id": "b1", "line_id": "ln-b1"}, {"_id": 0})
+        assert row["budget_material_unit_cost"] == 30 and row["updated_by"] == "acct-a"
+        ev = await op.audit_events.find({"action": "offers.offer_budget.updated"}, {"_id": 0}).to_list(None)
+        assert len(ev) == 3 and {e["actor_id"] for e in ev} == set(ALLOWED)
+        assert ev[0]["entity_id"] == "b1" and ev[0]["source_flow"] == "FLOW-003"
+        assert ev[0]["structured_diff"]["lines"][0]["line_id"] == "ln-b1"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_10_fg472_the_budget_read_shows_no_money_to_a_non_finance_role(
+        monkeypatch, _with_budget_router, backend, mode):
+    """FG-472: GET /offer-budgets/{id} returned sale prices, budget costs and margin to every
+    role. Non-finance: names, units, quantities, hours and notes only; finance: everything."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("b2", status="Draft"))
+        await op.offer_line_budgets.insert_one({
+            "org_id": ORG_A, "offer_id": "b2", "line_id": "ln-b2", "budget_material_unit_cost": 30,
+            "budget_labor_unit_cost": 45, "material_margin_percent": 25, "labor_margin_percent": 25,
+            "planned_labor_hours": 3, "notes": "n"})
+        for who in FORBIDDEN:
+            r = await c.get("/api/offer-budgets/b2", headers=T.hdr(who))
+            assert r.status_code == 200, (who, r.text)
+            assert _budget_keys(r.json()) == set(), (who, sorted(_budget_keys(r.json())))
+            line = r.json()["lines"][0]
+            assert line["activity_name"] == "Плочки" and line["qty"] == 10
+            assert line["planned_labor_hours"] == 3
+        for who in ALLOWED:
+            r = await c.get("/api/offer-budgets/b2", headers=T.hdr(who))
+            assert r.status_code == 200, r.text
+            keys = _budget_keys(r.json())
+            assert {"sale_total", "budget_total", "margin_value", "margin_percent"} <= keys, keys
+            assert r.json()["totals"]["sale"] == 1000.0
+    run(monkeypatch, backend, mode, scenario)
