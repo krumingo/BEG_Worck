@@ -8,6 +8,17 @@ from app.services.labor_cost import project_labor_cost
 from app.services.payment_state import active_payments
 
 
+# FG-530 (Krum): THE revenue rule — ISSUED invoices (direction Issued, a sent / paid / partly
+# paid status), net (без ДДС). The project P&L and the project aggregate use the same rule.
+REVENUE_STATUSES = ("Sent", "Paid", "PartiallyPaid")
+
+
+def issued_revenue_net(invoices) -> float:
+    """Net revenue of Issued invoice rows (each with direction already Issued)."""
+    return round(sum((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) or 0
+                     for i in invoices if i.get("status") in REVENUE_STATUSES), 2)
+
+
 async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     """Compute complete P&L for a single project."""
     tenant = TenantData.for_resolved_org(db, org_id)
@@ -31,14 +42,11 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
-    _rev_statuses = ["Sent", "Paid", "PartiallyPaid"]
+    _rev_statuses = list(REVENUE_STATUSES)   # FG-530: the one revenue rule
     # Gross (с ДДС) — invoiced / received, the cash view
     invoiced_total = sum(i.get("total", 0) for i in invoices if i.get("status") in _rev_statuses)
     # Net (без ДДС) — management revenue basis
-    invoiced_net = sum(
-        (i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0))
-        for i in invoices if i.get("status") in _rev_statuses
-    )
+    invoiced_net = issued_revenue_net(invoices)
     # Output VAT collected on sales invoices
     output_vat = sum(i.get("vat_amount", 0) or 0 for i in invoices if i.get("status") in _rev_statuses)
     paid_total = sum(i.get("paid_amount", 0) or 0 for i in invoices)
