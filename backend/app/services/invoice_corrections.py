@@ -961,6 +961,9 @@ COST_TARGET_PROJECT = "project"
 COST_TARGET_UNDETERMINED = "undetermined"
 DQ_DIFFERENCE_LINE_UNDETERMINED = "accepted_difference_line_undetermined"
 DQ_DIFFERENCE_LINE_REVERSED = "accepted_difference_line_reversed"
+# Р63: re-booking onto a Completed project needs the Owner (the decision names Completed only;
+# Archived / Finished / Cancelled are a question for Krum — debt D20)
+CLOSED_PROJECT_STATUSES = ("Completed",)
 POSTING_BOOKING = "booking"            # at the Owner's acceptance (Р55(3) / Р58)
 POSTING_RESOLUTION = "resolution"      # FG-277: the Accountant decides an open line
 POSTING_REVERSAL = "reversal"          # FG-276: the Owner reverses (append-only)
@@ -1073,14 +1076,25 @@ def open_difference_lines(note: dict) -> List[dict]:
     postings = acc.get("postings") or []
     booked = booked_by_line(postings)
     reversed_lines = {p["original_line_id"] for p in postings if p.get("kind") == POSTING_REVERSAL}
+    decided = {d["proposal_id"] for d in acc.get("decisions") or []}
+    pending = {p["original_line_id"]: p["id"] for p in acc.get("proposals") or [] if p["id"] not in decided}
+    last_reversed: Dict[str, dict] = {}
+    for p in postings:
+        if p.get("kind") == POSTING_REVERSAL:
+            last_reversed[p["original_line_id"]] = p
     out = []
     for s in acc.get("split") or []:
         line_id = s["original_line_id"]
         if cents(s.get("net")) <= 0 or booked.get(line_id, Decimal(0)) != 0:
             continue
         if s["target"] == COST_TARGET_UNDETERMINED or line_id in reversed_lines:
-            out.append({"original_line_id": line_id, "net": s["net"],
-                        "state": "reversed" if line_id in reversed_lines else COST_TARGET_UNDETERMINED})
+            entry = {"original_line_id": line_id, "net": s["net"],
+                     "state": "reversed" if line_id in reversed_lines else COST_TARGET_UNDETERMINED,
+                     "pending_proposal": pending.get(line_id)}
+            if line_id in last_reversed:
+                r = last_reversed[line_id]          # Р63: where the reversed booking was
+                entry["original_destination"] = (r["target"], r.get("project_id"), r.get("package_id"))
+            out.append(entry)
     return out
 
 

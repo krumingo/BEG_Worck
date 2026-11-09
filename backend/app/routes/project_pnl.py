@@ -89,10 +89,11 @@ async def get_org_pnl_overview(
     """P&L overview for all projects in the organization."""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    projects = await tenant.projects.find(
-        {"org_id": org_id, "status": {"$in": ["Active", "Draft", "Paused"]}},
-        {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1},
-    ).to_list(100)
+    # FG-278: the SAME project scope as every company-result reader (every project,
+    # every status) — so totals, company losses and final_profit agree with /org/pnl-attribution
+    from app.services.pnl_aggregator import COMPANY_RESULT_SCOPE, company_result_projects
+    projects = await company_result_projects(
+        tenant, org_id, {"_id": 0, "id": 1, "name": 1, "code": 1, "status": 1})
 
     results = []
     totals = {"budget": 0, "revenue": 0, "expense": 0, "profit": 0}
@@ -125,7 +126,7 @@ async def get_org_pnl_overview(
     totals["company_losses"] = losses["amount"]
     totals["final_profit"] = round(totals["profit"] - losses["amount"], 2)
 
-    return {"projects": results, "totals": totals, "company_losses": losses}
+    return {"projects": results, "totals": totals, "company_losses": losses, "scope": COMPANY_RESULT_SCOPE}
 
 
 # ── Aggregated PnL + Profit Attribution ──

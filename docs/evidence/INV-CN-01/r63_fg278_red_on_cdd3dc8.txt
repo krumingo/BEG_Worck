@@ -1,0 +1,23 @@
+# Р63 (FG-281) + FG-278 status-scope red proofs — the new tests run against cdd3dc8 (real Mongo rs0, 3 modes)
+# Р63: on cdd3dc8 a re-booking after a reversal had no 'same destination' path and NO Owner step at all —
+#   test_fg277_… on cdd3dc8 re-booked il-27x as a company cost straight away by the Accountant (one person).
+# FG-278: /org/pnl-overview left the Completed project out (Active/Draft/Paused only), /org/pnl-attribution counted it.
+E       AssertionError: {"detail":{"error_code":"PROJECT_REQUIRED","message":"Изберете обект"}}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+E       AssertionError: {"detail":{"error_code":"PROJECT_REQUIRED","message":"Изберете обект"}}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+E       AssertionError: {"detail":{"error_code":"PROJECT_REQUIRED","message":"Изберете обект"}}
+E       assert 422 == 200
+E        +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+E       AssertionError: assert 'prj-done' in ['prj-1', 'prj-2']
+E       AssertionError: assert 'prj-done' in ['prj-1', 'prj-2']
+E       AssertionError: assert 'prj-done' in ['prj-1', 'prj-2']
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg278_every_company_result_reader_uses_one_project_status_scope[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg278_every_company_result_reader_uses_one_project_status_scope[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg278_every_company_result_reader_uses_one_project_status_scope[enforce]
+6 failed, 138 deselected, 1 warning in 4.39s

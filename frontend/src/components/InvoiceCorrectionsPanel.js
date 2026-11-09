@@ -111,6 +111,42 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
     const reason = (window.prompt("Причина за приемане на разликата:") || "").trim();
     if (reason) post(`/finance/credit-notes/${note.id}/accept-difference`, { reason });
   };
+  // FG-276 / FG-277 / Р63: the accepted difference's journal — open lines, reversal, proposals
+  const resolveLine = (note, lineId) => {
+    const target = (window.prompt("Разнеси към: project / company", "project") || "").trim();
+    if (target !== "project" && target !== "company") return;
+    const projectId = target === "project" ? (window.prompt("ID на обект (празно — разпределението на реда):") || "").trim() : "";
+    const reason = (window.prompt("Причина:") || "").trim();
+    if (!reason) return;
+    const body = { target, reason };
+    if (projectId) body.project_id = projectId;
+    post(`/finance/credit-notes/${note.id}/difference-lines/${lineId}/resolve`, body);
+  };
+  const reverseDifference = (note) => {
+    const reason = (window.prompt("Причина за сторно на приетата разлика:") || "").trim();
+    if (reason) post(`/finance/credit-notes/${note.id}/reverse-difference`, { reason });
+  };
+  const decideProposal = (note, proposal, decision) => {
+    const reason = (window.prompt(decision === "approve" ? "Коментар (по желание):" : "Причина:") || "").trim();
+    if (decision === "reject" && !reason) return;
+    post(`/finance/credit-notes/${note.id}/difference-proposals/${proposal.id}/${decision}`, reason ? { reason } : {});
+  };
+  const pendingProposals = (note) => {
+    const acc = note.difference_accepted || {};
+    const decided = new Set((acc.decisions || []).map((d) => d.proposal_id));
+    return (acc.proposals || []).filter((p) => !decided.has(p.id));
+  };
+  const openLines = (note) => {
+    const acc = note.difference_accepted || {};
+    const booked = {};
+    (acc.postings || []).forEach((p) => { booked[p.original_line_id] = (booked[p.original_line_id] || 0) + p.net; });
+    const reversed = new Set((acc.postings || []).filter((p) => p.kind === "reversal").map((p) => p.original_line_id));
+    const pending = new Set(pendingProposals(note).map((p) => p.original_line_id));
+    return (acc.split || []).filter((l) => l.net > 0 && Math.abs(booked[l.original_line_id] || 0) < 0.005
+      && (l.target === "undetermined" || reversed.has(l.original_line_id)) && !pending.has(l.original_line_id));
+  };
+  const isBooked = (note) => (note.difference_accepted?.postings || []).reduce((a, p) => a + p.net, 0) !== 0;
+
   const reject = (note) => {
     const reason = (window.prompt("Причина за отхвърляне / оттегляне:") || "").trim();
     if (reason) post(`/finance/credit-notes/${note.id}/reject`, { reason });
@@ -163,6 +199,30 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
                 Приеми разликата
               </Button>
             )}
+            {canWrite && openLines(n).map((l) => (
+              <Button key={l.original_line_id} size="sm" variant="outline" disabled={busy}
+                      onClick={() => resolveLine(n, l.original_line_id)} data-testid={`resolve-line-${n.id}-${l.original_line_id}`}>
+                Разнеси разлика ({l.net})
+              </Button>
+            ))}
+            {isOwner && n.difference_accepted?.postings && isBooked(n) && (
+              <Button size="sm" variant="outline" disabled={busy} onClick={() => reverseDifference(n)} data-testid={`reverse-diff-${n.id}`}>
+                Сторнирай разликата
+              </Button>
+            )}
+            {pendingProposals(n).map((p) => (
+              <span key={p.id} className="flex items-center gap-1" data-testid={`proposal-${p.id}`}>
+                <Badge variant="outline" className="text-xs text-amber-400">
+                  Предложено: {p.target === "company" ? "фирмен разход" : `обект ${p.project_id || ""}`} ({p.net})
+                </Badge>
+                {isOwner && p.by !== user?.id && (
+                  <Button size="sm" disabled={busy} onClick={() => decideProposal(n, p, "approve")} data-testid={`approve-proposal-${p.id}`}>Одобри</Button>
+                )}
+                {(isOwner || p.by === user?.id) && (
+                  <Button size="sm" variant="outline" disabled={busy} onClick={() => decideProposal(n, p, "reject")} data-testid={`reject-proposal-${p.id}`}>Отхвърли</Button>
+                )}
+              </span>
+            ))}
             {n.status === "pending_approval" && (isOwner || n.created_by === user?.id) && (
               <Button size="sm" variant="outline" disabled={busy} onClick={() => reject(n)} data-testid={`reject-note-${n.id}`}>
                 Отхвърли

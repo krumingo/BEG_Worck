@@ -207,6 +207,15 @@ Red proofs against ef7cddd: `fg_pass27_red_on_ef7cddd.txt`. FG-269: a direct del
 
 Red proofs against e75b558: `fg_pass28_red_on_e75b558.txt`. The backend fails 3/3: there is no resolve path. Jest fails 4/4.
 
+## Approved on cdd3dc8 (Krum, 09.11): FG-278 status scope + Р63 (FG-281)
+
+| Point | Fix | Test |
+|---|---|---|
+| **FG-278 (status scope)** | Every company-result reader now uses **one** project scope, `company_result_project_filter`: **every project of the org, of every status**. Each project is counted on its own P&L; `compute_project_pnl` counts only that project's records, so a subproject is counted once. Before, `/org/pnl-overview` counted only Active/Draft/Paused while `/org/pnl-attribution` counted all root projects, so one Completed project made the two readers disagree. Both readers echo `scope = {projects: all, project_statuses: all}`, and totals, company losses and `final_profit` agree. | `test_fg278_every_company_result_reader_uses_one_project_status_scope`: a Completed project with −100.00; both readers have identical totals |
+| **Р63 (FG-281)** | After a reversal, the Accountant (Р14 roles) proposes the re-booking of a line through `…/difference-lines/{line}/resolve`. **The same destination as the reversed booking applies at once.** A line booked by its allocation goes back to that allocation: `target=project` with no id. **Another project, company cost, or a Completed project** → an append-only `proposals` entry only; nothing is booked and the line is locked (409) until decided. `…/difference-proposals/{id}/approve`: **Owner only** (other roles → 403), **never the proposer** (403 `SAME_PERSON_APPROVAL`), another tenant → 404. It posts the re-booking in the current period and closes the DQ issue. `…/reject`: the Owner, or the proposer withdrawing. Decisions are append-only (`decisions`); every write uses the Idempotency-Key, a transaction with CAS on `journal_version`, and an AuditEvent (`difference_rebooking_proposed/approved/rejected`). The panel shows the open lines, the reversal and the proposals. | `test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner` |
+
+Red proofs against cdd3dc8: `r63_fg278_red_on_cdd3dc8.txt`.
+
 ## Debts after Addendum A
 
 | # | Status |
@@ -230,6 +239,8 @@ Red proofs against e75b558: `fg_pass28_red_on_e75b558.txt`. The backend fails 3/
 | D16 approver | **Closed.** The Owner approves (Р49.4, Р51). |
 | D17 Р58 company cost in company reports | **Closed by the canon (oracle Q007, FLOW-015 / FLOW-024 L170-180).** The company result readers in main (`/org/pnl-attribution`, and per FG-271 also `/org/pnl-overview` and `/finance/stats`) now have a separate line **"Фирмени загуби (не се разпределят)"** (`company_losses`: label, `includes` text, amount, drill-down lines) and `totals.final_profit = profit − company_losses`. The existing `profit` (the sum of projects) is unchanged. The cost is never in a project P&L and never in the overhead allocation base. The dashboard widget shows the line with its drill-down. Test: the `test_r58_…` scenario; red proof `q007_red_on_caea933.txt`. |
 | D18 FLOW-009 warehouse losses view | **Open (no such view in main).** Q007 also wants the Р58 company loss visible in a warehouse losses view (FLOW-009). Main has only per-project material waste (`/projects/{id}/material-waste`), no company-level warehouse-losses view. Per Q007 no new screen is invented. Spec for whoever builds it: show the `company_cost_lines` (Р58 accepted differences on warehouse lines) as losses on return, by acceptance period, with drill-down to the note. |
+| D19 subprojects in the company result | **Note.** The one scope counts every project on its own P&L. Whether a parent's P&L should instead aggregate its subprojects (`compute_aggregated_pnl`) for the company result is not in the canon. |
+| D20 Р63 "Completed" | **Question for Krum.** Р63 names a **Completed** project only. Re-booking onto an Archived / Finished / Cancelled project currently follows only the same-destination rule. |
 | SEC-01 (#69, now in main) | **Open.** `finance.py` routes, old and new, still use `finance_permission` (Owner/Admin/Accountant); #69 did not migrate `finance.py`. Moving the whole module to `require_money_write` plus catalog actions is one follow-up, so the module keeps a single rule. |
 
 ## Gates (`gates.txt`, FG pass 28 head 6730fc2; main 3699c3b merged; real Mongo = disposable local mongo:7.0 rs0, a fresh container per block)

@@ -29,8 +29,9 @@ pytestmark = pytest.mark.skipif(bool(_real_refusal()) or not os.environ.get("W0_
 
 ORG_A, ORG_B = "ORG-INVCN-A", "ORG-INVCN-B"
 USERS = {
-    "owner-a": (ORG_A, "Owner"), "admin-a": (ORG_A, "Admin"), "acct-a": (ORG_A, "Accountant"),
+    "owner-a": (ORG_A, "Owner"), "owner2-a": (ORG_A, "Owner"), "admin-a": (ORG_A, "Admin"), "acct-a": (ORG_A, "Accountant"),
     "viewer-a": (ORG_A, "Viewer"), "site-a": (ORG_A, "SiteManager"), "admin-b": (ORG_B, "Admin"),
+    "owner-b": (ORG_B, "Owner"),
 }
 MODES = ["off", "shadow", "enforce"]
 BANK_A = "acc-bank-a"
@@ -1543,8 +1544,13 @@ def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(m
                                                    "status": "open"}) == 2
         assert await op.audit_events.find_one({"action": "finance.credit_note.difference_reversed"})
         assert (await c.post(rev, headers=hdr("owner-a"), json={"reason": "пак"})).status_code == 409
-        # the correction: re-book il-27x as a company loss, in the CURRENT period
+        # the correction: re-book il-27x as a company loss, in the CURRENT period — another
+        # destination than the reversed booking, so the Owner approves it (Р63)
         r = await c.post(url, headers=hdr("acct-a"), json={"target": "company", "reason": "загуба от връщане"})
+        assert r.status_code == 200, r.text
+        prop = r.json()["difference_accepted"]["proposals"][-1]
+        r = await c.post("/api/finance/credit-notes/%s/difference-proposals/%s/approve" % (n["id"], prop["id"]),
+                         headers=hdr("owner-a"), json={})
         assert r.status_code == 200, r.text
         block = await ic.company_losses_block(tenant)
         assert block["amount"] == 5.0
@@ -1575,6 +1581,124 @@ def test_fg277_fg276_fg278_resolve_reverse_and_scope_of_an_accepted_difference(m
         assert r.json()["total"] == 7.0
         ov = (await c.get("/api/org/pnl-overview", headers=hdr("owner-a"))).json()
         assert ov["totals"]["final_profit"] == round(ov["totals"]["profit"] - 12.0, 2)
+    run(monkeypatch, mode, scenario)
+
+
+def test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner(monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services import invoice_corrections as ic
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        bill = await sent(c, direction="Received", project="prj-1")
+        for lid in ("il-63p", "il-63d"):
+            row = {"id": lid, "org_id": ORG_A, "invoice_id": bill["id"], "description": lid,
+                   "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+                   "created_at": "2026-10-02T08:00:00+00:00"}
+            if lid == "il-63p":
+                row["allocations"] = [{"type": "project", "ref_id": "prj-1", "qty": 10}]
+            await op.invoice_lines.insert_one(row)
+        await op.warehouse_transactions.insert_one({                # il-63d: direct delivery to prj-2
+            "id": "wt-63", "org_id": ORG_A, "action": "receive_from_supplier_to_project", "movement_id": "mv-63",
+            "invoice_id": bill["id"], "invoice_line_id": "il-63d", "qty": 10, "project_id": "prj-2",
+            "destination": {"location_type": "project", "location_id": "prj-2"}})
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_63", "org_id": ORG_A, "invoice_id": bill["id"], "amount": 72.0, "status": "open",
+            "created_at": "2026-10-05T08:00:00+00:00", "dq_task": {"status": "open"}})
+        n = (await note(c, bill, number="CN-63", expected_credit_note_ids=["ecn_63"],
+                        lines=[{"original_line_id": "il-63p", "amount": 25.0},
+                               {"original_line_id": "il-63d", "amount": 25.0}])).json()
+        base = "/api/finance/credit-notes/%s" % n["id"]
+        assert (await c.post(base + "/accept-difference", headers=hdr("owner-a"),
+                             json={"reason": "доставчикът не коригира"})).status_code == 200
+        assert (await c.post(base + "/reverse-difference", headers=hdr("owner-a"),
+                             json={"reason": "грешно разнесено"})).status_code == 200
+
+        async def postings():
+            return (await op.credit_debit_notes.find_one({"id": n["id"]}))["difference_accepted"]["postings"]
+
+        # SAME destination as the reversed booking → applied at once (allocation line: back to
+        # its own allocation; direct delivery: the same project)
+        r = await c.post(base + "/difference-lines/il-63p/resolve", headers=hdr("acct-a"),
+                         json={"target": "project", "reason": "обратно на обекта"})
+        assert r.status_code == 200, r.text
+        assert ic.booked_by_line(await postings())["il-63p"] == ic.cents(5)
+        # ANOTHER destination (company) → a proposal only; nothing booked; the line is locked
+        before = await postings()
+        r = await c.post(base + "/difference-lines/il-63d/resolve", headers=hdr("acct-a"),
+                         json={"target": "company", "reason": "загуба от връщане"})
+        assert r.status_code == 200, r.text
+        prop = r.json()["difference_accepted"]["proposals"][-1]
+        assert (prop["target"], prop["by"], prop["why_approval"]) == ("company", "acct-a", "other_destination")
+        assert await postings() == before
+        assert (await c.post(base + "/difference-lines/il-63d/resolve", headers=hdr("acct-a"),
+                             json={"target": "project", "project_id": "prj-2", "reason": "r"})).status_code == 409
+        approve = base + "/difference-proposals/%s/approve" % prop["id"]
+        nokey = {k: v for k, v in hdr("owner-a").items() if k != "Idempotency-Key"}
+        assert (await c.post(approve, headers=nokey, json={})).status_code == 428
+        assert (await c.post(approve, headers=hdr("acct-a"), json={})).status_code == 403     # not an Owner
+        assert (await c.post(approve, headers=hdr("admin-a"), json={})).status_code == 403
+        assert (await c.post(approve, headers=hdr("owner-b"), json={})).status_code == 404    # other tenant
+        # the proposer withdraws; the OWNER proposes himself → he cannot approve (two people)
+        r = await c.post(base + "/difference-proposals/%s/reject" % prop["id"], headers=hdr("acct-a"),
+                         json={"reason": "оттеглям"})
+        assert r.status_code == 200, r.text
+        r = await c.post(base + "/difference-lines/il-63d/resolve", headers=hdr("owner-a"),
+                         json={"target": "company", "reason": "загуба от връщане"})
+        prop2 = r.json()["difference_accepted"]["proposals"][-1]
+        approve2 = base + "/difference-proposals/%s/approve" % prop2["id"]
+        r = await c.post(approve2, headers=hdr("owner-a"), json={})
+        assert r.status_code == 403 and code(r) == "SAME_PERSON_APPROVAL", r.text
+        r = await c.post(approve2, headers=hdr("owner2-a"), json={"reason": "одобрявам"})
+        assert r.status_code == 200, r.text
+        assert (await c.post(approve2, headers=hdr("owner2-a"), json={})).status_code == 409   # decided
+        assert (await ic.company_losses_block(tenant))["amount"] == 5.0
+        last = (await postings())[-1]
+        assert (last["original_line_id"], last["target"], last["basis"]) == (
+            "il-63d", "company", "rebooking_approved_by_owner")
+        assert await op.dq_issues.count_documents({"kind": "accepted_difference_line_reversed",
+                                                   "status": "open"}) == 0
+        for action in ("proposed", "approved", "rejected"):
+            assert await op.audit_events.find_one(
+                {"action": "finance.credit_note.difference_rebooking_" + action}), action
+        # the SAME project, but now Completed → the Owner approves as well
+        assert (await c.post(base + "/reverse-difference", headers=hdr("owner-a"),
+                             json={"reason": "пак грешно"})).status_code == 200
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"status": "Completed"}})
+        r = await c.post(base + "/difference-lines/il-63p/resolve", headers=hdr("acct-a"),
+                         json={"target": "project", "project_id": "prj-1", "reason": "обратно"})
+        prop3 = r.json()["difference_accepted"]["proposals"][-1]
+        assert prop3["why_approval"] == "other_destination"        # explicit id ≠ the allocation
+        r = await c.post(base + "/difference-lines/il-63d/resolve", headers=hdr("acct-a"),
+                         json={"target": "company", "reason": "пак загуба"})
+        assert r.json()["difference_accepted"]["proposals"][-1]["why_approval"] == "other_destination"
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg278_every_company_result_reader_uses_one_project_status_scope(monkeypatch, mode):
+    async def scenario(c, op):
+        import importlib
+        from tests.test_warehouse_canonical_c22_all_reports_cutover import _DB_MODULES
+        for name in set(_DB_MODULES) | {"app.services.pnl_aggregator", "app.services.project_pnl",
+                                        "app.permissions.money_write", "app.routes.project_pnl"}:
+            module = importlib.import_module(name)
+            if hasattr(module, "db"):
+                monkeypatch.setattr(module, "db", op)
+        # a Completed project with a cost of its own → a −100.00 result
+        await op.projects.insert_one({"id": "prj-done", "org_id": ORG_A, "code": "DONE", "name": "Done",
+                                      "status": "Completed"})
+        bill = await sent(c, direction="Received", project="prj-done")
+        await op.invoice_lines.insert_one({
+            "id": "il-done", "org_id": ORG_A, "invoice_id": bill["id"], "description": "Лепило",
+            "qty": 10, "unit_price": 10, "line_total_ex_vat": 100.0, "vat_amount": 20.0,
+            "created_at": "2026-10-02T08:00:00+00:00",
+            "allocations": [{"type": "project", "ref_id": "prj-done", "qty": 10}]})
+        att = (await c.get("/api/org/pnl-attribution", headers=hdr("owner-a"))).json()
+        ov = (await c.get("/api/org/pnl-overview", headers=hdr("owner-a"))).json()
+        assert "prj-done" in [p["id"] for p in ov["projects"]]
+        assert att["scope"] == ov["scope"] == {"projects": "all", "project_statuses": "all"}
+        for k in ("revenue", "expense", "profit", "company_losses", "final_profit"):
+            assert att["totals"][k] == ov["totals"][k], k
+        assert att["company_losses"] == ov["company_losses"]
     run(monkeypatch, mode, scenario)
 
 

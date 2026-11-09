@@ -82,13 +82,30 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
     }
 
 
+def company_result_project_filter(org_id: str) -> dict:
+    """FG-278 (09.11): THE one project scope of every company-result reader
+    (/org/pnl-attribution, /org/pnl-overview): EVERY project of the org — each on its own
+    P&L (``compute_project_pnl`` counts only that project's records, so a subproject is
+    counted once, never inside its parent) — of EVERY status: a Completed (archived,
+    cancelled …) project's result is part of the company result (FLOW-015: archived
+    projects stay in the historical reports). One scope, so the project sums, the company
+    losses and final_profit agree between the readers."""
+    return {"org_id": org_id}
+
+
+COMPANY_RESULT_SCOPE = {"projects": "all", "project_statuses": "all"}
+COMPANY_RESULT_PROJECT_LIMIT = 500
+
+
+async def company_result_projects(tenant, org_id: str, fields: dict) -> list:
+    return await tenant.projects.find(company_result_project_filter(org_id), fields).to_list(
+        COMPANY_RESULT_PROJECT_LIMIT)
+
+
 async def compute_org_profit_attribution(org_id: str) -> dict:
     """Identifies WHY org is in profit/loss — top contributors and detractors."""
     tenant = TenantData.for_resolved_org(db, org_id)
-    projects = await tenant.projects.find(
-        {"org_id": org_id, "parent_project_id": {"$in": [None, ""]}},
-        {"_id": 0, "id": 1, "name": 1, "code": 1},
-    ).to_list(200)
+    projects = await company_result_projects(tenant, org_id, {"_id": 0, "id": 1, "name": 1, "code": 1})
 
     project_pnls = []
     total_labor = total_materials = total_overhead = total_subcontractor = 0
@@ -141,6 +158,7 @@ async def compute_org_profit_attribution(org_id: str) -> dict:
             "final_profit": round(total_profit - company_losses, 2),
         },
         "company_losses": losses,
+        "scope": COMPANY_RESULT_SCOPE,
         "top_winners": winners,
         "top_losers": losers,
         "expense_breakdown": {
