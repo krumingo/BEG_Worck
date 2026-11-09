@@ -493,6 +493,12 @@ async def approve_quantity(data: QuantityApprovalInput, user: dict = Depends(get
         }
         await ensure_labor_indexes(db)
         await _insert_decision(tenant.labor_quantity_approvals, rec)
+        if prev:
+            # R77 (FG-507): a corrected quantity flags the approved manual akord rows of the
+            # replaced approval, with the new quantity as the proposal
+            from app.services.labor_cost import flag_rows_of_changed_quantities
+            await flag_rows_of_changed_quantities(tenant, org_id, [p["id"] for p in prev], user["id"],
+                                                  "corrected (re-approved)", replacement=rec)
         await _audit(user, action="labor_quantity.corrected" if prev else "labor_quantity.approved",
                      entity_type="labor_quantity_approval", entity_id=rec["id"], version=line["report_version"],
                      before={"approved_quantity": prev[-1].get("approved_quantity")} if prev else None,

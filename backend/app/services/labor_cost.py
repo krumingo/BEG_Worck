@@ -455,6 +455,64 @@ async def load_smr_terms(tenant: TenantData, org_id: str, lines) -> dict:
     return {"packages": packages, "quantities": quantities, "classifications": classifications}
 
 
+R77_FLAG = "изисква корекция"
+
+
+async def flag_rows_of_changed_quantities(tenant: TenantData, org_id: str, approval_ids, actor_id: str,
+                                          reason: str, replacement: dict = None, session=None) -> int:
+    """R77 (Krum, canon 9b9ede8b; FG-507): a LAB-02 approved quantity that an APPROVED manual
+    akord row used was corrected or voided. The row is NOT changed and keeps counting at its
+    old amount (with a visible DQ warning); it is flagged "изисква корекция" with the
+    correction recorded and a proposal — reverse it and enter a new row at the new quantity,
+    approved by a second person (R66). Each flag writes an AuditEvent and raises an alarm."""
+    from datetime import datetime, timezone
+    import uuid as _uuid
+    from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
+    from app.audit.store import record_event
+    ids = [a for a in (approval_ids or []) if a]
+    if not ids:
+        return 0
+    rows = await tenant.labor_entries.find(
+        {"org_id": org_id, "quantity_approval_id": {"$in": ids}, "approval_status": MANUAL_APPROVED,
+         "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}, {"_id": 0},
+        session=session).to_list(500)
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        proposal = {"action": "reverse_and_reenter", "approved_by_second_person": True,
+                    "replacement_approval_id": None, "quantity": None, "piece_rate": None, "labor_cost": None}
+        if replacement and replacement.get("status") == "approved":
+            q = float(replacement.get("approved_quantity") or 0)
+            rate = float(replacement.get("piece_rate") or 0)
+            proposal.update({"replacement_approval_id": replacement.get("id"), "quantity": q,
+                             "piece_rate": rate, "labor_cost": round(q * rate, 2)})
+        flag = {"status": R77_FLAG, "at": now, "by": actor_id, "reason": reason,
+                "changed_approval_id": row.get("quantity_approval_id"),
+                "old": {"quantity": row.get("quantity"), "piece_rate": row.get("piece_rate"),
+                        "labor_cost": row.get("labor_cost")},
+                "proposal": proposal}
+        await tenant.labor_entries.update_one(
+            {"org_id": org_id, "id": row["id"]}, {"$set": {"correction_required": flag}}, session=session)
+        await record_event(db, build_event(
+            tenant_id=org_id, actor_type="human", actor_id=actor_id,
+            action="labor.manual_entry.correction_required", source_flow="FLOW-028",
+            retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="labor_entry",
+            entity_id=row["id"], entity_version=str(row.get("version") or 1),
+            structured_diff={"before": None, "after": {"correction_required": flag}},
+            reason="R77: the LAB-02 approved quantity of this row was " + reason,
+            tool_or_endpoint="labor_quantity_approvals (void / correction)"), session=session)
+        await tenant.alarm_events.insert_one({
+            "id": str(_uuid.uuid4()), "org_id": org_id, "rule_id": None,
+            "rule_name": "Ръчен труд — изисква корекция", "severity": "warning",
+            "type": "labor_correction_required", "site_id": row.get("project_id"),
+            "triggered_at": now, "status": "active",
+            "message": "Одобреното количество на ръчен акордов ред е променено — сторно и нов ред (втори човек)",
+            "context": {"entity_type": "labor_entry", "entity_id": row["id"],
+                        "changed_approval_id": row.get("quantity_approval_id")},
+            "acknowledged_by": None, "acknowledged_at": None, "resolved_by": None,
+            "resolved_at": None, "resolve_notes": None}, session=session)
+    return len(rows)
+
+
 async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
                                actor_id: str, reason: str,
                                collection: str = "employee_daily_reports", bump: bool = True,
@@ -466,10 +524,15 @@ async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
     if bump:  # LAB-01-M: a reset bumps the version inside its own compare-and-set
         await tenant.collection(collection).update_one(
             {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}}, session=session)
+    voided = [a["id"] for a in await tenant.labor_quantity_approvals.find(
+        {"org_id": org_id, "report_id": report_id, "status": "approved"}, {"_id": 0, "id": 1},
+        session=session).to_list(500)]
     res = await tenant.labor_quantity_approvals.update_many(
         {"org_id": org_id, "report_id": report_id, "status": "approved"},
         {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
         session=session)
+    # R77 (FG-507): an APPROVED manual akord row priced from a voided quantity is flagged
+    await flag_rows_of_changed_quantities(tenant, org_id, voided, actor_id, reason, session=session)
     # LAB-02: the approver's DOWNTIME classification of the old version is void as well
     await tenant.labor_line_classifications.update_many(
         {"org_id": org_id, "report_id": report_id, "status": "active"},
@@ -688,6 +751,16 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
     by_name = {}
     for p in pkgs.values():
         by_name.setdefault((p.get("activity_name") or "").lower().strip(), []).append(p)
+    # FG-508: the quantity approvals behind manual akord rows, to flag self-approved ones
+    self_qty = set()
+    qa_ids = sorted({r.get("quantity_approval_id") for r in manual if r.get("quantity_approval_id")})
+    if qa_ids:
+        by_row = {r.get("quantity_approval_id"): r for r in manual if r.get("quantity_approval_id")}
+        for a in await tenant.labor_quantity_approvals.find(
+                {"org_id": org_id, "id": {"$in": qa_ids}}, {"_id": 0, "id": 1, "approved_by": 1}).to_list(len(qa_ids)):
+            r = by_row.get(a["id"]) or {}
+            if a.get("approved_by") and a["approved_by"] in (r.get("employee_id"), r.get("created_by")):
+                self_qty.add(a["id"])
     for row in manual:
         cost = row.get("labor_cost")
         row_dq = [] if cost is not None else ["MANUAL_ROW_NO_COST"]
@@ -709,6 +782,17 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             dq.append({"code": "MANUAL_ROW_NON_ISO_DATE", "report_id": "manual:" + str(row.get("id")),
                        "date": row.get("date"), "normalized": normalize_labor_date(row.get("date")),
                        "message": "Ръчен ред с дата не във формат ГГГГ-ММ-ДД — коригирайте ръчно (сторно + нов ред)."})
+        if row.get("correction_required"):
+            # R77 (FG-507): still counted at its old amount until the correction is approved
+            row_dq.append("MANUAL_ROW_CORRECTION_REQUIRED")
+            dq.append({"code": "MANUAL_ROW_CORRECTION_REQUIRED", "report_id": "manual:" + str(row.get("id")),
+                       "status": R77_FLAG, "correction": row["correction_required"],
+                       "message": "Одобреното количество е променено — редът изисква корекция (сторно + нов ред, одобрен от втори човек); дотогава се брои старата сума."})
+        if row.get("quantity_approval_id") and row["quantity_approval_id"] in self_qty:
+            # FG-508 (R66): an old row whose quantity was approved by its worker or creator
+            row_dq.append("MANUAL_AKORD_SELF_APPROVED_QUANTITY")
+            dq.append({"code": "MANUAL_AKORD_SELF_APPROVED_QUANTITY", "report_id": "manual:" + str(row.get("id")),
+                       "message": "Количеството на акордовия ред е одобрено от работника или от въвеждащия — нужна е проверка (R66)."})
         role = {"Owner": "Собственика", "Accountant": "Счетоводителя"}.get(
             row.get("approved_by_role") or "", row.get("approved_by_role") or "одобряващия")
         rec = {"report_id": "manual:" + str(row.get("id")), "worker_id": row.get("employee_id"),

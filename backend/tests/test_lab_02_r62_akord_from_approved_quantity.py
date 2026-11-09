@@ -80,11 +80,133 @@ def test_one_approved_quantity_backs_one_live_row_and_a_voided_one_is_not_approv
         assert r.status_code == 201, r.text
         rid = r.json()["id"]
         r2 = await c.post("/api/labor-entries", json=_body(quantity_approval_id="qa-1", date="2026-11-12"),
-                          headers=_key("owner"))
+                          headers=_key("acct"))          # not the quantity's approver (FG-508)
         assert r2.status_code == 409 and r2.json()["detail"]["code"] == "APPROVED_QUANTITY_IN_USE", r2.text
         # LAB-02 voids the approval (a re-approval) — the manual row can no longer be approved
         await op.labor_quantity_approvals.update_one({"id": "qa-1"}, {"$set": {"status": "void"}})
         r = await c.post(f"/api/labor-entries/{rid}/approve", json=_decision(cost=60.0), headers=_key("owner"))
         assert r.status_code == 409 and r.json()["detail"]["code"] == "APPROVED_QUANTITY_VOID", r.text
         assert (await op.labor_entries.find_one({"id": rid}))["approval_status"] == "pending"
+    run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 41: FG-508 (R66), FG-507 (R77)
+
+@pytest.mark.parametrize("approver,creator", [("w1", "admin"), ("admin", "admin")])
+def test_fg508_a_quantity_approved_by_the_worker_or_the_creator_is_refused(monkeypatch, approver, creator):
+    async def scenario(c, op):
+        await _akord_setup(op, approved_by=approver)
+        r = await c.post("/api/labor-entries", json=_body(quantity_approval_id="qa-1"), headers=_key(creator))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "SELF_APPROVED_QUANTITY", r.text
+        assert await op.labor_entries.count_documents({"quantity_approval_id": "qa-1"}) == 0
+    run(monkeypatch, scenario)
+
+
+def test_fg508_old_rows_with_a_self_approved_quantity_are_not_approved_and_are_flagged(monkeypatch):
+    from app.services.labor_cost import project_labor_cost
+
+    async def scenario(c, op):
+        await _akord_setup(op, approved_by="admin")
+        base = {"org_id": ORG, "project_id": P, "employee_id": "w1", "execution_package_id": AK_PKG,
+                "hours": 8, "pay_type": "Akord", "quantity": 12.0, "piece_rate": 5.0, "labor_cost": 60.0,
+                "quantity_approval_id": "qa-1", "source": "manual", "created_by": "admin", "version": 1,
+                "reversed_by_entry_id": None}
+        await op.labor_entries.insert_one(dict(base, id="old-p", date=AK_DAY, approval_status="pending"))
+        r = await c.post("/api/labor-entries/old-p/approve", json=_decision(cost=60.0), headers=_key("owner"))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "SELF_APPROVED_QUANTITY", r.text
+        await op.labor_entries.insert_one(dict(base, id="old-a", date="2026-11-11", approval_status="approved",
+                                               approved_by="owner", approved_by_role="Owner"))
+        lc = await project_labor_cost(ORG, P)
+        rec = [x for x in lc["lines"] if x.get("manual_entry_id") == "old-a"][0]
+        assert "MANUAL_AKORD_SELF_APPROVED_QUANTITY" in rec["dq"] and rec["amount"] == 60.0   # flagged, not hidden
+    run(monkeypatch, scenario)
+
+
+async def _approved_akord_row(c, op):
+    await _akord_setup(op)
+    r = await c.post("/api/labor-entries", json=_body(quantity_approval_id="qa-1"), headers=_key("admin"))
+    assert r.status_code == 201, r.text
+    rid = r.json()["id"]
+    r = await c.post(f"/api/labor-entries/{rid}/approve", json=_decision(cost=60.0), headers=_key("owner"))
+    assert r.status_code == 200, r.text
+    return rid
+
+
+def test_r77_a_voided_quantity_flags_the_row_which_still_counts_with_a_warning(monkeypatch):
+    from app.services.labor_cost import project_labor_cost, void_labor_approvals
+    from app.tenancy.data_access import TenantData
+
+    async def scenario(c, op):
+        rid = await _approved_akord_row(c, op)
+        tenant = TenantData.for_resolved_org(op, ORG)
+        await void_labor_approvals(tenant, ORG, "R-Q", "sm", "report_corrected")
+        row = await op.labor_entries.find_one({"id": rid})
+        flag = row["correction_required"]
+        assert flag["status"] == "изисква корекция" and flag["changed_approval_id"] == "qa-1"
+        assert flag["old"] == {"quantity": 12.0, "piece_rate": 5.0, "labor_cost": 60.0}
+        assert flag["proposal"]["action"] == "reverse_and_reenter" and flag["proposal"]["approved_by_second_person"]
+        assert (row["approval_status"], row["labor_cost"]) == ("approved", 60.0)      # unchanged
+        ev = await op.audit_events.find_one({"entity_id": rid, "action": "labor.manual_entry.correction_required"})
+        assert ev and ev["actor_id"] == "sm"
+        al = await op.alarm_events.find_one({"type": "labor_correction_required", "context.entity_id": rid})
+        assert al and al["status"] == "active" and al["site_id"] == P
+        lc = await project_labor_cost(ORG, P)
+        rec = [x for x in lc["lines"] if x.get("manual_entry_id") == rid][0]
+        assert rec["amount"] == 60.0 and "MANUAL_ROW_CORRECTION_REQUIRED" in rec["dq"]   # old amount + warning
+        assert any(w["code"] == "MANUAL_ROW_CORRECTION_REQUIRED" for w in lc["dq_warnings"])
+    run(monkeypatch, scenario)
+
+
+def test_r77_a_corrected_quantity_proposes_the_new_amount_and_the_fix_needs_a_second_person(monkeypatch):
+    from app.services.labor_cost import flag_rows_of_changed_quantities, project_labor_cost
+    from app.tenancy.data_access import TenantData
+
+    async def scenario(c, op):
+        rid = await _approved_akord_row(c, op)
+        tenant = TenantData.for_resolved_org(op, ORG)
+        # LAB-02 re-approval: qa-1 void, qa-2 approved at 10 (the route calls this with the new record)
+        await op.labor_quantity_approvals.update_one({"id": "qa-1"}, {"$set": {"status": "void"}})
+        qa2 = {"id": "qa-2", "org_id": ORG, "report_id": "R-Q", "entry_id": None, "report_version": 1,
+               "worker_id": "w1", "project_id": P, "date": AK_DAY, "approved_quantity": 10.0,
+               "execution_package_id": AK_PKG, "labor_pay_type": "Akord", "piece_rate": 5.0,
+               "labor_terms_version": 3, "status": "approved", "approved_by": "owner", "replaces": ["qa-1"]}
+        await op.labor_quantity_approvals.insert_one(dict(qa2))
+        assert await flag_rows_of_changed_quantities(tenant, ORG, ["qa-1"], "owner", "corrected (re-approved)",
+                                                     replacement=qa2) == 1
+        prop = (await op.labor_entries.find_one({"id": rid}))["correction_required"]["proposal"]
+        assert (prop["replacement_approval_id"], prop["quantity"], prop["labor_cost"]) == ("qa-2", 10.0, 50.0)
+        # the fix: reverse the old row (resolves the alarm), enter the new one, a second person approves
+        r = await c.post(f"/api/labor-entries/{rid}/reverse", json=_decision(version=2, cost=60.0, reason="R77"),
+                         headers=_key("owner"))
+        assert r.status_code == 200, r.text
+        al = await op.alarm_events.find_one({"type": "labor_correction_required", "context.entity_id": rid})
+        assert al["status"] == "resolved"
+        r = await c.post("/api/labor-entries", json=_body(quantity_approval_id="qa-2", corrects_entry_id=rid),
+                         headers=_key("admin"))
+        assert r.status_code == 201, r.text
+        new = r.json()
+        assert (new["quantity"], new["labor_cost"], new["corrects_entry_id"]) == (10.0, 50.0, rid)
+        r = await c.post(f"/api/labor-entries/{new['id']}/approve", json=_decision(cost=50.0), headers=_key("admin"))
+        assert r.status_code == 403, r.text                          # forbidden: the creator (R66)
+        r = await c.post(f"/api/labor-entries/{new['id']}/approve", json=_decision(cost=50.0), headers=_key("acct"))
+        assert r.status_code == 200, r.text                          # a second person
+        lc = await project_labor_cost(ORG, P)
+        mine = [x for x in lc["lines"] if x.get("manual_entry_id") in (rid, new["id"])]
+        assert [x["amount"] for x in mine] == [50.0], mine           # the old row stopped counting
+    run(monkeypatch, scenario)
+
+
+def test_r77_only_approved_rows_of_the_changed_quantity_are_flagged(monkeypatch):
+    from app.services.labor_cost import flag_rows_of_changed_quantities
+    from app.tenancy.data_access import TenantData
+
+    async def scenario(c, op):
+        await _akord_setup(op)
+        r = await c.post("/api/labor-entries", json=_body(quantity_approval_id="qa-1"), headers=_key("admin"))
+        rid = r.json()["id"]                                          # pending — not counted yet
+        tenant = TenantData.for_resolved_org(op, ORG)
+        assert await flag_rows_of_changed_quantities(tenant, ORG, ["qa-1"], "sm", "voided") == 0
+        assert "correction_required" not in await op.labor_entries.find_one({"id": rid})
+        assert await op.alarm_events.count_documents({"type": "labor_correction_required"}) == 0
+        assert await flag_rows_of_changed_quantities(tenant, ORG, ["qa-other"], "sm", "voided") == 0
     run(monkeypatch, scenario)

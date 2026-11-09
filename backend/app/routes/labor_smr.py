@@ -124,7 +124,8 @@ async def create_labor_entry(
     entry.update(await _manual_row_pricing(tenant, org_id, entry["employee_id"],
                                            entry["execution_package_id"], hours, data.get("quantity"),
                                            approval_id=(data.get("quantity_approval_id") or "").strip() or None,
-                                           project_id=entry["project_id"], date=entry["date"]))
+                                           project_id=entry["project_id"], date=entry["date"],
+                                           creator_id=user["id"]))
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
     # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
     # a replay shows them to a caller without the finance right (an R16 member).
@@ -218,7 +219,7 @@ MANUAL_REVERSED = "reversed"
 
 async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hours: float,
                               quantity, approval_id: Optional[str] = None, project_id=None,
-                              date=None) -> dict:
+                              date=None, creator_id: Optional[str] = None) -> dict:
     """FG-423: the R62 price of a manual row — the package's pay type first, then the
     profile's; akord = quantity × the package's piece rate (never hours × rate)."""
     pkg = None
@@ -243,6 +244,11 @@ async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hou
             raise HTTPException(status_code=422, detail={
                 "code": "AKORD_APPROVAL_MISMATCH",
                 "message": "Одобреното количество трябва да е на същия работник, СМР пакет, обект и ден"})
+        if appr.get("approved_by") in {employee_id, creator_id}:
+            # FG-508 (R66): the quantity was approved by the worker or by the row's creator
+            raise HTTPException(status_code=409, detail={
+                "code": "SELF_APPROVED_QUANTITY",
+                "message": "Количеството е одобрено от работника или от въвеждащия реда — нужно е одобрение от втори човек"})
         piece = appr.get("piece_rate")
         if appr.get("labor_pay_type") != "Akord" or not piece or float(piece) <= 0:
             raise HTTPException(status_code=422, detail=(
@@ -421,11 +427,19 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
             code = "ALREADY_APPROVED" if row.get("approval_status") == MANUAL_APPROVED and kind == "approve" else "INVALID_STATE"
             raise HTTPException(status_code=409, detail={
                 "code": code, "message": f"Редът е „{row.get('approval_status') or MANUAL_PENDING}“ — не може да бъде {kind}"})
-        if kind == "approve" and row.get("quantity_approval_id") and not await tenant.labor_quantity_approvals.find_one(
-                {"org_id": org_id, "id": row["quantity_approval_id"], "status": "approved"}, {"_id": 0, "id": 1}):
-            raise HTTPException(status_code=409, detail={
-                "code": "APPROVED_QUANTITY_VOID",
-                "message": "Одобреното количество на реда вече не е активно — сторнирайте и въведете нов ред"})
+        if kind == "approve" and row.get("quantity_approval_id"):
+            qa = await tenant.labor_quantity_approvals.find_one(
+                {"org_id": org_id, "id": row["quantity_approval_id"], "status": "approved"},
+                {"_id": 0, "id": 1, "approved_by": 1})
+            if not qa:
+                raise HTTPException(status_code=409, detail={
+                    "code": "APPROVED_QUANTITY_VOID",
+                    "message": "Одобреното количество на реда вече не е активно — сторнирайте и въведете нов ред"})
+            if qa.get("approved_by") in {row.get("employee_id"), row.get("created_by")}:
+                # FG-508 (R66), also for a row entered before the rule
+                raise HTTPException(status_code=409, detail={
+                    "code": "SELF_APPROVED_QUANTITY",
+                    "message": "Количеството е одобрено от работника или от въвеждащия реда — нужно е одобрение от втори човек"})
         if kind == "approve" and await _approved_report_hours_exist(
                 org_id, row.get("project_id"), row.get("employee_id"), row.get("date")):
             raise HTTPException(status_code=409, detail={
@@ -484,6 +498,12 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
                 await tenant.labor_entries.update_one(
                     {"org_id": org_id, "id": entry_id},
                     {"$set": {"reversed_by_entry_id": reversal_id, "reversed_at": now}}, session=session)
+                # R77: the correction is under way — its alarm is resolved
+                await tenant.alarm_events.update_many(
+                    {"org_id": org_id, "type": "labor_correction_required", "status": "active",
+                     "context.entity_id": entry_id},
+                    {"$set": {"status": "resolved", "resolved_at": now, "resolved_by": user["id"],
+                              "resolve_notes": "R77: reversed — " + reason}}, session=session)
             event = build_event(
                 tenant_id=org_id, actor_type="human", actor_id=user["id"],
                 action=f"labor.manual_entry.{ {'approve': 'approved', 'reject': 'rejected', 'reverse': 'reversed'}[kind] }",
