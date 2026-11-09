@@ -6191,3 +6191,65 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | A2C / A1 | 0/247, 0/498 |
 | **warehouse** | **44 / 1121** |
 | wh_fix_01 a3_r44 | 138 |
+
+## 2026-11-09 11:50 UTC: #89 OFF-02 `7cfeae5` (FG-472): PASS, no blocking finding
+
+- **FG-472:** `PUT /offer-budgets` requires the R67 finance write first and writes the rows + one AuditEvent in one transaction. `GET` has an explicit non-finance allow-list view. The router is not mounted in `server.py`.
+
+| Gate | Result |
+|---|---|
+| off_02 | 28 |
+| off_01 | 90 |
+| off_01 audit probe | 147 |
+| probe off01 | 675 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/242, 0/488 |
+| **warehouse** | **44 / 1121** |
+
+## 2026-11-09 12:00 UTC: #73 LAB-01-T `8b72647` / `55d23f6`: FAIL, LAB73-M4 (evidence)
+
+- **Fixed:**
+  - LAB73-M3: `labor_day_locks` is classified; A2C 0, A1 0; W0 = main's 16.
+  - LAB73-M2 (b): the lock-tx insert goes through `mw.insert_once()`.
+- **LAB73-M4 (blocking, evidence / harness):**
+  - SEC-01 C01 / C02 `test_the_committed_evidence_satisfies_the_package` fail: `written_orgs ['A','None']`. On `8b72647` the fresh-run tests failed too.
+  - The committed `SEC-01-C01` / `-C02` results each have one such row: off / A / owner / P1 / `labor_create`, the first labor create of the run.
+  - Cause: the DDL (create collection + unique index of `labor_day_locks`) is logged in the oplog with no org. Reproduced in my own C01 harness run: 1 of 48 rows.
+  - `55d23f6` creates the index at startup, so the fresh runs pass, but the committed C01 / C02 evidence was not regenerated: 2 failed / 28.
+- **Green (`8b72647`):**
+
+| Gate | Result |
+|---|---|
+| lab_01* | 189 |
+| race probe | 20 |
+| SEC-02 | 31 |
+| PM-01 | 6 |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0 / 0 |
+
+## 2026-11-09 12:00 UTC: #83 CP-01 `f91b423`: PASS, no blocking finding
+
+- **CP83-M2 fixed:** f81_readers 132 / 132. The setup now registers and verifies the subcontractor; 0 assertion lines changed; 0 bytes in `backend/app` vs `a5176b2`.
+- **Re-run on this head:** a3_r44 138, post_55 47, PAY 630, SEC-01 30, sub_adv_01 9, cp_01 647 (+6). The rest from `a5176b2` stands.
+
+## 2026-11-09 12:00 UTC: #88 PWA-01 `131d945` (merge `bdf5e5a` of main `1525a1e` = merge-tree; R68 PostHog; FG-470): PASS, no blocking finding
+
+- **Backend:** byte-identical to main.
+
+| Check | Result |
+|---|---|
+| jest | 26 / 246 |
+| build | OK |
+| Playwright | 35 / 35 (Cache Storage: only `bw-shell-*`, 0 `/api` / `/uploads` / `/ws`) |
+| analytics-check, no key | 2 / 2 |
+| analytics-check, test key + posthog-js 1.200.0 served locally | 15 / 15 |
+
+- **PWA88-N1 (non-blocking, security):** the PostHog CDN loader is injected at runtime with no SRI or pinned version, into the origin that holds `bw_token` in localStorage. Prefer a lockfile-pinned npm build or a CSP.
+- **Note:** a short `REACT_APP_BUILD_SHA` gives build identity `unknown` (`build-info.js` needs 40 hex). That was my invocation, not a defect.
