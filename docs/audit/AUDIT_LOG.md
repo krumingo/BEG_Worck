@@ -5831,3 +5831,17 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
     - reject: Owner / Admin / Accountant 428, the rest 403;
     - nothing written, 3 modes.
 - **Queue (after disk cleanup):** #86 `8e8be48` → #84 `5242cba` → #73/#75 → #88. Still ~0.9 GB free.
+
+## 2026-11-09 06:26 UTC: periodic pass. #73 `8a02819`, #81 `61cef41`, #83 `a35417f`, NEW #89 `1b13d11` (all on main `44e8d97`); gates blocked by disk
+
+| PR | Merge | vs merge-tree | Role-union | PM-01 |
+|---|---|---|---|---|
+| #73 `8a02819` | `c3d5f8d8` (`5e3a152` + `44e8d97`) | **matrix.csv edited (6 rows)** + `run_meta` | 0 | **6 own cells differ** |
+| #81 `61cef41` | `f31fe92d` (`72e7e87` + `44e8d97`) | generated A1/SEC-02/`run_meta` | 0 | 48/48, 0 extra |
+| #83 `a35417f` | `2f64d708` (`dbadbf1` + `44e8d97`) | `subcontractors.py` import union (+ `Request`; `typing` kept) + generated files | 0 | 864/864, 0 extra |
+
+- **LAB73-M1 (blocking until fixed, evidence):** the merge hand-resolved `docs/evidence/PM-01/matrix.csv` and set `POST /api/pay-runs` Owner/Admin × 3 modes to main's **400**. LAB-01's code at the head still answers **428** (no Idempotency-Key, R29), and the committed matrix at `5e3a152` said 428. The committed evidence no longer matches the code, so PM-01 will fail. Fix: regenerate the matrix with the harness on the merge, never by hand.
+- **#73 R62** (`8a02819`: one labor cost per project in every reader; FG-340/FG-58/FG-390): 21 files, +2762/-340. Needs a full code review + gates; not done yet.
+- **#81** F-81-03 extended to SUB-ADV-01 advances. **#83** FG-290 (receipt must be a tenant file), FG-294 (invoice ЕГН masked + audited).
+- **NEW #89 `1b13d11`** (OFF-02, FG-350: offer write responses strip money for non-finance like the offer read): not reviewed yet.
+- **Gates for all of the above + #86 `8e8be48`, #84 `5242cba`, #75 `48ba662`, #88:** blocked by the disk (~0.9 GB free).
