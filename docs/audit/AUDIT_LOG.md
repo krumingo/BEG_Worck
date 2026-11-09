@@ -6253,3 +6253,47 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 
 - **PWA88-N1 (non-blocking, security):** the PostHog CDN loader is injected at runtime with no SRI or pinned version, into the origin that holds `bw_token` in localStorage. Prefer a lockfile-pinned npm build or a CSP.
 - **Note:** a short `REACT_APP_BUILD_SHA` gives build identity `unknown` (`build-info.js` needs 40 hex). That was my invocation, not a defect.
+
+## 2026-11-09 12:50 UTC: #83 CP-01 `4c8e922` (FLOW Guard pass 39): FAIL, 3 blocking
+
+- **CP83-M3:** main's `test_sub_adv_01::test_the_routes_check_the_role_before_any_read_and_take_the_key` (`:892`) fails. FG-481 puts the replay read before amount validation.
+- **CP83-M4:** PM-01 2 failed. The new `POST /companies/{id}/vat/reveal` and `/counterparties/{id}/vat/reveal` are not in the matrix (not regenerated).
+- **CP83-M5:** A2C 1 violation: `money_input.py:198`, a raw `db[audit_idempotency].find_one` with no literal tenant filter. W0 has 1 new failure (`a2c_static_guard`).
+- **Green:** probe 84, cp_01 662, SEC-01 30, SEC-02 31.
+- **`6709453`:** fixes CP83-M3 (validation → replay → guards; same key + another body → 409). Re-audit running.
+
+## 2026-11-09 12:50 UTC: #73 LAB-01-T `7c24452`: PASS, no blocking finding
+
+- **Closed:** LAB73-M2, M3, M4 and R1.
+- **`7c24452`:** `205c7d6` + regenerated SEC-01 / -C01 / -C02 / -C03 / SEC-02.
+
+| Gate | Result |
+|---|---|
+| lab_01* | 199 |
+| race probe | 20 |
+| probes lab01e / lab01f / lab01h | 4 / 5 / 3 |
+| SEC-01 | 30 |
+| SEC-02 | 31; regen 0 cells |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/244, 0/492 |
+| **warehouse** | **44 / 1121** |
+
+- **Base:** still main `44e8d97`. Onto `1525a1e` it conflicts only in generated files (A2B, PM-01 `run_meta`, SEC-01-C01 / C02 / C03, SEC-02); role-union 0. It needs a merge of main and regeneration.
+- `tests/test_work_sessions.py` is a live-server test, not run here.
+
+## 2026-11-09 12:50 UTC: #88 PWA-01 `62f898a`: PASS, no blocking finding
+
+- **PWA88-N1 closed:** `posthog-js` 1.200.0 is pinned and bundled (the `module.no-external` build, as a lazy chunk); `/decide` and remote config are off.
+
+| Check | Result |
+|---|---|
+| jest | 26 / 249 |
+| build | OK |
+| Playwright | 35 / 35 |
+| analytics-check, no key | 4 / 4 |
+| analytics-check, test key | 18 / 18 |
+
+- **Pre-existing D5:** `assets.emergent.sh` script in `index.html`. Krum's decision.
