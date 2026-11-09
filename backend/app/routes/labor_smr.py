@@ -122,7 +122,9 @@ async def create_labor_entry(
     # FG-423 (R62): priced as R62 prices labor — akord = quantity × the package's piece rate,
     # otherwise hours × the profile's hourly rate (no rate → no cost, never a default)
     entry.update(await _manual_row_pricing(tenant, org_id, entry["employee_id"],
-                                           entry["execution_package_id"], hours, data.get("quantity")))
+                                           entry["execution_package_id"], hours, data.get("quantity"),
+                                           approval_id=(data.get("quantity_approval_id") or "").strip() or None,
+                                           project_id=entry["project_id"], date=entry["date"]))
     mw = await MoneyWrite.begin(user, "labor.entry.create", idempotency_key, data)
     # SEC-01-C03-B (FG-15): the stored row keeps the rate and cost; neither the response nor
     # a replay shows them to a caller without the finance right (an R16 member).
@@ -215,7 +217,8 @@ MANUAL_REVERSED = "reversed"
 
 
 async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hours: float,
-                              quantity) -> dict:
+                              quantity, approval_id: Optional[str] = None, project_id=None,
+                              date=None) -> dict:
     """FG-423: the R62 price of a manual row — the package's pay type first, then the
     profile's; akord = quantity × the package's piece rate (never hours × rate)."""
     pkg = None
@@ -225,21 +228,43 @@ async def _manual_row_pricing(tenant, org_id: str, employee_id: str, pkg_id, hou
         {"org_id": org_id, "user_id": employee_id}, {"_id": 0}) or {}
     pay_type = (pkg or {}).get("labor_pay_type") or profile.get("pay_type") or "Hourly"
     if pay_type == "Akord":
-        # R62 + R33 (FLOW Guard): the akord quantity is the LAB-02 APPROVED quantity — never a
-        # second quantity typed into a manual row. This branch has no LAB-02 approval source,
-        # so a manual akord row is refused (LAB-02, #75, links the approved quantity).
-        raise HTTPException(status_code=422, detail={
-            "code": "AKORD_NEEDS_APPROVED_QUANTITY",
-            "message": "Акордният ред се остойностява само от одобрено количество (LAB-02) — ръчно въведено количество не се приема"})
-        q = money_value(quantity, "quantity", places=None)        # finite > 0, else 422
-        piece = (pkg or {}).get("labor_piece_rate")
-        if not piece or float(piece) <= 0:
+        # R62 + R33 (FLOW Guard): the akord quantity is the LAB-02 APPROVED quantity of that
+        # worker, package and day (labor_quantity_approvals, status approved) — never a second,
+        # typed quantity. quantity × the piece rate snapshotted in that approval.
+        if not approval_id:
+            raise HTTPException(status_code=422, detail={
+                "code": "AKORD_NEEDS_APPROVED_QUANTITY",
+                "message": "Акордният ред се остойностява само от одобрено количество (LAB-02) — посочете одобрението"})
+        appr = await tenant.labor_quantity_approvals.find_one(
+            {"org_id": org_id, "id": approval_id, "status": "approved"}, {"_id": 0})
+        if not appr or appr.get("worker_id") != employee_id or appr.get("execution_package_id") != pkg_id \
+                or appr.get("project_id") != project_id \
+                or normalize_labor_date(appr.get("date")) != normalize_labor_date(date):
+            raise HTTPException(status_code=422, detail={
+                "code": "AKORD_APPROVAL_MISMATCH",
+                "message": "Одобреното количество трябва да е на същия работник, СМР пакет, обект и ден"})
+        piece = appr.get("piece_rate")
+        if appr.get("labor_pay_type") != "Akord" or not piece or float(piece) <= 0:
             raise HTTPException(status_code=422, detail=(
-                "Акордният ред изисква СМР пакет с акордна цена — няма цена по подразбиране"))
+                "Одобрението няма акордна цена — няма цена по подразбиране"))
+        q = float(appr.get("approved_quantity") or 0)
+        if quantity not in (None, "") and money_value(quantity, "quantity", places=None) != q:
+            raise HTTPException(status_code=422, detail={
+                "code": "SECOND_QUANTITY",
+                "message": "Количеството е одобреното (LAB-02) — друго количество не се приема"})
+        live = await tenant.labor_entries.find_one(
+            {"org_id": org_id, "quantity_approval_id": approval_id,
+             "approval_status": {"$in": [MANUAL_PENDING, MANUAL_APPROVED]},
+             "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}, {"_id": 0, "id": 1})
+        if live:
+            raise HTTPException(status_code=409, detail={
+                "code": "APPROVED_QUANTITY_IN_USE", "entry_id": live["id"],
+                "message": "Това одобрено количество вече е в друг ръчен ред"})
         return {"pay_type": "Akord", "quantity": q, "piece_rate": float(piece),
-                "labor_terms_version": (pkg or {}).get("labor_terms_version") or 0,
+                "quantity_approval_id": approval_id,
+                "labor_terms_version": appr.get("labor_terms_version") or 0,
                 "hourly_rate": None, "labor_cost": round(q * float(piece), 2),
-                "labor_formula": f"{q} × {float(piece)} = {round(q * float(piece), 2)}"}
+                "labor_formula": f"{q} × {float(piece)} = {round(q * float(piece), 2)} (одобрено количество {approval_id})"}
     rate = profile.get("hourly_rate")
     cost = round(hours * float(rate), 2) if rate else None
     # an hourly row carries only its rate and cost (the akord fields belong to akord rows)
@@ -396,6 +421,11 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
             code = "ALREADY_APPROVED" if row.get("approval_status") == MANUAL_APPROVED and kind == "approve" else "INVALID_STATE"
             raise HTTPException(status_code=409, detail={
                 "code": code, "message": f"Редът е „{row.get('approval_status') or MANUAL_PENDING}“ — не може да бъде {kind}"})
+        if kind == "approve" and row.get("quantity_approval_id") and not await tenant.labor_quantity_approvals.find_one(
+                {"org_id": org_id, "id": row["quantity_approval_id"], "status": "approved"}, {"_id": 0, "id": 1}):
+            raise HTTPException(status_code=409, detail={
+                "code": "APPROVED_QUANTITY_VOID",
+                "message": "Одобреното количество на реда вече не е активно — сторнирайте и въведете нов ред"})
         if kind == "approve" and await _approved_report_hours_exist(
                 org_id, row.get("project_id"), row.get("employee_id"), row.get("date")):
             raise HTTPException(status_code=409, detail={
