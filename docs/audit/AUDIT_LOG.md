@@ -6341,3 +6341,47 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | **warehouse** | **44 / 1121** |
 
 - **Next:** it must re-merge #73 `af22870` (which contains main `1525a1e`) and regenerate the generated files.
+
+## 2026-11-09 14:50 UTC: #73 LAB-01 `af22870` → `749ccd6` → `d34d41b`: PASS, no blocking finding
+
+- **`af22870`:** merge of main `1525a1e`. = merge-tree except generated evidence; role-union 0. All gates green, warehouse 44 / 1121.
+- **`749ccd6` (pass 40):**
+  - FG-502: session writes answer with hours only.
+  - FG-500: manual-row dates normalised on read.
+  - A manual akord row is refused without a LAB-02 approved quantity. The code after that `raise` in `_manual_row_pricing` is dead (minor).
+- **`d34d41b`:** `749ccd6` + regenerated evidence.
+
+| Gate | Result |
+|---|---|
+| lab_01* | 201 |
+| probes lab01h / race / lab01e / lab01f | 3 / 20 / 4 / 5 |
+| SEC-01 | 30 |
+| SEC-02 | 31; regen 0 cells |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/245, 0/494 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 | 138 / 132 / 47 |
+
+- Contains main.
+
+## 2026-11-09 14:50 UTC: #83 CP-01 `83cc386` / `2415b5f` (pass 40): gates green
+
+| Gate | Result |
+|---|---|
+| probe | 84 |
+| cp_01 | 690 (+12) |
+| sub_adv_01 | 9 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | within main's 16 |
+| A2C / A1 | 0/247, 0/498 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 | 138 / 132 / 47 |
+
+- **`2415b5f`:** evidence only; SEC-01 / PM-01 re-check running.
