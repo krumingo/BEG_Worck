@@ -81,7 +81,9 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_PEOPLE,
               "users", "persons", "employee_profiles", "brigades", "attendance_entries",
               "work_sessions", "employee_daily_reports", "daily_work_logs", "work_reports",
-              "labor_entries", "labor_quantity_approvals", "reminder_logs", "notifications",
+              "labor_entries", "labor_quantity_approvals",
+              "labor_day_locks",   # LAB73-M3: R62 / FG-463 per (project, worker, day) lock, org_id
+              "reminder_logs", "notifications",
               "password_reset_tokens"),
     **_family(FAMILY_PARTIES,
               "companies", "clients", "counterparties", "subcontractors",
