@@ -342,6 +342,13 @@ R67_ROUTES = {
     ("POST", "/api/smr-analyses/{analysis_id}/to-offer"): "offers.offer_from_smr_analysis.create",
 }
 
+#: FG-472: app/routes/offer_budget.py is NOT mounted in server.py (no served route, no PM-01
+#: cell, no frontend caller). Its write is gated all the same (if it is ever mounted); checked
+#: on the router itself, not on the served app.
+UNMOUNTED_R67_ROUTES = {
+    ("PUT", "/offer-budgets/{offer_id}"): "offers.offer_budget.update",
+}
+
 
 def test_08_r67_every_offer_write_carries_its_action_first_and_only_finance_holds_them():
     """Static: each R67 route's FIRST dependency is require_money_write with its own action;
@@ -361,7 +368,19 @@ def test_08_r67_every_offer_write_carries_its_action_first_and_only_finance_hold
     assert set(found) == set(R67_ROUTES), sorted(set(R67_ROUTES) ^ set(found))
     for key, calls in found.items():
         assert getattr(calls[0], "sec01_action", None) == R67_ROUTES[key], key
-    assert set(R67_ROUTES.values()) == OFFER_WRITE_ACTIONS and OFFER_WRITE_ACTIONS <= ACTIONS
+    assert set(R67_ROUTES.values()) | set(UNMOUNTED_R67_ROUTES.values()) == OFFER_WRITE_ACTIONS
+    assert OFFER_WRITE_ACTIONS <= ACTIONS
+    from app.routes import offer_budget
+    assert not any(isinstance(r, APIRoute) and r.path.startswith("/api/offer-budgets")
+                   for r in server.app.routes)                              # still unmounted
+    for route in offer_budget.router.routes:
+        for method in route.methods:
+            if (method, route.path) in UNMOUNTED_R67_ROUTES:
+                first = route.dependant.dependencies[0].call
+                assert first.sec01_action == UNMOUNTED_R67_ROUTES[(method, route.path)]
+    get = next(r for r in offer_budget.router.routes if r.path == "/offer-budgets/{offer_id}"
+               and "GET" in r.methods)
+    assert getattr(get.endpoint, "sec02_strips_money", False)
     assert all(is_significant_action(a) for a in OFFER_WRITE_ACTIONS)     # denials audited
     holders = {rid for rid, acts in PERMISSION_MATRIX.items() if acts & OFFER_WRITE_ACTIONS}
     assert holders == {"owner", "admin", "accountant"}

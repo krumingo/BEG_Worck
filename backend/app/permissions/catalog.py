@@ -128,6 +128,7 @@ ACTIONS: Set[str] = {
     "offers.offer_from_missing_smr.create",     # POST /api/missing-smr/{item_id}/to-offer
     "offers.offer_from_missing_smr_batch.create", # POST /api/missing-smr/batch-to-offer
     "offers.offer_from_smr_analysis.create",    # POST /api/smr-analyses/{analysis_id}/to-offer
+    "offers.offer_budget.update",                # PUT /api/offer-budgets/{offer_id} (FG-472)
     # ------------------------------------------------------------------
     # LIVE-OPS-01 / TASK 5C — Canonical warehouse/stock core (FLOW-009).
     # Every canonical movement command is denied by default and granted
@@ -262,6 +263,7 @@ OFFER_WRITE_ACTIONS: Set[str] = {
     "offers.offer_from_missing_smr.create",
     "offers.offer_from_missing_smr_batch.create",
     "offers.offer_from_smr_analysis.create",
+    "offers.offer_budget.update",
 }
 
 # SUB-ADV-01 (R39, Krum 07.11.2026): "Дава го само Owner или Accountant" — the advance is

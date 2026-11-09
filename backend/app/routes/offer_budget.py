@@ -2,7 +2,7 @@
 Routes - Offer Execution Budget (per line).
 Budget, Margin, Planned Materials tabs for Offer Editor.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from typing import Optional
 from datetime import datetime, timezone
 import uuid
@@ -10,6 +10,8 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import (money_values_visible, require_money_write,
+                                         strip_money_for_non_finance)
 from app.tenancy.data_access import TenantData
 
 
@@ -20,8 +22,17 @@ def _tenant(user: dict) -> TenantData:
 router = APIRouter(tags=["Offer Execution Budget"])
 
 
+#: FG-472 (R20): what a caller without the finance right sees of the execution budget — the
+#: work itself (name, unit, quantity, planned hours, notes), never a sale price, a budget cost
+#: or a margin. The sale keys ("sale_*", "sale") are not money words for the generic SEC-02
+#: strip, so the non-finance view is built from this allow-list.
+NON_FINANCE_LINE_KEYS = ("line_id", "activity_name", "unit", "qty", "planned_labor_hours",
+                         "notes", "has_budget")
+
+
 @router.get("/offer-budgets/{offer_id}")
-async def get_offer_budgets(offer_id: str, user: dict = Depends(require_m2)):
+@strip_money_for_non_finance   # OFF-02 FG-472 (R20): sale / budget / margin are money
+async def get_offer_budgets(offer_id: str, request: Request, user: dict = Depends(require_m2)):
     """Get execution budget data for all lines of an offer"""
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -77,6 +88,11 @@ async def get_offer_budgets(offer_id: str, user: dict = Depends(require_m2)):
     total_budget = sum(l["budget_total"] for l in lines)
     total_margin = round(total_sale - total_budget, 2)
 
+    if not await money_values_visible(request, user):
+        return {"offer_id": offer_id, "offer_no": offer.get("offer_no", ""),
+                "lines": [{k: l[k] for k in NON_FINANCE_LINE_KEYS} for l in lines],
+                "money_hidden": True}
+
     return {
         "offer_id": offer_id,
         "offer_no": offer.get("offer_no", ""),
@@ -92,17 +108,26 @@ async def get_offer_budgets(offer_id: str, user: dict = Depends(require_m2)):
 
 
 @router.put("/offer-budgets/{offer_id}")
-async def save_offer_budgets(offer_id: str, data: dict, user: dict = Depends(require_m2)):
-    """Save execution budget data for offer lines"""
+async def save_offer_budgets(
+        offer_id: str, data: dict,
+        _r67: dict = Depends(require_money_write(
+            "offers.offer_budget.update", module="M2", resource_type="offer_budget")),  # FG-472 / R67
+        user: dict = Depends(require_m2)):
+    """Save execution budget data for offer lines.
+
+    FG-472 (R67): Owner / Admin / Accountant only — the gate above refuses every other role
+    before anything is read or written. The budget rows and ONE canonical AuditEvent (which
+    lines, their new cost / margin values) are written in one transaction."""
+    from app.routes.offers import _in_transaction, _offer_event
     tenant = _tenant(user)
     org_id = user["org_id"]
-    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id})
+    offer = await tenant.offers.find_one({"id": offer_id, "org_id": org_id}, {"_id": 0})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
 
     lines_data = data.get("lines", [])
     now = datetime.now(timezone.utc).isoformat()
-    saved = 0
+    docs = []
 
     for ld in lines_data:
         lid = ld.get("line_id")
@@ -121,14 +146,27 @@ async def save_offer_budgets(offer_id: str, data: dict, user: dict = Depends(req
             "updated_at": now,
             "updated_by": user["id"],
         }
-        await tenant.offer_line_budgets.update_one(
-            {"org_id": org_id, "offer_id": offer_id, "line_id": lid},
-            {"$set": budget_doc},
-            upsert=True,
-        )
-        saved += 1
+        docs.append(budget_doc)
 
-    return {"ok": True, "saved": saved}
+    async def body(session):
+        for budget_doc in docs:
+            await tenant.offer_line_budgets.update_one(
+                {"org_id": org_id, "offer_id": offer_id, "line_id": budget_doc["line_id"]},
+                {"$set": budget_doc},
+                upsert=True, session=session,
+            )
+        await _offer_event(
+            session, tenant_id=org_id, actor_type="human", actor_id=user["id"],
+            action="offers.offer_budget.updated", offer=offer, idem_key=None,
+            roles=[user.get("role") or ""], endpoint="PUT /api/offer-budgets/{offer_id}",
+            diff={"lines": [{k: d[k] for k in ("line_id", "budget_material_unit_cost",
+                                               "budget_labor_unit_cost", "material_margin_percent",
+                                               "labor_margin_percent", "planned_labor_hours")}
+                            for d in docs]})
+    if docs:
+        await _in_transaction(body)
+
+    return {"ok": True, "saved": len(docs)}
 
 
 @router.get("/offer-materials/{offer_id}")
