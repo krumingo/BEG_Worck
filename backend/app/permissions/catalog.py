@@ -266,6 +266,12 @@ def is_significant_action(action: str) -> bool:
     return verb in SIGNIFICANT_VERBS
 
 
+# R62 / FG-58 (Krum 09.11.2026): "Ръчно добавен ред за труд се брои само след одобрение от
+# Собственика" — the approval of a manual labor row is the Owner's ONLY (Admin is taken out
+# of its full set below, as for the R39 advance; Accountant does not hold it).
+MANUAL_LABOR_APPROVE_ACTIONS: Set[str] = {"labor.manual_entry.approve"}  # POST /api/labor-entries/{id}/approve
+ACTIONS |= MANUAL_LABOR_APPROVE_ACTIONS
+
 # ---------------------------------------------------------------------------
 # Canonical FLOW-002 roles. label_bg is the canonical Bulgarian label.
 # ---------------------------------------------------------------------------
@@ -281,7 +287,7 @@ _ALL = set(ACTIONS)
 # company-wide — R20 gives the finance roles every project's money.
 CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
-    "admin":           {"label_bg": "Администратор",          "actions": set(_ALL) - SUBCONTRACTOR_ADVANCE_ACTIONS},
+    "admin":           {"label_bg": "Администратор",          "actions": set(_ALL) - SUBCONTRACTOR_ADVANCE_ACTIONS - MANUAL_LABOR_APPROVE_ACTIONS},
     "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit",
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",

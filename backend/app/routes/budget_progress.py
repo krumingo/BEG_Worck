@@ -328,6 +328,8 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
     warnings = []
     missing_updates = 0
     mat_cost = await project_material_cost(tenant, org_id, project_id)
+    from app.services.labor_cost import package_labor_split
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
 
     for pkg in pkgs:
         name = pkg.get("activity_name", "")
@@ -370,7 +372,7 @@ async def get_progress_warnings(project_id: str, user: dict = Depends(require_m2
         # Progress lag (low progress with significant cost)
         total_cost_pct = 0
         if pkg.get("budget_total", 0) > 0:
-            actual_total = mat_total + (pkg.get("actual_labor_cost", 0) or 0)
+            actual_total = mat_total + (labor_split.get(pkg["id"]) or {}).get("cost", 0.0)
             total_cost_pct = actual_total / pkg["budget_total"] * 100
         if progress < 20 and total_cost_pct > 40:
             warnings.append({
@@ -435,10 +437,12 @@ async def get_progress_risk(org_id: str, project_id: str) -> dict:
 
     # Check for lag
     mat_cost = await project_material_cost(tenant, org_id, project_id)
+    from app.services.labor_cost import package_labor_split
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
     for pkg in pkgs:
         progress = pkg.get("progress_percent", 0) or 0
         budget = pkg.get("budget_total", 0)
-        actual = split_for_package(mat_cost, pkg["id"])["total"] + (pkg.get("actual_labor_cost", 0) or 0)
+        actual = split_for_package(mat_cost, pkg["id"])["total"] + (labor_split.get(pkg["id"]) or {}).get("cost", 0.0)
         if budget > 0 and progress < 20 and actual > budget * 0.4:
             flags.append("critical_progress_lag")
             break

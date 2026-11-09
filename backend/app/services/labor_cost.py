@@ -442,16 +442,40 @@ async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
     return getattr(res, "modified_count", 0)
 
 
+# R62 (Krum 09.11.2026, FG-340 / FG-58): a manual labor row counts only after the Owner
+# approved it. The rows a sync derives from approved work reports are a PROJECTION of the
+# report lines (already counted from the reports) and are never added a second time.
+MANUAL_APPROVED = "approved"
+MANUAL_PENDING = "pending"
+SYNC_SOURCE = "work_report_sync"
+
+
+async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
+                               date_from: str = None, date_to: str = None) -> list:
+    """R62: the Owner-approved manual labor rows of a project (not synced, not reversed)."""
+    flt = {"org_id": org_id, "project_id": project_id, "source": {"$ne": SYNC_SOURCE},
+           "approval_status": MANUAL_APPROVED, "entry_kind": {"$ne": "reversal"},
+           "reversed_by_entry_id": None}
+    if date_from or date_to:
+        flt["date"] = {k: v for k, v in (("$gte", date_from), ("$lte", date_to)) if v}
+    return await tenant.labor_entries.find(flt, {"_id": 0}).to_list(5000)
+
+
 async def project_labor_cost(org_id: str, project_id: str, date_from: str = None,
                              date_to: str = None) -> dict:
-    """Real labor cost of one project ("изхарчено" труд, R31), from approved report lines.
+    """THE labor cost of one project ("изхарчено" труд, R31; R62: one number in every
+    reader) — approved report lines priced by the one labor calculation (salary → approved
+    hours × rate, akord → approved quantity × piece rate, DOWNTIME apart) PLUS the manual
+    labor rows the Owner approved. Drafts / unapproved reports and unapproved manual rows
+    never count.
 
     Each worker on the project is computed with ``compute_person_labor`` over ALL their
     approved lines on the same dates (other projects included), so a day-based salary is
     split between the projects of that day exactly as the Pay Run counts it; only the
-    project's lines are kept. Returns ``{lines, by_smr, labor_total, downtime_total,
-    total, approved_hours, dq_warnings}``. ``by_smr`` is keyed by smr_type (the SMR the
-    report names) and has labor/downtime/hours/akord_quantity per SMR.
+    project's lines are kept. Returns ``{lines, by_smr, by_package, labor_total,
+    downtime_total, total, approved_hours, downtime_hours, manual_total, manual_rows,
+    dq_warnings}``. ``by_smr`` is keyed by smr_type and has labor/downtime/hours/
+    akord_quantity per SMR; ``by_package`` is keyed by execution_package_id ("" = none).
     """
     from app.services.report_normalizer import fetch_normalized_report_lines
 
@@ -460,49 +484,73 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
         org_id=org_id, date_from=date_from, date_to=date_to, project_id=project_id,
         status_filter="APPROVED")
     proj_lines = [ln for ln in proj_lines if ln.get("project_id") == project_id]
-    empty = {"lines": [], "by_smr": {}, "labor_total": 0.0, "downtime_total": 0.0,
-             "total": 0.0, "approved_hours": 0.0, "dq_warnings": []}
-    if not proj_lines:
-        return empty
-
-    workers = sorted({ln["worker_id"] for ln in proj_lines if ln.get("worker_id")})
-    dates = sorted({ln["date"] for ln in proj_lines if ln.get("date")})
-    d_from, d_to = (date_from or dates[0]), (date_to or dates[-1])
-
-    profiles = await tenant.employee_profiles.find(
-        {"org_id": org_id, "user_id": {"$in": workers}}, {"_id": 0}).to_list(len(workers) or 1)
-    prof_map = {p["user_id"]: p for p in profiles}
+    manual = await approved_manual_rows(tenant, org_id, project_id, date_from, date_to)
 
     kept, dq = [], []
-    all_by_worker = {}
-    for wid in workers:
-        all_lines = await fetch_normalized_report_lines(
-            org_id=org_id, date_from=d_from, date_to=d_to, worker_id=wid, status_filter="APPROVED")
-        all_by_worker[wid] = all_lines
-    smr_terms = await load_smr_terms(tenant, org_id, [ln for ls in all_by_worker.values() for ln in ls])
+    if proj_lines:
+        workers = sorted({ln["worker_id"] for ln in proj_lines if ln.get("worker_id")})
+        dates = sorted({ln["date"] for ln in proj_lines if ln.get("date")})
+        d_from, d_to = (date_from or dates[0]), (date_to or dates[-1])
 
-    for wid in workers:
-        res = compute_person_labor(prof_map.get(wid, {}), all_by_worker[wid], smr_terms)
-        for rec in res["lines"]:
-            if rec["project_id"] == project_id:
-                kept.append(rec)
-        dq.extend(w for w in res["dq_warnings"]
-                  if any(r["report_id"] == w["report_id"] and r["project_id"] == project_id
-                         for r in res["lines"]))
+        profiles = await tenant.employee_profiles.find(
+            {"org_id": org_id, "user_id": {"$in": workers}}, {"_id": 0}).to_list(len(workers) or 1)
+        prof_map = {p["user_id"]: p for p in profiles}
 
-    by_smr = {}
+        all_by_worker = {}
+        for wid in workers:
+            all_lines = await fetch_normalized_report_lines(
+                org_id=org_id, date_from=d_from, date_to=d_to, worker_id=wid, status_filter="APPROVED")
+            all_by_worker[wid] = all_lines
+        smr_terms = await load_smr_terms(tenant, org_id, [ln for ls in all_by_worker.values() for ln in ls])
+
+        for wid in workers:
+            res = compute_person_labor(prof_map.get(wid, {}), all_by_worker[wid], smr_terms)
+            for rec in res["lines"]:
+                if rec["project_id"] == project_id:
+                    kept.append(rec)
+            dq.extend(w for w in res["dq_warnings"]
+                      if any(r["report_id"] == w["report_id"] and r["project_id"] == project_id
+                             for r in res["lines"]))
+
+    # R62 / FG-58: the Owner-approved manual rows, each at its own stored cost
+    for row in manual:
+        cost = row.get("labor_cost")
+        rec = {"report_id": "manual:" + str(row.get("id")), "worker_id": row.get("employee_id"),
+               "date": row.get("date", ""), "project_id": project_id,
+               "smr_type": row.get("activity_name") or "", "hours": float(row.get("hours") or 0),
+               "cost_type": LABOR, "pay_type": "Manual", "pay_type_source": "manual_row",
+               "rate": row.get("hourly_rate"), "approved_quantity": None, "piece_rate": None,
+               "amount": round(float(cost), 2) if cost is not None else 0.0,
+               "formula": "ръчен ред, одобрен от Собственика",
+               "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
+               "execution_package_id": row.get("execution_package_id") or None,
+               "manual_entry_id": row.get("id")}
+        kept.append(rec)
+        if cost is None:
+            dq.append({"code": "MANUAL_ROW_NO_COST", "report_id": rec["report_id"],
+                       "message": "Ръчен ред за труд без стойност — не влиза в разхода (0)."})
+
+    by_smr, by_package = {}, {}
     for rec in kept:
         key = rec["smr_type"] or "Общо"
         s = by_smr.setdefault(key, {"labor": 0.0, "downtime": 0.0, "hours": 0.0,
                                     "downtime_hours": 0.0, "akord_quantity": 0.0, "dq_count": 0})
+        pk = by_package.setdefault(rec.get("execution_package_id") or "",
+                                   {"labor": 0.0, "downtime": 0.0, "hours": 0.0, "downtime_hours": 0.0,
+                                    "cost": 0.0})
         if rec["cost_type"] == LABOR:
             s["labor"] = round(s["labor"] + rec["amount"], 2)
             s["hours"] = round(s["hours"] + rec["hours"], 2)
+            pk["labor"] = round(pk["labor"] + rec["amount"], 2)
+            pk["hours"] = round(pk["hours"] + rec["hours"], 2)
             if rec["pay_type"] == AKORD and rec["approved_quantity"]:
                 s["akord_quantity"] = round(s["akord_quantity"] + rec["approved_quantity"], 3)
         else:
             s["downtime"] = round(s["downtime"] + rec["amount"], 2)
             s["downtime_hours"] = round(s["downtime_hours"] + rec["hours"], 2)
+            pk["downtime"] = round(pk["downtime"] + rec["amount"], 2)
+            pk["downtime_hours"] = round(pk["downtime_hours"] + rec["hours"], 2)
+        pk["cost"] = round(pk["labor"] + pk["downtime"], 2)
         s["dq_count"] += len(rec["dq"])
 
     labor_total = round(sum(r["amount"] for r in kept if r["cost_type"] == LABOR), 2)
@@ -510,10 +558,27 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
     return {
         "lines": kept,
         "by_smr": by_smr,
+        "by_package": by_package,
         "labor_total": labor_total,
         "downtime_total": downtime_total,
         "total": round(labor_total + downtime_total, 2),
         "approved_hours": round(sum(r["hours"] for r in kept if r["cost_type"] == LABOR), 2),
         "downtime_hours": round(sum(r["hours"] for r in kept if r["cost_type"] != LABOR), 2),
+        "manual_total": round(sum(r["amount"] for r in kept if r.get("manual_entry_id")), 2),
+        "manual_rows": len(manual),
         "dq_warnings": dq,
     }
+
+
+async def package_labor_split(org_id: str, project_id: str) -> dict:
+    """R62: ``{package_id: {cost, labor, downtime, hours, downtime_hours}}`` of the project
+    from THE labor cost, at read time (no cached ``actual_labor_cost``)."""
+    if not project_id:
+        return {}
+    return (await project_labor_cost(org_id, project_id))["by_package"]
+
+
+async def package_labor_actual(org_id: str, pkg: dict) -> float:
+    """R62: one package's labor cost (labor + downtime) from THE labor cost, at read time."""
+    split = await package_labor_split(org_id, pkg.get("project_id"))
+    return (split.get(pkg.get("id")) or {}).get("cost", 0.0)

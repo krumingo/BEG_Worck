@@ -358,7 +358,8 @@ async def get_package_financial_summary(pkg_id: str, user: dict = Depends(requir
     # 5C-C20 F-10 — canonical material actual at read time (no recompute).
     split = await package_material_split(tenant, org_id, pkg)
     mat_actual = split["total"]          # consumption + фира, once (5C-C21 F-12)
-    lab_actual = pkg.get("actual_labor_cost", 0)
+    from app.services.labor_cost import package_labor_actual
+    lab_actual = await package_labor_actual(org_id, pkg)   # R62: THE labor cost, at read time
 
     # Subcontract for this package
     sub_lines = [row async for row in tenant.subcontractor_package_lines.find(
@@ -430,6 +431,8 @@ async def get_project_package_breakdown(
 
     # 5C-C20 F-10 — canonical material actual per package at read time.
     mat_cost = await project_material_cost(tenant, org_id, project_id)
+    from app.services.labor_cost import package_labor_split
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
 
     breakdown = []
     for pkg in pkgs:
@@ -439,7 +442,7 @@ async def get_project_package_breakdown(
         mat = split["total"]                  # consumption + фира, once
         mat_budget = pkg.get("material_budget_total", 0) or 0
         mat_variance = round(mat - mat_budget, 2) if mat_budget > 0 else None
-        lab = pkg.get("actual_labor_cost", 0)
+        lab = (labor_split.get(pid) or {}).get("cost", 0.0)
         sub = round(sub_by_pkg.get(pid, 0), 2)
         total_actual = round(mat + lab + sub, 2)
         has_actuals = total_actual > 0
