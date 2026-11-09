@@ -1,0 +1,1029 @@
+{
+ "started_at": "2026-11-09T14:56:08.343Z",
+ "app": "http://127.0.0.1:8081",
+ "steps": [
+  {
+   "step": "document CSP: script-src 'self' only",
+   "pass": false,
+   "detail": ""
+  },
+  {
+   "step": "document CSP: frame-ancestors 'none'",
+   "pass": false,
+   "detail": ""
+  },
+  {
+   "step": "X-Frame-Options DENY",
+   "pass": false
+  },
+  {
+   "step": "X-Content-Type-Options nosniff",
+   "pass": false
+  },
+  {
+   "step": "Referrer-Policy",
+   "pass": false
+  },
+  {
+   "step": "title is BEG_Work",
+   "pass": false,
+   "detail": "Emergent | Fullstack App"
+  },
+  {
+   "step": "no Emergent badge in the DOM",
+   "pass": false,
+   "detail": null
+  },
+  {
+   "step": "login works under the CSP",
+   "pass": true,
+   "detail": "http://127.0.0.1:8081/"
+  },
+  {
+   "step": "screen /projects renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "screen /employees renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "screen /pay-runs renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "screen /offers renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "screen /assets/items renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "screen /finance renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "screen /settings renders",
+   "pass": true,
+   "detail": 1
+  },
+  {
+   "step": "AI not configured -> 503 'AI не е настроен'",
+   "pass": true,
+   "detail": [
+    503,
+    "AI не е настроен"
+   ]
+  },
+  {
+   "step": "reminder trigger without credentials -> 401",
+   "pass": true,
+   "detail": 401
+  },
+  {
+   "step": "reminder trigger as tenant Owner -> 403",
+   "pass": true,
+   "detail": 403
+  },
+  {
+   "step": "the app cannot be framed by another origin",
+   "pass": false,
+   "detail": {
+    "child_url": "http://127.0.0.1:8081/"
+   }
+  },
+  {
+   "step": "no request to any third-party host (except Google Fonts)",
+   "pass": false,
+   "detail": {
+    "hosts": {
+     "127.0.0.1:8081": 147,
+     "fonts.googleapis.com": 18,
+     "assets.emergent.sh": 10,
+     "us-assets.i.posthog.com": 9,
+     "fonts.gstatic.com": 18,
+     "localhost:35791": 1,
+     "cdn.tailwindcss.com": 1
+    }
+   }
+  },
+  {
+   "step": "no request to emergent.sh",
+   "pass": false,
+   "detail": null
+  },
+  {
+   "step": "no request to cdn.tailwindcss.com or posthog",
+   "pass": false,
+   "detail": null
+  },
+  {
+   "step": "every script came from the app origin",
+   "pass": false,
+   "detail": [
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://us-assets.i.posthog.com/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+    "https://assets.emergent.sh/scripts/debug-monitor.js",
+    "https://cdn.tailwindcss.com/",
+    "https://us-assets.i.posthog.com/static/array.js"
+   ]
+  }
+ ],
+ "requests": [
+  {
+   "url": "http://127.0.0.1:8081/login",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/login",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/activity?limit=3&page=1",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/reminders/missing-attendance",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/reminders/missing-work-reports",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/pulse/today",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/org/pnl-overview",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/overhead/realtime",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/org/pnl-overview",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/aging-report",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/org/pnl-attribution",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/morning-briefing",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/cashflow/forecast/compact",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/cashflow/forecast",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/attendance/unclear-status",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/personnel-today",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/pending-payments",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/reports/company-finance-series?months=3",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/projects",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/projects?",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/users",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/employees",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/employees",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/pay-runs",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/pay-runs/generate?period_start=2026-11-07&period_end=2026-11-13&review_mode=true",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/settings/payroll-week",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/offers",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/offers",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/projects",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/assets/items",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/assets/items?page=1&page_size=20&sort_dir=asc",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/finance",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/accounts",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/settings",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/subscription",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/invoice-settings",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/ai-config/hourly-rates",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/settings/asset-intake-roles",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/settings/workers-see-pay",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/assets/ai-intake",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/internal/run-reminder-jobs?all_tenants=true",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/internal/run-reminder-jobs?all_tenants=true",
+   "type": "fetch"
+  },
+  {
+   "url": "http://localhost:35791/",
+   "type": "document"
+  },
+  {
+   "url": "http://127.0.0.1:8081/login",
+   "type": "document"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/emergent-main.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/js/main.2eb50a93.js",
+   "type": "script"
+  },
+  {
+   "url": "http://127.0.0.1:8081/static/css/main.cd034429.css",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://assets.emergent.sh/scripts/debug-monitor.js",
+   "type": "script"
+  },
+  {
+   "url": "https://cdn.tailwindcss.com/",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+   "type": "stylesheet"
+  },
+  {
+   "url": "https://us-assets.i.posthog.com/static/array.js",
+   "type": "script"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/inter/v20/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuGKYAZ9hiA.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/auth/me",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/organization",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/version",
+   "type": "fetch"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms?status=active&page_size=5",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "https://fonts.gstatic.com/s/plusjakartasans/v12/LDIoaomQNQcsA88c7O9yZ4KMCoOg4Ko20yw.woff2",
+   "type": "font"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/activity?limit=3&page=1",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/reminders/missing-attendance",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/reminders/missing-work-reports",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/alarms/count",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/pulse/today",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/org/pnl-overview",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/overhead/realtime",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/stats",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/org/pnl-overview",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/finance/aging-report",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/org/pnl-attribution",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/morning-briefing",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/cashflow/forecast/compact",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/cashflow/forecast",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/attendance/unclear-status",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/personnel-today",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/dashboard/pending-payments",
+   "type": "xhr"
+  },
+  {
+   "url": "http://127.0.0.1:8081/api/reports/company-finance-series?months=3",
+   "type": "xhr"
+  }
+ ],
+ "csp_violations": [],
+ "console_errors": [
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to fetch finance series: H",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "H",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "H",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "H",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+  "Failed to load resource: net::ERR_TUNNEL_CONNECTION_FAILED",
+  "Failed to load resource: the server responded with a status of 503 (Service Unavailable)",
+  "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+  "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+ ],
+ "hosts": {
+  "127.0.0.1:8081": 147,
+  "fonts.googleapis.com": 18,
+  "assets.emergent.sh": 10,
+  "us-assets.i.posthog.com": 9,
+  "fonts.gstatic.com": 18,
+  "localhost:35791": 1,
+  "cdn.tailwindcss.com": 1
+ },
+ "finished_at": "2026-11-09T14:56:22.482Z",
+ "request_count": 204
+}

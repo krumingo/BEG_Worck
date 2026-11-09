@@ -60,6 +60,15 @@ def real_blob(path):
                           capture_output=True, check=True).stdout
 
 
+def live_nginx_conf():
+    """Bytes of the hand-copied nginx.conf on the live server (blob ``LIVE_NGINX_BLOB``,
+    the file as first tracked in 4f92268). The fixtures model the pre-W0-09A reality —
+    "nginx.conf now tracked, same bytes" — so they use these bytes, not whatever HEAD's
+    nginx.conf holds now (SEC-03 added security headers to the tracked file)."""
+    return subprocess.run(["git", "-C", REPO_ROOT, "cat-file", "blob", LIVE_NGINX_BLOB],
+                          capture_output=True, check=True).stdout
+
+
 def _write(root, rel, data, mode=None):
     full = os.path.join(root, *rel.split("/"))
     os.makedirs(os.path.dirname(full), exist_ok=True)
@@ -119,7 +128,7 @@ def make_repo(root, tools=None):
     run_git(root, "commit", "-q", "-m", "c0 legacy baseline")
     c0 = run_git(root, "rev-parse", "HEAD")
 
-    _write(root, "nginx.conf", real_blob("nginx.conf"))
+    _write(root, "nginx.conf", live_nginx_conf())
     _write(root, "backend/server.py", "print('release two')\n")
     run_git(root, "add", "-A")
     run_git(root, "commit", "-q", "-m", "c1 track nginx.conf, backend change")
@@ -194,7 +203,7 @@ class Layout:
         # live repo = exact c0 tree + the hand-copied nginx.conf (pre-W0-09A reality)
         self.extract_commit(repo, commits["c0"], os.path.join(self.base, "repo"))
         with open(os.path.join(self.base, "repo", "nginx.conf"), "wb") as f:
-            f.write(real_blob("nginx.conf"))
+            f.write(live_nginx_conf())
         os.makedirs(os.path.join(self.fake, "images"))
         os.makedirs(os.path.join(self.fake, "refs"))
         self.add_image(VERIFIER_IMAGE_ID, "python:3.11-slim")

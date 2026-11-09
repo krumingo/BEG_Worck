@@ -1,0 +1,13 @@
+# SEC-03 frontend red on main 1525a1e: the two SEC-03 jest files + src/lib/escapeHtml.js (the test helper only) on an origin/main worktree;
+# PayRunPrintView / UnitQrBlock / public/index.html are main's own. CI=true yarn test --watchAll=false --testPathPattern sec03 --verbose
+  ✓ escapeHtml escapes every markup character and maps null/undefined to empty (3 ms)
+  ✕ forbidden: the group list never writes a raw stored name into the print window (3 ms)
+  ✕ forbidden: the individual slip never writes a raw stored name into the print window (1 ms)
+  ✕ forbidden: the selected slips never writes a raw stored name into the print window (1 ms)
+  ✓ positive: an ordinary name prints unchanged (1 ms)
+  ✕ forbidden: the QR print escapes qr id and serial and has no inline script (50 ms)
+  ✕ no external <script src> and no remote loader of the former template (1 ms)
+  ✕ title and description are BEG_Work
+  ✕ the CSP meta allows scripts from 'self' only
+Test Suites: 2 failed, 2 total
+Tests:       7 failed, 2 passed, 9 total
