@@ -25,6 +25,23 @@ DEFAULT_OT = {"over_8h": 1.5, "after_20": 1.5, "weekend": 2.0}
 DEFAULT_MAX_SESSION = 12
 DEFAULT_WORK_HOURS = 8
 
+# R62 (Krum, canon 6f29205) — "one labor-cost number in every reader": these are TIME
+# screens. Hours come from the time sessions; the money a session carries is hours × the
+# snapshot rate, NOT the approved labor cost (project_labor_cost: approved reports + approved
+# manual rows). It is shown only as an estimate, labelled as such — never a second official
+# cost. The official figure, where it can be computed, is ``approved_labor_cost``.
+SESSION_COST_BASIS = "оценка, неодобрено"
+SESSION_COST_NOTE = ("Сумите от работните сесии са оценка (часове × ставка) и не са одобрен "
+                     "разход за труд; официалният разход е от одобрените отчети.")
+
+
+def _label_session_costs(result: dict) -> dict:
+    """R62: mark the session money in a time-screen response as an unapproved estimate."""
+    result["cost_basis"] = SESSION_COST_BASIS
+    result["cost_is_official"] = False
+    result["cost_note"] = SESSION_COST_NOTE
+    return result
+
 
 # ── Pydantic Models ────────────────────────────────────────────────
 
@@ -276,7 +293,8 @@ async def list_sessions(
         query["is_overtime"] = is_overtime
 
     tenant = _tenant(user)
-    return await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1)
+    return _label_session_costs(
+        await paginate_query(tenant.work_sessions, query, page, page_size, "started_at", -1))
 
 
 # ── Active Sessions ────────────────────────────────────────────────
@@ -294,7 +312,7 @@ async def get_active_sessions(
     now = datetime.now(timezone.utc).isoformat()
     for s in items:
         s["elapsed_hours"] = round(compute_duration(s["started_at"], now), 2)
-    return {"items": items, "total": len(items)}
+    return _label_session_costs({"items": items, "total": len(items)})
 
 
 # ── My Today ───────────────────────────────────────────────────────
@@ -324,14 +342,14 @@ async def get_my_today(user: dict = Depends(get_current_user)):
             total_hours += elapsed
             has_open = True
 
-    return {
+    return _label_session_costs({
         "items": items,
         "total_sessions": len(items),
         "total_hours": round(total_hours, 2),
-        "total_cost": round(total_cost, 2),
+        "total_cost": round(total_cost, 2),          # R62: estimate (cost_basis), not approved
         "has_open_session": has_open,
         "is_overtime": total_hours > DEFAULT_WORK_HOURS,
-    }
+    })
 
 
 # ── Summary ────────────────────────────────────────────────────────
@@ -364,13 +382,22 @@ async def get_summary(
     overtime_hours = sum(s.get("duration_hours", 0) for s in items if s.get("is_overtime"))
     workers = set(s["worker_id"] for s in items)
 
-    return {
+    # R62: the one official figure for a site and period is project_labor_cost (approved
+    # reports + approved manual rows); across all sites it is not summed here (None).
+    approved = None
+    if site_id:
+        from app.services.labor_cost import project_labor_cost
+        lc = await project_labor_cost(user["org_id"], site_id,
+                                      date_from=date or date_from, date_to=date or date_to)
+        approved = round(lc["total"], 2)
+    return _label_session_costs({
         "total_hours": round(total_hours, 2),
-        "total_cost": round(total_cost, 2),
+        "total_cost": round(total_cost, 2),          # R62: estimate (cost_basis), not approved
+        "approved_labor_cost": approved,
         "workers_count": len(workers),
         "overtime_hours": round(overtime_hours, 2),
         "sessions_count": len(items),
-    }
+    })
 
 
 # ── Split Session ──────────────────────────────────────────────────
@@ -488,7 +515,7 @@ async def get_overtime_report(
         w["total_cost"] = round(w["total_cost"], 2)
         result.append(w)
 
-    return {"workers": result, "total": len(result)}
+    return _label_session_costs({"workers": result, "total": len(result)})
 
 
 # ── Update (Admin/Manager) ────────────────────────────────────────

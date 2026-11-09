@@ -131,7 +131,7 @@ def _app(monkeypatch, op):
     from app.deps import modules
     from app.master_data.deps import ENV_MODE
     from app.routes import full_cost, labor_smr, revenue_expense  # noqa: F401 — loaded, then patched
-    from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot  # noqa: F401
+    from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions  # noqa: F401
     from app.services import morning_briefing, project_financial_results, pulse_generator  # noqa: F401
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
@@ -140,9 +140,10 @@ def _app(monkeypatch, op):
         if getattr(mod, "__name__", "").startswith("app") and getattr(mod, "db", None) is real:
             monkeypatch.setattr(mod, "db", op)
     app = FastAPI()
-    from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot
+    from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions
     for r in (labor_smr.router, revenue_expense.router, full_cost.router, activity_budgets.router,
-              centralized_reports.router, projects.router, revenue_snapshot.router):
+              centralized_reports.router, projects.router, revenue_snapshot.router,
+              work_sessions.router):
         app.include_router(r, prefix="/api")
 
     async def m2(user: dict = Depends(get_current_user)):      # the module gate is not under test
@@ -463,3 +464,51 @@ def test_r62_the_decision_routes_carry_their_action_first():
         assert marked[0].sec01_action == "labor.manual_entry.approve"
     holders = {k for k, v in CANONICAL_ROLES.items() if "labor.manual_entry.approve" in v["actions"]}
     assert holders == {"owner", "accountant"}         # R66: Owner / Управител or the Accountant
+
+
+def test_r62_work_session_time_screens_show_hours_and_never_a_second_official_cost(monkeypatch, backend):
+    """Orchestrator follow-up to R62: the work_sessions screens (list, active, my-today,
+    summary, overtime) are TIME screens. Their hours stay; the session money (hours × the
+    snapshot rate, 5000 here) is labelled "оценка, неодобрено" and is not official; the one
+    official figure is approved_labor_cost = project_labor_cost total (180). A caller without
+    the finance right sees neither."""
+    from datetime import datetime, timezone
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    async def scenario(c, op):
+        await op.work_sessions.update_one({"id": "ws"}, {"$set": {
+            "worker_id": "w1", "worker_name": "Работник", "started_at": DAY + "T08:00:00",
+            "ended_at": DAY + "T18:00:00", "duration_hours": 10.0, "is_overtime": True}})
+        await op.work_sessions.insert_one({
+            "id": "ws-today", "org_id": ORG, "site_id": P, "worker_id": "owner",
+            "started_at": today + "T07:00:00", "ended_at": today + "T09:00:00",
+            "duration_hours": 2.0, "labor_cost": 300.0, "is_overtime": False})
+        rng = "date_from=2026-11-01&date_to=2026-11-08"   # every seeded report; not today
+        lbl = {"cost_basis": "оценка, неодобрено", "cost_is_official": False}
+
+        r = await c.get(f"/api/work-sessions/summary?site_id={P}&{rng}", headers=_token("owner"))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["total_hours"] == 10.0 and d["overtime_hours"] == 10.0           # hours stay
+        assert d["total_cost"] == 5000.0 and lbl.items() <= d.items()             # an estimate
+        assert d["approved_labor_cost"] == 180.0                                  # THE number
+        r = await c.get(f"/api/work-sessions/summary?{rng}", headers=_token("owner"))
+        assert r.json()["approved_labor_cost"] is None and lbl.items() <= r.json().items()
+
+        for url in (f"/api/work-sessions/overtime?{rng}", f"/api/work-sessions?{rng}",
+                    "/api/work-sessions/active", "/api/work-sessions/my-today"):
+            r = await c.get(url, headers=_token("owner"))
+            assert r.status_code == 200, (url, r.text)
+            assert lbl.items() <= r.json().items(), url
+        ot = (await c.get(f"/api/work-sessions/overtime?{rng}", headers=_token("owner"))).json()
+        assert ot["workers"][0]["overtime_hours"] == 10.0
+        me = (await c.get("/api/work-sessions/my-today", headers=_token("owner"))).json()
+        assert me["total_hours"] == 2.0 and me["total_cost"] == 300.0
+
+        # no finance right: hours only — no estimate, no label, no official figure
+        r = await c.get(f"/api/work-sessions/summary?site_id={P}&{rng}", headers=_token("w1"))
+        assert r.status_code == 200, r.text
+        d = r.json()
+        assert d["total_hours"] == 10.0
+        assert not {"total_cost", "approved_labor_cost", "cost_basis", "cost_note"} & set(d), d
+    run(monkeypatch, scenario, backend)
