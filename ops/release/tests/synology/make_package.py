@@ -190,7 +190,7 @@ def main():
             expected[key + "_REBUILD"] = ",".join(doc["release"]["services_to_rebuild"])
         for rel in ("docker-compose.yml", "Dockerfile.backend", "Dockerfile.frontend"):
             write(pkg, "layout/" + rel, harness.real_blob("ops/synology/deploy/" + rel))
-        write(pkg, "layout/nginx.conf", harness.real_blob("nginx.conf"))
+        write(pkg, "layout/nginx.conf", harness.live_nginx_conf())  # the live hand-copied file (SEC-03)
         write(pkg, "rt-layout/docker-compose.yml", RT_COMPOSE)
         write(pkg, "rt-layout/Dockerfile.backend", RT_DOCKERFILE_BACKEND)
         write(pkg, "rt-layout/Dockerfile.frontend", RT_DOCKERFILE_FRONTEND)
