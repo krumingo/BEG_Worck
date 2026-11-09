@@ -1,29 +1,31 @@
-# INV-CN-01 gates (FG pass 28: FG-277/276/278 + FG-271 UI; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3699c3b merged), 2026-11-08T20:02:55Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (FG-278 status scope + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 44e8d97 merged), 2026-11-09T05:42:11Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
-W0-03E-A2C tenant boundary guard: 242 module(s) checked, 0 violation(s)
+W0-03E-A2C tenant boundary guard: 244 module(s) checked, 0 violation(s)
 ## A1 guard
-W0-03E-A1 tenant access guard: 488 unit(s) checked, 0 violation(s)
+W0-03E-A1 tenant access guard: 492 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-147 passed, 1 warning in 101.96s (0:01:41)
+153 passed, 1 warning in 101.35s (0:01:41)
 ## PAY-01 family (real mongo + mongomock)
-630 passed, 1 warning in 136.64s (0:02:16)
+630 passed, 1 warning in 132.07s (0:02:12)
 ## R0 (real mongo)
-814 passed, 10 warnings in 151.30s (0:02:31)
+814 passed, 10 warnings in 133.31s (0:02:13)
 ## W0 (real mongo)
-16 failed, 1176 passed, 10 warnings in 140.34s (0:02:20)
+16 failed, 1176 passed, 10 warnings in 118.41s (0:01:58)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
       1 FAILED tests/test_w0_03e_real_mongo.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 86.75s (0:01:26)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 65.25s (0:01:05)
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## ACT-01 (#77, no regression, real mongo)
-113 passed in 49.53s
+113 passed in 43.37s
 ## OH-01 (#74, no regression, real mongo)
-231 passed, 1 warning in 67.48s (0:01:07)
+231 passed, 1 warning in 61.05s (0:01:01)
+## OFF-01 (#79) + SUB-ADV-01 (#76), no regression, real mongo
+246 passed, 10 warnings in 147.43s (0:02:27)
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 184.47s (0:03:04)
+6 passed, 10 warnings in 148.88s (0:02:28)
 ## frontend yarn test
 Test Suites: 20 passed, 20 total
 Tests:       183 passed, 183 total

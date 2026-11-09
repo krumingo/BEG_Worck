@@ -1,47 +1,47 @@
-# Warehouse suite on 6730fc2 (FG pass 28 + main 3699c3b merged), real Mongo rs0, a fresh container per file, 2026-11-08T20:34:30Z
+# Warehouse suite on 639b389 (FG-278 + Р63, main 44e8d97 merged), real Mongo rs0, a fresh container per file, 2026-11-09T06:12:06Z
 # totals: 1117 passed / 4 failed (c13_mongo, identical to main) / 16 errors (material_ledger: live-server only, cannot run here)
-tests/test_warehouse_canonical_actions.py: 7 passed, 1 warning in 0.42s
-tests/test_warehouse_canonical_c12_regressions.py: 14 passed, 1 warning in 1.90s
-tests/test_warehouse_canonical_c13_mongo.py: 4 failed, 2 passed, 1 warning in 1.39s
-tests/test_warehouse_canonical_c13_regressions.py: 22 passed, 1 warning in 1.20s
-tests/test_warehouse_canonical_c14_regressions.py: 8 passed in 0.05s
-tests/test_warehouse_canonical_c15_regressions.py: 7 passed in 0.03s
-tests/test_warehouse_canonical_c16_regressions.py: 5 passed in 0.03s
-tests/test_warehouse_canonical_c18_corrections.py: 10 passed, 1 warning in 1.11s
-tests/test_warehouse_canonical_c19_bot_findings.py: 25 passed, 10 warnings in 6.96s
-tests/test_warehouse_canonical_c20_finance_reads.py: 11 passed, 1 warning in 2.90s
-tests/test_warehouse_canonical_c21_writeoff_transfer.py: 16 passed, 5 warnings in 4.43s
-tests/test_warehouse_canonical_c22_all_reports_cutover.py: 10 passed, 1 warning in 4.55s
-tests/test_warehouse_canonical_c23_profit_period_waste.py: 10 passed, 1 warning in 3.58s
-tests/test_warehouse_canonical_c24_fifo_layers_legacy_index.py: 10 passed, 1 warning in 4.68s
-tests/test_warehouse_canonical_c25_cost_at_accept_transit.py: 16 passed, 5 warnings in 8.44s
-tests/test_warehouse_canonical_c26_one_path_per_lot.py: 12 passed, 1 warning in 5.23s
-tests/test_warehouse_canonical_c26a_writeoff_rights_values.py: 38 passed, 1 warning in 9.36s
-tests/test_warehouse_canonical_c26b_project_writeoff_endpoint.py: 22 passed, 5 warnings in 4.89s
-tests/test_warehouse_canonical_c26b_value_leak.py: 4 passed, 13 warnings in 1.58s
-tests/test_warehouse_canonical_c26c_r27_all_modes.py: 40 passed, 5 warnings in 10.80s
-tests/test_warehouse_canonical_c26d_subproject_parent.py: 24 passed, 5 warnings in 6.00s
-tests/test_warehouse_canonical_c26e_r28_all_modes.py: 272 passed, 1 warning in 77.03s (0:01:17)
-tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed, 1 warning in 16.06s
-tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed, 1 warning in 6.90s
-tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed, 5 warnings in 4.86s
-tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed, 5 warnings in 17.97s
-tests/test_warehouse_canonical_c26k_subproject_link.py: 6 passed, 1 warning in 6.06s
-tests/test_warehouse_canonical_c26l_cross_project_link.py: 11 passed, 1 warning in 3.05s
-tests/test_warehouse_canonical_c26l_k_line_race.py: 63 passed, 1 warning in 29.03s
-tests/test_warehouse_canonical_c26l_l_all_paths_lock.py: 153 passed, 5 warnings in 303.81s (0:05:03)
-tests/test_warehouse_canonical_c26l_n_invoice_status.py: 72 passed, 1 warning in 29.92s
-tests/test_warehouse_canonical_concurrency.py: 2 passed, 1 warning in 0.86s
-tests/test_warehouse_canonical_envelope.py: 8 passed, 1 warning in 0.36s
-tests/test_warehouse_canonical_legacy_fail_close.py: 10 passed, 1 warning in 0.42s
-tests/test_warehouse_canonical_migration_readiness.py: 2 passed, 1 warning in 1.05s
-tests/test_warehouse_canonical_mongo.py: 11 passed, 1 warning in 2.47s
-tests/test_warehouse_canonical_mongo_c10.py: 4 passed, 1 warning in 1.63s
-tests/test_warehouse_canonical_mongo_full.py: 6 passed, 1 warning in 1.71s
-tests/test_warehouse_canonical_overflow.py: 1 passed, 1 warning in 20.35s
-tests/test_warehouse_canonical_permissions_catalog.py: 9 passed, 1 warning in 0.36s
-tests/test_warehouse_canonical_projection_shim.py: 3 passed, 1 warning in 0.44s
-tests/test_warehouse_canonical_rule_b_split.py: 2 passed, 1 warning in 0.39s
-tests/test_warehouse_canonical_shape.py: 12 passed, 6 warnings in 0.39s
-tests/test_warehouse_canonical_static_writer_inventory.py: 2 passed, 1 warning in 1.15s
-tests/test_warehouse_material_ledger.py: 16 errors in 0.62s
+tests/test_warehouse_canonical_actions.py: 7 passed, 1 warning in 0.29s
+tests/test_warehouse_canonical_c12_regressions.py: 14 passed, 1 warning in 1.26s
+tests/test_warehouse_canonical_c13_mongo.py: 4 failed, 2 passed, 1 warning in 1.15s
+tests/test_warehouse_canonical_c13_regressions.py: 22 passed, 1 warning in 0.77s
+tests/test_warehouse_canonical_c14_regressions.py: 8 passed in 0.03s
+tests/test_warehouse_canonical_c15_regressions.py: 7 passed in 0.02s
+tests/test_warehouse_canonical_c16_regressions.py: 5 passed in 0.02s
+tests/test_warehouse_canonical_c18_corrections.py: 10 passed, 1 warning in 0.81s
+tests/test_warehouse_canonical_c19_bot_findings.py: 25 passed, 10 warnings in 6.26s
+tests/test_warehouse_canonical_c20_finance_reads.py: 11 passed, 1 warning in 2.67s
+tests/test_warehouse_canonical_c21_writeoff_transfer.py: 16 passed, 5 warnings in 4.06s
+tests/test_warehouse_canonical_c22_all_reports_cutover.py: 10 passed, 1 warning in 4.24s
+tests/test_warehouse_canonical_c23_profit_period_waste.py: 10 passed, 1 warning in 3.08s
+tests/test_warehouse_canonical_c24_fifo_layers_legacy_index.py: 10 passed, 1 warning in 4.19s
+tests/test_warehouse_canonical_c25_cost_at_accept_transit.py: 16 passed, 5 warnings in 7.11s
+tests/test_warehouse_canonical_c26_one_path_per_lot.py: 12 passed, 1 warning in 4.23s
+tests/test_warehouse_canonical_c26a_writeoff_rights_values.py: 38 passed, 1 warning in 8.23s
+tests/test_warehouse_canonical_c26b_project_writeoff_endpoint.py: 22 passed, 5 warnings in 4.19s
+tests/test_warehouse_canonical_c26b_value_leak.py: 4 passed, 13 warnings in 1.39s
+tests/test_warehouse_canonical_c26c_r27_all_modes.py: 40 passed, 5 warnings in 9.68s
+tests/test_warehouse_canonical_c26d_subproject_parent.py: 24 passed, 5 warnings in 5.21s
+tests/test_warehouse_canonical_c26e_r28_all_modes.py: 272 passed, 1 warning in 68.30s (0:01:08)
+tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed, 1 warning in 14.60s
+tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed, 1 warning in 5.94s
+tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed, 5 warnings in 4.40s
+tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed, 5 warnings in 16.16s
+tests/test_warehouse_canonical_c26k_subproject_link.py: 6 passed, 1 warning in 5.25s
+tests/test_warehouse_canonical_c26l_cross_project_link.py: 11 passed, 1 warning in 2.94s
+tests/test_warehouse_canonical_c26l_k_line_race.py: 63 passed, 1 warning in 25.39s
+tests/test_warehouse_canonical_c26l_l_all_paths_lock.py: 153 passed, 5 warnings in 304.18s (0:05:04)
+tests/test_warehouse_canonical_c26l_n_invoice_status.py: 72 passed, 1 warning in 30.28s
+tests/test_warehouse_canonical_concurrency.py: 2 passed, 1 warning in 0.71s
+tests/test_warehouse_canonical_envelope.py: 8 passed, 1 warning in 0.26s
+tests/test_warehouse_canonical_legacy_fail_close.py: 10 passed, 1 warning in 0.28s
+tests/test_warehouse_canonical_migration_readiness.py: 2 passed, 1 warning in 0.84s
+tests/test_warehouse_canonical_mongo.py: 11 passed, 1 warning in 2.31s
+tests/test_warehouse_canonical_mongo_c10.py: 4 passed, 1 warning in 1.39s
+tests/test_warehouse_canonical_mongo_full.py: 6 passed, 1 warning in 1.58s
+tests/test_warehouse_canonical_overflow.py: 1 passed, 1 warning in 17.90s
+tests/test_warehouse_canonical_permissions_catalog.py: 9 passed, 1 warning in 0.29s
+tests/test_warehouse_canonical_projection_shim.py: 3 passed, 1 warning in 0.28s
+tests/test_warehouse_canonical_rule_b_split.py: 2 passed, 1 warning in 0.31s
+tests/test_warehouse_canonical_shape.py: 12 passed, 6 warnings in 0.30s
+tests/test_warehouse_canonical_static_writer_inventory.py: 2 passed, 1 warning in 0.75s
+tests/test_warehouse_material_ledger.py: 16 errors in 0.60s
