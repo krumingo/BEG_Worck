@@ -24,6 +24,7 @@ from app.permissions.money_input import (MoneyWrite, money_value, project_in_ten
                                          labor_money_visible, without_labor_money)
 from app.services.labor_cost import (compute_person_labor, load_smr_terms, project_labor_cost,
                                      package_labor_split, overlapping_manual_rows,
+                                     bump_labor_day_lock, live_report_claims,
                                      MANUAL_APPROVED, MANUAL_PENDING, SYNC_SOURCE)
 from app.services.report_normalizer import LABOR_LINE_FIELDS
 
@@ -141,14 +142,28 @@ async def create_labor_entry(
             raise HTTPException(status_code=409, detail={
                 "code": "DUPLICATE_OF_APPROVED_REPORT",
                 "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
-        # FG-463: nor the hours of another live manual row (pending or approved) of the same day
-        if await overlapping_manual_rows(tenant, org_id, entry["project_id"], entry["employee_id"],
-                                         entry["date"], (MANUAL_PENDING, MANUAL_APPROVED)):
-            raise HTTPException(status_code=409, detail={
-                "code": "DUPLICATE_MANUAL_ROW",
-                "message": "За този работник, обект и ден вече има ръчен ред — поправете него, не добавяйте втори"})
-        async with mw.insert_once():
-            await tenant.labor_entries.insert_one(mw.unique(entry))
+
+        async def body(session):
+            # LAB73-R1: the day's lock, then the overlap re-read — in ONE transaction
+            lock = await bump_labor_day_lock(tenant, org_id, entry["project_id"], entry["employee_id"],
+                                             entry["date"], session=session)
+            if await tenant.labor_entries.find_one({"org_id": org_id, "id": entry["id"]}, {"_id": 0, "id": 1},
+                                                   session=session):
+                return                       # this key's row is already there (a concurrent retry)
+            if await live_report_claims(tenant, org_id, lock, session=session):
+                raise HTTPException(status_code=409, detail={
+                    "code": "DUPLICATE_OF_APPROVED_REPORT",
+                    "message": "За този работник, обект и ден има одобрен отчет — поправете отчета, не добавяйте ръчен ред"})
+            # FG-463: nor the hours of another live manual row (pending or approved) of the day
+            if await overlapping_manual_rows(tenant, org_id, entry["project_id"], entry["employee_id"],
+                                             entry["date"], (MANUAL_PENDING, MANUAL_APPROVED),
+                                             exclude_id=entry["id"], session=session):
+                raise HTTPException(status_code=409, detail={
+                    "code": "DUPLICATE_MANUAL_ROW",
+                    "message": "За този работник, обект и ден вече има ръчен ред — поправете него, не добавяйте втори"})
+            await tenant.labor_entries.insert_one(mw.unique(entry), session=session)
+
+        await _run_manual_tx(body)
         mw.result_id = entry["id"]
     out = {k: v for k, v in entry.items() if k != "_id"}
     return out if show_money else without_labor_money(out)
@@ -227,7 +242,9 @@ async def _run_manual_tx(body):
     """ONE MongoDB transaction (auth_tx.run_in_transaction); no transactions → 503, nothing
     written. (The DB-free tests replace this function explicitly.)"""
     from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    from app.services.labor_cost import ensure_labor_day_locks
     try:
+        await ensure_labor_day_locks(db)     # LAB73-R1: never created inside a transaction
         return await run_in_transaction(db, body)
     except TransactionsUnavailable:
         raise HTTPException(status_code=503, detail=(
@@ -334,6 +351,20 @@ async def _decide_manual_row(entry_id: str, data: ManualDecision, user: dict, ki
         async def body(session):
             from app.audit.envelope import build_event, RETENTION_R1_CRITICAL_BUSINESS
             from app.audit.store import record_event
+            if kind == "approve":
+                # LAB73-R1: the day's lock, then the overlap re-read — in THIS transaction
+                lock = await bump_labor_day_lock(tenant, org_id, row.get("project_id"), row.get("employee_id"),
+                                                 row.get("date"), session=session)
+                if await live_report_claims(tenant, org_id, lock, session=session):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "DUPLICATE_OF_APPROVED_REPORT",
+                        "message": "За този работник, обект и ден има одобрен отчет — часовете не се броят два пъти"})
+                if await overlapping_manual_rows(tenant, org_id, row.get("project_id"), row.get("employee_id"),
+                                                 row.get("date"), (MANUAL_APPROVED,), exclude_id=entry_id,
+                                                 session=session):
+                    raise HTTPException(status_code=409, detail={
+                        "code": "DUPLICATE_MANUAL_ROW",
+                        "message": "За този работник, обект и ден вече има одобрен ръчен ред — часовете не се броят два пъти"})
             res = await tenant.labor_entries.update_one(
                 {"org_id": org_id, "id": entry_id, "version": row.get("version"),
                  "approval_status": row.get("approval_status")},

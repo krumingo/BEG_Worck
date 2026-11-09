@@ -463,7 +463,7 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
 
 async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: str,
                                   employee_id: str, date: str, statuses,
-                                  exclude_id: str = None) -> list:
+                                  exclude_id: str = None, session=None) -> list:
     """FG-463 (R62): the live manual rows (``statuses``; not reversed, not a reversal) of one
     worker on one project and day — hours that would be counted a second time."""
     if not (project_id and employee_id and date):
@@ -473,7 +473,67 @@ async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: s
            "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
     if exclude_id:
         flt["id"] = {"$ne": exclude_id}
-    return await tenant.labor_entries.find(flt, {"_id": 0, "id": 1, "approval_status": 1}).to_list(50)
+    return await tenant.labor_entries.find(flt, {"_id": 0, "id": 1, "approval_status": 1},
+                                           session=session).to_list(50)
+
+
+# LAB73-R1 (AUDIT-2, FG-463 race): ONE lock document per (tenant, project, worker, day). Every
+# write that adds hours of that day — a manual row created, a manual row approved, a report
+# approved — bumps it INSIDE its transaction and re-reads the overlap there. Two concurrent
+# transactions write the same document: one gets a write conflict, is retried by the driver
+# and then sees the other's committed row (→ 409). A report approval claims the day on the
+# lock before its side effects; a claim counts while the report is APPROVED or still fresh.
+LABOR_DAY_LOCKS = "labor_day_locks"
+REPORT_CLAIM_FRESH_SECONDS = 600
+
+
+_day_lock_indexed: set = set()
+
+
+async def ensure_labor_day_locks(raw_db) -> None:
+    """Create the lock collection's unique index BEFORE a transaction opens (a collection or
+    an index cannot be created by two concurrent transactions). Idempotent, once per db."""
+    key = (id(raw_db), getattr(raw_db, "name", ""))
+    if key in _day_lock_indexed:
+        return
+    await raw_db[LABOR_DAY_LOCKS].create_index([("org_id", 1), ("id", 1)], unique=True,
+                                               name="one_lock_per_labor_day")
+    _day_lock_indexed.add(key)
+
+
+def labor_day_lock_id(project_id: str, employee_id: str, date: str) -> str:
+    return "%s|%s|%s" % (project_id, employee_id, date)
+
+
+async def bump_labor_day_lock(tenant: TenantData, org_id: str, project_id: str, employee_id: str,
+                              date: str, session=None, report_claim: str = None) -> dict:
+    """Bump (create) the day's lock document in the caller's transaction; returns it."""
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    lid = labor_day_lock_id(project_id, employee_id, date)
+    upd = {"$inc": {"seq": 1}, "$set": {"updated_at": now},
+           "$setOnInsert": {"org_id": org_id, "project_id": project_id,
+                            "employee_id": employee_id, "date": date}}
+    if report_claim:
+        upd["$set"]["report_claims." + report_claim] = now
+    coll = tenant.collection(LABOR_DAY_LOCKS)
+    await coll.update_one({"org_id": org_id, "id": lid}, upd, upsert=True, session=session)
+    return await coll.find_one({"org_id": org_id, "id": lid}, {"_id": 0}, session=session) or {}
+
+
+async def live_report_claims(tenant: TenantData, org_id: str, lock: dict, session=None) -> list:
+    """The report claims of a day lock that still count: the report is APPROVED, or its
+    approval started less than REPORT_CLAIM_FRESH_SECONDS ago (still running)."""
+    from datetime import datetime, timezone, timedelta
+    out = []
+    fresh_after = (datetime.now(timezone.utc) - timedelta(seconds=REPORT_CLAIM_FRESH_SECONDS)).isoformat()
+    for rid, at in (lock.get("report_claims") or {}).items():
+        rep = await tenant.employee_daily_reports.find_one(
+            {"org_id": org_id, "id": rid}, {"_id": 0, "status": 1, "approval_status": 1}, session=session)
+        status = ((rep or {}).get("approval_status") or (rep or {}).get("status") or "").upper()
+        if status == "APPROVED" or (rep is not None and str(at) >= fresh_after and status != "REJECTED"):
+            out.append(rid)
+    return out
 
 
 async def project_labor_cost(org_id: str, project_id: str, date_from: str = None,

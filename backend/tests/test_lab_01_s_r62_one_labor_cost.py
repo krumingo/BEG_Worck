@@ -718,3 +718,56 @@ def test_r73_a_creator_who_lost_the_right_to_enter_labor_cannot_act(monkeypatch)
         assert r.status_code == 403, r.text
         assert (await op.labor_entries.find_one({"id": "le-man"}))["approval_status"] == "pending"
     run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ LAB73-R1 (AUDIT-2 probe): FG-463 is atomic
+# The audit probe's cases (docs/audit/probes/lab01/test_probe_lab01t_fg463_race.py) — real
+# Mongo only (the race needs real transactions), ten runs each.
+
+@pytest.mark.skipif(bool(_real_refusal()), reason="real Mongo only")
+@pytest.mark.parametrize("i", range(10))
+def test_lab73_r1_t1_two_concurrent_approvals_of_overlapping_rows(monkeypatch, i):
+    async def scenario(c, op):
+        await _legacy_manual(op, "le-dup", date="2026-11-05")
+        a, b = await asyncio.gather(
+            c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("owner")),
+            c.post("/api/labor-entries/le-dup/approve", json=_decision(cost=30.0), headers=_key("acct")))
+        st = {r["id"]: r["approval_status"] async for r in op.labor_entries.find(
+            {"id": {"$in": ["le-man", "le-dup"]}}, {"_id": 0, "id": 1, "approval_status": 1})}
+        assert list(st.values()).count("approved") == 1, (st, a.text, b.text)
+        assert sorted([a.status_code, b.status_code]) == [200, 409], (a.text, b.text)
+    run(monkeypatch, scenario, backend="real")
+
+
+@pytest.mark.skipif(bool(_real_refusal()), reason="real Mongo only")
+@pytest.mark.parametrize("i", range(10))
+def test_lab73_r1_t2_two_concurrent_creates_of_the_same_day(monkeypatch, i):
+    async def scenario(c, op):
+        body = {"project_id": P, "employee_id": "w1", "hours": 1, "date": "2026-11-09",
+                "execution_package_id": PKG}
+        a, b = await asyncio.gather(c.post("/api/labor-entries", json=body, headers=_key("admin")),
+                                    c.post("/api/labor-entries", json=body, headers=_key("owner")))
+        n = await op.labor_entries.count_documents({"employee_id": "w1", "date": "2026-11-09",
+                                                    "source": "manual"})
+        assert n == 1, (n, a.text, b.text)
+        assert sorted([a.status_code, b.status_code]) == [201, 409], (a.text, b.text)
+    run(monkeypatch, scenario, backend="real")
+
+
+@pytest.mark.skipif(bool(_real_refusal()), reason="real Mongo only")
+@pytest.mark.parametrize("i", range(10))
+def test_lab73_r1_t3_a_report_and_a_manual_row_of_the_same_day_approved_concurrently(monkeypatch, i):
+    """The report of le-man's day (w1, 2026-11-05) is approved by the SiteManager while the
+    Owner approves le-man: at most one of the two counts."""
+    async def scenario(c, op):
+        await op.employee_daily_reports.insert_one({
+            "id": "R-RACE", "org_id": ORG, "worker_id": "w1", "date": "2026-11-05", "hours": 2,
+            "project_id": P, "smr_type": "Шпакловка", "status": "SUBMITTED", "submitted_by": "w1"})
+        a, b = await asyncio.gather(
+            c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("owner")),
+            c.post("/api/daily-reports/R-RACE/approve", json={}, headers=_token("sm")))
+        man = (await op.labor_entries.find_one({"id": "le-man"}))["approval_status"]
+        rep = (await op.employee_daily_reports.find_one({"id": "R-RACE"}))["status"]
+        assert [man == "approved", rep == "APPROVED"].count(True) == 1, (man, rep, a.text, b.text)
+        assert 409 in (a.status_code, b.status_code), (a.text, b.text)
+    run(monkeypatch, scenario, backend="real")

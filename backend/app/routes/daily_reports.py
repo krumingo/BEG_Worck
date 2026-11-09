@@ -371,14 +371,6 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     # LAB-01-I (LAB01H-1, CLAUDE §8): nobody approves a report they authored or corrected
     if actor.get("id") in self_approval_ids(report):
         return {"status": "failed", "report_id": rid, "reason": "self_approval"}
-    # FG-463 (R62): an approved manual labor row already carries this worker's hours on this
-    # project and day — approving the report would count them twice
-    from app.services.labor_cost import MANUAL_APPROVED, overlapping_manual_rows
-    if await overlapping_manual_rows(
-            tenant, org_id, report.get("project_id", ""),
-            report.get("worker_id") or report.get("employee_id") or "",
-            report.get("date") or report.get("report_date") or "", (MANUAL_APPROVED,)):
-        return {"status": "failed", "report_id": rid, "reason": "duplicate_of_approved_manual_row"}
 
     worker_id = report.get("worker_id", "")
     hours = float(report.get("hours") or report.get("hours_worked") or 0)
@@ -429,6 +421,40 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     else:
         regular_hours = hours
         overtime_hours = 0
+
+    # FG-463 / LAB73-R1 (R62): an approved manual labor row already carries this worker's hours
+    # on this project and day — approving the report would count them twice. Checked in ONE
+    # transaction with the day's lock, which this approval claims before any side effect (a
+    # concurrent manual-row approval / create of that day then sees the claim → 409).
+    from app.services.labor_cost import MANUAL_APPROVED, bump_labor_day_lock, overlapping_manual_rows
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    day_worker = report.get("worker_id") or report.get("employee_id") or ""
+    day_date = report.get("date") or report.get("report_date") or ""
+
+    class _ApprovedManualRow(Exception):
+        pass
+
+    async def claim_day(session):
+        await bump_labor_day_lock(tenant, org_id, project_id, day_worker, day_date,
+                                  session=session, report_claim=rid)
+        if await overlapping_manual_rows(tenant, org_id, project_id, day_worker, day_date,
+                                         (MANUAL_APPROVED,), session=session):
+            raise _ApprovedManualRow()
+    if project_id and day_worker and day_date:
+        try:
+            try:
+                from app.services.labor_cost import ensure_labor_day_locks
+                await ensure_labor_day_locks(db)   # never created inside a transaction
+                await run_in_transaction(db, claim_day)
+            except TransactionsUnavailable:
+                # a deployment without transactions approved reports before LAB73-R1 and still
+                # does: the same claim and check, without the cross-request atomicity
+                import logging
+                logging.getLogger(__name__).warning(
+                    "LAB73-R1: no MongoDB transactions — the report/manual-row day check is not atomic")
+                await claim_day(None)
+        except _ApprovedManualRow:
+            return {"status": "failed", "report_id": rid, "reason": "duplicate_of_approved_manual_row"}
 
     # A) Slip number — canonical counter_type sequence (shared by single + bulk)
     slip_number = report.get("slip_number")
