@@ -26,6 +26,7 @@ import re
 from typing import Callable, List, Optional
 
 from app.db import db
+from app.services.auth_tx import run_in_transaction
 from app.tenancy.data_access import TenantData
 
 logger = logging.getLogger(__name__)
@@ -93,79 +94,61 @@ async def require_ai(org_id: Optional[str]) -> None:
 
 # ── data minimisation ─────────────────────────────────────────────
 
-# SEC-03 FG-517: a broad candidate pattern, then the real checksum decides, so
-# lowercase / spaced / dashed forms are caught and plain amounts or ids are not.
-# IBAN: 2 letters, 2 digits, then 11–30 alphanumerics, optionally grouped by
-# single spaces or dashes; any case. Valid only if ISO 13616 mod-97 == 1.
+# SEC-03 FG-517 / FG-535: redaction errs on the side of hiding. Anything that LOOKS
+# like an IBAN or a ЕГН/ЛНЧ is replaced — checksum valid or not, any case, with
+# spaces, NBSP, several spaces or dashes between the groups, and next to commas,
+# dots or other numbers. Over-redaction (e.g. a 10-digit phone or invoice number)
+# is accepted; a leaked personal id is not.
+_SEP = r"[ \t\u00a0\u202f\-]"
+# IBAN: 2 letters + 2 digits, then alphanumeric groups separated by _SEP runs.
 _IBAN_START = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}\d{2}")
-# ЕГН: 10 digits, optionally separated by single spaces or dashes, not part of a
-# longer number or a decimal amount. Valid only with a real month and checksum.
-_EGN_CANDIDATE = re.compile(r"(?<![\d.,])\d(?:[ \-]?\d){9}(?!\d|[.,]\d|[ \-]\d)")
-_EGN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3, 6)
-
-
-def _iban_valid(compact: str) -> bool:
-    compact = compact.upper()
-    if not 15 <= len(compact) <= 34 or not compact.isalnum():
-        return False
-    moved = compact[4:] + compact[:4]
-    try:
-        return int("".join(str(int(ch, 36)) for ch in moved)) % 97 == 1
-    except ValueError:
-        return False
-
-
-def _egn_valid(digits: str) -> bool:
-    if len(digits) != 10 or not digits.isdigit():
-        return False
-    month = int(digits[2:4])
-    if not (1 <= month <= 12 or 21 <= month <= 32 or 41 <= month <= 52):
-        return False
-    check = sum(int(d) * w for d, w in zip(digits, _EGN_WEIGHTS)) % 11
-    return (0 if check == 10 else check) == int(digits[9])
-
-
-def _sub_valid(pattern, valid, text: str) -> str:
-    def repl(m):
-        compact = re.sub(r"[ \-]", "", m.group(0))
-        return REDACTED if valid(compact) else m.group(0)
-    return pattern.sub(repl, text)
+_IBAN_GROUP = re.compile(r"(%s*)([A-Za-z0-9]+)" % _SEP)
+IBAN_MIN_LEN, IBAN_MAX_LEN = 15, 34
+# ЕГН / ЛНЧ (both 10 digits) and any longer id: a run of digits, single _SEP
+# characters allowed between them, of 10 digits or more.
+_DIGIT_RUN = re.compile(r"\d(?:%s?\d)*" % _SEP)
+ID_MIN_DIGITS = 10
 
 
 def _redact_ibans(text: str) -> str:
-    """Scan from every possible IBAN start; extend over alphanumerics (single
-    space/dash between them allowed) and redact the LONGEST prefix that is a valid
-    IBAN — so words after the IBAN neither hide it nor get redacted with it."""
+    """From every possible IBAN start, take the following alphanumeric groups up to
+    the LAST group that contains a digit (bank codes like BNBG are kept inside, but
+    trailing words such as "and more" are not swallowed); redact when the compact
+    length is IBAN-like (15–34). No checksum: a mistyped IBAN is still personal."""
     out, pos = [], 0
     for m in _IBAN_START.finditer(text):
         if m.start() < pos:
             continue
-        compact, ends, i = m.group(0), [], m.end()
-        while i < len(text) and len(compact) < 34:
-            j = i + 1 if text[i] in " -" and i + 1 < len(text) and text[i + 1].isascii() \
-                and text[i + 1].isalnum() else i
-            if j < len(text) and text[j].isascii() and text[j].isalnum():
-                compact += text[j]
-                i = j + 1
-                ends.append((i, compact))
-            else:
+        compact, end_ok, i = m.group(0), m.end(), m.end()
+        while len(compact) < IBAN_MAX_LEN:
+            g = _IBAN_GROUP.match(text, i)
+            if not g or not g.group(2).isascii():
                 break
-        best = next((end for end, c in reversed(ends) if _iban_valid(c)
-                     and not (end < len(text) and text[end].isascii() and text[end].isalnum())), None)
-        if best is not None:
+            compact += g.group(2)
+            i = g.end()
+            if any(ch.isdigit() for ch in g.group(2)):
+                end_ok = i
+        compact_ok = re.sub(r"[^A-Za-z0-9]", "", text[m.start():end_ok])
+        if IBAN_MIN_LEN <= len(compact_ok):
             out.append(text[pos:m.start()])
             out.append(REDACTED)
-            pos = best
+            pos = end_ok
     out.append(text[pos:])
     return "".join(out)
 
 
+def _redact_ids(text: str) -> str:
+    def repl(m):
+        digits = sum(ch.isdigit() for ch in m.group(0))
+        return REDACTED if digits >= ID_MIN_DIGITS else m.group(0)
+    return _DIGIT_RUN.sub(repl, text)
+
+
 def redact_personal(text: str) -> str:
-    """Replace IBAN and ЕГН in text that is about to leave for the model."""
+    """Replace anything IBAN-like and any ЕГН/ЛНЧ-like digit run before the model sees it."""
     if not text:
         return text
-    text = _redact_ibans(text)
-    return _sub_valid(_EGN_CANDIDATE, _egn_valid, text)
+    return _redact_ids(_redact_ibans(text))
 
 
 _DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,", re.IGNORECASE)
@@ -247,23 +230,22 @@ def _usage(response) -> dict:
     return {"input_tokens": _n("input_tokens"), "output_tokens": _n("output_tokens")}
 
 
+class AIAuditFailed(AIProviderError):
+    """SEC-03 FG-536: the AuditEvent + ledger row of a completed call could not be
+    committed together; nothing is counted and the AI result is not returned."""
+
+
 async def _record_call(org_id: str, user_id: Optional[str], feature: str, outcome: str,
                        usage: dict, error_type: Optional[str] = None) -> None:
-    """Canonical AuditEvent of one AI call (+ the ledger row when it completed).
-    Metadata only: no prompt, no response, no personal data, no key."""
+    """Canonical AuditEvent of one AI call — metadata only: no prompt, no response,
+    no personal data, no key. A COMPLETED call also writes its ledger row, and both
+    commit in ONE transaction (FG-536): if the audit fails, no counted action remains."""
     from datetime import datetime, timezone
     import uuid
     from app.audit.envelope import (ACTOR_HUMAN, RESULT_FAILURE, RESULT_SUCCESS,
                                     RETENTION_R4_AI_CONTENT, build_event)
     from app.audit.store import record_event
     now = datetime.now(timezone.utc)
-    if outcome == "completed":
-        await TenantData.for_resolved_org(db, org_id).collection(AI_USAGE_LEDGER).insert_one({
-            "id": str(uuid.uuid4()), "org_id": org_id, "user_id": user_id, "feature": feature,
-            "model_and_version": model_and_version(), "actions": 1,
-            "input_tokens": usage["input_tokens"], "output_tokens": usage["output_tokens"],
-            "period": now.strftime("%Y-%m"), "occurred_at": now.isoformat(),
-        })
     event = build_event(
         tenant_id=org_id, actor_type=ACTOR_HUMAN, actor_id=user_id or "unknown",
         action="ai.call.%s" % outcome, source_flow="FLOW-050",
@@ -277,7 +259,24 @@ async def _record_call(org_id: str, user_id: Optional[str], feature: str, outcom
         model_and_version=model_and_version(), source_channel="api",
         tool_or_endpoint="ai_provider.complete:%s" % feature, error_code=error_type,
     )
-    await record_event(db, event)
+    if outcome != "completed":
+        await record_event(db, event)
+        return
+    row = {"id": str(uuid.uuid4()), "org_id": org_id, "user_id": user_id, "feature": feature,
+           "model_and_version": model_and_version(), "actions": 1,
+           "input_tokens": usage["input_tokens"], "output_tokens": usage["output_tokens"],
+           "period": now.strftime("%Y-%m"), "occurred_at": now.isoformat(),
+           "audit_event_id": event["event_id"]}
+
+    async def body(session):
+        await TenantData.for_resolved_org(db, org_id).collection(AI_USAGE_LEDGER).insert_one(
+            dict(row), session=session)
+        await record_event(db, dict(event), session=session)
+    try:
+        await run_in_transaction(db, body)
+    except Exception as exc:
+        logger.warning("AI call audit/ledger not committed: %s", type(exc).__name__)
+        raise AIAuditFailed("AI call could not be recorded (%s)" % type(exc).__name__) from None
 
 
 async def complete(org_id: Optional[str], *, user_id: Optional[str], feature: str,

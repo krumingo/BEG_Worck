@@ -640,9 +640,16 @@ async def toggle_feature_flag(data: ModuleToggle, user: dict = Depends(require_p
     await log_audit(user["org_id"], user["id"], user["email"], "toggled", "feature_flag", data.module_code, {"enabled": data.enabled})
     return await tenant.feature_flags.find({"org_id": user["org_id"]}, {"_id": 0}).to_list(100)
 
-# ── SEC-03 / Р76 FG-519: per-tenant AI switch (Owner only, canonical AuditEvent) ──
+# ── SEC-03 / Р76 FG-519, FG-538: per-tenant AI switch ──
+# Owner only. The flag and its canonical AuditEvent commit in ONE transaction;
+# an Idempotency-Key (W0-04 registry) and a reason are required.
+AI_SETTINGS_ACTION = "ai.settings.change"
+AI_SETTINGS_REASON_MIN = 3
+
+
 class AISettingsUpdate(BaseModel):
     enabled: bool
+    reason: str = Field(..., min_length=AI_SETTINGS_REASON_MIN, max_length=500)
 
 
 @router.get("/ai/settings")
@@ -653,8 +660,13 @@ async def get_ai_settings(user: dict = Depends(get_current_user)):
 
 
 @router.put("/ai/settings")
-async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict = Depends(get_current_user)):
+async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict = Depends(get_current_user),
+                          idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    import json
     from app.audit.envelope import RETENTION_R3_SECURITY_ACCESS, build_event
+    from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE, IDEMPOTENCY_STARTED,
+                                       IdempotencyConflict, begin_idempotent, complete_idempotent,
+                                       fail_idempotent, request_fingerprint)
     from app.audit.store import record_event
     from app.services import ai_provider
     from app.services.user_role_policy import RANK_OWNER, actor_rank
@@ -662,21 +674,69 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
     if await actor_rank(user, mode, tenant_id) < RANK_OWNER:
         raise HTTPException(status_code=403, detail={"error_code": "OWNER_ONLY",
                                                      "message": "Only the Owner switches AI on or off"})
+    key = idempotency_key.strip() if isinstance(idempotency_key, str) else ""
+    if not key:
+        raise HTTPException(status_code=428, detail={"error_code": "IDEMPOTENCY_KEY_REQUIRED",
+                                                     "message": "Липсва Idempotency-Key — заявката не е записана"})
+    reason = data.reason.strip()
+    if len(reason) < AI_SETTINGS_REASON_MIN:
+        raise HTTPException(status_code=422, detail={"error_code": "REASON_REQUIRED",
+                                                     "message": "Посочете причина"})
+    org_id = user["org_id"]
+    try:
+        state = await begin_idempotent(db, tenant_id=org_id, key=key, action=AI_SETTINGS_ACTION,
+                                       request_fingerprint=request_fingerprint(
+                                           {"enabled": data.enabled, "reason": reason}))
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail={"error_code": "IDEMPOTENCY_KEY_REUSED",
+                                                     "message": "Този Idempotency-Key вече е използван за друга заявка"})
+    if state["status"] == IDEMPOTENCY_DUPLICATE:
+        if state.get("prior_status") == IDEMPOTENCY_COMPLETED:
+            return json.loads(state["result_reference"])
+        raise HTTPException(status_code=409, detail={"error_code": "IDEMPOTENCY_IN_PROGRESS",
+                                                     "message": "Заявка с този Idempotency-Key още се обработва"})
+    if state["status"] != IDEMPOTENCY_STARTED:
+        raise HTTPException(status_code=409, detail={"error_code": "IDEMPOTENCY_IN_PROGRESS",
+                                                     "message": "Заявка с този Idempotency-Key още се обработва"})
     tenant = _tenant(user)
-    before = await ai_provider.ai_enabled_for_tenant(user["org_id"])
-    now = datetime.now(timezone.utc).isoformat()
-    await tenant.feature_flags.update_one(
-        {"org_id": user["org_id"], "module_code": ai_provider.AI_FLAG},
-        {"$set": {"enabled": data.enabled, "updated_at": now, "updated_by": user["id"]}},
-        upsert=True)
-    await record_event(db, build_event(
-        tenant_id=user["org_id"], actor_type="human", actor_id=user["id"],
-        action="ai.settings.changed", source_flow="FLOW-050",
-        retention_class=RETENTION_R3_SECURITY_ACCESS, entity_type="feature_flag",
-        entity_id=ai_provider.AI_FLAG,
-        structured_diff={"before": {"enabled": before}, "after": {"enabled": data.enabled}},
-        source_channel="api", tool_or_endpoint="PUT /api/ai/settings"))
-    return {"enabled": data.enabled, "configured": ai_provider.is_configured()}
+
+    async def body(session):
+        row = await tenant.feature_flags.find_one(
+            {"org_id": org_id, "module_code": ai_provider.AI_FLAG}, {"_id": 0, "enabled": 1}, session=session)
+        before = bool(row and row.get("enabled") is True)
+        now = datetime.now(timezone.utc).isoformat()
+        await tenant.feature_flags.update_one(
+            {"org_id": org_id, "module_code": ai_provider.AI_FLAG},
+            {"$set": {"enabled": data.enabled, "updated_at": now, "updated_by": user["id"]}},
+            upsert=True, session=session)
+        await record_event(db, build_event(
+            tenant_id=org_id, actor_type="human", actor_id=user["id"],
+            action="ai.settings.changed", source_flow="FLOW-050",
+            retention_class=RETENTION_R3_SECURITY_ACCESS, entity_type="feature_flag",
+            entity_id=ai_provider.AI_FLAG, reason=reason, idempotency_key=key,
+            structured_diff={"before": {"enabled": before}, "after": {"enabled": data.enabled}},
+            source_channel="api", tool_or_endpoint="PUT /api/ai/settings"), session=session)
+    from app.services.auth_tx import TransactionsUnavailable
+    try:
+        await run_ai_settings_transaction(db, body)
+    except TransactionsUnavailable:
+        await fail_idempotent(db, tenant_id=org_id, key=key, action=AI_SETTINGS_ACTION,
+                              error_code="TRANSACTIONS_UNAVAILABLE")
+        raise HTTPException(status_code=503, detail={"error_code": "TRANSACTIONS_UNAVAILABLE",
+                                                     "message": "Промяната изисква транзакции (replica set); нищо не е записано"})
+    except Exception:
+        await fail_idempotent(db, tenant_id=org_id, key=key, action=AI_SETTINGS_ACTION, error_code="ERROR")
+        raise
+    result = {"enabled": data.enabled, "configured": ai_provider.is_configured()}
+    await complete_idempotent(db, tenant_id=org_id, key=key, action=AI_SETTINGS_ACTION,
+                              result_reference=json.dumps(result, sort_keys=True))
+    return result
+
+
+async def run_ai_settings_transaction(database, body):
+    """The flag + AuditEvent transaction (module-level so tests can emulate it on mongomock)."""
+    from app.services.auth_tx import run_in_transaction
+    return await run_in_transaction(database, body)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

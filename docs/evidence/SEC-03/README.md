@@ -37,6 +37,10 @@ Branch `claude/sec-03-emergent-removal` from main `1525a1e`. Draft PR, no merge,
 
 ## Not done here (recorded as debt, decisions for Krum / orchestrator)
 
+- **AUDIT-2 N2 (debt, not built, orchestrator):** there is no Platform-level path to switch `ai_enabled` for ANOTHER tenant (`PUT /feature-flags` only ever touched the Platform Admin's own org, and now refuses `ai_enabled`). Each tenant's Owner switches their own tenant via `PUT /api/ai/settings` (FG-519/538). A support path for another tenant would need a Support Access Grant (§3), which does not exist yet.
+- **AUDIT-2 N4:** fixed. The `ai_proposal.py` module docstring (FG-520) and the `get_ai_proposal` / `llm_proposal` docstrings now describe the Anthropic adapter, the Owner switch, the audit + ledger and the fallbacks.
+- **FG-537 (AI budget enforcement) and the dev-server `*.emergent.sh` trust:** waiting for Krum's decision (orchestrator). Not touched.
+
 1. **PostHog on main (H-2).** The package says not to touch PostHog while #88 is not on main, so the snippet bytes stay. The CSP (`script-src 'self'`) blocks that inline snippet and its remote `array.js` in the browser. In effect, main's legacy PostHog sends nothing once SEC-03 is deployed; the e2e shows exactly one blocked inline script, whose hash is the PostHog snippet's. #88's bundled posthog-js needs only `connect-src` to its host. The meta CSP adds that host when `REACT_APP_POSTHOG_KEY` is set; the nginx header must add it then too. (Orchestrator, Q1: agreed: strict CSP, legacy snippet blocked, no remote-script whitelist.)
 2. **AI photo originals (§4).** The photo endpoints store nothing; they only return proposals. The canonical File Registry (W0-06) is not on main, and a second registry is forbidden (§16). Debt: "AI photo original → File Registry when W0-06 lands". Until then `ai_enabled` is off, so no photo reaches any model. (Orchestrator: agreed, recorded as debt.)
 3. **`smr-analyses/{id}/ai-breakdown`** writes the AI split into analysis lines. That is existing behaviour, protected by `manual_override`, and is not changed here. Recorded as debt against §10's draft → confirm rule.

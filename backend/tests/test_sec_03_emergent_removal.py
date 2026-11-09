@@ -348,7 +348,26 @@ def ai(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_MODEL", raising=False)
     fake = FakeClient()
     monkeypatch.setattr(ai_provider, "client_factory", fake)
+    monkeypatch.setattr(ai_provider, "run_in_transaction", snapshot_transaction)
     return ai_provider, db, fake
+
+
+TX_COLLECTIONS = ("ai_usage_ledger", "audit_events", "feature_flags")
+
+
+async def snapshot_transaction(db, body):
+    """mongomock has no sessions: emulate commit-or-nothing (the contract of
+    auth_tx.run_in_transaction) by restoring the touched collections when ``body``
+    raises. Atomicity on a real replica set: test_real_mongo_* below."""
+    snap = {n: await db[n].find({}).to_list(None) for n in TX_COLLECTIONS}
+    try:
+        return await body(None)
+    except BaseException:
+        for n, docs in snap.items():
+            await db[n].delete_many({})
+            if docs:
+                await db[n].insert_many(docs)
+        raise
 
 
 def configure(monkeypatch, db, *, key=True, model=True, enabled=True, org=ORG_A):
@@ -440,33 +459,96 @@ def test_forbidden_a_provider_failure_is_audited_not_counted_and_never_leaks(ai,
     assert ledger(db) == []                                      # only completed actions count
 
 
-# ── FG-517 redaction ──
+# ── FG-517 / FG-535 redaction: anything that looks like one is hidden ──
 @pytest.mark.parametrize("text", [
     "IBAN BG80BNBG96611020345678", "iban bg80bnbg96611020345678", "bg80 bnbg 9661 1020 3456 78 мазилка",
     "BG80-BNBG-9661-1020-3456-78", "GB82 WEST 1234 5698 7654 32", "IBAN BG80BNBG96611020345678 and more",
+    "BG80\u00a0BNBG\u00a09661\u00a01020\u00a03456\u00a078", "BG80  BNBG  9661  1020  3456  78",
+    "BG80BNBG96611020345679",                       # bad IBAN checksum — still hidden
     "ЕГН 8001010008", "800101 0008", "80-01-01-0008", "800 101 0008", "egn:8001010008,",
+    "ЕГН 8001010008, тел.", "ЕГН:8001010008.", "ЕГН8001010008 и 5 бр", "800101\u00a00008",
+    "ID 8001010000",                                # bad ЕГН checksum — still hidden
+    "ЛНЧ 1001234567", "ЛНЧ: 10 0123 4567",
 ])
-def test_personal_ids_are_redacted_in_any_case_and_spacing(text):
+def test_personal_ids_are_redacted_in_any_case_spacing_and_checksum(text):
     from app.services.ai_provider import redact_personal
     out = redact_personal(text)
-    assert "[скрито]" in out
+    assert "[скрито]" in out, out
     digits = re.sub(r"\D", "", out)
-    assert "8001010008" not in digits and "96611020345678" not in digits and "12345698765432" not in digits
+    for leaked in ("8001010008", "8001010000", "96611020345678", "96611020345679", "12345698765432", "1001234567"):
+        assert leaked not in digits, (text, out)
     if "and more" in text:
         assert out.endswith(" and more")
     if "мазилка" in text:
         assert out.endswith(" мазилка")
+    if " и 5 бр" in text:
+        assert out.endswith(" и 5 бр")
 
 
 @pytest.mark.parametrize("text", [
-    "сума 1234567890.50 лв", "1 234 567,89", "тел 0888123456", "фактура 2026000123", "QR-000012",
-    "BG80BNBG96611020345679",          # wrong IBAN checksum
-    "ID 8001010000",                    # wrong ЕГН checksum
-    "12 345,00 и 9876543210", "модел GW12345678901234 x", "AB12CDEFGHIJKLMNOP", "мазилка 12 м2 по 18,50",
+    "1 234 567,89", "QR-000012", "12 345,00 лв", "мазилка 12 м2 по 18,50 лв", "Обект №17, етаж 3, 120 м2",
 ])
-def test_plain_amounts_and_ids_are_not_over_redacted(text):
+def test_ordinary_amounts_and_short_ids_stay_readable(text):
+    """Over-redaction is accepted (FG-535) — but ordinary quantities and short ids pass."""
     from app.services.ai_provider import redact_personal
     assert redact_personal(text) == text
+
+
+# ── FG-536: audit + ledger in one transaction ──
+def test_forbidden_if_the_audit_fails_no_counted_action_remains(ai, monkeypatch):
+    from app.audit import store
+    ai_provider, db, fake = ai
+    configure(monkeypatch, db)
+
+    async def broken(*a, **kw):
+        raise RuntimeError("audit store down")
+    monkeypatch.setattr(store, "record_event", broken)
+    with pytest.raises(ai_provider.AIAuditFailed):
+        call(ai_provider)
+    assert fake.messages.calls != []          # the model answered…
+    assert ledger(db) == []                   # …but nothing is counted, and the answer is not returned
+
+
+def _real_mongo_db():
+    url = os.environ.get("W0_03_REAL_MONGO_URL")
+    if not url:
+        pytest.skip("W0_03_REAL_MONGO_URL not set (the gates run on real Mongo)")
+    from motor.motor_asyncio import AsyncIOMotorClient
+    return AsyncIOMotorClient(url)["sec03_tx_%s" % os.urandom(4).hex()]
+
+
+def test_real_mongo_ai_call_audit_and_ledger_commit_together_or_not_at_all(monkeypatch):
+    """FG-536 on a real replica set (no emulation): a failing audit write rolls the
+    ledger row back; a good call commits both."""
+    from app.audit import store
+    from app.services import ai_provider
+
+    async def scenario():
+        db = _real_mongo_db()
+        try:
+            monkeypatch.setattr(ai_provider, "db", db)
+            monkeypatch.setenv("ANTHROPIC_API_KEY", "test-only-key-sec03")
+            monkeypatch.setenv("ANTHROPIC_MODEL", "configured-model-sec03")
+            await db["feature_flags"].insert_one({"org_id": ORG_A, "module_code": "ai_enabled", "enabled": True})
+            fake = FakeClient('{"ok": 1}')
+            monkeypatch.setattr(ai_provider, "client_factory", fake)
+            real_record = store.record_event
+
+            async def broken(database, event, session=None):
+                await real_record(database, event, session=session)   # written inside the txn…
+                raise RuntimeError("fail after the audit write")       # …then the txn aborts
+            monkeypatch.setattr(store, "record_event", broken)
+            with pytest.raises(ai_provider.AIAuditFailed):
+                await ai_provider.complete(ORG_A, user_id="u-1", feature="f", system="s", text="t")
+            assert await db["ai_usage_ledger"].count_documents({}) == 0
+            assert await db["audit_events"].count_documents({"action": "ai.call.completed"}) == 0
+            monkeypatch.setattr(store, "record_event", real_record)
+            assert await ai_provider.complete(ORG_A, user_id="u-1", feature="f", system="s", text="t") == '{"ok": 1}'
+            assert await db["ai_usage_ledger"].count_documents({}) == 1
+            assert await db["audit_events"].count_documents({"action": "ai.call.completed"}) == 1
+        finally:
+            await db.client.drop_database(db.name)
+    run(scenario())
 
 
 # ── the AI endpoints ──
@@ -628,6 +710,7 @@ def _auth_client(monkeypatch, db, user):
     from app.deps.auth import get_current_user, require_platform_admin
     from fastapi import HTTPException
     monkeypatch.setattr(auth_routes, "db", db)
+    monkeypatch.setattr(auth_routes, "run_ai_settings_transaction", snapshot_transaction)
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
 
     async def _noop(*a, **kw):
@@ -653,11 +736,17 @@ def _switch_events(db):
     return run(db[AUDIT_COLLECTION].find({"action": "ai.settings.changed"}, {"_id": 0}).to_list(None))
 
 
+def _put(client, enabled, key="k-1", reason="тест на живо от Крум"):
+    headers = {"Idempotency-Key": key} if key else {}
+    body = {"enabled": enabled} if reason is None else {"enabled": enabled, "reason": reason}
+    return client.put("/api/ai/settings", json=body, headers=headers)
+
+
 @pytest.mark.parametrize("user", [TENANT_ADMIN, PLATFORM, TECH], ids=["admin", "platform-admin", "technician"])
 def test_forbidden_only_the_owner_switches_ai(ai, monkeypatch, user):
     ai_provider, db, fake = ai
     client = _auth_client(monkeypatch, db, user)
-    r = client.put("/api/ai/settings", json={"enabled": True})
+    r = _put(client, True)
     assert r.status_code == 403, r.text
     # the generic module switch refuses the AI flag for everyone, platform admin included
     r = client.put("/api/feature-flags", json={"module_code": "ai_enabled", "enabled": True})
@@ -665,20 +754,93 @@ def test_forbidden_only_the_owner_switches_ai(ai, monkeypatch, user):
     assert run(ai_provider.ai_enabled_for_tenant(ORG_A)) is False and _switch_events(db) == []
 
 
+@pytest.mark.parametrize("key,reason,status", [(None, "причина", 428), ("k", None, 422), ("k", "  ", 422),
+                                               ("k", "x", 422)])
+def test_forbidden_the_switch_needs_an_idempotency_key_and_a_reason(ai, monkeypatch, key, reason, status):
+    ai_provider, db, fake = ai
+    r = _put(_auth_client(monkeypatch, db, OWNER), True, key=key, reason=reason)
+    assert r.status_code == status, r.text
+    assert run(ai_provider.ai_enabled_for_tenant(ORG_A)) is False and _switch_events(db) == []
+
+
 def test_positive_the_owner_switches_ai_with_an_audit_event_and_it_is_off_by_default(ai, monkeypatch):
     ai_provider, db, fake = ai
     client = _auth_client(monkeypatch, db, OWNER)
     assert client.get("/api/ai/settings").json() == {"enabled": False, "configured": False}
-    r = client.put("/api/ai/settings", json={"enabled": True})
+    r = _put(client, True, key="k-on")
     assert r.status_code == 200, r.text
     assert run(ai_provider.ai_enabled_for_tenant(ORG_A)) is True
     assert run(ai_provider.ai_enabled_for_tenant(ORG_B)) is False
-    r = client.put("/api/ai/settings", json={"enabled": False})
+    r = _put(client, False, key="k-off", reason="край на теста")
     assert r.status_code == 200 and run(ai_provider.ai_enabled_for_tenant(ORG_A)) is False
     evs = _switch_events(db)
-    assert [(e["actor_id"], e["structured_diff"]["before"]["enabled"], e["structured_diff"]["after"]["enabled"])
-            for e in evs] == [("owner-1", False, True), ("owner-1", True, False)]
+    assert [(e["actor_id"], e["structured_diff"]["before"]["enabled"], e["structured_diff"]["after"]["enabled"],
+             e["reason"], e["idempotency_key"]) for e in evs] == [
+        ("owner-1", False, True, "тест на живо от Крум", "k-on"), ("owner-1", True, False, "край на теста", "k-off")]
     assert {e["tenant_id"] for e in evs} == {ORG_A}
+
+
+def test_the_switch_is_idempotent_per_key(ai, monkeypatch):
+    ai_provider, db, fake = ai
+    client = _auth_client(monkeypatch, db, OWNER)
+    first = _put(client, True, key="same")
+    again = _put(client, True, key="same")
+    assert first.status_code == again.status_code == 200 and first.json() == again.json()
+    assert len(_switch_events(db)) == 1                                   # replay: nothing written twice
+    other = _put(client, False, key="same")                               # same key, different request
+    assert other.status_code == 409 and other.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REUSED"
+    assert run(ai_provider.ai_enabled_for_tenant(ORG_A)) is True and len(_switch_events(db)) == 1
+
+
+def test_forbidden_if_the_switch_event_fails_the_flag_does_not_change(ai, monkeypatch):
+    from app.audit import store
+    ai_provider, db, fake = ai
+    client = _auth_client(monkeypatch, db, OWNER)
+
+    async def broken(*a, **kw):
+        raise RuntimeError("audit store down")
+    monkeypatch.setattr(store, "record_event", broken)
+    r = _put(client, True, key="k-broken")
+    assert r.status_code == 500
+    assert run(ai_provider.ai_enabled_for_tenant(ORG_A)) is False and _switch_events(db) == []
+
+
+def test_real_mongo_the_switch_and_its_event_commit_together(monkeypatch):
+    """FG-538 on a real replica set: the flag write is rolled back when the event fails.
+    The route function is driven directly in ONE event loop (a Motor client cannot
+    cross TestClient's loop)."""
+    from fastapi import HTTPException
+    from app.audit import store
+    from app.routes import auth as auth_routes
+    from app.services import ai_provider
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+
+    async def scenario():
+        real_db = _real_mongo_db()
+        try:
+            monkeypatch.setattr(ai_provider, "db", real_db)
+            monkeypatch.setattr(auth_routes, "db", real_db)
+            real_record = store.record_event
+
+            async def broken(database, event, session=None):
+                await real_record(database, event, session=session)
+                raise RuntimeError("fail after the event write")
+            monkeypatch.setattr(store, "record_event", broken)
+            body = auth_routes.AISettingsUpdate(enabled=True, reason="тест на живо")
+            with pytest.raises(RuntimeError):
+                await auth_routes.put_ai_settings(body, None, dict(OWNER), idempotency_key="rk-1")
+            assert await real_db["feature_flags"].count_documents({"module_code": "ai_enabled"}) == 0
+            assert await real_db["audit_events"].count_documents({"action": "ai.settings.changed"}) == 0
+            monkeypatch.setattr(store, "record_event", real_record)
+            out = await auth_routes.put_ai_settings(body, None, dict(OWNER), idempotency_key="rk-2")
+            assert out["enabled"] is True
+            assert await real_db["feature_flags"].count_documents({"module_code": "ai_enabled", "enabled": True}) == 1
+            assert await real_db["audit_events"].count_documents({"action": "ai.settings.changed"}) == 1
+            with pytest.raises(HTTPException):          # a tenant Admin never reaches the transaction
+                await auth_routes.put_ai_settings(body, None, dict(TENANT_ADMIN), idempotency_key="rk-3")
+        finally:
+            await real_db.client.drop_database(real_db.name)
+    run(scenario())
 
 
 # ════════════════════════════════════════════════════════════ frontend template (H-1, M-4, L-6)

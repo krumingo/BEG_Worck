@@ -244,9 +244,12 @@ LLM_SYSTEM_PROMPT = """Ти си експерт по строително-мон
 
 async def llm_proposal(title: str, unit: str, qty: float, city: str = None,
                        org_id: str = None, user_id: str = None) -> dict:
-    """Generate a proposal with the configured AI provider (SEC-03 / Р76:
-    Anthropic directly, key and model from configuration, tenant flag
-    ``ai_enabled``). Raises ``AINotConfigured`` when AI is not set up."""
+    """One AI proposal through ``app/services/ai_provider.py`` (SEC-03 / Р76: Anthropic
+    directly; key and model from configuration; the tenant's Owner-controlled
+    ``ai_enabled`` flag). The provider writes the call's AuditEvent and, when it
+    completes, its ``ai_usage_ledger`` row in one transaction. Raises
+    ``AINotConfigured`` (not set up / off for the tenant) or ``AIProviderError``
+    (incl. ``AIAuditFailed``). Returns a PROPOSAL only — nothing is written here."""
     from app.services import ai_provider
 
     city_hint = f" в град {city}" if city else " в България"
@@ -325,10 +328,18 @@ async def llm_proposal(title: str, unit: str, qty: float, city: str = None,
 async def get_ai_proposal(title: str, unit: str, qty: float, city: str = None, org_id: str = None,
                           user_id: str = None) -> dict:
     """
-    Hybrid AI proposal: tries LLM first, falls back to rule-based.
-    Applies approved calibration factors if available.
+    SMR price/material PROPOSAL for a person to confirm — never written by itself.
+
+    * AI configured and ``ai_enabled`` on for the tenant → the AI proposal
+      (``provider: "llm"``; audited and counted, see :func:`llm_proposal`);
+    * AI not configured / off → the rule-based engine, with
+      ``fallback_reason`` "AI не е настроен, използван rule-based engine";
+    * AI call failed (or could not be audited) → the rule-based engine,
+      ``fallback_reason`` "LLM недостъпен, използван rule-based engine".
+
+    Approved calibration factors of the tenant are applied in every case.
     """
-    # Try LLM first
+    # AI first when it is available for this tenant
     from app.services.ai_provider import AINotConfigured, AI_NOT_CONFIGURED_MESSAGE
     try:
         result = await llm_proposal(title, unit, qty, city, org_id, user_id)

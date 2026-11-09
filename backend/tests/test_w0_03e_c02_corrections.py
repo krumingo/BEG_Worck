@@ -337,6 +337,13 @@ def test_ai_batch_recognition_match_stays_a_suggestion_with_a_master_ref(monkeyp
     # SEC-03 FG-522: photo AI is off until the File Registry stores the original;
     # this test covers the match logic downstream of that switch.
     monkeypatch.setattr(ai_provider, "PHOTO_AI_FILE_REGISTRY_READY", True)
+    # SEC-03 FG-536: the call's AuditEvent + ledger row commit in one transaction;
+    # mongomock has none, so the body runs directly (atomicity is proven on real
+    # Mongo in tests/test_sec_03_emergent_removal.py).
+
+    async def _direct_transaction(database, body):
+        return await body(None)
+    monkeypatch.setattr(ai_provider, "run_in_transaction", _direct_transaction)
     run(db["feature_flags"].insert_one({"org_id": ADMIN["org_id"], "module_code": "ai_enabled", "enabled": True}))
     answer = json.dumps({"name": "Bosch GBH", "brand": "Bosch", "model": "GBH",
                          "type_label": "Бормашини", "confidence": 90})
