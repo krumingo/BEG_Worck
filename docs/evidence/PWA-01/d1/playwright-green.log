@@ -1,0 +1,37 @@
+PASS  index.html links the manifest  "/manifest.webmanifest"
+PASS  manifest: name/short_name/start_url/scope/display/lang
+PASS  manifest: 192/512 any + maskable icons  ["192x192:any","512x512:any","192x192:maskable","512x512:maskable"]
+PASS  icon /icons/icon-192.png served  200
+PASS  icon /icons/icon-512.png served  200
+PASS  icon /icons/icon-maskable-192.png served  200
+PASS  icon /icons/icon-maskable-512.png served  200
+PASS  icon /icons/apple-touch-icon.png served  200
+PASS  apple-touch-icon + apple meta tags
+PASS  service worker active, scope /  {"scope":"http://localhost:4173/","active":"activated","scriptURL":"http://localhost:4173/service-worker.js","version":{"build_sha":"e571b06a4d664301b90601b1e6d202fd1773f8f5","cache":"bw-shell-e571b06a4d66-90998068"}}
+PASS  SW version = RC-01 build identity  {"build_sha":"e571b06a4d664301b90601b1e6d202fd1773f8f5","cache":"bw-shell-e571b06a4d66-90998068"}
+PASS  Chromium installability: no errors  []
+PASS  desktop: install button in the sidebar
+PASS  Cache Storage: only the app-shell cache exists  ["bw-shell-e571b06a4d66-90998068"]
+PASS  Cache Storage: no /api, /uploads or /ws entry  []
+PASS  Cache Storage: shell has index.html + js + css
+PASS  offline: shell opens from cache
+PASS  offline: Без връзка bar visible  "Без връзка — промените няма да се запишат"
+PASS  offline: /api is not answered from any cache  "network-error"
+PASS  offline: deep link navigation falls back to the shell
+PASS  D1 offline reload: token kept  "kept"
+PASS  D1 offline reload: still inside the shell (dashboard layout, no login page)
+PASS  logout: no token / user / tenant marker / tenant draft in localStorage  ["lang"]
+PASS  logout: sessionStorage empty  []
+PASS  logout: only the app-shell cache remains  ["bw-shell-e571b06a4d66-90998068"]
+PASS  tenant switch: tenant A draft + session storage cleared
+PASS  tenant switch: tenant B login kept, marker = org-b
+PASS  tenant switch: only the app-shell cache remains  ["bw-shell-e571b06a4d66-90998068"]
+PASS  update: Има нова версия bar shown, page not reloaded silently
+PASS  update: Обнови activates the new worker and reloads once
+PASS  phone: install button in the menu
+PASS  phone offline: shell + Без връзка bar
+PASS  D1 phone offline reload: still inside the shell
+PASS  phone: no /api, /uploads or /ws entry in Cache Storage
+PASS  iOS: Сподели → Добави към началния екран steps
+
+35 passed, 0 failed

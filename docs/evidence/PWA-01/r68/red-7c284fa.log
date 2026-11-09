@@ -1,0 +1,4 @@
+FAIL  no key: window.posthog absent and no analytics script  {"loaded":true,"real_library":false}
+FAIL  no key: no request to any PostHog host  ["https://us-assets.i.posthog.com/static/array.js"]
+
+0 passed, 2 failed

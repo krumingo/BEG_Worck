@@ -1,0 +1,75 @@
+{
+  "expect": "off",
+  "checks": [
+    {
+      "name": "PWA88-N1: no script loaded from any PostHog host",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "PWA88-N1: nothing fetched from a PostHog static/CDN path (array.js, recorder, surveys, toolbar)",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "no key: window.posthog absent and no analytics script",
+      "ok": true,
+      "detail": {
+        "loaded": false,
+        "scriptTag": false
+      }
+    },
+    {
+      "name": "no key: no request to any PostHog host",
+      "ok": true,
+      "detail": []
+    }
+  ],
+  "review_page": {
+    "posthog": false,
+    "script": false
+  },
+  "reset_page": {
+    "posthog": false,
+    "script": false
+  },
+  "referrer_seen_by_page": "http://localhost:4173/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+  "client_state": {
+    "loaded": false,
+    "scriptTag": false
+  },
+  "requests": [],
+  "events": [],
+  "external_requests": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+  ],
+  "script_requests": [
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4173/static/js/main.fb19d856.js",
+    "http://localhost:4173/service-worker.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4173/static/js/main.fb19d856.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4173/static/js/main.fb19d856.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4173/static/js/main.fb19d856.js"
+  ],
+  "other_third_party_scripts": [
+    "https://assets.emergent.sh/scripts/emergent-main.js"
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0
+  }
+}
