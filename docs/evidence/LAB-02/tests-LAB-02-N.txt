@@ -1,4 +1,4 @@
-# L02N gates (2026-11-09) — head 4fa4957 — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
+# L02N gates (2026-11-09) — head b35d0c7 — real mongo:7.0 rs0 (fresh container), pytest -rs (skips listed)
 ## PM-01 regenerated: tests/test_pm_01_permission_matrix.py --harness exit=0
   changed cells vs. the branch before the merge:
     changed cells: 0
@@ -27,35 +27,35 @@
     - PUT /api/labor-terms/{package_id}: status —→403, wrote —→no — 15 cells: roles driver, requester, technician, viewer, warehousekeeper × modes enforce, off, shadow
 ## W0-03E-A2B inventory regenerated: scripts/w0_03e_a2b_inventory.py exit=0
 ## PM-01 tests
-6 passed, 10 warnings in 199.18s (0:03:19)
+6 passed, 10 warnings in 190.00s (0:03:10)
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 246 module(s) checked, 0 violation(s)
 ## A1 guard
 W0-03E-A1 tenant access guard: 496 unit(s) checked, 0 violation(s)
 ## LAB suites
-261 passed, 1 warning in 36.71s
+271 passed, 1 warning in 37.81s
 ## SEC-01 (money_write_permissions + c01 + c02 + c03)
-30 passed, 10 warnings in 128.16s (0:02:08)
+30 passed, 10 warnings in 118.96s (0:01:58)
 ## SEC-02 (test_sec_02_finance_read.py)
-31 passed, 10 warnings in 227.28s (0:03:47)
+1 failed, 30 passed, 10 warnings in 236.13s (0:03:56)
 ## PAY-01
-630 passed, 1 warning in 167.71s (0:02:47)
+630 passed, 1 warning in 167.81s (0:02:47)
 ## W0-04 (real)
-74 passed, 1 warning in 15.76s
+74 passed, 1 warning in 16.14s
 ## AUTH-01/02
-122 passed, 10 warnings in 177.19s (0:02:57)
+122 passed, 10 warnings in 177.93s (0:02:57)
 ## R0 tests/test_r0_0*.py (real)
-814 passed, 10 warnings in 170.90s (0:02:50)
+814 passed, 10 warnings in 170.82s (0:02:50)
 ## W0 DB-free (no real Mongo URL)
-15 failed, 1094 passed, 83 skipped, 10 warnings in 90.31s (0:01:30)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 89.00s (0:01:28)
   non-legacy_routes failures: 0
-## frontend (head 4fa4957)
+## frontend (head b35d0c7)
 Test Suites: 23 passed, 23 total
 Tests:       191 passed, 191 total
-Done in 33.25s.
+Done in 32.00s.
 
-## tests/test_work_sessions.py — LIVE server (uvicorn :8012, head 4fa4957, fresh mongo:7.0 rs0, seeded admin, one project)
-  login token: yes; project: 8f887ddc-905f-40c0-9f22-bb8f0227f3eb
+## tests/test_work_sessions.py — LIVE server (uvicorn :8012, head b35d0c7, fresh mongo:7.0 rs0, seeded admin, one project)
+  login token: yes; project: 1052140a-0214-478d-822e-c6170c15e11b
 PASSED tests/test_work_sessions.py::test_start_session
 PASSED tests/test_work_sessions.py::test_end_session
 PASSED tests/test_work_sessions.py::test_auto_close_on_new_start
@@ -68,4 +68,9 @@ PASSED tests/test_work_sessions.py::test_overtime_report
 PASSED tests/test_work_sessions.py::test_update_session
 PASSED tests/test_work_sessions.py::test_end_no_open
 PASSED tests/test_work_sessions.py::test_list_sessions
-12 passed in 1.61s
+12 passed in 1.54s
+
+## OPEN — SEC-02 fresh-run failure above (1 of 31): an intermittent LEAK, not noise
+  row: enforce / tenant B / driver (Driver) / GET /api/sites/{site_id}/pulse / P1 / 200 / written op.site_pulses / leaks_7777 True
+  reproduced 2 of ~10 fresh runs on this head (sec02 reruns: 1 failed, 1 passed, then 1 failed of 2, then 0 of 5 with a context capture)
+  under investigation; not fixed in this gate
