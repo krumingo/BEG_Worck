@@ -6434,3 +6434,38 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - SEC-02 `leaks_7777` substring flake (debt).
   - #88 D5: `assets.emergent.sh` script in `index.html` (Krum).
 - **Environment:** three or more audit mongods on volumes `audit2_db*` (created by this session), quiet logs; ~20 GB free. `pytest-asyncio` and `pypdf` are needed by the suites but are missing from `requirements*.txt` (debt).
+
+## 2026-11-09 16:30 UTC: follow-ups on the orchestrator's queued requests
+
+- **#83 `2415b5f`, fixtures in #81 / #55 tests (vs main):** 0 assertion lines removed; 3 added. No guard is patched off. Accounts are registered and verified through the real register.
+- **#89 R67 test changes:** exactly R67.
+  - The Accountant moves to the allowed side.
+  - Tech and the project manager move to the forbidden side.
+  - In enforce, "nothing written" compares only the business collections. PM-01 still checks every denial cell.
+- **#89 FG-472:** `offer_budget`'s router is not mounted (confirmed).
+- **#88 `62f898a` dependencies:** `--frozen-lockfile` verified the sha512 of every tarball against `yarn.lock`.
+  - posthog-js 1.200.0, preact 10.29.8, core-js 3.51.0, fflate 0.4.9 (`^0.4.8`), web-vitals 4.2.4.
+  - All are more than 2 weeks old.
+- **#82 `tests/test_procurement.py`:** not runnable here. Its credentials and project id are not created by any repo seed (an external preview environment), and it calls the retired `post-to-warehouse`.
+- **Trial merge #84 `faaa2d0` × #82 `108afc0`:**
+  - `merge-tree` conflicts in code: `routes/finance.py`, `warehouse_movements/service.py`, `ownership.py` (add / add), plus the A1 inventory and `run_meta`.
+  - Resolved as a union (second `@staticmethod`, one `expected_credit_notes`); A1 inventory regenerated.
+  - Result:
+
+| Suite | Result |
+|---|---|
+| probe whrev01 | 144 |
+| silock | 3 |
+| wh_rev_01 | 104 |
+| fg233 | 9 |
+| wh_fix_01 | 47 / 129 / 132 |
+| probe R64 | 9 |
+| probe invcn01 | 99 |
+| inv_cn_01 | 165 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| A2C / A1 | 0 / 0 |
+| **warehouse** | **44 / 1121** |
+
+  - The second of #82 / #84 to merge must carry this union resolution.
+- **Environment:** `audit2mongo` (27020) exited once (code 14) during the trial. It was restarted on its volume and the affected suites were re-run. Earlier verdicts come from completed runs.
