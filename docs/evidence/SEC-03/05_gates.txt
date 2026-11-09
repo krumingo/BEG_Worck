@@ -106,7 +106,7 @@ fix WITHOUT the fixture change: 37 failed (fixture assumed HEAD:nginx.conf == li
 ## other backend tests touching the changed modules (20 files; many need a live server → errors on both sides)
 main: 6 failed, 759 passed, 124 errors in 429.86s (0:07:09)
 fix:  7 failed, 758 passed, 124 errors in 423.04s (0:07:03)
-only difference: FAILED tests/test_st_02_staging_stack.py::test_ops_release_tools_are_not_modified_by_st02 (scope guard; see README, orchestrator Q3)
+only difference was FAILED tests/test_st_02_staging_stack.py::test_ops_release_tools_are_not_modified_by_st02 (scope guard) -> resolved by option A (orchestrator Q3): passes; the ST-02 file is 159 passed + the same 3 errors as main
 
 ## frontend
 Test Suites: 22 passed, 22 total

@@ -26,9 +26,13 @@ Branch `claude/sec-03-emergent-removal` from main `1525a1e`. Draft PR, no merge,
 - Optional: `ANTHROPIC_API_KEY` (the firm's own key, only in `.env` / secret store) and `ANTHROPIC_MODEL` (the model Krum chooses). Without either, AI answers "AI не е настроен" and manual work continues. AI is switched on per firm with the `ai_enabled` flag (Platform Admin); it is off by default.
 - Optional: `INTERNAL_JOB_KEY` (≥ 32 characters) only if an external service should trigger `/api/internal/run-reminder-jobs`; the built-in 15-minute loop does not need it.
 
-## Open
+## Release Manifest note (deployment)
 
-- **Q3, ST-02 scope guard.** `backend/tests/test_st_02_staging_stack.py::test_ops_release_tools_are_not_modified_by_st02` allows changes under `ops/release` since `07da9ab` only in the 5 R26 files. The release-fixture fix above adds 2 test files, so this test fails on the branch (it passes on main). The alternative, keeping the fixture on HEAD's `nginx.conf`, breaks 37 release tests. Asked the orchestrator. My recommendation is to allow exactly those two fixture files in that set.
+**At the next deployment, the live server's hand-copied `nginx.conf` must be replaced by the tracked root `nginx.conf` from this branch** (the M-4 security headers: CSP with `frame-ancestors 'none'`, `X-Frame-Options`, `nosniff`, `Referrer-Policy`). After that deployment, `LIVE_NGINX_BLOB` in `ops/release/tests/harness.py` must be updated to the new blob. Otherwise the headers never reach production; the meta CSP in `index.html` alone cannot block framing.
+
+## Q3, resolved (orchestrator: option A)
+
+`backend/tests/test_st_02_staging_stack.py::test_ops_release_tools_are_not_modified_by_st02`: the allowed set now includes exactly `ops/release/tests/harness.py` and `ops/release/tests/synology/make_package.py` ("SEC-03: fixture reads the live nginx.conf blob (b87dfcd)"). Nothing else changed: the "nothing under ops/synology/" assertion is unchanged and still holds. ST-02 file: 159 passed, 3 errors. The 3 are the same R26 bundle tests that error on main in this environment.
 
 ## Not done here (recorded as debt, decisions for Krum / orchestrator)
 
