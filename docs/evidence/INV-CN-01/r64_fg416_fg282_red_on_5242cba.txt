@@ -1,0 +1,32 @@
+# Р64 (FG-415) + FG-416 + FG-282 red proofs — the new tests run against 5242cba (real Mongo rs0, 3 modes)
+
+## the full new tests on 5242cba
+# FG-416: the same Idempotency-Key with another approve comment -> 200 (the comment was not in the fingerprint); must be 409.
+# FG-282: on 5242cba (before #81 WH81-03 was merged) a Received invoice with a project_id was revenue: 200.0, must be 0.
+E       assert (200 == 409)
+E        +  where 200 = <Response [200 OK]>.status_code
+E       assert (200 == 409)
+E        +  where 200 = <Response [200 OK]>.status_code
+E       assert (200 == 409)
+E        +  where 200 = <Response [200 OK]>.status_code
+E       assert 200.0 == 0
+E       assert 200.0 == 0
+E       assert 200.0 == 0
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[enforce]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg278_every_company_result_reader_uses_one_project_status_scope[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg278_every_company_result_reader_uses_one_project_status_scope[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg278_every_company_result_reader_uses_one_project_status_scope[enforce]
+6 failed, 138 deselected, 1 warning in 4.52s
+
+## Р64 alone (the FG-416 part cut out)
+# On 5242cba re-booking an ARCHIVED project to the same place was booked AT ONCE (only 'Completed' needed the Owner),
+# so no new proposal exists and the last proposal (an older one) has no project_statuses -> KeyError.
+E       KeyError: 'project_statuses'
+E       KeyError: 'project_statuses'
+E       KeyError: 'project_statuses'
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner[enforce]
+3 failed, 141 deselected, 1 warning in 3.23s

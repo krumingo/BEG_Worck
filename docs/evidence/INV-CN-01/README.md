@@ -216,6 +216,17 @@ Red proofs against e75b558: `fg_pass28_red_on_e75b558.txt`. The backend fails 3/
 
 Red proofs against cdd3dc8: `r63_fg278_red_on_cdd3dc8.txt`.
 
+## Р64 (D20, FG-415) + FG-416 + FG-282; main 1525a1e (#81) merged
+
+| Point | Fix | Test |
+|---|---|---|
+| **Р64 (FG-415)** | A project is "open" only when it is **Active or Paused** (`OPEN_PROJECT_STATUSES`). A Р63 re-booking onto any other status (Completed, Archived, Finished, Stopped, Cancelled, warranty …), or onto a project that is missing, becomes **a proposal even to the same place**. This covers the projects of the line's own allocation when the destination is "back to the allocation". The status is read **inside the transaction**, both when proposing and **again at the approval**; the decision and the AuditEvent record it. A project that disappeared → 409. The Owner who approves is never the proposer. | `test_r63_…`: Archived + same place → proposal `closed_project` with `{prj-1: Archived}`; the non-Owner gets 403; another Owner approves and the status is re-read as `Completed`; company → company with no project involved → at once |
+| **FG-416** | The approve idempotency fingerprint now includes the comment. The same key with another body → 409 `IDEMPOTENCY_KEY_REUSED`; the same key and body → the replay. | same test |
+| **FG-282** | Closed by #81 (WH81-03: every project revenue reader filters `direction: Issued`), checked after the merge and pinned by a test. | `test_fg278_…`: a Received invoice of a Completed project → revenue 0, expense > 0 |
+| **Merge of #81** | Merged with a merge commit, both sides kept. In `create_invoice`, the WH-FIX-01 Р45 stamp, AuditEvent and DQ run **in the same transaction** as the FG-264 supplier-number insert (an `after_insert` hook). `update_invoice` keeps `_stamp_and_refresh` and the FG-249 409. The FG-233 per-invoice lock sits beside the WH-FIX-01 per-supplier-invoice lock. `_lock_invoice` sits beside `_bind_invoice_line_price`, each with its own `@staticmethod`. | the WH-FIX-01 suites in the gates |
+
+Red proofs against 5242cba: `r64_fg416_fg282_red_on_5242cba.txt`.
+
 ## Debts after Addendum A
 
 | # | Status |
@@ -240,7 +251,7 @@ Red proofs against cdd3dc8: `r63_fg278_red_on_cdd3dc8.txt`.
 | D17 Р58 company cost in company reports | **Closed by the canon (oracle Q007, FLOW-015 / FLOW-024 L170-180).** The company result readers in main (`/org/pnl-attribution`, and per FG-271 also `/org/pnl-overview` and `/finance/stats`) now have a separate line **"Фирмени загуби (не се разпределят)"** (`company_losses`: label, `includes` text, amount, drill-down lines) and `totals.final_profit = profit − company_losses`. The existing `profit` (the sum of projects) is unchanged. The cost is never in a project P&L and never in the overhead allocation base. The dashboard widget shows the line with its drill-down. Test: the `test_r58_…` scenario; red proof `q007_red_on_caea933.txt`. |
 | D18 FLOW-009 warehouse losses view | **Open (no such view in main).** Q007 also wants the Р58 company loss visible in a warehouse losses view (FLOW-009). Main has only per-project material waste (`/projects/{id}/material-waste`), no company-level warehouse-losses view. Per Q007 no new screen is invented. Spec for whoever builds it: show the `company_cost_lines` (Р58 accepted differences on warehouse lines) as losses on return, by acceptance period, with drill-down to the note. |
 | D19 subprojects in the company result | **Note.** The one scope counts every project on its own P&L. Whether a parent's P&L should instead aggregate its subprojects (`compute_aggregated_pnl`) for the company result is not in the canon. |
-| D20 Р63 "Completed" | **Question for Krum.** Р63 names a **Completed** project only. Re-booking onto an Archived / Finished / Cancelled project currently follows only the same-destination rule. |
+| D20 Р63 "Completed" | **Closed by Р64.** Every status other than Active / Paused needs the Owner, even for the same place. |
 | SEC-01 (#69, now in main) | **Open.** `finance.py` routes, old and new, still use `finance_permission` (Owner/Admin/Accountant); #69 did not migrate `finance.py`. Moving the whole module to `require_money_write` plus catalog actions is one follow-up, so the module keeps a single rule. |
 
 ## Gates (`gates.txt`, FG-278 + Р63 head 639b389; main 44e8d97 merged; real Mongo = disposable local mongo:7.0 rs0, a fresh container per block)

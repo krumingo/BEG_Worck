@@ -1648,8 +1648,13 @@ def test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner(mo
         approve2 = base + "/difference-proposals/%s/approve" % prop2["id"]
         r = await c.post(approve2, headers=hdr("owner-a"), json={})
         assert r.status_code == 403 and code(r) == "SAME_PERSON_APPROVAL", r.text
-        r = await c.post(approve2, headers=hdr("owner2-a"), json={"reason": "одобрявам"})
+        r = await c.post(approve2, headers=hdr("owner2-a", key="k-416"), json={"reason": "одобрявам"})
         assert r.status_code == 200, r.text
+        # FG-416: the same key with another body (another comment) → 409; the same body → replay
+        r = await c.post(approve2, headers=hdr("owner2-a", key="k-416"), json={"reason": "друго"})
+        assert r.status_code == 409 and code(r) == "IDEMPOTENCY_KEY_REUSED", r.text
+        assert (await c.post(approve2, headers=hdr("owner2-a", key="k-416"),
+                             json={"reason": "одобрявам"})).status_code == 200
         assert (await c.post(approve2, headers=hdr("owner2-a"), json={})).status_code == 409   # decided
         assert (await ic.company_losses_block(tenant))["amount"] == 5.0
         last = (await postings())[-1]
@@ -1660,16 +1665,36 @@ def test_r63_rebooking_after_a_reversal_same_place_at_once_else_another_owner(mo
         for action in ("proposed", "approved", "rejected"):
             assert await op.audit_events.find_one(
                 {"action": "finance.credit_note.difference_rebooking_" + action}), action
-        # the SAME project, but now Completed → the Owner approves as well
+        # Р64 / FG-415: the SAME place, but the project is not Active / Paused (here Archived)
+        # → a proposal, never booked at once; the status is re-read at the approval
         assert (await c.post(base + "/reverse-difference", headers=hdr("owner-a"),
                              json={"reason": "пак грешно"})).status_code == 200
-        await op.projects.update_one({"id": "prj-1"}, {"$set": {"status": "Completed"}})
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"status": "Archived"}})
+        before = await postings()
         r = await c.post(base + "/difference-lines/il-63p/resolve", headers=hdr("acct-a"),
-                         json={"target": "project", "project_id": "prj-1", "reason": "обратно"})
+                         json={"target": "project", "reason": "обратно на обекта"})
+        assert r.status_code == 200, r.text
         prop3 = r.json()["difference_accepted"]["proposals"][-1]
-        assert prop3["why_approval"] == "other_destination"        # explicit id ≠ the allocation
+        assert (prop3["why_approval"], prop3["project_statuses"]) == ("closed_project", {"prj-1": "Archived"})
+        assert await postings() == before                                   # nothing booked
+        # the same place, no project involved (company → company) → at once
         r = await c.post(base + "/difference-lines/il-63d/resolve", headers=hdr("acct-a"),
                          json={"target": "company", "reason": "пак загуба"})
+        assert r.status_code == 200 and len(await postings()) == len(before) + 1, r.text
+        # the proposer is never the approver; another Owner approves; status re-read (Completed now)
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"status": "Completed"}})
+        approve3 = base + "/difference-proposals/%s/approve" % prop3["id"]
+        assert (await c.post(approve3, headers=hdr("acct-a"), json={})).status_code == 403
+        r = await c.post(approve3, headers=hdr("owner-a"), json={})
+        assert r.status_code == 200, r.text
+        dec = r.json()["difference_accepted"]["decisions"][-1]
+        assert (dec["decision"], dec["project_statuses"]) == ("approved", {"prj-1": "Completed"})
+        # a Completed project, ANOTHER line re-booked to it explicitly → a proposal as well
+        await op.projects.update_one({"id": "prj-2"}, {"$set": {"status": "Finished"}})
+        assert (await c.post(base + "/reverse-difference", headers=hdr("owner-a"),
+                             json={"reason": "трети път"})).status_code == 200
+        r = await c.post(base + "/difference-lines/il-63d/resolve", headers=hdr("acct-a"),
+                         json={"target": "project", "project_id": "prj-2", "reason": "към обекта"})
         assert r.json()["difference_accepted"]["proposals"][-1]["why_approval"] == "other_destination"
     run(monkeypatch, mode, scenario)
 
@@ -1699,6 +1724,12 @@ def test_fg278_every_company_result_reader_uses_one_project_status_scope(monkeyp
         for k in ("revenue", "expense", "profit", "company_losses", "final_profit"):
             assert att["totals"][k] == ov["totals"][k], k
         assert att["company_losses"] == ov["company_losses"]
+        # FG-282 (closed by #81 WH81-03, pinned here): a Received invoice with a project_id is
+        # a cost, never revenue
+        from app.services.project_pnl import compute_project_pnl
+        assert (await compute_project_pnl(ORG_A, "prj-done"))["revenue"]["total_revenue"] == 0
+        done = [p for p in ov["projects"] if p["id"] == "prj-done"][0]
+        assert done["revenue"] == 0 and done["expense"] > 0
     run(monkeypatch, mode, scenario)
 
 

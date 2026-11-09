@@ -529,16 +529,20 @@ async def resolve_difference_line(note_id: str, line_id: str, body: dict = Body(
         at = ic.now_iso()
         if line["state"] == "reversed":
             # Р63 (FG-281): the SAME destination as the reversed booking applies at once;
-            # another project / company / a Completed project needs the Owner (≠ proposer)
+            # another project / company cost needs the Owner (≠ proposer). Р64 (FG-415): a
+            # project that is not Active / Paused needs the Owner EVEN for the same place —
+            # its status read here, inside the transaction.
             same = (target, project_id, package_id) == line["original_destination"]
-            completed = bool(project_id) and await tenant.projects.find_one(
-                {"id": project_id, "status": {"$in": list(ic.CLOSED_PROJECT_STATUSES)}},
-                {"_id": 0, "id": 1}, session=session)
-            if not same or completed:
+            statuses = await ic.project_statuses(
+                tenant, await ic.rebooking_projects(tenant, line_id, target, project_id, session=session),
+                session=session)
+            closed = ic.any_project_closed(statuses)
+            if not same or closed:
                 proposal = {"id": "dpr_" + uuid.uuid4().hex[:16], "original_line_id": line_id,
                             "net": line["net"], "target": target, "project_id": project_id,
                             "package_id": package_id, "reason": reason, "by": user["id"], "at": at,
-                            "why_approval": "completed_project" if same else "other_destination"}
+                            "project_statuses": statuses,
+                            "why_approval": "other_destination" if not same else "closed_project"}
                 return {"proposals": [proposal]}, {"line_id": line_id, "proposal": proposal}, reason, \
                     "finance.credit_note.difference_rebooking_proposed"
         period = acc["at"][:7] if line["state"] == ic.COST_TARGET_UNDETERMINED else at[:7]
@@ -601,19 +605,28 @@ async def approve_difference_proposal(note_id: str, proposal_id: str, body: dict
         if line is None:
             raise ic.conflict(ic.NOT_PENDING, "Редът вече няма неразпределена разлика")
         at = ic.now_iso()
+        # Р64: the project status is read again at the approval, in this transaction
+        statuses = await ic.project_statuses(
+            tenant, await ic.rebooking_projects(tenant, proposal["original_line_id"], proposal["target"],
+                                                proposal.get("project_id"), session=session),
+            session=session)
+        if any(st is None for st in statuses.values()):
+            raise ic.conflict(ic.NOT_PENDING, "Обектът от предложението вече не съществува")
         posting = ic._posting(ic.POSTING_RESOLUTION, proposal["original_line_id"], ic.cents(proposal["net"]),
                               proposal["target"], at, period=at[:7], by=user["id"], reason=proposal["reason"],
                               project_id=proposal.get("project_id"), package_id=proposal.get("package_id"),
                               basis="rebooking_approved_by_owner")
         decision = {"proposal_id": proposal_id, "decision": "approved", "by": user["id"], "at": at,
-                    "reason": comment, "posting_id": posting["id"]}
+                    "reason": comment, "posting_id": posting["id"], "project_statuses": statuses}
         await _close_line_dq(tenant, note, proposal["original_line_id"], user, at, posting, session)
         return {"postings": [posting], "decisions": [decision]}, {
-            "proposal_id": proposal_id, "proposed_by": proposal["by"], "cost_period": at[:7]}, \
+            "proposal_id": proposal_id, "proposed_by": proposal["by"], "cost_period": at[:7],
+            "project_statuses_at_approval": statuses}, \
             comment or proposal["reason"], None
 
     return await _difference_write(user, note_id, key, "finance.credit_note.difference_rebooking_approved",
-                                   {"note_id": note_id, "proposal_id": proposal_id}, apply)
+                                   {"note_id": note_id, "proposal_id": proposal_id, "reason": comment},  # FG-416
+                                   apply)
 
 
 @router.post("/finance/credit-notes/{note_id}/difference-proposals/{proposal_id}/reject")

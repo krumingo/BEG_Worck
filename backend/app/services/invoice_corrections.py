@@ -961,9 +961,38 @@ COST_TARGET_PROJECT = "project"
 COST_TARGET_UNDETERMINED = "undetermined"
 DQ_DIFFERENCE_LINE_UNDETERMINED = "accepted_difference_line_undetermined"
 DQ_DIFFERENCE_LINE_REVERSED = "accepted_difference_line_reversed"
-# Р63: re-booking onto a Completed project needs the Owner (the decision names Completed only;
-# Archived / Finished / Cancelled are a question for Krum — debt D20)
-CLOSED_PROJECT_STATUSES = ("Completed",)
+# Р64 (D20 / FG-415): a project NOT in one of these statuses (closed technically or
+# financially, warranty, archived, cancelled, finished, stopped …) — every Р63 re-booking
+# onto it needs the Owner, even to the same place; re-checked at the approval.
+OPEN_PROJECT_STATUSES = ("Active", "Paused")
+
+
+async def rebooking_projects(tenant, line_id: str, target: str, project_id: Optional[str], *,
+                             session=None) -> List[str]:
+    """The projects a re-booking lands on: the named one, or — "back to the line's own
+    allocation" — the projects of the invoice line's allocations."""
+    if target != COST_TARGET_PROJECT:
+        return []
+    if project_id:
+        return [project_id]
+    row = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "allocations": 1},
+                                              session=session) or {}
+    return sorted({a["ref_id"] for a in row.get("allocations") or []
+                   if a.get("type") == "project" and a.get("ref_id")})
+
+
+async def project_statuses(tenant, project_ids: List[str], *, session=None) -> Dict[str, Optional[str]]:
+    out: Dict[str, Optional[str]] = {pid: None for pid in project_ids}
+    if project_ids:
+        async for p in tenant.projects.find({"id": {"$in": project_ids}}, {"_id": 0, "id": 1, "status": 1},
+                                            session=session):
+            out[p["id"]] = p.get("status")
+    return out
+
+
+def any_project_closed(statuses: Dict[str, Optional[str]]) -> bool:
+    """Р64: a missing project, or one not Active / Paused, counts as closed."""
+    return any(st not in OPEN_PROJECT_STATUSES for st in statuses.values())
 POSTING_BOOKING = "booking"            # at the Owner's acceptance (Р55(3) / Р58)
 POSTING_RESOLUTION = "resolution"      # FG-277: the Accountant decides an open line
 POSTING_REVERSAL = "reversal"          # FG-276: the Owner reverses (append-only)
