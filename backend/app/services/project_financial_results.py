@@ -29,7 +29,7 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
 
     # Cash in: actual payments received
     invoices = await tenant.invoices.find(
-        {"org_id": org_id, "project_id": project_id},
+        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(500)
     cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)

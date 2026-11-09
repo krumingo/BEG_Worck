@@ -95,6 +95,7 @@ ORG_KEYED: Dict[str, str] = {
               # expected_credit_notes is also added by PR #82 (WH-REV-01, Р47) —
               # whichever merges second keeps one entry.
               "credit_debit_notes", "invoice_offsets", "expected_credit_notes",
+              "invoice_line_allocation_versions",
               "ocr_invoice_intake", "historical_offer_rows", "historical_import_batches",
               "sales"),
     **_family(FAMILY_PAYMENTS,
@@ -130,6 +131,7 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_TASKS,
               "worker_calendar", "alarm_rules", "alarm_events",
               # INV-CN-01 FG-249 / Р55(1): canonical data-quality issues (one per kind + entity)
+              # WH-FIX-01 A2/A3: the deduplicated DQ issues (per tenant, org_id).
               "dq_issues"),
     **_family(FAMILY_FILES,
               "media_files", "scan_docs", "excel_import_templates"),

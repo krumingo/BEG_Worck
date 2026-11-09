@@ -323,7 +323,7 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
 
     # Revenue from invoices
     invoices = await tenant.invoices.find(
-        {"org_id": org_id, "project_id": project_id},
+        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
     ).to_list(200)
     # NET revenue (без ДДС) so balance/margin sit on the same basis as costs

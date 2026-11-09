@@ -27,7 +27,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     # ── b. REVENUE ─────────────────────────────────────────────────
     invoices = await tenant.invoices.find(
-        {"org_id": org_id, "project_id": project_id},
+        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
     # INV-CN-01: Issued is official; D15 — an Overdue invoice is issued revenue too
@@ -243,7 +243,7 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
 
         # Revenue (invoices issued in this month)
         inv = await tenant.invoices.find(
-            {"org_id": org_id, "project_id": project_id,
+            {"org_id": org_id, "project_id": project_id, "direction": "Issued",  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
              "created_at": {"$gte": ms, "$lt": me}},
             {"_id": 0, "total": 1, "subtotal": 1, "status": 1},
         ).to_list(100)

@@ -1,0 +1,26 @@
+# WH81-03: tests/test_wh_fix_01_f81_readers.py -k wh81_03 on 20b1663 (before the fix), real Mongo rs0 + mongomock, -rA
+tests/test_wh_fix_01_f81_readers.py:248: assert 1000.0 == 0.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1500.0 == 500.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1000.0 == 0.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1500.0 == 500.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1000.0 == 0.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1500.0 == 500.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1000.0 == 0.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1500.0 == 500.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1000.0 == 0.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1500.0 == 500.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1000.0 == 0.0
+tests/test_wh_fix_01_f81_readers.py:248: assert 1500.0 == 500.0
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[mongomock-off-False]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[mongomock-off-True]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[mongomock-shadow-False]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[mongomock-shadow-True]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[mongomock-enforce-False]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[mongomock-enforce-True]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[real-off-False]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[real-off-True]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[real-shadow-False]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[real-shadow-True]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[real-enforce-False]
+FAILED tests/test_wh_fix_01_f81_readers.py::test_wh81_03_supplier_invoice_is_not_project_revenue[real-enforce-True]
+12 failed, 102 deselected, 2 warnings in 3.37s
