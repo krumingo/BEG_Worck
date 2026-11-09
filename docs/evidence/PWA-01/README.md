@@ -150,3 +150,34 @@ production build трябва да се подаде `REACT_APP_POSTHOG_KEY` (и
 - Отваря се линк за смяна на парола → няма PostHog.
 - Влизане в приложението с referrer от линка → токенът не е в нито една заявка.
 - SPA преход към линка или към `/projects/<id>` → изпращат се само шаблони.
+
+## PWA88-N1 — без зареждане на скрипт от PostHog CDN (поправено)
+Бележка от AUDIT-2: `initAnalytics` вмъкваше по време на работа `<host>-assets.i.posthog.com/static/array.js`
+без SRI и без фиксирана версия. Скриптът се изпълнява в същия origin, където localStorage пази `bw_token`.
+
+Промяна (commit `30206f6`):
+- `posthog-js` е **в bundle-а от npm**, с точна версия `1.200.0` в `package.json` и `yarn.lock`
+  (integrity sha512 от registry).
+- Използва се неговият `dist/module.no-external` build, който не може да зарежда отдалечени скриптове:
+  няма surveys, toolbar, site apps, web experiments или recorder.
+- Библиотеката е lazy chunk. Без ключ дори не се изтегля.
+- Изключени са:
+  - `/decide`, тоест никаква отдалечена конфигурация;
+  - feature flags, surveys, site apps, web experiments и toolbar metrics.
+- Поведението по R68 и FG-470 е същото и тестовете му минават.
+
+| | Резултат |
+|---|---|
+| jest на кода от `131d945` | 5 ✕ (`n1/jest-red-131d945.log`) |
+| jest на `30206f6` | 26 suites / 249 tests pass (`n1/jest-green.log`) |
+| Playwright, тестов ключ, build на `131d945` | 15 PASS / **3 FAIL**: `array.js` и `/decide` се теглят (`n1/red-131d945.*`) |
+| Playwright, тестов ключ, build на `30206f6` | **18/18**: няма скрипт и няма `/decide` от PostHog хост; всички R68/FG-470 проверки минават (`n1/green-on.*`) |
+| Playwright, без ключ | 4/4 · `run.js` 35/35 |
+
+Проверката записва **всяка** заявка на браузъра с типа ѝ. Скрипт от PostHog хост или от
+`/__posthog/static/*` е FAIL.
+
+**Отворена точка (D5, вече съществуваща):** същата проверка показва, че `index.html` зарежда
+`https://assets.emergent.sh/scripts/emergent-main.js`. Това е скрипт на трета страна, без SRI, в
+origin-а с `bw_token`, тоест същият клас риск. Не е пипан: извън обхвата е, а в `index.html` има
+коментар „do not edit or remove“. Нужно е решение на Крум.
