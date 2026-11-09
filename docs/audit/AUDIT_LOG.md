@@ -9,7 +9,8 @@
 |---|---|---|---|
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
 | #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
-| #83 CP-01 | `2415b5f` | **PASS** (CP83-M1..M5 closed; pass 40) | 2026-11-09 |
+| #83 CP-01 | `781d185` | **PASS** (pass 41) | 2026-11-09 |
+| #90 SEC-03 | `bc52843` | **PASS** (N1 deploy JWT_SECRET ≥32; N2 ai_enabled per-tenant path) | 2026-11-09 |
 | #89 OFF-02 | `7cfeae5` | **PASS** (R67 closes OFF89-N1; FG-472) | 2026-11-09 |
 | #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
 | #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
@@ -6469,3 +6470,57 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 
   - The second of #82 / #84 to merge must carry this union resolution.
 - **Environment:** `audit2mongo` (27020) exited once (code 14) during the trial. It was restarted on its volume and the affected suites were re-run. Earlier verdicts come from completed runs.
+
+## 2026-11-09 18:00 UTC: #90 SEC-03 `bc52843` (Emergent removal + hardening, R75 / R76): PASS, no blocking finding
+
+- **No external script:** the built `index.html` = the app bundle + main's legacy PostHog inline snippet (H-2 debt). The CSP blocks that snippet (hash verified).
+- **The CSP does not break the app.** My e2e:
+  - Setup: production build + the repo's `nginx.conf` (nginx:1.27-alpine) + uvicorn on real Mongo + the PR's `e2e_bot.js`. Result: BOT PASSED.
+  - Login and 7 screens render; framing is blocked; every script comes from the app origin.
+  - CSP / XFO / nosniff / Referrer are on every response.
+  - The 2 violations are the legacy snippet. The 403s are the same as on main.
+- **AI:** `anthropic==2.3.0` is genuine. Its new pins (httpx2 / httpcore2 from pydantic, etc.) are its declared dependencies. Key and model come from env only; `ai_enabled` is off by default; only the error type is logged; ЕГН / IBAN are redacted in the text part.
+- **JWT_SECRET:** fail-closed and correct.
+- **Reminder trigger:** an internal key (≥ 32, `compare_digest`) or a Platform Admin, with an explicit scope and an AuditEvent per tenant. The `attendance.py` change is a pure move.
+- **Print XSS:** escaped.
+
+| Gate | Result |
+|---|---|
+| sec_03 | 45 |
+| w0_03e_c02 | 25 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/243, 0/490 |
+| **warehouse** | **44 / 1121** |
+| ops/release | 81 (+1 skip) |
+| ST-02 | 162 |
+| jest | 22 / 191 |
+| build | OK |
+
+- **Non-blocking notes:**
+  - N1: production must have `JWT_SECRET` ≥ 32 bytes before deploy; the live `nginx.conf` must be replaced.
+  - N2: `PUT /feature-flags` toggles only the Platform Admin's own org; there is no per-tenant path for `ai_enabled`.
+  - N3: redaction covers only upper-case IBAN and plain 10-digit ЕГН in text; images are not redacted.
+  - N4: stale docstring in `ai_proposal.py`.
+- **Merge note:** #88 × #90 conflict in `frontend/public/index.html` only. After both land, nginx `connect-src` needs the PostHog host when a key is set.
+
+## 2026-11-09 18:00 UTC: #83 CP-01 `781d185` (pass 41: FG-510 / 498 / 511 / 513): PASS, no blocking finding
+
+| Gate | Result |
+|---|---|
+| probe | 84 |
+| cp_01 | 724 (+15) |
+| sub_adv_01 | 9 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | within main's 16 |
+| A2C / A1 | 0 / 0 |
+| **warehouse** | **44 / 1121** |
+| wh_fix_01 | 138 / 132 / 47 |
