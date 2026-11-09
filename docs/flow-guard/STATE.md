@@ -22,7 +22,7 @@
 | `claude/act-01-client-act-from-offer` (ACT-01) | `c7df7ca` | 27 | слят в main (`fddb0185`);  FLOW-004 |
 | #79 `claude/off-01-offer-version-accept` (OFF-01) | `25c9ae8` | 33 | слят в main (`44e8d97`);  FLOW-003, FLOW-002 magic link |
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `3028304` | 37 | слят в main (`1525a1e`);  FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
-| #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
+| #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `e07320d` | 38 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `7750f4e` | 38 | FLOW-010, Р48 |
 | #84 `claude/inv-cn-01-credit-notes` (INV-CN-01) | `f6e0c90` | 38 | FLOW-006/025/034, Р47, Р49, Р51, Р52 |
 | #86 `claude/prj-01-project-lifecycle` (PRJ-01) | `8e8be48` | 31b | FLOW-001, FLOW-018/039, Р54 |
