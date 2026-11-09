@@ -5845,3 +5845,24 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **#81** F-81-03 extended to SUB-ADV-01 advances. **#83** FG-290 (receipt must be a tenant file), FG-294 (invoice ЕГН masked + audited).
 - **NEW #89 `1b13d11`** (OFF-02, FG-350: offer write responses strip money for non-finance like the offer read): not reviewed yet.
 - **Gates for all of the above + #86 `8e8be48`, #84 `5242cba`, #75 `48ba662`, #88:** blocked by the disk (~0.9 GB free).
+
+## 2026-11-09 07:04 UTC: #81 `3028304` (= `61cef41` + evidence; merge `f31fe92d` of main `44e8d97`): PASS, no blocking finding
+
+- **Merge checks:** see the 06:27 entry (generated files only; role-union 0; PM-01 48/48, 0 extra). F-81-03 now also covers SUB-ADV-01 advances.
+- **Disk handling:** the audit mongods are set to quiet logging (connection logs off, slowms 600000). A watchdog stopped the first run at 242 MB: rs0 had been recreated by the 06:34 restart, and its fresh journal plus drop-pending files grew. The warehouse suite was finished on rs3 (steady size; dropping DBs + `fsync` frees space). Each warehouse file runs on its own clean DB, so 28 files on rs0 + 16 on rs3 = the whole suite.
+
+| Gate | Result |
+|---|---|
+| probe X5–X7 | 18 |
+| probe X1–X4 | 12 + X4 (the probe's known `request=None` limitation) |
+| probe X8 | 12 |
+| SEC-01 | 30 |
+| wh_fix_01 | 317 |
+| **warehouse** | **1121 (44 files, 0 bad)** |
+| PAY | 630 |
+| W0 | same 15 |
+| A2C / A1 | 0 / 0 |
+| R0 | 814 |
+| PM-01 | 6 |
+
+- **#83:** final head `4929451` = `a35417f` + regenerated evidence (no code change).
