@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 27.1,
+ "seconds": 30.3,
  "amount_rows": [
   {
    "mode": "off",
@@ -3150,6 +3150,7 @@
    "same_key_first": {
     "status": 201,
     "business_written": [
+     "op.labor_day_locks",
      "op.labor_entries"
     ]
    },
@@ -3378,6 +3379,7 @@
    "same_key_first": {
     "status": 201,
     "business_written": [
+     "op.labor_day_locks",
      "op.labor_entries"
     ]
    },
@@ -3606,6 +3608,7 @@
    "same_key_first": {
     "status": 201,
     "business_written": [
+     "op.labor_day_locks",
      "op.labor_entries"
     ]
    },
@@ -3659,10 +3662,12 @@
    "probe": "labor",
    "status": 201,
    "business_written": [
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written": [
     "op.audit_idempotency",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3709,10 +3714,12 @@
    "probe": "labor",
    "status": 201,
    "business_written": [
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written": [
     "op.audit_idempotency",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3759,10 +3766,12 @@
    "probe": "labor",
    "status": 201,
    "business_written": [
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written": [
     "op.audit_idempotency",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3809,10 +3818,12 @@
    "probe": "labor",
    "status": 201,
    "business_written": [
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written": [
     "op.audit_idempotency",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3859,10 +3870,12 @@
    "probe": "labor",
    "status": 201,
    "business_written": [
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written": [
     "op.audit_idempotency",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "error_code": null
@@ -3913,10 +3926,12 @@
    "probe": "labor",
    "status": 201,
    "business_written": [
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "written": [
     "op.audit_idempotency",
+    "op.labor_day_locks",
     "op.labor_entries"
    ],
    "error_code": null
@@ -4497,7 +4512,7 @@
     409
    ],
    "retry_payment_ids": [
-    "489be3eb-8f47-5914-9199-6146dc71d813"
+    "8c63cddd-0c99-520e-8911-3c910a1dd2d1"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4521,7 +4536,7 @@
     409
    ],
    "retry_payment_ids": [
-    "a9158d40-131d-53b5-b3f8-6d988b62c331"
+    "1af0f469-8355-506c-b588-47e1dea49a8d"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4545,7 +4560,7 @@
     409
    ],
    "retry_payment_ids": [
-    "2eec705e-98c5-5940-9e84-b5a67b17f6dd"
+    "0462d225-6d09-5ca4-a6c2-df9abf3f79a5"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,

@@ -885,7 +885,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 171.6,
+ "seconds": 196.2,
  "rows": [
   {
    "mode": "off",
@@ -14883,7 +14883,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -14897,7 +14901,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -14939,7 +14947,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -20499,9 +20511,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -20511,9 +20528,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -20547,9 +20569,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -21945,7 +21972,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -21959,7 +21989,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -21997,7 +22030,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -25227,7 +25263,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25240,7 +25278,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25253,7 +25293,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25266,7 +25308,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25279,7 +25323,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25331,7 +25377,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25344,7 +25392,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -25383,7 +25433,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -39530,7 +39582,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -39544,7 +39600,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -39586,7 +39646,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -45146,9 +45210,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -45158,9 +45227,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -45194,9 +45268,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "off",
@@ -46592,7 +46671,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -46606,7 +46688,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -46644,7 +46729,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -49874,7 +49962,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -49887,7 +49977,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -49900,7 +49992,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -49913,7 +50007,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -49926,7 +50022,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -49978,7 +50076,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -49991,7 +50091,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -50030,7 +50132,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -67579,7 +67683,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -67593,7 +67701,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -67635,7 +67747,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -71074,7 +71190,7 @@
     "total_spent"
    ],
    "hidden_budget_keys": [],
-   "leaks_7777": true,
+   "leaks_7777": false,
    "actual_keys": [
     "remaining",
     "total_labor_cost",
@@ -73195,9 +73311,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -73207,9 +73328,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -73243,9 +73369,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -74641,7 +74772,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -74655,7 +74789,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -74693,7 +74830,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -77923,7 +78063,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -77936,7 +78078,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -77949,7 +78093,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -77962,7 +78108,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -77975,7 +78123,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -78027,7 +78177,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -78040,7 +78192,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -78079,7 +78233,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -92226,7 +92382,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -92240,7 +92400,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -92282,7 +92446,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -97842,9 +98010,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -97854,9 +98027,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -97890,9 +98068,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "shadow",
@@ -99288,7 +99471,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -99302,7 +99488,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -99340,7 +99529,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -102570,7 +102762,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102583,7 +102777,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102596,7 +102792,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102609,7 +102807,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102622,7 +102822,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102674,7 +102876,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102687,7 +102891,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -102726,7 +102932,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -120315,7 +120523,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -120329,7 +120541,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -120371,7 +120587,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -126067,9 +126287,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -126079,9 +126304,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -126119,9 +126349,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -127523,7 +127758,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -127537,7 +127775,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -127575,7 +127816,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -130819,7 +131063,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130832,7 +131078,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130845,7 +131093,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130858,7 +131108,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130871,7 +131123,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130929,7 +131183,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130942,7 +131198,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -130985,7 +131243,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -145178,7 +145438,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -145192,7 +145456,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -145234,7 +145502,11 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "budget_freeze",
+    "sale_total",
+    "total_sale"
+   ],
    "leaks_7777": false
   },
   {
@@ -150930,9 +151202,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -150942,9 +151219,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -150982,9 +151264,14 @@
    "probe": "POST /api/budget-freezes/{project_id}",
    "rule": "R20-2B",
    "target": "P2",
-   "status": 400,
-   "written": [],
-   "foreign_ids": false
+   "status": 201,
+   "written": [
+    "op.budget_freezes"
+   ],
+   "foreign_ids": false,
+   "actual_keys": [],
+   "worker_detail": [],
+   "forbidden_keys": []
   },
   {
    "mode": "enforce",
@@ -152386,7 +152673,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -152400,7 +152690,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -152438,7 +152731,10 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
+   "money_keys": [
+    "labor_budget",
+    "variance_value"
+   ],
    "leaks_7777": false
   },
   {
@@ -155682,7 +155978,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155695,7 +155993,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155708,7 +156008,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155721,7 +156023,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155734,7 +156038,9 @@
    "rule": "R20-5",
    "target": "P1",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155792,7 +156098,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155805,7 +156113,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -155848,7 +156158,9 @@
    "rule": "R20-5",
    "target": "P2",
    "status": 422,
-   "written": [],
+   "written": [
+    "op.audit_idempotency"
+   ],
    "foreign_ids": false,
    "money_keys": []
   },
@@ -159590,7 +159902,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -159599,13 +159911,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "scope_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -159621,7 +159933,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 17,
-     "integrity_hash": "89a340056c7ed48f0e7e4bcdb576c7cc33773c9e5270ecc8072448bdf378873a"
+     "integrity_hash": "3786af49f14cad8b8e07e18640205a22a9ad5a82a79fddb1d45c86814550d21b"
     }
    ]
   },
@@ -159632,7 +159944,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -159641,7 +159953,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159666,7 +159978,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 18,
-     "integrity_hash": "7f43f1a47b3bac3305428cd28519a5dcfbacf7283fe84c7856e6a97901615dcf"
+     "integrity_hash": "719c0e7047ec56b7dd9ce5be5e9abb9523ec6653de7f637b0f7fbaf77a297868"
     }
    ]
   },
@@ -159677,7 +159989,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -159689,7 +160001,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -159698,7 +160010,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159724,7 +160036,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 19,
-     "integrity_hash": "d5a2a42200842be260869c13271eb7e34a67bb67f16f2e3e7e5f19672ae8d423"
+     "integrity_hash": "8383185ad1d1aea479b2189f681e88268ad91498f47dd78c037e4ac4b4ae21cf"
     }
    ]
   },
@@ -159735,7 +160047,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -159747,7 +160059,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -159759,7 +160071,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -159768,13 +160080,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "scope_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159792,7 +160104,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 20,
-     "integrity_hash": "2f6fcec13e7c1a0e153577b04aec5f6f65a64a35206972b3519baad7b1264fdc"
+     "integrity_hash": "8aeb4548098cec514605ef8cfba3af862b13b946ac09d05002ded3c13f5290d3"
     }
    ]
   },
@@ -159803,7 +160115,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -159812,7 +160124,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159838,7 +160150,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 21,
-     "integrity_hash": "ded29cd2632fe069492244beaeb4ddd3ad070e96d4ca5cd83f80dfba98fc93e8"
+     "integrity_hash": "751bd4e5d5ad45394ada4044d92ed6a9d6b0ff0f0c0265ba989f5dd24bc27928"
     }
    ]
   },
@@ -159849,7 +160161,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -159861,7 +160173,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -159870,7 +160182,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -159896,7 +160208,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 22,
-     "integrity_hash": "a9358f7732f21528a38c367cfc085dbbb89294d2cfe65e93bf2bfc8709784b3a"
+     "integrity_hash": "f53b065e93959b5c9c61c6b270c50ab225713c7acd6cf605c72153bde1b57dd3"
     }
    ]
   },
@@ -159907,7 +160219,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -159919,7 +160231,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -159931,7 +160243,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -159940,13 +160252,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "scope_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -159964,7 +160276,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 23,
-     "integrity_hash": "f75e70fb1e5d3d227d7068ab4f56e0eea10a16f6259663d97a6460d1924d7e50"
+     "integrity_hash": "1334e81494c2cf31d96cbe6a87ce37f0d2c7a626ca518ba51ff624060272ee31"
     }
    ]
   },
@@ -159975,7 +160287,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -159984,7 +160296,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160010,7 +160322,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 24,
-     "integrity_hash": "a816bb030e5562f51e4bdf830ab4a543c19636f061585f35cd2faab6249284f0"
+     "integrity_hash": "8ac938dedf5940563111ee9c241fef9ff66fa95fd5c2aab938f5ef508883b358"
     }
    ]
   },
@@ -160021,7 +160333,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -160033,7 +160345,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -160042,7 +160354,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+     "tenant_id": "67f2cbde-3aa5-4546-9410-942712175f40",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -160068,7 +160380,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 26,
-     "integrity_hash": "336e2db3603718df5dc5d62e7a6e44523e18335267c59ebc6f55aa3107048105"
+     "integrity_hash": "4885993f6dc86b6a255ed846ebf4dd72757724a8e7aad8d3263df2c9cabb7892"
     }
    ]
   },
@@ -160079,7 +160391,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -160091,7 +160403,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "6f3116c9-e4fd-40f5-ade3-1b3f0c1c57e0",
+   "expected_tenant": "67f2cbde-3aa5-4546-9410-942712175f40",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
