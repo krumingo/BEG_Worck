@@ -97,6 +97,8 @@ _DB_MODULES = (
     "app.routes.materials_baseline", "app.routes.budget_progress",
     "app.services.resource_model", "app.services.resolve_hourly_rate",
     "app.services.budget_formula",
+    # LAB-01: the labor calculation reads through these two
+    "app.services.labor_cost", "app.services.report_normalizer",
 )
 
 
