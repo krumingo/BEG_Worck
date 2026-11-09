@@ -336,7 +336,7 @@
 | FG-341 | low | #75 LAB-02 `5809367` | паричните пътища на LAB-02 (`labor-terms`, approve/classify, pending) са с твърди списъци роли, извън SEC-01/SEC-02 каталозите и `require_m2` | SUSPECTED | open (дълг) |
 | FG-350 | medium | OFF-01 #79 `f526182` (+ main) | `POST /offers/{id}/new-version`, `POST /versions/{n}/restore` и `PUT /offers/{id}/lines` връщат клиентски цени на Технически ръководител | PROVEN | open (+ Krum: може ли ТР да пише оферти) |
 | FG-351 | low | main `ea57121` (и OFF-01) | отварянето на клиентския линк не записва AuditEvent (само първо гледане в `offer_events`; 410 — нищо) | PROVEN | open |
-| FG-352 | low | OFF-01 #79 `f526182` | evidence README спира на `5675e17`; сливането с `ea57121` (промени в harness-а) не е документирано | PROVEN | open |
+| FG-352 | low | OFF-01 #79 `f526182` | evidence README спира на `5675e17`; сливането с `ea57121` (промени в harness-а) не е документирано | PROVEN | resolved (OFF-01 #79 `25c9ae8`, PROVEN: `docs/evidence/OFF-01-MAIN-MERGE/test_summary.txt` + `warehouse_suite.txt` — гейтовете на сливането с `ea57121`: OFF-01 237, ACT-01 113, PM-01 6, PAY 630, SEC-01 30, SEC-02 31, склад 1121 (= main), W0 16 failed = същите като базата на main) |
 | FG-355 | high | main `ea57121` | анализът на цената се пише, одобрява, заключва и превръща в оферта от всяка роля с M2; връща себестойност/надценка; без AuditEvent | PROVEN | open (+ Krum: анализ само с количества за SiteManager) |
 | FG-356 | medium | main `ea57121` | одобреният анализ се редактира, умножава и редовете му се трият, а статусът остава `approved` | PROVEN | open |
 | FG-357 | high | main `ea57121` | офертата от анализа показва на клиента себестойността като ед. цена и надценката/риска в бележката | PROVEN (main), SUSPECTED (OFF-01) | open |
@@ -3888,6 +3888,13 @@
 - Бавен преглед FLOW-023 на main `ea57121`: нови FG-355..364 (4 high: FG-355, FG-357, FG-358, FG-361). Krum: FG-355 (анализ само с количества от ТР?), FG-359 (праг на загуба за Approval), FG-361 (симулираният каталог — демо или махане).
 - OFF-01 #79 `f526182`: сливането с main `ea57121` (`552ffdce`) — чисто (разлики спрямо auto-merge само в harness, 2 inventory, `run_meta.json`); паричните пазачи на main по офертите запазени; FG-129/130/135/136/137/138/144/149 — още resolved (PROVEN); FG-139 open; FG-173 partial; нови FG-350..352. Тестове: 237 passed.
 - LAB-01 #73 `7ee87f8`: сливането с main `ea57121` (`c7d48ed0`, 5 конфликта) — без загубен пазач (запазено сторно-само пресинхронизиране SEC-01-C02/FG-26; `piece_rate`, `labor_formula` в `LABOR_MONEY_FIELDS`); `a0409535` — приемливо. LAB-02 #75 `5809367`: сливането `adc01d42` — чисто. FG-58 ефект PROVEN; FG-66, FG-82, FG-44 без промяна; разрешените LAB записи остават. Нови FG-340 (high), FG-341. Тестове: LAB-01 423/423 (1 flake, минал отделно), LAB-02 473/473.
+
+### Проход 33 — 09.11.2026 00:50 UTC (периодичен)
+
+- main без промяна (`ea57121`).
+- OFF-01 #79 `f526182` → `25c9ae8`: само evidence на сливането — FG-352 → resolved.
+- LAB-01 #73 `7ee87f8` → `fdcb5ac`: само тестове (складовите c20/c21/c22 насочват и `services/labor_cost`, `services/report_normalizer` към тестовата база) и evidence `tests-LAB-01-R.txt`; без промяна в кода; FG-340 остава open.
+- Бавен преглед: FLOW-024 повторно (след OH-01) — в проверка.
 
 ## Бележки, които не са разминавания
 

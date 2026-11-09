@@ -1,6 +1,6 @@
 # FLOW GUARD — състояние
 
-Последен проход: **32** — 08.11.2026 22:50–00:00 UTC.
+Последен проход: **33** — 09.11.2026 00:50 UTC (FLOW-024 повторно — в проверка).
 
 ## Последно проверен SHA по клон
 
@@ -15,12 +15,12 @@
 | #70 `claude/pay-01-payment-reversal` | `16a886f` | 13 | слят в main (`d226c49`) |
 | #71 `claude/sec-02-finance-read` | `021a078` | 24b | слят в main (`0750d75`);  SEC-02, Р20/Р31 |
 | #72 `claude/w0-04-c01-audit-indexes` | `04e0a1b` | 13 | слят в main (`7b6da64`) |
-| #73 `claude/lab-01-labor-cost` | `7ee87f8` | 32 | LAB-01, FLOW-019/028 |
+| #73 `claude/lab-01-labor-cost` | `fdcb5ac` | 33 | LAB-01, FLOW-019/028 |
 | `claude/oh-01-overhead` (OH-01) | `4c8b313` | 27 | слят в main (`1ea98fe2`);  FLOW-024 |
 | #75 `claude/lab-02-quantity-approval` (LAB-02) | `5809367` | 32 | FLOW-028, Р33 |
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `aa369d8` | 31 | слят в main (`ea57121`);  FLOW-021, Р39/Р40 |
 | `claude/act-01-client-act-from-offer` (ACT-01) | `c7df7ca` | 27 | слят в main (`fddb0185`);  FLOW-004 |
-| #79 `claude/off-01-offer-version-accept` (OFF-01) | `f526182` | 32 | FLOW-003, FLOW-002 magic link |
+| #79 `claude/off-01-offer-version-accept` (OFF-01) | `25c9ae8` | 33 | FLOW-003, FLOW-002 magic link |
 | #81 `claude/wh-fix-01-post-55` (WH-FIX-01) | `72e7e87` | 32 | FLOW-009/020/008, Р44, Р45; FG-199, FG-215 resolved |
 | #82 `claude/wh-rev-01-receipt-reversal` (WH-REV-01) | `1622f62` | 22 | FLOW-009/006, Р46, Р47 |
 | #83 `claude/cp-01-counterparty-iban` (CP-01) | `1e455e3` | 31 | FLOW-010, Р48 |
