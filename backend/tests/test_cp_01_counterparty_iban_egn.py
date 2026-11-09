@@ -1555,3 +1555,39 @@ def test_fg294_an_invoice_egn_is_masked_for_every_role_and_revealed_with_an_audi
         r = await c.get("/api/finance/invoices/inv-r1", headers=hdr("acct-a"))
         assert r.json().get("counterparty_eik") in (None, "111111111")
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ R65 (Krum, 09.11.2026, CP-01 D11)
+def test_r65_invoice_pdf_with_an_egn_only_owner_accountant_and_audited(monkeypatch, backend, mode):
+    """R65: the PDF of an invoice to a natural person is the official document and carries
+    the FULL ЕГН; only Owner / Accountant download it (Admin and the rest → 403, nothing
+    written); every download writes ``invoice.pdf.downloaded`` (who, when, which invoice).
+    A company invoice's PDF is unchanged (Admin may download it, no audit)."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({
+            "id": "inv-p", "org_id": ORG_A, "invoice_no": "I-P", "direction": "Issued", "kind": "Invoice",
+            "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31", "currency": "EUR",
+            "counterparty_name": "Мария П", "counterparty_eik": TYPED,
+            "lines": [{"description": "СМР", "qty": 1, "unit_price": 10.0, "line_total": 10.0}],
+            "subtotal": 10.0, "vat_percent": 0, "vat_amount": 0, "total": 10.0,
+            "paid_amount": 0, "remaining_amount": 10.0})
+        url = "/api/finance/invoices/inv-p/pdf"
+        for who in ("admin-a", "site-a", "viewer-a", "tech-a"):
+            r = await c.get(url, headers=hdr(who))
+            assert r.status_code == 403, (who, r.status_code)
+        assert await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"}) == []
+        for who in ("owner-a", "acct-a"):
+            r = await c.get(url, headers=hdr(who))
+            assert r.status_code == 200 and r.headers["content-type"].startswith("application/pdf"), \
+                (who, r.status_code, r.text[:200])
+        ev = await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"})
+        assert len(ev) == 2 and {e["entity_id"] for e in ev} == {"inv-p"}
+        assert {e["actor_id"] for e in ev} == {"owner-a", "acct-a"} and no_full(ev, TYPED)
+        assert all(e.get("timestamp") or e.get("occurred_at") or e.get("created_at") for e in ev), ev
+        # another tenant's invoice is not found; a company invoice is unchanged
+        r = await c.get("/api/finance/invoices/inv-p/pdf", headers=hdr("owner-b"))
+        assert r.status_code == 404
+        r = await c.get("/api/finance/invoices/inv-r1/pdf", headers=hdr("admin-a"))
+        assert r.status_code == 200, r.text[:200]
+        assert len(await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"})) == 2
+    run(monkeypatch, backend, mode, scenario)

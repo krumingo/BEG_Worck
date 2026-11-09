@@ -2254,7 +2254,27 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     invoice = await tenant.invoices.get(invoice_id, {"_id": 0})
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
+
+    # CP-01 R65 (Krum, 09.11.2026, D11): the PDF of an invoice to a natural person is the
+    # official document and carries the FULL ЕГН — so it is downloaded only by the Owner and
+    # the Accountant (other roles → 403), and every download is an AuditEvent (who, when,
+    # which invoice), committed before the document is returned. Company invoices unchanged.
+    if cr.possible_egn(invoice.get("counterparty_eik")) or invoice.get("egn"):
+        if not cr.can_reveal_egn(user):
+            from app.services.master_write import forbidden
+            raise forbidden("PDF на фактура към физическо лице (с ЕГН) се сваля само от "
+                            "Собственик и Счетоводител (Р65)")
+        from app.services.master_write import audit as mw_audit, run_tx
+
+        async def _audit_download(session):
+            await mw_audit(db, session, user, "invoice.pdf.downloaded", entity_type="invoice",
+                           entity_id=invoice_id, key="pdf-" + uuid.uuid4().hex,
+                           diff={"egn_masked": cr.mask_egn(invoice.get("counterparty_eik")
+                                                           or invoice.get("egn")),
+                                 "downloaded_by": user["id"], "role": user.get("role")})
+
+        await run_tx(db, _audit_download)
+
     # Get org info
     org = await tenant.own_organization({"_id": 0})
     org_name = org.get("name", "") if org else ""
