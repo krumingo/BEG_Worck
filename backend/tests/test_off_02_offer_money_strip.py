@@ -55,14 +55,16 @@ def money_keys_in(payload) -> set:
 
 @pytest.fixture(autouse=True)
 def _with_extra_works(monkeypatch):
+    monkeypatch.setitem(T.USERS, "driver-a", (ORG_A, "Driver"))
     """The OFF-01 app + the extra-works router (create-offer, smr-to-offer)."""
     real_app = T._app
 
     def app(mp, op, sysdb, mode_):
         a = real_app(mp, op, sysdb, mode_)
-        from app.routes import extra_works as ew
-        mp.setattr(ew, "db", op, raising=False)
-        a.include_router(ew.router, prefix="/api")
+        from app.routes import extra_works as ew, missing_smr as ms, smr_analysis as sa
+        for module in (ew, ms, sa):
+            mp.setattr(module, "db", op, raising=False)
+            a.include_router(module.router, prefix="/api")
         return a
     monkeypatch.setattr(T, "_app", app)
 
@@ -188,4 +190,123 @@ def test_04_import_preview_answers_like_the_read(monkeypatch, backend, mode):
         fin = await c.post("/api/offers/import-preview", headers=T.hdr("admin-a"), files=files)
         assert fin.status_code == 200, fin.text[:300]
         assert {"material_price", "labor_price"} <= money_keys_in(fin.json()), fin.text[:400]
+    run(monkeypatch, backend, mode, scenario)
+
+
+
+# ═════════════ R67 (Krum, 09.11.2026; FG-350, OFF89-N1): who may WRITE an offer at all
+FORBIDDEN = ("site-a", "tech-a", "viewer-a", "driver-a")
+ALLOWED = ("owner-a", "admin-a", "acct-a")
+BUSINESS = ("offers", "offer_versions", "offer_events", "extra_work_drafts", "missing_smr",
+            "smr_analyses", "audit_logs")
+
+
+def _writes():
+    """Every offer mutation route (R67), with a body that would pass validation."""
+    return [
+        ("POST", "/api/offers", {"project_id": PRJ_A, "title": "Кухня", "lines": [LINE]}),
+        ("PUT", "/api/offers/d1", {"title": "Ново"}),
+        ("PUT", "/api/offers/d1/lines", {"lines": [{"activity_name": "Мазилка", "unit": "m2", "qty": 10}]}),
+        ("POST", "/api/offers/d1/send", None),
+        ("POST", "/api/offers/s1/accept", None),
+        ("POST", "/api/offers/s1/reject", {"reason": "x"}),
+        ("POST", "/api/offers/s1/new-version", None),
+        ("POST", "/api/offers/s1/cancel", {"reason": "x"}),
+        ("DELETE", "/api/offers/d1", None),
+        ("POST", "/api/offers/import-confirm", {"project_id": PRJ_A, "title": "Импорт",
+                                                 "lines": [{"activity_name": "Боя", "qty": 1}]}),
+        ("POST", "/api/offers/d1/versions", {"note": "n"}),
+        ("POST", "/api/offers/d1/versions/1/restore", None),
+        ("DELETE", "/api/offers/d1/versions/1", None),
+        ("POST", "/api/extra-works/create-offer", {"draft_ids": ["ewd-0"]}),
+        ("POST", "/api/projects/%s/smr-to-offer" % PRJ_A, {"source_ids": ["ewd-1"]}),
+        ("POST", "/api/missing-smr/ms-1/to-offer", None),
+        ("POST", "/api/missing-smr/batch-to-offer", {"ids": ["ms-1"]}),
+        ("POST", "/api/smr-analyses/an-1/to-offer", None),
+    ]
+
+
+async def _seed_r67(op):
+    await op.offers.insert_one(offer_doc("d1", status="Draft"))
+    await op.offers.insert_one(offer_doc("s1", token=TOKEN))
+    await op.offer_versions.insert_one({
+        "id": "ver-d1-1", "org_id": ORG_A, "project_id": PRJ_A, "offer_id": "d1",
+        "version_number": 1, "created_at": "2026-11-01T09:00:00+00:00", "created_by": "admin-a",
+        "snapshot_json": {"title": "Баня", "lines": [], "subtotal": 0, "vat_amount": 0, "total": 0}})
+    await _seed_drafts(op)
+
+
+async def _call(c, who, method, path, body):
+    h = T.hdr(who)
+    return await (c.request(method, path, headers=h, json=body) if body is not None
+                  else c.request(method, path, headers=h))
+
+
+def test_05_r67_every_other_role_gets_403_and_nothing_is_written(monkeypatch, backend, mode):
+    """R67: SiteManager / Technician / Viewer / Driver → 403 on EVERY offer write, before
+    anything is read or written (the business collections are byte-identical)."""
+    async def scenario(c, op):
+        await _seed_r67(op)
+        before = await T.snap(op, BUSINESS)
+        bad = []
+        for who in FORBIDDEN:
+            for method, path, body in _writes():
+                r = await _call(c, who, method, path, body)
+                if r.status_code != 403:
+                    bad.append((who, method, path, r.status_code, r.text[:120]))
+        assert bad == [], bad
+        assert await T.snap(op, BUSINESS) == before
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_06_r67_owner_admin_accountant_may_write_offers(monkeypatch, backend, mode):
+    """R67: Owner, Admin and Accountant pass the gate on every offer write (no 401/403), and
+    the Accountant — refused before on create / accept / reject / cancel / delete — writes."""
+    async def scenario(c, op):
+        bad = []
+        for who in ALLOWED:
+            for method, path, body in _writes():
+                r = await _call(c, who, method, path, body)
+                if r.status_code in (401, 403):
+                    bad.append((who, method, path, r.status_code, r.text[:120]))
+        assert bad == [], bad
+        # the Accountant's full cycle on a fresh offer
+        r = await c.post("/api/offers", headers=T.hdr("acct-a"), json={
+            "project_id": PRJ_A, "title": "Счетоводител", "vat_percent": 20, "lines": [LINE]})
+        assert r.status_code == 201, r.text
+        oid = r.json()["id"]
+        assert (await c.put("/api/offers/%s/lines" % oid, headers=T.hdr("acct-a"),
+                            json={"lines": [dict(LINE, qty=12)]})).status_code == 200
+        s = await c.post("/api/offers/%s/send" % oid, headers=T.hdr("acct-a"))
+        assert s.status_code == 200, s.text
+        a = await c.post("/api/offers/%s/accept" % oid, headers=T.hdr("acct-a"))
+        assert a.status_code == 200 and a.json()["status"] == "Accepted", a.text
+        assert "total" in a.json()                                # a finance role sees money
+    monkeypatch_seed = _seed_r67
+
+    async def with_seed(c, op):
+        await monkeypatch_seed(op)
+        await scenario(c, op)
+    run(monkeypatch, backend, mode, with_seed)
+
+
+def test_07_off89_n1_a_site_manager_cannot_zero_the_prices(monkeypatch, backend, mode):
+    """AUDIT-2 OFF89-N1: a SiteManager saw the lines without prices (stripped) and PUT them
+    back — every price became 0. Now: 403, the stored prices and totals are untouched; the
+    client's own magic-link answer is unchanged."""
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("d2", status="Draft"))
+        g = await c.get("/api/offers/d2", headers=T.hdr("site-a"))
+        assert g.status_code == 200 and "total" not in g.json()         # the read stays, stripped
+        stripped_lines = g.json()["lines"]
+        assert all("material_unit_cost" not in l for l in stripped_lines)
+        r = await c.put("/api/offers/d2/lines", headers=T.hdr("site-a"),
+                        json={"lines": stripped_lines})
+        assert r.status_code == 403, r.text
+        doc = await get(op, "d2")
+        assert doc["total"] == 1200.0 and doc["lines"][0]["material_unit_cost"] == 40
+        # the client-link flow is not an offer write of a staff role: unchanged
+        await op.offers.insert_one(offer_doc("s2", token="tcl" + "m" * 21))
+        resp = await T.respond(c, "tcl" + "m" * 21, "approve")
+        assert resp.status_code == 200 and resp.json()["status"] == "Accepted", resp.text
     run(monkeypatch, backend, mode, scenario)
