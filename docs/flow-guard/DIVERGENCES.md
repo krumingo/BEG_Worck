@@ -316,7 +316,7 @@
 | FG-310 | low | #81 `a7166d4` (merge `fdfad135`) | сливането на main запази остарели evidence файлове (PM-01 run_meta, SEC-01/C01/C02/C03 results) — 2 теста за evidence са червени само на #81 | PROVEN | resolved (#81 `72e7e87`, PROVEN: само evidence файлове, регенерирани от harness-ите (PM-01, SEC-01/C01/C02/C03, SEC-02); двата теста `test_the_committed_evidence_satisfies_the_package` минават; всички 5 evidence теста — 5 passed) |
 | FG-315 | medium | PWA-01 `a05167a` | локалните данни са по tenant, не по потребител; изходът/401 трие всичко без предупреждение — основа, която противоречи на Р61 (5) за PWA-02 | PROVEN | open (дълг за PWA-02) |
 | FG-316 | low | PWA-01 `a05167a` | изчистването не покрива IndexedDB, бисквитки и HTTP кеша | PROVEN | open |
-| FG-317 | medium | PWA-01 `a05167a` | външни скриптове с запис на сесията (PostHog `session_recording`) са в инсталираното приложение — могат да запишат ЕГН/IBAN/суми | PROVEN | partial по Р68 (#88 PWA-01 `d59bcca`, PROVEN: PostHog без session recording (`analytics.js:30, 46-49`), без autocapture/heatmaps/rageclick/exceptions, маскиран текст, без identify, само `error_kind`, ключ от env, URL без query/hash; Playwright: само `array.js`, `/decide`, `/e/`); остава (SUSPECTED, Krum): `emergent-main.js` (`index.html:35`) на всяка страница; бисквитката `ph_*` оцелява при изчистването; токенът на линка → FG-470; проход 40 (#88 `62f898a` / `30206f63`, PWA88-N1): posthog-js 1.200.0 е вграден в bundle-а — без външен `array.js`, без `/decide`, без remote config/surveys/site apps/experiments (jest + evidence 18/18); остава `emergent-main.js` (`index.html`) — потвърдено и от SEC-SCAN 2026-11-09 H-1 (клон `claude/sec-scan`), Krum; решено от Крум по Р75 (09.11.2026): скриптовете и надписът на Emergent се махат — пакет SEC-03 |
+| FG-317 | medium | PWA-01 `a05167a` | външни скриптове с запис на сесията (PostHog `session_recording`) са в инсталираното приложение — могат да запишат ЕГН/IBAN/суми | PROVEN | partial по Р68 (#88 PWA-01 `d59bcca`, PROVEN: PostHog без session recording (`analytics.js:30, 46-49`), без autocapture/heatmaps/rageclick/exceptions, маскиран текст, без identify, само `error_kind`, ключ от env, URL без query/hash; Playwright: само `array.js`, `/decide`, `/e/`); остава (SUSPECTED, Krum): `emergent-main.js` (`index.html:35`) на всяка страница; бисквитката `ph_*` оцелява при изчистването; токенът на линка → FG-470; проход 40 (#88 `62f898a` / `30206f63`, PWA88-N1): posthog-js 1.200.0 е вграден в bundle-а — без външен `array.js`, без `/decide`, без remote config/surveys/site apps/experiments (jest + evidence 18/18); остава `emergent-main.js` (`index.html`) — потвърдено и от SEC-SCAN 2026-11-09 H-1 (клон `claude/sec-scan`), Krum; решено от Крум по Р75 (09.11.2026): скриптовете и надписът на Emergent се махат — пакет SEC-03; проход 42 (#90 SEC-03 `bc52843`): остатъкът от Emergent е махнат на клона (production build — само собственият bundle; без emergent в index.html и JS) — resolved след merge/deploy и подмяна на живия nginx.conf; PostHog — чака #88 |
 | FG-318 | low | PWA-01 `a05167a` | `/api` и `/uploads` нямат `Cache-Control: no-store`; e2e mock-ът го добавя и скрива липсата | SUSPECTED | open |
 | FG-319 | low | PWA-01 `a05167a` | презареждане без интернет губи сесията (токенът се трие при мрежова грешка) | PROVEN | resolved (PWA-01 #88 `7c284fa` / `e571b06`, PROVEN по код + jest `AuthContext.offline.test.js`: токенът се трие само при 401 или 403 от `/auth/me` (`AuthContext.js` `sessionRejected`); при мрежова грешка/5xx потребителят идва от `bw_user`, нищо от `/api` не се кешира; блокирано устройство (Р61 (6)) получава 401/403 и сесията приключва) |
 | FG-320 | low | PWA-01 `a05167a` | версията на service worker-а не е версията на работещата страница; другите табове се поемат без презареждане | PROVEN | open |
@@ -416,6 +416,14 @@
 | FG-511 | low | #83 CP-01 `2415b5f` | replay-ят връща текущия запис, не оригиналния отговор (след анулиран акт — `status: cancelled`); FLOW-006 пътищата пазят първия отговор байт по байт | PROVEN (поведение) / SUSPECTED (канон) | open (+ Krum) |
 | FG-512 | low | #83 CP-01 `2415b5f` (+ main) | replay първо не е на всички парични пътища — дълг D12: `full_cost.py:123`, `labor_smr.py:93/120/302`, `reports.py:976/1042/1107` | SUSPECTED | open (отделна задача) |
 | FG-513 | low | #83 CP-01 `2415b5f` | AuditEvent при търсене по ЕГН не казва кои записи са намерени — само маскираната заявка и броя | PROVEN | open (+ Krum) |
+| FG-515 | low | #90 SEC-03 `bc52843` | CSP в nginx е статичен `connect-src 'self'` — ще блокира PostHog след #88; заглавките стигат до production само след ръчна подмяна на живия nginx.conf | PROVEN | open |
+| FG-516 | low | #90 SEC-03 `bc52843` | тестовият режим за `JWT_SECRET` включва staging/dev/local — там липсващ или къс ключ се приема (`ENV=staging JWT_SECRET=abc`) | PROVEN | open |
+| FG-517 | low | #90 SEC-03 `bc52843` | регулярният израз за скриване не хваща IBAN с малки букви и ЕГН с интервали/тирета; прекалено скрива телефони/суми/цифри в id; снимките не се минимизират | PROVEN | open |
+| FG-518 | medium | #90 SEC-03 `bc52843` | кешът на ai-breakdown прилага стари AI резултати и при изключен `ai_enabled` или без ключ (`smr_analysis.py:991-1003` преди проверката на `:1037`) | PROVEN (код) | open |
+| FG-519 | medium | #90 SEC-03 `bc52843` | AI извикванията не пишат canonical AuditEvent и запис за потребление; включването на `ai_enabled` — само legacy `log_audit` (`auth.py:640`) | PROVEN | open (+ Krum: Approval и бюджет по FLOW-050) |
+| FG-520 | low | #90 SEC-03 `bc52843` | остатъци извън обхвата: docstring и preview URL, `test_m9_alerts.py` очаква 200 без ключ, чеклистът с `EMERGENT_LLM_KEY`, dev сървърът с `*.emergent.sh`, неизползвани `openai`/`litellm` | PROVEN | open (+ Krum за dev сървъра) |
+| FG-521 | low | #90 SEC-03 `bc52843` | AuditEvent за напомнянията се пише след изпълнението и не атомарно; Platform Admin пуска `all_tenants` без Support Access Grant | SUSPECTED | open |
+| FG-522 | medium | #90 SEC-03 `bc52843` (+ main) | оригиналната снимка не се пази преди AI обработката — клиентът я компресира, пази се само едно смалено base64 копие (дълг до W0-06) | PROVEN | open (+ Krum: без `ai_enabled` до W0-06) |
 | FG-480 | low | #83 CP-01 `a5176b2` | редът на пакета записва `payment_method` от заявката (по подразбиране „bank“), а регистърът — от сметката: аванс в брой е „bank“ в пакета и „Cash“ в регистъра | PROVEN | resolved (#83 CP-01 `b4a775f`, PROVEN: методът на реда на пакета — от сметката (`subcontractors.py:732-733, 1217-1219`); сметка банка + заявка „cash“ → `bank`/`Bank`; каса + „bank“ → `cash`/`Cash`) |
 | FG-481 | low | #83 CP-01 `a5176b2` | проверките вървят преди replay-а по Idempotency-Key: повтор на изпълнен аванс след архивиране на подизпълнителя връща 422 вместо записаното 201 | PROVEN | resolved за аванса и плащането (#83 CP-01 `b4a775f`, PROVEN off/enforce: `completed_replay` (`money_input.py:184-213`) преди проверките (`subcontractors.py:660-670, 1150-1157`); повтор след архивиране → 201 със същия id; друго тяло → 409 IDEMPOTENCY_CONFLICT; ключът е изолиран по tenant (B → 404, подправен ред → None)); удръжката → FG-499 |
 | FG-482 | medium | #83 CP-01 `a5176b2` | ДДС номер BG+ЕГН на клиент-фирма се показва изцяло на всички роли в `/clients/search/unified` (търсене и по цифрите на ЕГН), `/projects/{id}/client-info`, `/projects/{id}/invoice-context` | PROVEN | partial (#83 CP-01 `b4a775f`, PROVEN: `BG******1111` за всички 6 роли в unified search, client-info, invoice-context, `/companies`, find-by-eik, табло, `/projects`; търсене по цифрите на ЕГН — само Owner/Accountant; `POST /companies/{id}/vat/reveal` Owner/Accountant 200 + AuditEvent `company.vat_egn.revealed` само с маскираното, останалите 403); остатък → FG-496, FG-497, FG-498 |
@@ -4145,6 +4153,62 @@
 - **Код (#75 LAB-02 `4fa4957`):** `routes/labor_smr.py:238-245` — приема старо одобрение на количество, направено от самия работник (цена 250); четците на труда пренебрегват такива одобрения. Одобрението на реда от Собственика отчасти покрива риска.
 - **Решение:** промяна в кода — отказ на самоодобрено количество; Крум потвърждава дали одобрението на реда е достатъчно.
 
+## FG-515 — CSP в nginx ще блокира PostHog; заглавките зависят от ръчна подмяна
+
+- **Тежест:** low. **Статус:** open. **PROVEN** (проход 42).
+- **Канон:** Р75 („добавя се защита на браузъра (CSP…)“); Р68 (PostHog остава с анонимна статистика); CLAUDE.md §6 (Release Manifest / конфигурационна версия).
+- **Код (#90 SEC-03 `bc52843`):** nginx CSP `connect-src 'self'` статичен — след #88 с ключ PostHog се блокира; заглавките стигат до production само след ръчна подмяна на живия nginx.conf.
+- **Решение:** промяна в кода/release — `connect-src` с PostHog хоста само при конфигуриран ключ; подмяната на nginx.conf в Release Manifest.
+
+## FG-516 — тестовият режим за `JWT_SECRET` е твърде широк
+
+- **Тежест:** low. **Статус:** open. **PROVEN**.
+- **Канон:** Р75 „без таен ключ сървърът не стартира (без „dev-secret-key“)“; CLAUDE.md §6 (Staging като production среда), §16.
+- **Код (#90 SEC-03 `bc52843`):** `ENV=staging` или `ENVIRONMENT=dev` се броят за тестов режим — сървърът стартира, `JWT_SECRET=abc` се приема.
+- **Решение:** промяна в кода — тестов режим само при изричен флаг за тестове; staging като production.
+
+## FG-517 — скриването на лични данни преди модела е непълно
+
+- **Тежест:** low. **Статус:** open. **PROVEN**.
+- **Канон:** Р48 (3), Р71 (ЕГН/IBAN скрити); пакет SEC-03 т. 9 („само нужните полета (без ЕГН/IBAN)“).
+- **Код (#90 SEC-03 `bc52843`):** регулярният израз не хваща IBAN с малки букви и ЕГН с интервали/тирета; прекалено скрива телефони, суми, цифри в id; снимките не се минимизират (без изрязване на документи с лични данни).
+- **Решение:** промяна в кода — нормализиране преди проверката; списък от полета вместо свободен текст, където е възможно.
+
+## FG-518 — кешът на ai-breakdown работи и при изключен AI
+
+- **Тежест:** medium. **Статус:** open. **PROVEN** по код.
+- **Канон:** Р76 „без тях AI е изключен“; CLAUDE.md §10 (AI само чернови → потвърждение).
+- **Код (#90 SEC-03 `bc52843`):** `routes/smr_analysis.py:991-1003` — прилага кеширани AI резултати преди проверката `ai_enabled`/ключ на `:1037`.
+- **Решение:** промяна в кода — проверката преди кеша; кешираният резултат също само като чернова.
+
+## FG-519 — AI извикванията без canonical AuditEvent и отчет за потребление
+
+- **Тежест:** medium. **Статус:** open (+ Krum). **PROVEN**.
+- **Канон:** CLAUDE.md §10 („Всеки важен отговор има source links и timestamp“), §14 (AuditEvent); FLOW-050 / CLAUDE.md §11 (месечен AI бюджет, AI Usage Ledger).
+- **Код (#90 SEC-03 `bc52843`):** AI извикванията не пишат canonical AuditEvent, нито запис за потребление; включването на `ai_enabled` — само legacy `log_audit` (`routes/auth.py:640`).
+- **Решение:** промяна в кода — canonical AuditEvent и запис в AI Usage Ledger; Крум решава дали включването иска Approval и брои ли се срещу бюджета.
+
+## FG-520 — остатъци от Emergent извън обхвата на пакета
+
+- **Тежест:** low. **Статус:** open (+ Krum за dev сървъра). **PROVEN**.
+- **Канон:** Р75 („махат се скриптовете и надписът на Emergent от програмата“); Р76.
+- **Код (#90 SEC-03 `bc52843`):** docstring `ai_proposal.py:3`, preview URL в `backend_test.py`; `test_m9_alerts.py` вика напомнянията без ключ и очаква 200; чеклистът в паметта още назовава `EMERGENT_LLM_KEY`; dev сървърът за visual edits вярва на `*.emergent.sh`; `openai` и `litellm` закрепени, но неизползвани.
+- **Решение:** промяна в кода — почистване; Крум решава за dev сървъра.
+
+## FG-521 — напомнянията: AuditEvent след изпълнението; `all_tenants` без разрешение
+
+- **Тежест:** low. **Статус:** open. **SUSPECTED**.
+- **Канон:** CLAUDE.md §3 („temporary scoped Support/Partner Access Grants“; Tenant Guard на всеки job), §14.
+- **Код (#90 SEC-03 `bc52843`):** AuditEvent се пише след изпълнението, не атомарно; човек Platform Admin може да пусне `all_tenants` без Support Access Grant.
+- **Решение:** промяна в кода — събитие преди/с изпълнението; `all_tenants` само със служебен ключ или Support Access Grant.
+
+## FG-522 — оригиналната снимка не се пази преди AI
+
+- **Тежест:** medium. **Статус:** open (+ Krum). **PROVEN**. Налице и на main.
+- **Канон:** CLAUDE.md §4 „Оригиналното аудио и оригиналната снимка се пазят преди AI/OCR обработка.“; Р72.
+- **Код (#90 SEC-03 `bc52843`):** клиентът компресира снимките преди изпращане; пази се само едно смалено base64 копие в Mongo, при подаване и след AI. Признат дълг до W0-06 (File Registry).
+- **Решение:** промяна в кода в W0-06; предложение за Крум — `ai_enabled` за никой tenant преди W0-06.
+
 ## FG-485 — Р69 не е изпълнено: смяна на окончателно разпределение без Собственика
 
 - **Тежест:** medium. **Статус:** open. **PROVEN** (проход 39, проба P1, 3 режима).
@@ -5082,6 +5146,13 @@
 - #83 CP-01 `2415b5f`: FG-495, FG-497, FG-499 → resolved (PROVEN); FG-496, FG-498 partial; нови FG-510..513. Препоръка: FG-510 и FG-498 (а) — преди сливане. Krum: (1) ДДС с кирилско „В“, `_`, `:`, тире, запетая — нормализиране или 422; (2) `vatNumber` и master-data `vat` BG+10 цифри като чувствителни; (3) Р29 „оригинален резултат“ — id или тяло; (4) AuditEvent при търсене по ЕГН без id-тата — достатъчно ли е; (5) FG-426/Р72. Тестове: CP-01 690, SUB-ADV-01 9, PAY-01 193 (+5 нестабилни, минават отделно) + 91, SEC-01 30.
 - #73 LAB-01 `d34d41b` + #75 LAB-02 `4fa4957`: сливанията `af228707` (main `1525a1e`) и `fe743f47` — приемливи (без кодова разлика спрямо auto-merge; F-81-03, WH-FIX-01 и R62 четците запазени). 19 четеца = `project_labor_cost`. FG-500, FG-502 → resolved; акордът само от одобрено количество в LAB-02 (Р62 + Р33) — PROVEN; FG-463/490/491 остават затворени; FG-341 open; FG-207 partial. Нови FG-505..508. Krum: (1) FG-507 — корекция на количество след одобрен ред: спиране, автоматично изпадане или DQ; (2) FG-505 — агрегатът с платен или одобрен труд; (3) FG-506 — касовата карта от pay runs; (4) FG-508 — старо самоодобрено количество при одобрен от Собственика ред. Тестове: R62 84, LAB-01 25 + 92, SEC-01 30, SEC-02 31, PM-01 6, WH-FIX-01 270, A2B/A2C 76 × 2, LAB-02 52 × 3 + 8.
 - Бавният преглед (FLOW-029) — отложен (тестовата база: 65 стари бази, сривове).
+
+### Проход 42 — 09.11.2026 16:10 UTC (по съобщение от оркестратора)
+
+- Нов PR #90 SEC-03 `bc52843` (Р75, Р76): съответства на 10-те точки на пакета; пропуски в т. 3, 4, 9, 10 (low/medium). Production build — само собственият bundle; PostHog snippet байт-идентичен с main (по пакета). `JWT_SECRET` fail-closed (с изключение FG-516); напомнянията — служебен ключ / Platform Admin, през данните на tenant-а, AuditEvent; печатът екранира имената; AI адаптер `anthropic==2.3.0`, без ключ/модел в кода, без AI → 503 „AI не е настроен“ / резервен път, без 500; логовете — само вида на грешката; `emergentintegrations`/`EMERGENT_LLM_KEY` махнати. Към модела не отиват структурирани ЕГН, IBAN, имена, клиентски полета, tenant id.
+- FG-317 → остатъкът от Emergent решен на клона (след merge/deploy). FG-325..328, 332, 333, 360, 361, 143, 185 — без промяна (при изключен AI фиктивното 60/40 на FG-360 е нормалният път).
+- Нови FG-515..522. Krum: (1) FG-519 — Approval и бюджет по FLOW-050 за включване на AI; (2) FG-522 — без `ai_enabled` до W0-06; (3) FG-520 — dev сървърът с `*.emergent.sh`.
+- Тестове: SEC-03 45, W0-03E-C02 25, ST-02 3, A2C + две tenant-а 36, jest 9, craco build OK.
 
 ## Бележки, които не са разминавания
 
