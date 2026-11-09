@@ -416,3 +416,42 @@ Gates for this head: `gates_r65.txt`.
 - The outgoing payment in `test_r44_allocate_payment_to_it_is_409` names the supplier by `counterparty_id`.
 - No assertion of #81 changed.
 - Result: `test_wh_fix_01_*` 317 passed, 0 skipped, with the warehouse real-Mongo variables, on the branch and on main 1525a1e alike.
+
+## 18. R71 (Krum, 09.11.2026): FG-427, FG-425, FG-429, FG-455, FG-457, receipt type
+
+- **FG-427: the SUB-ADV-01 advance goes through the payment guards.** `POST /subcontractor-packages/{id}/advances` now calls `require_selectable_party` and `check_payment_target`, the same as every payment, before the Idempotency-Key is reserved.
+  - An inactive or archived subcontractor → 422.
+  - The account decides cash vs bank.
+  - Cash needs a registered receipt and the recipient's name (R59 / FG-290 / R71); without them → 422.
+  - Cash is blocked with 409 while the subcontractor has an unverified IBAN (R50.1).
+  - Bank goes only to a verified account. In enforce mode, which is production, anything else → 409. Off / shadow keep the legacy path by the guard mode, as for every other payment (D1).
+  - A refusal writes nothing. The bank / receipt stamp is on both the package row and the ledger row.
+- **FG-425: a receipt in use is never hard-deleted.** `DELETE /media/{id}` of a file that a `finance_payments` or `subcontractor_payments` row names as `cash_receipt_file_id` → **409 `RECEIPT_IN_USE`**.
+  - The file and its record stay.
+  - The refusal writes the AuditEvent `media.delete_refused` (result `denied`, with the referencing rows).
+  - A file no payment uses is still deletable as before.
+  - "Archive only": the media module has no archive operation today. Archiving a receipt belongs to the W0-06 File Registry (D10). An archived record is already refused as a *new* receipt (FG-290).
+- **R71: a receipt is a photo or a PDF.** The `content_type` must be `image/*` or `application/pdf`; without one, the file extension decides. A video or anything else → **422 `CASH_RECEIPT_TYPE_NOT_ALLOWED`**, nothing written. R72 (OCR into lines) is a separate future task.
+- **FG-429: BG + ЕГН as a VAT number is an ЕГН.** A VAT number of `BG` + 10 digits (`counterparty_vat_no`, `vat_number`, `vat_no`) is shown as `BG******1234` for **every role**, full-IBAN right or not, Admin included.
+  - This covers every invoice reader and write response, counterparties, projects' `invoice_details`, the turnover drill and client invoices (`cr.mask_iban_fields`, `cr.mask_invoice_egn`), and the logs (`cr.mask_for_log`).
+  - A masked value sent back by a form keeps the stored one (invoice update, counterparty update, project update).
+  - The full value only via the audited `POST /finance/invoices/{id}/egn/reveal`, which now returns `counterparty_vat_no` (and `egn`) too.
+  - The PDF of such an invoice is downloaded only by Owner / Accountant, with `invoice.pdf.downloaded`.
+  - A company VAT number (BG + 9 digits) is shown as it is.
+- **FG-455: the PDF.**
+  - An ЕГН stored only in `egn` is printed in full, labelled **"ЕГН"**. A 10-digit `counterparty_eik` is also printed as "ЕГН", and a company's ЕИК as "ЕИК".
+  - `invoice.pdf.downloaded` is written only **after** `doc.build()` succeeded, still before the bytes are returned. A failed build writes no AuditEvent.
+- **FG-457:** main's `test_sub_adv_01_subcontractor_advance.py` real-Mongo harness was red on the branch with 422 `CASH_RECEIPT_REQUIRED`. Its cash advances and payments had no receipt, and the suite was in no gate glob.
+  - Setup only: the request helper and the `adv` body carry the receipt registered by the C02 records (`file_cash_receipt`) and a recipient. **No assertion changed**; 9 passed.
+  - The claim in `gates_r65.txt` is corrected there.
+  - From now on the gates also run the SUB-ADV-01 suite, regenerate its evidence with `--harness`, and run the **whole suite with real Mongo** on the branch and on main.
+- **Tests:**
+  - `test_fg427_a_subcontractor_advance_goes_through_the_payment_guards`
+  - `test_fg425_a_receipt_in_use_is_never_hard_deleted`
+  - `test_r71_a_receipt_is_a_photo_or_a_pdf`
+  - `test_fg429_a_bg_egn_vat_number_is_an_egn`
+  - `test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build`
+
+  Red on `7750f4e`: 27 of 27 (`r71_red_on_7750f4e_real_mongo.txt`).
+
+Gates for this head: `gates_r71.txt`.
