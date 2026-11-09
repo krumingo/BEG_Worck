@@ -1395,6 +1395,21 @@ async def get_invoice_context(project_id: str, user: dict = Depends(get_current_
 # PROJECT DASHBOARD - Single endpoint for all card data
 # ══════════════════════════════════════════════════════════════════════════════
 
+async def _project_materials_money(tenant, org_id: str, project_id: str) -> dict:
+    """WH-FIX-01 (FG-150) — the project's material cost through the shared
+    canonical helper (``canonical_material_cost.project_material_cost``, the
+    same number as P&L / financial results) and the input VAT of the invoice
+    lines allocated to it (``project_input_vat``, the P&L VAT rule)."""
+    from app.services.canonical_material_cost import (
+        project_input_vat, project_material_cost,
+    )
+    cost = await project_material_cost(tenant, org_id, project_id)
+    ex_vat = round(float(cost.get("total_cost") or 0), 2)
+    vat = await project_input_vat(tenant, org_id, project_id)
+    return {"ex_vat": ex_vat, "vat": vat, "inc_vat": round(ex_vat + vat, 2),
+            "count": len(cost.get("lines") or []), "source": cost.get("source")}
+
+
 @router.get("/projects/{project_id}/dashboard")
 @strip_money_for_non_finance   # SEC-02-A (R20-5M, D1)
 async def get_project_dashboard(project_id: str, user: dict = Depends(get_current_user)):
@@ -1626,6 +1641,10 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     invoice_list = []
     totals_paid = 0
     totals_unpaid = 0
+    # F-81-03: client money in (Issued) vs money paid to suppliers (Received) —
+    # the card keeps both as document turnover; only the Issued part is income.
+    totals_paid_issued = 0
+    totals_paid_received = 0
     totals_proforma_future = 0
     totals_subtotal = 0
     totals_vat = 0
@@ -1680,6 +1699,10 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
                 totals_proforma_future += remaining_amount
             else:
                 totals_paid += paid_amount
+                if inv.get("direction") == "Issued":
+                    totals_paid_issued += paid_amount
+                elif inv.get("direction") == "Received":
+                    totals_paid_received += paid_amount
                 totals_unpaid += remaining_amount
                 totals_subtotal += subtotal
                 totals_vat += vat_amount
@@ -1714,6 +1737,8 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
             "vat": round(totals_vat, 2),
             "total": round(totals_total, 2),
             "paid": round(totals_paid, 2),
+            "paid_issued": round(totals_paid_issued, 2),       # F-81-03: client money in
+            "paid_received": round(totals_paid_received, 2),   # F-81-03: paid to suppliers
             "unpaid": round(totals_unpaid, 2),
             "proforma_future": round(totals_proforma_future, 2),
         },
@@ -1764,26 +1789,25 @@ async def get_project_dashboard(project_id: str, user: dict = Depends(get_curren
     materials_vat = 0
     materials_inc_vat = 0
     
-    try:
-        warehouse_txns = await tenant.warehouse_transactions.find(
-            {"project_id": project_id, "org_id": org_id},
-            {"_id": 0, "total_ex_vat": 1, "total_vat": 1, "total_inc_vat": 1}
-        ).to_list(None)
-        materials_ex_vat = sum(t.get("total_ex_vat", 0) or 0 for t in warehouse_txns)
-        materials_vat = sum(t.get("total_vat", 0) or 0 for t in warehouse_txns)
-        materials_inc_vat = sum(t.get("total_inc_vat", 0) or 0 for t in warehouse_txns)
-    except Exception as e:
-        logger.warning(f"projects.py calc error: {e}")
-    
+    # WH-FIX-01 (FG-150): the ONE project material-cost helper every finance
+    # report uses (canonical ledger + Р13 legacy split + Path B) — the legacy
+    # `warehouse_transactions.total_ex_vat` field is carried by no canonical
+    # row, so the card showed 0. No silent fallback: an error propagates.
+    mat = await _project_materials_money(tenant, org_id, project_id)
+    materials_ex_vat, materials_vat, materials_inc_vat = (
+        mat["ex_vat"], mat["vat"], mat["inc_vat"])
     card_materials = {
         "total_ex_vat": materials_ex_vat,
         "total_vat": materials_vat,
         "total_inc_vat": materials_inc_vat,
+        "source": mat["source"],
     }
     
     # ── Card 8: Balance ─────────────────────────────────────────────────────
-    # Income = actual paid amounts from invoices (source of truth: paid_amount)
-    income = totals_paid
+    # Income = actual paid amounts of SALES invoices (source of truth: paid_amount).
+    # F-81-03: a payment TO a supplier (Received) is cash out, never income; the
+    # supplier cost reaches this card through materials, not through income.
+    income = totals_paid_issued
     
     # Check for project payments (additional income)
     try:
@@ -1953,7 +1977,13 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             ("employee_daily_reports", "project_id"),
             ("extra_works", "project_id"),
             ("payroll_payment_allocations", "project_id"),
-            ("warehouse_transactions", "project_id"),
+            # WH-FIX-01 (FG-193, FLOW-009 / CLAUDE.md §2.9): the warehouse
+            # ledger (`warehouse_transactions`) is NOT rewritten here. Its rows
+            # are append-only and written only by the canonical command
+            # service; their projections (material_entries, warehouse_batches)
+            # stay on the parent, and a subproject's canonical project IS its
+            # parent (5C-C26d, FG-38). Sub-project А inherits the warehouse
+            # history through `parent_project_id` — a relation, no rewrite.
             ("subcontractor_payments", "project_id"),
         ]
         migration_log = {}
@@ -1967,6 +1997,11 @@ async def create_sub_project(project_id: str, data: CreateSubProjectRequest, use
             )
             if result.modified_count > 0:
                 migration_log[coll_name] = result.modified_count
+
+        kept = await tenant.warehouse_transactions.count_documents(
+            {"project_id": project_id, "org_id": org_id})
+        if kept:
+            migration_log["warehouse_transactions_kept_on_parent"] = kept
 
         # Work sessions use site_id instead of project_id
         ws_result = await tenant.work_sessions.update_many(
@@ -2475,7 +2510,7 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
     # ── Invoices ──
     async def count_invoices(pids):
         invs = await tenant.invoices.find(
-            {"org_id": org_id, "project_id": {"$in": pids}},
+            {"org_id": org_id, "project_id": {"$in": pids}, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
             {"_id": 0, "total": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
         ).to_list(500)
         # Proformas are future receivables, not P&L revenue — kept out of invoiced/paid
@@ -2543,13 +2578,15 @@ async def get_project_aggregate(project_id: str, user: dict = Depends(get_curren
 
     # ── Materials (от warehouse transactions) ──
     async def count_materials(pids):
-        txns = await tenant.warehouse_transactions.find(
-            {"org_id": org_id, "project_id": {"$in": pids}},
-            {"_id": 0, "total_ex_vat": 1, "total_inc_vat": 1},
-        ).to_list(None)
-        ex_vat = round(sum(t.get("total_ex_vat", 0) or 0 for t in txns), 2)
-        inc_vat = round(sum(t.get("total_inc_vat", 0) or 0 for t in txns), 2)
-        return {"ex_vat": ex_vat, "inc_vat": inc_vat, "count": len(txns)}
+        # WH-FIX-01 (FG-150): the shared canonical material-cost helper.
+        ex_vat = inc_vat = 0.0
+        count = 0
+        for pid in pids:
+            m = await _project_materials_money(tenant, org_id, pid)
+            ex_vat += m["ex_vat"]
+            inc_vat += m["inc_vat"]
+            count += m["count"]
+        return {"ex_vat": round(ex_vat, 2), "inc_vat": round(inc_vat, 2), "count": count}
 
     own_mat = await count_materials([project_id])
     child_mat = await count_materials(subtree_ids) if subtree_ids else {"ex_vat": 0, "inc_vat": 0, "count": 0}

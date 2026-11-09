@@ -27,7 +27,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
 
     # ── b. REVENUE ─────────────────────────────────────────────────
     invoices = await tenant.invoices.find(
-        {"org_id": org_id, "project_id": project_id},
+        {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1},
     ).to_list(200)
     _rev_statuses = ["Sent", "Paid", "PartiallyPaid"]
@@ -94,11 +94,10 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     material_cost = round(material_total - material_waste_cost, 2)
 
     # ── e. SUBCONTRACTOR COST ──────────────────────────────────────
-    sub_payments = await tenant.subcontractor_payments.find(
-        {"org_id": org_id, "project_id": project_id, "status": {"$in": ["confirmed", "paid", "completed"]}},
-        {"_id": 0, "amount": 1},
-    ).to_list(200)
-    subcontractor_cost = round(sum(p.get("amount", 0) for p in sub_payments), 2)
+    # SUB-ADV-01-A (FG-115, FLOW-006): an advance is cash, not cost — the cost is recognised
+    # when the advance is deducted on an act (ordinary payments + advance deducted).
+    from app.services.subcontract_cost import subcontractor_cost_recognized
+    subcontractor_cost = await subcontractor_cost_recognized(tenant, org_id, project_id)
 
     # Contract payments (external workers)
     contract_docs = await tenant.contract_payments.find(
@@ -226,7 +225,7 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
 
         # Revenue (invoices issued in this month)
         inv = await tenant.invoices.find(
-            {"org_id": org_id, "project_id": project_id,
+            {"org_id": org_id, "project_id": project_id, "direction": "Issued",  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
              "created_at": {"$gte": ms, "$lt": me}},
             {"_id": 0, "total": 1, "subtotal": 1, "status": 1},
         ).to_list(100)
