@@ -194,16 +194,30 @@ def parse_number(prefix: str, number) -> int:
         return 0
 
 
+def number_counter_id(org_id: str) -> str:
+    """INV84-N2: the ONE shared counter document has a deterministic ``_id`` — an upsert on
+    it is unique by itself, so two concurrent first uses never create two counters (the
+    ``inv_cn_01_number_counter_unique`` index is only a second guard)."""
+    return "number_counter:%s:%s" % (org_id, NUMBER_COUNTER)
+
+
+def number_counter_filter(org_id: str) -> dict:
+    return {"_id": number_counter_id(org_id)}
+
+
 async def seed_number_counter(tenant, prefix: str, settings: dict) -> None:
     """Create the shared per-tenant counter ONCE (outside any transaction), above every
     number already used by an issued invoice or an outgoing note of this tenant — so the
     first number it gives can never repeat a legacy one. Idempotent; a concurrent
     creator wins and this is a no-op."""
     from pymongo.errors import DuplicateKeyError
-    flt = {"org_id": tenant.org_id, "counter_type": NUMBER_COUNTER}
+    flt = number_counter_filter(tenant.org_id)
     if await tenant.org_counters.find_one(flt, {"_id": 0, "value": 1}):
         return
     highest = 0
+    async for legacy in tenant.org_counters.find(            # an earlier, filter-keyed counter
+            {"counter_type": NUMBER_COUNTER, "_id": {"$ne": flt["_id"]}}, {"_id": 0, "value": 1}):
+        highest = max(highest, int(legacy.get("value") or 0))
     async for row in tenant.invoices.find(
             {"direction": "Issued", "invoice_no": {"$regex": "^%s-" % prefix}},
             {"_id": 0, "invoice_no": 1}):
@@ -215,12 +229,60 @@ async def seed_number_counter(tenant, prefix: str, settings: dict) -> None:
     try:
         await tenant.org_counters.update_one(
             flt, {"$setOnInsert": {"value": max(highest, configured), "prefix": prefix,
-                                   "created_at": now_iso()}}, upsert=True)
+                                   "counter_type": NUMBER_COUNTER, "created_at": now_iso()}},
+            upsert=True)
     except DuplicateKeyError:
         pass
 
 
 MAX_NUMBER_SKIPS = 10000
+
+
+def number_series_lock_id(org_id: str) -> str:
+    return "number_series_lock:%s" % org_id
+
+
+async def ensure_number_series_lock(tenant) -> None:
+    """OUTSIDE the transaction: create the series lock document (idempotent)."""
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await tenant.org_counters.update_one(
+            {"_id": number_series_lock_id(tenant.org_id)},
+            {"$setOnInsert": {"name": "number_series_lock", "value": 0}}, upsert=True)
+    except DuplicateKeyError:
+        pass
+
+
+async def lock_number_series(tenant, *, session) -> None:
+    """INV84-N2: IN the transaction of every OUR number decision that does not go through
+    the counter (a manual / legacy number at issue): two concurrent decisions write the
+    same document → WriteConflict → the loser re-runs and sees the committed number — the
+    duplicate check never depends on the unique index alone."""
+    await tenant.org_counters.update_one(
+        {"_id": number_series_lock_id(tenant.org_id)}, {"$inc": {"value": 1}}, session=session)
+
+
+def supplier_note_lock_id(org_id: str, key: str, number: str) -> str:
+    return "supplier_note_lock:%s:%s:%s" % (org_id, key, number)
+
+
+async def ensure_supplier_note_lock(tenant, key: str, number: str) -> None:
+    from pymongo.errors import DuplicateKeyError
+    try:
+        await tenant.org_counters.update_one(
+            {"_id": supplier_note_lock_id(tenant.org_id, key, number)},
+            {"$setOnInsert": {"name": "supplier_note_lock", "value": 0}}, upsert=True)
+    except DuplicateKeyError:
+        pass
+
+
+async def lock_supplier_note_number(tenant, key: str, number: str, *, session) -> None:
+    """INV84-N2: a supplier note's (supplier, number) duplicate check is serialised by this
+    document — two notes with the same number on two DIFFERENT invoices of one supplier
+    claim different invoices, so without it only the unique index would stop them."""
+    await tenant.org_counters.update_one(
+        {"_id": supplier_note_lock_id(tenant.org_id, key, number)}, {"$inc": {"value": 1}},
+        session=session)
 
 
 def supplier_key(invoice: dict) -> Optional[str]:
@@ -312,6 +374,7 @@ DQ_TITLES = {
     DQ_CREDIT_NOTE_DIFFERENCE: "разлика в кредитно известие",
     DQ_DIFFERENCE_LINE_UNDETERMINED: "приета разлика: не може да се определи склад или обект за реда",
     DQ_DIFFERENCE_LINE_REVERSED: "сторнирана приета разлика: изберете обект или фирма",
+    "INDEX_NOT_BUILT": "индекс на базата не е изграден (стари данни) — пазят го други проверки; нужна е миграция",
 }
 
 
@@ -409,7 +472,7 @@ async def take_number(tenant, prefix: str, *, session) -> str:
     from pymongo import ReturnDocument
     for _ in range(MAX_NUMBER_SKIPS):
         doc = await tenant.org_counters.find_one_and_update(
-            {"org_id": tenant.org_id, "counter_type": NUMBER_COUNTER},
+            number_counter_filter(tenant.org_id),
             {"$inc": {"value": 1}}, return_document=ReturnDocument.AFTER, session=session)
         number = format_number(prefix, int(doc["value"]))
         if not await number_taken(tenant, number, session=session):
@@ -736,13 +799,41 @@ PLANNED_INDEXES = (
 
 _ensured: set = set()
 
+#: INV84-N2 — what each planned index guards, and the OTHER guard of that invariant (the
+#: write path never depends on the unique index alone; a missing index is a DQ issue).
+INDEX_GUARDS = {
+    "inv_cn_02_outgoing_invoice_no": ("our invoice numbers are unique per tenant",
+                                      "counter $inc / series lock in the issue transaction"),
+    "inv_cn_02_supplier_invoice_no": ("one supplier invoice per (supplier, number)",
+                                      "(supplier, number) lock document (FG-264)"),
+    "inv_cn_01_issued_number_unique": ("an issued number is given once",
+                                       "counter $inc / series lock in the issue transaction"),
+    "inv_cn_01_note_id_unique": ("one note per id", "deterministic id + Idempotency-Key registry"),
+    "inv_cn_01_outgoing_number_unique": ("our note numbers are unique (shared series)",
+                                         "counter $inc in the approval transaction"),
+    "inv_cn_01_incoming_number_unique": ("one supplier note per (supplier, number)",
+                                         "(supplier, note number) lock document (INV84-N2)"),
+    "inv_cn_01_note_by_invoice": ("read speed only", "—"),
+    "inv_cn_01_offset_id_unique": ("one offset per id", "deterministic id + Idempotency-Key registry"),
+    "inv_cn_01_number_counter_unique": ("one shared number counter per tenant",
+                                        "deterministic counter _id (INV84-N2)"),
+}
+#: index builds that failed, per database handle: {repr(db): {name: error}}
+_index_failures: Dict[str, Dict[str, str]] = {}
+DQ_INDEX_NOT_BUILT = "INDEX_NOT_BUILT"
+INDEX_RETRY_SECONDS = 600           # a failed build is retried at most every 10 minutes
+_retry_at: Dict[str, float] = {}
+_recorded: Dict[str, frozenset] = {}
+
 
 async def ensure_indexes(database) -> None:
     """Create the planned indexes on the tenant's operational database (once per process
     and database handle). Idempotent: an existing identical index is a no-op."""
+    import time
     name = repr(database)          # the client + database it names
-    if name in _ensured:
+    if name in _ensured or time.monotonic() < _retry_at.get(name, 0):
         return
+    _retry_at[name] = time.monotonic() + INDEX_RETRY_SECONDS
     # one explicit call per collection (the A2C guard sees every collection named)
     plan = {}
     for coll, keys, opts in PLANNED_INDEXES:
@@ -754,30 +845,64 @@ async def ensure_indexes(database) -> None:
     import logging
     log = logging.getLogger(__name__)
 
+    failures = _index_failures.setdefault(name, {})
+
     def _skip(opts, exc):
         log.warning("INV-CN-01 index %s not built now: %s", opts.get("name"), exc)
+        failures[opts.get("name")] = str(exc)[:300]
 
     for keys, opts in plan["invoices"]:
         try:
             await database.invoices.create_index(keys, **opts)
+            failures.pop(opts["name"], None)
         except Exception as exc:                                   # noqa: BLE001
             _skip(opts, exc)
     for keys, opts in plan["credit_debit_notes"]:
         try:
             await database.credit_debit_notes.create_index(keys, **opts)
+            failures.pop(opts["name"], None)
         except Exception as exc:                                   # noqa: BLE001
             _skip(opts, exc)
     for keys, opts in plan["invoice_offsets"]:
         try:
             await database.invoice_offsets.create_index(keys, **opts)
+            failures.pop(opts["name"], None)
         except Exception as exc:                                   # noqa: BLE001
             _skip(opts, exc)
     for keys, opts in plan["org_counters"]:
         try:
             await database.org_counters.create_index(keys, **opts)
+            failures.pop(opts["name"], None)
         except Exception as exc:                                   # noqa: BLE001
             _skip(opts, exc)
-    _ensured.add(name)
+    if not failures:
+        _ensured.add(name)          # a failed build is retried at the next write (FG-264)
+
+
+async def record_index_health(tenant, database) -> List[dict]:
+    """INV84-N2: every planned index whose build failed on this database → ONE DQ issue +
+    alarm (the #81 / #82 schema, visible to the Owner / Admin / Accountant), naming the
+    invariant and its other guard; an index built later resolves it. Idempotent."""
+    failed = _index_failures.get(repr(database), {})
+    key = "%s|%s" % (repr(database), tenant.org_id)
+    if _recorded.get(key) == frozenset(failed):
+        return [{"index": n} for n in failed]          # nothing changed since the last record
+    _recorded[key] = frozenset(failed)
+    out = []
+    for _coll, _keys, opts in PLANNED_INDEXES:
+        index_name = opts["name"]
+        invariant, guard = INDEX_GUARDS.get(index_name, ("", ""))
+        if index_name in failed:
+            await open_dq_issue(tenant, dq_type=DQ_INDEX_NOT_BUILT, entity_type="index",
+                                entity_id=index_name,
+                                details={"invariant": invariant, "other_guard": guard,
+                                         "error": failed[index_name],
+                                         "remedy": "scripts/inv_cn_01_migrate.py (dry run → Owner → --apply)"})
+            out.append({"index": index_name, "invariant": invariant, "other_guard": guard})
+        else:
+            await resolve_dq_issue(tenant, dq_type=DQ_INDEX_NOT_BUILT, entity_id=index_name,
+                                   notes="index built")
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════ shared reads

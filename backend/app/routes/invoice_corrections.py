@@ -79,6 +79,7 @@ async def _prepare(user: dict):
     settings = await fin.get_invoice_settings(user["org_id"])
     prefix = ic.number_prefix(settings)
     await ic.ensure_indexes(fin.db)
+    await ic.record_index_health(tenant, fin.db)                   # INV84-N2
     await ic.seed_number_counter(tenant, prefix, settings)
     return tenant, prefix
 
@@ -177,9 +178,14 @@ async def create_note(body: dict = Body(...), user: dict = Depends(require_m5),
                         "issue_date": body.get("issue_date") if isinstance(body.get("issue_date"), str)
                         else now[:10]})
 
+        if direction == ic.INCOMING:
+            await ic.ensure_supplier_note_lock(tenant, supplier_key, number)
+
         async def tx_body(session):
             if direction == ic.INCOMING:
                 await _claim(tenant, invoice_id, session)
+                # INV84-N2: (supplier, note number) serialised across invoices of the supplier
+                await ic.lock_supplier_note_number(tenant, supplier_key, number, session=session)
                 dup = await tenant.credit_debit_notes.find_one(
                     {"direction": ic.INCOMING, "supplier_key": supplier_key, "number": number},
                     {"_id": 0, "id": 1}, session=session)
@@ -847,6 +853,7 @@ async def create_offset(body: dict = Body(...), user: dict = Depends(require_m5)
         from app.services.auth_tx import run_in_transaction
         tenant = fin._tenant(user)
         await ic.ensure_indexes(fin.db)
+        await ic.record_index_health(tenant, fin.db)               # INV84-N2
         src = _correctable(await tenant.invoices.get(src_id, {"_id": 0}))
         tgt = _correctable(await tenant.invoices.get(tgt_id, {"_id": 0}))
         if ic.contract_key(src) is None or ic.contract_key(src) != ic.contract_key(tgt):

@@ -1866,6 +1866,64 @@ def test_inv84_r64_1_back_to_own_allocation_on_a_closed_project_is_a_proposal(mo
     run(monkeypatch, mode, scenario)
 
 
+def test_inv84_n2_every_invariant_holds_without_its_unique_index_and_a_missing_index_is_a_dq_issue(
+        monkeypatch, mode):
+    async def scenario(c, op):
+        from app.services import invoice_corrections as ic
+        # no unique index can be relied on here: drop every planned unique one (a legacy
+        # database whose data refused the build) and forget the per-process cache
+        for coll in ("invoices", "credit_debit_notes", "org_counters"):
+            for name in list(await op[coll].index_information()):
+                if name.startswith("inv_cn_0"):
+                    await op[coll].drop_index(name)
+        ic._ensured.clear(); ic._retry_at.clear(); ic._index_failures.clear(); ic._recorded.clear()
+        # a legacy collision that makes the incoming-number index unbuildable
+        for i in (1, 2):
+            await op.credit_debit_notes.insert_one({"id": "legacy-n%d" % i, "org_id": ORG_A,
+                                                    "direction": "incoming", "supplier_key": "x",
+                                                    "number": "OLD-1"})
+        # (1) the shared counter: 6 parallel FIRST issues → ONE counter document, 6 numbers
+        drafts = [await draft(c) for _ in range(6)]
+        results = await asyncio.gather(*(
+            c.post("/api/finance/invoices/%s/issue" % d["id"], headers=hdr("acct-a")) for d in drafts))
+        assert all(r.status_code == 200 for r in results), [r.text for r in results]
+        assert sorted(r.json()["invoice_no"] for r in results) == ["INV-%04d" % i for i in range(1, 7)]
+        assert await op.org_counters.count_documents({"counter_type": ic.NUMBER_COUNTER}) == 1
+        # (2) the missing index is a canonical DQ issue + alarm naming its invariant + other guard
+        dq = await op.dq_issues.find_one({"id": "dq-index-not-built-inv_cn_01_incoming_number_unique"})
+        assert dq and (dq["type"], dq["status"], dq["owner_role"]) == ("INDEX_NOT_BUILT", "open", "accountant")
+        assert dq["details"]["invariant"] == "one supplier note per (supplier, number)"
+        assert "lock" in dq["details"]["other_guard"]
+        assert (await op.alarm_events.find_one(
+            {"id": "alarm-index-not-built-inv_cn_01_incoming_number_unique"}))["status"] == "active"
+        # (3) one supplier note per (supplier, number) ACROSS two invoices of the supplier,
+        # 6 in parallel, with no index → 1 × 201 + 5 × 409
+        b1 = await sent(c, direction="Received")
+        b2 = await sent(c, direction="Received")
+        rs = await asyncio.gather(*(
+            note(c, b, number="CN-SAME", lines=[{"original_line_id": b["lines"][0]["id"], "qty": 1}])
+            for b in (b1, b2, b1, b2, b1, b2)))
+        assert sorted(r.status_code for r in rs) == [201, 409, 409, 409, 409, 409], [r.text for r in rs]
+        assert {code(r) for r in rs if r.status_code == 409} == {"DUPLICATE_CREDIT_NOTE"}
+        # (4) two manual numbers decided concurrently, no index → one issued, the other 409
+        settings = "/api/finance/invoice-settings"
+        assert (await c.put(settings, headers=hdr("owner-a"), json={"issued_auto_numbering": False})).status_code == 200
+        m = [await draft(c) for _ in range(2)]
+        for d in m:
+            await op.invoices.update_one({"id": d["id"]}, {"$set": {"manual_number": "MAN-1"}})
+        rs = await asyncio.gather(*(c.post("/api/finance/invoices/%s/issue" % d["id"], headers=hdr("acct-a"))
+                                    for d in m))
+        assert sorted(r.status_code for r in rs) == [200, 409], [r.text for r in rs]
+        assert await op.invoices.count_documents({"direction": "Issued", "invoice_no": "MAN-1"}) == 1
+        # (5) the legacy collision cleaned + the index built → the DQ issue resolves
+        await op.credit_debit_notes.delete_one({"id": "legacy-n2"})
+        ic._retry_at.clear()
+        await note(c, b1, number="CN-NEXT", lines=[{"original_line_id": b1["lines"][0]["id"], "qty": 1}])
+        assert (await op.dq_issues.find_one(
+            {"id": "dq-index-not-built-inv_cn_01_incoming_number_unique"}))["status"] == "resolved"
+    run(monkeypatch, mode, scenario)
+
+
 def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
     async def scenario(c, op):
         body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",

@@ -1,0 +1,11 @@
+# INV84-N2 red proof — the new test run against ea21b210 (real Mongo, 3 modes)
+
+## full test: a failed index build left ONLY a log warning — no DQ issue / alarm (step 2): assert (None)
+E       assert (None)
+E       assert (None)
+
+## the same test WITHOUT the DQ steps (2) and (5) on ea21b210
+# Honest note: the parallel duplicates without the unique indexes (shared counter, supplier-note number across
+# two invoices, manual numbers) did NOT reproduce in this harness on ea21b210 — the new counter _id and lock
+# documents are DEFENSIVE (the invariant no longer depends on the index by construction), not a proven race.
+3 passed, 162 deselected, 1 warning in 5.85s

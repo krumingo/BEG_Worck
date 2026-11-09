@@ -435,9 +435,9 @@ async def update_settings(data: dict, user: dict = Depends(require_m5)):
     if "issued_next_number" in update:
         # INV-CN-01 / Р49.3: the shared counter may only move FORWARD (never re-issue a
         # number); if it does not exist yet, it is seeded from these settings at first use.
-        from app.services.invoice_corrections import NUMBER_COUNTER
+        from app.services.invoice_corrections import number_counter_filter
         await tenant.org_counters.update_one(
-            {"org_id": org_id, "counter_type": NUMBER_COUNTER},
+            number_counter_filter(org_id),
             {"$max": {"value": int(update["issued_next_number"]) - 1}})
 
     return await get_settings(user)
@@ -466,9 +466,9 @@ async def get_next_number(
     if direction == "Issued":
         # INV-CN-01 / Р49.3: once the shared counter exists, it is the source of the next
         # number (a preview only — the number is taken at issue). Read-only here.
-        from app.services.invoice_corrections import NUMBER_COUNTER, format_number
+        from app.services.invoice_corrections import format_number, number_counter_filter
         counter = await _tenant(user).org_counters.find_one(
-            {"org_id": user["org_id"], "counter_type": NUMBER_COUNTER}, {"_id": 0, "value": 1})
+            number_counter_filter(user["org_id"]), {"_id": 0, "value": 1})
         if counter:
             num = int(counter.get("value") or 0) + 1
             next_number = format_number(prefix, num)
@@ -881,6 +881,7 @@ async def _insert_supplier_invoice(user: dict, invoice: dict, *, after_insert=No
     from app.services.auth_tx import run_in_transaction
     tenant = _tenant(user)
     await ic.ensure_indexes(db)
+    await ic.record_index_health(tenant, db)                       # INV84-N2
     await ic.ensure_supplier_lock(tenant, invoice, invoice["invoice_no"])
 
     async def body(session):
@@ -1433,12 +1434,14 @@ async def _issue_in_tx(tenant: TenantData, user: dict, invoice_id: str, session,
         number = current.get("invoice_no")
     elif current.get("invoice_no"):
         number = current["invoice_no"]          # a legacy draft numbered before INV-CN-01
+        await ic.lock_number_series(tenant, session=session)       # INV84-N2
     elif settings.get("issued_auto_numbering", True):
         number = await ic.take_number(tenant, prefix, session=session)
     else:
         number = (current.get("manual_number") or "").strip()
         if not number:
             raise HTTPException(status_code=400, detail="Номерът на фактурата е задължителен")
+        await ic.lock_number_series(tenant, session=session)       # INV84-N2
     if current.get("direction") == "Issued":
         # FG-217: only OUR series counts (a supplier's number never blocks our issue)
         if await ic.number_taken(tenant, number, session=session, exclude_invoice_id=invoice_id):
@@ -1464,7 +1467,9 @@ async def _issue(user: dict, invoice_id: str, idem_key: Optional[str]) -> dict:
     settings = await get_invoice_settings(user["org_id"])
     prefix = ic.number_prefix(settings)
     await ic.ensure_indexes(db)
+    await ic.record_index_health(tenant, db)                       # INV84-N2
     await ic.seed_number_counter(tenant, prefix, settings)
+    await ic.ensure_number_series_lock(tenant)
 
     async def body(session):
         return await _issue_in_tx(tenant, user, invoice_id, session, prefix, settings,
