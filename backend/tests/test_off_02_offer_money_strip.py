@@ -474,3 +474,137 @@ def test_10_fg472_the_budget_read_shows_no_money_to_a_non_finance_role(
             assert {"sale_total", "budget_total", "margin_value", "margin_percent"} <= keys, keys
             assert r.json()["totals"]["sale"] == 1000.0
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════ F-89-01 [P1] (Codex, PR #89): the review token is a bearer secret
+#: The keys that carry the public review link (``/offers/review/{token}``): whoever holds
+#: one sees the client prices (public GET) and can make the offer Accepted (public approve).
+REVIEW_KEYS = ("review_token", "review_url")
+
+
+@pytest.fixture
+def _with_projects_router(monkeypatch):
+    """The OFF-01 app + the projects router (the project dashboard lists the extra offers)."""
+    real_app = T._app
+
+    def app(mp, op, sysdb, mode_):
+        a = real_app(mp, op, sysdb, mode_)
+        from app.routes import projects as rp
+        mp.setattr(rp, "db", op, raising=False)
+        a.include_router(rp.router, prefix="/api")
+        return a
+    monkeypatch.setattr(T, "_app", app)
+
+
+def _review_keys_in(payload) -> set:
+    found = set()
+
+    def walk(v):
+        if isinstance(v, dict):
+            for k, x in v.items():
+                if k in REVIEW_KEYS:
+                    found.add(k)
+                walk(x)
+        elif isinstance(v, list):
+            for x in v:
+                walk(x)
+    walk(payload)
+    return found
+
+
+async def _seed_review(op):
+    """A Sent offer with a live review link (the main offer), its snapshot and an event, and
+    a Sent EXTRA offer with its own link — the project dashboard lists the extra offers."""
+    await op.offers.insert_one(offer_doc("rt1", token=TOKEN, review_token_version=1,
+                                         review_token_status="active"))
+    await op.offers.insert_one(offer_doc("rt-extra", token="tkx" + "e" * 21, offer_type="extra",
+                                         offer_no="OFF-0002", review_token_version=1))
+    await op.offer_versions.insert_one({
+        "id": "ov-rt1", "org_id": ORG_A, "project_id": PRJ_A, "offer_id": "rt1",
+        "version_number": 1, "created_at": "2026-11-02T10:00:00+00:00", "created_by": "admin-a",
+        "note": "Автоматичен snapshot при изпращане", "is_auto_backup": True,
+        "snapshot_json": {"offer_no": "OFF-0001", "status": "Sent", "version": 1, "lines": []}})
+    await op.offer_events.insert_one({
+        "id": "oe-rt1", "org_id": ORG_A, "offer_id": "rt1", "event_type": "sent",
+        "actor": "admin-a@off01.example", "created_at": "2026-11-02T10:00:00+00:00",
+        "details": {"sent_by": "admin-a"}})
+
+
+def _staff_surfaces():
+    """Every internal GET that answers with an offer (whole, in a list, nested in a version,
+    a history or the project dashboard)."""
+    return {
+        "single": "/api/offers/rt1",
+        "list": "/api/offers",
+        "list_project": "/api/offers?project_id=%s" % PRJ_A,
+        "list_sent": "/api/offers?status=Sent",
+        "versions": "/api/offers/rt1/versions",
+        "version_1": "/api/offers/rt1/versions/1",
+        "events": "/api/offers/rt1/events",
+        "dashboard": "/api/projects/%s/dashboard" % PRJ_A,
+    }
+
+
+def test_11_f89_01_no_internal_response_gives_staff_the_review_link(
+        monkeypatch, _with_projects_router, backend, mode):
+    """F-89-01: GET /offers/{id} (quantity-only after the SEC-02 strip) still carried
+    ``review_token``. A SiteManager read it, opened the public review (prices — R20) and
+    approved it (Accepted — R67). Now no internal response of a non-finance caller carries the
+    token or a review URL, in any surface; the chain "internal response → public read →
+    approve" cannot be started; finance keeps the link; the client's link still works."""
+    secrets = (TOKEN, "tkx" + "e" * 21)
+
+    async def scenario(c, op):
+        await _seed_review(op)
+        leaks = {}
+        for who in FORBIDDEN:
+            for name, url in _staff_surfaces().items():
+                r = await c.get(url, headers=T.hdr(who, key=False))
+                if r.status_code != 200:
+                    continue                 # refused: nothing handed out
+                bad = sorted(_review_keys_in(r.json())) + [s for s in secrets if s in r.text]
+                bad += ["/offers/review/"] if "/offers/review/" in r.text else []
+                if bad:
+                    leaks["%s %s" % (who, name)] = bad
+        assert leaks == {}, leaks
+        # the reads did answer the SiteManager (the surfaces were really exercised)
+        for name in ("single", "list_project", "versions", "events"):
+            r = await c.get(_staff_surfaces()[name], headers=T.hdr("site-a", key=False))
+            assert r.status_code == 200, (name, r.status_code, r.text[:200])
+        assert (await get(op, "rt1"))["status"] == "Sent"
+        # finance keeps the link where it is shown today (the offer editor, the send answer)
+        for who in ALLOWED:
+            r = await c.get("/api/offers/rt1", headers=T.hdr(who, key=False))
+            assert r.status_code == 200 and r.json()["review_token"] == TOKEN, (who, r.text[:200])
+        # the client's link still works end to end
+        r = await c.get("/api/offers/review/%s" % TOKEN)
+        assert r.status_code == 200, r.text[:200]
+        r = await T.respond(c, TOKEN)
+        assert r.status_code == 200, r.text[:300]
+        assert (await get(op, "rt1"))["status"] == "Accepted"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_12_f89_01_the_send_answer_keeps_the_link_only_for_finance(monkeypatch, backend, mode):
+    """The send answer is the one place the link is handed out: finance gets ``review_url``
+    and the token; the strip (defence in depth: an enforce assignment that grants the send
+    without finance.money_values.read) removes both."""
+    import app.permissions.money_write as mw
+
+    async def scenario(c, op):
+        await op.offers.insert_one(offer_doc("sd1", status="Draft"))
+        r = await c.post("/api/offers/sd1/send", headers=T.hdr("acct-a"))
+        assert r.status_code == 200, r.text[:300]
+        token = r.json()["review_token"]
+        assert r.json()["review_url"] == "/offers/review/%s" % token
+        await op.offers.insert_one(offer_doc("sd2", status="Draft"))
+
+        async def no_finance_read(request, user):
+            return False
+        monkeypatch.setattr(mw, "money_values_visible", no_finance_read)
+        r = await c.post("/api/offers/sd2/send", headers=T.hdr("admin-a"))
+        assert r.status_code == 200, r.text[:300]
+        stored = (await get(op, "sd2"))["review_token"]
+        assert _review_keys_in(r.json()) == set() and stored not in r.text, r.text[:300]
+        assert r.json()["status"] == "Sent"
+    run(monkeypatch, backend, mode, scenario)
