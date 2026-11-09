@@ -1903,3 +1903,49 @@ def test_fg480_fg481_advance_method_from_the_account_and_replay_before_the_guard
         r = await c.post("/api/subcontractor-payments", headers=h2, json=pbody)
         assert r.status_code in (200, 201) and r.json()["id"] == pid, r.text
     run(monkeypatch, backend, mode, scenario)
+
+
+def test_cp83_m3_the_order_is_validation_replay_guards():
+    """CP83-M3: role check (dependency) → pure body validation (no read) → the idempotency
+    replay → the state guards; #76's rule "validation before the first read" holds."""
+    import inspect
+    from app.routes import subcontractors as s
+    for fn in (s.create_subcontractor_advance, s.create_subcontractor_payment):
+        src = inspect.getsource(fn)
+        assert src.index("money_value(") < src.index("completed_replay(") \
+            < src.index("require_selectable_party(") < src.index("check_payment_target(") \
+            < src.index("MoneyWrite.begin("), fn.__name__
+        assert src.index("money_value(") < src.index("find_one("), fn.__name__
+
+
+def test_cp83_m3_same_key_other_body_is_409_and_a_completed_replay_survives_archiving(monkeypatch, backend, mode):
+    if backend != "real":
+        pytest.skip("SUB-ADV-01's package reservation runs on a real MongoDB only")
+
+    async def scenario(c, op):
+        await op.subcontractor_packages.update_one({"id": "pkg1"}, {"$set": {"contract_total": 9000.0}})
+        cash = {"account_id": CASH_A, "cash_receipt_file_id": "file_r", "cash_recipient_name": "Бригадир"}
+        for url, body in (("/api/subcontractor-packages/pkg1/advances",
+                           dict(cash, amount=100.0, reason="Аванс по договор")),
+                          ("/api/subcontractor-payments", dict(cash, package_id="pkg1", amount=10.0))):
+            await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "active",
+                                                                          "active": True}})
+            h = dict(hdr("acct-a"), **{"Idempotency-Key": "m3-" + url[-8:]})
+            r = await c.post(url, headers=h, json=body)
+            assert r.status_code == 201, r.text
+            first = r.json()
+            before = (len(await rows(op, "finance_payments")), len(await rows(op, "subcontractor_payments")))
+            # the same key, another body → 409, nothing written
+            r = await c.post(url, headers=h, json=dict(body, amount=body["amount"] + 1))
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_CONFLICT", r.text
+            # archived afterwards: the completed key still replays the stored 201
+            await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "archived",
+                                                                          "active": False}})
+            r = await c.post(url, headers=h, json=body)
+            assert r.status_code == 201 and r.json()["id"] == first["id"], r.text
+            # …and the other body is still 409 (before the archive guard)
+            r = await c.post(url, headers=h, json=dict(body, amount=body["amount"] + 1))
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_CONFLICT"
+            assert (len(await rows(op, "finance_payments")),
+                    len(await rows(op, "subcontractor_payments"))) == before
+    run(monkeypatch, backend, mode, scenario)

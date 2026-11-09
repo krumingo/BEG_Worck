@@ -1,0 +1,6 @@
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_m3_the_order_is_validation_replay_guards
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_m3_same_key_other_body_is_409_and_a_completed_replay_survives_archiving[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_m3_same_key_other_body_is_409_and_a_completed_replay_survives_archiving[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_cp83_m3_same_key_other_body_is_409_and_a_completed_replay_survives_archiving[real-enforce]
+4 failed, 8 passed, 3 skipped, 672 deselected, 1 warning in 24.02s
+main SUB-ADV-01 static rule (test_the_routes_check_the_role_before_any_read_and_take_the_key) on 4c8e922: 1 failed, 10 warnings in 1.63s

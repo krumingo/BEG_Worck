@@ -637,15 +637,6 @@ async def create_subcontractor_payment(
     Debt SEC-01-C02-D1 (remaining): not yet through a W0-05 write service, no Approval,
     no reversal API (W0-05 / R1 Payment).
     """
-    # CP-01 FG-481 (R29): a replay of a completed key answers with the stored payment
-    # BEFORE any check — a later guard (an archived payee, a changed IBAN) never turns the
-    # original 201 into a refusal.
-    replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_payment.create",
-                                               idempotency_key, data)
-    if replay:
-        stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
-        if stored:
-            return stored
     amount = money_value(data.get("amount"))
     vat_raw = data.get("vat_amount")
     vat_amount = round(money_value(vat_raw, "vat_amount", allow_zero=True), 2) \
@@ -665,6 +656,18 @@ async def create_subcontractor_payment(
         raise HTTPException(status_code=422, detail={
             "error_code": "ADVANCE_DEDUCTION_NEEDS_ACT",
             "message": "Авансът се приспада по конкретен потвърден акт (act_id)"})
+
+    # CP-01 FG-481 / CP83-M3 (R29): order = role check (dependency) → pure body validation
+    # (above, no read) → the idempotency replay → the state guards. A replay of a completed
+    # key answers with the stored payment BEFORE any state check (an archived payee, a
+    # changed IBAN never turns the original 201 into a refusal); the same key with a
+    # different body → 409.
+    replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_payment.create",
+                                               idempotency_key, data)
+    if replay:
+        stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
+        if stored:
+            return stored
 
     tenant = _tenant(user)
     org_id = user["org_id"]
@@ -1142,15 +1145,16 @@ async def create_subcontractor_advance(
     ``committed_paid_total``; it is deducted later, explicitly, on acts.
     Idempotency-Key required (R29); AuditEvent ``subcontractor_advance_created``.
     """
-    # CP-01 FG-481 (R29): a replay of a completed key → the stored advance, BEFORE any check
+    amount = round(money_value(data.get("amount")), 2)
+    reason = _reason(data.get("reason"))
+    # CP-01 FG-481 / CP83-M3 (R29): role check → pure validation (above) → the replay → the
+    # state guards. A completed key → the stored advance; the same key with another body → 409.
     replay = await MoneyWrite.completed_replay(user, "finance.subcontractor_advance.create",
                                                idempotency_key, {**data, "package_id": pkg_id})
     if replay:
         stored = await _tenant(user).subcontractor_payments.find_one({"id": replay}, {"_id": 0})
         if stored:
             return stored
-    amount = round(money_value(data.get("amount")), 2)
-    reason = _reason(data.get("reason"))
     tenant = _tenant(user)
     org_id = user["org_id"]
     pkg = await tenant.subcontractor_packages.find_one({"id": pkg_id, "org_id": org_id})

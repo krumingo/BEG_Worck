@@ -186,10 +186,10 @@ class MoneyWrite:
                                body: Any) -> Optional[str]:
         """CP-01 FG-481 (R29): a READ-ONLY look at the key registry. When this key already
         COMPLETED with the same request, the stored result's reference — so a route answers
-        the replay with the original result BEFORE any guard runs (a retry after the payee
-        was archived still gets its 201). Reserves nothing, writes nothing; anything else
-        (no key, a new key, a different body, in progress) → None and the route goes on to
-        its checks and ``begin`` as usual."""
+        the replay with the original result BEFORE any state guard runs (a retry after the
+        payee was archived still gets its 201). A known key with a DIFFERENT body → 409
+        IDEMPOTENCY_CONFLICT. Reserves nothing, writes nothing; otherwise (no key, a new key,
+        in progress) → None and the route goes on to its checks and ``begin`` as usual."""
         from app.audit.idempotency import (IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED,
                                            _record_id)
         key = (raw_key or "").strip()
@@ -198,10 +198,16 @@ class MoneyWrite:
         rec = await db[IDEMPOTENCY_COLLECTION].find_one(
             {"id": _record_id(user["org_id"], action, "%s:%s" % (user["id"], key))},
             {"_id": 0, "status": 1, "request_fingerprint": 1, "result_reference": 1})
-        if not rec or rec.get("status") != IDEMPOTENCY_COMPLETED:
+        if not rec:
             return None
         if rec.get("request_fingerprint") not in (None, request_fingerprint(body)):
-            return None                      # a different body: begin() answers 409
+            # CP83-M3: the same key with a different body → 409, before any state guard
+            # (exactly the answer ``begin`` gives); nothing is written
+            raise HTTPException(status_code=409, detail={
+                "error_code": "IDEMPOTENCY_CONFLICT",
+                "message": "The same operation key was already used with a different payload"})
+        if rec.get("status") != IDEMPOTENCY_COMPLETED:
+            return None
         return rec.get("result_reference")
 
     def new_id(self, name: str) -> str:
