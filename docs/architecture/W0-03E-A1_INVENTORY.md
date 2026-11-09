@@ -17,8 +17,8 @@
 | app/routes/finance.py:get_safe_starting_number | (helper) | invoices | find_one(direction, invoice_no) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:get_settings | GET /finance/invoice-settings | invoices | find_one(direction) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:update_settings | PUT /finance/invoice-settings | invoice_settings | update_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/finance.py:update_settings | PUT /finance/invoice-settings | org_counters | update_one(counter_type) | TenantData org_id (session) | new read | SAFE |
-| app/routes/finance.py:get_next_number | GET /finance/next-invoice-number | org_counters | find_one(counter_type) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:update_settings | PUT /finance/invoice-settings | org_counters | update_one(number_counter_filter(org_id)) | TenantData org_id (session) | new read | SAFE |
+| app/routes/finance.py:get_next_number | GET /finance/next-invoice-number | org_counters | find_one(number_counter_filter(user['org_id'])) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:list_accounts | GET /finance/accounts | finance_payments | aggregate(pipeline) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:list_accounts | GET /finance/accounts | financial_accounts | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/finance.py:create_transfer | POST /finance/transfers | financial_accounts | get(id = from_id) | TenantData org_id (session) | scoped@base | SAFE |
