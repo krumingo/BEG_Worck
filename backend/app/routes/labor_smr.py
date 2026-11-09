@@ -16,11 +16,13 @@ from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
-from app.permissions.money_write import (require_field_cost_write, require_finance_read, money_values_visible, without_keys, strip_money_for_non_finance)
+from app.permissions.money_write import (require_field_cost_write, require_finance_read, money_values_visible, without_keys, strip_money_for_non_finance,
+                                         require_money_write, audit_money_write)
 from app.permissions.finance_read import LABOR_MONEY_FIELDS
 from app.permissions.money_input import (MoneyWrite, money_value, project_in_tenant,  # SEC-01-C03
                                          labor_money_visible, without_labor_money)
-from app.services.labor_cost import compute_person_labor, load_smr_terms
+from app.services.labor_cost import (compute_person_labor, load_smr_terms, project_labor_cost,
+                                     package_labor_split, MANUAL_APPROVED, MANUAL_PENDING, SYNC_SOURCE)
 from app.services.report_normalizer import LABOR_LINE_FIELDS
 
 
@@ -100,8 +102,16 @@ async def create_labor_entry(
         "hourly_rate": None,  # populated by aggregator
         "labor_cost": None,
         "source": data.get("source", "manual"),
+        # R62 / FG-58: a manual labor row counts in the project's labor cost only after
+        # the Owner approved it (POST /labor-entries/{id}/approve)
+        "approval_status": MANUAL_PENDING,
+        "created_by": user["id"],
         "created_at": now,
     }
+    if entry["source"] == SYNC_SOURCE:
+        # the synced rows are a projection of approved work reports — only the sync writes them
+        raise HTTPException(status_code=422, detail=(
+            "Източник „work_report_sync“ се записва само от синхронизацията на одобрени отчети"))
 
     # Resolve hourly rate
     profile = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": entry["employee_id"]}, {"_id": 0, "hourly_rate": 1})
@@ -123,6 +133,47 @@ async def create_labor_entry(
         mw.result_id = entry["id"]
     out = {k: v for k, v in entry.items() if k != "_id"}
     return out if show_money else without_labor_money(out)
+
+
+# R62 / FG-58 (Krum 09.11.2026): only the Owner approves a manual labor row.
+MANUAL_ROW_APPROVE_ACTION = "labor.manual_entry.approve"
+
+
+@router.post("/labor-entries/{entry_id}/approve")
+async def approve_manual_labor_entry(
+    entry_id: str,
+    request: Request,
+    _owner: dict = Depends(require_money_write(
+        MANUAL_ROW_APPROVE_ACTION, module="M2", resource_type="labor_entry",
+        roles=("Owner",))),   # R62: Owner only (off/shadow: the legacy role; enforce: the action)
+    user: dict = Depends(require_m2),
+):
+    """R62 / FG-58: the Owner approves a manual labor row; from then on it counts in THE
+    project labor cost (``project_labor_cost``). Once only: a second approval → 409. A
+    synced or reversal row is not a manual row → 409. Canonical AuditEvent (before/after)."""
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    row = await tenant.labor_entries.find_one({"org_id": org_id, "id": entry_id}, {"_id": 0})
+    if not row:
+        raise HTTPException(status_code=404, detail="Редът за труд не е намерен")
+    if row.get("source") == SYNC_SOURCE or row.get("entry_kind") == "reversal" or row.get("reversed_by_entry_id"):
+        raise HTTPException(status_code=409, detail=(
+            "Това не е активен ръчен ред — редовете от одобрени отчети не се одобряват отделно"))
+    now = datetime.now(timezone.utc).isoformat()
+    res = await tenant.labor_entries.update_one(
+        {"org_id": org_id, "id": entry_id, "approval_status": {"$ne": MANUAL_APPROVED}},
+        {"$set": {"approval_status": MANUAL_APPROVED, "approved_by": user["id"], "approved_at": now}})
+    if not getattr(res, "modified_count", 0):
+        raise HTTPException(status_code=409, detail={"code": "ALREADY_APPROVED",
+                                                     "message": "Редът вече е одобрен"})
+    await audit_money_write(
+        request, user, action=MANUAL_ROW_APPROVE_ACTION, source_flow="FLOW-028",
+        entity_type="labor_entry", entity_id=entry_id,
+        before={"approval_status": row.get("approval_status")},
+        after={"approval_status": MANUAL_APPROVED, "approved_by": user["id"]},
+        scope_type="project", scope_id=row.get("project_id"),
+        reason="R62: manual labor row approved by the Owner — counts in the project labor cost")
+    return await tenant.labor_entries.find_one({"org_id": org_id, "id": entry_id}, {"_id": 0})
 
 
 @router.post("/labor-entries/sync-from-work-reports")
@@ -390,16 +441,11 @@ async def _recompute_package_labor(project_id: str, user: dict) -> dict:
         {"_id": settings_id(WORKER_RATES, org_id)})
     default_rate = 18  # EUR/h fallback
 
-    # Aggregate used hours from labor_entries
-    entries = await tenant.labor_entries.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "execution_package_id": 1, "hours": 1, "labor_cost": 1}).to_list(5000)
-    used_by_pkg = {}
-    cost_by_pkg = {}
-    for e in entries:
-        ep_id = e.get("execution_package_id")
-        if ep_id:
-            used_by_pkg[ep_id] = used_by_pkg.get(ep_id, 0) + float(e.get("hours", 0))
-            if e.get("labor_cost") is not None:
-                cost_by_pkg[ep_id] = cost_by_pkg.get(ep_id, 0) + float(e["labor_cost"])
+    # R62: used hours / actual labor cost per package from THE labor cost (approved reports
+    # + Owner-approved manual rows), not from the raw labor_entries
+    split = await package_labor_split(org_id, project_id)
+    used_by_pkg = {k: v["hours"] + v["downtime_hours"] for k, v in split.items() if k}
+    cost_by_pkg = {k: v["cost"] for k, v in split.items() if k}
 
     updated = 0
     for pkg in pkgs:
@@ -463,12 +509,13 @@ async def get_labor_cost_by_exec_pkg(
     if not pkg:
         raise HTTPException(status_code=404, detail="Execution package not found")
 
-    entries = await tenant.labor_entries.find(
-        {"org_id": org_id, "execution_package_id": pkg_id}, {"_id": 0}
-    ).sort("date", -1).to_list(500)
+    # R62: THE labor cost of the package's project, the package's lines only (approved
+    # reports + Owner-approved manual rows) — not the raw labor_entries
+    lc = await project_labor_cost(org_id, pkg.get("project_id")) if pkg.get("project_id") else {"lines": []}
+    entries = [r for r in lc["lines"] if (r.get("execution_package_id") or "") == pkg_id]
 
     # Load employee names
-    emp_ids = list(set(e["employee_id"] for e in entries))
+    emp_ids = list(set(e.get("worker_id") for e in entries if e.get("worker_id")))
     users = await tenant.users.find({"id": {"$in": emp_ids}}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1}).to_list(50)
     name_map = {u["id"]: f"{u.get('first_name', '')} {u.get('last_name', '')}".strip() for u in users}
 
@@ -479,27 +526,24 @@ async def get_labor_cost_by_exec_pkg(
     partial_cost = False
 
     for e in entries:
-        h = float(e.get("hours", 0))
-        c = e.get("labor_cost")
+        h = float(e.get("hours", 0) or 0)
+        c = e.get("amount", 0) or 0
         total_hours += h
-        if c is not None:
-            total_cost += c
-        else:
+        total_cost += c
+        if e.get("dq"):
             partial_cost = True
 
-        uid = e["employee_id"]
+        uid = e.get("worker_id")
         if uid not in by_employee:
-            by_employee[uid] = {"employee_id": uid, "name": name_map.get(uid, ""), "hours": 0, "cost": 0, "rate": e.get("hourly_rate")}
+            by_employee[uid] = {"employee_id": uid, "name": name_map.get(uid, ""), "hours": 0, "cost": 0, "rate": e.get("rate")}
         by_employee[uid]["hours"] += h
-        if c is not None:
-            by_employee[uid]["cost"] += c
+        by_employee[uid]["cost"] += c
 
         d = e.get("date", "")
         if d not in by_date:
             by_date[d] = {"date": d, "hours": 0, "cost": 0}
         by_date[d]["hours"] += h
-        if c is not None:
-            by_date[d]["cost"] += c
+        by_date[d]["cost"] += c
 
     for v in by_employee.values():
         v["hours"] = round(v["hours"], 1)
@@ -558,12 +602,13 @@ async def get_labor_warnings(project_id: str, request: Request,
 
     warnings = []
     pkg_summaries = []
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
 
     for pkg in pkgs:
         planned = pkg.get("planned_hours")
         used = pkg.get("used_hours", 0)
         budget = pkg.get("labor_budget_total", 0)
-        actual = pkg.get("actual_labor_cost", 0)
+        actual = (labor_split.get(pkg["id"]) or {}).get("cost", 0.0)
         name = pkg.get("activity_name", "")
 
         flags = []
@@ -614,23 +659,19 @@ async def get_labor_warnings(project_id: str, request: Request,
 # ═══════════════════════════════════════════════════════════════════
 
 async def get_labor_summary_for_project(org_id: str, project_id: str) -> dict:
-    """Get aggregated labor summary for project profit integration"""
+    """The project's labor summary for the profit readers — R62: from THE labor cost
+    (``project_labor_cost``: approved reports + Owner-approved manual rows), never from the
+    raw labor_entries. "mapped" = linked to an execution package."""
     tenant = TenantData.for_resolved_org(db, org_id)
-    # Mapped labor (linked to execution packages)
-    mapped = await tenant.labor_entries.find(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": {"$ne": None}},
-        {"_id": 0, "hours": 1, "labor_cost": 1}
-    ).to_list(5000)
-    mapped_hours = sum(float(e.get("hours", 0)) for e in mapped)
-    mapped_cost = sum(float(e["labor_cost"]) for e in mapped if e.get("labor_cost") is not None)
-
-    # Unmapped labor
-    unmapped = await tenant.labor_entries.find(
-        {"org_id": org_id, "project_id": project_id, "execution_package_id": None},
-        {"_id": 0, "hours": 1, "labor_cost": 1}
-    ).to_list(5000)
-    unmapped_hours = sum(float(e.get("hours", 0)) for e in unmapped)
-    unmapped_cost = sum(float(e["labor_cost"]) for e in unmapped if e.get("labor_cost") is not None)
+    lc = await project_labor_cost(org_id, project_id)
+    split = lc["by_package"]
+    unm = split.get("") or {"cost": 0.0, "hours": 0.0, "downtime_hours": 0.0}
+    unmapped_cost = unm["cost"]
+    unmapped_hours = unm["hours"] + unm["downtime_hours"]
+    total_cost = lc["total"]
+    total_hours = round(lc["approved_hours"] + lc.get("downtime_hours", 0), 2)
+    mapped_cost = round(total_cost - unmapped_cost, 2)
+    mapped_hours = round(total_hours - unmapped_hours, 2)
 
     # Budget from execution packages
     pkgs = await tenant.execution_packages.find(
@@ -640,19 +681,20 @@ async def get_labor_summary_for_project(org_id: str, project_id: str) -> dict:
     total_budget = sum(p.get("labor_budget_total", 0) for p in pkgs)
     total_planned_hours = sum(p.get("planned_hours", 0) or 0 for p in pkgs)
 
-    total_cost = round(mapped_cost + unmapped_cost, 2)
-    total_hours = round(mapped_hours + unmapped_hours, 1)
-
     return {
-        "total_hours": total_hours,
-        "total_cost": total_cost,
+        "total_hours": round(total_hours, 1),
+        "total_cost": round(total_cost, 2),
         "mapped_hours": round(mapped_hours, 1),
         "mapped_cost": round(mapped_cost, 2),
         "unmapped_hours": round(unmapped_hours, 1),
         "unmapped_cost": round(unmapped_cost, 2),
+        "downtime_cost": lc["downtime_total"],
+        "manual_cost": lc["manual_total"],
         "budget_total": round(total_budget, 2),
         "planned_hours_total": round(total_planned_hours, 1),
         "variance_value": round(total_cost - total_budget, 2) if total_budget > 0 else None,
         "currency": "EUR",
-        "has_data": len(mapped) + len(unmapped) > 0,
+        "has_data": len(lc["lines"]) > 0,
+        "source": "project_labor_cost",
+        "dq_warnings": lc["dq_warnings"],
     }

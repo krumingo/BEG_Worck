@@ -402,14 +402,21 @@ async def update_execution_package(
     if not pkg:
         raise HTTPException(status_code=404, detail="Package not found")
 
+    # R62: the labor actual of a package is THE labor cost (approved reports + Owner-approved
+    # manual rows) — it is not typed in here; a manual labor row goes through
+    # POST /labor-entries and the Owner's approval.
+    if "actual_labor_cost" in (data or {}):
+        raise HTTPException(status_code=422, detail=(
+            "Трудът по пакета се изчислява от одобрените отчети и одобрените ръчни редове — не се въвежда тук"))
     allowed = ["progress_percent", "used_hours", "qty_executed", "status",
-               "actual_material_cost", "actual_labor_cost", "actual_subcontract_cost", "actual_overhead_cost",
+               "actual_material_cost", "actual_subcontract_cost", "actual_overhead_cost",
                "planned_hours", "planned_margin", "notes"]
     update = {k: v for k, v in data.items() if k in allowed}
 
     if any(k.startswith("actual_") for k in update):
         mat = float(update.get("actual_material_cost", pkg.get("actual_material_cost", 0)))
-        lab = float(update.get("actual_labor_cost", pkg.get("actual_labor_cost", 0)))
+        from app.services.labor_cost import package_labor_actual
+        lab = await package_labor_actual(user["org_id"], pkg)   # R62: THE labor cost
         sub = float(update.get("actual_subcontract_cost", pkg.get("actual_subcontract_cost", 0)))
         ovh = float(update.get("actual_overhead_cost", pkg.get("actual_overhead_cost", 0)))
         update["actual_total_cost"] = round(mat + lab + sub + ovh, 2)
@@ -474,28 +481,13 @@ async def get_project_profit_summary(
     # the total is still counted once.
     material_waste_cost = material_summary.get("waste_cost", 0.0) or 0.0
 
-    # Labor cost: from labor_entries (mapped + unmapped) with fallback to work_reports
+    # Labor cost — R62 (Krum 09.11.2026, FG-340): THE labor cost of the project, the same
+    # number as the P&L and the net profit (approved reports, Owner-approved manual rows).
+    # No fallback: drafts / unapproved work reports never count.
     from app.routes.labor_smr import get_labor_summary_for_project
     labor_summary = await get_labor_summary_for_project(org_id, project_id)
-    
-    if labor_summary["has_data"]:
-        labor_cost = labor_summary["total_cost"]
-        labor_hours = labor_summary["total_hours"]
-    else:
-        # Fallback to old work_reports aggregation
-        profiles = await tenant.employee_profiles.find({"org_id": org_id}, {"_id": 0, "user_id": 1, "hourly_rate": 1}).to_list(200)
-        rate_map = {p["user_id"]: p.get("hourly_rate", 0) or 0 for p in profiles}
-        reports = await tenant.work_reports.find({"org_id": org_id, "project_id": project_id}, {"_id": 0, "user_id": 1, "lines": 1}).to_list(1000)
-        labor_cost = 0
-        labor_hours = 0
-        for wr in reports:
-            rate = rate_map.get(wr["user_id"], 0)
-            for line in wr.get("lines", []):
-                h = float(line.get("hours", 0))
-                labor_hours += h
-                labor_cost += h * rate
-        labor_cost = round(labor_cost, 2)
-        labor_summary = None
+    labor_cost = labor_summary["total_cost"]
+    labor_hours = labor_summary["total_hours"]
 
     # Subcontract cost: from subcontractor packages + acts + payments
     from app.routes.subcontractors import get_subcontract_metrics
@@ -560,7 +552,7 @@ async def get_project_profit_summary(
         "earned_revenue": len(accepted_acts) > 0,
         "billed_revenue": len(issued_invoices) > 0,
         "material_cost": material_summary["has_data"],
-        "labor_cost": labor_summary["has_data"] if labor_summary else len(reports) > 0,
+        "labor_cost": labor_summary["has_data"],
         "subcontract_cost": sub_metrics.get("available", False),
         "overhead_cost": len(overhead_allocs) > 0,
         "execution_packages": len(exec_pkgs) > 0,
@@ -594,7 +586,7 @@ async def get_project_profit_summary(
                 "legacy_excluded_cost", "cutover_at")},
             "labor": labor_cost,
             "labor_hours": round(labor_hours, 1),
-            "labor_detail": labor_summary if labor_summary else None,
+            "labor_detail": labor_summary,
             "subcontract": round(subcontract_cost, 2),
             "subcontract_detail": sub_metrics if sub_metrics.get("available") else None,
             "overhead": round(overhead_cost, 2),
@@ -668,6 +660,8 @@ async def get_project_smr_view(
     # time), not the `actual_material_cost` cache that only a recompute fills.
     from app.services.canonical_material_cost import project_material_cost, split_for_package
     mat_cost = await project_material_cost(tenant, org_id, project_id)
+    from app.services.labor_cost import package_labor_split
+    labor_split = await package_labor_split(org_id, project_id)   # R62: THE labor cost, at read time
 
     rows = []
     for pkg in pkgs:
@@ -675,7 +669,7 @@ async def get_project_smr_view(
         sale = pkg.get("sale_total", 0)
         mat_split = split_for_package(mat_cost, pid)
         lab_budget = pkg.get("labor_budget_total", 0)
-        lab_actual = pkg.get("actual_labor_cost", 0) or 0
+        lab_actual = (labor_split.get(pid) or {}).get("cost", 0.0)
         lab_remaining = round(lab_budget - lab_actual, 2) if lab_budget > 0 else None
         progress = pkg.get("progress_percent", 0) or 0
         has_progress = pkg.get("progress_last_updated_at") is not None

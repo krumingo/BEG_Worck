@@ -133,12 +133,14 @@ def _app(monkeypatch, op, sysdb, mode):
     from app.master_data.deps import ENV_MODE
     from app.routes import finance as r_finance
     from app.services import project_pnl
+    from app.services import labor_cost, report_normalizer   # LAB-01 / R62: P&L reads labor through these
     from app.tenancy import guard, registry, resolver
     from app.utils import audit as u_audit
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit):
+    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit,
+                   labor_cost, report_normalizer):
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
     for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
