@@ -21,6 +21,7 @@ from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.services import master_records as mr
+from app.services import counterparty_rules as cr
 from app.services.bank_account_guard import (check_payment_target, is_cash_account,
                                              require_selectable_party)
 from app.permissions.money_write import require_money_write, require_finance_read, strip_money_for_non_finance
@@ -119,7 +120,8 @@ async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(r
         raise HTTPException(status_code=422, detail={"error_code": "EIK_INVALID",
                                                      "message": "ЕИК съдържа само цифри"})
     sub = {
-        "name": data.name, "eik": eik, "vat_number": data.vat_number,
+        "name": data.name, "eik": eik,
+        "vat_number": cr.canonical_vat_input(data.vat_number),   # FG-525 / FG-526: as counterparties
         "contact_person": data.contact_person, "phone": data.phone,
         "email": data.email, "address": data.address, "notes": data.notes,
         "active": True,
@@ -133,7 +135,8 @@ async def create_subcontractor(data: SubcontractorCreate, user: dict = Depends(r
 
     try:
         return await mr.create(db, user, idempotency_key, collection="subcontractors", doc=sub,
-                               fingerprint=data.model_dump(), check=check)
+                               fingerprint=data.model_dump(), check=check,
+                               result=cr.mask_vat_egn)                       # FG-525
     except HTTPException as exc:
         detail = exc.detail if isinstance(exc.detail, dict) else {}
         if exc.status_code == 409 and detail.get("error_code") == "EIK_ALREADY_EXISTS":

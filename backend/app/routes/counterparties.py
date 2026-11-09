@@ -122,11 +122,13 @@ async def _with_duplicate_dq(tenant, user, eik: str, attempted_for: Optional[str
 def _vat_clauses(search: str, may_reveal: bool) -> list:
     """FG-510: the VAT part of the counterparty search, on the NORMALISED form."""
     norm = cr.normalize_vat(search) or ""
-    if not may_reveal and cr.egn_digits_query(search):
+    digits = cr.search_digits(search)
+    if not may_reveal and digits:
+        # FG-528: no other role than Owner / Accountant matches VAT digits — at ANY length
         return []
     out = [{"vat_number": {"$regex": re.escape(search), "$options": "i"}}]
-    if norm and norm != search:
-        out.append({"vat_number": {"$regex": re.escape(norm), "$options": "i"}})
+    for alt in {norm, digits} - {search, ""}:
+        out.append({"vat_number": {"$regex": re.escape(alt), "$options": "i"}})
     return out
 
 
@@ -190,11 +192,14 @@ async def list_counterparties(
     # Paginate
     skip = (page - 1) * page_size
     counterparties = await tenant.counterparties.find(query, {"_id": 0}).sort(sort_by, sort_direction).skip(skip).limit(page_size).to_list(page_size)
-    if search and cr.can_reveal_egn(user):        # R48.3: an ЕГН-digit search is audited
-        digits = cr.egn_digits_query(search)
-        ids = [cp["id"] for cp in counterparties if digits and cr.vat_is_egn(cp.get("vat_number"))
+    digits = cr.search_digits(search) if search else ""
+    if digits and cr.can_reveal_egn(user):
+        # FG-529 (R48.3): EVERY Owner / Accountant digit search is audited — short ones and
+        # ones with no ЕГН match included (the matched ЕГН-bearing records by id)
+        ids = [cp["id"] for cp in counterparties if cr.vat_is_egn(cp.get("vat_number"))
                and digits in (cr.normalize_vat(cp.get("vat_number")) or "")]
-        await mr.audit_egn_search(db, user, search, len(ids), "counterparties.list", ids)
+        await mr.audit_egn_search(db, user, search, len(ids), "counterparties.list", ids,
+                                  always=True)
     
     # Add invoice counts
     for cp in counterparties:
@@ -229,7 +234,7 @@ async def create_counterparty(data: CounterpartyCreate, user: dict = Depends(req
                                                      "message": "ЕИК съдържа само цифри"})
     counterparty = {
         "name": data.name, "type": data.type,
-        "vat_number": cr.normalize_vat(data.vat_number),          # FG-496
+        "vat_number": cr.canonical_vat_input(data.vat_number),    # FG-496 / FG-526: 422 if not BG + digits
         "address": data.address, "phone": data.phone, "email": data.email,
         "contact_person": data.contact_person, "payment_terms_days": data.payment_terms_days,
         "notes": data.notes, "active": True,
@@ -304,8 +309,8 @@ async def update_counterparty(counterparty_id: str, data: CounterpartyUpdate, us
     new_eik = cr.normalize_eik(raw.pop("eik", None)) if data.eik else ""
     old_eik = cr.normalize_eik(counterparty.get("eik"))
     changes = {k: v for k, v in raw.items() if v is not None}
-    if "vat_number" in changes:                                   # FG-496
-        changes["vat_number"] = cr.normalize_vat(changes["vat_number"])
+    if "vat_number" in changes and not cr.is_masked_vat(changes["vat_number"]):   # FG-496 / FG-526
+        changes["vat_number"] = cr.canonical_vat_input(changes["vat_number"])
     # FG-429: the form shows a BG + ЕГН VAT number masked — sending it back keeps the stored one
     changes = {k: v for k, v in cr.keep_stored_if_masked(changes, counterparty,
                                                           keys=("vat_number", "iban")).items()

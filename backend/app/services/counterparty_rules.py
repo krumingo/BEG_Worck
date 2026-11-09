@@ -12,6 +12,8 @@ FLOW-032 L46/L105/L109-112; FLOW-040 §9/§11; CLAUDE.md §2, §8, §14.
 * IBAN normalisation, the ISO 13616 mod-97 check and the IBAN mask (logs/AuditEvent).
 """
 import re
+
+from fastapi import HTTPException
 from typing import Any, Dict, Optional
 
 # ── roles ─────────────────────────────────────────────────────────────────────
@@ -226,6 +228,59 @@ def normalize_vat(value: Any) -> Any:
     return v or None
 
 
+#: FG-526 / FG-527 (Krum, 09.11.2026): the SAFE input normalisation only — separators,
+#: format / zero-width characters, full-width forms and the Cyrillic В / Г of the prefix.
+_INPUT_SEPARATORS = frozenset(" \t\u00a0-./_:,\u2013\u2014")
+_INPUT_CYRILLIC = str.maketrans({"В": "B", "в": "B", "Г": "G", "г": "G"})
+VAT_INPUT_INVALID = "VAT_NUMBER_INVALID"
+_VAT_CANONICAL = re.compile(r"^BG\d{9,10}$")
+
+
+def canonical_vat_input(value: Any) -> Any:
+    """FG-526 / FG-527 (Krum: refuse with an explanation): a VAT number typed into a form is
+    accepted ONLY as BG + 9 digits (ЕИК) or BG + 10 digits (ЕГН) — the rule invoices already
+    use (``validators.validate_vat_number``). The only changes made are the safe ones of
+    FG-510: separators, zero-width / format characters, full-width forms, Cyrillic В / Г.
+    Anything else ("ДДС BG…", "VAT BG…", "ЕГН 7501011111", a bare 10-digit number, Greek Β,
+    combining marks, non-Latin digits, "(физ. лице)") → 422, nothing rewritten, nothing
+    stored. Empty → None."""
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise HTTPException(status_code=422, detail={
+            "error_code": VAT_INPUT_INVALID,
+            "message": "Въведи ДДС номер като BG + цифри (BG + 9 цифри за фирма, BG + 10 за лице)"})
+    import unicodedata
+    v = "".join(ch for ch in value if unicodedata.category(ch) != "Cf")
+    # full-width forms only (FF01–FF5E) → ASCII; no other compatibility mapping
+    v = "".join(chr(ord(ch) - 0xFEE0) if 0xFF01 <= ord(ch) <= 0xFF5E else ch for ch in v)
+    v = "".join(ch for ch in v if ch not in _INPUT_SEPARATORS).translate(_INPUT_CYRILLIC)
+    if not v.strip():
+        return None
+    v = v.upper() if v.isascii() else v
+    if not (v.isascii() and _VAT_CANONICAL.match(v)):
+        raise HTTPException(status_code=422, detail={
+            "error_code": VAT_INPUT_INVALID,
+            "message": "Въведи ДДС номер като BG + цифри (BG + 9 цифри за фирма, BG + 10 за "
+                       "лице) — без думи, интервали или други знаци",
+            "value_ignored": True})
+    return v
+
+
+def search_digits(query: Any) -> str:
+    """FG-529: the digits of a search text, every Unicode decimal digit converted to ASCII
+    (full-width, Arabic-Indic, …), so another script cannot bypass the ЕГН rules."""
+    import unicodedata
+    out = []
+    for ch in str(query or ""):
+        if ch.isdecimal():
+            try:
+                out.append(str(unicodedata.decimal(ch)))
+            except (TypeError, ValueError):
+                continue
+    return "".join(out)
+
+
 def vat_is_egn(value: Any) -> bool:
     """FG-429 / FG-496: ``BG`` + 10 digits after normalisation — a natural person's VAT
     number, i.e. an ЕГН (a company's is BG + its 9 / 13-digit ЕИК). A masked value is not."""
@@ -236,9 +291,9 @@ def vat_is_egn(value: Any) -> bool:
 
 
 def egn_digits_query(query: Any) -> str:
-    """FG-496: the digit run of a search text (≥ 4 digits), the part that may match an ЕГН."""
-    d = re.sub(r"\D", "", str(query or ""))
-    return d if len(d) >= 4 else ""
+    """FG-496 / FG-528 / FG-529: the digits of a search text (any script, converted to ASCII)
+    — at ANY length: every digit run may be part of an ЕГН."""
+    return search_digits(query)
 
 
 def mask_vat(value: Any) -> str:

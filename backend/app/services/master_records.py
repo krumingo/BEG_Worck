@@ -342,11 +342,11 @@ async def reveal_vat_egn(db, user, idem: Optional[str], *, collection: str, reco
 
 
 async def audit_egn_search(db, user, query: Any, hits: int, where: str,
-                           matched_ids: Optional[list] = None) -> None:
+                           matched_ids: Optional[list] = None, always: bool = False) -> None:
     """R48.3 ("with audit"): an Owner / Accountant search whose digits matched an ЕГН (a
     person's ЕГН, or a BG + ЕГН VAT number) is an AuditEvent ``party.egn_search`` — who,
     when, where, how many matches, and the query MASKED (never the digits searched)."""
-    if hits <= 0:
+    if hits <= 0 and not always:
         return
     tenant = TenantData.for_user(db, user)          # noqa: F841 (tenant-scoped caller)
 

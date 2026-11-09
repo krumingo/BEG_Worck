@@ -553,3 +553,30 @@ Gates for the final head: **`gates_pass40.txt`**.
   Red on `2415b5f`: 32 (`pass41_red_on_2415b5f_real_mongo.txt`). The 8 that pass there are spellings pass 40 already handled, plus the skips.
 
 Gates for the final head: **`gates_pass41.txt`**.
+
+## 22. FLOW Guard pass 43 (Krum, 09.11.2026: FG-525..529) and the merge of main `3863610`
+
+- **FG-526 / FG-527 (Krum: refuse with an explanation): canonical VAT input only.**
+  - `cr.canonical_vat_input` accepts **only BG + 9 digits (ЕИК) or BG + 10 digits (ЕГН)**. This is the rule invoices already use (`validators.validate_vat_number`), which does not allow a bare ЕИК, so neither does this.
+  - It makes only the safe FG-510 changes: separators (space - . / _ : , – —), format / zero-width characters, full-width forms (U+FF01–FF5E), and the Cyrillic В / Г of the prefix.
+  - Everything else → **422 `VAT_NUMBER_INVALID`** with the message „Въведи ДДС номер като BG + цифри (BG + 9 цифри за фирма, BG + 10 за лице)…“. **Nothing is rewritten and nothing is stored.** Refused inputs include: "ДДС BG…", "VAT BG…", "ЕГН 7501011111", a bare 10-digit number, Greek Β, combining marks, non-Latin digits, "(физ. лице)", too few digits, and a foreign prefix.
+  - It applies on **every create / update path**: counterparty create / update; company create (two routes) / update; **subcontractor create (FG-525)**; invoice create / update; project `invoice_details` create / update.
+  - A masked value sent back still keeps the stored one.
+  - The read-side classifier (`normalize_vat`, FG-510) stays broader, so a legacy value in any spelling is still *masked*. It never rewrites stored data.
+- **FG-525:** `POST /subcontractors` normalises the VAT number with the same rule and its response masks a BG + ЕГН value. The subcontractor readers already masked it (FG-429).
+- **FG-528 (Krum: finance only):** Admin, Viewer and SiteManager never match ЕГН digits, **at any length**:
+  - in the counterparty list, a query with any digit does not match on `vat_number`;
+  - in the client search, a BG + ЕГН VAT number or a person's ЕГН matches only for Owner / Accountant.
+- **FG-529 (Krum: with a record):**
+  - The query digits of **any script** (full-width, Arabic-Indic, …) are converted to ASCII (`cr.search_digits`), so they cannot bypass the rules or the audit.
+  - **Every** Owner / Accountant search with a digit writes `party.egn_search`, short searches and searches with no match included. It records the query masked, the match count and the matched ids.
+- **Idempotency keys (FLOW Guard Q3, Krum):** they stay per user, the standard R29 scope; nothing changed.
+- **Tests:**
+  - `test_fg526_527_a_vat_number_not_in_canonical_form_is_refused_never_rewritten` (10 inputs)
+  - `test_fg526_527_only_the_safe_normalisation_is_applied`
+  - `test_fg525_526_every_write_path_refuses_and_writes_nothing` (9 paths, then the subcontractor positive case)
+  - `test_fg528_529_egn_digits_match_only_for_finance_and_every_such_search_is_audited`
+
+  Red on `781d185`: 23 of 23 (`pass43_red_on_781d185_real_mongo.txt`).
+
+Gates for the final head: **`gates_pass43.txt`**.

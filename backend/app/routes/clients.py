@@ -444,8 +444,9 @@ async def unified_client_search(
                 name_match = q_lower in full_name.lower()
                 # FG-227 (R48.3): searching by ЕГН would confirm a person's ЕГН — only the roles
                 # that may see it in full (Owner / Accountant) may search by it
-                egn_match = cr.can_reveal_egn(user) and normalize_egn(q) and \
-                    normalize_egn(q) in normalize_egn(p.get("egn") or "")
+                # FG-529: the query digits of any script, as ASCII
+                egn_match = cr.can_reveal_egn(user) and bool(cr.search_digits(q)) and \
+                    cr.search_digits(q) in normalize_egn(p.get("egn") or "")
                 if egn_match and not name_match:
                     egn_hits += 1
                     egn_ids.append(p["id"])
@@ -467,7 +468,10 @@ async def unified_client_search(
             })
     
     results.sort(key=lambda x: x["display_name"].lower())
-    await mr.audit_egn_search(db, user, q, egn_hits, "clients.search.unified", egn_ids)   # R48.3
+    if cr.search_digits(q) and cr.can_reveal_egn(user):
+        # FG-529 (R48.3): every Owner / Accountant digit search is audited, matches or not
+        await mr.audit_egn_search(db, user, q, egn_hits, "clients.search.unified", egn_ids,
+                                  always=True)
     
     return {
         "items": results[:limit],
@@ -515,7 +519,7 @@ async def create_company_client(
     company = {
         "name": data.company_name.strip(),
         "eik": eik,
-        "vat_number": cr.normalize_vat(data.vat_number) if data.vat_number else None,   # FG-496
+        "vat_number": cr.canonical_vat_input(data.vat_number),   # FG-496 / FG-526: 422 if not BG + digits
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip().lower() if data.email else None,

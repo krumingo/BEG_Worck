@@ -298,7 +298,7 @@ async def _store_vat_copy(tenant, user, details, owner_type, owner_id):
     out = dict(details)
     if cr.is_masked_vat(out["vat_number"]):
         return out
-    out["vat_number"] = cr.normalize_vat(out["vat_number"])
+    out["vat_number"] = cr.canonical_vat_input(out["vat_number"])    # FG-526: 422 if not BG + digits
     if not cr.vat_is_egn(out["vat_number"]):
         return out
     canonical = None
@@ -939,7 +939,7 @@ async def create_company(data: CompanyCreate, user: dict = Depends(get_current_u
     company = {
         "eik": eik,
         "name": data.name.strip(),
-        "vat_number": cr.normalize_vat(data.vat_number) if data.vat_number else None,   # FG-496
+        "vat_number": cr.canonical_vat_input(data.vat_number),   # FG-496 / FG-526: 422 if not BG + digits
         "mol": data.mol.strip() if data.mol else None,
         "address": data.address.strip() if data.address else None,
         "email": data.email.strip() if data.email else None,
@@ -999,7 +999,7 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
     if cr.is_masked_vat(update.get("vat_number")):   # FG-482: a masked value keeps the stored one
         update.pop("vat_number")
     elif update.get("vat_number"):
-        update["vat_number"] = cr.normalize_vat(update["vat_number"])        # FG-496
+        update["vat_number"] = cr.canonical_vat_input(update["vat_number"])  # FG-496 / FG-526
     return await mr.update(db, user, idempotency_key, collection="companies", record_id=company_id,
                            changes=update, fingerprint={"id": company_id, "body": data.model_dump()},
                            result=cr.mask_vat_egn)

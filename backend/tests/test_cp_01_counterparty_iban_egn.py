@@ -2154,3 +2154,94 @@ def test_fg511_a_replay_returns_the_original_response_byte_for_byte(monkeypatch,
             assert again.status_code == 201 and again.content == first.content, (again.text, first.text)
             assert "променено по-късно" not in again.text
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 43 (Krum, 09.11.2026)
+REFUSED_VAT = ["ДДС BG" + TYPED, "VAT BG" + TYPED, "ЕГН " + TYPED, TYPED, "ΒG" + TYPED,
+               "BG" + TYPED[:5] + "́" + TYPED[5:], "BG" + "".join(chr(0x0660 + int(d)) for d in TYPED),
+               "BG" + TYPED + " (физ. лице)", "BG12345", "DE123456789"]
+ACCEPTED_VAT = {"BG-" + TYPED: VAT_EGN, "bg." + TYPED: VAT_EGN, "ВГ " + TYPED: VAT_EGN,
+                "BG​" + TYPED: VAT_EGN,
+                "ＢＧ" + "".join(chr(ord(d) + 0xFEE0) for d in TYPED): VAT_EGN,
+                "BG 111 111 111": "BG111111111"}
+
+
+@pytest.mark.parametrize("raw", REFUSED_VAT)
+def test_fg526_527_a_vat_number_not_in_canonical_form_is_refused_never_rewritten(raw):
+    from fastapi import HTTPException
+    from app.services import counterparty_rules as cr
+    with pytest.raises(HTTPException) as exc:
+        cr.canonical_vat_input(raw)
+    assert exc.value.status_code == 422
+    assert exc.value.detail["error_code"] == "VAT_NUMBER_INVALID"
+    assert "BG + цифри" in exc.value.detail["message"]
+
+
+def test_fg526_527_only_the_safe_normalisation_is_applied():
+    from app.services import counterparty_rules as cr
+    for raw, stored in ACCEPTED_VAT.items():
+        assert cr.canonical_vat_input(raw) == stored, raw
+    assert cr.canonical_vat_input("") is None and cr.canonical_vat_input(None) is None
+
+
+def test_fg525_526_every_write_path_refuses_and_writes_nothing(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        bad = "ДДС BG" + TYPED
+        snap = {k: await rows(op, k) for k in ("counterparties", "companies", "subcontractors",
+                                                "invoices", "projects")}
+        calls = [
+            ("post", "/api/counterparties", {"name": "X1", "type": "supplier", "vat_number": bad}),
+            ("put", "/api/counterparties/cp2", {"name": "Доставчик cp2", "vat_number": bad}),
+            ("post", "/api/companies", {"eik": "565656565", "name": "Ф", "vat_number": bad}),
+            ("post", "/api/clients/company", {"company_name": "Ф2", "eik": "575757575", "vat_number": bad}),
+            ("put", "/api/companies/co1", {"name": "Фирма", "vat_number": bad}),
+            ("post", "/api/subcontractors", {"name": "С1", "eik": "585858585", "vat_number": bad}),
+            ("post", "/api/finance/invoices", {"direction": "Issued", "counterparty_name": "М",
+                                               "counterparty_vat_no": bad, "issue_date": "2026-11-09",
+                                               "due_date": "2026-11-30", "lines": []}),
+            ("put", "/api/finance/invoices/inv-r1", {"counterparty_vat_no": bad}),
+            ("put", "/api/projects/prj-1", {"invoice_details": {"company_name": "X", "vat_number": bad}}),
+        ]
+        for method, url, body in calls:
+            who = "admin-a" if url.startswith("/api/projects/") else "acct-a"   # the project writer
+            r = await getattr(c, method)(url, headers=hdr(who), json=body)
+            assert r.status_code == 422 and r.json()["detail"]["error_code"] == "VAT_NUMBER_INVALID", \
+                (url, r.status_code, r.text)
+        for k, before in snap.items():
+            assert await rows(op, k) == before, k
+        # the subcontractor path normalises and masks like counterparties (FG-525)
+        r = await c.post("/api/subcontractors", headers=hdr("acct-a"),
+                         json={"name": "С2", "eik": "595959595", "vat_number": "bg-" + TYPED})
+        assert r.status_code == 201 and no_full(r.json(), TYPED), r.text
+        assert (await rows(op, "subcontractors", {"eik": "595959595"}))[0]["vat_number"] == VAT_EGN
+        r = await c.get("/api/subcontractors", headers=hdr("admin-a"))
+        assert no_full(r.json(), TYPED)
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg528_529_egn_digits_match_only_for_finance_and_every_such_search_is_audited(monkeypatch, backend, mode):
+    async def scenario(c, op):
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": VAT_EGN}})
+        await op.companies.update_one({"id": "co1"}, {"$set": {"vat_number": VAT_EGN}})
+        full_width = "".join(chr(ord(d) + 0xFEE0) for d in TYPED[:6])
+        arabic = "".join(chr(0x0660 + int(d)) for d in TYPED[:6])
+        for q in (TYPED[:1], TYPED[:2], TYPED[:3], full_width, arabic):
+            for who in ("admin-a", "viewer-a", "site-a"):
+                r = await c.get("/api/counterparties?active_only=false&search=" + q, headers=hdr(who))
+                if r.status_code == 200:
+                    assert "cp2" not in {x["id"] for x in r.json()["items"]}, (who, q)
+                r = await c.get("/api/clients/search/unified?type=company&query=" + q, headers=hdr(who))
+                assert r.json()["total"] == 0 or "co1" not in {i["id"] for i in r.json()["items"]}, (who, q)
+        assert await rows(op, "audit_events", {"action": "party.egn_search"}) == []
+        # Owner / Accountant: a match, and EVERY digit search audited — short / other scripts too
+        n = 0
+        for q in (TYPED[:2], full_width, arabic, "99999"):
+            r = await c.get("/api/counterparties?active_only=false&search=" + q, headers=hdr("acct-a"))
+            n += 1
+            if q != "99999":
+                assert "cp2" in {x["id"] for x in r.json()["items"]}, q
+            r = await c.get("/api/clients/search/unified?type=company&query=" + q, headers=hdr("owner-a"))
+            n += 1
+        ev = await rows(op, "audit_events", {"action": "party.egn_search"})
+        assert len(ev) == n and no_full(ev, TYPED) and no_full(ev, TYPED[:6]), len(ev)
+    run(monkeypatch, backend, mode, scenario)
