@@ -793,6 +793,19 @@ async def current_open(tenant, invoice: dict, *, session=None) -> Decimal:
     return adjusted_total({**invoice, **derived}) - paid
 
 
+INVOICE_AWAITS_CREDIT_NOTE = "INVOICE_AWAITS_CREDIT_NOTE"     # the code #82 (Р47) uses
+
+
+async def awaited_credit(tenant, invoice_id: str, *, session=None) -> Decimal:
+    """Р47 / Р74 (FG-453): the credit a supplier invoice still awaits — Σ of its OPEN
+    expected_credit_notes (the same reading as #82's ``finance._awaited_credit``)."""
+    total = Decimal(0)
+    async for r in tenant.expected_credit_notes.find(
+            {"invoice_id": invoice_id, "status": "open"}, {"_id": 0, "amount": 1}, session=session):
+        total += cents(r.get("amount"))
+    return total
+
+
 EXPECTED_LINK_REQUIRED = "EXPECTED_CREDIT_LINK_REQUIRED"
 EXPECTED_LINK_INVALID = "EXPECTED_CREDIT_LINK_INVALID"
 

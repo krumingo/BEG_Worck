@@ -568,6 +568,53 @@ def test_offset_same_contract_needs_a_second_person(monkeypatch, mode):
     run(monkeypatch, mode, scenario)
 
 
+def test_r74_fg453_an_offset_of_a_supplier_invoice_follows_the_payment_rules(monkeypatch, mode):
+    """Р74 (FG-453): an offset is a payment — Р44 allocation, the Р47 cap, Р51(4) 2nd person."""
+    async def scenario(c, op):
+        a = await sent(c, direction="Received")                          # supplier invoice, 240
+        assert (await quick_pay(c, a["id"], 240.0)).status_code == 201
+        n = await note(c, a, number="CN-74")                              # registered, applied
+        assert n.status_code == 201 and n.json()["applied"] is True, n.text
+        n = n.json()                                                      # A: credit balance 36
+        b = await sent(c, direction="Received")                           # B: open 240, same contract
+        # Р44: a line of B without final allocation → no offset (as no payment), nothing written
+        line = b["lines"][0]
+        await op.invoices.update_one({"id": b["id"]}, {"$set": {
+            "lines.0.allocations": [{"type": "project", "ref_id": "prj-1", "qty": line["qty"] - 1}]}})
+        r = await offset(c, a, b, 10, n["id"])
+        assert r.status_code == 409 and code(r) == "INVOICE_NOT_FULLY_ALLOCATED", r.text
+        assert await op.invoice_offsets.count_documents({}) == 0
+        await op.invoices.update_one({"id": b["id"]}, {"$set": {
+            "lines.0.allocations": [{"type": "project", "ref_id": "prj-1", "qty": line["qty"]}]}})
+        # Р47: B awaits a credit of 220 after a reversal → payable until the note 20 → 36 refused
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_74", "org_id": ORG_A, "invoice_id": b["id"], "amount": 220.0, "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        r = await offset(c, a, b, 36, n["id"])
+        assert r.status_code == 409 and code(r) == "INVOICE_AWAITS_CREDIT_NOTE", r.text
+        assert r.json()["detail"]["payable_until_credit_note"] == 20.0
+        assert (await offset(c, a, b, 20, n["id"])).status_code == 201   # within the cap: requested
+        await op.invoice_offsets.update_many({}, {"$set": {"status": "rejected"}})   # (clean slate)
+        await op.expected_credit_notes.update_one({"id": "ecn_74"}, {"$set": {"status": "fulfilled"}})
+        # positive: requested by the Accountant, approved by the Owner (Р51(4): two people)
+        off = (await offset(c, a, b, 36, n["id"])).json()
+        assert off["status"] == "pending_approval", off
+        assert (await c.post("/api/finance/offsets/%s/approve" % off["id"], headers=hdr("acct-a"),
+                             json={"version": 1})).status_code == 403       # not the Owner
+        # the cap is re-checked AT THE APPROVAL (a reversal arrived meanwhile) → 409, nothing applied
+        await op.expected_credit_notes.update_one({"id": "ecn_74"}, {"$set": {"status": "open"}})
+        r = await c.post("/api/finance/offsets/%s/approve" % off["id"], headers=hdr("owner-a"),
+                         json={"version": 1})
+        assert r.status_code == 409 and code(r) == "INVOICE_AWAITS_CREDIT_NOTE", r.text
+        assert (await get_inv(c, b["id"]))["remaining_amount"] == 240.0
+        await op.expected_credit_notes.update_one({"id": "ecn_74"}, {"$set": {"status": "fulfilled"}})
+        r = await c.post("/api/finance/offsets/%s/approve" % off["id"], headers=hdr("owner-a"),
+                         json={"version": 1})
+        assert r.status_code == 200, r.text
+        assert (await get_inv(c, b["id"]))["remaining_amount"] == 204.0
+    run(monkeypatch, mode, scenario)
+
+
 def test_credit_above_invoiced_including_six_concurrent(monkeypatch, mode):
     async def scenario(c, op):
         inv = await sent(c)

@@ -899,6 +899,23 @@ async def _check_offset(tenant, src_id: str, tgt_id: str, amount, session,
                           "Сумата надвишава кредитното салдо или остатъка за плащане",
                           credit_balance=ic.money(max(balance, 0)),
                           target_remaining=ic.money(max(open_tgt, 0)))
+    # Р74 (FG-453): an offset IS a payment. A supplier (Received) invoice is settled by an
+    # offset only under the payment rules — Р44 full allocation of each supplier invoice
+    # (ensure_payable) and the Р47 cap of the settled one after a receipt reversal; the
+    # Р51(4) second person is the approval itself. Checked at the request AND again at
+    # the approval, in the transaction.
+    from app.services.invoice_allocation import ensure_payable
+    for inv in (src, tgt):
+        if inv.get("direction") == "Received":
+            await ensure_payable(tenant, inv, session=session)
+    if tgt.get("direction") == "Received":
+        awaited = await ic.awaited_credit(tenant, tgt_id, session=session)
+        if awaited > 0 and ic.cents(amount) > open_tgt - awaited:
+            raise ic.conflict(ic.INVOICE_AWAITS_CREDIT_NOTE,
+                              "Фактурата очаква кредитно известие за сторнирана доставка — "
+                              "прихващане над нетно полученото не се записва",
+                              invoice_id=tgt_id, awaited_credit=ic.money(awaited),
+                              payable_until_credit_note=ic.money(max(open_tgt - awaited, Decimal(0))))
 
 
 @router.post("/finance/offsets/{offset_id}/approve")
