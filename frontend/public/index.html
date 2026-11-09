@@ -3,15 +3,25 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="theme-color" content="#000000" />
+        <meta name="theme-color" content="#070b13" />
+        <!-- PWA-01: installable shell (manifest + icons + iOS home-screen tags) -->
+        <link rel="manifest" href="%PUBLIC_URL%/manifest.webmanifest" />
+        <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/icons/favicon-32.png" />
+        <link rel="icon" type="image/svg+xml" href="%PUBLIC_URL%/icons/icon.svg" />
+        <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/apple-touch-icon.png" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="BEG_Work" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black" />
         <meta name="description" content="BEG_Work" />
         <!--
-        SEC-03 (H-1, M-4, L-6): no third-party script. Only the app's own bundle
-        runs; the former template's remote loaders, the framed "visual edits"
-        loaders, the badge and its font are gone. The policy below is the browser-side copy of the CSP that
-        nginx also sends (nginx.conf adds frame-ancestors, which a meta tag cannot).
-        %REACT_APP_BACKEND_URL% / %REACT_APP_POSTHOG_HOST% are filled in by the
-        build (empty when unset).
+        SEC-03 (H-1, M-4, L-6): no third-party script and no inline script. Only the
+        app's own bundle runs (analytics, when configured, is bundled — PWA-01 / R68);
+        the former template's remote loaders, the framed "visual edits" loaders, the
+        badge and its font are gone. The policy below is the build-templated CSP
+        (nginx.conf adds frame-ancestors and the other configuration-independent
+        directives). %REACT_APP_BACKEND_URL% / %REACT_APP_POSTHOG_HOST% are filled in
+        by the build (empty when unset; the analytics host only with a key).
         -->
         <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: %REACT_APP_BACKEND_URL%; connect-src 'self' %REACT_APP_BACKEND_URL% %REACT_APP_POSTHOG_HOST%; media-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
@@ -20,76 +30,5 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
-        <script>
-            !(function (t, e) {
-                var o, n, p, r;
-                e.__SV ||
-                    ((window.posthog = e),
-                    (e._i = []),
-                    (e.init = function (i, s, a) {
-                        function g(t, e) {
-                            var o = e.split(".");
-                            2 == o.length && ((t = t[o[0]]), (e = o[1])),
-                                (t[e] = function () {
-                                    t.push(
-                                        [e].concat(
-                                            Array.prototype.slice.call(
-                                                arguments,
-                                                0,
-                                            ),
-                                        ),
-                                    );
-                                });
-                        }
-                        ((p = t.createElement("script")).type =
-                            "text/javascript"),
-                            (p.crossOrigin = "anonymous"),
-                            (p.async = !0),
-                            (p.src =
-                                s.api_host.replace(
-                                    ".i.posthog.com",
-                                    "-assets.i.posthog.com",
-                                ) + "/static/array.js"),
-                            (r =
-                                t.getElementsByTagName(
-                                    "script",
-                                )[0]).parentNode.insertBefore(p, r);
-                        var u = e;
-                        for (
-                            void 0 !== a ? (u = e[a] = []) : (a = "posthog"),
-                                u.people = u.people || [],
-                                u.toString = function (t) {
-                                    var e = "posthog";
-                                    return (
-                                        "posthog" !== a && (e += "." + a),
-                                        t || (e += " (stub)"),
-                                        e
-                                    );
-                                },
-                                u.people.toString = function () {
-                                    return u.toString(1) + ".people (stub)";
-                                },
-                                o =
-                                    "init me ws ys ps bs capture je Di ks register register_once register_for_session unregister unregister_for_session Ps getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSurveysLoaded onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey canRenderSurveyAsync identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset get_distinct_id getGroups get_session_id get_session_replay_url alias set_config startSessionRecording stopSessionRecording sessionRecordingStarted captureException loadToolbar get_property getSessionProperty Es $s createPersonProfile Is opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing Ss debug xs getPageViewId captureTraceFeedback captureTraceMetric".split(
-                                        " ",
-                                    ),
-                                n = 0;
-                            n < o.length;
-                            n++
-                        )
-                            g(u, o[n]);
-                        e._i.push([i, s, a]);
-                    }),
-                    (e.__SV = 1));
-            })(document, window.posthog || []);
-            posthog.init("phc_xAvL2Iq4tFmANRE7kzbKwaSqp1HJjN7x48s3vr0CMjs", {
-                api_host: "https://us.i.posthog.com",
-                person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well,
-                session_recording: {
-                    recordCrossOriginIframes: true,
-                    capturePerformance: false,
-                },
-            });
-        </script>
     </body>
 </html>

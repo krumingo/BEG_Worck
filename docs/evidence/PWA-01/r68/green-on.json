@@ -1,0 +1,157 @@
+{
+  "expect": "on",
+  "checks": [
+    {
+      "name": "real posthog-js loaded from the local test host",
+      "ok": true,
+      "detail": {
+        "loaded": true,
+        "real_library": true,
+        "disable_session_recording": true,
+        "autocapture": false,
+        "mask_all_text": true,
+        "recording_started": false
+      }
+    },
+    {
+      "name": "client: disable_session_recording true",
+      "ok": true
+    },
+    {
+      "name": "client: autocapture false, text masked",
+      "ok": true
+    },
+    {
+      "name": "client: recording not started despite /decide asking for it",
+      "ok": true,
+      "detail": false
+    },
+    {
+      "name": "no recording/snapshot request left the app",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "events: only $pageview / app_error",
+      "ok": true,
+      "detail": [
+        "$pageview",
+        "app_error"
+      ]
+    },
+    {
+      "name": "events: no $snapshot / $autocapture / $exception",
+      "ok": true
+    },
+    {
+      "name": "no field content (ЕГН / IBAN / amounts / names / password) in any request",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "page URLs carry no query string or hash",
+      "ok": true,
+      "detail": [
+        "http://localhost:4174/login",
+        "http://localhost:4174/tech"
+      ]
+    },
+    {
+      "name": "app_error carries only error_kind",
+      "ok": true,
+      "detail": [
+        "TypeError"
+      ]
+    }
+  ],
+  "client_state": {
+    "loaded": true,
+    "real_library": true,
+    "disable_session_recording": true,
+    "autocapture": false,
+    "mask_all_text": true,
+    "recording_started": false
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    }
+  ],
+  "events": [
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/login",
+        "$host": "localhost:4174",
+        "$pathname": "/login",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "6sxg5oy5ys8huwtk",
+        "$time": 1794210785.059,
+        "distinct_id": "01a1bf4b-e707-7f74-9e4b-96af60dab591",
+        "$device_id": "01a1bf4b-e707-7f74-9e4b-96af60dab591",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bf4b-e706-7b34-94f8-0dc819374c4a",
+        "$window_id": "01a1bf4b-e706-7b34-94f8-0dc9f4e77328",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "app_error",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/tech",
+        "$host": "localhost:4174",
+        "$pathname": "/tech",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "4mo4j3f4ejmdjydg",
+        "$time": 1794210785.77,
+        "distinct_id": "01a1bf4b-e707-7f74-9e4b-96af60dab591",
+        "$device_id": "01a1bf4b-e707-7f74-9e4b-96af60dab591",
+        "error_kind": "TypeError",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bf4b-e706-7b34-94f8-0dc819374c4a",
+        "$window_id": "01a1bf4b-e706-7b34-94f8-0dc9f4e77328",
+        "$process_person_profile": false
+      }
+    }
+  ],
+  "external_requests": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0
+  }
+}

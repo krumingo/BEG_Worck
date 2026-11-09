@@ -6,6 +6,7 @@ import DashboardLayout from "@/components/DashboardLayout";
 import PlatformAdminGuard from "@/components/PlatformAdminGuard";
 import { canReadFinance } from "@/lib/financeAccess";
 import PlatformLayout from "@/components/PlatformLayout";
+import PwaBanners from "@/components/pwa/PwaBanners";
 import LoginPage from "@/pages/LoginPage";
 import SignupPage from "@/pages/SignupPage";
 import ForgotPasswordPage from "@/pages/ForgotPasswordPage";
@@ -357,6 +358,7 @@ function App() {
         <ProjectProvider>
           <BrowserRouter>
             <AppRoutes />
+            <PwaBanners />
           </BrowserRouter>
         </ProjectProvider>
       </PlatformAuthProvider>

@@ -266,6 +266,15 @@ async def active_member_count(tenant: TenantData, project_id: Any) -> int:
     return await rel.count({"project_id": pid, "active": True})
 
 
+async def any_row_count(tenant: TenantData, project_id: Any, session=None) -> int:
+    """PRJ-01 / R56(2): how many membership rows (any state, any date) the tenant's project
+    has — a Draft with a team is a used project. ``session``: the caller's transaction."""
+    rel = _rel(tenant)
+    pid = _ident(project_id, "project_id")
+    kw = {} if session is None else {"session": session}
+    return await rel.count({"project_id": pid}, **kw)
+
+
 async def tenant_active_rows(tenant: TenantData, projection: Optional[Mapping] = None,
                              limit: Optional[int] = None) -> List[Dict]:
     """Every active membership row of THIS tenant (W0-03E-A2B, W0-02 bootstrap).
