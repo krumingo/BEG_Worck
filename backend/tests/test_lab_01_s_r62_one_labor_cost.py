@@ -771,3 +771,23 @@ def test_lab73_r1_t3_a_report_and_a_manual_row_of_the_same_day_approved_concurre
         assert [man == "approved", rep == "APPROVED"].count(True) == 1, (man, rep, a.text, b.text)
         assert 409 in (a.status_code, b.status_code), (a.text, b.text)
     run(monkeypatch, scenario, backend="real")
+
+
+@pytest.mark.skipif(bool(_real_refusal()), reason="real Mongo only")
+@pytest.mark.parametrize("i", range(5))
+def test_lab73_r1_a_concurrent_retry_of_the_same_key_writes_one_row(monkeypatch, i):
+    """Two concurrent POST /labor-entries with the SAME Idempotency-Key: one row (the
+    key-derived id), both answers name it — never 409 for the key's own row."""
+    async def scenario(c, op):
+        body = {"project_id": P, "employee_id": "w1", "hours": 1, "date": "2026-11-14",
+                "execution_package_id": PKG}
+        h = _key("admin")
+        a, b = await asyncio.gather(c.post("/api/labor-entries", json=body, headers=h),
+                                    c.post("/api/labor-entries", json=body, headers=h))
+        n = await op.labor_entries.count_documents({"employee_id": "w1", "date": "2026-11-14"})
+        assert n == 1, (n, a.text, b.text)
+        ok = [r for r in (a, b) if r.status_code in (200, 201)]
+        assert ok and all(r.json()["id"] == ok[0].json()["id"] for r in ok), (a.text, b.text)
+        assert all(r.status_code in (200, 201, 409) for r in (a, b)), (a.text, b.text)
+        assert not any(r.status_code == 409 and "DUPLICATE" in r.text for r in (a, b)), (a.text, b.text)
+    run(monkeypatch, scenario, backend="real")

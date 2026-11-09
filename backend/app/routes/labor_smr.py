@@ -161,7 +161,10 @@ async def create_labor_entry(
                 raise HTTPException(status_code=409, detail={
                     "code": "DUPLICATE_MANUAL_ROW",
                     "message": "За този работник, обект и ден вече има ръчен ред — поправете него, не добавяйте втори"})
-            await tenant.labor_entries.insert_one(mw.unique(entry), session=session)
+            # F-69-01: the key-derived _id, once per key (the read above already returns a
+            # committed row of this key; the lock serialises concurrent attempts)
+            async with mw.insert_once():
+                await tenant.labor_entries.insert_one(mw.unique(entry), session=session)
 
         await _run_manual_tx(body)
         mw.result_id = entry["id"]
