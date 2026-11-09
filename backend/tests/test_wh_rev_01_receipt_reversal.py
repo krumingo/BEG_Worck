@@ -754,3 +754,16 @@ async def test_f82_02_one_cent_above_a_positive_net(
     assert await db["payment_allocations"].count_documents({}) == allocs
     out = await _pay(finance, 72.0, "k-net")
     assert out["ok"]
+
+
+def test_f82_credit_note_rule_is_integer_cents_without_allowance():
+    """The one R47 comparison (quick-pay, allocate, reversal)."""
+    from app.services.credit_note_rule import cents, credit_exceeds_unpaid, payment_exceeds_net
+    assert cents(72.005) == 7201 and cents("0.1") + cents("0.2") == cents("0.3")
+    assert payment_exceeds_net(0.01, 120, 0, 120)          # net 0 → one cent refused
+    assert payment_exceeds_net(72.01, 120, 0, 48)          # one cent above net 72
+    assert not payment_exceeds_net(72.0, 120, 0, 48)       # exactly the net
+    assert credit_exceeds_unpaid(120, 120, 48)             # paid 120 > net 72
+    assert credit_exceeds_unpaid(120, 72.01, 48)
+    assert not credit_exceeds_unpaid(120, 72, 48)          # paid = net
+    assert not credit_exceeds_unpaid(0, 0, 120)            # nothing paid

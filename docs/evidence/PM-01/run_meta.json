@@ -34,8 +34,15 @@
     "user_id": "<tenant A user_id>",
     "org_id": "<tenant A org_id>"
   },
-  "seconds": 166.7,
-  "slow_calls": [],
+  "seconds": 206.0,
+  "slow_calls": [
+    {
+      "route": "GET /api/warehouse/migration-readiness/legacy-writer-inventory",
+      "role": "owner",
+      "mode": "off",
+      "seconds": 3.71
+    }
+  ],
   "mongo": "local replica set (oplog)",
   "outbound_http": "closed local port"
 }

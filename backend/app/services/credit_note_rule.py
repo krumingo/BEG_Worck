@@ -33,5 +33,6 @@ def payment_exceeds_net(amount, total, paid, credit) -> bool:
 
 
 def credit_exceeds_unpaid(total, paid, credit) -> bool:
-    """True when an awaited credit would put the net value below what is paid."""
-    return payable_cents(total, paid, credit) < 0
+    """True when an awaited credit would put the net value (total − credit)
+    below what is ALREADY paid. Nothing paid → nothing to protect (False)."""
+    return cents(paid) > 0 and payable_cents(total, paid, credit) < 0
