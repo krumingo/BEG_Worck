@@ -1283,12 +1283,12 @@ async def serve_project_photo(filename: str, user: dict = Depends(get_current_us
     photo = await tenant.project_photos.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0, "content_type": 1, "status": 1, "project_id": 1})
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found or access denied")
-    if not await can_access_project(user, photo.get("project_id")):
-        # MEDIA-SEC-01 (FG-541): the photo's project membership, as for the list
-        raise HTTPException(status_code=403, detail="Access denied")
     if photo.get("status") == PHOTO_RETIRED and user.get("role") not in ("Owner", "Admin"):
         # PRJ-01 / D6: a retired photo is kept as evidence for Owner/Admin, not served to others
         raise HTTPException(status_code=404, detail="Photo not found or access denied")
+    if not await can_access_project(user, photo.get("project_id")):
+        # MEDIA-SEC-01 (FG-541): the photo's project membership, as for the list (after the PRJ-01 retired rule)
+        raise HTTPException(status_code=403, detail="Access denied")
     return FileResponse(file_path, media_type=photo.get("content_type", "image/jpeg"))
 
 
