@@ -223,3 +223,21 @@ UI: `OffersListPage` / `OfferEditorPage` show the write buttons to Owner / Admin
 | ID | Debt |
 |---|---|
 | D-OFF02-5 | The project dashboard answers a Warehousekeeper and a Driver who are not members of the project (the money and the link are stripped, the rest is not). Who may read the dashboard is for Krum to decide. |
+
+### Gates on `012f915` (code = `007c2cc`), real `mongo:7.0` rs0, sequential, a fresh Mongo per suite
+
+| Gate | Result |
+|---|---|
+| OFF-02 | **34 passed, 0 skipped** (28 + `test_11` and `test_12` × 3 modes) |
+| OFF-01 + audit probe | **237** |
+| ACT-01 | **113** |
+| PM-01 | **6 passed, 0 skipped** |
+| PAY | **630** (+ 8 in `test_pay_runs_p1_06e_helpers`, run with it this time: 638) |
+| SEC-01 | **30** |
+| SUB-ADV-01 | **9** |
+| SEC-02 | **31** |
+| R0 | **814** |
+| W0 | 1176 passed + **the same 16 as main** (the failing list is byte-identical to the baseline) |
+| Warehouse canonical | **44 files / 1121 passed, 0 skipped** (= main), enforce, file by file |
+| A2C / A1 guards | 242 modules / 488 units, 0 violations; inventories unchanged |
+| Review-link scan | 389 GET routes × 5 roles × 3 modes = 6984 calls: **0 hits** (3 routes before the fix) |
