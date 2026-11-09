@@ -28,6 +28,7 @@ import ImageCropDialog from "@/components/ImageCropDialog";
 import PayslipDialog from "@/components/PayslipDialog";
 import AdminResetPasswordModal from "@/components/AdminResetPasswordModal";
 import { toast } from "sonner";
+import AuthImage from "@/components/AuthImage";
 
 // P1-0.3: single source of truth for report status buckets.
 // Header, footer (Reports tab) and summary cards all derive from THIS — no drift.
@@ -49,18 +50,15 @@ function bucketsFrom(rpt) {
 }
 
 function Avatar({ name, url, size = 48 }) {
-  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
-  const [imgError, setImgError] = useState(false);
   const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-  
-  if (fullUrl && !imgError) {
-    return <img src={fullUrl} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} onError={() => setImgError(true)} />;
-  }
-  return (
+  const badge = (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: size * 0.35 }}>
       {initials}
     </div>
   );
+  // MEDIA-SEC-01 (FG-540): the avatar needs the session — fetched as a blob, not <img src>
+  if (url) return <AuthImage src={url} fallback={badge} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+  return badge;
 }
 
 const STATUS_COLORS = { Present: "bg-emerald-500/20 text-emerald-400", Absent: "bg-red-500/20 text-red-400", Late: "bg-amber-500/20 text-amber-400", Leave: "bg-blue-500/20 text-blue-400", Sick: "bg-orange-500/20 text-orange-400" };

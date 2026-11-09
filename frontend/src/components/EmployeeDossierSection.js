@@ -9,6 +9,7 @@ import API from "@/lib/api";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Search, ChevronRight, Loader2 } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 export default function EmployeeDossierSection() {
   const { t } = useTranslation();
@@ -44,7 +45,7 @@ export default function EmployeeDossierSection() {
           {filtered.map(w => (
             <button key={w.id} onClick={() => navigate(`/employees/${w.id}?tab=reports`)} className="flex items-center gap-3 p-3 rounded-xl border border-border bg-card hover:border-primary/40 text-left transition-colors" data-testid={`worker-card-${w.id}`}>
               {w.avatar_url ? (
-                <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" />
+                <AuthImage src={w.avatar_url} className="w-10 h-10 rounded-full object-cover" alt="" />
               ) : (
                 <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
                   {(w.first_name?.[0] || "")}{(w.last_name?.[0] || "")}

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Eye, MapPin, AlertTriangle, Check } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS_BADGE = {
   DRAFT:     { label: "Чернова",  cls: "bg-gray-500/15 text-gray-400 border-gray-500/30" },
@@ -86,7 +87,7 @@ export default function GroupedReportsTable({ items, bulk, onOpenDetail, onOpenO
             {/* Group header */}
             <div className="flex items-center gap-3 mb-2">
               {g.worker_avatar ? (
-                <img src={`${process.env.REACT_APP_BACKEND_URL}${g.worker_avatar}`} className="w-7 h-7 rounded-full object-cover" alt="" />
+                <AuthImage src={g.worker_avatar} className="w-7 h-7 rounded-full object-cover" alt="" />
               ) : (
                 <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center text-[9px] font-bold text-primary">
                   {(g.worker_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2)}

@@ -1196,6 +1196,9 @@ async def list_project_photos(project_id: str, include_retired: bool = False,
     project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    if not await can_access_project(user, project_id):
+        # MEDIA-SEC-01 (FG-541): the same membership check as GET /projects/{id}
+        raise HTTPException(status_code=403, detail="Access denied")
     flt = {"project_id": project_id, "org_id": org_id}
     if not include_retired:
         flt["status"] = {"$ne": PHOTO_RETIRED}   # PRJ-01 (FG-238): retired, not deleted
@@ -1224,6 +1227,10 @@ async def upload_project_photo(
     project = await tenant.projects.find_one({"id": project_id, "org_id": org_id}, {"_id": 0, "id": 1, "name": 1})
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    if not await can_access_project(user, project_id):
+        # MEDIA-SEC-01 (FG-541): only a member (or Admin/Owner) adds a photo — checked
+        # before the file is read, so a denial writes nothing (no file, no row, no audit)
+        raise HTTPException(status_code=403, detail="Access denied")
     if file.content_type not in ALLOWED_PHOTO_TYPES:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": f"Allowed: {ALLOWED_PHOTO_TYPES}"})
     content = await file.read()
@@ -1273,9 +1280,12 @@ async def serve_project_photo(filename: str, user: dict = Depends(get_current_us
         raise HTTPException(status_code=400, detail="Invalid filename")
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="File not found")
-    photo = await tenant.project_photos.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0, "content_type": 1, "status": 1})
+    photo = await tenant.project_photos.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0, "content_type": 1, "status": 1, "project_id": 1})
     if not photo:
         raise HTTPException(status_code=404, detail="Photo not found or access denied")
+    if not await can_access_project(user, photo.get("project_id")):
+        # MEDIA-SEC-01 (FG-541): the photo's project membership, as for the list
+        raise HTTPException(status_code=403, detail="Access denied")
     if photo.get("status") == PHOTO_RETIRED and user.get("role") not in ("Owner", "Admin"):
         # PRJ-01 / D6: a retired photo is kept as evidence for Owner/Admin, not served to others
         raise HTTPException(status_code=404, detail="Photo not found or access denied")
@@ -1307,6 +1317,9 @@ async def delete_project_photo(photo_id: str, body: Optional[dict] = Body(None),
             raise HTTPException(status_code=404, detail="Photo not found")
         if photo.get("uploaded_by") != user["id"] and user["role"] not in ["Admin", "Owner"]:
             raise HTTPException(status_code=403, detail="Only the uploader or admin can retire this photo")
+        if not await can_access_project(user, photo.get("project_id")):
+            # MEDIA-SEC-01 (FG-541): the uploader must still be on the project's team
+            raise HTTPException(status_code=403, detail="Access denied")
         if photo.get("status") == PHOTO_RETIRED:
             raise lifecycle.refuse(409, "PHOTO_ALREADY_RETIRED", "Снимката вече е скрита")
         now = lifecycle.now_iso()

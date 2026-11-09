@@ -24,6 +24,7 @@ import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutG
 import { warrantyStatus } from "@/lib/warranty";
 import UnitQrBlock from "@/components/UnitQrBlock";
 import { toast } from "sonner";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS = {
   available: { label: "наличен", color: "#16a34a" },
@@ -43,17 +44,15 @@ const empName = (e) =>
   (e?.name || `${e?.first_name || ""} ${e?.last_name || ""}`.trim() || e?.email || "").trim();
 
 function Avatar({ name, url, size = 24 }) {
-  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
-  const [imgErr, setImgErr] = useState(false);
   const initials = (name || "?").split(" ").map((w) => w[0]).join("").toUpperCase().slice(0, 2);
-  if (fullUrl && !imgErr) {
-    return <img src={fullUrl} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
-  }
-  return (
+  const badge = (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold shrink-0" style={{ width: size, height: size, fontSize: size * 0.4 }}>
       {initials}
     </div>
   );
+  // MEDIA-SEC-01 (FG-540): the avatar needs the session — fetched as a blob, not <img src>
+  if (url) return <AuthImage src={url} fallback={badge} alt={name} className="rounded-full object-cover shrink-0" style={{ width: size, height: size }} />;
+  return badge;
 }
 
 // аватар + име в едно (за история и резюмета); ако няма име — нищо

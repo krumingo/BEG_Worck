@@ -15,6 +15,7 @@ import {
 import {
   FileText, Clock, MapPin, Loader2, Calendar, Check, DollarSign,
 } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 export default function PayslipDialog({ open, onClose, batchId, workerId }) {
   const { t } = useTranslation();
@@ -60,7 +61,7 @@ export default function PayslipDialog({ open, onClose, batchId, workerId }) {
             <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
               <div className="flex items-center gap-3">
                 {w.avatar_url ? (
-                  <img src={`${process.env.REACT_APP_BACKEND_URL}${w.avatar_url}`} className="w-10 h-10 rounded-full object-cover" alt="" />
+                  <AuthImage src={w.avatar_url} className="w-10 h-10 rounded-full object-cover" alt="" />
                 ) : (
                   <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold text-primary">
                     {(w.first_name?.[0] || "")}{(w.last_name?.[0] || "")}
