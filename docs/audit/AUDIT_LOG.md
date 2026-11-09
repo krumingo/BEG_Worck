@@ -5809,3 +5809,13 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **#79 `25c9ae8`** = `f526182` (PASS 22:59) + OFF-01 merge evidence only. The verdict stands.
 - **#73 `fdcb5ac`** = `7ee87f8` + test-harness bindings in 3 warehouse canonical tests (c20, c21, c22): the `app.services.labor_cost` / `report_normalizer` modules are bound to the test db, as LAB-01 now reads through them. Fixture only, 0 assertion lines changed. Plus evidence.
 - **Gates for #73 / #75 / #86 `8e8be48` / #88:** still blocked by the disk (~0.9 GB free).
+
+## 2026-11-09 02:22 UTC: #73 `5e3a152` / #75 `48ba662` final heads: merge checks OK; gates blocked by disk
+
+- **#73 `5e3a152`** = `fdcb5ac` + warehouse-suite evidence only (no code change, PM-01 matrix unchanged). The earlier merge checks apply.
+- **#75 `48ba662`:** merge `fc538d5d` of LAB-01 `5e3a152` into LAB-02 `5809367`.
+  - Only `run_meta.json` differs from merge-tree.
+  - Its code change is LAB-01's c20/c21/c22 fixture bindings (0 assertions changed).
+  - Role-union 0; PM-01 matrix unchanged vs `5809367`.
+- **FLOW Guard FG-340 (high) is open on #73:** one project shows three different labor costs. It waits for Krum's decision, so #73/#75 merges wait. Not re-judged here.
+- **Gates:** #86 `8e8be48` → #73 → #75 → #88. Still blocked (~0.9 GB free; cleanup approval pending).
