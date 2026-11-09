@@ -191,6 +191,17 @@ def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mo
 
 # ───────────────── FG-200 — finance UI invoices (embedded lines) ─────────────────
 
+@pytest.fixture(params=[pytest.param("real", marks=pytest.mark.skipif(
+        bool(h._real_refusal()), reason="requires transactions (auth_tx): INV-CN-01 creates and sends a "
+                               "numbered supplier invoice only inside a MongoDB transaction"))])
+def real_backend(request):
+    """INV-CN-01 merge (orchestrator decision, 09.11): these flows create a NUMBERED supplier
+    invoice and send it — money writes inside auth_tx.run_in_transaction, which has no
+    non-transactional fallback by design. They run on real MongoDB only (the same bodies,
+    the same assertions); without real MongoDB they skip with that reason."""
+    return request.param
+
+
 def _ui_invoice(project_id=None):
     body = {"direction": "Received", "invoice_no": "UI-1", "issue_date": "2026-11-05",
             "due_date": "2099-12-31", "counterparty_name": "Доставчик", "currency": "EUR",
@@ -203,7 +214,7 @@ def _ui_invoice(project_id=None):
     return body
 
 
-def test_fg200_ui_invoice_with_one_header_project_is_stamped_and_payable(monkeypatch, backend, mode):
+def test_fg200_ui_invoice_with_one_header_project_is_stamped_and_payable(monkeypatch, real_backend, mode):
     async def scenario(c, op):
         r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=_ui_invoice("prj-1"))
         assert r.status_code == 201, r.text
@@ -218,10 +229,10 @@ def test_fg200_ui_invoice_with_one_header_project_is_stamped_and_payable(monkeyp
         r = await c.post(f"/api/finance/invoices/{inv_id}/payments", headers=hdr("acct-a"),
                          json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
         assert r.status_code == 201, r.text
-    run(monkeypatch, backend, mode, scenario)
+    run(monkeypatch, real_backend, mode, scenario)
 
 
-def test_fg200_ui_invoice_without_destination_is_pending_and_not_payable(monkeypatch, backend, mode):
+def test_fg200_ui_invoice_without_destination_is_pending_and_not_payable(monkeypatch, real_backend, mode):
     async def scenario(c, op):
         r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=_ui_invoice())
         assert r.status_code == 201, r.text
@@ -243,7 +254,7 @@ def test_fg200_ui_invoice_without_destination_is_pending_and_not_payable(monkeyp
         r = await c.post(f"/api/finance/invoices/{inv_id}/payments", headers=hdr("acct-a"),
                          json={"amount": 10.0, "method": "BankTransfer", "account_id": h.BANK_A})
         assert r.status_code == 201, r.text
-    run(monkeypatch, backend, mode, scenario)
+    run(monkeypatch, real_backend, mode, scenario)
 
 
 def test_a4_header_only_supplier_invoice_is_not_payable_until_written_on_lines(
@@ -397,7 +408,7 @@ def test_whfix81_06_reallocation_racing_a_payment_is_refused(monkeypatch, backen
 
 
 def test_whfix81_06_embedded_lines_of_a_paid_invoice_change_only_by_correction(
-        monkeypatch, backend, mode):
+        monkeypatch, real_backend, mode):
     async def scenario(c, op):
         r = await c.post("/api/finance/invoices", headers=hdr("acct-a"), json=_ui_invoice("prj-1"))
         inv_id = r.json()["id"]
@@ -419,7 +430,7 @@ def test_whfix81_06_embedded_lines_of_a_paid_invoice_change_only_by_correction(
                                                 "kind": "allocation_correction"}).to_list(None)
         assert ver["reason"] == "друг обект"
         assert ver["snapshot"]["lines"][0]["project_id"] == "prj-1"   # the previous version
-    run(monkeypatch, backend, mode, scenario)
+    run(monkeypatch, real_backend, mode, scenario)
 
 
 def test_fg215_new_line_of_an_issued_invoice_is_not_stamped(monkeypatch, backend, mode):
