@@ -251,6 +251,14 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
             "smr_type_id": "Мазилка", "started_at": "2026-11-04T07:00:00",
             "ended_at": "2026-11-04T15:00:00", "duration_hours": 8, "labor_cost": 3000,
             "created_at": now})
+        # R62 / FG-390 (LAB-01-S): the budget alarm's "spent" is THE labor cost of the
+        # project (approved reports), not the work sessions — so P1 also carries APPROVED
+        # report lines of the same paid technician (hourly 20 in the probe profile) worth the
+        # same 6200 = 310 h × 20: POST /alarms/evaluate still raises the 124 % alarm.
+        await op_db.employee_daily_reports.insert_one({
+            "id": sid(tkey, "r62rep"), "org_id": org, "worker_id": tech, "submitted_by": tech,
+            "date": "2026-11-04", "hours": 310, "project_id": p1, "smr_type": "Мазилка",
+            "status": "APPROVED", "approval_status": "APPROVED", "created_at": now})
 
 
 def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:

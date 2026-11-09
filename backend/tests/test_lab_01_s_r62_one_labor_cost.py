@@ -239,3 +239,16 @@ def test_r62_the_package_labor_actual_is_not_typed_in(monkeypatch):
         assert r.status_code == 422, r.text
         assert set((await _numbers(c)).values()) == {160.0}
     run(monkeypatch, scenario)
+
+
+def test_r62_the_approve_route_carries_the_owner_only_action_first():
+    """SEC-01 style: the money-write dependency is the route's first and only marked one."""
+    from app.permissions.catalog import CANONICAL_ROLES
+    from app.routes.labor_smr import router
+    route = next(r for r in router.routes if getattr(r, "path", "") == "/labor-entries/{entry_id}/approve")
+    calls = [d.call for d in route.dependant.dependencies]
+    marked = [c for c in calls if hasattr(c, "sec01_action")]
+    assert len(marked) == 1 and calls[0] is marked[0]
+    assert marked[0].sec01_action == "labor.manual_entry.approve"
+    holders = {k for k, v in CANONICAL_ROLES.items() if "labor.manual_entry.approve" in v["actions"]}
+    assert holders == {"owner"}
