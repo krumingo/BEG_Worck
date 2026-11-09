@@ -5819,3 +5819,15 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - Role-union 0; PM-01 matrix unchanged vs `5809367`.
 - **FLOW Guard FG-340 (high) is open on #73:** one project shows three different labor costs. It waits for Krum's decision, so #73/#75 merges wait. Not re-judged here.
 - **Gates:** #86 `8e8be48` → #73 → #75 → #88. Still blocked (~0.9 GB free; cleanup approval pending).
+
+## 2026-11-09 06:14 UTC: main `44e8d97` (merge of #79) verified; #84 `5242cba` merge checks (gates blocked by disk)
+
+- **main `44e8d97`:** parents `ea57121` + `25c9ae8` (= `f526182` + evidence; PASS). Tree = merge-tree.
+- **#84 `5242cba`** (FG-278 one project-status scope for company-result readers; R63/FG-281 re-booking after a reversal; merge `5e7ab4a2` of main `44e8d97`):
+  - Only the generated A1 inventory and `run_meta` differ from merge-tree.
+  - Role-union 0.
+  - PM-01: 432/432 own cells, all keep the PR's value. The 48 "extra" cells are the PR's own new R63 routes `POST /finance/credit-notes/{id}/difference-proposals/{pid}/approve|reject`:
+    - approve: Owner only (Owner 428 = key required; all others 403);
+    - reject: Owner / Admin / Accountant 428, the rest 403;
+    - nothing written, 3 modes.
+- **Queue (after disk cleanup):** #86 `8e8be48` → #84 `5242cba` → #73/#75 → #88. Still ~0.9 GB free.
