@@ -1,10 +1,13 @@
 """
 Pydantic models - Offers / BOQ (M2).
 """
-from pydantic import BaseModel
-from typing import Optional, List
+from pydantic import BaseModel, Field
+from typing import Literal, Optional, List
 
-OFFER_STATUSES = ["Draft", "Sent", "Accepted", "Rejected", "NeedsRevision", "Archived"]
+# OFF-01: "Superseded" — a version replaced by a newer one (never accepted afterwards);
+# "Cancelled" — a sent offer withdrawn instead of deleted (CLAUDE.md §2.9).
+OFFER_STATUSES = ["Draft", "Sent", "Accepted", "Rejected", "NeedsRevision", "Archived",
+                  "Superseded", "Cancelled"]
 OFFER_UNITS = ["m2", "m", "pcs", "hours", "lot", "kg", "l"]
 
 class OfferLineInput(BaseModel):
@@ -39,6 +42,21 @@ class OfferLinesUpdate(BaseModel):
     lines: List[OfferLineInput]
 
 class OfferReject(BaseModel):
+    reason: Optional[str] = None
+
+# OFF-01 / FLOW-003 „Interim Approval Receipt“: the carrier of an internal acceptance.
+# "internal_unspecified" is what the plain „Приеми“ button records (no carrier named).
+OFFER_APPROVAL_METHODS = ("signed_pdf", "verified_email", "internal_unspecified")
+
+
+class OfferAccept(BaseModel):
+    approval_method: Literal["signed_pdf", "verified_email", "internal_unspecified"] = \
+        "internal_unspecified"
+    evidence_file_id: Optional[str] = Field(None, max_length=200)
+    note: Optional[str] = Field(None, max_length=500)
+
+
+class OfferCancel(BaseModel):
     reason: Optional[str] = None
 
 class ActivityCatalogCreate(BaseModel):

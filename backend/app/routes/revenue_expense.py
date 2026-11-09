@@ -426,6 +426,7 @@ async def update_execution_package(
 @router.get("/project-profit/{project_id}")
 async def get_project_profit_summary(
     project_id: str,
+    request: Request = None,                    # SUB-ADV-01 (FG-128); None = direct call
     _sec02: dict = Depends(require_finance_read(
         "finance.project_profit.read", module="M2", resource_type="project_profit")),  # SEC-02 (R20-2): before any read
     user: dict = Depends(require_m2)):
@@ -500,6 +501,10 @@ async def get_project_profit_summary(
     from app.routes.subcontractors import get_subcontract_metrics
     sub_metrics = await get_subcontract_metrics(org_id, project_id)
     
+    from app.routes.subcontractors import advance_visible, get_advance_metrics
+    subcontract_advances = (await get_advance_metrics(org_id, project_id)
+                            if await advance_visible(request, user) else None)
+
     # Fallback to received invoices if no subcontractor packages
     if sub_metrics.get("available"):
         subcontract_cost = sub_metrics["certified"]  # certified = execution cost basis
@@ -574,6 +579,10 @@ async def get_project_profit_summary(
             "collected": round(collected_revenue, 2),
             "receivables": receivables,
         },
+
+        # SUB-ADV-01-B (FG-128): subcontractor advances given / deducted / remaining — cash and
+        # settlement, NOT an expense (FLOW-006): outside "expenses"; finance roles only (else None).
+        "subcontract_advances": subcontract_advances,
 
         "expenses": {
             "material": round(net_material_cost - material_waste_cost, 2),

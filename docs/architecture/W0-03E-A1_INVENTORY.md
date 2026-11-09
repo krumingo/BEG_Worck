@@ -64,6 +64,7 @@
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | project_team→projects | assigned_project_ids(org_id+user_id → tenant projects) | data_access helper | new read | SAFE |
 | app/routes/finance.py:get_invoice | GET /finance/invoices/{invoice_id} | payment_allocations | find(active_allocations({'invoice_id': invoic) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:list_invoice_versions | GET /finance/invoices/{invoice_id}/versions | invoice_versions | find(invoice_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/finance.py:reveal_invoice_egn | POST /finance/invoices/{invoice_id}/egn/reveal | invoices | find_one(id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | get(id = invoice_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | find_one(direction, invoice_no, id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/finance.py:update_invoice | PUT /finance/invoices/{invoice_id} | invoices | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
@@ -135,6 +136,12 @@
 | app/routes/offers.py:can_access_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
 | app/routes/offers.py:can_manage_project | (helper) | project_team→projects | is_project_member(org_id+project_id+user_id[+role]) | data_access helper | new read | SAFE |
 | app/routes/offers.py:get_next_offer_no | (helper) | offers | find_one((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/offers.py:_draft_was_used | (helper) | offer_events | find_one(offer_id, event_type) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_check_evidence_file | (helper) | media_files | get(id = file_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_has_newer_version | (helper) | offers | find_one(parent_offer_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_family_guard | (helper) | offers | update_one(id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_family_guard | (helper) | offers | get(id = pid) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:_family_guard | (helper) | offers | find(parent_offer_id) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:create_offer | POST /offers | projects | get(id = data.project_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_offer | POST /offers | offers | insert_one(offer) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:list_offers | GET /offers | projects | get_many(id ∈ (o.get('project_id') for o in offers)) | TenantData org_id (session) | scoped@base | SAFE |
@@ -143,22 +150,25 @@
 | app/routes/offers.py:get_offer | GET /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:get_offer | GET /offers/{offer_id} | projects | get(id = offer.get('project_id')) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:update_offer | PUT /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:update_offer | PUT /offers/{offer_id} | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:update_offer | PUT /offers/{offer_id} | offers | update_one(id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:update_offer_lines | PUT /offers/{offer_id}/lines | offers | update_one(id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | update_one(id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_versions | find_one(offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_versions | insert_one(id, project_id, offer_id, version_number, created_at, create) | TenantData org_id (session) | scoped@base | SAFE |
-| app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:send_offer | POST /offers/{offer_id}/send | offer_events | insert_one(id, offer_id, event_type, actor, created_at, details) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:accept_offer | POST /offers/{offer_id}/accept | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:accept_offer | POST /offers/{offer_id}/accept | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:accept_offer | POST /offers/{offer_id}/accept | offers | find_one_and_update(id, status, superseded_by, version) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:reject_offer | POST /offers/{offer_id}/reject | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:reject_offer | POST /offers/{offer_id}/reject | offers | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:reject_offer | POST /offers/{offer_id}/reject | offers | find_one_and_update(id, status, superseded_by, version) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | update_one(id, status, superseded_by, updated_at) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_offer_version | POST /offers/{offer_id}/new-version | offers | insert_one(new_offer) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/offers.py:cancel_offer | POST /offers/{offer_id}/cancel | offers | get(id = offer_id) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:cancel_offer | POST /offers/{offer_id}/cancel | offers | find_one_and_update(id, status, superseded_by) | TenantData org_id (session) | new read | SAFE |
 | app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | get(id = offer_id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | delete_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:delete_offer | DELETE /offers/{offer_id} | offers | delete_one(id, review_token, parent_offer_id, updated_at) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:list_activity_catalog | GET /activity-catalog | activity_catalog | find(query) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:create_activity | POST /activity-catalog | projects | get(id = data.project_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:create_activity | POST /activity-catalog | activity_catalog | insert_one(item) | TenantData org_id (session) | new read | SAFE |
@@ -180,7 +190,9 @@
 | app/routes/offers.py:get_offer_review | GET /offers/review/{review_token} | offers | update_one(id, review_token) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:get_offer_review | GET /offers/review/{review_token} | offer_events | find_one(offer_id, event_type) | literal offer['org_id'] | scoped@base | SAFE |
 | app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offers | resolve_review_token(review_token (unique, fail-closed)) | data_access helper | BARE@base | FIXED |
-| app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offers | update_one(id, review_token) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offers | update_one(id, review_token, status, superseded_by, version, review_tok) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offer_events | insert_one(id, offer_id, event_type, actor, created_at, details) | TenantData org_id (session) | new read | SAFE |
+| app/routes/offers.py:respond_to_offer | POST /offers/review/{review_token}/respond | offers | get(id = offer['id']) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/offers.py:get_offer_events | GET /offers/{offer_id}/events | offers | get(id = offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/offers.py:get_offer_events | GET /offers/{offer_id}/events | offer_events | find(offer_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/reports.py:get_price_history | GET /prices | invoices | $lookup(? → id) | TenantData.lookup $filter org_id | new read | SAFE |
@@ -382,4 +394,6 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 367 accesses — FIXED 123, SAFE 244
+Totals: 379 accesses — FIXED 124, SAFE 255
+
+Totals: 391 accesses — FIXED 132, SAFE 259
