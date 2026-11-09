@@ -1,0 +1,38 @@
+{
+ "note": "counter-check: the payment audit step WITHOUT entry_id (the code before this fix); crash after the audit + 2 same-key retries",
+ "f76_02_payment": [
+  {
+   "mode": "off",
+   "statuses": [
+    500,
+    201,
+    201
+   ],
+   "audit_rows": 2,
+   "payment_rows": 1,
+   "paid": 500.0
+  },
+  {
+   "mode": "shadow",
+   "statuses": [
+    500,
+    201,
+    201
+   ],
+   "audit_rows": 2,
+   "payment_rows": 1,
+   "paid": 500.0
+  },
+  {
+   "mode": "enforce",
+   "statuses": [
+    500,
+    201,
+    201
+   ],
+   "audit_rows": 2,
+   "payment_rows": 1,
+   "paid": 500.0
+  }
+ ]
+}
