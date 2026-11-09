@@ -65,6 +65,11 @@ ENTITY_COLLECTIONS: Dict[str, str] = {
     "subcontractor": "subcontractors",
 }
 
+#: PRJ-01 / D14 (CLAUDE.md §2 rule 9): collections whose "deleted" records stay as
+#: tombstones. Every read/update through this layer skips them.
+TOMBSTONE_STATUS = "deleted"
+TOMBSTONED = frozenset({"projects"})
+
 #: Aggregation stages that read another collection. Only the scoped
 #: ``lookup`` pair is allowed; the rest would bypass the tenant predicate.
 _FORBIDDEN_STAGES = ("$graphLookup", "$unionWith", "$out", "$merge")
@@ -95,6 +100,26 @@ class TenantCollection:
         self._scope = scope
         self.name = name
 
+    def _q(self, flt: Optional[Mapping] = None) -> Dict[str, Any]:
+        """The tenant predicate (``TenantData.scoped``) — and, for a collection with
+        tombstones (PRJ-01 / D14: ``projects``), "not a tombstone": a deleted project is
+        invisible to every read and update through this layer. The explicit way to see one
+        is :meth:`tombstone`."""
+        out = self._scope.scoped(flt)
+        if self.name in TOMBSTONED:
+            out = {"$and": [out, {"status": {"$ne": TOMBSTONE_STATUS}}]}
+        return out
+
+    async def tombstone(self, record_id: Any, projection: Optional[Mapping] = None,
+                        **kw) -> Optional[Dict]:
+        """The tenant's TOMBSTONED record with this id (PRJ-01 / D14), else ``None`` —
+        for a writer that must refuse a reference to a deleted record (409)."""
+        if record_id in (None, "") or self.name not in TOMBSTONED:
+            return None
+        return await self._raw.find_one(
+            self._scope.scoped({"id": record_id, "status": TOMBSTONE_STATUS}),
+            _proj(projection), **kw)
+
     @property
     def tenant(self) -> "TenantData":
         """The tenant view this collection belongs to (5C-C18), so a service
@@ -116,7 +141,7 @@ class TenantCollection:
         """
         if record_id in (None, ""):
             return None
-        return await self._raw.find_one(self._scope.scoped({"id": record_id}), _proj(projection),
+        return await self._raw.find_one(self._q({"id": record_id}), _proj(projection),
                                         **kw)
 
     async def require(self, record_id: Any, projection: Optional[Mapping] = None,
@@ -137,19 +162,19 @@ class TenantCollection:
             raise TenantScopeViolation("get_many needs the id field")
         if proj is not None and any(v for k, v in proj.items() if k != "_id") and "id" not in proj:
             proj = {**proj, "id": 1}
-        docs = await self._raw.find(self._scope.scoped({"id": {"$in": wanted}}), proj).to_list(None)
+        docs = await self._raw.find(self._q({"id": {"$in": wanted}}), proj).to_list(None)
         return {d["id"]: d for d in docs}
 
     async def find_one(self, flt: Optional[Mapping] = None, projection: Optional[Mapping] = None,
                        **kw) -> Optional[Dict]:
-        return await self._raw.find_one(self._scope.scoped(flt), _proj(projection), **kw)
+        return await self._raw.find_one(self._q(flt), _proj(projection), **kw)
 
     def find(self, flt: Optional[Mapping] = None, projection: Optional[Mapping] = None, **kw):
         """A motor cursor over the tenant's matching documents."""
-        return self._raw.find(self._scope.scoped(flt), _proj(projection), **kw)
+        return self._raw.find(self._q(flt), _proj(projection), **kw)
 
     async def count(self, flt: Optional[Mapping] = None, **kw) -> int:
-        return await self._raw.count_documents(self._scope.scoped(flt), **kw)
+        return await self._raw.count_documents(self._q(flt), **kw)
 
     async def count_documents(self, flt: Optional[Mapping] = None, **kw) -> int:
         """The motor name, so a converted call site reads like the original."""
@@ -158,12 +183,15 @@ class TenantCollection:
     async def distinct(self, key: str, flt: Optional[Mapping] = None, **kw) -> List:
         # 5C-C19 F-3: driver options (notably ``session``) pass through,
         # in the same ``**kw`` style PR #56 uses for get/count.
-        return await self._raw.distinct(key, self._scope.scoped(flt), **kw)
+        return await self._raw.distinct(key, self._q(flt), **kw)
 
     def aggregate(self, pipeline: List[Mapping]):
         """Aggregation restricted to the tenant; every join must be :meth:`TenantData.lookup`."""
         checked = self._scope._check_pipeline(list(pipeline))
-        return self._raw.aggregate([{"$match": {TENANT_KEY: self._scope.org_id}}] + checked)
+        first = {TENANT_KEY: self._scope.org_id}
+        if self.name in TOMBSTONED:
+            first = self._q(None)
+        return self._raw.aggregate([{"$match": first}] + checked)
 
     # --------------------------------------------------------------- writes
     async def insert_one(self, doc: Dict, **kw):
@@ -176,34 +204,34 @@ class TenantCollection:
         return await self._raw.insert_many([self._own(d) for d in docs], **kw)
 
     async def update_one(self, flt: Mapping, update: Mapping, **kw):
-        return await self._raw.update_one(self._scope.scoped(flt), update, **kw)
+        return await self._raw.update_one(self._q(flt), update, **kw)
 
     async def update_many(self, flt: Mapping, update: Mapping, **kw):
-        return await self._raw.update_many(self._scope.scoped(flt), update, **kw)
+        return await self._raw.update_many(self._q(flt), update, **kw)
 
     async def delete_one(self, flt: Mapping, **kw):
-        return await self._raw.delete_one(self._scope.scoped(flt), **kw)
+        return await self._raw.delete_one(self._q(flt), **kw)
 
     async def delete_many(self, flt: Optional[Mapping] = None, **kw):
         """W0-03E-A2C: a scoped bulk delete. An empty filter deletes only THIS
         tenant's documents, never the collection."""
-        return await self._raw.delete_many(self._scope.scoped(flt), **kw)
+        return await self._raw.delete_many(self._q(flt), **kw)
 
     async def find_one_and_update(self, flt: Mapping, update: Mapping, **kw):
-        return await self._raw.find_one_and_update(self._scope.scoped(flt), update, **kw)
+        return await self._raw.find_one_and_update(self._q(flt), update, **kw)
 
     async def find_one_and_delete(self, flt: Mapping, **kw):
-        return await self._raw.find_one_and_delete(self._scope.scoped(flt), **kw)
+        return await self._raw.find_one_and_delete(self._q(flt), **kw)
 
     async def replace_one(self, flt: Mapping, replacement: Dict, **kw):
         """Scoped replace. The replacement document is stamped with this tenant,
         and one that names another tenant is refused — a replace rewrites the
         whole document, so an absent owner would silently unbind the record."""
-        return await self._raw.replace_one(self._scope.scoped(flt),
+        return await self._raw.replace_one(self._q(flt),
                                            self._own(replacement), **kw)
 
     async def find_one_and_replace(self, flt: Mapping, replacement: Dict, **kw):
-        return await self._raw.find_one_and_replace(self._scope.scoped(flt),
+        return await self._raw.find_one_and_replace(self._q(flt),
                                                      self._own(replacement), **kw)
 
     def _own(self, doc: Dict) -> Dict:

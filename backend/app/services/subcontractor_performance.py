@@ -3,7 +3,39 @@ Service - Subcontractor Performance summary.
 Additive analytics layer on top of existing subcontractor data.
 """
 from app.db import db
+from app.services.payment_state import active_payments
 from app.tenancy.data_access import TenantData
+
+#: PRJ-01 / R54(2) (FG-240): where ``actual_paid_amount`` comes from.
+PAID_SOURCE = "payment_ledger"
+
+
+async def ledger_paid(tenant, subcontractor_id, project_id, package_id=None) -> float:
+    """What was really paid to this subcontractor on this project (and package, when the
+    record names one): the Outflow rows of the ONE Payment ledger (``finance_payments``,
+    FLOW-006) created by subcontractor payments, without reversed pairs."""
+    flt = {"subcontractor_id": subcontractor_id, "project_id": project_id}
+    if package_id:
+        flt["package_id"] = package_id
+    sp_ids = await tenant.subcontractor_payments.distinct("id", flt)
+    if not sp_ids:
+        return 0.0
+    rows = await tenant.finance_payments.find(
+        active_payments({"subcontractor_payment_id": {"$in": sp_ids}, "direction": "Outflow"}),
+        {"_id": 0, "amount": 1}).to_list(None)
+    return round(sum(float(r.get("amount") or 0) for r in rows), 2)
+
+
+async def apply_ledger_paid(tenant, items) -> None:
+    """Replace every typed-in ``actual_paid_amount`` with the ledger value. The old manual
+    value is not used; it stays in the record (and its history) and is shown as
+    ``legacy_manual_paid_amount``."""
+    for it in items:
+        if it.get("actual_paid_amount") is not None:
+            it["legacy_manual_paid_amount"] = it["actual_paid_amount"]
+        it["actual_paid_amount"] = await ledger_paid(
+            tenant, it.get("subcontractor_id"), it.get("project_id"), it.get("package_id"))
+        it["actual_paid_source"] = PAID_SOURCE
 
 
 def _compute_status(entry: dict) -> str:
@@ -37,6 +69,7 @@ async def build_subcontractor_performance(org_id: str, project_id: str = None, s
         query["subcontractor_id"] = subcontractor_id
 
     items = await tenant.subcontractor_performance.find(query, {"_id": 0}).sort("created_at", -1).to_list(500)
+    await apply_ledger_paid(tenant, items)
 
     delayed = 0
     over_budget = 0

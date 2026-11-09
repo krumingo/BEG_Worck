@@ -87,7 +87,9 @@ ORG_KEYED: Dict[str, str] = {
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",
               "subcontractor_payments", "subcontractor_performance",
               # CP-01: the VerifiedBankAccount register and the ЕИК claim rows
-              "verified_bank_accounts", "counterparty_eik_claims", "company_eik_claims"),
+              "verified_bank_accounts", "counterparty_eik_claims", "company_eik_claims",
+              # PRJ-01 (R54-2): the append-only versions of a subcontractor rating
+              "subcontractor_performance_versions"),
     **_family(FAMILY_COMMERCIAL,
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
               "change_orders", "client_acts", "client_act_line_totals", "contract_payments",
