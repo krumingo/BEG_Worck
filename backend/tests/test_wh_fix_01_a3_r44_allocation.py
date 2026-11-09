@@ -32,7 +32,8 @@ async def _seed_supplier_invoice(op, allocated=60):
         "kind": "Invoice", "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31",
         "currency": "EUR", "subtotal": 1000.0, "vat_percent": 20, "vat_amount": 200.0,
         "total": 1200.0, "paid_amount": 0, "remaining_amount": 1200.0,
-        "counterparty_name": "Доставчик", "created_at": "2026-11-08T09:00:00+00:00"})
+        "counterparty_name": "Доставчик", "created_at": "2026-11-08T09:00:00+00:00",
+        "supplier_counterparty_id": "cp-sup"})                 # CP-01: a payee from the list
     await op.invoice_lines.insert_one({
         "id": LINE, "org_id": ORG_A, "invoice_id": INV, "line_no": 1, "description": "Лепило",
         "unit": "bag", "qty": 100, "unit_price": 10, "vat_percent": 20,
@@ -51,6 +52,7 @@ def run(monkeypatch, backend, mode, scenario, allocated=60):
             await h._seed(op, sysdb)
             await _seed_supplier_invoice(op, allocated)
             app = h._app(monkeypatch, op, sysdb, mode)
+            await h.verified_supplier(monkeypatch, op)          # CP-01: guard stays on
             from app.routes import invoice_lines as r_lines
             monkeypatch.setattr(r_lines, "db", op)
             app.include_router(r_lines.router, prefix="/api")
@@ -85,7 +87,12 @@ def test_r44_quick_pay_of_a_partly_allocated_supplier_invoice_is_409(monkeypatch
 
 def test_r44_allocate_payment_to_it_is_409(monkeypatch, backend, mode):
     async def scenario(c, op):
-        pid = await pay(c, 500.0, direction="Outflow")
+        # CP-01: an outgoing bank payment to the supplier chosen from the list
+        r = await c.post("/api/finance/payments", headers=hdr("acct-a"), json={
+            "direction": "Outflow", "amount": 500.0, "date": "2026-11-05", "method": "BankTransfer",
+            "account_id": h.BANK_A, "counterparty_id": "cp-sup"})
+        assert r.status_code == 201, r.text
+        pid = r.json()["id"]
         before = await snap(op)
         r = await c.post(f"/api/finance/payments/{pid}/allocate", headers=hdr("acct-a"),
                          json={"allocations": [{"invoice_id": INV, "amount": 50}]})
@@ -194,6 +201,8 @@ def test_a3_deadline_per_tenant_and_escalation_to_owner(monkeypatch, backend, mo
 def _ui_invoice(project_id=None):
     body = {"direction": "Received", "invoice_no": "UI-1", "issue_date": "2026-11-05",
             "due_date": "2099-12-31", "counterparty_name": "Доставчик", "currency": "EUR",
+            # CP-01: the form names the supplier by its ЕИК → the payee from the list
+            "counterparty_eik": "818181818",
             "vat_percent": 20, "lines": [{"description": "Пясък", "unit": "t", "qty": 4,
                                           "unit_price": 25}]}
     if project_id:

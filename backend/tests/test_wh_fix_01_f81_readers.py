@@ -45,6 +45,7 @@ def run(monkeypatch, backend, mode, scenario):
             await h._bootstrap_indexes(op)
             await h._seed(op, sysdb)
             app = h._app(monkeypatch, op, sysdb, mode)
+            await h.verified_supplier(monkeypatch, op, "cp-81")   # CP-01: guard stays on
             from app.routes import (dashboard, reports, revenue_expense, material_smr,
                                     subcontractors, labor_smr)
             for mod in (dashboard, reports, revenue_expense, material_smr, subcontractors, labor_smr):

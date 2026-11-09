@@ -188,6 +188,36 @@ async def snap(op, colls=MONEY):
     return out
 
 
+def _iban(bban: str) -> str:
+    digits = "".join(str(int(ch, 36)) for ch in bban + "BG00")
+    return "BG%02d%s" % (98 - int(digits) % 97, bban)
+
+
+async def verified_supplier(monkeypatch, op, cp_id="cp-sup", eik="818181818"):
+    """CP-01 (FLOW-006 / FLOW-010 §8, R48.1; as CP83-04): an outgoing bank payment goes only to
+    a VERIFIED account of its payee. The supplier gets one through the real register —
+    entered by the Accountant, verified by the Owner (a different person) from two
+    independent sources. The guard itself stays on (production = enforce)."""
+    from app.routes import bank_accounts
+    monkeypatch.setattr(bank_accounts, "db", op)
+    if not await op.counterparties.find_one({"id": cp_id}):
+        await op.counterparties.insert_one({"id": cp_id, "org_id": ORG_A, "name": "Доставчик",
+                                            "type": "supplier", "eik": eik, "active": True})
+    acct = {"id": "acct-a", "org_id": ORG_A, "role": "Accountant", "email": "acct-a@pay01.example"}
+    owner = {"id": "owner-a", "org_id": ORG_A, "role": "Owner", "email": "owner-a@pay01.example"}
+    acc = await bank_accounts.register_counterparty_bank_account(
+        cp_id, {"iban": _iban("UNCR7000152" + eik[:7])}, user=acct,
+        idempotency_key="reg-" + cp_id)
+    verified = await bank_accounts.verify_bank_account(acc["id"], {
+        "version": acc["version"], "counterparty_confirmed_by": "управител на доставчика",
+        "sources": [{"kind": "contract", "description": "договор за доставка",
+                     "source_origin": "contract"},
+                    {"kind": "phone_known", "description": "обаждане на записания телефон",
+                     "source_origin": "known_contact"}]}, user=owner, idempotency_key="ver-" + cp_id)
+    assert verified["status"] == "verified"
+    return verified
+
+
 async def pay(c, amount=200.0, direction="Inflow", account=BANK_A, who="acct-a"):
     r = await c.post("/api/finance/payments", headers=hdr(who), json={
         "direction": direction, "amount": amount, "date": "2026-11-05", "method": "BankTransfer",

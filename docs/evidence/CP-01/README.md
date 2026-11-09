@@ -408,3 +408,11 @@ Gates for this head: `gates_pass30.txt`.
 - The A1 inventory is 380 accesses on the branch against 392 on main. The difference is CP-01 removing the hard-delete paths of clients / counterparties / companies / persons and moving their writes into `master_records`.
 
 Gates for this head: `gates_r65.txt`.
+
+**#81's tests under the CP-01 guard (found by the full-suite gate after the merge):**
+- 48 cases of `test_wh_fix_01_a3_r44_allocation.py` / `test_wh_fix_01_f81_readers.py` paid a supplier invoice by bank to a supplier with **no verified bank account**. CP-01 refuses that correctly: 409 `BANK_ACCOUNT_NOT_VERIFIED`.
+- As in CP83-04, the guard was **not** turned off. The fixtures now give the supplier a verified account through the real register (`tests/test_pay_01_payment_reversal.verified_supplier`: entered by the Accountant, verified by the Owner from two independent sources). The invoices name that supplier: the seeded ones by `supplier_counterparty_id`, the UI-created ones by its ЕИК, as the form does.
+- `create_invoice` does not store a `supplier_counterparty_id` sent in the body; this is behaviour on main, and it was not changed.
+- The outgoing payment in `test_r44_allocate_payment_to_it_is_409` names the supplier by `counterparty_id`.
+- No assertion of #81 changed.
+- Result: `test_wh_fix_01_*` 317 passed, 0 skipped, with the warehouse real-Mongo variables, on the branch and on main 1525a1e alike.
