@@ -25,3 +25,24 @@ tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed in 21.19s
 tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed in 9.10s
 tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed, 4 warnings in 7.15s
 # from c26j on: the first pass hit mongod's open-file limit ('Too many open files', WiredTiger panic) in c26j; re-run file by file, each on a fresh container:
+tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed, 4 warnings in 23.29s (fresh container)
+tests/test_warehouse_canonical_c26k_subproject_link.py: 6 passed in 8.33s (fresh container)
+tests/test_warehouse_canonical_c26l_cross_project_link.py: 11 passed in 4.69s (fresh container)
+tests/test_warehouse_canonical_c26l_k_line_race.py: 63 passed in 37.13s (fresh container)
+tests/test_warehouse_canonical_c26l_l_all_paths_lock.py: 153 passed, 4 warnings in 309.07s (0:05:09) (fresh container)
+tests/test_warehouse_canonical_c26l_n_invoice_status.py: 72 passed in 22.82s (fresh container)
+tests/test_warehouse_canonical_concurrency.py: 2 passed in 1.77s (fresh container)
+tests/test_warehouse_canonical_envelope.py: 8 passed in 1.23s (fresh container)
+tests/test_warehouse_canonical_legacy_fail_close.py: 10 passed in 1.24s (fresh container)
+tests/test_warehouse_canonical_migration_readiness.py: 2 passed in 2.27s (fresh container)
+tests/test_warehouse_canonical_mongo.py: 11 passed in 3.97s (fresh container)
+tests/test_warehouse_canonical_mongo_c10.py: 4 passed in 2.78s (fresh container)
+tests/test_warehouse_canonical_mongo_full.py: 6 passed in 2.89s (fresh container)
+tests/test_warehouse_canonical_overflow.py: 1 passed in 30.01s (fresh container)
+tests/test_warehouse_canonical_permissions_catalog.py: 9 passed in 1.20s (fresh container)
+tests/test_warehouse_canonical_projection_shim.py: 3 passed in 1.20s (fresh container)
+tests/test_warehouse_canonical_rule_b_split.py: 2 passed in 1.26s (fresh container)
+tests/test_warehouse_canonical_shape.py: 12 passed, 5 warnings in 1.27s (fresh container)
+tests/test_warehouse_canonical_static_writer_inventory.py: 2 passed in 1.87s (fresh container)
+# done
+# total: 44 files / 1121 passed (= main ea57121's 1121), 0 failed, 0 errors
