@@ -11,7 +11,12 @@ from app.db import db
 from app.services.invoice_line_lock import (
     InvoiceLineAllocationLocked, run_transaction, write_unless_linked,
 )
-from app.services.invoice_state import NOT_DRAFT, claim_invoice
+from app.services.invoice_state import NOT_DRAFT, STATUS_CHANGED, claim_invoice
+
+# WHFIX81-06 — an invoice with money paid on it is an official record: its
+# allocation changes only as a correction (reason, version, AuditEvent).
+ALLOCATION_CORRECTION_REQUIRED = "ALLOCATION_CORRECTION_REQUIRED"
+PAID_STATUSES = ("Paid", "PartiallyPaid")
 from app.tenancy.data_access import TenantData
 from app.deps.auth import get_current_user
 from app.permissions.money_write import require_finance_read
@@ -149,6 +154,9 @@ def compute_allocation_stats(line: dict) -> dict:
     line["qty_allocated"] = round(qty_allocated, 4)
     line["qty_unallocated"] = round(qty_unallocated, 4)
     line["is_fully_allocated"] = qty_unallocated <= 0.0001  # Float tolerance
+    # WH-FIX-01 A2 (FG-155): final only at 100 %; otherwise the interim
+    # „чака разпределение" (the same rule as services.invoice_allocation).
+    line["allocation_status"] = "allocated" if line["is_fully_allocated"] else "pending_allocation"
     
     return line
 
@@ -178,6 +186,26 @@ async def validate_allocation_refs(tenant: TenantData, allocations: List[dict]):
                 ref = await tenant.companies.get(ref_id)
             if not ref:
                 raise HTTPException(status_code=404, detail=f"Client {ref_id} not found")
+
+
+async def _apply_header(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
+    """A4 #9 (Р45): an invoice with ONE header destination gets it written
+    explicitly on every new unallocated line, with an AuditEvent, in the same
+    transaction as the line write."""
+    from app.services.invoice_allocation import apply_header_destination
+    invoice = await tenant.invoices.find_one({"id": invoice_id},
+                                             {"_id": 0, "id": 1, "allocations": 1,
+                                              "direction": 1, "project_id": 1},
+                                             session=session)
+    if invoice:
+        await apply_header_destination(tenant, user, invoice, session=session)
+
+
+async def _refresh_dq(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
+    """FG-201: the DQ issue / alarm of the invoice are opened / resolved by the
+    WRITE (AuditEvent, same transaction) — the list GET never writes."""
+    from app.services.invoice_allocation import refresh_invoice_dq
+    await refresh_invoice_dq(tenant, invoice_id, actor=user, session=session)
 
 
 async def get_org_require_full_allocation(tenant: TenantData) -> bool:
@@ -348,6 +376,37 @@ async def get_unallocated_lines(
     }
 
 
+@router.get("/invoice-lines/invoices-to-allocate")
+async def get_invoices_to_allocate(user: dict = Depends(require_m5)):
+    """WH-FIX-01 A2/A3 (FG-155, Р44) — „фактури за разпределяне": every
+    supplier invoice with a line in the interim state „чака разпределение",
+    drill-down to the lines, with its DQ issue (owner Accountant, deadline,
+    escalation to Owner) and alarm. Finance roles only (Р14 / Р20)."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    from app.services.invoice_allocation import invoices_to_allocate
+    items = await invoices_to_allocate(_tenant(user), user["org_id"])
+    return {"count": len(items), "invoices": items}
+
+
+@router.get("/invoice-lines/{line_id}/allocation-versions")
+async def get_allocation_versions(line_id: str, user: dict = Depends(require_m5)):
+    """WHFIX81-06 — the previous allocations of a line (corrections of a paid
+    invoice), oldest first, and the current one. Finance roles only."""
+    if not finance_permission(user):
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+    tenant = _tenant(user)
+    line = await tenant.invoice_lines.find_one({"id": line_id},
+                                               {"_id": 0, "allocations": 1, "allocation_version": 1})
+    if not line:
+        raise HTTPException(status_code=404, detail="Invoice line not found")
+    versions = await tenant.invoice_line_allocation_versions.find(
+        {"invoice_line_id": line_id}, {"_id": 0}).sort("version", 1).to_list(None)
+    return {"line_id": line_id, "versions": versions,
+            "current": {"version": line.get("allocation_version") or 0,
+                        "allocations": line.get("allocations") or []}}
+
+
 @router.get("/invoice-lines/enums")
 async def get_invoice_line_enums():
     """Get available enum values"""
@@ -432,8 +491,13 @@ async def create_invoice_line(data: InvoiceLineCreate, user: dict = Depends(requ
         await claim_invoice(tenant, data.invoice_id, session=session, allowed=("Draft",),
                             code=NOT_DRAFT)
         await tenant.invoice_lines.insert_one(dict(line), session=session)
+        await _apply_header(tenant, user, data.invoice_id, session)
         await recalculate_invoice_totals(tenant, data.invoice_id, session=session)
+        await _refresh_dq(tenant, user, data.invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await run_transaction(tenant, _body)
+    line = await tenant.invoice_lines.find_one({"id": line["id"]}, {"_id": 0}) or line
     
     return {k: v for k, v in line.items() if k != "_id"}
 
@@ -518,7 +582,11 @@ async def create_invoice_lines_bulk(data: InvoiceLineBulkCreate, user: dict = De
                                 code=NOT_DRAFT)
             await tenant.invoice_lines.insert_many([dict(l) for l in created_lines],
                                                    session=session)
+            await _apply_header(tenant, user, invoice_id, session)
             await recalculate_invoice_totals(tenant, invoice_id, session=session)
+            await _refresh_dq(tenant, user, invoice_id, session)
+        from app.audit.store import ensure_chain_index
+        await ensure_chain_index(tenant._db)
         await run_transaction(tenant, _body)
     
     return {"ok": True, "count": len(created_lines), "lines": [{k: v for k, v in l.items() if k != "_id"} for l in created_lines]}
@@ -610,6 +678,11 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
                     raise HTTPException(status_code=400, detail=f"Allocated qty ({total_allocated}) exceeds purchased qty ({qty})")
                 if require_full and abs(total_allocated - qty) > 0.0001:
                     raise HTTPException(status_code=400, detail=f"Full allocation required. Allocated: {total_allocated}, Required: {qty}")
+            if "allocations" in update:
+                from app.services.invoice_allocation import audit_allocation_change
+                await audit_allocation_change(tenant, user, line_id,
+                                              current.get("allocations") or [],
+                                              update["allocations"] or [], session=session)
             merged = compute_allocation_stats(compute_line_totals({**current, **update}))
             patch = {
                 **update,
@@ -623,8 +696,11 @@ async def update_invoice_line(line_id: str, data: InvoiceLineUpdate, user: dict 
             await tenant.invoice_lines.update_one({"id": line_id}, {"$set": patch},
                                                   session=session)
             await recalculate_invoice_totals(tenant, line["invoice_id"], session=session)
+            await _refresh_dq(tenant, user, line["invoice_id"], session)
         # FG-109 / FG-124: the costing inputs are refused (409) on a linked
         # line; vat_percent alone is not costing but still derives totals.
+        from app.audit.store import ensure_chain_index
+        await ensure_chain_index(tenant._db)  # WH-FIX-01 A2 #4: record_event runs in the tx
         await _unless_linked(tenant, line_id, _write,
                              refuse_if_linked=any(k in update for k in LOCKED_WHEN_LINKED))
 
@@ -651,7 +727,28 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
     
     # Validate allocations
     allocs = [a.model_dump() for a in data.allocations]
-    total_allocated = sum(a["qty"] for a in allocs)
+    # A4 #10 (Р45): a percentage is converted AT ONCE into an exact amount and
+    # qty share of THIS line (cumulative rounding: Σ amount = the line value,
+    # Σ qty = the line qty); the stored allocation carries the amount / qty.
+    pct_items = [a for a in allocs if a.get("percent") is not None]
+    if pct_items and len(pct_items) != len(allocs):
+        raise HTTPException(status_code=422, detail={
+            "error_code": "ALLOCATION_MIXED_INPUT",
+            "message": "use either quantities or percentages for one line"})
+    if pct_items:
+        from app.services.invoice_allocation import split_percentages
+        total = float(line.get("line_total_ex_vat") or
+                      float(line.get("qty") or 0) * float(line.get("unit_price") or 0))
+        parts = split_percentages(total, float(line.get("qty") or 0) or None,
+                                  [a["percent"] for a in allocs])
+        for a, part in zip(allocs, parts):
+            a["input_percent"] = a.pop("percent")
+            a["amount"] = part["amount"]
+            a["qty"] = part["qty"]
+    else:
+        for a in allocs:
+            a.pop("percent", None)
+    total_allocated = round(sum(a["qty"] or 0 for a in allocs), 4)
 
     # Check if full allocation required
     require_full = await get_org_require_full_allocation(tenant)
@@ -661,7 +758,25 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
 
     now = datetime.now(timezone.utc).isoformat()
 
+    reason = (data.correction_reason or "").strip()
+    if reason:
+        from app.services.money_amount import check_reason
+        check_reason(reason)              # ≤ 500 chars, no control / invisible chars → 400
+
     async def _write(session):
+        # WHFIX81-06: the invoice is CLAIMED in this transaction — a CAS write on
+        # its document that honours the PAY-01 payment row lock (INVOICE_BUSY
+        # while a payment is being written), so a payment and a reallocation of
+        # the same invoice are serialized and each sees the other's result.
+        inv = await claim_invoice(tenant, line["invoice_id"], session=session,
+                                  forbidden=("Cancelled",), code=STATUS_CHANGED)
+        paid = bool(inv) and (inv.get("status") in PAID_STATUSES
+                              or float(inv.get("paid_amount") or 0) > 0)
+        if paid and not reason:
+            raise HTTPException(status_code=409, detail={
+                "error_code": ALLOCATION_CORRECTION_REQUIRED, "invoice_id": line["invoice_id"],
+                "message": "Фактурата е платена — разпределението се променя само с корекция "
+                           "(посочете причина)."})
         # Codex F-55-C26-04: the purchased qty is read in the lock
         # transaction, not from the row read before it.
         current = await tenant.invoice_lines.find_one({"id": line_id}, {"_id": 0, "qty": 1},
@@ -679,13 +794,36 @@ async def allocate_invoice_line(line_id: str, data: InvoiceLineAllocationsUpdate
                 status_code=400,
                 detail=f"Full allocation required by organization settings. Allocated: {total_allocated}, Required: {qty_purchased}. Unallocated: {qty_purchased - total_allocated}"
             )
+        # WH-FIX-01 A2 #4 — the allocation change is a correction with a
+        # canonical AuditEvent in the same transaction.
+        before = await tenant.invoice_lines.find_one(
+            {"id": line_id}, {"_id": 0, "allocations": 1, "allocation_version": 1},
+            session=session)
+        from app.services.invoice_allocation import audit_allocation_change
+        version = int((before or {}).get("allocation_version") or 0) + 1
+        if paid:
+            # WHFIX81-06: a correction keeps the previous version READABLE
+            # (append-only `invoice_line_allocation_versions`).
+            await tenant.invoice_line_allocation_versions.insert_one({
+                "id": f"{line_id}:v{version - 1}", "org_id": user["org_id"],
+                "invoice_id": line["invoice_id"], "invoice_line_id": line_id,
+                "version": version - 1, "allocations": (before or {}).get("allocations") or [],
+                "superseded_at": now, "superseded_by": user["id"], "reason": reason},
+                session=session)
+        await audit_allocation_change(tenant, user, line_id, (before or {}).get("allocations") or [],
+                                      allocs, session=session,
+                                      reason=reason or None)
         await tenant.invoice_lines.update_one({"id": line_id}, {"$set": {
+            "allocation_version": version,
             "allocations": allocs,
             "qty_allocated": round(total_allocated, 4),
             "qty_unallocated": round(qty_purchased - total_allocated, 4),
             "is_fully_allocated": abs(total_allocated - qty_purchased) <= 0.0001,
             "updated_at": now,
         }}, session=session)
+        await _refresh_dq(tenant, user, line["invoice_id"], session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)     # WH-FIX-01 A2 #4: record_event runs in the tx
     await _unless_linked(tenant, line_id, _write)                # FG-109
 
     await log_audit(user["org_id"], user["id"], user["email"], "invoice_line_allocated", "invoice_line", line_id,
@@ -723,6 +861,9 @@ async def delete_invoice_line(line_id: str, user: dict = Depends(require_m5)):
                             code=NOT_DRAFT)
         await tenant.invoice_lines.delete_one({"id": line_id}, session=session)
         await recalculate_invoice_totals(tenant, invoice_id, session=session)
+        await _refresh_dq(tenant, user, invoice_id, session)
+    from app.audit.store import ensure_chain_index
+    await ensure_chain_index(tenant._db)
     await _unless_linked(tenant, line_id, _write)    # FG-109: a linked line is never deleted
     
     return {"ok": True}

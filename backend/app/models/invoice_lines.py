@@ -92,9 +92,41 @@ class InvoiceLineBulkCreate(BaseModel):
     lines: List[InvoiceLineCreate]
 
 
+class AllocationInputItem(BaseModel):
+    """WH-FIX-01 A4 #10 (Р45): an allocation entered as a PERCENTAGE of the line
+    (an input aid only) — converted at once into an exact amount / qty share
+    per line by the route; the percentage itself is never stored as the rule."""
+    type: Literal["project", "warehouse", "client"]
+    ref_id: str
+    qty: Optional[float] = None
+    percent: Optional[float] = None
+    note: Optional[str] = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def normalize_ref_id(cls, data: Any) -> Any:
+        if isinstance(data, dict) and 'refId' in data:
+            data.setdefault('ref_id', data['refId'])
+            del data['refId']
+        return data
+
+    @model_validator(mode='after')
+    def qty_or_percent(self):
+        if (self.qty is None) == (self.percent is None):
+            raise ValueError('give exactly one of qty or percent')
+        if self.qty is not None and self.qty <= 0:
+            raise ValueError('qty must be positive')
+        if self.percent is not None and not (0 < self.percent <= 100):
+            raise ValueError('percent must be in (0, 100]')
+        return self
+
+
 class InvoiceLineAllocationsUpdate(BaseModel):
     """Update allocations for a line - replaces all existing allocations"""
-    allocations: List[AllocationItem]
+    allocations: List[AllocationInputItem]
+    # WHFIX81-06 (CLAUDE.md §7, FLOW-006 „Корекции"): the allocation of a
+    # PAID invoice changes only as a correction — a reason is required.
+    correction_reason: Optional[str] = None
 
 
 # DEPRECATED: Keep for backward compatibility

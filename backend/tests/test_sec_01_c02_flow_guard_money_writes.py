@@ -285,6 +285,9 @@ def expected(key: str, legacy_role: str, tenant: str, target: Optional[str]) -> 
             return deny
         if target == "XA" and key in ("labor_create", "waste_create"):
             return {"status": 404, "writes": False}      # SEC-01-C03-B (FG-29)
+        if key == "waste_create":
+            # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+            return {"status": 422, "writes": False}
         writes = not (key in WRITES_ONLY_WITH_SOURCE_DATA and target in ("P2", "XA"))
         return {"status": ok, "writes": writes}
     if legacy_role not in FINANCE:
@@ -799,7 +802,10 @@ def test_the_rule_table_itself():
     assert expected("labor_sync", "Viewer", "A", "P1")["status"] == 403
     assert expected("labor_sync", "Accountant", "A", "P2") == {"status": 200, "writes": False}
     assert expected("labor_create", "Technician", "A", "P1")["status"] == 201   # FG-24
-    assert expected("waste_create", "SiteManager", "A", "P1")["status"] == 201  # FG-24
+    # FG-24: a SiteManager member IS allowed (not 403); WH-FIX-01 FG-159: the canonical
+    # write-off answers this harness body (no Master item) with 422, nothing written.
+    assert expected("waste_create", "SiteManager", "A", "P1") == {"status": 422, "writes": False}
+    assert expected("waste_create", "Viewer", "A", "P1")["status"] == 403
     assert expected("subpay", "Viewer", "A", None)["status"] == 403            # FG-27
     assert expected("subpay", "Accountant", "A", None) == {"status": 201, "writes": True}
     assert expected("subpay", "Accountant", "B", None) == {"status": 409, "writes": False}

@@ -1976,13 +1976,27 @@
     "unit": "Unit",
     "wasteType": "Waste Type",
     "notes": "Notes",
-    "fillRequired": "Fill material and quantity",
+    "fillRequired": "Pick a material and quantity",
     "added": "Entry added",
     "noData": "No material data",
     "manualEntries": "Manual entries",
     "writeOffs": "Warehouse write-offs",
     "writeOffsTitle": "Warehouse write-offs (waste)",
-    "writeOffBadge": "warehouse write-off"
+    "writeOffBadge": "warehouse write-off",
+    "pickMaterial": "Pick a material on the project",
+    "noStockOnProject": "No material in stock on the project",
+    "evidence": "Photo / evidence",
+    "evidenceRequired": "Attach a photo or document as evidence",
+    "errors": {
+      "item": "Not a Master item — pick from the list",
+      "key": "Missing idempotency key — retry",
+      "invalid": "Invalid waste data",
+      "forbidden": "You may not write off waste on this project",
+      "noStock": "Not enough stock on the project",
+      "evidence": "File registry unavailable — evidence cannot be stored",
+      "conflict": "Already sent with different data — reload",
+      "generic": "The waste was not saved"
+    }
   },
   "excelImportV2": {
     "title": "Import from Excel",

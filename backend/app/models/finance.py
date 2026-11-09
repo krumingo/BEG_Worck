@@ -110,6 +110,9 @@ class InvoiceUpdate(BaseModel):
 
 class InvoiceLinesUpdate(BaseModel):
     lines: List[InvoiceLineInput]
+    # WHFIX81-06: a destination change on an invoice with money paid on it is a
+    # correction — the reason is required (versioned, AuditEvent).
+    correction_reason: Optional[str] = None
 
 class PaymentCreate(BaseModel):
     direction: str

@@ -177,6 +177,9 @@ def expected(key: str, legacy_role: str, target: Optional[str]) -> Dict[str, Any
         success = {"status": ok, "writes": False}
     if key in UNCHANGED_RESYNC:
         success = {"status": ok, "writes": False}
+    if key == "waste_create":
+        # WH-FIX-01 FG-159 (package WH-FIX-01, FLOW-009 single writer, merged after #69): POST material-waste is the CANONICAL write-off — it needs a Master item, stock on the project and evidence; this harness body has no item_id → 422 MASTER_IDENTITY_MISSING, nothing written. Its rights (R16 + Р27) stay checked here; the canonical write, its idempotency and replay are proven in tests/test_wh_fix_01_post_55.py::test_fg159_*.
+        success = {"status": 422, "writes": False}
     if rule == "finance":
         if legacy_role not in FINANCE:
             return deny
