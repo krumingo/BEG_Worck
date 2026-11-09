@@ -132,6 +132,7 @@ def _app(monkeypatch, op):
     from app.master_data.deps import ENV_MODE
     from app.routes import full_cost, labor_smr, revenue_expense  # noqa: F401 — loaded, then patched
     from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions  # noqa: F401
+    from app.routes import daily_reports  # noqa: F401
     from app.services import morning_briefing, project_financial_results, pulse_generator  # noqa: F401
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
@@ -143,12 +144,13 @@ def _app(monkeypatch, op):
     from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions
     for r in (labor_smr.router, revenue_expense.router, full_cost.router, activity_budgets.router,
               centralized_reports.router, projects.router, revenue_snapshot.router,
-              work_sessions.router):
+              work_sessions.router, daily_reports.router):
         app.include_router(r, prefix="/api")
 
     async def m2(user: dict = Depends(get_current_user)):      # the module gate is not under test
         return user
     app.dependency_overrides[modules.require_m2] = m2
+    app.dependency_overrides[modules.require_m4] = m2
     return app
 
 
@@ -382,7 +384,8 @@ def test_r62_a_manual_akord_row_is_quantity_times_the_piece_rate(monkeypatch):
 
 def test_r62_a_manual_row_never_repeats_hours_of_an_approved_report(monkeypatch):
     async def scenario(c, op):
-        r = await c.post("/api/labor-entries", json={"project_id": P, "employee_id": "w1", "hours": 2, "date": DAY},
+        r = await c.post("/api/labor-entries", json={"project_id": P, "employee_id": "w1", "hours": 2, "date": DAY,
+                                                     "execution_package_id": PKG},     # FG-461: an SMR package
                          headers=_key("admin"))
         assert r.status_code == 409 and r.json()["detail"]["code"] == "DUPLICATE_OF_APPROVED_REPORT", r.text
         # the report of the manual row's day got approved meanwhile → its approval is refused
@@ -512,3 +515,147 @@ def test_r62_work_session_time_screens_show_hours_and_never_a_second_official_co
         assert d["total_hours"] == 10.0
         assert not {"total_cost", "approved_labor_cost", "cost_basis", "cost_note"} & set(d), d
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 38 (FG-460 … FG-463, FG-424)
+
+async def _legacy_manual(op, rid, created_by="admin", **kw):
+    """A legacy manual row (before FG-461): free-text SMR, maybe no package / no creator."""
+    doc = {"id": rid, "org_id": ORG, "project_id": P, "employee_id": "w1", "date": "2026-11-07",
+           "hours": 1, "hourly_rate": 30, "labor_cost": 30, "source": "manual",
+           "approval_status": "pending", "version": 1, "reversed_by_entry_id": None}
+    if created_by:
+        doc["created_by"] = created_by
+    doc.update(kw)
+    await op.labor_entries.insert_one(doc)
+
+
+def test_fg460_the_activity_parts_add_up_to_the_report_total(monkeypatch, backend):
+    """FG-460: an SMR without a budget and an SMR-less approved manual row are "без бюджет"
+    rows — the activities add up to the centralized report's labor total."""
+    async def scenario(c, op):
+        await _legacy_manual(op, "le-free", activity_name="Нещо без бюджет")            # unbudgeted
+        await _legacy_manual(op, "le-none", employee_id="sm", date="2026-11-08")        # no SMR at all
+        for rid in ("le-man", "le-free", "le-none"):
+            r = await c.post(f"/api/labor-entries/{rid}/approve",
+                             json=_decision(cost=50.0 if rid == "le-man" else 30.0), headers=_key("owner"))
+            assert r.status_code == 200, (rid, r.text)
+        full = (await c.get(f"/api/projects/{P}/centralized-reports", headers=_token("owner"))).json()
+        acts = (await c.get(f"/api/projects/{P}/centralized-reports/activities", headers=_token("owner"))).json()["activities"]
+        total = full["finance"]["total_clean_labor"]
+        assert total == 290.0, total                                   # 180 + 50 + 30 + 30
+        assert round(sum(a["clean_labor_cost"] for a in acts), 2) == total, acts
+        assert round(sum(a["clean_labor_cost"] for a in full["activities"]), 2) == total
+        nb = {a["activity_name"]: a["clean_labor_cost"] for a in acts if a.get("without_budget")}
+        assert nb.get("Нещо без бюджет") == 30.0 and nb.get("Без СМР") == 30.0, nb
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg461_a_new_manual_row_names_its_smr_package_never_free_text(monkeypatch):
+    async def scenario(c, op):
+        base = {"project_id": P, "employee_id": "w1", "hours": 2, "date": "2026-11-12"}
+        r = await c.post("/api/labor-entries", json=dict(base, activity_name="Каквото и да е"), headers=_key("admin"))
+        assert r.status_code == 422 and r.json()["detail"]["code"] == "SMR_REFERENCE_REQUIRED", r.text
+        await op.execution_packages.insert_one({"id": "pkg-other", "org_id": ORG, "project_id": "prj-x",
+                                                "activity_name": "Чужд"})
+        r = await c.post("/api/labor-entries", json=dict(base, execution_package_id="pkg-other"), headers=_key("admin"))
+        assert r.status_code == 422 and r.json()["detail"]["code"] == "SMR_REFERENCE_INVALID", r.text
+        r = await c.post("/api/labor-entries", json=dict(base, execution_package_id=PKG, activity_name="Боя"),
+                         headers=_key("admin"))
+        assert r.status_code == 422 and r.json()["detail"]["code"] == "FREE_TEXT_SMR", r.text
+        r = await c.post("/api/labor-entries", json=dict(base, execution_package_id=PKG), headers=_key("admin"))
+        assert r.status_code == 201, r.text
+        assert r.json()["activity_name"] == "Шпакловка"                # the package's SMR
+        assert await op.labor_entries.count_documents({"date": "2026-11-12"}) == 1
+    run(monkeypatch, scenario)
+
+
+def test_fg461_a_legacy_row_is_mapped_to_its_package_smr_or_flagged(monkeypatch):
+    """A legacy row named like ONE package of the project is counted on that package's SMR
+    budget; a row that cannot be mapped keeps its text with DQ MANUAL_ROW_NO_SMR_REF."""
+    from app.services.labor_cost import project_labor_cost
+
+    async def scenario(c, op):
+        await _legacy_manual(op, "le-map", activity_name="  шпакловка ")
+        await _legacy_manual(op, "le-dq", activity_name="Непознато", employee_id="sm")
+        for rid in ("le-map", "le-dq"):
+            r = await c.post(f"/api/labor-entries/{rid}/approve", json=_decision(cost=30.0), headers=_key("owner"))
+            assert r.status_code == 200, r.text
+        lc = await project_labor_cost(ORG, P)
+        recs = {r["manual_entry_id"]: r for r in lc["lines"] if r.get("manual_entry_id")}
+        assert recs["le-map"]["smr_type"] == "Шпакловка" and recs["le-map"]["execution_package_id"] == PKG
+        assert recs["le-map"]["dq"] == []
+        assert "MANUAL_ROW_NO_SMR_REF" in recs["le-dq"]["dq"]
+        assert any(w["code"] == "MANUAL_ROW_NO_SMR_REF" for w in lc["dq_warnings"])
+        assert lc["by_package"][PKG]["labor"] >= 30.0
+    run(monkeypatch, scenario)
+
+
+def test_fg463_the_same_hours_are_never_counted_twice(monkeypatch):
+    """FG-463: a 2nd manual row for the same worker, project and day → 409 (create and
+    approve); a report over an approved manual row → 409; a manual row over an approved
+    report → 409 (FG-423)."""
+    async def scenario(c, op):
+        # le-man (pending, w1, 2026-11-05) exists → a 2nd row of that day is refused
+        r = await c.post("/api/labor-entries", json={"project_id": P, "employee_id": "w1", "hours": 1,
+                                                     "date": "2026-11-05", "execution_package_id": PKG},
+                         headers=_key("admin"))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "DUPLICATE_MANUAL_ROW", r.text
+        # a legacy 2nd row of that day: the first approved wins, the second approval is refused
+        await _legacy_manual(op, "le-dup", date="2026-11-05")
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("owner"))
+        assert r.status_code == 200, r.text
+        r = await c.post("/api/labor-entries/le-dup/approve", json=_decision(cost=30.0), headers=_key("owner"))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "DUPLICATE_MANUAL_ROW", r.text
+        # a report of that day cannot be approved on top of the approved manual row
+        await op.employee_daily_reports.insert_one({
+            "id": "R-OVER", "org_id": ORG, "worker_id": "w1", "date": "2026-11-05", "hours": 2,
+            "project_id": P, "smr_type": "Шпакловка", "status": "SUBMITTED", "submitted_by": "w1"})
+        r = await c.post("/api/daily-reports/R-OVER/approve", json={}, headers=_token("sm"))
+        assert r.status_code == 409, r.text
+        rep = await op.employee_daily_reports.find_one({"id": "R-OVER"})
+        assert rep["status"] == "SUBMITTED"
+        assert set((await _numbers(c)).values()) == {230.0}                 # 180 + 50, once
+    run(monkeypatch, scenario)
+
+
+def test_fg424_a_row_without_a_creator_is_approved_by_an_owner_only(monkeypatch):
+    async def scenario(c, op):
+        await _legacy_manual(op, "le-anon", created_by=None, execution_package_id=PKG)
+        r = await c.post("/api/labor-entries/le-anon/approve", json=_decision(cost=30.0), headers=_key("acct"))
+        assert r.status_code == 403 and r.json()["detail"]["code"] == "UNKNOWN_CREATOR_OWNER_ONLY", r.text
+        assert (await op.labor_entries.find_one({"id": "le-anon"}))["approval_status"] == "pending"
+        r = await c.post("/api/labor-entries/le-anon/approve", json=_decision(cost=30.0), headers=_key("owner"))
+        assert r.status_code == 200, r.text
+    run(monkeypatch, scenario)
+
+
+def test_fg424_the_audit_event_names_the_real_approver_role(monkeypatch):
+    from app.services.labor_cost import project_labor_cost
+
+    async def scenario(c, op):
+        r = await c.post("/api/labor-entries/le-man/approve", json=_decision(), headers=_key("acct"))
+        assert r.status_code == 200, r.text
+        assert r.json()["approved_by"] == "acct" and r.json()["approved_by_role"] == "Accountant"
+        ev = await op.audit_events.find_one({"entity_id": "le-man"})
+        assert "Accountant" in ev["reason"] and "Owner" not in ev["reason"], ev["reason"]
+        rec = [x for x in (await project_labor_cost(ORG, P))["lines"] if x.get("manual_entry_id") == "le-man"][0]
+        assert "Счетоводителя" in rec["formula"] and "Собственика" not in rec["formula"]
+    run(monkeypatch, scenario)
+
+
+def test_fg463_a_retried_create_replays_its_row_and_is_not_a_duplicate(monkeypatch):
+    """The duplicate check runs after the idempotent replay: the same key returns the row it
+    wrote; only a NEW request for the same worker, project and day is refused."""
+    async def scenario(c, op):
+        body = {"project_id": P, "employee_id": "w1", "hours": 2, "date": "2026-11-13",
+                "execution_package_id": PKG}
+        h = _key("admin")
+        r1 = await c.post("/api/labor-entries", json=body, headers=h)
+        r2 = await c.post("/api/labor-entries", json=body, headers=h)
+        assert r1.status_code == 201 and r2.status_code in (200, 201), (r1.text, r2.text)
+        assert r1.json()["id"] == r2.json()["id"]
+        r3 = await c.post("/api/labor-entries", json=body, headers=_key("admin"))
+        assert r3.status_code == 409 and r3.json()["detail"]["code"] == "DUPLICATE_MANUAL_ROW", r3.text
+        assert await op.labor_entries.count_documents({"date": "2026-11-13"}) == 1
+    run(monkeypatch, scenario)

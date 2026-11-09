@@ -534,11 +534,16 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         # SEC-02-B (FG-15): POST /labor-entries twice with the SAME Idempotency-Key — the
         # replay (#69 SEC-01-C03) must not show the rate / cost either.
         replay = []
+        n_row = 0
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for role in ("technician", "requester", "accountant"):
                 key = "sec02b-%s-%s" % (mode, role)
-                body = {"project_id": fx["A"]["project_id"], "hours": 1, "activity_name": "SEC02B",
+                n_row += 1
+                # R62: FG-461 — a manual row names its SMR package (no free-text SMR);
+                # FG-463 — one live manual row per worker, project and day (own day each)
+                body = {"project_id": fx["A"]["project_id"], "hours": 1,
+                        "execution_package_id": sid("A", "ep2"), "date": "2026-12-%02d" % n_row,
                         "employee_id": fx["A"]["users"]["technician"]["id"]}
                 hdr = {"Authorization": "Bearer " + tokens[("A", role)], "Idempotency-Key": key}
                 r1 = tc.post("/api/labor-entries", json=body, headers=hdr)
@@ -668,11 +673,20 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                   "worker_id": fx["A"]["users"]["driver"]["id"], "site_id": p1,
                   "smr_type_id": "Мазилка", "started_at": "2026-11-05T07:00:00",
                   "ended_at": "2026-11-05T15:00:00", "duration_hours": 8, "labor_cost": 500}
+        # R62 / FG-462: the paid workers are counted on THE labor cost lines — the second paid
+        # worker is the same 500 as an APPROVED manual labor row (the session stays as time)
+        second_row = {"id": sid("A", "le_band"), "org_id": fx["A"]["tenant_id"], "project_id": p1,
+                      "employee_id": fx["A"]["users"]["driver"]["id"],
+                      "execution_package_id": sid("A", "ep2"), "activity_name": "Мазилка",
+                      "date": "2026-11-05", "hours": 8, "hourly_rate": 62.5, "labor_cost": 500,
+                      "source": "manual", "approval_status": "approved", "version": 2,
+                      "created_by": fx["A"]["users"]["admin"]["id"], "reversed_by_entry_id": None}
         for mode in MODES:
             os.environ["PERMISSION_SERVICE_MODE"] = mode
             for paid in (1, 2):
                 if paid == 2:
                     tc.portal.call(lambda: op_db.work_sessions.insert_one(dict(second)))
+                    tc.portal.call(lambda: op_db.labor_entries.insert_one(dict(second_row)))
                 for role in ("requester", "technician", "viewer", "accountant"):
                     hdr = {"Authorization": "Bearer " + tokens[("A", role)]}
                     cnt = tc.get("/api/alarms/count", headers=hdr)
@@ -715,6 +729,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                                    in str(a.get("type"))]})
                 if paid == 2:
                     tc.portal.call(lambda: op_db.work_sessions.delete_one({"id": second["id"]}))
+                    tc.portal.call(lambda: op_db.labor_entries.delete_one({"id": second_row["id"]}))
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
 
     result = {
@@ -1317,6 +1332,27 @@ def _fake_tenant(collections):
     return t
 
 
+def _canonical_lines_from_sessions(monkeypatch, data):
+    """R62 / FG-462: the paid-worker count of the "sessions" source runs on THE labor cost
+    lines (project_labor_cost), never on raw session money. These DB-free tests keep their
+    session rows as data and hand them over as the equivalent canonical lines (ended rows
+    only, same window, pay = the row's cost, SMR = the row's SMR)."""
+    from app.services import labor_cost
+
+    async def lines(org_id, project_id, date_from=None, date_to=None):
+        out = []
+        for s_ in data.get("work_sessions", []):
+            day = (s_.get("started_at") or "")[:10]
+            if s_.get("org_id") != org_id or s_.get("site_id") != project_id or not s_.get("ended_at"):
+                continue
+            if (date_from and day < date_from) or (date_to and day > date_to):
+                continue
+            out.append({"worker_id": s_.get("worker_id"), "date": day, "amount": s_.get("labor_cost", 0),
+                        "smr_type": s_.get("smr_type_id") or s_.get("smr_type")})
+        return {"lines": out}
+    monkeypatch.setattr(labor_cost, "project_labor_cost", lines)
+
+
 def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
     """SEC-02-E (FLOW Guard FG-63; R31): the 2+ rule uses the workers of the SAME source,
     filter and window as the "spent" figure."""
@@ -1331,6 +1367,7 @@ def test_fg63_workers_are_counted_from_the_money_source_and_window(monkeypatch):
                               sess("w3", "2026-11-02", ended=False)]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
+    _canonical_lines_from_sessions(monkeypatch, data)
     user = {"org_id": org, "id": "sm"}
     run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
     # whole history, ended sessions only: w1 + w2 (w3 not ended, w4 is a draft report)
@@ -1373,6 +1410,7 @@ def test_fg74_only_workers_with_pay_in_the_window_count(monkeypatch):
              "entries": [{"user_id": "u3", "hours": 8}]}]}
     monkeypatch.setattr(data_access.TenantData, "for_user",
                         staticmethod(lambda _db, _u: _fake_tenant(data)))
+    _canonical_lines_from_sessions(monkeypatch, data)
     user = {"org_id": org, "id": "sm"}
     run = lambda *a, **k: asyncio.run(money_write.project_labor_workers(user, p, *a, **k))
     # sessions: only w1 (Мазилка) and w5 (Шпакловка) are paid

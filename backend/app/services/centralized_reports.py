@@ -141,9 +141,10 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         "has_missing_rate": False,
     })
     for e in entries:
+        # FG-460: an entry with no SMR is kept (key "") — it becomes the "Без СМР" row, so
+        # the activity parts add up to the report total
         key = (e["smr_type"] or "").lower().strip()
-        if not key:
-            continue
+        by_smr[key].setdefault("label", e["smr_type"] or "")
         if e["approval_status"] == "draft":
             by_smr[key]["draft_hours"] += e["hours"]
             by_smr[key]["draft_clean"] += e["amount_clean_labor"]
@@ -157,6 +158,7 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
 
     activities = []
     seen = set()
+    used = set()       # FG-460: the by_smr keys a row already shows
     for b in budgets:
         name = b.get("subtype") or b.get("type", "")
         if _is_noise(name):
@@ -170,7 +172,13 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
             r = calculate_budget_formula_sync(lb, b.get("coefficient", 1), b.get("avg_daily_wage_at_calc") or 200)
             planned = r["planned_man_hours"]
 
-        smr = by_smr.get(key, by_smr.get(b.get("type", "").lower().strip(), {}))
+        tkey = b.get("type", "").lower().strip()
+        smr_key = key if key in by_smr else (tkey if tkey in by_smr else None)
+        if smr_key in used:
+            smr_key = None          # one SMR's hours / cost are shown once
+        smr = by_smr.get(smr_key, {}) if smr_key is not None else {}
+        if smr_key is not None:
+            used.add(smr_key)
         dh = round(smr.get("draft_hours", 0), 1)
         ah = round(smr.get("approved_hours", 0), 1)
         total_h = round(dh + ah, 1)
@@ -213,7 +221,9 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
         if key in seen:
             continue
         seen.add(key)
-        smr = by_smr.get(key, {})
+        smr = by_smr.get(key, {}) if key not in used else {}
+        if key in by_smr:
+            used.add(key)
         dh = round(smr.get("draft_hours", 0), 1)
         ah = round(smr.get("approved_hours", 0), 1)
         total_clean = round(smr.get("draft_clean", 0) + smr.get("approved_clean", 0), 2)
@@ -232,6 +242,33 @@ async def build_centralized_reports(org_id: str, project_id: str, *,
             "burn_pct_approved": 0, "burn_pct_total": 0,
             "risk_status": "yellow" if (dh + ah) > 0 else "green",
             "is_extra": True, "source": "missing_smr",
+            "has_missing_rate": smr.get("has_missing_rate", False),
+        })
+
+    # FG-460 (R62): an SMR with labor but no budget row (or no SMR at all, e.g. an approved
+    # manual row) is listed as "без бюджет" — never dropped, so the activities add up to
+    # the report's labor total.
+    for key in sorted(k for k in by_smr if k not in used):
+        smr = by_smr[key]
+        dh = round(smr.get("draft_hours", 0), 1)
+        ah = round(smr.get("approved_hours", 0), 1)
+        total_clean = round(smr.get("draft_clean", 0) + smr.get("approved_clean", 0), 2)
+        total_oh = round(smr.get("draft_oh", 0) + smr.get("approved_oh", 0), 2)
+        if not (dh or ah or total_clean or total_oh):
+            continue
+        activities.append({
+            "category": "Без бюджет",
+            "activity_name": smr.get("label") or "Без СМР",
+            "unit": "", "qty": 0,
+            "material_budget": 0, "labor_budget": 0, "total_budget": 0,
+            "planned_hours": 0, "draft_hours": dh, "approved_hours": ah,
+            "total_reported_hours": round(dh + ah, 1),
+            "clean_labor_cost": total_clean,
+            "labor_cost_with_overhead": round(total_clean + total_oh, 2),
+            "subcontractor_price": None,
+            "burn_pct_approved": 0, "burn_pct_total": 0,
+            "risk_status": "yellow" if (dh + ah) > 0 else "green",
+            "is_extra": False, "source": "labor_without_budget", "without_budget": True,
             "has_missing_rate": smr.get("has_missing_rate", False),
         })
 

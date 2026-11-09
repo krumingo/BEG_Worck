@@ -371,6 +371,14 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
     # LAB-01-I (LAB01H-1, CLAUDE §8): nobody approves a report they authored or corrected
     if actor.get("id") in self_approval_ids(report):
         return {"status": "failed", "report_id": rid, "reason": "self_approval"}
+    # FG-463 (R62): an approved manual labor row already carries this worker's hours on this
+    # project and day — approving the report would count them twice
+    from app.services.labor_cost import MANUAL_APPROVED, overlapping_manual_rows
+    if await overlapping_manual_rows(
+            tenant, org_id, report.get("project_id", ""),
+            report.get("worker_id") or report.get("employee_id") or "",
+            report.get("date") or report.get("report_date") or "", (MANUAL_APPROVED,)):
+        return {"status": "failed", "report_id": rid, "reason": "duplicate_of_approved_manual_row"}
 
     worker_id = report.get("worker_id", "")
     hours = float(report.get("hours") or report.get("hours_worked") or 0)
@@ -561,6 +569,7 @@ _APPROVE_FAIL_MSG = {
     "coefficient_must_be_at_least_1": "Коефициентът за извънреден труд трябва да е поне 1.",
     "reason_required": "Изисква се причина за override на извънреден труд.",
     "self_approval": "Не можете да одобрите отчет, който сте създали или поправили — одобрява друг човек.",
+    "duplicate_of_approved_manual_row": "За този работник, обект и ден има одобрен ръчен ред за труд — часовете не се броят два пъти (сторнирайте реда или поправете отчета).",
 }
 
 
@@ -582,7 +591,7 @@ async def approve_daily_report(report_id: str, data: dict = {}, user: dict = Dep
     res = await approve_report_one(report, user, override=(data or {}).get("override"),
                                    block_overtime_without_override=False)
     if res["status"] == "failed":
-        code = 403 if res["reason"] == "self_approval" else 400
+        code = {"self_approval": 403, "duplicate_of_approved_manual_row": 409}.get(res["reason"], 400)
         raise HTTPException(status_code=code, detail=_APPROVE_FAIL_MSG.get(res["reason"], res["reason"]))
     if res["status"] == "blocked":  # not expected on single path
         raise HTTPException(status_code=409, detail="overtime_requires_override")

@@ -461,6 +461,21 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
     return await tenant.labor_entries.find(flt, {"_id": 0}).to_list(5000)
 
 
+async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: str,
+                                  employee_id: str, date: str, statuses,
+                                  exclude_id: str = None) -> list:
+    """FG-463 (R62): the live manual rows (``statuses``; not reversed, not a reversal) of one
+    worker on one project and day — hours that would be counted a second time."""
+    if not (project_id and employee_id and date):
+        return []
+    flt = {"org_id": org_id, "project_id": project_id, "employee_id": employee_id, "date": date,
+           "source": {"$ne": SYNC_SOURCE}, "approval_status": {"$in": list(statuses)},
+           "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
+    if exclude_id:
+        flt["id"] = {"$ne": exclude_id}
+    return await tenant.labor_entries.find(flt, {"_id": 0, "id": 1, "approval_status": 1}).to_list(50)
+
+
 async def project_labor_cost(org_id: str, project_id: str, date_from: str = None,
                              date_to: str = None) -> dict:
     """THE labor cost of one project ("изхарчено" труд, R31; R62: one number in every
@@ -512,20 +527,46 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
                       if any(r["report_id"] == w["report_id"] and r["project_id"] == project_id
                              for r in res["lines"]))
 
-    # R62 / FG-58: the Owner-approved manual rows, each at its own stored cost
+    # R62 / FG-58: the approved manual rows, each at its own stored cost.
+    # FG-461: a row's SMR is its execution package's SMR (activity_name), never free text; a
+    # legacy row without a package is mapped to the ONE package of the project whose SMR has
+    # that name, otherwise it keeps its text with DQ MANUAL_ROW_NO_SMR_REF.
+    pkgs = {}
+    if manual:
+        for p in await tenant.execution_packages.find(
+                {"org_id": org_id, "project_id": project_id},
+                {"_id": 0, "id": 1, "activity_name": 1}).to_list(2000):
+            pkgs[p["id"]] = p
+    by_name = {}
+    for p in pkgs.values():
+        by_name.setdefault((p.get("activity_name") or "").lower().strip(), []).append(p)
     for row in manual:
         cost = row.get("labor_cost")
+        row_dq = [] if cost is not None else ["MANUAL_ROW_NO_COST"]
+        pkg = pkgs.get(row.get("execution_package_id") or "")
+        if pkg is None and not row.get("execution_package_id"):
+            cands = by_name.get((row.get("activity_name") or "").lower().strip(), [])
+            pkg = cands[0] if len(cands) == 1 else None
+        if pkg is not None:
+            smr_name, pkg_id = pkg.get("activity_name") or "", pkg["id"]
+        else:
+            smr_name, pkg_id = row.get("activity_name") or "", row.get("execution_package_id") or None
+            row_dq.append("MANUAL_ROW_NO_SMR_REF")
+            dq.append({"code": "MANUAL_ROW_NO_SMR_REF", "report_id": "manual:" + str(row.get("id")),
+                       "message": "Ръчен ред без пакет/СМР — СМР бюджетът не може да го отнесе."})
+        role = {"Owner": "Собственика", "Accountant": "Счетоводителя"}.get(
+            row.get("approved_by_role") or "", row.get("approved_by_role") or "одобряващия")
         rec = {"report_id": "manual:" + str(row.get("id")), "worker_id": row.get("employee_id"),
                "date": row.get("date", ""), "project_id": project_id,
-               "smr_type": row.get("activity_name") or "", "hours": float(row.get("hours") or 0),
+               "smr_type": smr_name, "hours": float(row.get("hours") or 0),
                "cost_type": LABOR, "pay_type": row.get("pay_type") or "Manual",
                "pay_type_source": "manual_row",
                "rate": row.get("hourly_rate"), "approved_quantity": row.get("quantity"),
                "piece_rate": row.get("piece_rate"),
                "amount": round(float(cost), 2) if cost is not None else 0.0,
-               "formula": (row.get("labor_formula") or "") + " (ръчен ред, одобрен от Собственика)",
-               "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
-               "execution_package_id": row.get("execution_package_id") or None,
+               "formula": (row.get("labor_formula") or "") + f" (ръчен ред, одобрен от {role})",
+               "dq": row_dq,
+               "execution_package_id": pkg_id,
                "manual_entry_id": row.get("id")}
         kept.append(rec)
         if cost is None:

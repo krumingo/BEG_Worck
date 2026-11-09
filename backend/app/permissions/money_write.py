@@ -517,8 +517,10 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
     """Distinct PAID workers per SMR, and of the whole project, behind a "spent" figure.
 
     ``source`` — what the screen sums (same filters and the same pay as its handler):
-      sessions     ended work sessions of the site, pay = ``labor_cost`` (expected-actual,
-                   activities-overview, budget-health, the activity burn);
+      sessions     R62 / FG-462: THE labor cost lines of the site (project_labor_cost —
+                   approved reports + approved manual rows), pay = ``amount``; the raw
+                   work-session money is never used (expected-actual, activities-overview,
+                   budget-health, the activity burn);
       centralized  the entries of ``build_centralized_reports`` — Draft/Submitted daily
                    reports + ended, unflagged work sessions, pay = ``amount_clean_labor``
                    (centralized-reports/activities); ``entries`` passes the handler's own;
@@ -551,13 +553,13 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
             pay_by_smr[_norm(smr)][worker] += amount
 
     if source == "sessions":
-        q = {"org_id": org, "site_id": project_id, "ended_at": {"$ne": None},
-             **_window("started_at", date_from, date_to)}
-        async for s_ in tenant.work_sessions.find(
-                q, {"_id": 0, "worker_id": 1, "smr_type_id": 1, "smr_type": 1,
-                    "labor_cost": 1}):
-            add(s_.get("worker_id"), s_.get("smr_type_id") or s_.get("smr_type"),
-                s_.get("labor_cost", 0))
+        # R62 / FG-462: the screens behind this source show THE labor cost (approved report
+        # lines + approved manual rows), not the raw work-session money — the paid workers
+        # are counted on the same lines, so the count matches the money it protects
+        from app.services.labor_cost import project_labor_cost
+        lc = await project_labor_cost(org, project_id, date_from, date_to)
+        for rec in lc["lines"]:
+            add(rec.get("worker_id"), rec.get("smr_type"), rec.get("amount", 0))
     if source == "centralized":
         if entries is None:
             from app.services.centralized_reports import build_centralized_reports
@@ -588,8 +590,8 @@ async def project_labor_workers(user: dict, project_id: str, source: str = "sess
 
 
 async def single_paid_sites(user: dict, site_ids) -> set:
-    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (ended work
-    sessions — what the pulse snapshot status and the budget alarm compare to the budget)
+    """SEC-02-G (audit SEC71-04; R31): the sites whose CUMULATIVE labor cost (THE labor cost,
+    R62 — what the pulse snapshot status and the budget alarm compare to the budget)
     comes from fewer than 2 paid workers. Their band (status / severity / alert) is not
     shown to a caller without the finance right: moving the budget and watching the band
     flip would bisect that one worker's pay."""
