@@ -194,7 +194,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         (UPLOADS / orphan).unlink()
         traversal = {}
         for probe in ("..%2F..%2Fetc%2Fpasswd", "..%2f" + stored(av_a), "%2e%2e%2f" + stored(av_a),
-                      "..", "...", "..%5C" + stored(av_a), stored(av_a) + "%00.jpg",
+                      "%2E%2E", "...", "..%5C" + stored(av_a), stored(av_a) + "%00.jpg",
                       ".%2F" + stored(av_a), "projects%2F" + stored(av_a), "%2Fetc%2Fpasswd",
                       "..%252F" + stored(av_a), "x" * 300 + ".jpg"):
             traversal[probe[:40]] = call("GET", "/api/media/avatar/" + probe)["status"]

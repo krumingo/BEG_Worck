@@ -1,0 +1,225 @@
+{
+ "fg540": {
+  "b_avatar_from_a": 404,
+  "b_avatar_from_b": 200,
+  "bad_token": 401,
+  "no_login": 401,
+  "non_avatar_plain": 404,
+  "non_avatar_site": 404,
+  "orphan_on_disk": 404,
+  "other_tenant": 404,
+  "other_tenant_file_on_disk": true,
+  "own": {
+   "same_bytes": true,
+   "status": 200
+  },
+  "same_tenant_viewer": 200,
+  "traversal": {
+   "%2E%2E": 404,
+   "%2Fetc%2Fpasswd": 404,
+   "%2e%2e%2ff62ad68f-7610-4170-9450-3a6fed0": 404,
+   ".%2Ff62ad68f-7610-4170-9450-3a6fed0e99f9": 404,
+   "..%252Ff62ad68f-7610-4170-9450-3a6fed0e9": 404,
+   "..%2F..%2Fetc%2Fpasswd": 404,
+   "..%2ff62ad68f-7610-4170-9450-3a6fed0e99f": 404,
+   "..%5Cf62ad68f-7610-4170-9450-3a6fed0e99f": 404,
+   "...": 404,
+   "f62ad68f-7610-4170-9450-3a6fed0e99f9.jpg": 404,
+   "projects%2Ff62ad68f-7610-4170-9450-3a6fe": 404,
+   "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
+  },
+  "unknown": 404
+ },
+ "fg541": {
+  "enforce": {
+   "counts_after": {
+    "audit_logs": 1,
+    "files": 13,
+    "photos": 1
+   },
+   "counts_before": {
+    "audit_logs": 1,
+    "files": 13,
+    "photos": 1
+   },
+   "file_accountant": 403,
+   "file_requester": 403,
+   "file_technician": 403,
+   "file_viewer": 403,
+   "list_accountant": 403,
+   "list_requester": 403,
+   "list_technician": 403,
+   "list_viewer": 403,
+   "member_file": 200,
+   "member_list": 200,
+   "member_upload": 201,
+   "other_tenant_list": 404,
+   "owner_file_other": 200,
+   "owner_list_other": 200,
+   "retire_nonmember_uploader": null,
+   "upload_accountant": 403,
+   "upload_requester": 403,
+   "upload_technician": 403,
+   "upload_viewer": 403
+  },
+  "off": {
+   "counts_after": {
+    "audit_logs": 1,
+    "files": 11,
+    "photos": 1
+   },
+   "counts_before": {
+    "audit_logs": 1,
+    "files": 11,
+    "photos": 1
+   },
+   "file_accountant": 403,
+   "file_requester": 403,
+   "file_technician": 403,
+   "file_viewer": 403,
+   "list_accountant": 403,
+   "list_requester": 403,
+   "list_technician": 403,
+   "list_viewer": 403,
+   "member_file": 200,
+   "member_list": 200,
+   "member_upload": 201,
+   "other_tenant_list": 404,
+   "owner_file_other": 200,
+   "owner_list_other": 200,
+   "retire_nonmember_uploader": null,
+   "upload_accountant": 403,
+   "upload_requester": 403,
+   "upload_technician": 403,
+   "upload_viewer": 403
+  },
+  "owner_upload_other": 201,
+  "retire_after_removal": {
+   "photo_status": null,
+   "removed": 200,
+   "status": 403
+  },
+  "shadow": {
+   "counts_after": {
+    "audit_logs": 1,
+    "files": 12,
+    "photos": 1
+   },
+   "counts_before": {
+    "audit_logs": 1,
+    "files": 12,
+    "photos": 1
+   },
+   "file_accountant": 403,
+   "file_requester": 403,
+   "file_technician": 403,
+   "file_viewer": 403,
+   "list_accountant": 403,
+   "list_requester": 403,
+   "list_technician": 403,
+   "list_viewer": 403,
+   "member_file": 200,
+   "member_list": 200,
+   "member_upload": 201,
+   "other_tenant_list": 404,
+   "owner_file_other": 200,
+   "owner_list_other": 200,
+   "retire_nonmember_uploader": null,
+   "upload_accountant": 403,
+   "upload_requester": 403,
+   "upload_technician": 403,
+   "upload_viewer": 403
+  }
+ },
+ "fg542": {
+  "before": {
+   "events": [],
+   "status": null
+  },
+  "linked": {
+   "error_code": "MEDIA_IN_USE",
+   "events": [],
+   "file_kept": true,
+   "row_kept": true,
+   "status": 409,
+   "status_after": null
+  },
+  "no_key": 428,
+  "no_reason": 400,
+  "other_technician": 403,
+  "other_tenant": 404,
+  "unused": {
+   "again": "MEDIA_ALREADY_RETIRED",
+   "body": {
+    "ok": true,
+    "retired": "101aca88-6ace-47a2-a543-a2b28b3dc76c"
+   },
+   "events": [
+    {
+     "action": "media.file.retire",
+     "diff": {
+      "after": {
+       "status": "retired"
+      },
+      "before": {
+       "status": "active"
+      },
+      "stored_filename": "101aca88-6ace-47a2-a543-a2b28b3dc76c.jpg"
+     },
+     "entity_type": "media_file",
+     "idempotency_key": "23f91324a38344d2ac5de5849da72a6e",
+     "reason": "дублирана снимка",
+     "source_flow": "FLOW-029",
+     "tenant_id": "40063adb-bf6f-4bde-94eb-a4885bf67bdf"
+    }
+   ],
+   "file_kept": true,
+   "file_owner": 200,
+   "file_technician": 404,
+   "listed": false,
+   "relink": 409,
+   "replay_same": true,
+   "replay_status": 200,
+   "retired_by_technician": true,
+   "retired_reason": "дублирана снимка",
+   "row_kept": true,
+   "status": 200,
+   "status_after": "retired"
+  },
+  "used_as_signature": {
+   "error_code": "MEDIA_IN_USE",
+   "file_kept": true,
+   "status": 409
+  },
+  "used_by_approved_smr": {
+   "error_code": "MEDIA_IN_USE",
+   "events": [],
+   "file_kept": true,
+   "row_kept": true,
+   "status": 409,
+   "status_after": null,
+   "uses": [
+    {
+     "id": "mediasec01-A-smr_used",
+     "kind": "missing_smr"
+    }
+   ]
+  }
+ },
+ "fg544": {
+  "after": {
+   "context_id_is_first": true,
+   "context_type": "project"
+  },
+  "first": 200,
+  "other_record": {
+   "error_code": "MEDIA_ALREADY_LINKED",
+   "status": 409
+  },
+  "owner_other_project": {
+   "error_code": "MEDIA_ALREADY_LINKED",
+   "status": 409
+  },
+  "same_again": 200
+ }
+}
