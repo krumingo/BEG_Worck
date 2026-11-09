@@ -779,7 +779,7 @@ async def get_client_summary(client_id: str, user: dict = Depends(require_m5)):
     for p in projects:
         pid = p["id"]
         invs = await tenant.invoices.find(
-            {"org_id": org_id, "project_id": pid},
+            {"org_id": org_id, "project_id": pid, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
             {"_id": 0, "total": 1, "paid_amount": 1, "status": 1},
         ).to_list(200)
         inv_total = sum(i.get("total", 0) for i in invs)

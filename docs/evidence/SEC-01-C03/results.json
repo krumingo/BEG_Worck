@@ -94,7 +94,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 27.1,
+ "seconds": 28.6,
  "amount_rows": [
   {
    "mode": "off",
@@ -3176,22 +3176,20 @@
    },
    "rows_added_no_key": 0,
    "same_key_first": {
-    "status": 201,
-    "business_written": [
-     "op.material_waste_entries"
-    ]
+    "status": 422,
+    "business_written": []
    },
    "same_key_replay": {
-    "status": 201,
+    "status": 422,
     "business_written": []
    },
    "replay_body_equals_first": true,
    "same_key_other_body": {
-    "status": 409,
-    "error_code": "IDEMPOTENCY_CONFLICT",
+    "status": 422,
+    "error_code": "MASTER_IDENTITY_MISSING",
     "business_written": []
    },
-   "rows_added_with_key": 1,
+   "rows_added_with_key": 0,
    "ledger_rows_after_keyed_sequence": 0
   },
   {
@@ -3404,22 +3402,20 @@
    },
    "rows_added_no_key": 0,
    "same_key_first": {
-    "status": 201,
-    "business_written": [
-     "op.material_waste_entries"
-    ]
+    "status": 422,
+    "business_written": []
    },
    "same_key_replay": {
-    "status": 201,
+    "status": 422,
     "business_written": []
    },
    "replay_body_equals_first": true,
    "same_key_other_body": {
-    "status": 409,
-    "error_code": "IDEMPOTENCY_CONFLICT",
+    "status": 422,
+    "error_code": "MASTER_IDENTITY_MISSING",
     "business_written": []
    },
-   "rows_added_with_key": 1,
+   "rows_added_with_key": 0,
    "ledger_rows_after_keyed_sequence": 0
   },
   {
@@ -3632,22 +3628,20 @@
    },
    "rows_added_no_key": 0,
    "same_key_first": {
-    "status": 201,
-    "business_written": [
-     "op.material_waste_entries"
-    ]
+    "status": 422,
+    "business_written": []
    },
    "same_key_replay": {
-    "status": 201,
+    "status": 422,
     "business_written": []
    },
    "replay_body_equals_first": true,
    "same_key_other_body": {
-    "status": 409,
-    "error_code": "IDEMPOTENCY_CONFLICT",
+    "status": 422,
+    "error_code": "MASTER_IDENTITY_MISSING",
     "business_written": []
    },
-   "rows_added_with_key": 1,
+   "rows_added_with_key": 0,
    "ledger_rows_after_keyed_sequence": 0
   }
  ],
@@ -3672,15 +3666,10 @@
    "user": "technician",
    "project": "P1",
    "probe": "waste",
-   "status": 201,
-   "business_written": [
-    "op.material_waste_entries"
-   ],
-   "written": [
-    "op.audit_idempotency",
-    "op.material_waste_entries"
-   ],
-   "error_code": null
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "MASTER_IDENTITY_MISSING"
   },
   {
    "mode": "off",
@@ -3722,15 +3711,10 @@
    "user": "requester",
    "project": "P1",
    "probe": "waste",
-   "status": 201,
-   "business_written": [
-    "op.material_waste_entries"
-   ],
-   "written": [
-    "op.audit_idempotency",
-    "op.material_waste_entries"
-   ],
-   "error_code": null
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "MASTER_IDENTITY_MISSING"
   },
   {
    "mode": "off",
@@ -3772,15 +3756,10 @@
    "user": "technician",
    "project": "P1",
    "probe": "waste",
-   "status": 201,
-   "business_written": [
-    "op.material_waste_entries"
-   ],
-   "written": [
-    "op.audit_idempotency",
-    "op.material_waste_entries"
-   ],
-   "error_code": null
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "MASTER_IDENTITY_MISSING"
   },
   {
    "mode": "shadow",
@@ -3822,15 +3801,10 @@
    "user": "requester",
    "project": "P1",
    "probe": "waste",
-   "status": 201,
-   "business_written": [
-    "op.material_waste_entries"
-   ],
-   "written": [
-    "op.audit_idempotency",
-    "op.material_waste_entries"
-   ],
-   "error_code": null
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "MASTER_IDENTITY_MISSING"
   },
   {
    "mode": "shadow",
@@ -3872,15 +3846,10 @@
    "user": "technician",
    "project": "P1",
    "probe": "waste",
-   "status": 201,
-   "business_written": [
-    "op.material_waste_entries"
-   ],
-   "written": [
-    "op.audit_idempotency",
-    "op.material_waste_entries"
-   ],
-   "error_code": null
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "MASTER_IDENTITY_MISSING"
   },
   {
    "mode": "enforce",
@@ -3926,15 +3895,10 @@
    "user": "requester",
    "project": "P1",
    "probe": "waste",
-   "status": 201,
-   "business_written": [
-    "op.material_waste_entries"
-   ],
-   "written": [
-    "op.audit_idempotency",
-    "op.material_waste_entries"
-   ],
-   "error_code": null
+   "status": 422,
+   "business_written": [],
+   "written": [],
+   "error_code": "MASTER_IDENTITY_MISSING"
   },
   {
    "mode": "enforce",
@@ -4497,7 +4461,7 @@
     409
    ],
    "retry_payment_ids": [
-    "489be3eb-8f47-5914-9199-6146dc71d813"
+    "75bb745e-8b7c-5c8b-a823-1783dc8618e1"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4521,7 +4485,7 @@
     409
    ],
    "retry_payment_ids": [
-    "a9158d40-131d-53b5-b3f8-6d988b62c331"
+    "6d350168-21d3-5140-b84b-28879635a4f2"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
@@ -4545,7 +4509,7 @@
     409
    ],
    "retry_payment_ids": [
-    "2eec705e-98c5-5940-9e84-b5a67b17f6dd"
+    "70cb5d92-349c-5499-90ae-aa9006ec3517"
    ],
    "ledger_rows_added": 1,
    "allocations_added": 1,
