@@ -2253,5 +2253,17 @@
     "criticalTitle": "Warning: total {{total}}h — verify for errors.",
     "otherReports": "Other reports ({{hours}}h)",
     "absenceConflictRow": "Conflict: marked as {{status}} for the day."
+  },
+  "pwa": {
+    "offline": "Offline — changes will not be saved",
+    "updateAvailable": "A new version is available",
+    "update": "Update",
+    "later": "Later",
+    "install": "Install the app",
+    "iosTitle": "Install on iPhone / iPad",
+    "iosStep1": "Tap the Share button in Safari (the square with an up arrow).",
+    "iosStep2": "Choose “Add to Home Screen”.",
+    "iosStep3": "Tap “Add” — BEG_Work will open full screen.",
+    "close": "Close"
   }
 }

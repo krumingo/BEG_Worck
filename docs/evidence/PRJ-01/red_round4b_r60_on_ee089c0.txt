@@ -1,0 +1,9 @@
+# PRJ-01 round 4b (R60: warranty linked to a SUB-PROJECT, roll-up) — the extended test on ee089c0, real MongoDB rs0
+E       AssertionError: assert {'already': 0... 0, 'link': 2} == {'already': 0... 0, 'link': 4}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'dq': 4} != {'dq': 2}
+E         {'link': 2} != {'link': 4}
+E         Use -v to get more diff
+1 failed, 8 passed in 13.75s

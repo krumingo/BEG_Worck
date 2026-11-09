@@ -1,0 +1,9 @@
+  ✕ network error: token kept, user restored from bw_user (34 ms)
+  ✕ 5xx: token kept, user restored (15 ms)
+  ✓ 401: session cleared (8 ms)
+  ✓ 403 on /auth/me: session cleared (6 ms)
+  ✕ 403 on /organization only: session kept (7 ms)
+  ✕ network error without a stored user: no user, token still kept (7 ms)
+  ✕ logout awaits the cache clearing before signing out (13 ms)
+Test Suites: 1 failed, 1 total
+Tests:       5 failed, 2 passed, 7 total

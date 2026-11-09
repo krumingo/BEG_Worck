@@ -1,0 +1,17 @@
+PASS  real posthog-js loaded from the local test host  {"loaded":true,"real_library":true,"disable_session_recording":true,"autocapture":false,"mask_all_text":true,"recording_started":false}
+PASS  client: disable_session_recording true
+PASS  client: autocapture false, text masked
+PASS  client: recording not started despite /decide asking for it  false
+PASS  no recording/snapshot request left the app  []
+PASS  events: only $pageview / app_error  ["$pageview","app_error"]
+PASS  events: no $snapshot / $autocapture / $exception
+PASS  no field content (ЕГН / IBAN / amounts / names / password) in any request  []
+PASS  FG-470: review link page loads no analytics  {"posthog":false,"script":false}
+PASS  FG-470: reset-password page loads no analytics  {"posthog":false,"script":false}
+PASS  FG-470: review token in no request (page, referrer, SPA, decide, cookies)  "referrer was set"
+PASS  FG-470: reset token / project id in no request
+PASS  FG-470: only route templates are sent  ["/login","/projects/:projectId","/tech"]
+PASS  page URLs carry no query string or hash  ["http://localhost:4174/login","http://localhost:4174/login","http://localhost:4174/projects/:projectId","http://localhost:4174/tech"]
+PASS  app_error carries only error_kind  ["TypeError"]
+
+15 passed, 0 failed

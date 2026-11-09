@@ -1,0 +1,320 @@
+{
+  "expect": "on",
+  "checks": [
+    {
+      "name": "PWA88-N1: no script loaded from any PostHog host",
+      "ok": false,
+      "detail": [
+        "http://localhost:4174/__posthog/static/array.js",
+        "http://localhost:4174/__posthog/static/array.js"
+      ]
+    },
+    {
+      "name": "PWA88-N1: nothing fetched from a PostHog static/CDN path (array.js, recorder, surveys, toolbar)",
+      "ok": false,
+      "detail": [
+        "http://localhost:4174/__posthog/static/array.js",
+        "http://localhost:4174/__posthog/static/array.js"
+      ]
+    },
+    {
+      "name": "bundled posthog-js initialised (no runtime loader)",
+      "ok": true,
+      "detail": {
+        "loaded": true,
+        "real_library": true,
+        "disable_session_recording": true,
+        "autocapture": false,
+        "mask_all_text": true,
+        "recording_started": false
+      }
+    },
+    {
+      "name": "PWA88-N1: no /decide call (no remote config)",
+      "ok": false,
+      "detail": [
+        "/static/array.js",
+        "/decide/",
+        "/e/",
+        "/static/array.js",
+        "/decide/",
+        "/e/",
+        "/e/"
+      ]
+    },
+    {
+      "name": "client: disable_session_recording true",
+      "ok": true
+    },
+    {
+      "name": "client: autocapture false, text masked",
+      "ok": true
+    },
+    {
+      "name": "client: recording not started despite /decide asking for it",
+      "ok": true,
+      "detail": false
+    },
+    {
+      "name": "no recording/snapshot request left the app",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "events: only $pageview / app_error",
+      "ok": true,
+      "detail": [
+        "$pageview",
+        "app_error"
+      ]
+    },
+    {
+      "name": "events: no $snapshot / $autocapture / $exception",
+      "ok": true
+    },
+    {
+      "name": "no field content (ЕГН / IBAN / amounts / names / password) in any request",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "FG-470: review link page loads no analytics",
+      "ok": true,
+      "detail": {
+        "posthog": false,
+        "script": false
+      }
+    },
+    {
+      "name": "FG-470: reset-password page loads no analytics",
+      "ok": true,
+      "detail": {
+        "posthog": false,
+        "script": false
+      }
+    },
+    {
+      "name": "FG-470: review token in no request (page, referrer, SPA, decide, cookies)",
+      "ok": true,
+      "detail": "referrer was set"
+    },
+    {
+      "name": "FG-470: reset token / project id in no request",
+      "ok": true
+    },
+    {
+      "name": "FG-470: only route templates are sent",
+      "ok": true,
+      "detail": [
+        "/login",
+        "/projects/:projectId",
+        "/tech"
+      ]
+    },
+    {
+      "name": "page URLs carry no query string or hash",
+      "ok": true,
+      "detail": [
+        "http://localhost:4174/login",
+        "http://localhost:4174/login",
+        "http://localhost:4174/projects/:projectId",
+        "http://localhost:4174/tech"
+      ]
+    },
+    {
+      "name": "app_error carries only error_kind",
+      "ok": true,
+      "detail": [
+        "TypeError"
+      ]
+    }
+  ],
+  "review_page": {
+    "posthog": false,
+    "script": false
+  },
+  "reset_page": {
+    "posthog": false,
+    "script": false
+  },
+  "referrer_seen_by_page": "http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+  "client_state": {
+    "loaded": true,
+    "real_library": true,
+    "disable_session_recording": true,
+    "autocapture": false,
+    "mask_all_text": true,
+    "recording_started": false
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    }
+  ],
+  "events": [
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/login",
+        "$host": "localhost:4174",
+        "$pathname": "/login",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "2w95l3qvm9znpstj",
+        "$time": 1794225837.909,
+        "distinct_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "$device_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1c031-9731-762b-b09f-52084b3159bc",
+        "$window_id": "01a1c031-9732-719a-8959-97d26a3df627",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/login",
+        "$host": "localhost:4174",
+        "$pathname": "/login",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "tc1v1f39p5fud6ta",
+        "$time": 1794225840.767,
+        "distinct_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "$device_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1c031-9731-762b-b09f-52084b3159bc",
+        "$window_id": "01a1c031-a26a-74a8-bad8-2c88f284d8dc",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/projects/:projectId",
+        "$host": "localhost:4174",
+        "$pathname": "/projects/:projectId",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "09s1fgkswriyx165",
+        "$time": 1794225841.425,
+        "distinct_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "$device_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1c031-9731-762b-b09f-52084b3159bc",
+        "$window_id": "01a1c031-a26a-74a8-bad8-2c88f284d8dc",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "app_error",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/tech",
+        "$host": "localhost:4174",
+        "$pathname": "/tech",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "2s7aet7v090x3hym",
+        "$time": 1794225841.426,
+        "distinct_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "$device_id": "01a1c031-9732-719a-8959-97d3e23492df",
+        "error_kind": "TypeError",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1c031-9731-762b-b09f-52084b3159bc",
+        "$window_id": "01a1c031-a26a-74a8-bad8-2c88f284d8dc",
+        "$process_person_profile": false
+      }
+    }
+  ],
+  "external_requests": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+  ],
+  "script_requests": [
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4174/static/js/main.10e33e9f.js",
+    "http://localhost:4174/service-worker.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4174/static/js/main.10e33e9f.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4174/static/js/main.10e33e9f.js",
+    "http://localhost:4174/__posthog/static/array.js",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "http://localhost:4174/static/js/main.10e33e9f.js",
+    "http://localhost:4174/__posthog/static/array.js"
+  ],
+  "other_third_party_scripts": [
+    "https://assets.emergent.sh/scripts/emergent-main.js"
+  ],
+  "summary": {
+    "passed": 15,
+    "failed": 3
+  }
+}

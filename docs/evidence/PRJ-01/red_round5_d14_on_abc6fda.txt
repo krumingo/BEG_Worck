@@ -1,0 +1,3 @@
+# PRJ-01 round 5 (D14: re-check inside the transaction + tombstone) — the extended test on abc6fda, real MongoDB rs0
+E       assert (200 == 200 and False)
+1 failed, 8 passed in 13.57s
