@@ -6524,3 +6524,14 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 | A2C / A1 | 0 / 0 |
 | **warehouse** | **44 / 1121** |
 | wh_fix_01 | 138 / 132 / 47 |
+
+## 2026-11-09 17:30 UTC: post-merge confirmations: main `5e36dc2` (#86) and main `3863610` (#88)
+
+- **main `5e36dc2`:** parents `1525a1e` + `49eb546` (#86, audited PASS). Tree `affedab0` = `merge-tree(1525a1e, 49eb546)` = the `49eb546` tree. Role-union 0.
+- **main `3863610`:** parents `5e36dc2` + `e03315a` (#88). Tree `035f0ff2` = `merge-tree(5e36dc2, e03315a)`. Role-union 0.
+  - `e03315a` = `merge-tree(5e36dc2, 62f898a)` (the audited PASS head) + 2 evidence files under `docs/evidence/PWA-01/main-merge-5e36dc2/` only.
+  - #88 brings 0 backend bytes (`5e36dc2..3863610 -- backend` empty).
+- **Open heads onto `3863610`:**
+  - #83 `781d185` conflicts in code (`routes/projects.py`, `tenancy/ownership.py`) + `run_meta`.
+  - #90 `bc52843` conflicts in `frontend/public/index.html` + `run_meta`.
+  - Both need a re-merge of main and a re-audit.
