@@ -157,7 +157,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 28.4,
+ "seconds": 31.7,
  "rows": [
   {
    "mode": "off",
@@ -2816,8 +2816,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "off",
@@ -2829,8 +2833,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "off",
@@ -2868,8 +2876,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "off",
@@ -5807,8 +5819,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "off",
@@ -5820,8 +5836,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "off",
@@ -5859,8 +5879,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "off",
@@ -9383,8 +9407,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "shadow",
@@ -9396,8 +9424,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "shadow",
@@ -9435,8 +9467,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "shadow",
@@ -12374,8 +12410,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "shadow",
@@ -12387,8 +12427,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "shadow",
@@ -12426,8 +12470,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "shadow",
@@ -16114,8 +16162,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "enforce",
@@ -16127,8 +16179,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "enforce",
@@ -16170,8 +16226,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "A"
+   ]
   },
   {
    "mode": "enforce",
@@ -19295,8 +19355,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "enforce",
@@ -19308,8 +19372,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "enforce",
@@ -19351,8 +19419,12 @@
    "path": "/api/execution-packages/recompute-labor/{project_id}",
    "target": "P2",
    "status": 200,
-   "written": [],
-   "written_orgs": []
+   "written": [
+    "op.execution_packages"
+   ],
+   "written_orgs": [
+    "B"
+   ]
   },
   {
    "mode": "enforce",
