@@ -1,0 +1,21 @@
+FAIL  PWA88-N1: no script loaded from any PostHog host  ["http://localhost:4174/__posthog/static/array.js","http://localhost:4174/__posthog/static/array.js"]
+INFO  other third-party scripts (pre-existing, D5): ["https://assets.emergent.sh/scripts/emergent-main.js"]
+FAIL  PWA88-N1: nothing fetched from a PostHog static/CDN path (array.js, recorder, surveys, toolbar)  ["http://localhost:4174/__posthog/static/array.js","http://localhost:4174/__posthog/static/array.js"]
+PASS  bundled posthog-js initialised (no runtime loader)  {"loaded":true,"real_library":true,"disable_session_recording":true,"autocapture":false,"mask_all_text":true,"recording_started":false}
+FAIL  PWA88-N1: no /decide call (no remote config)  ["/static/array.js","/decide/","/e/","/static/array.js","/decide/","/e/","/e/"]
+PASS  client: disable_session_recording true
+PASS  client: autocapture false, text masked
+PASS  client: recording not started despite /decide asking for it  false
+PASS  no recording/snapshot request left the app  []
+PASS  events: only $pageview / app_error  ["$pageview","app_error"]
+PASS  events: no $snapshot / $autocapture / $exception
+PASS  no field content (ЕГН / IBAN / amounts / names / password) in any request  []
+PASS  FG-470: review link page loads no analytics  {"posthog":false,"script":false}
+PASS  FG-470: reset-password page loads no analytics  {"posthog":false,"script":false}
+PASS  FG-470: review token in no request (page, referrer, SPA, decide, cookies)  "referrer was set"
+PASS  FG-470: reset token / project id in no request
+PASS  FG-470: only route templates are sent  ["/login","/projects/:projectId","/tech"]
+PASS  page URLs carry no query string or hash  ["http://localhost:4174/login","http://localhost:4174/login","http://localhost:4174/projects/:projectId","http://localhost:4174/tech"]
+PASS  app_error carries only error_kind  ["TypeError"]
+
+15 passed, 3 failed

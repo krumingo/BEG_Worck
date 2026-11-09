@@ -251,6 +251,10 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/work-sessions/overtime", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/work-sessions/{session_id}/detail", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/projects/{project_id}/site-workers", MONEY_VALUES_READ, R20_5M, CANON_B),
+    # PRJ-01 / FG-255: the subcontractor rating with the ledger "paid" (R54-2)
+    _E("GET", "/api/subcontractor-performance", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
+    _E("GET", "/api/subcontractor-performance/compact", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
+    _E("GET", "/api/subcontractor-performance/log", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
     _E("GET", "/api/projects/{project_id}/smr-groups", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/projects/{project_id}/smr-groups/tree", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/pulse/today", MONEY_VALUES_READ, R20_5B, CANON_B43 + "; R31 (no per-worker money); B-D2"),

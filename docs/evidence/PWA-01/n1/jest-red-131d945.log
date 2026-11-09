@@ -1,0 +1,6 @@
+  ✕ bundled library is initialised with recording off; no <script> is injected (PWA88-N1) (10 ms)
+  ✕ no remote config or remote extensions: decide, surveys, site apps, experiments, toolbar off (1 ms)
+  ✕ the source imports the pinned no-external build and never injects a script (1 ms)
+  ✕ a failing chunk load never breaks the app (1 ms)
+  ✕ window errors are reported as app_error with the type only (2 ms)
+Tests:       5 failed, 19 passed, 24 total

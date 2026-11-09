@@ -17,7 +17,19 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
         {"_id": 0, "id": 1, "name": 1, "code": 1},
     ).sort("code", 1).to_list(50)
 
-    all_ids = [parent_project_id] + [c["id"] for c in children]
+    # R60 (Krum, FG-273): a legacy warranty project may sit one level BELOW a sub-project
+    # (the only second level allowed). Its costs roll up to that sub-project, then to the
+    # whole project.
+    warranty_kids = await tenant.projects.find(
+        {"org_id": org_id, "type": "Warranty",
+         "parent_project_id": {"$in": [c["id"] for c in children]}},
+        {"_id": 0, "id": 1, "name": 1, "code": 1, "parent_project_id": 1},
+    ).sort("code", 1).to_list(200) if children else []
+    kids_of: dict = {}
+    for w in warranty_kids:
+        kids_of.setdefault(w["parent_project_id"], []).append(w)
+
+    all_ids = [parent_project_id] + [c["id"] for c in children] + [w["id"] for w in warranty_kids]
     pnl_results = {}
     for pid in all_ids:
         try:
@@ -32,9 +44,16 @@ async def compute_aggregated_pnl(org_id: str, parent_project_id: str) -> dict:
     children_data = []
     for c in children:
         cpnl = pnl_results.get(c["id"], _empty_pnl())
+        kids = kids_of.get(c["id"], [])
+        summary = _sum_summaries([_extract_summary(cpnl)] + [
+            _extract_summary(pnl_results.get(w["id"], _empty_pnl())) for w in kids])
         children_data.append({
             "id": c["id"], "name": c["name"], "code": c.get("code", ""),
-            "pnl": _extract_summary(cpnl),
+            "pnl": summary,
+            # R60: the sub-project's figures INCLUDE its warranty projects (listed here)
+            "warranty_children": [{
+                "id": w["id"], "name": w.get("name"), "code": w.get("code", ""),
+                "pnl": _extract_summary(pnl_results.get(w["id"], _empty_pnl()))} for w in kids],
         })
 
     # Aggregate totals
@@ -172,6 +191,17 @@ async def compute_org_profit_attribution(org_id: str) -> dict:
 
 def _empty_pnl():
     return {"budget": {}, "revenue": {}, "expense": {}, "profit": {}}
+
+
+def _sum_summaries(summaries):
+    """R60: one summary for a sub-project and its warranty projects."""
+    if len(summaries) == 1:
+        return summaries[0]
+    out = {k: round(sum(x.get(k, 0) or 0 for x in summaries), 2)
+           for k in ("total_budget", "total_revenue", "total_expense", "gross_profit")}
+    out["margin_pct"] = round(out["gross_profit"] / out["total_revenue"] * 100, 1) \
+        if out["total_revenue"] else 0
+    return out
 
 
 def _extract_summary(pnl):

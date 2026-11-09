@@ -1,0 +1,17 @@
+PASS  real posthog-js loaded from the local test host  {"loaded":true,"real_library":true,"disable_session_recording":true,"autocapture":false,"mask_all_text":true,"recording_started":false}
+PASS  client: disable_session_recording true
+PASS  client: autocapture false, text masked
+PASS  client: recording not started despite /decide asking for it  false
+PASS  no recording/snapshot request left the app  []
+PASS  events: only $pageview / app_error  ["$pageview","app_error"]
+PASS  events: no $snapshot / $autocapture / $exception
+FAIL  no field content (ЕГН / IBAN / amounts / names / password) in any request  ["rvTOKEN_9f3Kq2xY7pL0aB4cD8eF","p-SECRET-4711"]
+FAIL  FG-470: review link page loads no analytics  {"posthog":true,"script":true}
+FAIL  FG-470: reset-password page loads no analytics  {"posthog":true,"script":true}
+FAIL  FG-470: review token in no request (page, referrer, SPA, decide, cookies)  "referrer was set"
+FAIL  FG-470: reset token / project id in no request
+FAIL  FG-470: only route templates are sent  ["/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF","/reset-password","/login","/projects/p-SECRET-4711","/tech"]
+PASS  page URLs carry no query string or hash  ["http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF","http://localhost:4174/reset-password","http://localhost:4174/login","http://localhost:4174/login","http://localhost:4174/projects/p-SECRET-4711","http://localhost:4174/tech","http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF"]
+PASS  app_error carries only error_kind  ["TypeError"]
+
+9 passed, 6 failed

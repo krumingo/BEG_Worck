@@ -1,0 +1,10 @@
+# PWA-01 (#88) after merging main 5e36dc2 (#86 PRJ-01) — merge commit 89718aa, no conflicts
+# backend: local real MongoDB 7.0 replica set rs0 (docker mongo:7.0, port 27019),
+#   W0_03_REAL_MONGO_URL='mongodb://127.0.0.1:27019/?directConnection=true', from backend/:
+#   PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfs <file>
+R0: 83 + 69 + 388 + 145 + 56 + 73 = 814 passed (tests/test_r0_0*.py, file by file)
+W0 (tests/test_w0_*.py, one run, real Mongo): 16 failed, 1176 passed, 0 skipped
+    failure set IDENTICAL to docs/evidence/PRJ-01/w0_failed_branch.txt (main's 16): w0_failed.txt
+Guards: W0-03E-A2C 243 modules / 0 violations; W0-03E-A1 490 units / 0 violations
+Frontend: yarn test 27 suites / 253 passed; yarn build compiled (same 6 pre-existing exhaustive-deps warnings)
+Backend change in #88: none (git diff origin/main -- backend is empty)
