@@ -275,6 +275,10 @@ async def update_counterparty(counterparty_id: str, data: CounterpartyUpdate, us
     new_eik = cr.normalize_eik(raw.pop("eik", None)) if data.eik else ""
     old_eik = cr.normalize_eik(counterparty.get("eik"))
     changes = {k: v for k, v in raw.items() if v is not None}
+    # FG-429: the form shows a BG + ЕГН VAT number masked — sending it back keeps the stored one
+    changes = {k: v for k, v in cr.keep_stored_if_masked(changes, counterparty,
+                                                          keys=("vat_number", "iban")).items()
+               if not (k in ("vat_number", "iban") and v == counterparty.get(k))}
     eik_request = None
     if new_eik and new_eik != old_eik:
         if old_eik:

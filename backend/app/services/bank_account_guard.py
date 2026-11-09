@@ -73,6 +73,32 @@ def _receipt_id(receipt_file_id) -> str:
 
 
 CASH_RECEIPT_NOT_REGISTERED = "CASH_RECEIPT_NOT_REGISTERED"
+CASH_RECEIPT_TYPE_NOT_ALLOWED = "CASH_RECEIPT_TYPE_NOT_ALLOWED"
+#: R71: a receipt is a photo or a PDF (R72 — OCR into lines — is a separate future task)
+_RECEIPT_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".gif", ".bmp",
+                       ".tif", ".tiff", ".pdf")
+
+
+def _receipt_type_ok(doc: Dict[str, Any]) -> bool:
+    ctype = str(doc.get("content_type") or "").strip().lower()
+    if ctype:
+        return ctype.startswith("image/") or ctype == "application/pdf"
+    name = str(doc.get("filename") or doc.get("stored_filename") or "").strip().lower()
+    return name.endswith(_RECEIPT_EXTENSIONS)
+
+
+#: the payment records that carry a receipt ``file_id`` (FG-425)
+_RECEIPT_HOLDERS = ("finance_payments", "subcontractor_payments")
+
+
+async def receipt_references(tenant, file_id: str) -> list:
+    """FG-425: the payment rows that rest on ``file_id`` as their cash receipt."""
+    refs = []
+    for coll in _RECEIPT_HOLDERS:
+        rows = await tenant.collection(coll).find({"cash_receipt_file_id": file_id},
+                                                  {"_id": 0, "id": 1}).to_list(20)
+        refs += ["%s:%s" % (coll, r.get("id")) for r in rows]
+    return refs
 #: a file record in one of these states is not evidence any more
 _INACTIVE_FILE_STATES = frozenset({"deleted", "archived", "quarantined", "rejected", "superseded"})
 
@@ -85,13 +111,18 @@ async def _require_registered_receipt(tenant, fid: str) -> str:
     tenant's file records are the legacy ``media_files`` (TenantData scopes the read to the
     active tenant). D10: switch this lookup to the File Registry when W0-06 lands."""
     doc = await tenant.media_files.get(fid, {"_id": 0, "id": 1, "status": 1, "deleted_at": 1,
-                                             "is_deleted": 1})
+                                             "is_deleted": 1, "content_type": 1, "filename": 1,
+                                             "stored_filename": 1})
     state = str((doc or {}).get("status") or "").strip().lower()
     if not doc or state in _INACTIVE_FILE_STATES or doc.get("deleted_at") or doc.get("is_deleted"):
         raise HTTPException(status_code=422, detail={
             "error_code": CASH_RECEIPT_NOT_REGISTERED,
             "message": "Касовият бон / разписката трябва да е качен файл на тази фирма "
                        "(file_id от регистъра на файловете), в активно състояние (FG-290)"})
+    if not _receipt_type_ok(doc):
+        raise HTTPException(status_code=422, detail={
+            "error_code": CASH_RECEIPT_TYPE_NOT_ALLOWED,
+            "message": "Разписката / касовият бон трябва да е снимка или PDF (Р71)"})
     return fid
 
 

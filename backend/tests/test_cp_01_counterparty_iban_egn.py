@@ -179,6 +179,8 @@ def _app(monkeypatch, op, sysdb, mode):
         mods.append(r_bank)
     except ImportError:                     # main: the register does not exist
         r_bank = None
+    from app.routes import media as r_media  # FG-425: a receipt in use is never hard-deleted
+    mods.append(r_media)
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
@@ -195,7 +197,7 @@ def _app(monkeypatch, op, sysdb, mode):
     monkeypatch.setattr(resolver, "get_tenant_db", _get_db)
     monkeypatch.setattr(guard, "get_tenant_db", _get_db)
     app = FastAPI()
-    for r in (r_finance, r_cp, r_clients, r_projects, r_subs, r_bank):
+    for r in (r_finance, r_cp, r_clients, r_projects, r_subs, r_bank, r_media):
         if r is not None:
             app.include_router(r.router, prefix="/api")
     return app
@@ -1590,4 +1592,206 @@ def test_r65_invoice_pdf_with_an_egn_only_owner_accountant_and_audited(monkeypat
         r = await c.get("/api/finance/invoices/inv-r1/pdf", headers=hdr("admin-a"))
         assert r.status_code == 200, r.text[:200]
         assert len(await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"})) == 2
+    run(monkeypatch, backend, mode, scenario)
+
+
+
+# ═══════════════════════════════════════════════ R71 (Krum, 09.11.2026) — FLOW Guard pass 33
+def test_fg427_a_subcontractor_advance_goes_through_the_payment_guards(monkeypatch, backend, mode):
+    """FG-427: the SUB-ADV-01 advance is a payment to the subcontractor — the same guards:
+    an inactive / archived subcontractor → 422; cash only with a registered receipt + the
+    recipient (R59 / FG-290) and blocked while the IBAN is unverified (R50.1); bank only to a
+    VERIFIED account. Each refusal writes nothing."""
+    if backend != "real":               # the advance reservation is an aggregation update
+        pytest.skip("SUB-ADV-01's package reservation runs on a real MongoDB only")
+
+    async def scenario(c, op):
+        await op.subcontractor_packages.update_one({"id": "pkg1"}, {"$set": {"contract_total": 9000.0}})
+        url = "/api/subcontractor-packages/pkg1/advances"
+        base = {"amount": 100.0, "reason": "Аванс по договор"}
+        cash = dict(base, account_id=CASH_A)
+
+        async def nothing_written():
+            assert await rows(op, "subcontractor_payments") == []
+            assert await rows(op, "finance_payments") == []
+        for body, code in ((cash, "CASH_RECEIPT_REQUIRED"),
+                           (dict(cash, cash_recipient_name="Бригадир"), "CASH_RECEIPT_REQUIRED"),
+                           (dict(cash, cash_receipt_file_id="zzz", cash_recipient_name="Бригадир"),
+                            "CASH_RECEIPT_NOT_REGISTERED")):
+            r = await c.post(url, headers=hdr("acct-a"), json=body)
+            assert r.status_code == 422 and r.json()["detail"]["error_code"] == code, (body, r.text)
+        await nothing_written()
+        await seed_account(op, "ba-sub-p", IBAN_NEW, "pending_verification", party="sub1",
+                           party_type="subcontractor")
+        r = await c.post(url, headers=hdr("acct-a"), json=dict(
+            cash, cash_receipt_file_id="file_r", cash_recipient_name="Бригадир"))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "PAYEE_BLOCKED_PENDING_IBAN"
+        await nothing_written()
+        await op.verified_bank_accounts.delete_many({})
+        await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "archived",
+                                                                      "active": False}})
+        r = await c.post(url, headers=hdr("acct-a"), json=dict(
+            cash, cash_receipt_file_id="file_r", cash_recipient_name="Бригадир"))
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "COUNTERPARTY_NOT_SELECTABLE"
+        await nothing_written()
+        # active, cash with a registered receipt → paid; the ledger row carries the proof
+        await op.subcontractors.update_one({"id": "sub1"}, {"$set": {"lifecycle_status": "active",
+                                                                      "active": True}})
+        r = await c.post(url, headers=hdr("acct-a"), json=dict(
+            cash, cash_receipt_file_id="file_r", cash_recipient_name="Бригадир"))
+        assert r.status_code == 201, r.text
+        [led] = await rows(op, "finance_payments")
+        assert led["cash_receipt_file_id"] == "file_r" and led["cash_recipient_name"] == "Бригадир"
+        # bank, no verified account: refused in enforce (production); off / shadow keep the
+        # legacy path by the guard mode (D1), as every other payment
+        r = await c.post(url, headers=hdr("acct-a"), json=dict(base, account_id=BANK_A))
+        if mode == "enforce":
+            assert r.status_code == 409 and \
+                r.json()["detail"]["reason"] == "NO_VERIFIED_BANK_ACCOUNT", r.text
+            assert len(await rows(op, "finance_payments")) == 1
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg425_a_receipt_in_use_is_never_hard_deleted(monkeypatch, backend, mode):
+    """FG-425: DELETE /media/{id} of a receipt a payment rests on → 409 RECEIPT_IN_USE; the
+    file record stays; the refusal is an AuditEvent. An unused file is still deletable."""
+    async def scenario(c, op):
+        await op.media_files.update_one({"id": "file_bon"}, {"$set": {"owner_user_id": "acct-a"}})
+        await op.media_files.insert_one({"id": "file_free", "org_id": ORG_A, "filename": "x.jpg",
+                                         "owner_user_id": "acct-a"})
+        r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+            "amount": 3.0, "project_id": "prj-1", "method": "Cash", "cash_receipt_file_id": "file_bon"})
+        assert r.status_code == 201, r.text
+        for who in ("acct-a", "owner-a", "admin-a"):
+            r = await c.delete("/api/media/file_bon", headers=hdr(who))
+            assert r.status_code == 409 and r.json()["detail"]["error_code"] == "RECEIPT_IN_USE", (who, r.text)
+        assert await rows(op, "media_files", {"id": "file_bon"})
+        ev = await rows(op, "audit_events", {"action": "media.delete_refused"})
+        assert len(ev) == 3 and {e["result"] for e in ev} == {"denied"}
+        r = await c.delete("/api/media/file_free", headers=hdr("acct-a"))
+        assert r.status_code == 200, r.text
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_r71_a_receipt_is_a_photo_or_a_pdf(monkeypatch, backend, mode):
+    """R71: a receipt is an image or a PDF; a video (or anything else) → 422, nothing written."""
+    async def scenario(c, op):
+        await op.media_files.insert_many([
+            {"id": "f_video", "org_id": ORG_A, "filename": "bon.mp4", "content_type": "video/mp4"},
+            {"id": "f_text", "org_id": ORG_A, "filename": "bon.txt"},
+            {"id": "f_pdf", "org_id": ORG_A, "filename": "bon.pdf", "content_type": "application/pdf"},
+            {"id": "f_png", "org_id": ORG_A, "filename": "bon", "content_type": "image/png"}])
+        for fid in ("f_video", "f_text"):
+            r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+                "amount": 3.0, "project_id": "prj-1", "method": "Cash", "cash_receipt_file_id": fid})
+            assert r.status_code == 422 and \
+                r.json()["detail"]["error_code"] == "CASH_RECEIPT_TYPE_NOT_ALLOWED", (fid, r.text)
+        assert await rows(op, "finance_payments") == []
+        for fid in ("f_pdf", "f_png"):
+            r = await c.post("/api/finance/other-expense", headers=hdr("acct-a"), json={
+                "amount": 3.0, "project_id": "prj-1", "method": "Cash", "cash_receipt_file_id": fid})
+            assert r.status_code == 201, (fid, r.text)
+    run(monkeypatch, backend, mode, scenario)
+
+
+VAT_EGN = "BG" + TYPED
+
+
+def test_fg429_a_bg_egn_vat_number_is_an_egn(monkeypatch, backend, mode):
+    """FG-429: BG + ЕГН as a VAT number is an ЕГН (R48 / R65): masked in every response for
+    every role (Admin no longer sees it), full only via the audited reveal; the PDF of such
+    an invoice only for Owner / Accountant, with invoice.pdf.downloaded. A company's VAT
+    number (BG + 9 digits) is shown as it is."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({
+            "id": "inv-v", "org_id": ORG_A, "invoice_no": "I-V", "direction": "Issued", "kind": "Invoice",
+            "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31", "currency": "EUR",
+            "project_id": "prj-1", "counterparty_name": "Мария П", "counterparty_vat_no": VAT_EGN,
+            "lines": [{"description": "СМР", "qty": 1, "unit_price": 10.0, "line_total": 10.0}],
+            "subtotal": 10.0, "vat_percent": 0, "vat_amount": 0, "total": 10.0,
+            "paid_amount": 0, "remaining_amount": 10.0})
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": VAT_EGN}})
+        await op.projects.update_one({"id": "prj-1"}, {"$set": {"invoice_details.vat_number": VAT_EGN}})
+        readers = ["/api/finance/invoices", "/api/finance/invoices/inv-v", "/api/counterparties/cp2",
+                   "/api/counterparties?active_only=false", "/api/projects/prj-1",
+                   "/api/projects/prj-1/invoice-details", "/api/clients/pe1/invoices"]
+        for who in ("owner-a", "acct-a", "admin-a"):
+            seen = 0
+            for url in readers:
+                r = await c.get(url, headers=hdr(who))
+                if r.status_code != 200:
+                    continue
+                seen += 1
+                assert no_full(r.json(), TYPED), (who, url)
+            assert seen >= 4, (who, seen)
+        # a masked value sent back keeps the stored one
+        shown = (await c.get("/api/finance/invoices/inv-v", headers=hdr("acct-a"))).json()
+        assert shown["counterparty_vat_no"] == "BG******" + TYPED[-4:]
+        r = await c.put("/api/finance/invoices/inv-v", headers=hdr("acct-a"), json={
+            "counterparty_vat_no": shown["counterparty_vat_no"], "notes": "н"})
+        assert r.status_code == 200 and no_full(r.json(), TYPED), r.text
+        assert (await rows(op, "invoices", {"id": "inv-v"}))[0]["counterparty_vat_no"] == VAT_EGN
+        cp = (await c.get("/api/counterparties/cp2", headers=hdr("acct-a"))).json()
+        r = await c.put("/api/counterparties/cp2", headers=hdr("acct-a"),
+                        json={"name": cp["name"], "vat_number": cp["vat_number"]})
+        assert r.status_code == 200, r.text
+        assert (await rows(op, "counterparties", {"id": "cp2"}))[0]["vat_number"] == VAT_EGN
+        # the audited reveal
+        r = await c.post("/api/finance/invoices/inv-v/egn/reveal", headers=hdr("admin-a"))
+        assert r.status_code == 403
+        r = await c.post("/api/finance/invoices/inv-v/egn/reveal", headers=hdr("acct-a"))
+        assert r.status_code == 200 and r.json()["counterparty_vat_no"] == VAT_EGN, r.text
+        assert len(await rows(op, "audit_events", {"action": "invoice.egn.revealed"})) == 1
+        # the PDF: Owner / Accountant only, audited
+        assert (await c.get("/api/finance/invoices/inv-v/pdf", headers=hdr("admin-a"))).status_code == 403
+        r = await c.get("/api/finance/invoices/inv-v/pdf", headers=hdr("owner-a"))
+        assert r.status_code == 200, r.text[:200]
+        assert len(await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"})) == 1
+        # a company's VAT number is not an ЕГН
+        await op.invoices.update_one({"id": "inv-r1"}, {"$set": {"counterparty_vat_no": "BG111111111"}})
+        r = await c.get("/api/finance/invoices/inv-r1", headers=hdr("admin-a"))
+        assert r.json()["counterparty_vat_no"] == "BG111111111"
+    run(monkeypatch, backend, mode, scenario)
+
+
+def test_fg455_the_pdf_prints_the_egn_under_its_label_and_audits_after_the_build(monkeypatch, backend, mode):
+    """FG-455: an ЕГН stored only in ``egn`` is printed in full, as "ЕГН" (not "ЕИК"); a
+    failed build writes no AuditEvent; a built one writes it before returning."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({
+            "id": "inv-e", "org_id": ORG_A, "invoice_no": "I-E", "direction": "Issued", "kind": "Invoice",
+            "status": "Sent", "issue_date": "2026-11-01", "due_date": "2099-12-31", "currency": "EUR",
+            "counterparty_name": "Мария П", "egn": TYPED,
+            "lines": [{"description": "СМР", "qty": 1, "unit_price": 10.0, "line_total": 10.0}],
+            "subtotal": 10.0, "vat_percent": 0, "vat_amount": 0, "total": 10.0,
+            "paid_amount": 0, "remaining_amount": 10.0})
+        printed = []
+        import reportlab.platypus as rp
+        real_para = rp.Paragraph
+        from app.routes import finance as r_finance
+
+        class Spy(real_para):
+            def __init__(self, text, *a, **k):
+                printed.append(str(text))
+                super().__init__(text, *a, **k)
+        monkeypatch.setattr(rp, "Paragraph", Spy)
+        # a build that fails → 500-class error, no AuditEvent
+        real_build = rp.SimpleDocTemplate.build
+
+        def broken(self, *a, **k):
+            raise RuntimeError("build failed")
+        monkeypatch.setattr(rp.SimpleDocTemplate, "build", broken)
+        try:
+            r = await c.get("/api/finance/invoices/inv-e/pdf", headers=hdr("acct-a"))
+            assert r.status_code >= 500
+        except RuntimeError:
+            pass
+        assert await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"}) == []
+        monkeypatch.setattr(rp.SimpleDocTemplate, "build", real_build)
+        printed.clear()
+        r = await c.get("/api/finance/invoices/inv-e/pdf", headers=hdr("acct-a"))
+        assert r.status_code == 200 and r.headers["content-type"].startswith("application/pdf")
+        text = "\n".join(printed)
+        assert ("ЕГН: " + TYPED) in text and ("ЕИК: " + TYPED) not in text, text[:500]
+        assert len(await rows(op, "audit_events", {"action": "invoice.pdf.downloaded"})) == 1
     run(monkeypatch, backend, mode, scenario)

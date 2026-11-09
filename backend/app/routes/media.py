@@ -462,6 +462,25 @@ async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
     
     # ACL check for delete action
     await enforce_media_access(user, media, action="delete")
+
+    # CP-01 FG-425 (R71): a receipt that a payment rests on is financial evidence (FLOW-006,
+    # CLAUDE.md §2.9) — it is never hard-deleted. The refusal is an AuditEvent; nothing is
+    # removed (neither the file nor its record).
+    from app.services.bank_account_guard import receipt_references
+    refs = await receipt_references(tenant, media_id)
+    if refs:
+        from app.services.master_write import audit as mw_audit, run_tx
+
+        async def _refused(session):
+            await mw_audit(db, session, user, "media.delete_refused", entity_type="media_file",
+                           entity_id=media_id, key="media-del-" + uuid.uuid4().hex,
+                           result="denied", error_code="RECEIPT_IN_USE",
+                           diff={"referenced_by": refs[:10]}, source_flow="FLOW-006")
+        await run_tx(db, _refused)
+        raise HTTPException(status_code=409, detail={
+            "error_code": "RECEIPT_IN_USE",
+            "message": "Този файл е разписка/касов бон на плащане — не се изтрива (само архив)",
+            "referenced_by": refs[:10]})
     
     # Delete the actual file
     stored_filename = media.get("stored_filename")

@@ -1069,19 +1069,25 @@ async def reveal_invoice_egn(invoice_id: str, user: dict = Depends(require_m5),
 
     async def tx(session):
         invoice = await tenant.invoices.find_one({"id": invoice_id},
-                                                 {"_id": 0, "id": 1, "counterparty_eik": 1},
+                                                 {"_id": 0, "id": 1, "counterparty_eik": 1,
+                                                  "egn": 1, "counterparty_vat_no": 1},
                                                  **kw(session))
         if not invoice:
             raise HTTPException(status_code=404, detail="Invoice not found")
-        value = invoice.get("counterparty_eik") or ""
+        out = {"counterparty_eik": invoice.get("counterparty_eik") or ""}
+        if invoice.get("egn"):
+            out["egn"] = invoice["egn"]
+        if cr.vat_is_egn(invoice.get("counterparty_vat_no")):       # FG-429
+            out["counterparty_vat_no"] = invoice["counterparty_vat_no"]
+        shown = out.get("egn") or out["counterparty_eik"] or str(out.get("counterparty_vat_no", ""))[2:]
         await mw_audit(db, session, user, "invoice.egn.revealed", entity_type="invoice",
                        entity_id=invoice_id, key=key,
-                       diff={"egn_masked": cr.mask_egn(value),
+                       diff={"egn_masked": cr.mask_egn(shown), "fields": sorted(out),
                              "revealed_by": user["id"], "role": user.get("role")})
-        return value
+        return out
 
     value = await run_tx(db, tx)
-    return {"id": invoice_id, "counterparty_eik": value, "revealed": True}
+    return {"id": invoice_id, **value, "revealed": True}
 
 
 @router.put("/finance/invoices/{invoice_id}")
@@ -1103,6 +1109,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     # FG-294: the edit form shows the ЕГН masked — sending it back keeps the stored value
     if cr.is_masked_egn(data.counterparty_eik):
         data.counterparty_eik = None
+    if cr.is_masked_vat(data.counterparty_vat_no):        # FG-429: the same for BG + ЕГН
+        data.counterparty_vat_no = None
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
     eik_check = validate_eik(data.counterparty_eik or "" if data.counterparty_eik is not None else "")
@@ -2356,21 +2364,15 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     # official document and carries the FULL ЕГН — so it is downloaded only by the Owner and
     # the Accountant (other roles → 403), and every download is an AuditEvent (who, when,
     # which invoice), committed before the document is returned. Company invoices unchanged.
-    if cr.possible_egn(invoice.get("counterparty_eik")) or invoice.get("egn"):
-        if not cr.can_reveal_egn(user):
-            from app.services.master_write import forbidden
-            raise forbidden("PDF на фактура към физическо лице (с ЕГН) се сваля само от "
-                            "Собственик и Счетоводител (Р65)")
-        from app.services.master_write import audit as mw_audit, run_tx
-
-        async def _audit_download(session):
-            await mw_audit(db, session, user, "invoice.pdf.downloaded", entity_type="invoice",
-                           entity_id=invoice_id, key="pdf-" + uuid.uuid4().hex,
-                           diff={"egn_masked": cr.mask_egn(invoice.get("counterparty_eik")
-                                                           or invoice.get("egn")),
-                                 "downloaded_by": user["id"], "role": user.get("role")})
-
-        await run_tx(db, _audit_download)
+    # FG-429: a VAT number BG + ЕГН is an ЕГН too. FG-455: the AuditEvent is written only
+    # once the PDF is built (a failed build is no download), still before it is returned.
+    egn_value = invoice.get("egn") or (invoice.get("counterparty_eik")
+                                       if cr.possible_egn(invoice.get("counterparty_eik")) else None)
+    person_invoice = bool(egn_value) or cr.vat_is_egn(invoice.get("counterparty_vat_no"))
+    if person_invoice and not cr.can_reveal_egn(user):
+        from app.services.master_write import forbidden
+        raise forbidden("PDF на фактура към физическо лице (с ЕГН) се сваля само от "
+                        "Собственик и Счетоводител (Р65)")
 
     # Get org info
     org = await tenant.own_organization({"_id": 0})
@@ -2457,7 +2459,11 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     cp_name = invoice.get("counterparty_name", "")
     if cp_name:
         client_lines.append(f"<b>{cp_name}</b>")
-    if invoice.get("counterparty_eik"):
+    # FG-455: a natural person's identifier is printed as "ЕГН" (R65: in full), also when it
+    # is stored only in ``egn``; a company's as "ЕИК"
+    if egn_value:
+        client_lines.append(f"ЕГН: {egn_value}")
+    elif invoice.get("counterparty_eik"):
         client_lines.append(f"ЕИК: {invoice['counterparty_eik']}")
     if invoice.get("counterparty_vat_no"):
         client_lines.append(f"ДДС номер: {invoice['counterparty_vat_no']}")
@@ -2537,7 +2543,20 @@ async def export_invoice_pdf(invoice_id: str, user: dict = Depends(require_m5)):
     
     doc.build(elements)
     buffer.seek(0)
-    
+
+    if person_invoice:
+        # R65 / FG-455: built — now the download is recorded, before the bytes leave
+        from app.services.master_write import audit as mw_audit, run_tx
+        shown = egn_value or str(invoice.get("counterparty_vat_no"))[2:]
+
+        async def _audit_download(session):
+            await mw_audit(db, session, user, "invoice.pdf.downloaded", entity_type="invoice",
+                           entity_id=invoice_id, key="pdf-" + uuid.uuid4().hex,
+                           diff={"egn_masked": cr.mask_egn(shown),
+                                 "downloaded_by": user["id"], "role": user.get("role")})
+
+        await run_tx(db, _audit_download)
+
     filename = f"invoice_{invoice.get('invoice_no', invoice_id)}.pdf"
     return StreamingResponse(
         buffer,

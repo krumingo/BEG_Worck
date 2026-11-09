@@ -184,6 +184,8 @@ def mask_for_log(value: Any) -> Any:
             elif k in EGN_COPY_FIELDS and isinstance(v, (str, int)) and v \
                     and not str(v).startswith(EGN_MASK_PREFIX) and (k == "egn" or possible_egn(v)):
                 out[k] = mask_egn(v)
+            elif k in VAT_KEYS and vat_is_egn(v):        # FG-429
+                out[k] = mask_vat(v)
             else:
                 out[k] = mask_for_log(v)
         return out
@@ -192,6 +194,22 @@ def mask_for_log(value: Any) -> Any:
 
 #: FG-294: the invoice fields that may hold a person's ЕГН (an invoice to a natural person)
 INVOICE_EGN_KEYS = ("counterparty_eik", "egn")
+#: FG-429 (R71): VAT number fields — a natural person's Bulgarian VAT number is BG + ЕГН
+VAT_KEYS = ("counterparty_vat_no", "vat_number", "vat_no")
+
+
+def vat_is_egn(value: Any) -> bool:
+    """FG-429: ``BG`` + 10 digits — a natural person's VAT number, i.e. an ЕГН (a company's
+    is BG + its 9 / 13-digit ЕИК). An already masked value is not one."""
+    if not isinstance(value, str):
+        return False
+    v = re.sub(r"[\s.-]", "", value).upper()
+    return v.startswith("BG") and v[2:].isdigit() and len(v) == 12
+
+
+def mask_vat(value: Any) -> str:
+    """``BG******1234``."""
+    return "BG" + mask_egn(str(value)[2:])
 
 
 def mask_invoice_egn(value: Any) -> Any:
@@ -207,10 +225,17 @@ def mask_invoice_egn(value: Any) -> Any:
             if k in INVOICE_EGN_KEYS and isinstance(v, (str, int)) and v \
                     and not str(v).startswith(EGN_MASK_PREFIX) and (k == "egn" or possible_egn(v)):
                 out[k] = mask_egn(v)
+            elif k in VAT_KEYS and vat_is_egn(v):        # FG-429
+                out[k] = mask_vat(v)
             else:
                 out[k] = mask_invoice_egn(v)
         return out
     return value
+
+
+def is_masked_vat(value: Any) -> bool:
+    """FG-429: ``BG******1234`` — a masked BG + ЕГН VAT number."""
+    return isinstance(value, str) and value.upper().startswith("BG" + EGN_MASK_PREFIX)
 
 
 def is_masked_egn(value: Any) -> bool:
@@ -334,23 +359,26 @@ async def full_iban_allowed(user) -> bool:
 
 def mask_iban_fields(value: Any, full: bool) -> Any:
     """FG-245: a copy of ``value`` (dict / list, recursively) with every IBAN field shown as
-    ``****1234`` unless ``full``. Non-IBAN text in such a field is masked the same way."""
-    if full:
-        return value
+    ``****1234`` unless ``full``. Non-IBAN text in such a field is masked the same way.
+    FG-429 (R71): a VAT number that is BG + ЕГН is an ЕГН — masked here for EVERY reader,
+    ``full`` or not (the full IBAN right is not an ЕГН right)."""
     if isinstance(value, list):
         return [mask_iban_fields(v, full) for v in value]
     if isinstance(value, dict):
         out = {}
         for k, v in value.items():
-            if k in IBAN_KEYS and isinstance(v, str) and v and not v.startswith("****"):
+            if not full and k in IBAN_KEYS and isinstance(v, str) and v and not v.startswith("****"):
                 out[k] = mask_iban(v)
+            elif k in VAT_KEYS and vat_is_egn(v):
+                out[k] = mask_vat(v)
             else:
                 out[k] = mask_iban_fields(v, full)
         return out
     return value
 
 
-def keep_stored_if_masked(incoming: Any, stored: Any, keys=("iban", "eik", "egn", "tax_id")) -> Any:
+def keep_stored_if_masked(incoming: Any, stored: Any,
+                          keys=("iban", "eik", "egn", "tax_id", "vat_number")) -> Any:
     """A form that sends back a masked value (``****1234`` / ``******1234``) never overwrites
     the stored one with the mask (CLAUDE.md §2: no data destroyed by a masked read)."""
     if not isinstance(incoming, dict) or not isinstance(stored, dict):
@@ -358,7 +386,7 @@ def keep_stored_if_masked(incoming: Any, stored: Any, keys=("iban", "eik", "egn"
     out = dict(incoming)
     for k in keys:
         v = out.get(k)
-        if isinstance(v, str) and v.startswith("****") and stored.get(k):
+        if isinstance(v, str) and (v.startswith("****") or is_masked_vat(v)) and stored.get(k):
             out[k] = stored[k]
     return out
 

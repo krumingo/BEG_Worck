@@ -155,6 +155,13 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         snap = tc.portal.call(lambda: pm._snapshot(client, dbs))
 
         def call(method, role, url, body=None, idem: Optional[str] = "auto"):
+            # CP-01 (FG-427 / R59 / FG-290, setup only): a cash payment or advance to the
+            # subcontractor carries a receipt registered as a file of tenant A (seeded by the
+            # C02 records) and the recipient's name, as every cash payment must.
+            if method == "POST" and isinstance(body, dict) and (
+                    url == "/api/subcontractor-payments" or url.endswith("/advances")):
+                body = {"cash_receipt_file_id": "file_cash_receipt",
+                        "cash_recipient_name": "Бригадир", **body}
             headers = {"Authorization": "Bearer " + tokens[role]}
             if idem == "auto":
                 idem = uuid.uuid4().hex
@@ -196,7 +203,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
 
         adv_url = "/api/subcontractor-packages/%s/advances" % rid("pkg")
         pay_url = "/api/subcontractor-payments"
-        adv = {"amount": 1000, "reason": "Аванс по договор", "advance_date": "2026-11-07"}
+        adv = {"amount": 1000, "reason": "Аванс по договор", "advance_date": "2026-11-07",
+               # CP-01 (setup only): a cash advance carries a registered receipt + recipient
+               "cash_receipt_file_id": "file_cash_receipt", "cash_recipient_name": "Бригадир"}
 
         roles_rows, flows, races, refusals, reversal = [], [], [], [], []
         cap_races, fg115, crashes, visibility = [], [], [], []
@@ -334,7 +343,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                             ac.post(adv_url, json=adv,
                                     headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}),
                             ac.post(pay_url, json={"package_id": rid("pkg"),
-                                                   "act_id": rid("act1"), "amount": 1000},
+                                                   "act_id": rid("act1"), "amount": 1000,
+                                                   # CP-01 (setup only): the cash receipt
+                                                   "cash_receipt_file_id": "file_cash_receipt",
+                                                   "cash_recipient_name": "Бригадир"},
                                     headers={**hdr, "Idempotency-Key": uuid.uuid4().hex}))
                 a, b = tc.portal.call(pair)
                 rounds.append({"statuses": sorted([a.status_code, b.status_code]),

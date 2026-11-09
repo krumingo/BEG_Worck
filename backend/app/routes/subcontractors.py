@@ -1164,6 +1164,20 @@ async def create_subcontractor_advance(
             "message": "Авансът трябва да мине през платежния регистър: изберете "
                        "сметка (Каса/Банка)"})
 
+    # CP-01 FG-427 (R71): an advance is a payment to the subcontractor — the SAME guards as
+    # every payment, before the key is reserved (a refusal writes nothing): an inactive /
+    # archived subcontractor → 422; the account decides cash vs bank (FG-225); bank only to
+    # a VERIFIED account; cash only with a registered receipt + recipient (R59), and blocked
+    # while the subcontractor has an unverified IBAN (R50.1).
+    await require_selectable_party(tenant, "subcontractor", pkg["subcontractor_id"])
+    bank_stamp = await check_payment_target(
+        tenant, user, direction="Outflow", method=data.get("payment_method", "bank"),
+        account=account, party_type="subcontractor",
+        party_id=pkg["subcontractor_id"], bank_account_id=data.get("bank_account_id"),
+        cash_receipt_file_id=data.get("cash_receipt_file_id"),
+        cash_recipient_name=data.get("cash_recipient_name"),
+        path="/subcontractor-packages/{id}/advances") or {}
+
     mw = await MoneyWrite.begin(user, "finance.subcontractor_advance.create", idempotency_key,
                                 {**data, "package_id": pkg_id})
     if mw.replay_id:
@@ -1182,6 +1196,7 @@ async def create_subcontractor_advance(
         "reason": reason, "notes": data.get("notes", ""),
         "status": "completed", "account_id": account["id"],
         "created_by": user["id"], "created_at": now,
+        **bank_stamp,                                         # CP-01 FG-427
     }
     ledger_id = mw.new_id("finance_payment")
     advance["finance_payment_id"] = ledger_id
@@ -1205,6 +1220,7 @@ async def create_subcontractor_advance(
                 "project_id": pkg["project_id"],
                 "subcontractor_payment_id": advance["id"],   # FG-45 origin (PR #70)
                 "subcontractor_advance": True,
+                **bank_stamp,                                 # CP-01 FG-427: the proof
                 "created_at": now, "updated_at": now,
             }))
         async with mw.insert_once():
