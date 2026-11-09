@@ -10,7 +10,7 @@ import uuid
 
 from app.db import db
 from app.deps.auth import get_current_user, can_manage_project
-from app.permissions.money_write import strip_money_for_non_finance
+from app.permissions.money_write import require_money_write, strip_money_for_non_finance
 from app.utils.audit import log_audit
 from app.tenancy.data_access import TenantData
 
@@ -137,19 +137,17 @@ async def list_offer_versions(offer_id: str, user: dict = Depends(get_current_us
 
 @router.post("/offers/{offer_id}/versions", status_code=201)
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def create_offer_version(offer_id: str, data: VersionCreate, user: dict = Depends(get_current_user)):
+async def create_offer_version(offer_id: str, data: VersionCreate,
+                               _r67: dict = Depends(require_money_write(
+                                   "offers.offer_snapshot.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                               user: dict = Depends(get_current_user)):
     """Create a new version (snapshot) of the current offer state."""
     tenant = _tenant(user)
-    # Check permissions
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions to create versions")
+    # OFF-02 R67: the role is the route's gate (Owner / Admin / Accountant)
     
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    
-    if not await can_manage_project(user, offer["project_id"]):
-        raise HTTPException(status_code=403, detail="Access denied")
     
     now = datetime.now(timezone.utc).isoformat()
     version_number = await get_next_version_number(user["org_id"], offer_id)
@@ -212,23 +210,22 @@ async def get_offer_version(offer_id: str, version_number: int, user: dict = Dep
 
 @router.post("/offers/{offer_id}/versions/{version_number}/restore")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def restore_offer_version(offer_id: str, version_number: int, user: dict = Depends(get_current_user)):
+async def restore_offer_version(offer_id: str, version_number: int,
+                                _r67: dict = Depends(require_money_write(
+                                    "offers.offer_snapshot_restore.execute", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                                user: dict = Depends(get_current_user)):
     """
     Restore an offer to a specific version.
     - Creates an automatic backup version BEFORE restore
     - Overwrites current offer with the snapshot data
     """
     tenant = _tenant(user)
-    # Check permissions
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions to restore versions")
+    # OFF-02 R67: the role is the route's gate (Owner / Admin / Accountant)
     
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
     
-    if not await can_manage_project(user, offer["project_id"]):
-        raise HTTPException(status_code=403, detail="Access denied")
     _refuse_if_used(offer, await _draft_was_used(tenant, offer))
     
     # Get the version to restore
@@ -313,11 +310,13 @@ async def restore_offer_version(offer_id: str, version_number: int, user: dict =
 
 
 @router.delete("/offers/{offer_id}/versions/{version_number}")
-async def delete_offer_version(offer_id: str, version_number: int, user: dict = Depends(get_current_user)):
+async def delete_offer_version(offer_id: str, version_number: int,
+                               _r67: dict = Depends(require_money_write(
+                                   "offers.offer_snapshot.delete", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                               user: dict = Depends(get_current_user)):
     """Delete a specific version (admin only, cannot delete if it's the only version)."""
     tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin can delete versions")
+    # OFF-02 R67: the role is the route's gate (Owner / Admin / Accountant)
     
     offer = await tenant.offers.find_one({"id": offer_id, "org_id": user["org_id"]})
     if not offer:

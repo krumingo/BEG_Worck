@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
+from app.permissions.money_write import (require_finance_read, require_money_write,
+                                         strip_money_for_non_finance)
 from app.tenancy.data_access import (
     TenantData, assigned_project_ids, is_project_member, resolve_review_token,
 )
@@ -94,10 +95,9 @@ def compute_offer_totals(offer: dict) -> dict:
 
 
 async def can_edit_offer(user: dict, offer: dict) -> bool:
-    """Check if user can edit offer (must be Draft and have project access)"""
-    if offer["status"] != "Draft":
-        return False
-    return await can_manage_project(user, offer["project_id"])
+    """Only a Draft is edited. OFF-02 R67: WHO may edit is the route's gate
+    (require_money_write: Owner / Admin / Accountant), no longer the project role."""
+    return offer["status"] == "Draft"
 
 
 # ── OFF-01: versions, acceptance, cancellation (FLOW-003, FG-129/FG-130) ──
@@ -342,15 +342,15 @@ async def _offer_event(session, *, tenant_id: str, actor_type: str, actor_id: st
 
 @router.post("/offers", status_code=201)
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def create_offer(data: OfferCreate, user: dict = Depends(require_m2)):
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+async def create_offer(data: OfferCreate,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                       user: dict = Depends(require_m2)):
     
     project = await _tenant(user).projects.get(data.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if not await can_manage_project(user, data.project_id):
-        raise HTTPException(status_code=403, detail="Not authorized for this project")
+    # OFF-02 R67: the writer is Owner/Admin/Accountant (the gate above) — company-wide
     
     now = datetime.now(timezone.utc).isoformat()
     offer_no = await get_next_offer_no(_tenant(user))
@@ -460,12 +460,15 @@ async def get_offer(offer_id: str, user: dict = Depends(require_m2)):
 
 @router.put("/offers/{offer_id}")
 @strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
-async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(require_m2)):
+async def update_offer(offer_id: str, data: OfferUpdate,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer.update", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                       user: dict = Depends(require_m2)):
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if not await can_edit_offer(user, offer):
-        raise HTTPException(status_code=403, detail="Can only edit Draft offers you manage")
+    if not await can_edit_offer(user, offer):     # OFF-02 R67: the role is the gate above
+        raise HTTPException(status_code=403, detail="Can only edit Draft offers")
     
     update = {k: v for k, v in data.model_dump().items() if v is not None}
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
@@ -488,12 +491,15 @@ async def update_offer(offer_id: str, data: OfferUpdate, user: dict = Depends(re
 
 @router.put("/offers/{offer_id}/lines")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict = Depends(require_m2)):
+async def update_offer_lines(offer_id: str, data: OfferLinesUpdate,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_lines.update", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                             user: dict = Depends(require_m2)):
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if not await can_edit_offer(user, offer):
-        raise HTTPException(status_code=403, detail="Can only edit Draft offers you manage")
+    if not await can_edit_offer(user, offer):     # OFF-02 R67: the role is the gate above
+        raise HTTPException(status_code=403, detail="Can only edit Draft offers")
     
     lines = []
     for i, line in enumerate(data.lines):
@@ -540,13 +546,14 @@ async def update_offer_lines(offer_id: str, data: OfferLinesUpdate, user: dict =
 
 @router.post("/offers/{offer_id}/send")
 @strip_money_for_non_finance   # SEC-02-E (R20-5M, sweep)
-async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
+async def send_offer(offer_id: str,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_send.execute", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                     user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     offer = await _tenant(user).offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if not await can_manage_project(user, offer["project_id"]):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     if offer["status"] not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Only Draft offers can be sent")
     if len(offer.get("lines", [])) == 0:
@@ -616,6 +623,8 @@ async def send_offer(offer_id: str, user: dict = Depends(require_m2)):
 @router.post("/offers/{offer_id}/accept")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_accept.execute", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
                        user: dict = Depends(require_m2),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Internal acceptance of the CURRENT version (OFF-01). A superseded version → 409
@@ -624,8 +633,6 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
     offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can accept offers")
     key = _require_key(idempotency_key)
     data = data or OfferAccept()
     version = offer.get("version", 1)
@@ -689,7 +696,10 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
 
 @router.post("/offers/{offer_id}/reject")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(require_m2),
+async def reject_offer(offer_id: str, data: OfferReject,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_reject.execute", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                       user: dict = Depends(require_m2),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """Internal rejection of the CURRENT version. FG-144: one transaction — a CAS on
     status Sent + version + not superseded, the canonical AuditEvent with the reason; a
@@ -698,8 +708,6 @@ async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(re
     offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can reject offers")
     key = _require_key(idempotency_key)
     reason = (data.reason or "").strip() or None
     if reason:
@@ -742,7 +750,10 @@ async def reject_offer(offer_id: str, data: OfferReject, user: dict = Depends(re
 
 @router.post("/offers/{offer_id}/new-version")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
+async def create_offer_version(offer_id: str,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_version.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                               user: dict = Depends(require_m2),
                                idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """A new version (Draft) of a non-draft offer. OFF-01: the old version is superseded
     and its review link revoked in the same transaction as the insert of the new one."""
@@ -750,8 +761,6 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
     offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if not await can_manage_project(user, offer["project_id"]):
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     key = _require_key(idempotency_key)
     seen_status = offer["status"]
     new_version = offer.get("version", 1) + 1
@@ -837,6 +846,8 @@ async def create_offer_version(offer_id: str, user: dict = Depends(require_m2),
 @router.post("/offers/{offer_id}/cancel")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
 async def cancel_offer(offer_id: str, data: Optional[OfferCancel] = None,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_cancel.execute", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
                        user: dict = Depends(require_m2),
                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """OFF-01 (FG-130): a sent offer is withdrawn, never deleted — status Cancelled, the
@@ -845,8 +856,6 @@ async def cancel_offer(offer_id: str, data: Optional[OfferCancel] = None,
     offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can cancel offers")
     key = _require_key(idempotency_key)
     reason = ((data.reason if data else None) or "").strip()
     if not reason:
@@ -893,15 +902,16 @@ async def cancel_offer(offer_id: str, data: Optional[OfferCancel] = None,
 
 
 @router.delete("/offers/{offer_id}")
-async def delete_offer(offer_id: str, user: dict = Depends(require_m2)):
+async def delete_offer(offer_id: str,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer.delete", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                       user: dict = Depends(require_m2)):
     """Only a draft that was never sent (and is not a version of a sent offer) is removed.
     OFF-01 (FG-130): anything else → 409 OFFER_IN_USE; cancel it instead."""
     tenant = _tenant(user)
     offer = await tenant.offers.get(offer_id)
     if not offer:
         raise HTTPException(status_code=404, detail="Offer not found")
-    if user["role"] not in ["Admin", "Owner"]:
-        raise HTTPException(status_code=403, detail="Only Admin/Owner can delete offers")
     if offer["status"] != "Draft" or await _draft_was_used(tenant, offer):
         raise _conflict(OFFER_IN_USE, "Изпратена или използвана оферта не се изтрива — анулирайте я")
     
@@ -1377,10 +1387,11 @@ async def import_offer_preview(file: UploadFile = File(...), user: dict = Depend
 
 @router.post("/offers/import-confirm", status_code=201)
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def import_offer_confirm(data: dict, user: dict = Depends(require_m2)):
-    """Create offer from imported/previewed lines"""
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
+async def import_offer_confirm(data: dict,
+    _r67: dict = Depends(require_money_write(
+        "offers.offer_import.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                               user: dict = Depends(require_m2)):
+    """Create offer from imported/previewed lines (OFF-02 R67: the role is the gate above)"""
     
     project_id = data.get("project_id")
     if not project_id:

@@ -112,10 +112,19 @@ async def _calls(c, op, who):
     return out
 
 
-def test_01_site_manager_gets_no_money_from_any_offer_write(monkeypatch, backend, mode):
-    """FG-350: every write a SiteManager may call answers WITHOUT prices or totals."""
+def test_01_a_writer_without_the_finance_read_right_gets_no_money(monkeypatch, backend, mode):
+    """FG-350: every offer write answers through the SEC-02 strip, like the read. Since R67
+    only Owner / Admin / Accountant may write, the strip is the defence in depth for an
+    enforce assignment that grants an offer write without finance.money_values.read — here
+    forced by making money_values_visible answer False for the (writing) Admin."""
+    import app.permissions.money_write as mw
+
+    async def no_finance_read(request, user):
+        return False
+    monkeypatch.setattr(mw, "money_values_visible", no_finance_read)
+
     async def scenario(c, op):
-        out = await _calls(c, op, "site-a")
+        out = await _calls(c, op, "admin-a")
         leaks = {}
         for name, r in out.items():
             assert r.status_code in (200, 201), (name, r.status_code, r.text[:300])
@@ -265,6 +274,9 @@ def test_06_r67_owner_admin_accountant_may_write_offers(monkeypatch, backend, mo
     async def scenario(c, op):
         bad = []
         for who in ALLOWED:
+            for coll in ("offers", "offer_versions", "extra_work_drafts"):  # fresh data per role
+                await op[coll].delete_many({})
+            await _seed_r67(op)
             for method, path, body in _writes():
                 r = await _call(c, who, method, path, body)
                 if r.status_code in (401, 403):
@@ -282,12 +294,7 @@ def test_06_r67_owner_admin_accountant_may_write_offers(monkeypatch, backend, mo
         a = await c.post("/api/offers/%s/accept" % oid, headers=T.hdr("acct-a"))
         assert a.status_code == 200 and a.json()["status"] == "Accepted", a.text
         assert "total" in a.json()                                # a finance role sees money
-    monkeypatch_seed = _seed_r67
-
-    async def with_seed(c, op):
-        await monkeypatch_seed(op)
-        await scenario(c, op)
-    run(monkeypatch, backend, mode, with_seed)
+    run(monkeypatch, backend, mode, scenario)
 
 
 def test_07_off89_n1_a_site_manager_cannot_zero_the_prices(monkeypatch, backend, mode):
@@ -310,3 +317,51 @@ def test_07_off89_n1_a_site_manager_cannot_zero_the_prices(monkeypatch, backend,
         resp = await T.respond(c, "tcl" + "m" * 21, "approve")
         assert resp.status_code == 200 and resp.json()["status"] == "Accepted", resp.text
     run(monkeypatch, backend, mode, scenario)
+
+
+#: R67: every offer write route and its one Permission Service action (catalog.OFFER_WRITE_ACTIONS).
+R67_ROUTES = {
+    ("POST", "/api/offers"): "offers.offer.create",
+    ("PUT", "/api/offers/{offer_id}"): "offers.offer.update",
+    ("PUT", "/api/offers/{offer_id}/lines"): "offers.offer_lines.update",
+    ("POST", "/api/offers/{offer_id}/send"): "offers.offer_send.execute",
+    ("POST", "/api/offers/{offer_id}/accept"): "offers.offer_accept.execute",
+    ("POST", "/api/offers/{offer_id}/reject"): "offers.offer_reject.execute",
+    ("POST", "/api/offers/{offer_id}/new-version"): "offers.offer_version.create",
+    ("POST", "/api/offers/{offer_id}/cancel"): "offers.offer_cancel.execute",
+    ("DELETE", "/api/offers/{offer_id}"): "offers.offer.delete",
+    ("POST", "/api/offers/import-confirm"): "offers.offer_import.create",
+    ("POST", "/api/offers/{offer_id}/versions"): "offers.offer_snapshot.create",
+    ("POST", "/api/offers/{offer_id}/versions/{version_number}/restore"):
+        "offers.offer_snapshot_restore.execute",
+    ("DELETE", "/api/offers/{offer_id}/versions/{version_number}"): "offers.offer_snapshot.delete",
+    ("POST", "/api/extra-works/create-offer"): "offers.offer_from_extra_works.create",
+    ("POST", "/api/projects/{project_id}/smr-to-offer"): "offers.offer_from_smr.create",
+    ("POST", "/api/missing-smr/{item_id}/to-offer"): "offers.offer_from_missing_smr.create",
+    ("POST", "/api/missing-smr/batch-to-offer"): "offers.offer_from_missing_smr_batch.create",
+    ("POST", "/api/smr-analyses/{analysis_id}/to-offer"): "offers.offer_from_smr_analysis.create",
+}
+
+
+def test_08_r67_every_offer_write_carries_its_action_first_and_only_finance_holds_them():
+    """Static: each R67 route's FIRST dependency is require_money_write with its own action;
+    the catalog grants these actions to Owner, Admin and Accountant only."""
+    import server
+    from fastapi.routing import APIRoute
+    from app.permissions.catalog import (ACTIONS, OFFER_WRITE_ACTIONS, PERMISSION_MATRIX,
+                                         is_significant_action)
+    found = {}
+    for route in server.app.routes:
+        if not isinstance(route, APIRoute):
+            continue
+        for method in route.methods:
+            if (method, route.path) in R67_ROUTES:
+                calls = [d.call for d in route.dependant.dependencies]
+                found[(method, route.path)] = calls
+    assert set(found) == set(R67_ROUTES), sorted(set(R67_ROUTES) ^ set(found))
+    for key, calls in found.items():
+        assert getattr(calls[0], "sec01_action", None) == R67_ROUTES[key], key
+    assert set(R67_ROUTES.values()) == OFFER_WRITE_ACTIONS and OFFER_WRITE_ACTIONS <= ACTIONS
+    assert all(is_significant_action(a) for a in OFFER_WRITE_ACTIONS)     # denials audited
+    holders = {rid for rid, acts in PERMISSION_MATRIX.items() if acts & OFFER_WRITE_ACTIONS}
+    assert holders == {"owner", "admin", "accountant"}

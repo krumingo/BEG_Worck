@@ -12,7 +12,8 @@ import os
 
 from app.db import db
 from app.deps.auth import get_current_user
-from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
+from app.permissions.money_write import (require_finance_read, require_money_write,
+                                         strip_money_for_non_finance)
 from app.deps.modules import require_m2
 from app.services.ai_proposal import rule_based_proposal, get_ai_proposal
 
@@ -545,7 +546,10 @@ async def compare_versions(analysis_id: str, version: int, user: dict = Depends(
 # ── To Offer Bridge ───────────────────────────────────────────────
 
 @router.post("/smr-analyses/{analysis_id}/to-offer")
-async def to_offer(analysis_id: str, user: dict = Depends(require_m2)):
+async def to_offer(analysis_id: str,
+                   _r67: dict = Depends(require_money_write(
+                       "offers.offer_from_smr_analysis.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                   user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     doc = await tenant.smr_analyses.find_one({"id": analysis_id, "org_id": user["org_id"]}, {"_id": 0})
     if not doc:

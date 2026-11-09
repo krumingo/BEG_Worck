@@ -11,6 +11,7 @@ import uuid
 from app.db import db
 from app.deps.auth import get_current_user
 from app.deps.modules import require_m2
+from app.permissions.money_write import require_money_write
 
 router = APIRouter(tags=["Missing SMR"])
 
@@ -394,7 +395,10 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
 # ── Bridge: To Offer ──────────────────────────────────────────────
 
 @router.post("/missing-smr/{item_id}/to-offer")
-async def bridge_to_offer(item_id: str, user: dict = Depends(require_m2)):
+async def bridge_to_offer(item_id: str,
+                          _r67: dict = Depends(require_money_write(
+                              "offers.offer_from_missing_smr.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                          user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     item = await tenant.missing_smr.find_one({"id": item_id, "org_id": user["org_id"]})
     if not item:
@@ -706,7 +710,10 @@ async def ai_estimate(item_id: str, user: dict = Depends(require_m2)):
 # ── Batch To Offer ─────────────────────────────────────────────────
 
 @router.post("/missing-smr/batch-to-offer")
-async def batch_to_offer(data: BatchToOfferBody, user: dict = Depends(require_m2)):
+async def batch_to_offer(data: BatchToOfferBody,
+                         _r67: dict = Depends(require_money_write(
+                             "offers.offer_from_missing_smr_batch.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                         user: dict = Depends(require_m2)):
     tenant = _tenant(user)
     if not data.ids:
         raise HTTPException(status_code=400, detail="No items provided")

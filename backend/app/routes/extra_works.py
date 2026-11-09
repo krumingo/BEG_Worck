@@ -12,7 +12,8 @@ from app.db import db
 from app.tenancy.data_access import TenantData
 from app.tenancy.settings_identity import WORKER_RATES, settings_id
 from app.deps.auth import get_current_user
-from app.permissions.money_write import require_finance_read, strip_money_for_non_finance
+from app.permissions.money_write import (require_finance_read, require_money_write,
+                                         strip_money_for_non_finance)
 from app.deps.modules import require_m2
 from app.utils.audit import log_audit
 from app.services.ai_proposal import get_ai_proposal as hybrid_ai_proposal
@@ -445,11 +446,12 @@ async def apply_ai_to_draft(draft_id: str, city: Optional[str] = None, user: dic
 
 @router.post("/extra-works/create-offer", status_code=201)
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def create_offer_from_drafts(data: CreateOfferFromDrafts, user: dict = Depends(require_m2)):
-    """Create a new offer from selected draft extra work rows"""
+async def create_offer_from_drafts(data: CreateOfferFromDrafts,
+                                   _r67: dict = Depends(require_money_write(
+                                       "offers.offer_from_extra_works.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                                   user: dict = Depends(require_m2)):
+    """Create a new offer from selected draft extra work rows (OFF-02 R67: gate above)"""
     tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
     
     if not data.draft_ids:
         raise HTTPException(status_code=400, detail="No draft rows selected")
@@ -776,11 +778,12 @@ async def get_smr_aggregated(project_id: str, user: dict = Depends(get_current_u
 
 @router.post("/projects/{project_id}/smr-to-offer")
 @strip_money_for_non_finance   # OFF-02 FG-350 (R20): a write answers like the read
-async def create_offer_from_smr(project_id: str, data: dict, user: dict = Depends(get_current_user)):
-    """Create an offer from selected SMR rows."""
+async def create_offer_from_smr(project_id: str, data: dict,
+                                _r67: dict = Depends(require_money_write(
+                                    "offers.offer_from_smr.create", module="M2", resource_type="offer")),  # OFF-02 R67: Owner/Admin/Accountant only
+                                user: dict = Depends(get_current_user)):
+    """Create an offer from selected SMR rows (OFF-02 R67: gate above)."""
     tenant = _tenant(user)
-    if user["role"] not in ["Admin", "Owner", "SiteManager"]:
-        raise HTTPException(status_code=403, detail="Insufficient permissions")
 
     org_id = user["org_id"]
     source_ids = data.get("source_ids", [])
