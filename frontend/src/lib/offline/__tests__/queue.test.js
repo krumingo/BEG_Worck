@@ -22,8 +22,10 @@ function fakeApi({ enabled = true, revoked = false } = {}) {
     calls,
     batchAnswer: null,
     batchError: null,
+    receipts: [],
     get: jest.fn(async (url) => {
       calls.push(["GET", url]);
+      if (url.startsWith("/sync/receipts")) return { data: api.receipts };
       return { data: { enabled, revoked, server_time: SERVER_TIME } };
     }),
     post: jest.fn(async (url, body) => {
@@ -218,4 +220,48 @@ test("sha256 of a file is computed on the phone", async () => {
   const key = await globalThis.crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
   const sealed = await seal(key, "o", { a: 1 });
   expect(await open(key, "o", sealed)).toEqual({ a: 1 });
+});
+
+
+test("the office's decisions come back to the phone through the receipts (R61-3)", async () => {
+  const { q, store, api } = await setup();
+  const late = await q.enqueue("attendance.mark", {});
+  const conf = await q.enqueue("attendance.mark", {});
+  api.batchAnswer = (body) => ({ results: body.items.map((i) => (i.local_id === late
+    ? { local_id: late, status: "late", result: { late_id: "l1" } }
+    : { local_id: conf, status: "conflict", result: { conflict_id: "c1" } })) });
+  await q.flush();
+  expect((await store.get("queue", late)).sub).toBe("late");
+  // the office confirms the late record and keeps its own version in the conflict
+  api.receipts = [
+    { local_id: late, status: "synced", result: { entity_id: "att-1" } },
+    { local_id: conf, status: "rejected", result: { error_code: "CONFLICT_KEPT_OFFICE" } },
+  ];
+  expect(await q.refreshReceipts()).toBe(2);
+  const l = await store.get("queue", late);
+  expect(l.status).toBe("synced");
+  expect(l.sealed).toBeUndefined();
+  const c = await store.get("queue", conf);
+  expect(c.status).toBe("needs_review");
+  expect(c.last_error).toBe("CONFLICT_KEPT_OFFICE");
+});
+
+test("a photo keeps its original sealed on the phone while it waits for the file registry", async () => {
+  const { q, store, api } = await setup();
+  const blob = new (require("buffer").Blob)([new Uint8Array([1, 2, 3, 4])], { type: "image/jpeg" });
+  const id = await q.enqueue("media.upload", { sha256: "ab".repeat(32), size: 4, mime: "image/jpeg" }, { file: blob });
+  api.batchAnswer = (body) => ({ results: body.items.map((i) => ({ local_id: i.local_id, status: "waiting_file",
+    result: { file_registry: "unavailable" } })) });
+  await q.flush();
+  const row = await store.get("queue", id);
+  expect(row.status).toBe("waiting_file");
+  expect(row.file_sealed).toBeTruthy();
+  expect(JSON.stringify(row.file_sealed)).not.toMatch(/AQIDBA/); // base64 of 1,2,3,4 is not in clear
+  // the bytes are not sent to the server in this build
+  const sent = api.calls.find((c) => c[1] === "/sync/batch")[2];
+  expect(JSON.stringify(sent)).not.toMatch(/b64/);
+  // and they open again with the owner's key
+  const f = await open(await ownerKey(store, ownerOf("org-a", "u-1")), ownerOf("org-a", "u-1"), row.file_sealed);
+  expect(f.b64).toBe("AQIDBA==");
+  expect(q.state.get().unsent).toBe(1); // still on the phone
 });

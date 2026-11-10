@@ -7,6 +7,8 @@ import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
+import { sendOrQueue, STATUS, ONLINE_ONLY_MESSAGE } from "@/lib/offline";
+import SitePhotoButton from "@/components/offline/SitePhotoButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -289,7 +291,16 @@ export default function TechnicianDashboard() {
         const toDelete = existingDrafts.filter(d => editingWorkerIds.has(d.worker_id));
         await Promise.all(toDelete.map(d => API.delete(`/technician/draft/${d.id}`).catch(() => null)));
       }
-      const res = await API.post("/technician/daily-report", { project_id: selectedSite.project_id, entries: payload, general_notes: generalNotes || undefined });
+      // PWA-02: without a connection (and the offline queue on) the report stays on the phone.
+      const body = { project_id: selectedSite.project_id, entries: payload, general_notes: generalNotes || undefined };
+      const sent = await sendOrQueue({ opType: "technician.daily_report", projectId: selectedSite.project_id,
+        payload: body, send: () => API.post("/technician/daily-report", body) });
+      if (sent.queued) {
+        toast.success(STATUS.saved);
+        setSubmitting(false);
+        return;
+      }
+      const res = sent.response;
 
       // Check for hours warnings per worker
       const warnings = res.data?.hours_warnings || [];
@@ -320,7 +331,9 @@ export default function TechnicianDashboard() {
 
   const submitPhoto = async (e) => {
     const file = e.target.files?.[0]; if (!file) return;
-    try { const fd = new FormData(); fd.append("file", file); fd.append("project_id", selectedSite.project_id); fd.append("description", "Фактура от терена"); await API.post("/technician/photo-invoice", fd, { headers: { "Content-Type": "multipart/form-data" } }); toast.success(t("technician.invoiceUploaded")); setQuickScreen(null); } catch { toast.error("Error"); }
+    // R61-1: an invoice is money — never queued; without a connection: „Това изисква интернет“.
+    if (typeof navigator !== "undefined" && navigator.onLine === false) { toast.error(ONLINE_ONLY_MESSAGE); return; }
+    try { const fd = new FormData(); fd.append("file", file); fd.append("project_id", selectedSite.project_id); fd.append("description", "Фактура от терена"); await API.post("/technician/photo-invoice", fd, { headers: { "Content-Type": "multipart/form-data" } }); toast.success(t("technician.invoiceUploaded")); setQuickScreen(null); } catch (err) { toast.error(!err.response ? ONLINE_ONLY_MESSAGE : "Error"); }
     e.target.value = "";
   };
 
@@ -638,6 +651,7 @@ export default function TechnicianDashboard() {
           <Button onClick={startReport} className="h-16 rounded-2xl flex-col text-xs font-semibold"><FileText className="w-5 h-5 mb-1" />Отчет за деня</Button>
           <Button variant="outline" onClick={() => { setQSmr(""); setQuickScreen("quickSmr"); }} className="h-16 rounded-2xl flex-col text-xs"><AlertTriangle className="w-5 h-5 mb-1 text-orange-400" />Ново СМР</Button>
           <Button variant="outline" onClick={() => setQuickScreen("photoInvoice")} className="h-16 rounded-2xl flex-col text-xs"><Camera className="w-5 h-5 mb-1 text-blue-400" />Снимай фактура</Button>
+          <SitePhotoButton projectId={selectedSite?.project_id} />
         </div>
 
         {/* Чернови за днес — with edit + delete */}

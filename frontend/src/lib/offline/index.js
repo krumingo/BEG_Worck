@@ -73,3 +73,23 @@ export function useOfflineQueue() {
 export function isConnectivityError(err) {
   return !!err && !err.response && err.code !== "ERR_CANCELED";
 }
+
+// Send online; when the offline queue is on and there is no connection, keep the record on
+// the phone instead (encrypted) and send it later. Money and approvals never come here.
+export async function sendOrQueue({ opType, payload, send, projectId = null, file = null }) {
+  const enabled = offlineQueue.isEnabled();
+  const queue = async () => {
+    const localId = await offlineQueue.enqueue(opType, payload, { projectId, file });
+    requestBackgroundSync();
+    return { queued: true, localId };
+  };
+  if (enabled && typeof navigator !== "undefined" && navigator.onLine === false) return queue();
+  try {
+    return { queued: false, response: await send() };
+  } catch (err) {
+    if (enabled && isConnectivityError(err)) return queue();
+    throw err;
+  }
+}
+
+export const QUEUED_MESSAGE = STATUS.saved;

@@ -122,7 +122,17 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
     return enabled;
   }
 
-  async function enqueue(opType, payload, { projectId = null, baseVersion = null } = {}) {
+  // A photo/video: the original stays sealed on the phone (separately from the envelope that
+  // is sent) until a File Registry confirms its checksum — not in this build (D-item).
+  async function sealFile(key, o, file) {
+    const buf = typeof file.arrayBuffer === "function" ? await file.arrayBuffer() : await new Response(file).arrayBuffer();
+    let s = "";
+    const bytes = new Uint8Array(buf);
+    for (let i = 0; i < bytes.length; i += 1) s += String.fromCharCode(bytes[i]);
+    return seal(key, o, { name: file.name || "photo", type: file.type || "", b64: btoa(s) }, subtle);
+  }
+
+  async function enqueue(opType, payload, { projectId = null, baseVersion = null, file = null } = {}) {
     if (!session) throw new Error("no session");
     if (isOnlineOnly(opType)) {
       const e = new Error(ONLINE_ONLY_MESSAGE);
@@ -141,7 +151,8 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
     };
     const row = { owner: o, local_id: localId, op_type: opType, status: "saved", captured_at: capturedAt,
       created_at: capturedAt, attempts: 0, next_at: 0, last_error: null,
-      sealed: await seal(key, o, envelope, subtle) };
+      sealed: await seal(key, o, envelope, subtle),
+      ...(file ? { file_sealed: await sealFile(key, o, file) } : {}) };
     await store.put("queue", localId, row);
     await refresh();
     return localId;
@@ -151,6 +162,7 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
     const next = { ...row, ...patch };
     if (next.status === "synced") {
       delete next.sealed; // the payload leaves the phone once the server holds it
+      delete next.file_sealed;
       next.synced_at = now();
     }
     await store.put("queue", row.local_id, next);
@@ -217,12 +229,42 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
       else if (res.status === "processing") await update(fresh, { status: "pending", next_at: now() + 2000 });
       else if (res.status === "conflict") await update(fresh, { status: "conflict", result: res.result });
       else if (res.status === "late") await update(fresh, { status: "needs_review", sub: "late", result: res.result });
+      else if (res.status === "waiting_file") await update(fresh, { status: "waiting_file", result: res.result });
       else await update(fresh, { status: "needs_review", result: res.result,
         last_error: (res.result && res.result.error_code) || "REJECTED" });
     }
     state.set((s) => ({ ...s, lastSyncAt: answer.server_time || null }));
     await refresh();
     return { sent: due.length };
+  }
+
+  // The office decides on late records and conflicts later; the server's receipts carry the
+  // outcome back to the phone (R61-3: "the worker sees the status").
+  async function refreshReceipts() {
+    if (!session || !enabled) return 0;
+    const waiting = (await rows()).filter((r) => r.status === "conflict" || r.sub === "late");
+    if (!waiting.length) return 0;
+    let receipts;
+    try {
+      receipts = (await api.get(`/sync/receipts?device_id=${await deviceId()}`)).data;
+    } catch (err) {
+      if (isRevoked(err)) await wipe();
+      return 0;
+    }
+    if (!Array.isArray(receipts)) return 0;
+    const byLocal = new Map(receipts.map((r) => [r.local_id, r]));
+    let changed = 0;
+    for (const r of waiting) {
+      const rc = byLocal.get(r.local_id);
+      if (!rc || rc.status === "conflict" || rc.status === "late") continue;
+      changed += 1;
+      if (rc.status === "synced") await update(r, { status: "synced", sub: null, result: rc.result });
+      else if (rc.status === "waiting_file") await update(r, { status: "waiting_file", sub: null, result: rc.result });
+      else await update(r, { status: "needs_review", sub: null, result: rc.result,
+        last_error: (rc.result && rc.result.error_code) || "REJECTED" });
+    }
+    await refresh();
+    return changed;
   }
 
   async function flush() {
@@ -234,6 +276,7 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
         total += r.sent || 0;
         if (!r.sent || r.revoked || r.error) break;
       }
+      await refreshReceipts();
       return total;
     })().finally(() => { flushing = null; });
     return flushing;
@@ -246,7 +289,7 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
   }
 
   return {
-    state, start, enqueue, flush, retry, wipe, refresh, deviceId,
+    state, start, enqueue, flush, retry, wipe, refresh, deviceId, refreshReceipts,
     unsentCount: async () => (await rows()).filter((r) => r.status !== "synced").length,
     isEnabled: () => enabled,
     _clockOffset: () => clockOffsetMs,

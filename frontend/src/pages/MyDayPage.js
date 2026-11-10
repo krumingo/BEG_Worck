@@ -3,6 +3,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { sendOrQueue, STATUS } from "@/lib/offline";
 import { formatDate, formatTime } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -61,6 +62,7 @@ export default function MyDayPage() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const [marking, setMarking] = useState(false);
+  const [queuedMessage, setQueuedMessage] = useState(null);
   const [note, setNote] = useState("");
   const [selectedProject, setSelectedProject] = useState("");
   // Work sessions
@@ -97,13 +99,18 @@ export default function MyDayPage() {
   const handleMark = async (status) => {
     setMarking(true);
     try {
-      await API.post("/attendance/mark", {
-        project_id: selectedProject || null,
-        status,
-        note,
-        source: "Web",
+      // PWA-02: without a connection (and the offline queue on) the mark stays on the phone.
+      const r = await sendOrQueue({
+        opType: "attendance.mark",
+        projectId: selectedProject || null,
+        payload: { project_id: selectedProject || null, status, note },
+        send: () => API.post("/attendance/mark", { project_id: selectedProject || null, status, note, source: "Web" }),
       });
-      await fetchToday();
+      if (r.queued) {
+        setQueuedMessage(STATUS.saved);
+      } else {
+        await fetchToday();
+      }
       setNote("");
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.errorOccurred"));
@@ -206,6 +213,12 @@ export default function MyDayPage() {
             {marking ? <Loader2 className="w-6 h-6 animate-spin mr-3" /> : <CheckCircle2 className="w-7 h-7 mr-3" />}
             {pastDeadline ? t("myDay.imAtWorkLate") : t("myDay.imAtWork")}
           </Button>
+
+          {queuedMessage && (
+            <p className="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-400" data-testid="attendance-queued">
+              {queuedMessage} — ще се изпрати, когато има връзка
+            </p>
+          )}
 
           {/* Secondary Actions */}
           <div className="grid grid-cols-3 gap-3 mb-6">

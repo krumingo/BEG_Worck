@@ -48,7 +48,8 @@ export async function open(key, owner, sealed, subtle = globalThis.crypto.subtle
 // SHA-256 of a file / blob, computed on the phone (FLOW-037 L192: the original stays until
 // the server confirms the same checksum).
 export async function sha256Hex(data, subtle = globalThis.crypto.subtle) {
-  const buf = data instanceof ArrayBuffer ? data : await new Response(data).arrayBuffer();
+  const buf = data instanceof ArrayBuffer ? data
+    : (typeof data.arrayBuffer === "function" ? await data.arrayBuffer() : await new Response(data).arrayBuffer());
   const digest = await subtle.digest("SHA-256", buf);
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("");
 }

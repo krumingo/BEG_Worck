@@ -28,6 +28,79 @@ function Section({ icon: Icon, title, count, children, testId }) {
   );
 }
 
+const CORRECTION_ONLY = ["approved", "paid", "closed"];
+const ATT_STATUSES = ["Present", "Late", "Absent", "SickLeave", "Vacation"];
+
+// One decision row: a reason (required) and the buttons; posts with an Idempotency-Key.
+function Decide({ url, actions, onDone, testId, extra = null }) {
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [key] = useState(newKey);
+  const go = async (decision, payload) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await API.post(url, { decision, reason, ...(payload ? { payload } : {}) }, { headers: { "Idempotency-Key": `${key}:${decision}` } });
+      onDone();
+    } catch (e) {
+      const d = e.response && e.response.data && e.response.data.detail;
+      setError((d && d.message) || "Неуспешно");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="mt-3 space-y-2" data-testid={testId}>
+      <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина (задължително)"
+        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm" data-testid={`${testId}-reason`} />
+      {extra}
+      <div className="flex flex-wrap gap-2">
+        {actions.map((a) => (
+          <button key={a.decision} type="button" disabled={busy || reason.trim().length < 3 || a.disabled}
+            onClick={() => go(a.decision, a.payload && a.payload())} title={a.title || ""}
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40 ${a.tone || "border border-border hover:bg-muted"}`}
+            data-testid={`${testId}-${a.decision}`}>{a.label}</button>
+        ))}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function LateDecision({ item, onDone }) {
+  const [status, setStatus] = useState((item.payload && item.payload.status) || "Present");
+  const isAtt = item.op_type === "attendance.mark";
+  const actions = [
+    { decision: "confirm", label: "Потвърди", tone: "bg-primary text-primary-foreground" },
+    ...(isAtt ? [{ decision: "correct", label: "Коригирай", payload: () => ({ ...item.payload, status }) }] : []),
+    { decision: "reject", label: "Откажи", tone: "border border-destructive/50 text-destructive" },
+  ];
+  const extra = isAtt ? (
+    <label className="flex items-center gap-2 text-xs text-muted-foreground">Статус при корекция
+      <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded border border-border bg-background px-2 py-1 text-foreground">
+        {ATT_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+    </label>
+  ) : null;
+  return <Decide url={`/sync/late/${item.id}/decide`} actions={actions} onDone={onDone} testId="late-decide" extra={extra} />;
+}
+
+function ConflictDecision({ item, onDone }) {
+  const locked = CORRECTION_ONLY.includes(item.kind);
+  const actions = [
+    { decision: "keep_office", label: "Остави офисната", tone: "bg-primary text-primary-foreground" },
+    { decision: "accept_field", label: "Приеми теренната", disabled: locked,
+      title: locked ? "Одобрен/платен запис — само корекция или сторно" : "" },
+  ];
+  return (
+    <>
+      {locked && <p className="mt-2 text-xs text-amber-400">Записът е одобрен или платен — теренната версия може да влезе само чрез корекция или сторно в съответния модул.</p>}
+      <Decide url={`/sync/conflicts/${item.id}/resolve`} actions={actions} onDone={onDone} testId="conflict-decide" />
+    </>
+  );
+}
+
 const Empty = ({ text }) => <p className="px-1 py-2 text-sm text-muted-foreground">{text}</p>;
 
 export function RevokeDialog({ device, onClose, onDone }) {
@@ -104,6 +177,7 @@ export default function SyncConsolePage() {
                 <tr key={d.field} className="border-t border-border"><td className="py-1 font-mono">{d.field}</td><td>{String(d.office ?? "—")}</td><td className="text-amber-400">{String(d.phone ?? "—")}</td></tr>
               ))}</tbody>
             </table>
+            <ConflictDecision item={x} onDone={load} />
           </article>
         ))}
       </Section>
@@ -114,6 +188,7 @@ export default function SyncConsolePage() {
             <li key={x.id} className="rounded-lg border border-border p-3 text-sm" data-testid="console-late-item">
               <p className="font-medium">{OP_LABELS[x.op_type] || x.op_type} · {LATE_REASONS[x.reason] || x.reason}</p>
               <p className="text-xs text-muted-foreground">{x.author_name} · записано {fmt(x.captured_at)} · получено {fmt(x.received_at)}</p>
+              <LateDecision item={x} onDone={load} />
             </li>
           ))}</ul>
         )}
