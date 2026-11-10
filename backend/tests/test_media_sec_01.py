@@ -238,6 +238,47 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                  json={"reason": "x"})
         d["used_as_signature"] = {"status": r["status"], "error_code": r["error_code"],
                                   "file_kept": (UPLOADS / stored(sig)).is_file()}
+        # FG-556: a photo referenced by a work report, an extra-work draft, a pending expense
+        # or a payment receipt (by id, stored name or url; plain list or sub-document)
+        def by_name(m):
+            return stored(m)
+
+        def by_url(m):
+            return "/api/media/file/%s" % stored(m)
+
+        fg556 = {
+            "work_report_id": ("work_reports", lambda m: {"photos": [m["id"]], "status": "Approved"}),
+            "work_report_url": ("work_reports", lambda m: {"photos": [{"url": by_url(m)}]}),
+            "extra_work_draft": ("extra_work_drafts", lambda m: {"photos": [by_name(m)]}),
+            "pending_expense": ("pending_expenses", lambda m: {"media_id": m["id"],
+                                                               "status": "pending_approval"}),
+            "pending_expense_url": ("pending_expenses", lambda m: {"media_url": by_url(m)}),
+            "payment_receipt": ("finance_payments", lambda m: {"receipt_media_id": m["id"],
+                                                               "direction": "Outflow",
+                                                               "amount": 10}),
+        }
+        d["fg556"] = {}
+        for label, (coll, shape) in fg556.items():
+            m = upload()
+            row = {"id": pid("A", "use_" + label), "org_id": A["tenant_id"], "created_at": NOW,
+                   **shape(m)}
+            q(lambda: op_db[coll].insert_one(row))
+            r = call("DELETE", "/api/media/%s" % m["id"], role="technician", key="auto",
+                     json={"reason": "x"})
+            d["fg556"][label] = {
+                "status": r["status"], "error_code": r["error_code"],
+                "use_kind": (((r["body"] or {}).get("detail") or {}).get("uses") or [{}])[0].get("kind")
+                if isinstance(r["body"], dict) else None,
+                "status_after": media_row(m["id"]).get("status"),
+                "file_kept": (UPLOADS / stored(m)).is_file()}
+        # the same rows of ANOTHER tenant do not block tenant A's file
+        m = upload()
+        q(lambda: op_db.work_reports.insert_one({"id": pid("B", "use_other"),
+                                                 "org_id": fx["B"]["tenant_id"],
+                                                 "photos": [m["id"]], "created_at": NOW}))
+        d["fg556"]["other_tenant_row"] = call("DELETE", "/api/media/%s" % m["id"],
+                                              role="technician", key="auto",
+                                              json={"reason": "x"})["status"]
         # an unused file: rights, reason, key; then retired, file kept, AuditEvent
         free = upload()
         url = "/api/media/%s" % free["id"]
@@ -267,6 +308,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             "file_owner": call("GET", "/api/media/file/%s" % stored(free))["status"],
             "again": call("DELETE", url, role="technician", key="auto",
                           json={"reason": "пак"})["error_code"],
+            "meta_technician": call("GET", "/api/media/%s" % free["id"], role="technician")["status"],
+            "meta_requester": call("GET", "/api/media/%s" % free["id"], role="requester")["status"],
+            "meta_owner": call("GET", "/api/media/%s" % free["id"])["status"],
             "relink": call("POST", "/api/media/link", role="technician", json={
                 "media_id": free["id"], "context_type": "project",
                 "context_id": A["project_id"]})["status"],
@@ -506,6 +550,27 @@ def test_fg542_an_unused_file_is_retired_kept_and_audited(obs):
     assert ev["idempotency_key"] and ev["tenant_id"]
     assert ev["diff"]["before"] == {"status": "active"}
     assert ev["diff"]["after"] == {"status": "retired"}
+
+
+@real
+def test_fg556_a_photo_used_by_a_report_draft_expense_or_payment_is_409(obs):
+    d = obs["fg542"]["fg556"]
+    kinds = {"work_report_id": "work_reports", "work_report_url": "work_reports",
+             "extra_work_draft": "extra_work_drafts", "pending_expense": "pending_expenses",
+             "pending_expense_url": "pending_expenses", "payment_receipt": "finance_payments"}
+    for label, kind in kinds.items():
+        cell = d[label]
+        assert (cell["status"], cell["error_code"]) == (409, "MEDIA_IN_USE"), (label, cell)
+        assert cell["use_kind"] == kind, (label, cell)
+        assert cell["status_after"] is None and cell["file_kept"] is True, (label, cell)
+    assert d["other_tenant_row"] == 200
+
+
+@real
+def test_fg558_a_retired_files_metadata_is_for_owner_admin_only(obs):
+    d = obs["fg542"]["unused"]
+    assert d["meta_technician"] == 404 and d["meta_requester"] == 404
+    assert d["meta_owner"] == 200
 
 
 @real

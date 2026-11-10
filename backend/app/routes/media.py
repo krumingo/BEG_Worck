@@ -223,6 +223,10 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     if not media:
         raise HTTPException(status_code=404, detail="Media file not found")
     
+    if media.get("status") == MEDIA_RETIRED and user.get("role") not in ("Owner", "Admin"):
+        # MEDIA-SEC-01 (FG-558): a retired file's metadata is for Owner/Admin only
+        raise HTTPException(status_code=404, detail="Media file not found")
+
     # ACL check: enforces org isolation, owner/admin access, and context-based rules
     await enforce_media_access(user, media, action="meta")
     
@@ -508,25 +512,43 @@ async def _media_usages(tenant, org_id: str, media: dict, session=None) -> list:
 
     A file is used when it is linked (``context_type``/``context_id``) — to a work report,
     a missing-SMR item, a profile, … — or when a record points at it by id or stored name:
-    a missing-SMR attachment or client-approval signature, a scanned document, an OCR
-    intake, a user's avatar. An approved linked record is a use as well, so it is covered."""
+    a missing-SMR attachment or client-approval signature, a work report's or extra-work
+    draft's photos, a pending expense, a payment receipt (FG-556), a scanned document, an
+    OCR intake, a user's avatar. An approved linked record is a use as well, so it is covered."""
     media_id = media.get("id")
     stored = media.get("stored_filename")
     names = [x for x in (media_id, stored) if x]
+    urls = (["/api/media/file/%s" % stored, "/api/media/avatar/%s" % stored] if stored else [])
+    refs = names + urls
     uses = []
     if media.get("context_type") or media.get("context_id"):
         uses.append({"kind": "link", "context_type": media.get("context_type"),
                      "context_id": media.get("context_id")})
+
+    def any_of(*fields):
+        # a field holds one reference or a list of them (Mongo matches both with $in);
+        # "x.y" also reaches a list of sub-documents
+        return {"$or": [{f: {"$in": refs}} for f in fields]}
+
     checks = [
-        ("missing_smr", {"$or": [{"attachments.media_id": {"$in": names}},
-                                 {"client_approval.signature_media_id": {"$in": names}},
-                                 {"signature_media_id": {"$in": names}}]}),
-        ("scan_docs", {"media_id": {"$in": names}}),
-        ("ocr_invoice_intake", {"media_id": {"$in": names}}),
+        ("missing_smr", any_of("attachments.media_id", "attachments.url",
+                               "client_approval.signature_media_id", "signature_media_id")),
+        # FG-556: a work report's and an extra-work draft's photo list (ids, names or urls,
+        # or sub-documents with them)
+        ("work_reports", any_of("photos", "photos.media_id", "photos.id", "photos.url")),
+        ("extra_work_drafts", any_of("photos", "photos.media_id", "photos.id", "photos.url")),
+        # FG-556: a field expense receipt / an OCR expense
+        ("pending_expenses", any_of("media_id", "media_url")),
+        # FG-556: a payment receipt in the ledger. No writer on 3863610 stores one yet; every
+        # shape a receipt reference can take is covered so the first writer is protected.
+        ("finance_payments", any_of("media_id", "receipt_media_id", "receipt_media_ids",
+                                    "receipt_file_id", "receipt_url", "attachments.media_id",
+                                    "attachments.url")),
+        ("scan_docs", any_of("media_id")),
+        ("ocr_invoice_intake", any_of("media_id")),
     ]
     if stored:
-        avatar_urls = ["/api/media/avatar/%s" % stored, "/api/media/file/%s" % stored]
-        checks.append(("users", {"avatar_url": {"$in": avatar_urls}}))
+        checks.append(("users", any_of("avatar_url")))
     for coll, flt in checks:
         flt = {"org_id": org_id, **flt}
         row = await tenant.collection(coll).find_one(flt, {"_id": 0, "id": 1}, session=session)
