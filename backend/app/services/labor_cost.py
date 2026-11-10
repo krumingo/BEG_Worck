@@ -621,7 +621,7 @@ def normalize_labor_date(value) -> Optional[str]:
 
 async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: Optional[str],
                                   employee_id: str, date: str, statuses,
-                                  exclude_id: str = None, session=None) -> list:
+                                  exclude_id: str = None, session=None, exclude_ids=None) -> list:
     """FG-463 (R62): the live manual rows (``statuses``; not reversed, not a reversal) of one
     worker on one day — hours that would be counted a second time. ``project_id`` None =
     every project of the tenant (FG-490: a report without a project). FG-491: the day is
@@ -634,8 +634,9 @@ async def overlapping_manual_rows(tenant: TenantData, org_id: str, project_id: O
            "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None}
     if project_id:
         flt["project_id"] = project_id
-    if exclude_id:
-        flt["id"] = {"$ne": exclude_id}
+    skip = [x for x in ([exclude_id] + list(exclude_ids or [])) if x]
+    if skip:
+        flt["id"] = {"$nin": skip}
     rows = await tenant.labor_entries.find(
         flt, {"_id": 0, "id": 1, "approval_status": 1, "date": 1, "project_id": 1},
         session=session).to_list(5000)
@@ -806,6 +807,11 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             dq.append({"code": "MANUAL_ROW_NON_ISO_DATE", "report_id": "manual:" + str(row.get("id")),
                        "date": row.get("date"), "normalized": normalize_labor_date(row.get("date")),
                        "message": "Ръчен ред с дата не във формат ГГГГ-ММ-ДД — коригирайте ръчно (сторно + нов ред)."})
+        if row.get("pending_reversal"):
+            # R81: a creator's reversal waits for a second person — the row still counts
+            row_dq.append("MANUAL_ROW_REVERSAL_PENDING")
+            dq.append({"code": "MANUAL_ROW_REVERSAL_PENDING", "report_id": "manual:" + str(row.get("id")),
+                       "message": "Сторно от въвеждащия чака одобрение от втори човек — дотогава редът се брои."})
         if row.get("correction_required"):
             # R77 (FG-507): still counted at its old amount until the correction is approved
             row_dq.append("MANUAL_ROW_CORRECTION_REQUIRED")

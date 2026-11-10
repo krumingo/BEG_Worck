@@ -333,8 +333,11 @@ def test_fg534_the_correction_void_insert_and_flag_are_one_transaction(monkeypat
         async def boom(*a, **k):
             raise RuntimeError("simulated failure while flagging")
         monkeypatch.setattr(labor_cost, "flag_rows_of_changed_quantities", boom)
-        r = await c.post("/api/labor-quantities/approve", json=_reapprove(10, "qa-1"), headers=_key("owner"))
-        assert r.status_code >= 500 or r.status_code == 409, r.text
+        try:
+            r = await c.post("/api/labor-quantities/approve", json=_reapprove(10, "qa-1"), headers=_key("owner"))
+            assert r.status_code >= 500 or r.status_code == 409, r.text
+        except RuntimeError as exc:                                  # the test client re-raises it
+            assert "simulated failure" in str(exc)
         assert (await op.labor_quantity_approvals.find_one({"id": "qa-1"}))["status"] == "approved"
         assert await op.labor_quantity_approvals.count_documents({"report_id": "R-Q"}) == 1
         assert "correction_required" not in await op.labor_entries.find_one({"id": rid})
