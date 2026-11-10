@@ -109,7 +109,11 @@ async def is_past_deadline(org_id: str):
     end_hour = int(end.split(":")[0])
     return now_hour() >= end_hour
 
-async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source):
+async def create_attendance_entry(org_id, date, project_id, user_id, status, note, marked_by, source,
+                                  extra=None):
+    """``extra`` (PWA-02, additive): fields the offline sync stamps on the entry it creates
+    (``version``, ``sync_local_id``, ``captured_at``, ``device_id``…); never overrides the
+    fields below."""
     tenant = TenantData.for_resolved_org(db, org_id)
     existing = await tenant.attendance_entries.find_one({"org_id": org_id, "date": date, "user_id": user_id})
     if existing:
@@ -130,6 +134,8 @@ async def create_attendance_entry(org_id, date, project_id, user_id, status, not
         "marked_by_user_id": marked_by,
         "source": source,
     }
+    for k, v in (extra or {}).items():
+        entry.setdefault(k, v)
     await tenant.attendance_entries.insert_one(entry)
     await auto_resolve_reminders(org_id, "MissingAttendance", date, user_id, user_id)
     return {k: v for k, v in entry.items() if k != "_id"}

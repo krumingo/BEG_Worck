@@ -9,6 +9,7 @@ from fastapi import APIRouter, Body, Depends, Header, Request
 
 from app.deps.auth import get_current_user, require_admin, require_platform_admin
 from app.services import offline_sync as sync
+from app.services import offline_sync_handlers  # noqa: F401 — registers the 3 offline types
 
 router = APIRouter(prefix="/sync", tags=["offline-sync"])
 
@@ -76,6 +77,28 @@ async def revoke_device(device_id: str, body: Dict[str, Any] = Body(...),
     """R61-6: block a lost or stolen phone (Owner/Admin, reason, AuditEvent)."""
     key = _require_key(idempotency_key)
     return await sync.revoke_device(user, device_id, _require_reason(body.get("reason")), key)
+
+
+@router.post("/late/{late_id}/decide")
+async def decide_late(late_id: str, body: Dict[str, Any] = Body(...),
+                      idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                      user: dict = Depends(require_admin)):
+    """R61-3: Owner/Admin confirms, corrects or refuses a late record (reason + AuditEvent).
+    The only path that writes with the captured date."""
+    key = _require_key(idempotency_key)
+    return await sync.decide_late(user, late_id, body.get("decision"), _require_reason(body.get("reason")),
+                                  body.get("payload"), key)
+
+
+@router.post("/conflicts/{conflict_id}/resolve")
+async def resolve_conflict(conflict_id: str, body: Dict[str, Any] = Body(...),
+                           idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                           user: dict = Depends(require_admin)):
+    """R61-2/4: keep the office version, accept the phone's, or correct (reason + AuditEvent);
+    an approved / paid record only through correction or reversal."""
+    key = _require_key(idempotency_key)
+    return await sync.resolve_conflict(user, conflict_id, body.get("decision"),
+                                       _require_reason(body.get("reason")), body.get("payload"), key)
 
 
 @router.put("/flag")

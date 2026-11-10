@@ -264,6 +264,150 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         c["conflict_rows"] = count("sync_conflicts", {"local_id": env_edit["local_id"]})
         obs["conflict"] = c
 
+        # ═══════════════════════ the three real offline types (Q1) ═══════════════════════
+        from app.services import offline_sync_handlers  # noqa: F401 — registered by the router too
+        from app.services.offline_sync import local_day, zone
+        sofia = zone("Europe/Sofia")
+        today = local_day(datetime.now(timezone.utc), sofia)
+        yesterday_dt = datetime.now(timezone.utc) - timedelta(days=1)
+        yesterday = local_day(yesterday_dt, sofia)
+        P = A["project_id"]
+        q(lambda: op_db.projects.update_one({"id": P}, {"$set": {"status": "Active"}}))
+        req = A["users"]["requester"]
+
+        def att(user_id, status="Present", captured=None, **kw):
+            return envelope(user_id, A["tenant_id"], "attendance.mark",
+                            {"status": status, "project_id": P, "note": "офлайн"}, captured=captured, **kw)
+
+        def att_rows(uid, date):
+            return q(lambda: op_db.attendance_entries.find({"user_id": uid, "date": date},
+                                                           {"_id": 0}).to_list(None))
+
+        h: Dict[str, Any] = {}
+        # R1 — attendance today: synced once, Sofia day, stamped; 3× resend + parallel → 1 entry
+        e_att = att(tech["id"])
+        h["att_first"] = batch([e_att])["body"]["results"][0]
+        for _ in range(2):
+            h["att_again"] = batch([e_att])["body"]["results"][0]
+        with ThreadPoolExecutor(max_workers=3) as ex:
+            list(ex.map(lambda _: batch([e_att]), range(3)))
+        rows = att_rows(tech["id"], today)
+        h["att_rows"] = len(rows)
+        h["att_row"] = {k: rows[0].get(k) for k in ("date", "status", "source", "version", "sync_local_id",
+                                                     "captured_at", "device_id", "marked_by_user_id")} if rows else None
+        h["att_events"] = count("audit_events", {"action": "sync.item_synced",
+                                                 "idempotency_key": e_att["idempotency_key"]})
+        # R2 — identical self-mark (new key): synced, nothing written (Q3)
+        h["att_identical"] = batch([att(tech["id"])])["body"]["results"][0]
+        h["att_rows_after_identical"] = len(att_rows(tech["id"], today))
+        # R3 — a different status the same day: conflict, office entry untouched
+        e_diff = att(tech["id"], status="Absent")
+        h["att_diff"] = batch([e_diff])["body"]["results"][0]
+        h["att_after_diff"] = [r["status"] for r in att_rows(tech["id"], today)]
+        cid = h["att_diff"]["result"].get("conflict_id")
+        # R4 — resolving: the technician cannot; Owner keeps the office version
+        h["resolve_by_tech"] = call("POST", "/api/sync/conflicts/%s/resolve" % cid, role="technician",
+                                    key=str(uuid.uuid4()), json={"decision": "keep_office", "reason": "проверено"})["status"]
+        h["resolve_no_reason"] = call("POST", "/api/sync/conflicts/%s/resolve" % cid, role="owner",
+                                      key=str(uuid.uuid4()), json={"decision": "keep_office"})["status"]
+        k1 = str(uuid.uuid4())
+        h["resolve_keep"] = call("POST", "/api/sync/conflicts/%s/resolve" % cid, role="owner", key=k1,
+                                 json={"decision": "keep_office", "reason": "Говорих с техника — беше на обекта"})
+        h["resolve_keep_replay"] = call("POST", "/api/sync/conflicts/%s/resolve" % cid, role="owner", key=k1,
+                                        json={"decision": "keep_office", "reason": "Говорих с техника — беше на обекта"})["status"]
+        h["resolve_twice"] = call("POST", "/api/sync/conflicts/%s/resolve" % cid, role="owner",
+                                  key=str(uuid.uuid4()), json={"decision": "accept_field", "reason": "друго"})
+        h["receipt_after_keep"] = q(lambda: op_db.sync_receipts.find_one(
+            {"idempotency_key": e_diff["idempotency_key"]}, {"_id": 0, "status": 1, "result": 1}))
+        h["status_after_keep"] = [r["status"] for r in att_rows(tech["id"], today)]
+        # accept the phone's version of a second conflict: CAS on version, audit
+        e_diff2 = att(tech["id"], status="Late")
+        cid2 = batch([e_diff2])["body"]["results"][0]["result"].get("conflict_id")
+        h["resolve_accept"] = call("POST", "/api/sync/conflicts/%s/resolve" % cid2, role="admin",
+                                   key=str(uuid.uuid4()), json={"decision": "accept_field", "reason": "Потвърдено по телефона"})
+        h["after_accept"] = [{k: r.get(k) for k in ("status", "version", "update_source")}
+                             for r in att_rows(tech["id"], today)]
+        h["accept_event"] = q(lambda: op_db.audit_events.find_one(
+            {"action": "sync.conflict_accepted_field"}, {"_id": 0, "reason": 1, "actor_id": 1}))
+        # R9 — a paid day (pay run paid covering the worker's day): conflict, never written
+        q(lambda: op_db.pay_runs.insert_one({"id": "pr-pwa02", "org_id": A["tenant_id"], "status": "paid",
+                                             "period_start": today, "period_end": today,
+                                             "employee_rows": [{"employee_id": req["id"]}]}))
+        call("POST", "/api/sync/devices/register", role="requester", json={"device_id": DEVICE_A})
+        h["paid_day"] = batch([att(req["id"])], role="requester")["body"]["results"][0]
+        h["paid_rows"] = len(att_rows(req["id"], today))
+        pid_conf = h["paid_day"]["result"].get("conflict_id")
+        h["paid_accept"] = call("POST", "/api/sync/conflicts/%s/resolve" % pid_conf, role="owner",
+                                key=str(uuid.uuid4()), json={"decision": "accept_field", "reason": "опит"})
+        h["paid_correct"] = call("POST", "/api/sync/conflicts/%s/resolve" % pid_conf, role="owner",
+                                 key=str(uuid.uuid4()), json={"decision": "correct", "reason": "опит",
+                                                               "payload": {"status": "Present"}})
+        h["paid_rows_after"] = len(att_rows(req["id"], today))
+        # R5 — the technician's daily report today (attendance exists): synced once, stamped
+        e_rep = envelope(tech["id"], A["tenant_id"], "technician.daily_report",
+                         {"project_id": P, "entries": [{"smr_type": "Шпакловка", "hours": 6.5,
+                                                        "notes": "офлайн"}], "general_notes": "без интернет"})
+        h["report"] = batch([e_rep])["body"]["results"][0]
+        batch([e_rep])
+        reps = q(lambda: op_db.employee_daily_reports.find({"sync_local_id": e_rep["local_id"]},
+                                                           {"_id": 0}).to_list(None))
+        h["report_rows"] = len(reps)
+        h["report_row"] = {k: reps[0].get(k) for k in ("date", "hours", "status", "version", "worker_id")} if reps else None
+        # R10 — a report into a day with an approved report: conflict, nothing added
+        acc = A["users"]["accountant"]
+        q(lambda: op_db.employee_daily_reports.insert_one({
+            "id": "dr-approved", "org_id": A["tenant_id"], "worker_id": acc["id"], "date": today,
+            "project_id": P, "hours": 8, "approval_status": "APPROVED"}))
+        call("POST", "/api/sync/devices/register", role="accountant", json={"device_id": DEVICE_A})
+        e_rep2 = envelope(acc["id"], A["tenant_id"], "technician.daily_report",
+                          {"project_id": P, "entries": [{"smr_type": "Зидария", "hours": 2}]})
+        h["report_closed"] = batch([e_rep2], role="accountant")["body"]["results"][0]
+        h["report_closed_rows"] = count("employee_daily_reports", {"worker_id": acc["id"], "date": today})
+        # R6 — photo: waiting for a File Registry, never final; bad input refused
+        sha = "ab" * 32
+        h["photo"] = batch([envelope(tech["id"], A["tenant_id"], "media.upload",
+                                     {"sha256": sha, "size": 2_000_000, "mime": "image/jpeg",
+                                      "context_type": "project", "context_id": P})])["body"]["results"][0]
+        h["photo_bad_sha"] = batch([envelope(tech["id"], A["tenant_id"], "media.upload",
+                                             {"sha256": "nope", "size": 10, "mime": "image/jpeg"})])["body"]["results"][0]
+        h["photo_too_big"] = batch([envelope(tech["id"], A["tenant_id"], "media.upload",
+                                             {"sha256": sha, "size": 30 * 1024 * 1024, "mime": "image/jpeg"})])["body"]["results"][0]
+        h["photo_media_rows"] = count("media_files", {"context_id": P, "sha256": sha})
+        # R7 — late attendance (yesterday): not official; worker cannot decide; Owner confirms
+        e_late = att(tech["id"], captured=yesterday_dt)
+        h["late"] = batch([e_late])["body"]["results"][0]
+        lid = h["late"]["result"].get("late_id")
+        h["late_rows_before"] = len(att_rows(tech["id"], yesterday))
+        h["late_by_tech"] = call("POST", "/api/sync/late/%s/decide" % lid, role="technician",
+                                 key=str(uuid.uuid4()), json={"decision": "confirm", "reason": "аз"})["status"]
+        k2 = str(uuid.uuid4())
+        h["late_confirm"] = call("POST", "/api/sync/late/%s/decide" % lid, role="owner", key=k2,
+                                 json={"decision": "confirm", "reason": "Беше без покритие на обекта"})
+        h["late_confirm_replay"] = call("POST", "/api/sync/late/%s/decide" % lid, role="owner", key=k2,
+                                        json={"decision": "confirm", "reason": "Беше без покритие на обекта"})["status"]
+        h["late_decide_again"] = call("POST", "/api/sync/late/%s/decide" % lid, role="owner",
+                                      key=str(uuid.uuid4()), json={"decision": "reject", "reason": "друго"})["error_code"]
+        yrows = att_rows(tech["id"], yesterday)
+        h["late_rows_after"] = len(yrows)
+        h["late_row"] = {k: yrows[0].get(k) for k in ("date", "captured_at", "late_confirmed_by",
+                                                       "marked_by_user_id", "source")} if yrows else None
+        h["late_receipt"] = q(lambda: op_db.sync_receipts.find_one(
+            {"idempotency_key": e_late["idempotency_key"]}, {"_id": 0, "status": 1}))
+        h["late_event"] = q(lambda: op_db.audit_events.find_one(
+            {"action": "sync.late_confirmed"}, {"_id": 0, "reason": 1, "actor_id": 1, "structured_diff": 1}))
+        # R8 — a late report the office refuses: nothing written, the phone sees it
+        e_late2 = envelope(tech["id"], A["tenant_id"], "technician.daily_report",
+                           {"project_id": P, "entries": [{"smr_type": "Боя", "hours": 3}]}, captured=yesterday_dt)
+        lid2 = batch([e_late2])["body"]["results"][0]["result"].get("late_id")
+        h["late_reject"] = call("POST", "/api/sync/late/%s/decide" % lid2, role="admin", key=str(uuid.uuid4()),
+                                json={"decision": "reject", "reason": "Няма такава работа"})["status"]
+        h["late_reject_receipt"] = q(lambda: op_db.sync_receipts.find_one(
+            {"idempotency_key": e_late2["idempotency_key"]}, {"_id": 0, "status": 1, "result": 1}))
+        h["late_reject_rows"] = count("employee_daily_reports", {"sync_local_id": e_late2["local_id"]})
+        my = call("GET", "/api/sync/receipts?device_id=" + DEVICE_A)["body"]
+        h["my_receipts_statuses"] = sorted({r["status"] for r in my})
+        obs["handlers"] = h
+
         # ─────────────────────────────────────────────── console permissions
         k: Dict[str, Any] = {}
         for role in ROLE_KEYS:
@@ -472,6 +616,7 @@ def test_only_owner_and_admin_see_the_console_and_only_their_tenant(obs):
     assert k["owner_sees_device"] is True
     assert k["B_owner_sees_A_device"] is False
     assert k["owner_counts"]["conflicts"] >= 1 and k["owner_counts"]["late"] >= 2
+    assert all(r == 403 for r in [k["requester"], k["technician"]])
 
 
 @real
@@ -498,6 +643,96 @@ def test_switching_the_flag_off_stops_the_queue_and_loses_nothing(obs):
     assert rb["off"] == 200
     assert rb["batch_when_off"]["error_code"] == "OFFLINE_QUEUE_DISABLED"
     assert rb["receipts_kept"] > 0
+
+
+@real
+def test_attendance_syncs_once_on_the_sofia_day_stamped_with_version_and_capture(obs):
+    h = obs["handlers"]
+    assert h["att_first"]["status"] == "synced"
+    assert h["att_again"]["replay"] is True
+    assert h["att_rows"] == 1 and h["att_events"] == 1
+    row = h["att_row"]
+    assert row["source"] == "offline_sync" and row["version"] == 1
+    assert row["sync_local_id"] and row["captured_at"] and row["device_id"]
+
+
+@real
+def test_an_identical_self_mark_is_a_silent_confirmation(obs):
+    h = obs["handlers"]
+    assert h["att_identical"]["status"] == "synced"
+    assert h["att_identical"]["result"]["identical"] is True
+    assert h["att_rows_after_identical"] == 1
+
+
+@real
+def test_a_different_mark_is_a_conflict_and_the_office_entry_is_untouched(obs):
+    h = obs["handlers"]
+    assert h["att_diff"]["status"] == "conflict"
+    assert h["att_diff"]["result"]["kind"] == "already_recorded"
+    assert h["att_after_diff"] == ["Present"]
+
+
+@real
+def test_only_owner_admin_resolve_with_a_reason_once_and_the_phone_sees_it(obs):
+    h = obs["handlers"]
+    assert h["resolve_by_tech"] == 403 and h["resolve_no_reason"] == 422
+    assert h["resolve_keep"]["status"] == 200 and h["resolve_keep"]["body"]["status"] == "kept_office"
+    assert h["resolve_keep_replay"] == 200
+    assert h["resolve_twice"]["status"] == 409
+    assert h["receipt_after_keep"]["status"] == "rejected"
+    assert h["status_after_keep"] == ["Present"]
+    assert h["resolve_accept"]["status"] == 200
+    assert h["after_accept"] == [{"status": "Late", "version": 2, "update_source": "offline_conflict_resolution"}]
+    assert h["accept_event"]["reason"] == "Потвърдено по телефона"
+
+
+@real
+def test_a_paid_day_is_a_conflict_settled_only_by_correction_or_reversal(obs):
+    h = obs["handlers"]
+    assert h["paid_day"]["status"] == "conflict" and h["paid_day"]["result"]["kind"] == "paid"
+    assert h["paid_rows"] == 0
+    assert h["paid_accept"]["error_code"] == "CORRECTION_OR_REVERSAL_REQUIRED"
+    assert h["paid_correct"]["error_code"] == "CORRECTION_OR_REVERSAL_REQUIRED"
+    assert h["paid_rows_after"] == 0
+
+
+@real
+def test_the_daily_report_goes_through_the_domain_once_and_never_into_a_closed_day(obs):
+    h = obs["handlers"]
+    assert h["report"]["status"] == "synced", h["report"]
+    assert h["report_rows"] == 1
+    assert h["report_row"]["hours"] == 6.5 and h["report_row"]["version"] == 1
+    assert h["report_closed"]["status"] == "conflict" and h["report_closed"]["result"]["kind"] == "approved"
+    assert h["report_closed_rows"] == 1                       # only the office's approved one
+
+
+@real
+def test_a_photo_waits_for_the_file_registry_and_bad_files_are_refused(obs):
+    h = obs["handlers"]
+    assert h["photo"]["status"] == "waiting_file"
+    assert h["photo"]["result"]["file_registry"] == "unavailable"
+    assert h["photo_bad_sha"]["result"]["error_code"] == "CHECKSUM_INVALID"
+    assert h["photo_too_big"]["result"]["error_code"] == "FILE_TOO_LARGE"
+    assert h["photo_media_rows"] == 0
+
+
+@real
+def test_a_late_record_becomes_official_only_by_owner_admin_with_the_captured_date(obs):
+    h = obs["handlers"]
+    assert h["late"]["status"] == "late" and h["late_rows_before"] == 0
+    assert h["late_by_tech"] == 403
+    assert h["late_confirm"]["status"] == 200 and h["late_confirm"]["body"]["status"] == "confirmed"
+    assert h["late_confirm_replay"] == 200 and h["late_decide_again"] == "ALREADY_DECIDED"
+    assert h["late_rows_after"] == 1
+    row = h["late_row"]
+    assert row["late_confirmed_by"] and row["marked_by_user_id"] == row["late_confirmed_by"]
+    assert row["captured_at"]
+    assert h["late_receipt"]["status"] == "synced"
+    ev = h["late_event"]
+    assert ev["reason"] == "Беше без покритие на обекта" and ev["structured_diff"]["captured_at"]
+    assert h["late_reject"] == 200 and h["late_reject_rows"] == 0
+    assert h["late_reject_receipt"]["status"] == "rejected"
+    assert {"synced", "conflict", "waiting_file", "rejected"} <= set(h["my_receipts_statuses"])
 
 
 if __name__ == "__main__":

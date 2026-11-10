@@ -60,6 +60,9 @@ LATE = "late"
 REJECTED = "rejected"
 QUARANTINED = "quarantined"
 PROCESSING = "processing"
+#: a photo/video whose metadata and checksum arrived; the original stays on the phone until
+#: a File Registry confirms the same checksum (FLOW-037 L192). Never final in this build.
+WAITING_FILE = "waiting_file"
 
 #: R61-1: these never go through the offline queue — money and approvals need the internet.
 ONLINE_ONLY_PREFIXES = (
@@ -294,11 +297,17 @@ async def tenant_zone(user: Dict[str, Any]):
     return zone((org or {}).get("org_timezone") or DEFAULT_TZ)
 
 
+def local_day(dt: datetime, tz) -> str:
+    """Krum (09.11.2026): the attendance / report day is the TENANT's local day
+    (Europe/Sofia), not the UTC day — DST-aware through zoneinfo."""
+    return dt.astimezone(tz).date().isoformat()
+
+
 def late_reason(env: Dict[str, Any], received: datetime, tz) -> Optional[str]:
     """R61-3: before today (tenant zone, server clock) or a phone clock off by > 10 min."""
     if abs(env["device_clock_offset_ms"]) > CLOCK_SKEW_LIMIT_MS:
         return "clock_skew"
-    if env["captured_dt"].astimezone(tz).date() < received.astimezone(tz).date():
+    if local_day(env["captured_dt"], tz) < local_day(received, tz):
         return "previous_day"
     if env["captured_dt"] > received + timedelta(milliseconds=CLOCK_SKEW_LIMIT_MS):
         return "clock_skew"  # captured "in the future"
@@ -318,6 +327,14 @@ class SyncConflict(Exception):
         self.office = office
         self.field = field
         self.kind = kind  # version | approved | paid | already_recorded
+
+
+class SyncWaitingFile(Exception):
+    """Raised by a file handler: accepted as metadata only, the file itself is not taken."""
+
+    def __init__(self, result: Dict[str, Any]):
+        super().__init__("waiting_file")
+        self.result = result
 
 
 class SyncRejected(Exception):
@@ -468,7 +485,7 @@ async def process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked: 
         return await _finish(user, receipt, LATE, {"late_id": doc["id"], "reason": why_late})
 
     ctx = {"device_id": device_id, "received_at": iso(received), "tz": tz,
-           "captured_date": env["captured_dt"].astimezone(tz).date().isoformat()}
+           "captured_date": local_day(env["captured_dt"], tz)}
     try:
         result = await handler(user, env, ctx)
     except SyncConflict as c:
@@ -482,6 +499,11 @@ async def process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked: 
         return await _finish(user, receipt, CONFLICT, {"conflict_id": doc["id"], "kind": c.kind})
     except SyncRejected as r:
         return await _finish(user, receipt, REJECTED, {"error_code": r.code, "message": r.message})
+    except SyncWaitingFile as w:
+        await audit(user, action="sync.item_waiting_file", entity_type="sync_file",
+                    entity_id=env["local_id"], diff={"op_type": env["op_type"], **w.result},
+                    reason=None, key=env["idempotency_key"])
+        return await _finish(user, receipt, WAITING_FILE, w.result)
     except HTTPException as h:
         detail = h.detail if isinstance(h.detail, dict) else {"message": str(h.detail)}
         return await _finish(user, receipt, REJECTED, {
@@ -556,3 +578,177 @@ async def my_receipts(user: Dict[str, Any], device_id: str) -> List[Dict[str, An
         {"org_id": user["org_id"], "user_id": user["id"], "device_id": device_id},
         {"_id": 0, "fingerprint": 0}).sort("received_at", -1).to_list(200)
     return rows
+
+
+# ───────────────────────────────────────────── office decisions (Owner/Admin)
+LATE_DECISIONS = ("confirm", "correct", "reject")
+CONFLICT_DECISIONS = ("keep_office", "accept_field", "correct")
+#: R61-4: an approved / paid / closed record is never edited directly.
+CORRECTION_ONLY_KINDS = ("approved", "paid", "closed")
+
+
+async def _settle_receipt(user: Dict[str, Any], doc: Dict[str, Any], status: str,
+                          result: Dict[str, Any]) -> None:
+    """The author's receipt follows the office decision, so the phone shows it."""
+    await _tenant(user).sync_receipts.update_one(
+        {"org_id": user["org_id"], "user_id": doc["author_id"],
+         "idempotency_key": doc["idempotency_key"]},
+        {"$set": {"status": status, "result": result, "settled_at": iso(now_utc()),
+                  "settled_by": user["id"]}})
+
+
+async def _author(user: Dict[str, Any], author_id: str) -> Dict[str, Any]:
+    author = await _tenant(user).users.find_one({"org_id": user["org_id"], "id": author_id},
+                                                {"_id": 0, "password_hash": 0})
+    if not author:
+        raise refuse(409, "AUTHOR_NOT_FOUND", "Авторът на записа не е намерен")
+    return author
+
+
+async def _claim_decision(user: Dict[str, Any], coll: str, item_id: str, key: str) -> Dict[str, Any]:
+    """Compare-and-set open → deciding, so two people cannot decide the same item; the same
+    Idempotency-Key again returns the decision already made."""
+    tenant = _tenant(user)
+    doc = await tenant.collection(coll).find_one_and_update(
+        {"org_id": user["org_id"], "id": item_id, "status": "open"},
+        {"$set": {"status": "deciding", "decision_key": key, "decided_by": user["id"]}},
+        projection={"_id": 0})
+    if doc:
+        return {"doc": doc}
+    current = await tenant.collection(coll).find_one({"org_id": user["org_id"], "id": item_id},
+                                                     {"_id": 0})
+    if not current:
+        raise refuse(404, "NOT_FOUND", "Няма такъв запис")
+    if current.get("decision_key") == key and current.get("status") != "deciding":
+        return {"replay": current}
+    raise refuse(409, "ALREADY_DECIDED", "Записът вече е решен", current_status=current.get("status"))
+
+
+async def _reopen(user: Dict[str, Any], coll: str, item_id: str) -> None:
+    await _tenant(user).collection(coll).update_one(
+        {"org_id": user["org_id"], "id": item_id, "status": "deciding"},
+        {"$set": {"status": "open"}, "$unset": {"decision_key": "", "decided_by": ""}})
+
+
+def _env_of(doc: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
+    captured = datetime.fromisoformat(doc["captured_at"])
+    return {"local_id": doc["local_id"], "idempotency_key": doc["idempotency_key"],
+            "op_type": doc["op_type"], "captured_at": doc["captured_at"], "captured_dt": captured,
+            "captured_tz": doc.get("captured_tz"), "device_clock_offset_ms": doc.get("device_clock_offset_ms", 0),
+            "payload": payload, "base_version": doc.get("base_version"),
+            "project_id": doc.get("project_id")}
+
+
+async def decide_late(user: Dict[str, Any], late_id: str, decision: str, reason: str,
+                      payload: Optional[Dict[str, Any]], key: str) -> Dict[str, Any]:
+    """R61-3: Owner/Admin confirms, corrects or refuses a late record. Confirm/correct write
+    through the domain with the CAPTURED date (the only path that may)."""
+    if decision not in LATE_DECISIONS:
+        raise refuse(422, "DECISION_INVALID", "Невалидно решение")
+    if decision == "correct" and not isinstance(payload, dict):
+        raise refuse(422, "CORRECTION_REQUIRED", "Липсва коригираният запис")
+    claim = await _claim_decision(user, "sync_late", late_id, key)
+    if "replay" in claim:
+        return claim["replay"]
+    doc = claim["doc"]
+    tenant = _tenant(user)
+    stamp = iso(now_utc())
+    if decision == "reject":
+        await tenant.sync_late.update_one(
+            {"org_id": user["org_id"], "id": late_id},
+            {"$set": {"status": "rejected", "decision": "reject", "reason": reason, "decided_at": stamp}})
+        await _settle_receipt(user, doc, REJECTED, {"error_code": "LATE_REFUSED", "message": reason})
+        await audit(user, action="sync.late_rejected", entity_type="sync_late", entity_id=late_id,
+                    diff={"op_type": doc["op_type"], "author_id": doc["author_id"],
+                          "captured_at": doc["captured_at"]}, reason=reason, key=key)
+        return await tenant.sync_late.find_one({"org_id": user["org_id"], "id": late_id}, {"_id": 0})
+    confirm = CONFIRM_HANDLERS.get(doc["op_type"])
+    if confirm is None:
+        await _reopen(user, "sync_late", late_id)
+        raise refuse(409, "NO_CONFIRM_PATH", "Този тип запис не може да се потвърди")
+    used = payload if decision == "correct" else doc["payload"]
+    tz = await tenant_zone(user)
+    env = _env_of(doc, used)
+    ctx = {"confirmed_by": user["id"], "confirmed_at": stamp, "tz": tz,
+           "captured_date": local_day(env["captured_dt"], tz)}
+    try:
+        author = await _author(user, doc["author_id"])
+        result = await confirm(author, env, ctx)
+    except SyncConflict as c:
+        await _reopen(user, "sync_late", late_id)
+        raise refuse(409, "LATE_CONFLICT", "Записът е в конфликт с офиса (%s)" % c.kind, kind=c.kind,
+                     diff=diff_versions(c.office, c.field))
+    except SyncWaitingFile as w:
+        result = {**w.result, "waiting_file": True}
+    except (SyncRejected, HTTPException) as e:
+        await _reopen(user, "sync_late", late_id)
+        if isinstance(e, HTTPException):
+            raise
+        raise refuse(e.http_status, e.code, e.message)
+    status = "corrected" if decision == "correct" else "confirmed"
+    await tenant.sync_late.update_one(
+        {"org_id": user["org_id"], "id": late_id},
+        {"$set": {"status": status, "decision": decision, "reason": reason, "decided_at": stamp,
+                  "result": result, **({"corrected_payload": payload} if decision == "correct" else {})}})
+    await _settle_receipt(user, doc, WAITING_FILE if result.get("waiting_file") else SYNCED, result)
+    await audit(user, action="sync.late_%s" % status, entity_type=result.get("entity_type") or "sync_late",
+                entity_id=str(result.get("entity_id") or late_id),
+                diff={"late_id": late_id, "op_type": doc["op_type"], "author_id": doc["author_id"],
+                      "captured_at": doc["captured_at"], "received_at": doc["received_at"],
+                      "before": doc["payload"], "after": used},
+                reason=reason, key=key)
+    return await tenant.sync_late.find_one({"org_id": user["org_id"], "id": late_id}, {"_id": 0})
+
+
+#: op_type -> applier(user, conflict_doc, field_values) used when the office ACCEPTS the
+#: phone's version of a record that is neither approved nor paid (CAS on ``version``).
+APPLIERS: Dict[str, Callable[..., Awaitable[Dict[str, Any]]]] = {}
+
+
+async def resolve_conflict(user: Dict[str, Any], conflict_id: str, decision: str, reason: str,
+                           payload: Optional[Dict[str, Any]], key: str) -> Dict[str, Any]:
+    """R61-2: the owner decides — keep the office version, accept the phone's, or correct.
+    R61-4: approved / paid / closed → only a domain correction or reversal, never an edit."""
+    if decision not in CONFLICT_DECISIONS:
+        raise refuse(422, "DECISION_INVALID", "Невалидно решение")
+    if decision == "correct" and not isinstance(payload, dict):
+        raise refuse(422, "CORRECTION_REQUIRED", "Липсва коригираният запис")
+    tenant = _tenant(user)
+    pre = await tenant.sync_conflicts.find_one({"org_id": user["org_id"], "id": conflict_id}, {"_id": 0})
+    if pre and pre.get("status") == "open" and decision != "keep_office" \
+            and pre.get("kind") in CORRECTION_ONLY_KINDS:
+        raise refuse(409, "CORRECTION_OR_REVERSAL_REQUIRED",
+                     "Записът е одобрен/платен — промяна само чрез корекция или сторно", kind=pre["kind"])
+    claim = await _claim_decision(user, "sync_conflicts", conflict_id, key)
+    if "replay" in claim:
+        return claim["replay"]
+    doc = claim["doc"]
+    stamp = iso(now_utc())
+    if decision == "keep_office":
+        result = {"error_code": "CONFLICT_KEPT_OFFICE", "message": reason}
+        status = "kept_office"
+        await _settle_receipt(user, doc, REJECTED, result)
+    else:
+        applier = APPLIERS.get(doc["op_type"])
+        if applier is None:
+            await _reopen(user, "sync_conflicts", conflict_id)
+            raise refuse(409, "NO_APPLY_PATH", "Този тип конфликт се решава само с „Остави офисната“")
+        values = payload if decision == "correct" else doc["field_version"]
+        try:
+            result = await applier(user, doc, values)
+        except HTTPException:
+            await _reopen(user, "sync_conflicts", conflict_id)
+            raise
+        status = "corrected" if decision == "correct" else "accepted_field"
+        await _settle_receipt(user, doc, SYNCED, result)
+    await tenant.sync_conflicts.update_one(
+        {"org_id": user["org_id"], "id": conflict_id},
+        {"$set": {"status": status, "decision": decision, "reason": reason, "decided_at": stamp,
+                  "result": result, **({"corrected_payload": payload} if decision == "correct" else {})}})
+    await audit(user, action="sync.conflict_%s" % status, entity_type=doc.get("entity_type") or "sync_conflict",
+                entity_id=str(doc.get("entity_id") or conflict_id),
+                diff={"conflict_id": conflict_id, "kind": doc.get("kind"), "office": doc.get("office_version"),
+                      "phone": doc.get("field_version"), "applied": payload if decision == "correct"
+                      else (doc.get("field_version") if decision == "accept_field" else None)},
+                reason=reason, key=key)
+    return await tenant.sync_conflicts.find_one({"org_id": user["org_id"], "id": conflict_id}, {"_id": 0})
