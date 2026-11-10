@@ -507,10 +507,18 @@ async def update_user(
     # Owner touches an Owner, the last active Owner stays — refused before any write.
     await check_user_update(tenant, actor=user, target=target, update=update,
                             mode=ctx.mode, tenant_id=ctx.tenant_id)
+    from app.services.media_avatar import audit_avatar_change, check_avatar_url
+    if "avatar_url" in update:
+        # MEDIA-SEC-01 / R83(3): only a fresh profile photo of THIS user — checked before any write
+        update["avatar_url"] = await check_avatar_url(tenant, org_id, user_id, update["avatar_url"])
     diff = role_audit_diff(target, update)
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     async def _audit_change():
+        if "avatar_url" in update:
+            await audit_avatar_change(tdb, user, target_user_id=user_id,
+                                      before=target.get("avatar_url"), after=update["avatar_url"],
+                                      endpoint="PUT /api/users/{user_id}")
         if diff["after"]:
             await audit_user_change(tdb, tenant_id=org_id, actor_id=user["id"], action="user.role_status_changed",
                                     target_id=user_id, diff=diff, reason="user role/status changed",

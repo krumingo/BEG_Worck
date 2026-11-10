@@ -1231,6 +1231,12 @@ async def upload_project_photo(
         # MEDIA-SEC-01 (FG-541): only a member (or Admin/Owner) adds a photo — checked
         # before the file is read, so a denial writes nothing (no file, no row, no audit)
         raise HTTPException(status_code=403, detail="Access denied")
+    if user["role"] not in ("Admin", "Owner"):
+        # MEDIA-SEC-01 / R83(1): a Viewer — by company role or by project role, member or
+        # not — only reads photos; uploads are for Technician, SiteManager and office roles
+        if user["role"] == "Viewer" or await project_team.is_member(
+                _team(user), user["id"], project_id, "Viewer"):
+            raise HTTPException(status_code=403, detail="Access denied")
     if file.content_type not in ALLOWED_PHOTO_TYPES:
         raise HTTPException(status_code=400, detail={"error_code": "INVALID_FILE_TYPE", "message": f"Allowed: {ALLOWED_PHOTO_TYPES}"})
     content = await file.read()

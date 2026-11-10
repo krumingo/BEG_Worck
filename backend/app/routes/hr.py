@@ -190,9 +190,18 @@ async def update_employee_basic(user_id: str, data: dict, user: dict = Depends(r
     
     allowed = ["first_name", "last_name", "phone", "avatar_url"]
     update = {k: v for k, v in data.items() if k in allowed and v is not None}
+    from app.services.media_avatar import audit_avatar_change, check_avatar_url
+    if "avatar_url" in update:
+        # MEDIA-SEC-01 / R83(3): only a fresh profile photo of THIS user — checked before any write
+        update["avatar_url"] = await check_avatar_url(tenant, user["org_id"], user_id,
+                                                      update["avatar_url"])
     if update:
         update["updated_at"] = datetime.now(timezone.utc).isoformat()
         await tenant.users.update_one({"id": user_id}, {"$set": update})
+        if "avatar_url" in update:
+            await audit_avatar_change(db, user, target_user_id=user_id,
+                                      before=target.get("avatar_url"), after=update["avatar_url"],
+                                      endpoint="PUT /api/employees/{user_id}/basic")
     
     return await tenant.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "first_name": 1, "last_name": 1, "email": 1, "phone": 1, "role": 1, "avatar_url": 1})
 

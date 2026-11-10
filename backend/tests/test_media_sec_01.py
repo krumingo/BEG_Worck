@@ -203,14 +203,14 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
 
         # ─────────────────────────────────────────────── FG-542 — no hard delete
         d = {}
-        # linked (a profile avatar) -> 409
-        r = call("DELETE", "/api/media/%s" % av_a["id"], role="technician", key="auto",
+        # linked (a site photo of P1) -> 409
+        r = call("DELETE", "/api/media/%s" % site_a["id"], role="technician", key="auto",
                  json={"reason": "стара снимка"})
         d["linked"] = {"status": r["status"], "error_code": r["error_code"],
-                       "row_kept": bool(media_row(av_a["id"])),
-                       "status_after": media_row(av_a["id"]).get("status"),
-                       "file_kept": (UPLOADS / stored(av_a)).is_file(),
-                       "events": events(av_a["id"], "media.")}
+                       "row_kept": bool(media_row(site_a["id"])),
+                       "status_after": media_row(site_a["id"]).get("status"),
+                       "file_kept": (UPLOADS / stored(site_a)).is_file(),
+                       "events": events(site_a["id"], "media.")}
         # used by an approved missing-SMR item (attachment, no link on the media row)
         used = upload()
         q(lambda: op_db.missing_smr.insert_one({
@@ -333,6 +333,225 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         d["after"] = {"context_type": row.get("context_type"),
                       "context_id_is_first": row.get("context_id") == A["project_id"]}
         obs["fg544"] = d
+
+        # ─────────────────────────────────────────────── R83 — Krum's decisions
+        r83: Dict[str, Any] = {}
+        users_a = A["users"]
+
+        def user_row(uid):
+            return q(lambda: op_db.users.find_one({"id": uid}, {"_id": 0, "avatar_url": 1})) or {}
+
+        # R83(1) — a Viewer only reads photos, member or not
+        for ukey, rip in (("viewer", "Viewer"), ("requester", "Viewer")):
+            r = tc.post("/api/projects/%s/team" % A["project_id"],
+                        json={"user_id": users_a[ukey]["id"], "role_in_project": rip},
+                        headers={"Authorization": "Bearer " + tokens[("A", "admin")]})
+            assert r.status_code == 201, (ukey, r.status_code, r.text[:200])
+        v = {}
+        for mode in MODES:
+            os.environ["PERMISSION_SERVICE_MODE"] = mode
+            before = q(lambda: op_db.project_photos.count_documents({"project_id": A["project_id"]}))
+            v[mode] = {
+                "viewer_member_upload": call("POST", "/api/projects/%s/photos" % A["project_id"],
+                                             role="viewer", files={"file": ("v.jpg", io.BytesIO(JPEG),
+                                                                            "image/jpeg")})["status"],
+                "project_viewer_sitemanager_upload": call(
+                    "POST", "/api/projects/%s/photos" % A["project_id"], role="requester",
+                    files={"file": ("v.jpg", io.BytesIO(JPEG), "image/jpeg")})["status"],
+                "viewer_member_list": call("GET", "/api/projects/%s/photos" % A["project_id"],
+                                           role="viewer")["status"],
+                "rows_added": q(lambda: op_db.project_photos.count_documents(
+                    {"project_id": A["project_id"]})) - before,
+                "technician_upload": call("POST", "/api/projects/%s/photos" % A["project_id"],
+                                          role="technician",
+                                          files={"file": ("t.jpg", io.BytesIO(JPEG),
+                                                          "image/jpeg")})["status"]}
+        os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        r83["viewer"] = v
+
+        # R83(2) — a USED file is retired only by a request the Owner approves
+        a2: Dict[str, Any] = {}
+        used2 = upload()
+        q(lambda: op_db.work_reports.insert_one({
+            "id": pid("A", "wr_approved"), "org_id": A["tenant_id"], "project_id": A["project_id"],
+            "status": "Approved", "photos": [used2["id"]], "created_at": NOW}))
+        rq_url = "/api/media/%s/retire-request" % used2["id"]
+        r = call("DELETE", "/api/media/%s" % used2["id"], role="technician", key="auto",
+                 json={"reason": "грешна"})
+        a2["delete"] = (r["status"], r["error_code"])
+        a2["req_no_key"] = call("POST", rq_url, role="technician", json={"reason": "x"})["status"]
+        a2["req_no_reason"] = call("POST", rq_url, role="technician", key="auto", json={})["status"]
+        a2["req_other_user"] = call("POST", rq_url, role="requester", key="auto",
+                                    json={"reason": "x"})["status"]
+        a2["req_other_tenant"] = call("POST", rq_url, tkey="B", key="auto",
+                                      json={"reason": "x"})["status"]
+        k = uuid.uuid4().hex
+        r = call("POST", rq_url, role="technician", key=k, json={"reason": "снимката е на друг обект"})
+        r2 = call("POST", rq_url, role="technician", key=k, json={"reason": "снимката е на друг обект"})
+        rid = (r["body"] or {}).get("id")
+        a2["request"] = {"status": r["status"], "req_status": (r["body"] or {}).get("status"),
+                         "replay_same": r2["body"] == r["body"]}
+        a2["second_request"] = call("POST", rq_url, role="technician", key="auto",
+                                    json={"reason": "пак"})["error_code"]
+        a2["delete_while_pending"] = call("DELETE", "/api/media/%s" % used2["id"], role="technician",
+                                          key="auto", json={"reason": "x"})["error_code"]
+        ap_url = "/api/media/retire-requests/%s/approve" % rid
+        a2["approve_admin"] = call("POST", ap_url, role="admin", key="auto", json={})["error_code"]
+        a2["approve_technician"] = call("POST", ap_url, role="technician", key="auto",
+                                        json={})["error_code"]
+        a2["approve_no_key"] = call("POST", ap_url, json={})["status"]
+        a2["approve_other_tenant"] = call("POST", ap_url, tkey="B", key="auto", json={})["status"]
+        a2["before_approve"] = {"status": media_row(used2["id"]).get("status"),
+                                "events": [e["action"] for e in events(used2["id"], "media.")]}
+        a2["pending_list_owner"] = [x.get("id") for x in (call("GET", "/api/media-retire-requests")["body"] or [])]
+        a2["pending_list_technician"] = call("GET", "/api/media-retire-requests",
+                                             role="technician")["status"]
+        k = uuid.uuid4().hex
+        r = call("POST", ap_url, key=k, json={})
+        r2 = call("POST", ap_url, key=k, json={})
+        row = media_row(used2["id"])
+        meta_t = call("GET", "/api/media/%s" % used2["id"], role="technician")
+        a2["approve"] = {
+            "status": r["status"], "replay_same": r2["body"] == r["body"],
+            "media_status": row.get("status"), "in_use": row.get("retired_in_use"),
+            "approved_by_owner": row.get("retire_approved_by") == users_a["owner"]["id"],
+            "retired_by_requester": row.get("retired_by") == users_a["technician"]["id"],
+            "reason": row.get("retired_reason"), "pending": row.get("retire_request_pending"),
+            "file_kept": (UPLOADS / stored(used2)).is_file(),
+            "record_keeps_ref": (q(lambda: op_db.work_reports.find_one(
+                {"id": pid("A", "wr_approved")}, {"_id": 0, "photos": 1})) or {}).get("photos")
+            == [used2["id"]],
+            "meta_technician": meta_t["status"],
+            "meta_technician_detail": (meta_t["body"] or {}).get("detail"),
+            "meta_owner_status": (call("GET", "/api/media/%s" % used2["id"])["body"] or {}).get("status"),
+            "again": call("POST", ap_url, key="auto", json={})["error_code"],
+            "events": [{"action": e["action"], "reason": e["reason"],
+                        "approved_by": (e["diff"] or {}).get("approved_by") == users_a["owner"]["id"],
+                        "requested_by": (e["diff"] or {}).get("requested_by") == users_a["technician"]["id"]}
+                       for e in events(used2["id"], "media.")]}
+        # the second-person check: the Owner asks, the same Owner cannot approve -> reject
+        used3 = upload(role="owner")
+        q(lambda: op_db.pending_expenses.insert_one({
+            "id": pid("A", "pe_used3"), "org_id": A["tenant_id"], "media_id": used3["id"],
+            "status": "approved", "created_at": NOW}))
+        r = call("POST", "/api/media/%s/retire-request" % used3["id"], key="auto",
+                 json={"reason": "дубликат"})
+        rid3 = (r["body"] or {}).get("id")
+        a2["self"] = {
+            "request": r["status"],
+            "approve": call("POST", "/api/media/retire-requests/%s/approve" % rid3, key="auto",
+                            json={})["error_code"],
+            "reject_no_reason": call("POST", "/api/media/retire-requests/%s/reject" % rid3,
+                                     key="auto", json={})["status"],
+            "reject": call("POST", "/api/media/retire-requests/%s/reject" % rid3, key="auto",
+                           json={"reason": "остава"})["status"]}
+        row = media_row(used3["id"])
+        a2["self"].update({"media_status": row.get("status"), "pending": row.get("retire_request_pending"),
+                           "events": [e["action"] for e in events(used3["id"], "media.")],
+                           "request_again": call("POST", "/api/media/%s/retire-request" % used3["id"],
+                                                 key="auto", json={"reason": "пак"})["status"]})
+        # an UNUSED file has no request path: it is retired directly
+        free2 = upload()
+        a2["unused_request"] = call("POST", "/api/media/%s/retire-request" % free2["id"],
+                                    role="technician", key="auto", json={"reason": "x"})["error_code"]
+        r83["approval"] = a2
+
+        # R83(3) — avatars: only a fresh profile upload; changes audited; old ones retirable
+        a3: Dict[str, Any] = {}
+        tech = users_a["technician"]["id"]
+        a3["av_a_flag"] = media_row(av_a["id"]).get("avatar")
+        loose = upload()
+        a3["link_as_profile"] = call("POST", "/api/media/link", role="technician", json={
+            "media_id": loose["id"], "context_type": "profile", "context_id": tech})["error_code"]
+        a3["loose_not_avatar"] = call("GET", "/api/media/avatar/%s" % stored(loose))["status"]
+        put = lambda url, who="admin": call("PUT", "/api/users/%s" % tech, role=who,
+                                            json={"avatar_url": url})
+        a3["put_site_photo"] = put("/api/media/avatar/%s" % stored(site_a))["error_code"]
+        a3["put_file_form"] = put("/api/media/file/%s" % stored(av_a))["error_code"]
+        a3["put_b_avatar"] = put("/api/media/avatar/%s" % stored(av_b))["error_code"]
+        other_prof = upload(role="admin", context=("profile", users_a["accountant"]["id"]))
+        a3["put_other_users_profile"] = put("/api/media/avatar/%s" % stored(other_prof))["error_code"]
+        a3["after_refusals"] = user_row(tech).get("avatar_url")
+        a3["put_ok"] = put("/api/media/avatar/%s" % stored(av_a))["status"]
+        a3["after_put"] = user_row(tech).get("avatar_url") == "/api/media/avatar/%s" % stored(av_a)
+        a3["current_avatar_delete"] = call("DELETE", "/api/media/%s" % av_a["id"], role="technician",
+                                           key="auto", json={"reason": "x"})["error_code"]
+        av2 = upload(context=("profile", tech), name="av2.jpg")
+        r = call("PUT", "/api/employees/%s/basic" % tech,
+                 json={"avatar_url": "/api/media/avatar/%s" % stored(av2)})
+        a3["basic_put"] = r["status"]
+        a3["basic_put_bad"] = call("PUT", "/api/employees/%s/basic" % tech,
+                                   json={"avatar_url": "/api/media/avatar/%s" % stored(loose)})["error_code"]
+        a3["avatar_events"] = [{"action": e["action"],
+                                "after": ((e["diff"] or {}).get("after") or {}).get("avatar_url")}
+                               for e in events(tech, "user.avatar")]
+        # av_a is now an OLD avatar: its owner retires it; another user may not
+        a3["old_other_user"] = call("DELETE", "/api/media/%s" % av_a["id"], role="requester",
+                                    key="auto", json={"reason": "x"})["status"]
+        a3["old_owner"] = call("DELETE", "/api/media/%s" % av_a["id"], role="technician",
+                               key="auto", json={"reason": "стара снимка"})["status"]
+        a3["old_owner_status"] = media_row(av_a["id"]).get("status")
+        a3["old_avatar_served"] = call("GET", "/api/media/avatar/%s" % stored(av_a))["status"]
+        # an Admin retires another user's old avatar (other_prof is nobody's current avatar)
+        a3["old_admin"] = call("DELETE", "/api/media/%s" % other_prof["id"], role="admin",
+                               key="auto", json={"reason": "стара"})["status"]
+        a3["current_served"] = call("GET", "/api/media/avatar/%s" % stored(av2), role="viewer")["status"]
+        r83["avatars"] = a3
+
+        # R83(4) — the legacy-avatar backfill: dry run counts, apply idempotent + AuditEvent
+        a4: Dict[str, Any] = {}
+        spec = importlib.util.spec_from_file_location(
+            "mediasec01_backfill", BACKEND / "scripts" / "media_sec_01_avatar_backfill.py")
+        bf = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(bf)
+        viewer_id = users_a["viewer"]["id"]
+        legacy_name = "%s.jpg" % uuid.uuid4()
+        (UPLOADS / legacy_name).write_bytes(JPEG)
+        q(lambda: op_db.media_files.insert_one({
+            "id": pid("A", "legacy_av"), "org_id": A["tenant_id"], "owner_user_id": viewer_id,
+            "filename": "legacy.jpg", "stored_filename": legacy_name,
+            "url": "/api/media/file/%s" % legacy_name, "content_type": "image/jpeg",
+            "context_type": "profile", "context_id": viewer_id, "created_at": NOW}))
+        q(lambda: op_db.users.update_one({"id": viewer_id},
+                                         {"$set": {"avatar_url": "/api/media/file/%s" % legacy_name}}))
+        site_url = "/api/media/file/%s" % stored(site_a)
+        q(lambda: op_db.users.update_one({"id": users_a["accountant"]["id"]},
+                                         {"$set": {"avatar_url": site_url}}))
+        q(lambda: op_db.users.update_one({"id": users_a["requester"]["id"]},
+                                         {"$set": {"avatar_url": "/static/x.png"}}))
+        a4["served_before"] = call("GET", "/api/media/avatar/%s" % legacy_name)["status"]
+        audit_before = q(lambda: op_db.audit_events.count_documents({"action": "media.avatar.backfill"}))
+        dry = q(lambda: bf.migrate(op_db))
+        mine = {r["user_id"]: r["action"] for r in dry["plan"]}
+        a4["dry"] = {"viewer": mine.get(viewer_id), "accountant": mine.get(users_a["accountant"]["id"]),
+                     "requester": mine.get(users_a["requester"]["id"]),
+                     "technician": mine.get(tech), "applied": dry["applied"],
+                     "flag_written": media_row(pid("A", "legacy_av")).get("avatar"),
+                     "audit_written": q(lambda: op_db.audit_events.count_documents(
+                         {"action": "media.avatar.backfill"})) - audit_before}
+
+        async def _try(**kw):
+            try:
+                await bf.migrate(op_db, **kw)
+                return "ran"
+            except (bf.PlanMismatch, bf.NotApproved) as exc:
+                return type(exc).__name__
+        a4["apply_unapproved"] = q(lambda: _try(apply=True, plan_sha=dry["plan_sha"]))
+        a4["apply_wrong_sha"] = q(lambda: _try(apply=True, approved_by="Крум", plan_sha="0" * 64))
+        res = q(lambda: bf.migrate(op_db, apply=True, approved_by="Крум", plan_sha=dry["plan_sha"]))
+        a4["apply"] = {"written": res.get("written"),
+                       "flag": media_row(pid("A", "legacy_av")).get("avatar"),
+                       "viewer_url": user_row(viewer_id).get("avatar_url") == "/api/media/avatar/%s" % legacy_name,
+                       "served_after": call("GET", "/api/media/avatar/%s" % legacy_name)["status"],
+                       "site_photo_served": call("GET", "/api/media/avatar/%s" % stored(site_a))["status"],
+                       "events": [{"action": e["action"], "approved": (e["diff"] or {}).get("approved_by")}
+                                  for e in events(pid("A", "legacy_av"), "media.avatar")]}
+        dry2 = q(lambda: bf.migrate(op_db))
+        res2 = q(lambda: bf.migrate(op_db, apply=True, approved_by="Крум", plan_sha=dry2["plan_sha"]))
+        a4["second_apply_written"] = res2.get("written")
+        a4["second_viewer_action"] = {r["user_id"]: r["action"] for r in dry2["plan"]}.get(viewer_id)
+        r83["backfill"] = a4
+        obs["r83"] = r83
 
         # ─────────────────────────────────────────────── FG-541 — project photos
         other = pid("A", "other")
@@ -569,7 +788,10 @@ def test_fg556_a_photo_used_by_a_report_draft_expense_or_payment_is_409(obs):
 @real
 def test_fg558_a_retired_files_metadata_is_for_owner_admin_only(obs):
     d = obs["fg542"]["unused"]
-    assert d["meta_technician"] == 404 and d["meta_requester"] == 404
+    # R83(2): a reader of the record learns only THAT the file was retired (410, no metadata);
+    # a user with no access to the file still gets the ACL answer (403), not its status
+    assert d["meta_technician"] == 410
+    assert d["meta_requester"] == 403
     assert d["meta_owner"] == 200
 
 
@@ -615,9 +837,108 @@ def test_fg541_an_uploader_removed_from_the_team_cannot_retire(obs):
 
 
 @real
+@pytest.mark.parametrize("mode", MODES)
+def test_r83_1_a_viewer_reads_project_photos_but_never_uploads(obs, mode):
+    v = obs["r83"]["viewer"][mode]
+    assert v["viewer_member_upload"] == 403
+    assert v["project_viewer_sitemanager_upload"] == 403
+    assert v["viewer_member_list"] == 200
+    assert v["rows_added"] == 0
+    assert v["technician_upload"] == 201
+
+
+@real
+def test_r83_2_a_used_file_needs_a_request_and_the_owners_approval(obs):
+    a = obs["r83"]["approval"]
+    assert list(a["delete"]) == [409, "MEDIA_IN_USE"]
+    assert a["req_no_key"] == 428 and a["req_no_reason"] == 400
+    assert a["req_other_user"] == 403 and a["req_other_tenant"] == 404
+    assert a["request"] == {"status": 201, "req_status": "pending", "replay_same": True}
+    assert a["second_request"] == "RETIRE_REQUEST_PENDING"
+    assert a["delete_while_pending"] == "MEDIA_IN_USE"
+    assert a["approve_admin"] == "OWNER_APPROVAL_REQUIRED"
+    assert a["approve_technician"] == "OWNER_APPROVAL_REQUIRED"
+    assert a["approve_no_key"] == 428 and a["approve_other_tenant"] == 404
+    assert a["before_approve"] == {"status": None, "events": ["media.file.retire_request"]}
+    assert len(a["pending_list_owner"]) >= 1 and a["pending_list_technician"] == 403
+
+
+@real
+def test_r83_2_the_approved_retire_keeps_the_file_and_the_reference(obs):
+    ap = obs["r83"]["approval"]["approve"]
+    assert ap["status"] == 200 and ap["replay_same"]
+    assert ap["media_status"] == "retired" and ap["in_use"] is True
+    assert ap["approved_by_owner"] and ap["retired_by_requester"]
+    assert ap["reason"] == "снимката е на друг обект" and ap["pending"] is None
+    assert ap["file_kept"] is True and ap["record_keeps_ref"] is True
+    assert ap["meta_technician"] == 410
+    assert ap["meta_technician_detail"] == {"error_code": "MEDIA_RETIRED",
+                                            "media_id": ap["meta_technician_detail"]["media_id"],
+                                            "retired": True}
+    assert ap["meta_owner_status"] == "retired"
+    assert ap["again"] == "RETIRE_REQUEST_DECIDED"
+    assert [e["action"] for e in ap["events"]] == ["media.file.retire_request", "media.file.retire"]
+    retire = ap["events"][1]
+    assert retire["approved_by"] and retire["requested_by"]
+    assert retire["reason"] == "снимката е на друг обект"
+
+
+@real
+def test_r83_2_the_requester_never_approves_and_a_reject_leaves_the_file(obs):
+    s = obs["r83"]["approval"]["self"]
+    assert s["request"] == 201
+    assert s["approve"] == "SELF_APPROVAL_FORBIDDEN"
+    assert s["reject_no_reason"] == 400 and s["reject"] == 200
+    assert s["media_status"] is None and s["pending"] is None
+    assert s["events"] == ["media.file.retire_request", "media.file.retire_request.reject"]
+    assert s["request_again"] == 201
+    assert obs["r83"]["approval"]["unused_request"] == "MEDIA_NOT_IN_USE"
+
+
+@real
+def test_r83_3_only_a_fresh_profile_upload_is_an_avatar_and_changes_are_audited(obs):
+    a = obs["r83"]["avatars"]
+    assert a["av_a_flag"] is True
+    assert a["link_as_profile"] == "AVATAR_LINK_REFUSED" and a["loose_not_avatar"] == 404
+    for k in ("put_site_photo", "put_file_form", "put_b_avatar", "put_other_users_profile"):
+        assert a[k] == "AVATAR_NOT_ALLOWED", k
+    assert a["after_refusals"] in (None, "")
+    assert a["put_ok"] == 200 and a["after_put"] is True
+    assert a["basic_put"] == 200 and a["basic_put_bad"] == "AVATAR_NOT_ALLOWED"
+    assert [e["action"] for e in a["avatar_events"]] == ["user.avatar.change"] * 2
+    assert all(e["after"].startswith("/api/media/avatar/") for e in a["avatar_events"])
+
+
+@real
+def test_r83_3_an_old_avatar_is_retired_by_its_owner_or_an_admin_the_current_one_never(obs):
+    a = obs["r83"]["avatars"]
+    assert a["current_avatar_delete"] == "MEDIA_IN_USE"
+    assert a["old_other_user"] == 403
+    assert a["old_owner"] == 200 and a["old_owner_status"] == "retired"
+    assert a["old_avatar_served"] == 404
+    assert a["old_admin"] == 200
+    assert a["current_served"] == 200
+
+
+@real
+def test_r83_4_the_backfill_dry_runs_then_applies_once_with_an_audit_event(obs):
+    b = obs["r83"]["backfill"]
+    assert b["served_before"] == 404
+    assert b["dry"] == {"viewer": "flag", "accountant": "skip:not_a_profile_photo",
+                        "requester": "skip:url_shape", "technician": "already",
+                        "applied": False, "flag_written": None, "audit_written": 0}
+    assert b["apply_unapproved"] == "NotApproved" and b["apply_wrong_sha"] == "PlanMismatch"
+    ap = b["apply"]
+    assert ap["written"] == 1 and ap["flag"] is True and ap["viewer_url"] is True
+    assert ap["served_after"] == 200 and ap["site_photo_served"] == 404
+    assert ap["events"] == [{"action": "media.avatar.backfill", "approved": "Крум"}]
+    assert b["second_apply_written"] == 0 and b["second_viewer_action"] == "already"
+
+
+@real
 def test_the_committed_evidence_is_a_run_of_this_harness():
     data = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))
-    assert set(data) == {"fg540", "fg541", "fg542", "fg544"}
+    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83"}
 
 
 if __name__ == "__main__":

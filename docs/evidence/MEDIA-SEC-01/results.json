@@ -17,15 +17,15 @@
   "traversal": {
    "%2E%2E": 404,
    "%2Fetc%2Fpasswd": 404,
-   "%2e%2e%2f2de8e681-283f-44c1-9705-604b7e9": 404,
-   ".%2F2de8e681-283f-44c1-9705-604b7e901417": 404,
-   "..%252F2de8e681-283f-44c1-9705-604b7e901": 404,
+   "%2e%2e%2f33722282-3cf0-49a5-8e21-08613b2": 404,
+   ".%2F33722282-3cf0-49a5-8e21-08613b2b6a03": 404,
+   "..%252F33722282-3cf0-49a5-8e21-08613b2b6": 404,
    "..%2F..%2Fetc%2Fpasswd": 404,
-   "..%2f2de8e681-283f-44c1-9705-604b7e90141": 404,
-   "..%5C2de8e681-283f-44c1-9705-604b7e90141": 404,
+   "..%2f33722282-3cf0-49a5-8e21-08613b2b6a0": 404,
+   "..%5C33722282-3cf0-49a5-8e21-08613b2b6a0": 404,
    "...": 404,
-   "2de8e681-283f-44c1-9705-604b7e901417.jpg": 404,
-   "projects%2F2de8e681-283f-44c1-9705-604b7": 404,
+   "33722282-3cf0-49a5-8e21-08613b2b6a03.jpg": 404,
+   "projects%2F33722282-3cf0-49a5-8e21-08613": 404,
    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
   },
   "unknown": 404
@@ -34,12 +34,12 @@
   "enforce": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 36,
+    "files": 56,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 36,
+    "files": 56,
     "photos": 1
    },
    "file_accountant": 403,
@@ -65,12 +65,12 @@
   "off": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 34,
+    "files": 54,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 34,
+    "files": 54,
     "photos": 1
    },
    "file_accountant": 403,
@@ -102,12 +102,12 @@
   "shadow": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 35,
+    "files": 55,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 35,
+    "files": 55,
     "photos": 1
    },
    "file_accountant": 403,
@@ -197,7 +197,7 @@
    "again": "MEDIA_ALREADY_RETIRED",
    "body": {
     "ok": true,
-    "retired": "a3db4d42-e71e-407b-8cd6-79dec1c2e2df"
+    "retired": "305ca3a3-b7a3-4726-894a-364b58148fbb"
    },
    "events": [
     {
@@ -209,13 +209,13 @@
       "before": {
        "status": "active"
       },
-      "stored_filename": "a3db4d42-e71e-407b-8cd6-79dec1c2e2df.jpg"
+      "stored_filename": "305ca3a3-b7a3-4726-894a-364b58148fbb.jpg"
      },
      "entity_type": "media_file",
-     "idempotency_key": "b70d9ea111c54cf995bc2235ede31d90",
+     "idempotency_key": "5ccfce64fcbb49c3a837b70ddaf6014a",
      "reason": "дублирана снимка",
      "source_flow": "FLOW-029",
-     "tenant_id": "b0c6793e-3d74-4401-9cfd-ddacba9c219d"
+     "tenant_id": "8fa1a877-e703-48bd-9a19-c0fdd12de168"
     }
    ],
    "file_kept": true,
@@ -223,8 +223,8 @@
    "file_technician": 404,
    "listed": false,
    "meta_owner": 200,
-   "meta_requester": 404,
-   "meta_technician": 404,
+   "meta_requester": 403,
+   "meta_technician": 410,
    "relink": 409,
    "replay_same": true,
    "replay_status": 200,
@@ -269,5 +269,169 @@
    "status": 409
   },
   "same_again": 200
+ },
+ "r83": {
+  "approval": {
+   "approve": {
+    "again": "RETIRE_REQUEST_DECIDED",
+    "approved_by_owner": true,
+    "events": [
+     {
+      "action": "media.file.retire_request",
+      "approved_by": false,
+      "reason": "снимката е на друг обект",
+      "requested_by": false
+     },
+     {
+      "action": "media.file.retire",
+      "approved_by": true,
+      "reason": "снимката е на друг обект",
+      "requested_by": true
+     }
+    ],
+    "file_kept": true,
+    "in_use": true,
+    "media_status": "retired",
+    "meta_owner_status": "retired",
+    "meta_technician": 410,
+    "meta_technician_detail": {
+     "error_code": "MEDIA_RETIRED",
+     "media_id": "ba95a6ef-cdb0-4efc-9baa-413d4365238c",
+     "retired": true
+    },
+    "pending": null,
+    "reason": "снимката е на друг обект",
+    "record_keeps_ref": true,
+    "replay_same": true,
+    "retired_by_requester": true,
+    "status": 200
+   },
+   "approve_admin": "OWNER_APPROVAL_REQUIRED",
+   "approve_no_key": 428,
+   "approve_other_tenant": 404,
+   "approve_technician": "OWNER_APPROVAL_REQUIRED",
+   "before_approve": {
+    "events": [
+     "media.file.retire_request"
+    ],
+    "status": null
+   },
+   "delete": [
+    409,
+    "MEDIA_IN_USE"
+   ],
+   "delete_while_pending": "MEDIA_IN_USE",
+   "pending_list_owner": [
+    "7b2a1ddc-05c4-4a9b-ad4c-cb9730cc0280"
+   ],
+   "pending_list_technician": 403,
+   "req_no_key": 428,
+   "req_no_reason": 400,
+   "req_other_tenant": 404,
+   "req_other_user": 403,
+   "request": {
+    "replay_same": true,
+    "req_status": "pending",
+    "status": 201
+   },
+   "second_request": "RETIRE_REQUEST_PENDING",
+   "self": {
+    "approve": "SELF_APPROVAL_FORBIDDEN",
+    "events": [
+     "media.file.retire_request",
+     "media.file.retire_request.reject"
+    ],
+    "media_status": null,
+    "pending": null,
+    "reject": 200,
+    "reject_no_reason": 400,
+    "request": 201,
+    "request_again": 201
+   },
+   "unused_request": "MEDIA_NOT_IN_USE"
+  },
+  "avatars": {
+   "after_put": true,
+   "after_refusals": null,
+   "av_a_flag": true,
+   "avatar_events": [
+    {
+     "action": "user.avatar.change",
+     "after": "/api/media/avatar/33722282-3cf0-49a5-8e21-08613b2b6a03.jpg"
+    },
+    {
+     "action": "user.avatar.change",
+     "after": "/api/media/avatar/739680b5-0100-4e67-acf6-51d27205f97c.jpg"
+    }
+   ],
+   "basic_put": 200,
+   "basic_put_bad": "AVATAR_NOT_ALLOWED",
+   "current_avatar_delete": "MEDIA_IN_USE",
+   "current_served": 200,
+   "link_as_profile": "AVATAR_LINK_REFUSED",
+   "loose_not_avatar": 404,
+   "old_admin": 200,
+   "old_avatar_served": 404,
+   "old_other_user": 403,
+   "old_owner": 200,
+   "old_owner_status": "retired",
+   "put_b_avatar": "AVATAR_NOT_ALLOWED",
+   "put_file_form": "AVATAR_NOT_ALLOWED",
+   "put_ok": 200,
+   "put_other_users_profile": "AVATAR_NOT_ALLOWED",
+   "put_site_photo": "AVATAR_NOT_ALLOWED"
+  },
+  "backfill": {
+   "apply": {
+    "events": [
+     {
+      "action": "media.avatar.backfill",
+      "approved": "Крум"
+     }
+    ],
+    "flag": true,
+    "served_after": 200,
+    "site_photo_served": 404,
+    "viewer_url": true,
+    "written": 1
+   },
+   "apply_unapproved": "NotApproved",
+   "apply_wrong_sha": "PlanMismatch",
+   "dry": {
+    "accountant": "skip:not_a_profile_photo",
+    "applied": false,
+    "audit_written": 0,
+    "flag_written": null,
+    "requester": "skip:url_shape",
+    "technician": "already",
+    "viewer": "flag"
+   },
+   "second_apply_written": 0,
+   "second_viewer_action": "already",
+   "served_before": 404
+  },
+  "viewer": {
+   "enforce": {
+    "project_viewer_sitemanager_upload": 403,
+    "rows_added": 0,
+    "technician_upload": 201,
+    "viewer_member_list": 200,
+    "viewer_member_upload": 403
+   },
+   "off": {
+    "project_viewer_sitemanager_upload": 403,
+    "rows_added": 0,
+    "technician_upload": 201,
+    "viewer_member_list": 200,
+    "viewer_member_upload": 403
+   },
+   "shadow": {
+    "project_viewer_sitemanager_upload": 403,
+    "rows_added": 0,
+    "technician_upload": 201,
+    "viewer_member_list": 200,
+    "viewer_member_upload": 403
+   }
+  }
  }
 }
