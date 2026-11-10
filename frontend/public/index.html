@@ -20,10 +20,10 @@
         the former template's remote loaders, the framed "visual edits" loaders, the
         badge and its font are gone. The policy below is the build-templated CSP
         (nginx.conf adds frame-ancestors and the other configuration-independent
-        directives). %REACT_APP_BACKEND_URL% / %REACT_APP_POSTHOG_HOST% are filled in
-        by the build (empty when unset; the analytics host only with a key).
+        directives). REACT_APP_CSP_API_ORIGIN / REACT_APP_CSP_ANALYTICS_ORIGIN are ORIGINS
+        filled in by the build (empty when unset; analytics only with a key).
         -->
-        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: %REACT_APP_BACKEND_URL%; connect-src 'self' %REACT_APP_BACKEND_URL% %REACT_APP_POSTHOG_HOST%; media-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
+        <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: %REACT_APP_CSP_API_ORIGIN%; connect-src 'self' %REACT_APP_CSP_API_ORIGIN% %REACT_APP_CSP_ANALYTICS_ORIGIN%; media-src 'self' blob:; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" />
         <meta name="referrer" content="strict-origin-when-cross-origin" />
         <title>BEG_Work</title>
     </head>

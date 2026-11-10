@@ -869,4 +869,5 @@ def test_csp_and_anti_framing_headers_are_set_for_production():
         assert "add_header " + header in conf
     meta = re.search(r'http-equiv="Content-Security-Policy" content="([^"]+)"', INDEX.read_text(encoding="utf-8"))
     assert meta and "script-src 'self';" in meta.group(1) and "default-src 'self'" in meta.group(1)
-    assert "connect-src 'self' %REACT_APP_BACKEND_URL% %REACT_APP_POSTHOG_HOST%;" in meta.group(1)
+    # SEC90-N5: the build fills in ORIGINS (craco.config.js), never a URL with a path
+    assert "connect-src 'self' %REACT_APP_CSP_API_ORIGIN% %REACT_APP_CSP_ANALYTICS_ORIGIN%;" in meta.group(1)

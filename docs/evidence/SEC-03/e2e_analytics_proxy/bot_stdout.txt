@@ -1,0 +1,31 @@
+PASS document CSP: script-src 'self' only: "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+PASS document CSP: frame-ancestors 'none': "script-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+PASS X-Frame-Options DENY: "DENY"
+PASS X-Content-Type-Options nosniff: "nosniff"
+PASS Referrer-Policy: "strict-origin-when-cross-origin"
+PASS title is BEG_Work: "BEG_Work"
+PASS no Emergent badge in the DOM: null
+PASS login works under the CSP: "http://127.0.0.1:8081/"
+PASS screen /projects renders: 2
+PASS screen /employees renders: 2
+PASS screen /pay-runs renders: 2
+PASS screen /offers renders: 2
+PASS screen /assets/items renders: 2
+PASS screen /finance renders: 2
+PASS screen /settings renders: 2
+PASS photo AI -> 503 'изисква файлов регистър' (FG-522): [503,"AI по снимка изисква файлов регистър (W0-06): оригиналът трябва да се запази преди обработка"]
+PASS AI is off for the tenant by default: {"enabled":false,"configured":false}
+PASS the Owner switches AI on and off (FG-519): [200,200]
+PASS the switch needs an Idempotency-Key (428) and a reason (422) (FG-538): [428,422]
+PASS reminder trigger without credentials -> 401: 401
+PASS reminder trigger as tenant Owner -> 403: 403
+PASS the app cannot be framed by another origin: {"child_url":"chrome-error://chromewebdata/"}
+PASS no request to any third-party host (except Google Fonts): {"hosts":{"127.0.0.1:8081":153,"fonts.googleapis.com":8,"fonts.gstatic.com":8,"analytics.example.test":8,"localhost:42039":1}}
+PASS no request to emergent.sh: null
+PASS no request to cdn.tailwindcss.com: null
+PASS no request to any PostHog ASSET host (no remote script, #88 no-external build): null
+PASS analytics on: the bundled posthog-js really sent to analytics.example.test (allowed by the CSP): null
+PASS NO CSP violation at all (FG-539: analytics allowed by the templated CSP when configured): []
+PASS no CSP violation reported on ANY page (console): []
+PASS every script came from the app origin: ["http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/service-worker.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js","http://127.0.0.1:8081/static/js/main.f3b6814c.js","http://127.0.0.1:8081/static/js/62.4726be9e.chunk.js"]
+BOT PASSED
