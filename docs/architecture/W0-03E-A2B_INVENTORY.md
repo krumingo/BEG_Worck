@@ -72,6 +72,7 @@ Every org-keyed collection is backfilled to the resolved tenant when ownerless (
 | `material_requests` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `material_waste_entries` | items / materials / requests | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `media_files` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
+| `media_retire_requests` | file / document metadata | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `missing_smr` | work types / SMR identities | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `mobile_view_configs` | tenant settings / counters / subscription | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
 | `notifications` | users / persons / employee_profiles / attendance | `org_id` | BACKFILL_TO_RESOLVED_TENANT / BLOCK on conflict | (TenantData / none) |
