@@ -8,7 +8,7 @@
 | PR / branch | Last audited SHA | Result | Date |
 |---|---|---|---|
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
-| #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
+| #84 INV-CN-01 | `38d3244` | **PASS** (F-84-01, FG-571 / 572 / 599; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells; R47 wiring notes for the 2nd merger) | 2026-11-13 |
 | #83 CP-01 | `5695f97` | **PASS** (FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
@@ -6794,3 +6794,55 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 
 - **On `0c04438c`:** R0 814.
 - **N1 (deploy) stands:** `JWT_SECRET` ≥ 32 bytes; replace the live `nginx.conf`; then update `LIVE_NGINX_BLOB`.
+
+## 2026-11-13 — #84 INV-CN-01 `38d3244b` — PASS
+
+- **Head:** `38d3244b` = `baafdf3a` (FG-599) + `docs/evidence` only.
+
+### Merge check
+
+- Contains main `3863610`; clean onto main; role-union 0.
+- The earlier main-merge `9874601` equals merge-tree except PM-01 `run_meta` and SEC-02 evidence.
+
+### Static review
+
+- **F-84-01:** all 17 `invoice_corrections` routes take a Permission Service action first.
+  - Codex's revoked / expired / missing × off / shadow / enforce matrix is `test_f84_01_…` in the own suite.
+- **FG-572:** `require_money_write` comes first on PUT invoice, cancel, cancel/approve and cancel/reject.
+  - The four new actions are granted to owner / admin / accountant.
+  - The Owner-only Р51 approval stays in the service.
+- **FG-571:**
+  - `payable_net` → `current_open` → `payable_until_credit_note`;
+  - `_check_offset` is equivalent to before.
+- **FG-599:**
+  - outgoing note: legacy role must be Accountant, else 403 `ISSUER_ROLE_REQUIRED`;
+  - the UI issue button is shown only to the Accountant.
+  - The 2 changed old tests relax nothing: the same-person guard is still asserted, and `f84_01` off / shadow is tightened from 201 to 403.
+
+### Gates (real Mongo)
+
+| Gate | `ebcac7f9` | `baafdf3a` (= `38d3244b` code) |
+|---|---|---|
+| R0 | 814 | — |
+| W0 | 16 = main's 16 | — |
+| A2C / A1 | 0/246, 0/496 | — |
+| PAY | 630 | — |
+| SEC-01 | 30 | 30 |
+| SEC-02 | 31; regen 0 cells | 31 |
+| PM-01 | 6; regen 0 cells | 6; regen 0 cells |
+| inv_cn_01 | 186 | 189 |
+| probes | R64 9 / invcn01 99 | invcn01 99 |
+| **warehouse** | **44 / 1121** | — |
+| fg233 / wh_fix_01 | 9 / 47 / 129 / 132 | — |
+
+- **Not re-run on `baafdf3a`:** the warehouse suite. FG-599 touches only the `create_note` route and the UI.
+
+### For whichever of #82 / #84 merges second (union trial `671de2be` + `4dd01e88`, all green)
+
+- Merge-file union.
+- Restore `@staticmethod` before `_plan_receipt_reversal`.
+- Keep one `"expected_credit_notes"` ownership entry.
+- Regenerate the A1 inventory by redirecting the script's stdout into the doc.
+- R47 wiring: `ic.payable_until_credit_note` fits #82's call sites.
+  - **Units trap:** `ic.cents` is a 0.01 Decimal; `credit_note_rule.cents` is integer cents.
+  - #82's reversal guard should use `ic.payable_net`.
