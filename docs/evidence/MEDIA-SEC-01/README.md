@@ -48,6 +48,19 @@ Red before / green after: the new `tests/test_media_sec_01.py` on `d634bf4` → 
 
 Interleavings (FLOW Guard condition 6), each a test: claim → DELETE 409 → movement commits → movement holds the file; claim → movement fails → release → DELETE works; stale release too recent / with a reference (kept) / without one (released, audited, not retired); parallel approve vs claim (approve wins, claim 409) and DELETE vs claim (claim wins, DELETE 409); two writers' markers on one file; and the REAL warehouse route with a stub service that attempts a retire DURING the movement (refused; marker confirmed / released). Red on `56ea33b`: 6 failed (`red_fg588_on_56ea33b.txt`); FG-587/590 red on `1844627`: `red_pass47_on_1844627.txt`.
 
+## FLOW Guard pass 48 on cb19aeb — fixed
+
+| Finding | Fix |
+|---|---|
+| FG-595 (medium) | A marker that outlived its COMMITTED movement no longer blocks the Owner retire forever. `release_stale` (Owner/Admin, after `PENDING_HOLDER_MIN_AGE_SECONDS`) asks the registry: no holder → **released**; the only holders are `warehouse_transactions` rows whose `idempotency_key == marker.ref` (the marker's own movement) → **late-confirmed** (marker pulled, `ref_version` +1, AuditEvent `media.file.pending_holder_confirm_late` with the proof); anything else → 409 `PENDING_HOLDER_REFERENCED` with the proof, nothing changes. The routes' `finally` settles through `file_holders.settle_shielded` (`asyncio.shield`), so a client disconnect / middleware cancel after the commit cannot skip the settle. Tests: a marker left behind by a committed movement → late-confirmed → retire request 201 → Owner approve 200 → `retired`; a request cancelled twice (during the movement and during the settle) → marker settled. |
+| FG-596 | `warehouse_canonical._markers_for`: the Idempotency-Key replay check runs BEFORE the marker — when a movement with the same `{org_id, idempotency_key, action}` already committed, no marker is placed and the service returns its stored result. Test: a replay while a retire request is pending → 200, no marker (on cb19aeb: 409 `RETIRE_REQUEST_PENDING`). |
+| FG-598 | `POST /api/media/{id}/pending-holders/{marker}/release` requires `Idempotency-Key` (428 without); the granted settle runs in `lifecycle.keyed_transaction` (a replay returns the same answer, also after the marker is gone). A refused release (too recent / referenced) → 409 AND an AuditEvent `media.file.pending_holder_release_refused` (actor, marker, age, proof). |
+| FG-597 | Stays debt (OCR from-media, below). |
+
+Mixed case kept refused: own movement + another holder → 409 `PENDING_HOLDER_REFERENCED` (the marker stays until a person decides) — open question to the orchestrator whether that case should late-confirm too.
+
+Red-before: `red_pass48_on_cb19aeb.txt` — the new tests on cb19aeb: 4 failed.
+
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
 Until it is applied, a legacy avatar (uploaded before MEDIA-SEC-01, no `avatar` flag) shows initials instead of the photo.
@@ -80,7 +93,7 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 * Retired media has no "restore" path yet (same as retired project photos) — open question to Krum (`media_policy.RESTORE_ENABLED`).
 * **W0-07**: the interim Owner-approval flow (`media_retire_requests`) moves into the canonical Approval runtime.
 * **FG-588 option (a) — debt**: a pre-commit hook in the (locked) warehouse service so the claim runs INSIDE `service.execute`'s transaction; needs Krum. Option 4 (pending-holder marker) closes the proven race meanwhile.
-* **OCR from-media (`ocr_invoice.py` from-media) — debt**: claim-then-write outside one transaction; unreachable today (pre-existing 500: `create_ocr_intake` calls `extract_invoice_text(media_id=...)` without a tenant). Before that 500 is fixed, the route gets the pending-holder pattern (or the claim inside the write's transaction).
+* **OCR from-media (`ocr_invoice.py` from-media) — debt (FG-597)**: claim-then-write outside one transaction; unreachable today (pre-existing 500: `create_ocr_intake` calls `extract_invoice_text(media_id=...)` without a tenant). Before that 500 is fixed, the route gets the pending-holder pattern (or the claim inside the write's transaction).
 * **#83 merge (FG-555 / FG-589)**: `"retired"` goes into `bank_account_guard._INACTIVE_FILE_STATES` (and a pending retire request is refused); the `cash_receipt_file_id` writers in `finance.py` / `subcontractors.py` use `file_holders.claimed_write`; `receipt_references` uses `find_holders(kinds=RECEIPT_KINDS)`. FLOW Guard's 5-point recipe applies.
 * The frontend has no screen yet for the retire request / Owner approval (API only); `EmployeesPage` new-employee avatar keeps failing silently (now also refused by R83(3), as it passes a `/api/media/file/` URL).
 * `GET /api/media/{id}` order changed: the media ACL runs first, then the retired rule (403 for a user without access, 410 for a reader with access).

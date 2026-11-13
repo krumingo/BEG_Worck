@@ -279,45 +279,98 @@ async def settle_pending(tenant, org_id: str, markers: List[Dict[str, str]], *,
     return removed
 
 
-async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, actor: Dict[str, Any],
-                        min_age_seconds: int) -> Dict[str, Any]:
-    """Condition 4: release a marker that no movement followed — ONLY when it is older than
-    ``min_age_seconds`` (well above the movement transaction timeout) AND the registry proves
-    that no record (``warehouse_transactions.file_ids`` included) references the file. It never
-    retires anything. Writes the AuditEvent ``media.file.pending_holder_release`` with the
-    actor, the marker id and the proof."""
-    from datetime import datetime, timezone
-    media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
-    if not media:
-        raise _refuse(404, "MEDIA_NOT_FOUND", "Media file not found")
-    marker = next((m for m in media.get("pending_holders") or [] if m.get("id") == marker_id), None)
-    if not marker:
-        return {"released": False, "reason": "no_such_marker"}
-    age = (datetime.now(timezone.utc) - datetime.fromisoformat(marker["at"])).total_seconds()
-    if age < min_age_seconds:
-        raise _refuse(409, "PENDING_HOLDER_TOO_RECENT",
-                      "Маркерът е по-нов от минималната възраст за освобождаване")
-    probe = dict(media, pending_holders=[])
-    real = await find_holders(tenant, org_id, probe)
-    if real:
-        return {"released": False, "reason": "referenced", "proof": real}
+async def _audit_release(tenant, actor, media_id, action, reason, diff, key):
+    """FG-598: the release (granted OR refused) is an AuditEvent — a refusal in its own
+    transaction, since the refused request writes nothing else."""
     from app.services.auth_tx import run_in_transaction
     from app.services import project_lifecycle as lifecycle
 
     async def body(session):
+        await lifecycle.audit(session, actor, action=action, entity_type="media_file",
+                              entity_id=media_id, reason=reason, key=key,
+                              source_flow="FLOW-029", diff=diff)
+        return True
+    await run_in_transaction(tenant._db, body)   # pylint: disable=protected-access
+
+
+async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, actor: Dict[str, Any],
+                        min_age_seconds: int, key: str) -> Dict[str, Any]:
+    """Condition 4 + FG-595 / FG-598 — settle a marker that its writer left behind.
+
+    Only when the marker is older than ``min_age_seconds`` (far above the movement
+    transaction's lifetime). Then the registry decides:
+
+    * no holder at all → the marker is RELEASED (its movement never committed);
+    * the only holders are warehouse movements written under the marker's own
+      idempotency key (``marker.ref``) → the marker is LATE-CONFIRMED (its movement
+      committed and the writer missed ``settle_pending``) — FG-595;
+    * anything else → 409 ``PENDING_HOLDER_REFERENCED`` with the proof; nothing changes.
+
+    Never retires. Every outcome — refusals included — is an AuditEvent with the actor, the
+    marker and the proof (FG-598); the granted settle runs under the ``Idempotency-Key``."""
+    from datetime import datetime, timezone
+    from app.services import project_lifecycle as lifecycle
+    media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
+    if not media:
+        raise _refuse(404, "MEDIA_NOT_FOUND", "Media file not found")
+    marker = next((m for m in media.get("pending_holders") or [] if m.get("id") == marker_id), None)
+    fingerprint = {"media_id": media_id, "marker_id": marker_id}
+    if not marker:
+        # a REPLAY of a granted release finds the marker gone: the key returns its stored
+        # answer; a fresh key gets "no_such_marker" (nothing written)
+        async def nothing(session):
+            return {"released": False, "reason": "no_such_marker"}
+        return await lifecycle.keyed_transaction(actor, key, "media.file.pending_holder_release",
+                                                 fingerprint, nothing)
+    age = (datetime.now(timezone.utc) - datetime.fromisoformat(marker["at"])).total_seconds()
+    base = {"marker": marker, "age_seconds": int(age)}
+    if age < min_age_seconds:
+        await _audit_release(tenant, actor, media_id, "media.file.pending_holder_release_refused",
+                             "marker too recent", dict(base, refused="too_recent"), key)
+        raise _refuse(409, "PENDING_HOLDER_TOO_RECENT",
+                      "Маркерът е по-нов от минималната възраст за освобождаване")
+    probe = dict(media, pending_holders=[])
+    holders = await find_holders(tenant, org_id, probe)
+    refs = references_of(media)
+    moves = await tenant.warehouse_transactions.find(
+        {"org_id": org_id, "file_ids": {"$in": refs}},
+        {"_id": 0, "movement_id": 1, "idempotency_key": 1}).to_list(50)
+    others = [u for u in holders if u.get("kind") != "warehouse_movement"]
+    own = [m for m in moves if marker.get("ref") and m.get("idempotency_key") == marker.get("ref")]
+    if not holders:
+        outcome, action = "released", "media.file.pending_holder_release"
+    elif not others and moves and len(own) == len(moves):
+        outcome, action = "confirmed_late", "media.file.pending_holder_confirm_late"
+    else:
+        proof = {"holders": holders, "movements": moves}
+        await _audit_release(tenant, actor, media_id, "media.file.pending_holder_release_refused",
+                             "referenced", dict(base, refused="referenced", proof=proof), key)
+        raise HTTPException(status_code=409, detail={
+            "error_code": "PENDING_HOLDER_REFERENCED",
+            "message": "Файлът се използва — маркерът не се освобождава", "proof": proof})
+    proof = {"holders": holders, "own_movements": [m.get("movement_id") for m in own],
+             "checked": [h.kind for h in HOLDERS] + ["audit_event"]}
+
+    async def work(session):
         res = await tenant.media_files.update_one(
             {"id": media_id, "org_id": org_id, "pending_holders.id": marker_id},
             {"$pull": {"pending_holders": {"id": marker_id}}, "$inc": {"ref_version": 1}},
             session=session)
         if res.modified_count != 1:
             return {"released": False, "reason": "already_settled"}
-        await lifecycle.audit(session, actor, action="media.file.pending_holder_release",
-                              entity_type="media_file", entity_id=media_id,
-                              reason="stale pending holder released", key=None,
-                              source_flow="FLOW-029",
-                              diff={"marker": marker, "age_seconds": int(age),
-                                    "proof": {"holders": [], "checked": [h.kind for h in HOLDERS]
-                                              + ["audit_event"]}})
-        return {"released": True, "marker_id": marker_id}
+        await lifecycle.audit(session, actor, action=action, entity_type="media_file",
+                              entity_id=media_id, reason="stale pending holder %s" % outcome,
+                              key=key, source_flow="FLOW-029", diff=dict(base, proof=proof))
+        return {"released": True, "outcome": outcome, "marker_id": marker_id}
 
-    return await run_in_transaction(tenant._db, body)   # pylint: disable=protected-access
+    return await lifecycle.keyed_transaction(actor, key, "media.file.pending_holder_release",
+                                             fingerprint, work)
+
+
+async def settle_shielded(tenant, org_id: str, markers, *, confirmed: bool) -> None:
+    """FG-595: ``settle_pending`` in a ``finally`` that a client disconnect or a middleware
+    cancel cannot skip (``asyncio.shield``: the settle completes even if the request task is
+    cancelled while it runs)."""
+    import asyncio
+    if markers:
+        await asyncio.shield(settle_pending(tenant, org_id, markers, confirmed=confirmed))

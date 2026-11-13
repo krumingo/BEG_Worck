@@ -815,7 +815,8 @@ async def list_media_retire_requests(status: Optional[str] = REQ_PENDING,
 
 @router.post("/media/{media_id}/pending-holders/{marker_id}/release")
 async def release_stale_pending_holder(media_id: str, marker_id: str,
-                                       user: dict = Depends(get_current_user)):
+                                       user: dict = Depends(get_current_user),
+                                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     """FG-588 condition 4: an Owner/Admin releases a pending-holder marker that no movement
     followed — only after ``media_policy.PENDING_HOLDER_MIN_AGE_SECONDS`` and a registry
     proof that nothing references the file. Never retires anything; AuditEvent
@@ -824,5 +825,6 @@ async def release_stale_pending_holder(media_id: str, marker_id: str,
     from app.services.media_policy import PENDING_HOLDER_MIN_AGE_SECONDS
     if user.get("role") not in ("Owner", "Admin"):
         raise HTTPException(status_code=403, detail="Access denied")
+    key = lifecycle.require_key(idempotency_key)          # FG-598
     return await release_stale(_tenant(user), user["org_id"], media_id, marker_id, actor=user,
-                               min_age_seconds=PENDING_HOLDER_MIN_AGE_SECONDS)
+                               min_age_seconds=PENDING_HOLDER_MIN_AGE_SECONDS, key=key)

@@ -913,27 +913,36 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             m3 = upload()
             mk3 = q(lambda: fhp.mark_pending(T, org, [m3["id"]], route="test", user_id=tech))[0]["marker_id"]
             rel = "/api/media/%s/pending-holders/%s/release" % (m3["id"], mk3)
-            g["s3_too_recent"] = call("POST", rel, role="admin")["error_code"]
-            g["s3_technician"] = call("POST", rel, role="technician")["status"]
+            g["s3_no_key"] = call("POST", rel, role="admin")["status"]
+            g["s3_too_recent"] = call("POST", rel, role="admin", key="auto")["error_code"]
+            g["s3_technician"] = call("POST", rel, role="technician", key="auto")["status"]
             q(lambda: op_db.media_files.update_one({"id": m3["id"], "pending_holders.id": mk3},
                                                    {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
-            mov_row(m3["id"], "mv_3")
-            r = call("POST", rel, role="admin")
-            g["s3_with_reference"] = {"released": (r["body"] or {}).get("released"),
-                                      "reason": (r["body"] or {}).get("reason"),
-                                      "kept": pend(m3["id"]) == [mk3]}
+            mov_row(m3["id"], "mv_3")          # a movement NOT under this marker's key
+            r = call("POST", rel, role="admin", key="auto")
+            g["s3_with_reference"] = {"status": r["status"], "error_code": r["error_code"],
+                                      "kept": pend(m3["id"]) == [mk3],
+                                      "refusals": [e["action"] for e in events(
+                                          m3["id"], "media.file.pending_holder_release_refused")]}
             m4 = upload()
             mk4 = q(lambda: fhp.mark_pending(T, org, [m4["id"]], route="test", user_id=tech))[0]["marker_id"]
             q(lambda: op_db.media_files.update_one({"id": m4["id"], "pending_holders.id": mk4},
                                                    {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
-            r = call("POST", "/api/media/%s/pending-holders/%s/release" % (m4["id"], mk4), role="admin")
+            k4 = uuid.uuid4().hex
+            r = call("POST", "/api/media/%s/pending-holders/%s/release" % (m4["id"], mk4),
+                     role="admin", key=k4)
+            r_rep = call("POST", "/api/media/%s/pending-holders/%s/release" % (m4["id"], mk4),
+                         role="admin", key=k4)
+            g["s3_replay_same"] = r_rep["body"] == r["body"]
             g["s3_without_reference"] = {"released": (r["body"] or {}).get("released"),
+                                         "outcome": (r["body"] or {}).get("outcome"),
                                          "pending": pend(m4["id"]),
                                          "status": media_row(m4["id"]).get("status"),
                                          "events": [{"action": e["action"],
                                                      "marker": ((e["diff"] or {}).get("marker") or {}).get("id") == mk4,
                                                      "proof": bool((e["diff"] or {}).get("proof"))}
-                                                    for e in events(m4["id"], "media.file.pending_holder")]}
+                                                    for e in events(m4["id"], "media.file.pending_holder")
+                                                    if not e["action"].endswith("_refused")]}
             # (4a) parallel: retire-approve vs claim — a request is pending, the claim loses
             m5 = upload()
             q(lambda: op_db.work_reports.insert_one({"id": pid("A", "wr_m5"), "org_id": org,
@@ -997,6 +1006,70 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             q(lambda: fhp.settle_pending(T, org, kb, confirmed=False))
             g["s5_delete_after"] = call("DELETE", "/api/media/%s" % m8["id"], role="technician",
                                         key="auto", json={"reason": "x"})["status"]
+        if has_mark and hasattr(fhp, "settle_shielded"):
+            # FG-595(a) a marker outlived its COMMITTED movement → late-confirmed → retire flow open
+            m11 = upload()
+            k11 = "wh-key-" + uuid.uuid4().hex
+            mk11 = q(lambda: fhp.mark_pending(T, org, [m11["id"]], route="test", user_id=tech,
+                                             ref=k11))[0]["marker_id"]
+            q(lambda: op_db.warehouse_transactions.insert_one({
+                "id": pid("A", "mv_11"), "movement_id": "mv-11", "org_id": org, "tenant_id": org,
+                "idempotency_key": k11, "action": "receive_from_supplier",
+                "file_ids": [m11["id"]], "created_at": NOW}))
+            g["s595_request_blocked"] = call("POST", "/api/media/%s/retire-request" % m11["id"],
+                                            role="admin", key="auto",
+                                            json={"reason": "x"})["error_code"]
+            q(lambda: op_db.media_files.update_one({"id": m11["id"], "pending_holders.id": mk11},
+                                                   {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
+            r = call("POST", "/api/media/%s/pending-holders/%s/release" % (m11["id"], mk11),
+                     role="admin", key="auto")
+            g["s595_late"] = {"status": r["status"], "outcome": (r["body"] or {}).get("outcome"),
+                              "pending": pend(m11["id"]),
+                              "events": [e["action"] for e in events(m11["id"], "media.file.pending_holder")]}
+            rq = call("POST", "/api/media/%s/retire-request" % m11["id"], role="admin", key="auto",
+                      json={"reason": "грешна снимка"})
+            ap = call("POST", "/api/media/retire-requests/%s/approve" % (rq["body"] or {}).get("id"),
+                      key="auto", json={})
+            g["s595_retire_flow"] = {"request": rq["status"], "approve": ap["status"],
+                                     "status": media_row(m11["id"]).get("status")}
+            # FG-595(b) a request cancelled twice — during the movement AND during the settle
+            import asyncio as _asyncio
+            m12 = upload()
+            mk12 = q(lambda: fhp.mark_pending(T, org, [m12["id"]], route="test", user_id=tech, ref="k12"))
+            real_settle = fhp.settle_pending
+
+            async def slow_settle(*a, **kw):
+                await _asyncio.sleep(0.3)
+                return await real_settle(*a, **kw)
+
+            async def cancelled_twice():
+                started = _asyncio.Event()
+
+                async def run():
+                    await op_db.warehouse_transactions.insert_one({
+                        "id": pid("A", "mv_12"), "org_id": org, "tenant_id": org,
+                        "idempotency_key": "k12", "file_ids": [m12["id"]], "created_at": NOW})
+                    started.set()
+                    await _asyncio.sleep(5)
+                task = _asyncio.ensure_future(whc._settled(mk12, T, run))
+                await started.wait()
+                task.cancel()                     # the client went away after the commit
+                await _asyncio.sleep(0.1)
+                task.cancel()                     # … and the middleware cancels again
+                try:
+                    await task
+                except BaseException:             # noqa: BLE001
+                    pass
+                await _asyncio.sleep(0.6)
+            import app.routes.warehouse_canonical as whc
+            fhp.settle_pending = slow_settle
+            try:
+                q(cancelled_twice)
+            finally:
+                fhp.settle_pending = real_settle
+            g["s595_cancel"] = {"pending": pend(m12["id"]),
+                                "delete": call("DELETE", "/api/media/%s" % m12["id"], role="technician",
+                                               key="auto", json={"reason": "x"})["error_code"]}
         # (6) the real warehouse route with a stub service: a retire DURING the movement
         import app.routes.warehouse_canonical as whc
         import app.routes.media as media_routes
@@ -1026,19 +1099,24 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     {"id": fid}, {"_id": 0, "pending_holders": 1}) or {}).get("pending_holders") or [])
                 if self.fail:
                     raise ValueError("movement failed")
+                if await op_db.warehouse_transactions.find_one({"id": "mv-" + fid}):
+                    return _Res("mv-" + fid)                     # the service's replay
                 await op_db.warehouse_transactions.insert_one({
-                    "id": "mv-" + fid, "org_id": org, "tenant_id": org, "file_ids": [fid],
-                    "created_at": NOW})
+                    "id": "mv-" + fid, "movement_id": "mv-" + fid, "org_id": org,
+                    "tenant_id": org, "file_ids": [fid], "idempotency_key": inp.idempotency_key,
+                    "action": "receive_from_supplier", "created_at": NOW})
                 return _Res("mv-" + fid)
 
         route_obs = {}
         for label, fail, mf in (("commit", False, m9), ("fail", True, m10)):
             stub = _Stub(fail)
             whc._service = lambda: stub
+            ik = uuid.uuid4().hex
+            route_obs[label + "_key"] = ik
             try:
                 r = call("POST", "/api/warehouse/canonical/movements", json={
                     "action": "receive_from_supplier", "item_id": "it", "unit": "pcs",
-                    "quantity": "1", "idempotency_key": uuid.uuid4().hex,
+                    "quantity": "1", "idempotency_key": ik,
                     "file_ids": [mf["id"]]})
             finally:
                 whc._service = real_service
@@ -1046,6 +1124,25 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                 "pending_during": stub.seen.get("pending_during"),
                                 "pending_after": len(pend(mf["id"])),
                                 "media_status": media_row(mf["id"]).get("status")}
+        # FG-596: a REPLAY of the committed movement works even while a retire request waits
+        rq9 = call("POST", "/api/media/%s/retire-request" % m9["id"], role="admin", key="auto",
+                   json={"reason": "x"})
+        stub9 = _Stub(False)
+        rep_key = (q(lambda: op_db.warehouse_transactions.find_one(
+            {"id": "mv-" + m9["id"]}, {"_id": 0, "idempotency_key": 1})) or {}).get("idempotency_key")
+        whc._service = lambda: stub9
+        try:
+            r = call("POST", "/api/warehouse/canonical/movements", json={
+                "action": "receive_from_supplier", "item_id": "it", "unit": "pcs",
+                "quantity": "1", "idempotency_key": route_obs["commit_key"],
+                "file_ids": [m9["id"]]})
+        finally:
+            whc._service = real_service
+        route_obs["replay_while_pending"] = {"request": rq9["status"], "replay": r["status"],
+                                             "error_code": r["error_code"],
+                                             "pending_after": len(pend(m9["id"]))}
+        call("POST", "/api/media/retire-requests/%s/reject" % (rq9["body"] or {}).get("id"),
+             key="auto", json={"reason": "тест"})
         r = call("DELETE", "/api/media/%s" % m9["id"], role="technician", key="auto", json={"reason": "x"})
         route_obs["commit_delete_after"] = (r["status"], ((r["body"] or {}).get("detail") or {}).get("use_kinds"))
         r = call("DELETE", "/api/media/%s" % m10["id"], role="technician", key="auto", json={"reason": "x"})
@@ -1582,10 +1679,16 @@ def test_fg588_2_a_failed_movement_releases_and_the_file_can_be_retired(obs):
 @real
 def test_fg588_3_a_stale_marker_is_released_only_when_old_and_unreferenced(obs):
     g = obs["pass47"]["fg588"]
+    assert g["s3_no_key"] == 428                                        # FG-598
     assert g["s3_too_recent"] == "PENDING_HOLDER_TOO_RECENT" and g["s3_technician"] == 403
-    assert g["s3_with_reference"] == {"released": False, "reason": "referenced", "kept": True}
+    assert g["s3_with_reference"] == {"status": 409, "error_code": "PENDING_HOLDER_REFERENCED",
+                                      "kept": True,
+                                      # one audit for the too-recent refusal, one for this one
+                                      "refusals": ["media.file.pending_holder_release_refused"] * 2}
     w = g["s3_without_reference"]
-    assert w["released"] is True and w["pending"] == [] and w["status"] is None   # never retired
+    assert w["released"] is True and w["outcome"] == "released"
+    assert w["pending"] == [] and w["status"] is None                   # never retired
+    assert g["s3_replay_same"] is True
     assert w["events"] == [{"action": "media.file.pending_holder_release", "marker": True,
                             "proof": True}]
 
@@ -1601,6 +1704,22 @@ def test_fg588_4_retire_and_claim_in_parallel_exactly_one_wins(obs):
 
 
 @real
+def test_fg595_a_marker_that_outlived_its_movement_is_late_confirmed_and_retire_reopens(obs):
+    g = obs["pass47"]["fg588"]
+    assert g["s595_request_blocked"] == "MEDIA_IN_USE"
+    assert g["s595_late"] == {"status": 200, "outcome": "confirmed_late", "pending": [],
+                              "events": ["media.file.pending_holder_confirm_late"]}
+    assert g["s595_retire_flow"] == {"request": 201, "approve": 200, "status": "retired"}
+
+
+@real
+def test_fg595_a_cancelled_request_still_settles_its_marker(obs):
+    c = obs["pass47"]["fg588"]["s595_cancel"]
+    assert c["pending"] == []
+    assert c["delete"] == "MEDIA_IN_USE"          # the committed movement holds the file
+
+
+@real
 def test_fg588_5_two_writers_markers_on_one_file(obs):
     g = obs["pass47"]["fg588"]
     assert g["s5_two"] == 2 and g["s5_one_left"] is True
@@ -1613,6 +1732,9 @@ def test_fg588_6_the_warehouse_route_a_retire_during_the_movement_is_refused(obs
     assert r["commit"] == {"status": 200, "retire_during": "MEDIA_IN_USE", "pending_during": 1,
                            "pending_after": 0, "media_status": None}
     assert list(r["commit_delete_after"]) == [409, ["warehouse_movement"]]
+    # FG-596: a replay places no marker — it works while a retire request is pending
+    assert r["replay_while_pending"] == {"request": 201, "replay": 200, "error_code": None,
+                                         "pending_after": 0}
     assert r["fail"]["status"] == 400 and r["fail"]["retire_during"] == "MEDIA_IN_USE"
     assert r["fail"]["pending_after"] == 0 and r["fail"]["media_status"] is None
     assert r["fail_delete_after"] == 200

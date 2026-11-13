@@ -17,15 +17,15 @@
   "traversal": {
    "%2E%2E": 404,
    "%2Fetc%2Fpasswd": 404,
-   "%2e%2e%2f62f6cd27-3b31-408a-afec-7401596": 404,
-   ".%2F62f6cd27-3b31-408a-afec-7401596619f3": 404,
-   "..%252F62f6cd27-3b31-408a-afec-740159661": 404,
+   "%2e%2e%2f1b9848b1-bc1c-45a7-9736-8d5a1f4": 404,
+   ".%2F1b9848b1-bc1c-45a7-9736-8d5a1f4d589d": 404,
+   "..%252F1b9848b1-bc1c-45a7-9736-8d5a1f4d5": 404,
    "..%2F..%2Fetc%2Fpasswd": 404,
-   "..%2f62f6cd27-3b31-408a-afec-7401596619f": 404,
-   "..%5C62f6cd27-3b31-408a-afec-7401596619f": 404,
+   "..%2f1b9848b1-bc1c-45a7-9736-8d5a1f4d589": 404,
+   "..%5C1b9848b1-bc1c-45a7-9736-8d5a1f4d589": 404,
    "...": 404,
-   "62f6cd27-3b31-408a-afec-7401596619f3.jpg": 404,
-   "projects%2F62f6cd27-3b31-408a-afec-74015": 404,
+   "1b9848b1-bc1c-45a7-9736-8d5a1f4d589d.jpg": 404,
+   "projects%2F1b9848b1-bc1c-45a7-9736-8d5a1": 404,
    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
   },
   "unknown": 404
@@ -34,12 +34,12 @@
   "enforce": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 186,
+    "files": 274,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 186,
+    "files": 274,
     "photos": 1
    },
    "file_accountant": 403,
@@ -65,12 +65,12 @@
   "off": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 184,
+    "files": 272,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 184,
+    "files": 272,
     "photos": 1
    },
    "file_accountant": 403,
@@ -102,12 +102,12 @@
   "shadow": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 185,
+    "files": 273,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 185,
+    "files": 273,
     "photos": 1
    },
    "file_accountant": 403,
@@ -197,7 +197,7 @@
    "again": "MEDIA_ALREADY_RETIRED",
    "body": {
     "ok": true,
-    "retired": "1514483a-d32b-4ece-85cc-b0ba394a21e7"
+    "retired": "891e21ae-8d9b-4118-b75c-08f3261eda69"
    },
    "events": [
     {
@@ -209,13 +209,13 @@
       "before": {
        "status": "active"
       },
-      "stored_filename": "1514483a-d32b-4ece-85cc-b0ba394a21e7.jpg"
+      "stored_filename": "891e21ae-8d9b-4118-b75c-08f3261eda69.jpg"
      },
      "entity_type": "media_file",
-     "idempotency_key": "eecddbda543e43ea8460e75da004ba71",
+     "idempotency_key": "34b52659806f415cb00fabf289fd8c9d",
      "reason": "дублирана снимка",
      "source_flow": "FLOW-029",
-     "tenant_id": "9f465bef-1512-4815-bcfb-e25ae02e53c3"
+     "tenant_id": "637dfbd0-a9fa-4ac4-b38a-120117515b8d"
     }
    ],
    "file_kept": true,
@@ -400,6 +400,7 @@
       "warehouse_movement"
      ]
     ],
+    "commit_key": "2d8a906239f046bd9be56537856279bf",
     "fail": {
      "media_status": null,
      "pending_after": 0,
@@ -407,7 +408,14 @@
      "retire_during": "MEDIA_IN_USE",
      "status": 400
     },
-    "fail_delete_after": 200
+    "fail_delete_after": 200,
+    "fail_key": "08489d271b7e4674a08bbf0f1506827a",
+    "replay_while_pending": {
+     "error_code": null,
+     "pending_after": 0,
+     "replay": 200,
+     "request": 201
+    }
    },
    "s1_after_commit": [
     409,
@@ -436,12 +444,18 @@
     []
    ],
    "s2_released": 1,
+   "s3_no_key": 428,
+   "s3_replay_same": true,
    "s3_technician": 403,
    "s3_too_recent": "PENDING_HOLDER_TOO_RECENT",
    "s3_with_reference": {
+    "error_code": "PENDING_HOLDER_REFERENCED",
     "kept": true,
-    "reason": "referenced",
-    "released": false
+    "refusals": [
+     "media.file.pending_holder_release_refused",
+     "media.file.pending_holder_release_refused"
+    ],
+    "status": 409
    },
    "s3_without_reference": {
     "events": [
@@ -451,6 +465,7 @@
       "proof": true
      }
     ],
+    "outcome": "released",
     "pending": [],
     "released": true,
     "status": null
@@ -471,6 +486,24 @@
     "status": null
    },
    "s4c": "MEDIA_RETIRED",
+   "s595_cancel": {
+    "delete": "MEDIA_IN_USE",
+    "pending": []
+   },
+   "s595_late": {
+    "events": [
+     "media.file.pending_holder_confirm_late"
+    ],
+    "outcome": "confirmed_late",
+    "pending": [],
+    "status": 200
+   },
+   "s595_request_blocked": "MEDIA_IN_USE",
+   "s595_retire_flow": {
+    "approve": 200,
+    "request": 201,
+    "status": "retired"
+   },
    "s5_delete_after": 200,
    "s5_delete_while_one": 409,
    "s5_one_left": true,
@@ -513,7 +546,7 @@
     "meta_technician": 410,
     "meta_technician_detail": {
      "error_code": "MEDIA_RETIRED",
-     "media_id": "72d4d299-5044-4a53-a465-c96726e8fe48",
+     "media_id": "3c4908f7-033c-42e5-8cd0-f0dcb9f0d2e8",
      "retired": true
     },
     "pending": null,
@@ -552,7 +585,7 @@
    "delete_while_pending": "MEDIA_IN_USE",
    "link_while_pending": "RETIRE_REQUEST_PENDING",
    "pending_list_owner": [
-    "26a8ee61-5d33-4688-a64a-5c5d0acc6209"
+    "6bc17131-2743-4c47-b4a7-570900e540ee"
    ],
    "pending_list_technician": 403,
    "req_no_key": 428,
@@ -606,11 +639,11 @@
    "avatar_events": [
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/62f6cd27-3b31-408a-afec-7401596619f3.jpg"
+     "after": "/api/media/avatar/1b9848b1-bc1c-45a7-9736-8d5a1f4d589d.jpg"
     },
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/beda46b6-5ef4-43af-bc86-03212310c19a.jpg"
+     "after": "/api/media/avatar/50245d1a-64bd-4b56-82ae-f08d40457dbb.jpg"
     }
    ],
    "basic_put": 200,

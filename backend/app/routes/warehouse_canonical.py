@@ -123,18 +123,37 @@ class MovementCommandResponse(BaseModel):
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+async def _markers_for(tenant, user, idempotency_key, action, file_ids, route):
+    """MEDIA-SEC-01 (FG-588 / FG-596): the pending-holder markers for a movement's files.
+
+    FG-596: a REPLAY (a committed movement of this action under this Idempotency-Key)
+    places no marker — the service answers with the stored result, which writes no new
+    reference, so a replay works even while a retire request is pending."""
+    from app.services.file_holders import mark_pending
+    if not file_ids:
+        return []
+    done = await tenant.warehouse_transactions.find_one(
+        {"org_id": tenant.org_id, "idempotency_key": idempotency_key, "action": action},
+        {"_id": 0, "movement_id": 1})
+    if done:
+        return []
+    return await mark_pending(tenant, tenant.org_id, list(file_ids),
+                              route=route, user_id=str(user.get("id")), ref=idempotency_key)
+
+
 async def _settled(markers, tenant, run):
-    """MEDIA-SEC-01 (FG-588): run the movement; confirm the pending-holder markers when it
-    commits, release them when it fails (the call's arguments are built inside, so even a
-    bad request releases)."""
-    from app.services.file_holders import settle_pending
+    """MEDIA-SEC-01 (FG-588 / FG-595): run the movement; confirm the pending-holder markers
+    when it commits, release them when it fails (the call's arguments are built inside, so
+    even a bad request releases). The settle is SHIELDED: a client disconnect or a
+    middleware cancel during the movement cannot skip it."""
+    from app.services.file_holders import settle_shielded
     committed = False
     try:
         result = await run()
         committed = True
         return result
     finally:
-        await settle_pending(tenant, tenant.org_id, markers, confirmed=committed)
+        await settle_shielded(tenant, tenant.org_id, markers, confirmed=committed)
 
 
 def _service() -> CommandService:
@@ -260,21 +279,14 @@ async def post_movement(
         # MEDIA-SEC-01 (FG-588, option 4): the attached files get a DURABLE pending-holder
         # marker before the movement runs (a retired file / a pending retire request → 409,
         # nothing written); confirmed after the movement commits, released if it fails.
-        from app.services.file_holders import mark_pending, settle_pending
-        markers = await mark_pending(tenant, tenant.org_id, list(body.file_ids or []),
-                                     route="POST /api/warehouse/movements",
-                                     user_id=str(user.get("id")), ref=body.idempotency_key)
-        committed = False
-        try:
-            result = await service.execute(
-                ctx=ctx,
-                tenant_db=tenant._db,            # pylint: disable=protected-access
-                tenant_collection=tenant.warehouse_transactions,
-                inp=inp,
-            )
-            committed = True
-        finally:
-            await settle_pending(tenant, tenant.org_id, markers, confirmed=committed)
+        markers = await _markers_for(tenant, user, body.idempotency_key, body.action,
+                                     body.file_ids, "POST /api/warehouse/canonical/movements")
+        result = await _settled(markers, tenant, lambda: service.execute(
+            ctx=ctx,
+            tenant_db=tenant._db,            # pylint: disable=protected-access
+            tenant_collection=tenant.warehouse_transactions,
+            inp=inp,
+        ))
     except WarehouseMovementError as exc:
         raise _render_error(exc) from exc
     except ValueError as exc:
@@ -444,10 +456,9 @@ async def post_project_writeoff(
     service = _service()
     try:
         # MEDIA-SEC-01 (FG-588, option 4): durable pending-holder markers first (see above)
-        from app.services.file_holders import mark_pending, settle_pending
-        markers = await mark_pending(tenant, tenant.org_id, list(body.file_ids or []),
-                                     route="POST /api/warehouse/project-writeoff",
-                                     user_id=str(user.get("id")), ref=body.idempotency_key)
+        markers = await _markers_for(tenant, user, body.idempotency_key,
+                                     CanonicalAction.WRITE_OFF.value, body.file_ids,
+                                     "POST /api/warehouse/canonical/project-writeoff")
         result = await _settled(markers, tenant, lambda: service.execute(
             ctx=ctx,
             tenant_db=tenant._db,            # pylint: disable=protected-access
