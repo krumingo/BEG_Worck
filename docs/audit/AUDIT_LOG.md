@@ -9,7 +9,7 @@
 |---|---|---|---|
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
 | #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
-| #83 CP-01 | `781d185` | **PASS** (pass 41) | 2026-11-09 |
+| #83 CP-01 | `5695f97` | **PASS** (FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `aaef24f` | **PASS** (main `3863610` merged; N2/N3/N5 closed; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
@@ -6704,3 +6704,41 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | probes | lab02 4, lab02_retake 1, f75_01 51, lab01t_fg463_race 20 |
 
 - **Note:** #73 has since moved to `3d39a9df` (FG-591/592). #75 must re-merge it before merge.
+
+## 2026-11-13 — #83 CP-01 `5695f974` — PASS
+
+### Findings on `ec346f86` (FG-562), both closed
+
+**CP83-M6** — the invoice VAT number could no longer be cleared.
+- Repro: `PUT /api/finance/invoices/{id} {"counterparty_vat_no": ""}` returned 200 but kept the stored value.
+- Cause: `vat_update("")` → ("set", None) → the field was dropped by `if v is not None`.
+- Probe: `docs/audit/probes/cp01/test_probe_cp83_vatclear.py`. It passes on `ddc6e9ad`, fails 3/3 on `ec346f86`, and passes on `5695f974`.
+- Fixed by `38ee979e`.
+
+**CP83-M7** — the W0 A1 static guard went red.
+- The committed A1 inventory had 380 accesses; the generated one has 381. The missing row is FG-562's `companies.get` in `update_company`.
+- Fixed by `5695f974`: A1 inventory regenerated (381 / FIXED 124), plus the A2C / A2 project_team inventories.
+
+### Merge check
+
+- Contains main `3863610`; clean onto main; role-union 0.
+- Since `ec346f86` the code delta is `finance.py` `update_invoice` only (an explicit "" clears).
+
+### Gates on real Mongo
+
+| Gate | `ec346f86` | `5695f974` |
+|---|---|---|
+| probe cp01 | 84 | — |
+| CP-01 suite | 753 / 15 skipped | 759 / 15 skipped (+ probe) |
+| SUB-ADV / PRJ-01 | 9 / 9 | — |
+| SEC-01 | 30 | 30 |
+| SEC-02 | 31 | — |
+| PM-01 | 6; regen 0 cells | 6 |
+| PAY | 630 | 630 |
+| A2C / A1 | 0/248, 0/500 | 0/248, 0/500 |
+| R0 | 814 | — |
+| W0 | 11 (M7) | **10 = `ddc6e9ad`'s set** (strict subset of main's 16; CP-01 R48.4 never-delete) |
+| **warehouse** | **44 / 1121** | — |
+| wh_fix_01 | 138 / 132 / 47 | — |
+
+- **Open, for whichever of #83 / #91 merges second:** FG-555 / FG-589.
