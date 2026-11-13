@@ -17,15 +17,15 @@
   "traversal": {
    "%2E%2E": 404,
    "%2Fetc%2Fpasswd": 404,
-   "%2e%2e%2ff56e5fe3-16e3-4b00-816c-f29a0f8": 404,
-   ".%2Ff56e5fe3-16e3-4b00-816c-f29a0f8bc814": 404,
-   "..%252Ff56e5fe3-16e3-4b00-816c-f29a0f8bc": 404,
+   "%2e%2e%2f995f8ae6-8e49-4ba6-a3ec-37be8d8": 404,
+   ".%2F995f8ae6-8e49-4ba6-a3ec-37be8d8c9046": 404,
+   "..%252F995f8ae6-8e49-4ba6-a3ec-37be8d8c9": 404,
    "..%2F..%2Fetc%2Fpasswd": 404,
-   "..%2ff56e5fe3-16e3-4b00-816c-f29a0f8bc81": 404,
-   "..%5Cf56e5fe3-16e3-4b00-816c-f29a0f8bc81": 404,
+   "..%2f995f8ae6-8e49-4ba6-a3ec-37be8d8c904": 404,
+   "..%5C995f8ae6-8e49-4ba6-a3ec-37be8d8c904": 404,
    "...": 404,
-   "f56e5fe3-16e3-4b00-816c-f29a0f8bc814.jpg": 404,
-   "projects%2Ff56e5fe3-16e3-4b00-816c-f29a0": 404,
+   "995f8ae6-8e49-4ba6-a3ec-37be8d8c9046.jpg": 404,
+   "projects%2F995f8ae6-8e49-4ba6-a3ec-37be8": 404,
    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
   },
   "unknown": 404
@@ -34,12 +34,12 @@
   "enforce": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 137,
+    "files": 162,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 137,
+    "files": 162,
     "photos": 1
    },
    "file_accountant": 403,
@@ -65,12 +65,12 @@
   "off": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 135,
+    "files": 160,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 135,
+    "files": 160,
     "photos": 1
    },
    "file_accountant": 403,
@@ -102,12 +102,12 @@
   "shadow": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 136,
+    "files": 161,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 136,
+    "files": 161,
     "photos": 1
    },
    "file_accountant": 403,
@@ -197,7 +197,7 @@
    "again": "MEDIA_ALREADY_RETIRED",
    "body": {
     "ok": true,
-    "retired": "3a29ed4e-73d4-49e4-b239-6066555c5e35"
+    "retired": "626c2b2b-a141-49b3-9216-7d96df1a0879"
    },
    "events": [
     {
@@ -209,13 +209,13 @@
       "before": {
        "status": "active"
       },
-      "stored_filename": "3a29ed4e-73d4-49e4-b239-6066555c5e35.jpg"
+      "stored_filename": "626c2b2b-a141-49b3-9216-7d96df1a0879.jpg"
      },
      "entity_type": "media_file",
-     "idempotency_key": "6da66c37c35f426da9e7d7595a09aaa2",
+     "idempotency_key": "26caa12a05814d04a84877a88dbebdb7",
      "reason": "дублирана снимка",
      "source_flow": "FLOW-029",
-     "tenant_id": "45b6f7df-3af6-461d-80cc-a084c9a13b96"
+     "tenant_id": "5a5f9a22-e2af-4b18-bb1a-2b28bce1e653"
     }
    ],
    "file_kept": true,
@@ -371,6 +371,30 @@
    "status": 409
   }
  },
+ "pass47": {
+  "fg587": {
+   "link_events": [],
+   "link_to_project": 403,
+   "link_to_project_work_report": 403,
+   "rows_added": 1,
+   "still_unlinked": true,
+   "tech_link_work_report": 200,
+   "tech_upload_work_report": 200,
+   "upload_into_project_work_report": 403,
+   "upload_no_context": 200,
+   "viewer_link_profile_less": 403
+  },
+  "fg590b": {
+   "all_query": [
+    "probe_receipt"
+   ],
+   "delete": "MEDIA_IN_USE",
+   "kind_query": [
+    "probe_receipt"
+   ],
+   "other_kind_query": []
+  }
+ },
  "r83": {
   "approval": {
    "approve": {
@@ -397,7 +421,7 @@
     "meta_technician": 410,
     "meta_technician_detail": {
      "error_code": "MEDIA_RETIRED",
-     "media_id": "7e04ad8c-6f45-4881-9b3d-96e3b7caf8be",
+     "media_id": "7098cfff-4921-41c4-a07e-e7440acb79bb",
      "retired": true
     },
     "pending": null,
@@ -436,7 +460,7 @@
    "delete_while_pending": "MEDIA_IN_USE",
    "link_while_pending": "RETIRE_REQUEST_PENDING",
    "pending_list_owner": [
-    "e29ea616-7b4f-400f-bbf2-2d1d8381229d"
+    "671afb79-1548-4d7b-b74b-33d7fccb0471"
    ],
    "pending_list_technician": 403,
    "req_no_key": 428,
@@ -490,11 +514,11 @@
    "avatar_events": [
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/f56e5fe3-16e3-4b00-816c-f29a0f8bc814.jpg"
+     "after": "/api/media/avatar/995f8ae6-8e49-4ba6-a3ec-37be8d8c9046.jpg"
     },
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/308c8b02-015c-40d7-81f9-dc98e0b06b50.jpg"
+     "after": "/api/media/avatar/11258236-eb76-41f2-b90e-e7fa103641ca.jpg"
     }
    ],
    "basic_put": 200,

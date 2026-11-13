@@ -809,6 +809,66 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                              "ref_version": media_row(lk["id"]).get("ref_version")}
         obs["pass46"] = p46
 
+        # ─────────────────────────────────────────────── FLOW Guard pass 47
+        p47: Dict[str, Any] = {}
+        # FG-587 — the requester is a SiteManager by company role and a Viewer on P1 (R83(1))
+        wr_p1 = pid("A", "wr_p1_link")
+        q(lambda: op_db.work_reports.insert_one({
+            "id": wr_p1, "org_id": A["tenant_id"], "project_id": A["project_id"],
+            "user_id": tech, "status": "Draft", "created_at": NOW}))
+        f = lambda: {"file": ("l.jpg", io.BytesIO(JPEG), "image/jpeg")}
+        before_rows = q(lambda: op_db.media_files.count_documents({}))
+        free_up = call("POST", "/api/media/upload", role="requester", files=f())
+        lk = {"upload_no_context": free_up["status"]}
+        fid = (free_up["body"] or {}).get("id")
+        lk["link_to_project"] = call("POST", "/api/media/link", role="requester", json={
+            "media_id": fid, "context_type": "project", "context_id": A["project_id"]})["status"]
+        lk["link_to_project_work_report"] = call("POST", "/api/media/link", role="requester", json={
+            "media_id": fid, "context_type": "workReport", "context_id": wr_p1})["status"]
+        lk["still_unlinked"] = media_row(fid).get("context_type") is None
+        lk["link_events"] = [e["action"] for e in events(fid, "media.file.link")]
+        lk["upload_into_project_work_report"] = call(
+            "POST", "/api/media/upload", role="requester",
+            data={"context_type": "workReport", "context_id": wr_p1}, files=f())["status"]
+        lk["rows_added"] = q(lambda: op_db.media_files.count_documents({})) - before_rows
+        # positives: the member Technician links and uploads into the same work report
+        tf = upload()
+        lk["tech_link_work_report"] = call("POST", "/api/media/link", role="technician", json={
+            "media_id": tf["id"], "context_type": "workReport", "context_id": wr_p1})["status"]
+        lk["tech_upload_work_report"] = call(
+            "POST", "/api/media/upload", role="technician",
+            data={"context_type": "workReport", "context_id": wr_p1}, files=f())["status"]
+        # a company Viewer never links
+        vf = upload(role="admin")
+        lk["viewer_link_profile_less"] = call("POST", "/api/media/link", role="viewer", json={
+            "media_id": vf["id"], "context_type": "project",
+            "context_id": A["project_id"]})["status"]
+        p47["fg587"] = lk
+        # FG-590(b) — a registered finder answers EVERY kind query, filtered by its kinds
+        import app.services.file_holders as fh2
+        probe = upload()
+
+        async def probe_finder(tenant, org_id, media, refs, session):
+            return [{"kind": "probe_receipt", "id": "p-1"}] if media.get("id") == probe["id"] else []
+        fh2.register_finder(probe_finder)
+        try:
+            from app.db import db as app_db2
+            from app.tenancy.data_access import TenantData as TD2
+            t2 = TD2.for_resolved_org(app_db2, A["tenant_id"])
+            row = media_row(probe["id"])
+            p47["fg590b"] = {
+                "kind_query": [u["kind"] for u in q(lambda: fh2.find_holders(
+                    t2, A["tenant_id"], row, kinds=["probe_receipt"]))],
+                "other_kind_query": [u["kind"] for u in q(lambda: fh2.find_holders(
+                    t2, A["tenant_id"], row, kinds=["payment_receipt"]))],
+                "all_query": [u["kind"] for u in q(lambda: fh2.find_holders(
+                    t2, A["tenant_id"], row))],
+                "delete": call("DELETE", "/api/media/%s" % probe["id"], role="technician",
+                               key="auto", json={"reason": "x"})["error_code"]}
+        finally:
+            fh2._FINDERS.remove(probe_finder)
+        obs["pass47"] = p47
+
         # ─────────────────────────────────────────────── FG-541 — project photos
         other = pid("A", "other")
         own_up = call("POST", "/api/projects/%s/photos" % other,
@@ -1296,9 +1356,31 @@ def test_fg544_a_link_writes_an_audit_event(obs):
 
 
 @real
+def test_fg587_a_project_viewer_cannot_add_a_file_by_linking_or_by_a_project_record(obs):
+    lk = obs["pass47"]["fg587"]
+    assert lk["upload_no_context"] == 200            # company role SiteManager may upload
+    assert lk["link_to_project"] == 403
+    assert lk["link_to_project_work_report"] == 403  # the project resolved from the record
+    assert lk["still_unlinked"] is True and lk["link_events"] == []
+    assert lk["upload_into_project_work_report"] == 403
+    assert lk["rows_added"] == 1                     # only the allowed no-context upload
+    assert lk["tech_link_work_report"] == 200 and lk["tech_upload_work_report"] == 200
+    assert lk["viewer_link_profile_less"] == 403
+
+
+@real
+def test_fg590b_a_registered_finder_answers_every_kind(obs):
+    c = obs["pass47"]["fg590b"]
+    assert c["kind_query"] == ["probe_receipt"]
+    assert c["other_kind_query"] == []
+    assert "probe_receipt" in c["all_query"]
+    assert c["delete"] == "MEDIA_IN_USE"
+
+
+@real
 def test_the_committed_evidence_is_a_run_of_this_harness():
     data = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))
-    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83", "pass46"}
+    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83", "pass46", "pass47"}
 
 
 if __name__ == "__main__":

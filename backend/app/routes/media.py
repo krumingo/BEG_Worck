@@ -62,9 +62,10 @@ async def upload_media(
     """Upload a media file (photo)"""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    # MEDIA-SEC-01 (FG-575, R83(1)): the one upload guard, before anything is read
-    from app.deps.upload_guard import require_uploader
-    await require_uploader(user, context_id if context_type == "project" else None)
+    # MEDIA-SEC-01 (FG-575, R83(1), FG-587): the one upload guard, before anything is read;
+    # the project is resolved from ANY context that belongs to a project
+    from app.deps.upload_guard import require_uploader_for_context
+    await require_uploader_for_context(user, context_type, context_id)
     
     # ── Validate context access BEFORE processing file ─────────────────
     # If context is provided, verify user has access to link to it
@@ -164,6 +165,11 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
             "message": f"Invalid context type. Allowed: {MEDIA_CONTEXT_TYPES}",
         })
     
+    # MEDIA-SEC-01 (FG-587): linking a file to a record adds it there — the same upload
+    # guard as POST /media/upload (a company or project Viewer → 403), nothing written
+    from app.deps.upload_guard import require_uploader_for_context
+    await require_uploader_for_context(user, data.context_type, data.context_id)
+
     # Find media file
     media = await tenant.media_files.find_one({"id": data.media_id, "org_id": org_id}, {"_id": 0})
     if not media:

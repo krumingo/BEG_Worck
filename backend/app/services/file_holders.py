@@ -121,9 +121,12 @@ async def find_holders(tenant, org_id: str, media: Dict[str, Any], session=None,
                                                              session=session)
         if row:
             uses.append({"kind": h.kind, "id": row.get("id")})
-    if want is None or "audit_event" in want:
-        for fn in _FINDERS:
-            uses += await fn(tenant, org_id, media, refs, session)
+    # FG-590(b): every registered finder runs for every query; its rows are filtered by kind
+    # like the declared holders (a finder may answer several kinds, e.g. #83's receipts)
+    for fn in _FINDERS:
+        for u in await fn(tenant, org_id, media, refs, session):
+            if want is None or u.get("kind") in want:
+                uses.append(u)
     return uses
 
 

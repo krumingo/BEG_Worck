@@ -131,12 +131,14 @@ export default function EmployeesPage() {
         try {
           const fd = new FormData();
           fd.append("file", avatarFile);
-          fd.append("context_type", "avatar");
+          // MEDIA-SEC-01 (FG-590a, R83(3)): an avatar is a FRESH profile upload of this user,
+          // stored as /api/media/avatar/<stored name> (the server refuses any other value)
+          fd.append("context_type", "profile");
           fd.append("context_id", newUserId);
           const uploadRes = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-          const url = uploadRes.data.url || uploadRes.data.file_url;
-          if (url) {
-            await API.put(`/users/${newUserId}`, { avatar_url: url });
+          const stored = (uploadRes.data.url || "").split("/").pop();
+          if (stored) {
+            await API.put(`/users/${newUserId}`, { avatar_url: `/api/media/avatar/${stored}` });
           }
         } catch { /* avatar upload is optional */ }
       }

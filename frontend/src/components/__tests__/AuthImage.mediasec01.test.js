@@ -79,3 +79,12 @@ test("no source file points a plain <img src> at an avatar URL any more", () => 
   walk(root);
   expect(offenders).toEqual([]);
 });
+
+test("FG-590a: a new avatar is a fresh PROFILE upload stored as /api/media/avatar/<name>", () => {
+  const fs = require("fs");
+  const path = require("path");
+  const page = fs.readFileSync(path.resolve(__dirname, "../../pages/EmployeesPage.js"), "utf8");
+  expect(page).not.toMatch(/append\("context_type",\s*"avatar"\)/);
+  expect(page).toMatch(/append\("context_type",\s*"profile"\)/);
+  expect(page).toMatch(/avatar_url:\s*`\/api\/media\/avatar\/\$\{stored\}`/);
+});

@@ -40,3 +40,43 @@ async def require_uploader(user: dict, project_id: Optional[str] = None) -> None
     for prole in UPLOAD_DENIED_PROJECT_ROLES:
         if await project_team.is_member(team, user["id"], project_id, prole):
             raise _deny()
+
+
+#: FG-587: the record behind each media context that belongs to a project (its
+#: ``project_id`` field). ``project`` is the project itself; ``profile`` / ``message``
+#: belong to no project.
+_CONTEXT_RECORDS = {
+    "workReport": "work_reports",
+    "delivery": "deliveries",
+    "attendance": "attendance_entries",
+    "machine": "machines",
+    "missingSMR": "missing_smr",
+    "site": "sites",
+}
+
+
+async def project_of_context(user: dict, context_type: Optional[str],
+                             context_id: Optional[str]) -> Optional[str]:
+    """FG-587: the project a media context belongs to (server-side, in the caller's tenant),
+    so the project-role rule applies to EVERY target that hangs off a project — not only to
+    ``context_type == "project"``."""
+    if not context_type or not context_id:
+        return None
+    if context_type == "project":
+        return context_id
+    coll = _CONTEXT_RECORDS.get(context_type)
+    if not coll:
+        return None
+    from app.db import db
+    from app.tenancy.data_access import TenantData
+    row = await TenantData.for_user(db, user).collection(coll).find_one(
+        {"id": context_id, "org_id": user["org_id"]}, {"_id": 0, "project_id": 1})
+    return (row or {}).get("project_id") or None
+
+
+async def require_uploader_for_context(user: dict, context_type: Optional[str],
+                                       context_id: Optional[str]) -> None:
+    """``require_uploader`` with the project resolved from the media context (FG-587).
+    Used by ``POST /media/upload`` AND ``POST /media/link`` — linking an uploaded file to a
+    project's record is adding a file to that project."""
+    await require_uploader(user, await project_of_context(user, context_type, context_id))

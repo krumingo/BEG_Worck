@@ -1,0 +1,5 @@
+# MEDIA-SEC-01 pass 47 — the NEW tests/test_media_sec_01.py run against the OLD code 1844627 (worktree), real Mongo rs0
+FAILED tests/test_media_sec_01.py::test_fg587_a_project_viewer_cannot_add_a_file_by_linking_or_by_a_project_record
+FAILED tests/test_media_sec_01.py::test_fg590b_a_registered_finder_answers_every_kind
+FAILED tests/test_media_sec_01.py::test_the_committed_evidence_is_a_run_of_this_harness
+3 failed, 41 passed in 10.14s
