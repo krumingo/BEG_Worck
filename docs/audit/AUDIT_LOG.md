@@ -10,7 +10,7 @@
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
 | #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
 | #83 CP-01 | `5695f97` | **PASS** (FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
-| #90 SEC-03 | `aaef24f` | **PASS** (main `3863610` merged; N2/N3/N5 closed; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
+| #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #75 LAB-02 | `a665932` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `ed6e88d`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) — needs re-merge of #73 `3d39a9d` | 2026-11-13 |
@@ -6742,3 +6742,55 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | wh_fix_01 | 138 / 132 / 47 | — |
 
 - **Open, for whichever of #83 / #91 merges second:** FG-555 / FG-589.
+
+## 2026-11-13 — #90 SEC-03 `66dd1ae6` (code `38a3bfd4`) — PASS (delta over `aaef24f4`)
+
+- **Commits:** FG-563 (`b95ee4ea`, `0716f8e9`, `f34b1f25`) and FG-603 / FG-604 (`38a3bfd4`).
+
+### Merge check
+
+- Contains main `3863610`; clean onto main; role-union 0.
+
+### `complete_idempotent` / `begin` / `release` stay additive
+
+- `session` is passed only when given.
+- `attempt_token` filters only when passed. `begin` writes a token on every record, which is additive.
+- A FAILED-key retake is a CAS that writes a new token.
+- A pre-deploy STARTED key with no token still matches the `{attempt_token: None}` release filter.
+- Only `put_ai_settings` passes `expires_at`. The 10 other `begin_idempotent` callers and the warehouse service's own registry records never write it.
+
+### TTL — live on real Mongo, on `0c04438c` and again on `38a3bfd4`
+
+- A key with a past `expires_at` was removed after about 40 s.
+- Keys without `expires_at`, or with `expires_at` 7 days ahead, remain.
+- Index: `expires_at` with `expireAfterSeconds` 0.
+
+### Lost attempt
+
+- `test_real_mongo_fg603_…` ran on real Mongo (not skipped):
+  - the stale attempt A resumes after B's takeover;
+  - A's CAS raises `IdempotencyAttemptLost` inside the transaction, so A rolls back;
+  - exactly one `ai.settings.changed` event exists;
+  - A answers with B's result.
+
+### A2C registry-write fix
+
+- Both registry updates (stale-CAS release and failure release) filter on `tenant_id`.
+- A2C 0.
+
+### Gates (`66dd1ae6`)
+
+| Gate | Result |
+|---|---|
+| SEC-03 | 148 (4 real-Mongo) |
+| w0_03e_c02 | 25 |
+| A2C / A1 | 0/244, 0/492 |
+| SEC-01 | 30 |
+| PAY | 630 |
+| W0 | 16 = main's 16 |
+| SEC-02 | 31 |
+| PM-01 | 6 |
+| **warehouse** | **44 / 1121** |
+
+- **On `0c04438c`:** R0 814.
+- **N1 (deploy) stands:** `JWT_SECRET` ≥ 32 bytes; replace the live `nginx.conf`; then update `LIVE_NGINX_BLOB`.
