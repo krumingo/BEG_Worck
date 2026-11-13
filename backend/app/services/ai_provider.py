@@ -144,11 +144,37 @@ def _redact_ids(text: str) -> str:
     return _DIGIT_RUN.sub(repl, text)
 
 
+# SEC-03 FG-535 (pass 46): invisible characters are dropped before anything else —
+# they can split an ЕГН so that no digit-run rule sees it, and they carry no
+# meaning for the model.
+_INVISIBLE = re.compile("[\u200b\u200c\u200d\u2060\u2061\u2062\u2063\u2064\ufeff\u00ad\u180e]")
+# ЕГН written as 6+4 with a dot or slash (800101.0008, 800101/0008 — common in
+# Bulgarian documents). A dot could also be a decimal amount, so this form is
+# hidden only when the ЕГН month and checksum are valid.
+_EGN_6_4 = re.compile(r"(?<![\d.,/])(\d{6})[./](\d{4})(?![\d]|[.,/]\d)")
+_EGN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3, 6)
+
+
+def egn_checksum_valid(digits: str) -> bool:
+    if len(digits) != 10 or not digits.isdigit():
+        return False
+    month = int(digits[2:4])
+    if not (1 <= month <= 12 or 21 <= month <= 32 or 41 <= month <= 52):
+        return False
+    check = sum(int(d) * w for d, w in zip(digits, _EGN_WEIGHTS)) % 11
+    return (0 if check == 10 else check) == int(digits[9])
+
+
+def _redact_egn_6_4(text: str) -> str:
+    return _EGN_6_4.sub(lambda m: REDACTED if egn_checksum_valid(m.group(1) + m.group(2)) else m.group(0), text)
+
+
 def redact_personal(text: str) -> str:
     """Replace anything IBAN-like and any ЕГН/ЛНЧ-like digit run before the model sees it."""
     if not text:
         return text
-    return _redact_ids(_redact_ibans(text))
+    text = _INVISIBLE.sub("", text)
+    return _redact_ids(_redact_egn_6_4(_redact_ibans(text)))
 
 
 _DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,", re.IGNORECASE)

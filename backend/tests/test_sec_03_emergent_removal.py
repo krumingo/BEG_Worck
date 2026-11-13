@@ -352,7 +352,7 @@ def ai(monkeypatch):
     return ai_provider, db, fake
 
 
-TX_COLLECTIONS = ("ai_usage_ledger", "audit_events", "feature_flags")
+TX_COLLECTIONS = ("ai_usage_ledger", "audit_events", "feature_flags", "audit_idempotency")
 
 
 async def snapshot_transaction(db, body):
@@ -483,6 +483,26 @@ def test_personal_ids_are_redacted_in_any_case_spacing_and_checksum(text):
         assert out.endswith(" мазилка")
     if " и 5 бр" in text:
         assert out.endswith(" и 5 бр")
+
+
+@pytest.mark.parametrize("text", [
+    "ЕГН 8001\u200b010008", "80\u200c01\u200d01\u2060000\ufeff8", "ЕГН 8001\u00ad010008",   # invisible chars
+    "ЕГН 800101.0008", "ЕГН: 800101/0008.", "лице 800101.0008, адрес",                         # 6+4, valid checksum
+])
+def test_pass46_invisible_characters_and_the_6_4_form_are_redacted(text):
+    """FG-535 (pass 46): zero-width / soft-hyphen characters cannot split an ЕГН past the
+    filter, and the 6+4 form with a dot or slash is hidden when the checksum is valid."""
+    from app.services.ai_provider import redact_personal
+    out = redact_personal(text)
+    assert "[скрито]" in out and "0008" not in out, (text, out)
+
+
+@pytest.mark.parametrize("text", [
+    "сума 800101.0009 лв", "цена 123456.7890", "1234.5678", "800101.0000", "дата 12.03/2026",
+])
+def test_pass46_a_6_4_number_with_a_bad_checksum_is_an_amount_not_an_egn(text):
+    from app.services.ai_provider import redact_personal
+    assert redact_personal(text) == text
 
 
 @pytest.mark.parametrize("text", [
@@ -803,6 +823,103 @@ def test_forbidden_if_the_switch_event_fails_the_flag_does_not_change(ai, monkey
     r = _put(client, True, key="k-broken")
     assert r.status_code == 500
     assert run(ai_provider.ai_enabled_for_tenant(ORG_A)) is False and _switch_events(db) == []
+
+
+# ── FG-563: the switch key completes in the transaction; stale keys recover; keys expire ──
+def _idem(db, key):
+    return run(db["audit_idempotency"].find_one({"key": key}, {"_id": 0}))
+
+
+def test_the_switch_key_completes_with_the_commit_and_expires(ai, monkeypatch):
+    from datetime import datetime, timezone
+    ai_provider, db, fake = ai
+    assert _put(_auth_client(monkeypatch, db, OWNER), True, key="k-ttl").status_code == 200
+    rec = _idem(db, "k-ttl")
+    assert rec["status"] == "completed" and json.loads(rec["result_reference"])["enabled"] is True
+    days = (rec["expires_at"].replace(tzinfo=timezone.utc) - datetime.now(timezone.utc)).days
+    assert 6 <= days <= 7
+    ttl = [i for i in run(db["audit_idempotency"].index_information()).values() if i.get("key") == [("expires_at", 1)]]
+    assert ttl and ttl[0]["expireAfterSeconds"] == 0
+
+
+def test_forbidden_a_fresh_in_progress_key_is_409_and_writes_nothing(ai, monkeypatch):
+    from datetime import datetime, timezone
+    from app.audit.idempotency import request_fingerprint
+    ai_provider, db, fake = ai
+    run(db["audit_idempotency"].insert_one({
+        "id": "idem_%s_ai.settings.change_k-busy" % ORG_A, "tenant_id": ORG_A, "action": "ai.settings.change",
+        "key": "k-busy", "status": "started", "request_fingerprint": request_fingerprint(
+            {"enabled": True, "reason": "тест на живо от Крум"}),
+        "reserved_at": datetime.now(timezone.utc).isoformat()}))
+    r = _put(_auth_client(monkeypatch, db, OWNER), True, key="k-busy")
+    assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_IN_PROGRESS"
+    assert _switch_events(db) == [] and run(ai_provider.ai_enabled_for_tenant(ORG_A)) is False
+
+
+def test_a_stale_in_progress_key_with_nothing_committed_is_retaken(ai, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+    from app.audit.idempotency import request_fingerprint
+    ai_provider, db, fake = ai
+    run(db["audit_idempotency"].insert_one({
+        "id": "idem_%s_ai.settings.change_k-dead" % ORG_A, "tenant_id": ORG_A, "action": "ai.settings.change",
+        "key": "k-dead", "status": "started", "request_fingerprint": request_fingerprint(
+            {"enabled": True, "reason": "тест на живо от Крум"}),
+        "reserved_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}))
+    r = _put(_auth_client(monkeypatch, db, OWNER), True, key="k-dead")
+    assert r.status_code == 200, r.text
+    assert len(_switch_events(db)) == 1 and _idem(db, "k-dead")["status"] == "completed"
+
+
+def test_a_committed_key_that_was_never_completed_replays_instead_of_409(ai, monkeypatch):
+    """The pre-FG-563 failure mode: commit happened, completion was lost."""
+    from datetime import datetime, timedelta, timezone
+    from app.audit.idempotency import request_fingerprint
+    ai_provider, db, fake = ai
+    client = _auth_client(monkeypatch, db, OWNER)
+    assert _put(client, True, key="k-lost").status_code == 200
+    run(db["audit_idempotency"].update_one({"key": "k-lost"}, {"$set": {
+        "status": "started", "result_reference": None,
+        "reserved_at": (datetime.now(timezone.utc) - timedelta(seconds=5)).isoformat()}}))
+    r = _put(client, True, key="k-lost")
+    assert r.status_code == 200 and r.json()["enabled"] is True, r.text
+    assert len(_switch_events(db)) == 1 and _idem(db, "k-lost")["status"] == "completed"
+
+
+def test_real_mongo_a_crash_after_the_commit_never_strands_the_key(monkeypatch):
+    """FG-563 on a real replica set: the process dies right after the transaction
+    committed (before answering). The retry with the same key replays — no 409,
+    no second event, flag unchanged."""
+    from app.routes import auth as auth_routes
+    from app.services import ai_provider
+    from app.services.auth_tx import run_in_transaction
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+
+    class Crash(RuntimeError):
+        pass
+
+    async def scenario():
+        real_db = _real_mongo_db()
+        try:
+            monkeypatch.setattr(ai_provider, "db", real_db)
+            monkeypatch.setattr(auth_routes, "db", real_db)
+
+            async def commit_then_crash(database, body):
+                await run_in_transaction(database, body)
+                raise Crash("process died after the commit")
+            monkeypatch.setattr(auth_routes, "run_ai_settings_transaction", commit_then_crash)
+            body = auth_routes.AISettingsUpdate(enabled=True, reason="тест на живо")
+            with pytest.raises(Crash):
+                await auth_routes.put_ai_settings(body, None, dict(OWNER), idempotency_key="crash-1")
+            rec = await real_db["audit_idempotency"].find_one({"key": "crash-1"})
+            assert rec["status"] == "completed"          # completed IN the committed transaction
+            monkeypatch.setattr(auth_routes, "run_ai_settings_transaction", run_in_transaction)
+            again = await auth_routes.put_ai_settings(body, None, dict(OWNER), idempotency_key="crash-1")
+            assert again["enabled"] is True
+            assert await real_db["audit_events"].count_documents({"action": "ai.settings.changed"}) == 1
+            assert await real_db["feature_flags"].count_documents({"module_code": "ai_enabled", "enabled": True}) == 1
+        finally:
+            await real_db.client.drop_database(real_db.name)
+    run(scenario())
 
 
 def test_real_mongo_the_switch_and_its_event_commit_together(monkeypatch):

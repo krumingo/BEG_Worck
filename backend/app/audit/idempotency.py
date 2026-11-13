@@ -85,6 +85,17 @@ async def ensure_idempotency_index(db) -> None:
                                IdempotencyUnprotected)
 
 
+#: SEC-03 FG-563: records that carry ``expires_at`` are removed by this TTL index;
+#: records without the field (every caller that does not pass ``expires_at``)
+#: never expire — the money-write registries keep their semantics unchanged.
+IDEMPOTENCY_TTL_FIELD = "expires_at"
+
+
+async def ensure_idempotency_ttl_index(db) -> None:
+    await db[IDEMPOTENCY_COLLECTION].create_index(
+        IDEMPOTENCY_TTL_FIELD, expireAfterSeconds=0, name="expires_at_ttl")
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -107,6 +118,7 @@ async def begin_idempotent(
     key: str,
     action: str,
     request_fingerprint: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
 ) -> Dict[str, Any]:
     """
     Reserve an idempotency key, or report the existing reservation.
@@ -139,6 +151,8 @@ async def begin_idempotent(
         "reserved_at": _now_iso(),
         "completed_at": None,
     }
+    if expires_at is not None:          # SEC-03 FG-563: opt-in TTL (BSON date for the TTL index)
+        record[IDEMPOTENCY_TTL_FIELD] = expires_at
 
     existing = await db[IDEMPOTENCY_COLLECTION].find_one({"id": record["id"]}, {"_id": 0})
     if existing is None:
@@ -221,12 +235,14 @@ async def mark_idempotent_step(
 
 
 async def complete_idempotent(
-    db, *, tenant_id: str, key: str, action: str, result_reference: str
+    db, *, tenant_id: str, key: str, action: str, result_reference: str, session=None
 ) -> None:
     """Mark a reserved key as successfully completed.
 
     Note: this updates the idempotency REGISTRY, which is bookkeeping —
     the append-only rule protects audit_events, not this collection.
+    SEC-03 FG-563: pass ``session`` to complete the key INSIDE the business
+    transaction, so a crash after the commit can never leave it STARTED.
     """
     await db[IDEMPOTENCY_COLLECTION].update_one(
         {"id": _record_id(tenant_id, action, key), "status": IDEMPOTENCY_STARTED},
@@ -235,6 +251,7 @@ async def complete_idempotent(
             "result_reference": result_reference,
             "completed_at": _now_iso(),
         }},
+        session=session,
     )
 
 
