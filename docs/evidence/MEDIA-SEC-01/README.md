@@ -37,6 +37,17 @@ Branch `claude/media-sec-01` from main `3863610`. Canon: CLAUDE.md §2 rules 9 a
 
 Red before / green after: the new `tests/test_media_sec_01.py` on `d634bf4` → **19 failed** (`red_pass46_on_d634bf4.txt`); on this branch → **42 passed**.
 
+## FLOW Guard pass 47 on 1844627 — fixed
+
+| Finding | Fix |
+|---|---|
+| FG-587 (medium) | `app/deps/upload_guard.project_of_context` resolves the project of EVERY media context (workReport, delivery, attendance, machine, missingSMR, site, project); `require_uploader_for_context` guards `POST /media/upload` **and** `POST /media/link` → a company or project Viewer cannot add a file to a project by linking (403, nothing written). |
+| FG-588 (medium, proven race) | **Option 4 — the durable pending-holder marker** (orchestrator + FLOW Guard, 6 conditions). The warehouse routes (`POST /warehouse/canonical/movements`, `/project-writeoff`, and material waste through it) call `file_holders.mark_pending` BEFORE `service.execute`: one conditional update (not retired AND no pending retire request) that `$push`es `{id, route, user, ref, at}` and `$inc`s `ref_version`; a miss → 409, the movement does not run. DELETE / retire-request / retire-approve count a pending marker as a holder (409 `MEDIA_IN_USE`, `pending_link`, shown to Owner/Admin as „в процес на свързване", no ids for others), and their final CAS requires no pending holders AND the `ref_version` read. After the movement commits the marker is confirmed, on failure released (`settle_pending`: idempotent, by marker id, CAS, removes only its own entry; arguments are built inside the guarded call). A crash-left marker is released only by `POST /api/media/{id}/pending-holders/{marker}/release` (Owner/Admin) after `media_policy.PENDING_HOLDER_MIN_AGE_SECONDS` (3600) AND a registry proof of no reference (incl. `warehouse_transactions.file_ids`); never retires; AuditEvent `media.file.pending_holder_release` (actor, marker, proof). The locked warehouse service is NOT touched. |
+| FG-590 | (a) `EmployeesPage.js` new-employee avatar: `context_type="profile"` + `/api/media/avatar/<name>`; (b) `find_holders` runs every registered finder for every kind query (a #83 finder answers under `kinds=RECEIPT_KINDS`). |
+| FG-575 / FG-579 | Per FLOW Guard, the FG-575 remainder was exactly FG-587; the FG-579 remainders are FG-588 (fixed above), OCR from-media (debt, below) and #83 (at its merge). |
+
+Interleavings (FLOW Guard condition 6), each a test: claim → DELETE 409 → movement commits → movement holds the file; claim → movement fails → release → DELETE works; stale release too recent / with a reference (kept) / without one (released, audited, not retired); parallel approve vs claim (approve wins, claim 409) and DELETE vs claim (claim wins, DELETE 409); two writers' markers on one file; and the REAL warehouse route with a stub service that attempts a retire DURING the movement (refused; marker confirmed / released). Red on `56ea33b`: 6 failed (`red_fg588_on_56ea33b.txt`); FG-587/590 red on `1844627`: `red_pass47_on_1844627.txt`.
+
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
 Until it is applied, a legacy avatar (uploaded before MEDIA-SEC-01, no `avatar` flag) shows initials instead of the photo.
@@ -65,12 +76,12 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 
 * **FG-543, FG-545, FG-546** — out of scope by instruction (FG-545 = the FLOW-029 archive model, Wave 2).
 * `MissingSMRPage.js:712` still shows attachments with a plain `<img src=".../api/media/file/...">`. That route already required a login before this change, so these images most likely don't load today. The same `AuthImage` fix applies.
-* `EmployeesPage.js` uploads a new employee's avatar with `context_type="avatar"`, which is not in `MEDIA_CONTEXT_TYPES` → 400, swallowed silently (**pre-existing debt**, recorded per pass 46).
+* ~~`EmployeesPage.js` new-employee avatar with `context_type="avatar"`~~ — fixed in pass 47 (FG-590a).
 * Retired media has no "restore" path yet (same as retired project photos) — open question to Krum (`media_policy.RESTORE_ENABLED`).
 * **W0-07**: the interim Owner-approval flow (`media_retire_requests`) moves into the canonical Approval runtime.
-* **FG-579 residual — warehouse canonical**: the movement routes claim the attached `file_ids` BEFORE `service.execute`, which runs its own transaction that a caller cannot join (the warehouse service is locked; joining needs a hook in it). A retire racing a movement inside that gap is not excluded; the holder check still sees the movement afterwards. Fix with a pre-commit hook in the warehouse service (separate task).
-* **FG-579 residual — OCR from-media**: `create_ocr_intake` (service) inserts without a session; the claim runs just before it.
-* **#83 merge (FG-555)**: CP-01's `bank_account_guard.receipt_references` should read the registry (`file_holders.find_holders(..., kinds=RECEIPT_KINDS)`) instead of its own `_RECEIPT_HOLDERS` loop, and the CP-01 payment writers that set `cash_receipt_file_id` should call `file_holders.claimed_write`. FLOW Guard's 5-point recipe applies.
+* **FG-588 option (a) — debt**: a pre-commit hook in the (locked) warehouse service so the claim runs INSIDE `service.execute`'s transaction; needs Krum. Option 4 (pending-holder marker) closes the proven race meanwhile.
+* **OCR from-media (`ocr_invoice.py` from-media) — debt**: claim-then-write outside one transaction; unreachable today (pre-existing 500: `create_ocr_intake` calls `extract_invoice_text(media_id=...)` without a tenant). Before that 500 is fixed, the route gets the pending-holder pattern (or the claim inside the write's transaction).
+* **#83 merge (FG-555 / FG-589)**: `"retired"` goes into `bank_account_guard._INACTIVE_FILE_STATES` (and a pending retire request is refused); the `cash_receipt_file_id` writers in `finance.py` / `subcontractors.py` use `file_holders.claimed_write`; `receipt_references` uses `find_holders(kinds=RECEIPT_KINDS)`. FLOW Guard's 5-point recipe applies.
 * The frontend has no screen yet for the retire request / Owner approval (API only); `EmployeesPage` new-employee avatar keeps failing silently (now also refused by R83(3), as it passes a `/api/media/file/` URL).
 * `GET /api/media/{id}` order changed: the media ACL runs first, then the retired rule (403 for a user without access, 410 for a reader with access).
 

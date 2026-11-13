@@ -35,3 +35,8 @@ USAGE_DETAIL_ROLES = frozenset({"Owner", "Admin"})
 
 def may_see_usage_detail(user: dict) -> bool:
     return (user or {}).get("role") in USAGE_DETAIL_ROLES
+
+
+#: FG-588 condition 4: a pending-holder marker is released as stale only when it is older than
+#: this — far above the warehouse movement transaction's lifetime (seconds)
+PENDING_HOLDER_MIN_AGE_SECONDS = 3600

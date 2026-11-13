@@ -123,6 +123,20 @@ class MovementCommandResponse(BaseModel):
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+async def _settled(markers, tenant, run):
+    """MEDIA-SEC-01 (FG-588): run the movement; confirm the pending-holder markers when it
+    commits, release them when it fails (the call's arguments are built inside, so even a
+    bad request releases)."""
+    from app.services.file_holders import settle_pending
+    committed = False
+    try:
+        result = await run()
+        committed = True
+        return result
+    finally:
+        await settle_pending(tenant, tenant.org_id, markers, confirmed=committed)
+
+
 def _service() -> CommandService:
     """A fresh CommandService over the shared Mongo client.
 
@@ -243,16 +257,24 @@ async def post_movement(
             # all SERVER-DERIVED by the command service — never
             # accepted from the request body.
         )
-        # MEDIA-SEC-01 (FG-579): attached documents are references to files — touch
-        # each file's row first (a retired file / a pending retire request → 409)
-        from app.services.file_holders import claim as _claim_files
-        await _claim_files(tenant, tenant.org_id, list(body.file_ids or []))
-        result = await service.execute(
-            ctx=ctx,
-            tenant_db=tenant._db,            # pylint: disable=protected-access
-            tenant_collection=tenant.warehouse_transactions,
-            inp=inp,
-        )
+        # MEDIA-SEC-01 (FG-588, option 4): the attached files get a DURABLE pending-holder
+        # marker before the movement runs (a retired file / a pending retire request → 409,
+        # nothing written); confirmed after the movement commits, released if it fails.
+        from app.services.file_holders import mark_pending, settle_pending
+        markers = await mark_pending(tenant, tenant.org_id, list(body.file_ids or []),
+                                     route="POST /api/warehouse/movements",
+                                     user_id=str(user.get("id")), ref=body.idempotency_key)
+        committed = False
+        try:
+            result = await service.execute(
+                ctx=ctx,
+                tenant_db=tenant._db,            # pylint: disable=protected-access
+                tenant_collection=tenant.warehouse_transactions,
+                inp=inp,
+            )
+            committed = True
+        finally:
+            await settle_pending(tenant, tenant.org_id, markers, confirmed=committed)
     except WarehouseMovementError as exc:
         raise _render_error(exc) from exc
     except ValueError as exc:
@@ -421,11 +443,12 @@ async def post_project_writeoff(
     source_id = body.subproject_id or body.project_id
     service = _service()
     try:
-        # MEDIA-SEC-01 (FG-579): attached documents are references to files — touch
-        # each file's row first (a retired file / a pending retire request → 409)
-        from app.services.file_holders import claim as _claim_files
-        await _claim_files(tenant, tenant.org_id, list(body.file_ids or []))
-        result = await service.execute(
+        # MEDIA-SEC-01 (FG-588, option 4): durable pending-holder markers first (see above)
+        from app.services.file_holders import mark_pending, settle_pending
+        markers = await mark_pending(tenant, tenant.org_id, list(body.file_ids or []),
+                                     route="POST /api/warehouse/project-writeoff",
+                                     user_id=str(user.get("id")), ref=body.idempotency_key)
+        result = await _settled(markers, tenant, lambda: service.execute(
             ctx=ctx,
             tenant_db=tenant._db,            # pylint: disable=protected-access
             tenant_collection=tenant.warehouse_transactions,
@@ -442,7 +465,7 @@ async def post_project_writeoff(
                 file_ids=body.file_ids, reason=body.reason, notes=body.notes,
                 occurred_at=body.occurred_at,
             ),
-        )
+        ))
     except WarehouseMovementError as exc:
         raise _render_error(exc) from exc
     except ValueError as exc:

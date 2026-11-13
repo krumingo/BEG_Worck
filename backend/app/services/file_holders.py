@@ -111,6 +111,11 @@ async def find_holders(tenant, org_id: str, media: Dict[str, Any], session=None,
             and not own_profile:
         uses.append({"kind": "link", "context_type": media.get("context_type"),
                      "id": media.get("context_id")})
+    # FG-588 condition 2: a pending holder (a movement that is being written) is a holder
+    if want is None or "pending_link" in want:
+        for m in media.get("pending_holders") or []:
+            uses.append({"kind": "pending_link", "id": m.get("id"), "label": PENDING_LABEL,
+                         "route": m.get("route")})
     if not refs:
         return uses
     for h in HOLDERS:
@@ -196,5 +201,123 @@ async def claimed_write(tenant, org_id: str, refs: Iterable[Any],
     async def body(session):
         await claim(tenant, org_id, refs, session=session)
         return await write(session)
+
+    return await run_in_transaction(tenant._db, body)   # pylint: disable=protected-access
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FG-588 (option 4, FLOW Guard pass 47 — 6 conditions): the PENDING-HOLDER marker
+# ══════════════════════════════════════════════════════════════════════════════
+# A writer whose reference write runs in a transaction it cannot join (the locked
+# warehouse service: POST /warehouse/movements, the project write-off, material waste)
+# first places a DURABLE marker on the file row — committed before the movement runs.
+# Every retire path counts a non-empty ``pending_holders`` as a holder (409), and the
+# final retire CAS requires "no pending holders" AND the ref_version it read. After the
+# movement commits the marker is confirmed (the movement row is now the holder); if it
+# fails the marker is released. A marker left by a crash is released only by
+# :func:`release_stale` — after a minimum age and a proof that nothing references the file.
+PENDING_LABEL = "в процес на свързване"
+NO_PENDING = {"$or": [{"pending_holders": {"$exists": False}}, {"pending_holders": {"$size": 0}}]}
+
+
+def _now_iso() -> str:
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat()
+
+
+async def mark_pending(tenant, org_id: str, refs: Iterable[Any], *, route: str,
+                       user_id: str, ref: Optional[str] = None) -> List[Dict[str, str]]:
+    """Condition 1: ONE conditional update per file — filter "not retired AND no pending
+    retire request"; ``$push`` {id, route, user, ref, at} and ``$inc ref_version``. A miss →
+    409 and the movement must not run (markers already placed by this call are released).
+    Returns ``[{"media_id", "marker_id"}]``; values that name no file are left alone."""
+    import uuid as _uuid
+    placed: List[Dict[str, str]] = []
+    seen = set()
+    try:
+        for value in refs or []:
+            if not isinstance(value, str) or not value:
+                continue
+            name = value.rsplit("/", 1)[-1] if value.startswith("/api/media/") else value
+            media = await tenant.media_files.find_one(
+                {"org_id": org_id, "$or": [{"id": name}, {"stored_filename": name}]},
+                {"_id": 0, "id": 1, "status": 1, "retire_request_pending": 1})
+            if not media or media["id"] in seen:
+                continue
+            seen.add(media["id"])
+            marker = {"id": "ph-" + _uuid.uuid4().hex, "route": route, "user": user_id,
+                      "ref": ref, "at": _now_iso()}
+            res = await tenant.media_files.update_one(
+                {"id": media["id"], "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
+                 "retire_request_pending": None},
+                {"$push": {"pending_holders": marker}, "$inc": {"ref_version": 1}})
+            if res.matched_count != 1:
+                if media.get("status") == MEDIA_RETIRED:
+                    raise _refuse(409, "MEDIA_RETIRED", "Файлът е скрит и не може да се използва")
+                raise _refuse(409, "RETIRE_REQUEST_PENDING",
+                              "За файла има чакаща заявка за премахване")
+            placed.append({"media_id": media["id"], "marker_id": marker["id"]})
+    except Exception:
+        await settle_pending(tenant, org_id, placed, confirmed=False)
+        raise
+    return placed
+
+
+async def settle_pending(tenant, org_id: str, markers: List[Dict[str, str]], *,
+                         confirmed: bool) -> int:
+    """Condition 3: confirm (the movement committed — its row now holds the file) or
+    release (it failed) — idempotent, keyed by the marker id, a CAS that removes ONLY its
+    own entry. Returns how many entries were removed (0 on a repeat)."""
+    removed = 0
+    for m in markers or []:
+        res = await tenant.media_files.update_one(
+            {"id": m["media_id"], "org_id": org_id, "pending_holders.id": m["marker_id"]},
+            {"$pull": {"pending_holders": {"id": m["marker_id"]}},
+             "$set": {"pending_settled_at": _now_iso(),
+                      "pending_settled_as": "confirmed" if confirmed else "released"}})
+        removed += res.modified_count
+    return removed
+
+
+async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, actor: Dict[str, Any],
+                        min_age_seconds: int) -> Dict[str, Any]:
+    """Condition 4: release a marker that no movement followed — ONLY when it is older than
+    ``min_age_seconds`` (well above the movement transaction timeout) AND the registry proves
+    that no record (``warehouse_transactions.file_ids`` included) references the file. It never
+    retires anything. Writes the AuditEvent ``media.file.pending_holder_release`` with the
+    actor, the marker id and the proof."""
+    from datetime import datetime, timezone
+    media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
+    if not media:
+        raise _refuse(404, "MEDIA_NOT_FOUND", "Media file not found")
+    marker = next((m for m in media.get("pending_holders") or [] if m.get("id") == marker_id), None)
+    if not marker:
+        return {"released": False, "reason": "no_such_marker"}
+    age = (datetime.now(timezone.utc) - datetime.fromisoformat(marker["at"])).total_seconds()
+    if age < min_age_seconds:
+        raise _refuse(409, "PENDING_HOLDER_TOO_RECENT",
+                      "Маркерът е по-нов от минималната възраст за освобождаване")
+    probe = dict(media, pending_holders=[])
+    real = await find_holders(tenant, org_id, probe)
+    if real:
+        return {"released": False, "reason": "referenced", "proof": real}
+    from app.services.auth_tx import run_in_transaction
+    from app.services import project_lifecycle as lifecycle
+
+    async def body(session):
+        res = await tenant.media_files.update_one(
+            {"id": media_id, "org_id": org_id, "pending_holders.id": marker_id},
+            {"$pull": {"pending_holders": {"id": marker_id}}, "$inc": {"ref_version": 1}},
+            session=session)
+        if res.modified_count != 1:
+            return {"released": False, "reason": "already_settled"}
+        await lifecycle.audit(session, actor, action="media.file.pending_holder_release",
+                              entity_type="media_file", entity_id=media_id,
+                              reason="stale pending holder released", key=None,
+                              source_flow="FLOW-029",
+                              diff={"marker": marker, "age_seconds": int(age),
+                                    "proof": {"holders": [], "checked": [h.kind for h in HOLDERS]
+                                              + ["audit_event"]}})
+        return {"released": True, "marker_id": marker_id}
 
     return await run_in_transaction(tenant._db, body)   # pylint: disable=protected-access

@@ -867,6 +867,191 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                key="auto", json={"reason": "x"})["error_code"]}
         finally:
             fh2._FINDERS.remove(probe_finder)
+        # FG-588 (option 4) — the durable pending-holder marker, step by step
+        try:
+            import app.services.file_holders as fhp
+            has_mark = hasattr(fhp, "mark_pending")
+        except ImportError:
+            fhp, has_mark = None, False
+        from app.db import db as app_db3
+        from app.tenancy.data_access import TenantData as TD3
+        T = TD3.for_resolved_org(app_db3, A["tenant_id"])
+        org = A["tenant_id"]
+        g: Dict[str, Any] = {"has_mark": has_mark}
+
+        def pend(mid):
+            return [m.get("id") for m in media_row(mid).get("pending_holders") or []]
+
+        def mov_row(mid, rid):
+            q(lambda: op_db.warehouse_transactions.insert_one({
+                "id": pid("A", rid), "org_id": org, "tenant_id": org, "file_ids": [mid],
+                "created_at": NOW}))
+        if has_mark:
+            # (1) claim → DELETE → 409 → movement commits → still a holder
+            m1 = upload()
+            mk1 = q(lambda: fhp.mark_pending(T, org, [m1["id"]], route="test", user_id=tech))
+            r = call("DELETE", "/api/media/%s" % m1["id"], role="technician", key="auto", json={"reason": "x"})
+            ro = call("DELETE", "/api/media/%s" % m1["id"], role="owner", key="auto", json={"reason": "x"})
+            uses_o = ((ro["body"] or {}).get("detail") or {}).get("uses") or []
+            g["s1_delete_pending"] = (r["status"], r["error_code"],
+                                      ((r["body"] or {}).get("detail") or {}).get("use_kinds"))
+            g["s1_owner_label"] = [u.get("label") for u in uses_o if u.get("kind") == "pending_link"]
+            g["s1_tech_no_ids"] = "uses" not in ((r["body"] or {}).get("detail") or {})
+            mov_row(m1["id"], "mv_1")
+            g["s1_confirm"] = q(lambda: fhp.settle_pending(T, org, mk1, confirmed=True))
+            g["s1_confirm_again"] = q(lambda: fhp.settle_pending(T, org, mk1, confirmed=True))
+            r = call("DELETE", "/api/media/%s" % m1["id"], role="technician", key="auto", json={"reason": "x"})
+            g["s1_after_commit"] = (r["status"], ((r["body"] or {}).get("detail") or {}).get("use_kinds"),
+                                    pend(m1["id"]), media_row(m1["id"]).get("status"))
+            # (2) claim → movement fails → release → DELETE works
+            m2 = upload()
+            mk2 = q(lambda: fhp.mark_pending(T, org, [m2["id"]], route="test", user_id=tech))
+            g["s2_released"] = q(lambda: fhp.settle_pending(T, org, mk2, confirmed=False))
+            r = call("DELETE", "/api/media/%s" % m2["id"], role="technician", key="auto", json={"reason": "x"})
+            g["s2_delete"] = (r["status"], media_row(m2["id"]).get("status"), pend(m2["id"]))
+            # (3) stale release: too recent / with a real reference / without one
+            m3 = upload()
+            mk3 = q(lambda: fhp.mark_pending(T, org, [m3["id"]], route="test", user_id=tech))[0]["marker_id"]
+            rel = "/api/media/%s/pending-holders/%s/release" % (m3["id"], mk3)
+            g["s3_too_recent"] = call("POST", rel, role="admin")["error_code"]
+            g["s3_technician"] = call("POST", rel, role="technician")["status"]
+            q(lambda: op_db.media_files.update_one({"id": m3["id"], "pending_holders.id": mk3},
+                                                   {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
+            mov_row(m3["id"], "mv_3")
+            r = call("POST", rel, role="admin")
+            g["s3_with_reference"] = {"released": (r["body"] or {}).get("released"),
+                                      "reason": (r["body"] or {}).get("reason"),
+                                      "kept": pend(m3["id"]) == [mk3]}
+            m4 = upload()
+            mk4 = q(lambda: fhp.mark_pending(T, org, [m4["id"]], route="test", user_id=tech))[0]["marker_id"]
+            q(lambda: op_db.media_files.update_one({"id": m4["id"], "pending_holders.id": mk4},
+                                                   {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
+            r = call("POST", "/api/media/%s/pending-holders/%s/release" % (m4["id"], mk4), role="admin")
+            g["s3_without_reference"] = {"released": (r["body"] or {}).get("released"),
+                                         "pending": pend(m4["id"]),
+                                         "status": media_row(m4["id"]).get("status"),
+                                         "events": [{"action": e["action"],
+                                                     "marker": ((e["diff"] or {}).get("marker") or {}).get("id") == mk4,
+                                                     "proof": bool((e["diff"] or {}).get("proof"))}
+                                                    for e in events(m4["id"], "media.file.pending_holder")]}
+            # (4a) parallel: retire-approve vs claim — a request is pending, the claim loses
+            m5 = upload()
+            q(lambda: op_db.work_reports.insert_one({"id": pid("A", "wr_m5"), "org_id": org,
+                                                     "photos": [m5["id"]], "created_at": NOW}))
+            rq = call("POST", "/api/media/%s/retire-request" % m5["id"], role="admin", key="auto",
+                      json={"reason": "дубликат"})
+            rid5 = (rq["body"] or {}).get("id")
+            real_find2 = fhp.find_holders
+            st = {"claim": None}
+
+            async def find_during_approve(tenant, org_id, media, session=None, kinds=None):
+                out = await real_find2(tenant, org_id, media, session=session, kinds=kinds)
+                if media.get("id") == m5["id"] and st["claim"] is None:
+                    try:
+                        await fhp.mark_pending(T, org, [m5["id"]], route="race", user_id=tech)
+                        st["claim"] = "placed"
+                    except Exception as exc:                      # noqa: BLE001
+                        st["claim"] = (getattr(exc, "detail", {}) or {}).get("error_code")
+                return out
+            fhp.find_holders = find_during_approve
+            try:
+                r = call("POST", "/api/media/retire-requests/%s/approve" % rid5, key="auto", json={})
+            finally:
+                fhp.find_holders = real_find2
+            g["s4a"] = {"approve": r["status"], "claim": st["claim"],
+                        "status": media_row(m5["id"]).get("status"), "pending": pend(m5["id"])}
+            # (4b) parallel: DELETE vs claim — the claim commits during the retire → retire loses
+            m6 = upload()
+            st6 = {"claim": None}
+
+            async def find_during_delete(tenant, org_id, media, session=None, kinds=None):
+                out = await real_find2(tenant, org_id, media, session=session, kinds=kinds)
+                if media.get("id") == m6["id"] and st6["claim"] is None:
+                    await fhp.mark_pending(T, org, [m6["id"]], route="race", user_id=tech)
+                    st6["claim"] = "placed"
+                return out
+            fhp.find_holders = find_during_delete
+            try:
+                r = call("DELETE", "/api/media/%s" % m6["id"], role="technician", key="auto", json={"reason": "x"})
+            finally:
+                fhp.find_holders = real_find2
+            g["s4b"] = {"delete": (r["status"], r["error_code"]), "claim": st6["claim"],
+                        "status": media_row(m6["id"]).get("status"), "pending": len(pend(m6["id"]))}
+            # (4c) a retired file: the claim refuses and the movement must not run
+            m7 = upload()
+            call("DELETE", "/api/media/%s" % m7["id"], role="technician", key="auto", json={"reason": "x"})
+            try:
+                q(lambda: fhp.mark_pending(T, org, [m7["id"]], route="test", user_id=tech))
+                g["s4c"] = "placed"
+            except Exception as exc:                              # noqa: BLE001
+                g["s4c"] = (getattr(exc, "detail", {}) or {}).get("error_code")
+            # (5) two writers' markers on one file
+            m8 = upload()
+            ka = q(lambda: fhp.mark_pending(T, org, [m8["id"]], route="w1", user_id=tech))
+            kb = q(lambda: fhp.mark_pending(T, org, [m8["id"]], route="w2", user_id=tech))
+            g["s5_two"] = len(pend(m8["id"]))
+            q(lambda: fhp.settle_pending(T, org, ka, confirmed=False))
+            g["s5_one_left"] = pend(m8["id"]) == [kb[0]["marker_id"]]
+            g["s5_delete_while_one"] = call("DELETE", "/api/media/%s" % m8["id"], role="technician",
+                                            key="auto", json={"reason": "x"})["status"]
+            q(lambda: fhp.settle_pending(T, org, kb, confirmed=False))
+            g["s5_delete_after"] = call("DELETE", "/api/media/%s" % m8["id"], role="technician",
+                                        key="auto", json={"reason": "x"})["status"]
+        # (6) the real warehouse route with a stub service: a retire DURING the movement
+        import app.routes.warehouse_canonical as whc
+        import app.routes.media as media_routes
+        real_service = whc._service
+        m9, m10 = upload(), upload()
+
+        class _Res:
+            def __init__(self, mid):
+                self.movement_id, self.audit_event_id, self.replay, self.envelope = mid, "ae", False, {}
+
+        class _Stub:
+            def __init__(self, fail):
+                self.fail = fail
+                self.seen = {}
+
+            async def execute(self, ctx, tenant_db, tenant_collection, inp):
+                fid = inp.file_ids[0]
+                tech_doc = await op_db.users.find_one({"id": tech}, {"_id": 0})
+                try:            # the proven interleaving: a retire while the movement runs
+                    await media_routes.delete_media(fid, body={"reason": "race"}, reason=None,
+                                                    user=tech_doc,
+                                                    idempotency_key=uuid.uuid4().hex)
+                    self.seen["retire"] = "retired"
+                except Exception as exc:                          # noqa: BLE001
+                    self.seen["retire"] = (getattr(exc, "detail", {}) or {}).get("error_code")
+                self.seen["pending_during"] = len((await op_db.media_files.find_one(
+                    {"id": fid}, {"_id": 0, "pending_holders": 1}) or {}).get("pending_holders") or [])
+                if self.fail:
+                    raise ValueError("movement failed")
+                await op_db.warehouse_transactions.insert_one({
+                    "id": "mv-" + fid, "org_id": org, "tenant_id": org, "file_ids": [fid],
+                    "created_at": NOW})
+                return _Res("mv-" + fid)
+
+        route_obs = {}
+        for label, fail, mf in (("commit", False, m9), ("fail", True, m10)):
+            stub = _Stub(fail)
+            whc._service = lambda: stub
+            try:
+                r = call("POST", "/api/warehouse/canonical/movements", json={
+                    "action": "receive_from_supplier", "item_id": "it", "unit": "pcs",
+                    "quantity": "1", "idempotency_key": uuid.uuid4().hex,
+                    "file_ids": [mf["id"]]})
+            finally:
+                whc._service = real_service
+            route_obs[label] = {"status": r["status"], "retire_during": stub.seen.get("retire"),
+                                "pending_during": stub.seen.get("pending_during"),
+                                "pending_after": len(pend(mf["id"])),
+                                "media_status": media_row(mf["id"]).get("status")}
+        r = call("DELETE", "/api/media/%s" % m9["id"], role="technician", key="auto", json={"reason": "x"})
+        route_obs["commit_delete_after"] = (r["status"], ((r["body"] or {}).get("detail") or {}).get("use_kinds"))
+        r = call("DELETE", "/api/media/%s" % m10["id"], role="technician", key="auto", json={"reason": "x"})
+        route_obs["fail_delete_after"] = r["status"]
+        g["route"] = route_obs
+        p47["fg588"] = g
         obs["pass47"] = p47
 
         # ─────────────────────────────────────────────── FG-541 — project photos
@@ -1375,6 +1560,62 @@ def test_fg590b_a_registered_finder_answers_every_kind(obs):
     assert c["other_kind_query"] == []
     assert "probe_receipt" in c["all_query"]
     assert c["delete"] == "MEDIA_IN_USE"
+
+
+@real
+def test_fg588_1_claim_then_delete_refuses_then_the_movement_holds_the_file(obs):
+    g = obs["pass47"]["fg588"]
+    assert g["has_mark"] is True
+    assert list(g["s1_delete_pending"]) == [409, "MEDIA_IN_USE", ["pending_link"]]
+    assert g["s1_owner_label"] == ["в процес на свързване"] and g["s1_tech_no_ids"] is True
+    assert g["s1_confirm"] == 1 and g["s1_confirm_again"] == 0          # idempotent
+    assert list(g["s1_after_commit"]) == [409, ["warehouse_movement"], [], None]
+
+
+@real
+def test_fg588_2_a_failed_movement_releases_and_the_file_can_be_retired(obs):
+    g = obs["pass47"]["fg588"]
+    assert g["s2_released"] == 1
+    assert list(g["s2_delete"]) == [200, "retired", []]
+
+
+@real
+def test_fg588_3_a_stale_marker_is_released_only_when_old_and_unreferenced(obs):
+    g = obs["pass47"]["fg588"]
+    assert g["s3_too_recent"] == "PENDING_HOLDER_TOO_RECENT" and g["s3_technician"] == 403
+    assert g["s3_with_reference"] == {"released": False, "reason": "referenced", "kept": True}
+    w = g["s3_without_reference"]
+    assert w["released"] is True and w["pending"] == [] and w["status"] is None   # never retired
+    assert w["events"] == [{"action": "media.file.pending_holder_release", "marker": True,
+                            "proof": True}]
+
+
+@real
+def test_fg588_4_retire_and_claim_in_parallel_exactly_one_wins(obs):
+    g = obs["pass47"]["fg588"]
+    assert g["s4a"] == {"approve": 200, "claim": "RETIRE_REQUEST_PENDING",
+                        "status": "retired", "pending": []}
+    assert g["s4b"]["claim"] == "placed" and list(g["s4b"]["delete"])[0] == 409
+    assert g["s4b"]["status"] is None and g["s4b"]["pending"] == 1
+    assert g["s4c"] == "MEDIA_RETIRED"
+
+
+@real
+def test_fg588_5_two_writers_markers_on_one_file(obs):
+    g = obs["pass47"]["fg588"]
+    assert g["s5_two"] == 2 and g["s5_one_left"] is True
+    assert g["s5_delete_while_one"] == 409 and g["s5_delete_after"] == 200
+
+
+@real
+def test_fg588_6_the_warehouse_route_a_retire_during_the_movement_is_refused(obs):
+    r = obs["pass47"]["fg588"]["route"]
+    assert r["commit"] == {"status": 200, "retire_during": "MEDIA_IN_USE", "pending_during": 1,
+                           "pending_after": 0, "media_status": None}
+    assert list(r["commit_delete_after"]) == [409, ["warehouse_movement"]]
+    assert r["fail"]["status"] == 400 and r["fail"]["retire_during"] == "MEDIA_IN_USE"
+    assert r["fail"]["pending_after"] == 0 and r["fail"]["media_status"] is None
+    assert r["fail_delete_after"] == 200
 
 
 @real

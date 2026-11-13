@@ -601,6 +601,7 @@ async def delete_media(media_id: str, body: Optional[dict] = Body(None),
         res = await tenant.media_files.update_one(
             {"id": media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
              "retire_request_pending": None, "ref_version": media.get("ref_version"),
+             "$and": [_NO_PENDING],    # FG-588 condition 2: no pending holder
              "context_type": media.get("context_type"), "context_id": media.get("context_id")},
             {"$set": {"status": MEDIA_RETIRED, "retired_reason": why, "retired_at": now,
                       "retired_by": user["id"]}}, session=session)
@@ -634,6 +635,7 @@ async def delete_media(media_id: str, body: Optional[dict] = Body(None),
 # (``file_holders.claim`` → 409); the approval re-reads the holders and refuses
 # 409 ``RETIRE_REQUEST_STALE`` when they are not the ones the request named.
 REQ_PENDING, REQ_APPROVED, REQ_REJECTED = "pending", "approved", "rejected"
+from app.services.file_holders import NO_PENDING as _NO_PENDING   # FG-588 condition 2
 
 
 class RetireRequestBody(BaseModel):
@@ -679,11 +681,15 @@ async def request_media_retire(media_id: str, data: RetireRequestBody,
         if not uses:
             raise lifecycle.refuse(409, "MEDIA_NOT_IN_USE",
                                    "Файлът не се използва — премахва се директно (DELETE)")
+        if media.get("pending_holders"):
+            # FG-588: a movement is being written with this file — no request until it settles
+            raise _in_use(user, media_id, uses)
         rid = str(uuid.uuid4())
         now = lifecycle.now_iso()
         res = await tenant.media_files.update_one(
             {"id": media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
-             "retire_request_pending": None, "ref_version": media.get("ref_version")},
+             "retire_request_pending": None, "ref_version": media.get("ref_version"),
+             "$and": [_NO_PENDING]},
             {"$set": {"retire_request_pending": rid}}, session=session)
         if res.matched_count != 1:
             raise lifecycle.refuse(409, "RETIRE_REQUEST_PENDING", "Вече има чакаща заявка")
@@ -747,7 +753,8 @@ async def _decide(request_id: str, user: dict, approve: bool, reason: Optional[s
         if approve:
             res = await tenant.media_files.update_one(
                 {"id": media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
-                 "retire_request_pending": request_id, "ref_version": req.get("ref_version")},
+                 "retire_request_pending": request_id, "ref_version": req.get("ref_version"),
+                 "$and": [_NO_PENDING]},
                 {"$set": {"status": MEDIA_RETIRED, "retired_reason": req.get("reason"),
                           "retired_at": now, "retired_by": req.get("requested_by"),
                           "retired_in_use": True, "retired_uses": uses,
@@ -804,3 +811,18 @@ async def list_media_retire_requests(status: Optional[str] = REQ_PENDING,
     rows = await _tenant(user).media_retire_requests.find(flt, {"_id": 0}).sort(
         "requested_at", -1).to_list(200)
     return [_request_view(r, user) for r in rows]
+
+
+@router.post("/media/{media_id}/pending-holders/{marker_id}/release")
+async def release_stale_pending_holder(media_id: str, marker_id: str,
+                                       user: dict = Depends(get_current_user)):
+    """FG-588 condition 4: an Owner/Admin releases a pending-holder marker that no movement
+    followed — only after ``media_policy.PENDING_HOLDER_MIN_AGE_SECONDS`` and a registry
+    proof that nothing references the file. Never retires anything; AuditEvent
+    ``media.file.pending_holder_release``."""
+    from app.services.file_holders import release_stale
+    from app.services.media_policy import PENDING_HOLDER_MIN_AGE_SECONDS
+    if user.get("role") not in ("Owner", "Admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    return await release_stale(_tenant(user), user["org_id"], media_id, marker_id, actor=user,
+                               min_age_seconds=PENDING_HOLDER_MIN_AGE_SECONDS)
