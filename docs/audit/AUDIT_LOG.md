@@ -11,7 +11,7 @@
 | #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
 | #83 CP-01 | `781d185` | **PASS** (pass 41) | 2026-11-09 |
 | #90 SEC-03 | `aaef24f` | **PASS** (main `3863610` merged; N2/N3/N5 closed; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
-| #89 OFF-02 | `7cfeae5` | **PASS** (R67 closes OFF89-N1; FG-472) | 2026-11-09 |
+| #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
 | #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
@@ -6617,3 +6617,35 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - Result: 99 non-finance responses flagged, and all 129 "7777" occurrences are inside `"id"`. hidden_budget_keys / money_keys were `[]`.
 - **Scope:** main `3863610` has the same flake.
   - Fix: FG-567 (field-aware probe) on #73 `b1f7e902`.
+
+## 2026-11-13 — #89 OFF-02 `5763bd86` — PASS
+
+### OFF89-M2 (raised on `58d0e402`, closed)
+
+- **Finding:** the main-merge commit `58d0e402` resolved `docs/evidence/SEC-02/results.json` by taking main's copy.
+  - That copy is blob `58b559ee`, 176 probes.
+  - The PR's own regenerated copy (`edd450d7`, 185 probes) was dropped.
+- **Effect:** the merged code has 188 probes, so SEC-02 failed 2 tests on real Mongo, at `:1868` and `:2039`.
+- **Fix:** `5f64a60a` / `5763bd86` regenerated the evidence by the harnesses. Since `58d0e402` only `docs/evidence/` changed; there is no code change.
+
+### Merge check
+
+- `5763bd86` contains main `3863610`.
+- The merge equals merge-tree except PM-01 `run_meta` and SEC-02 evidence (regenerated).
+- Role-union 0; clean onto main.
+
+### Gates
+
+Real Mongo; code is identical to `58d0e402`, where W0 ran.
+
+| Gate | Result |
+|---|---|
+| R0 | 814 |
+| W0 | 16 = main's 16 |
+| A2C / A1 | 0/243, 0/490 |
+| PAY | 630 |
+| SEC-02 | 31; committed 188 probes = code 188; **independent harness regen: 0 differing cells** |
+| PM-01 | 6 / 0 skipped; regen 0 cells |
+| **warehouse** | **44 / 1121** (enforce) |
+
+- **Not re-run on `5763bd86`:** SEC-01 30 and OFF-02 own suite / probe off02 from the previous pass on `edd450d7`; the code is unchanged since then.
