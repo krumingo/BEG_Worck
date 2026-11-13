@@ -13,7 +13,7 @@
 | #90 SEC-03 | `aaef24f` | **PASS** (main `3863610` merged; N2/N3/N5 closed; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
+| #75 LAB-02 | `a665932` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `ed6e88d`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) — needs re-merge of #73 `3d39a9d` | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
@@ -6680,3 +6680,27 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | probes | lab01e_payrun_r29 4, lab01f_sources 5, lab01h_r36 3, lab01t_fg463_race 20 |
 
 - **Note:** on the stale `b1f7e902` evidence, SEC-02 and PM-01 failed (176 vs 177 probes; 15 `/aggregate` cells), as expected before the regen. `ed6e88d4` closes that.
+
+## 2026-11-13 — #75 LAB-02 `a665932b` — PASS (pending Krum: FG-565, FG-569)
+
+- **Merge check:**
+  - `b470e752` = merge-tree(`8ef6b442`, #73 `ed6e88d4`) except `docs/evidence`;
+  - contains #73 `ed6e88d4` and main `3863610`;
+  - role-union 0; clean onto main; no unclassified collections.
+- **FG-568 (static):** `void_labor_approvals` runs the bump, voids, R77 flags (+ the repair of never-flagged rows) and the DOWNTIME classification voids in ONE body. The body runs in the caller's session or in its own transaction.
+- **Gates** (real Mongo, warehouse in enforce):
+
+| Gate | Result |
+|---|---|
+| R0 | 814 |
+| W0 | 16 = main's 16 |
+| A2C / A1 | 0/247, 0/498 |
+| PAY | 630 |
+| SEC-01 | 30 |
+| SEC-02 | 31; **harness regen 0 differing cells** |
+| PM-01 | 6 / 0 skipped; regen 0 cells |
+| **warehouse** | **44 / 1121** |
+| LAB-01 + LAB-02 suites | 314 + 1 env-only (`test_lab01c_put_daily_report_refuses_pricing_fields_in_day_entries` needs `MONGO_URL`; with it `test_lab_01_labor_cost.py` 25/25) |
+| probes | lab02 4, lab02_retake 1, f75_01 51, lab01t_fg463_race 20 |
+
+- **Note:** #73 has since moved to `3d39a9df` (FG-591/592). #75 must re-merge it before merge.
