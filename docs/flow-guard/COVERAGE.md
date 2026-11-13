@@ -1126,7 +1126,7 @@
 - прикачени файлове към ново СМР приемат всеки `media_id` и всеки външен URL, за чужд обект, без одит;
 - една снимка има само една връзка, а повторното свързване тихо я мести и сменя кой я вижда.
 
-Следващ FLOW в бавния преглед: FLOW-030.
+Следващ FLOW в бавния преглед: FLOW-031.
 
 ### Предишни FG по темите на FLOW-029
 
@@ -1139,3 +1139,135 @@
 - **FG-254** (обект с файл от `/api/media/upload` се изтриваше като чернова) → resolved с PRJ-01. **FG-272** → open (друг път).
 - **FG-318** (`/uploads` без `Cache-Control: no-store`) → reference за L146.
 - **FG-145** (`scan_docs` трие оригинала с `os.remove`) → open, сроден на FG-542.
+
+## Проход 46 — FLOW-030 (BEG Brain / централен AI асистент)
+
+- main @ `3863610` (= `38636107`, merge #88 PWA-01), 13.11.2026.
+- Проба (P1–P5):
+  - `scratchpad/fg46_030/test_probe_030.py` → `scratchpad/fg46_030/out.json`;
+  - дървото е от `git archive 3863610`;
+  - harness и seed — от `tests/test_oh_01_overhead_no_hard_delete.py` (регистриран tenant, 6 роли, режим `enforce`), с **една** база `fg46sw030_*`. Базата е изтрита, `dbs_left: []`;
+  - реален Mongo: `fgmongo2` (`127.0.0.1:27039`, rs0), защото `fgmongo` (27019) падна по време на прохода („Too many open files“);
+  - първо пускане на `mongomock_motor` (`out_mongomock.json`). Повторно на реален Mongo (`out.json`) — резултатът е **идентичен** (P1–P5);
+  - външен AI не е викан: `EMERGENT_LLM_KEY` е махнат, а `emergentintegrations` е блокиран в `sys.modules`. `get_ai_proposal` минава по собствения си резервен път, както на сървър без ключ.
+- Канон:
+  - FLOW-030 (BUSINESS LOCK, 20.07.2026):
+    - цел L9;
+    - „Един Brain, много шапки“ L11-22;
+    - „Защитени backend tools“ L24-35 (L26 — схемата на отговора на tool);
+    - „Текущ резултат и прогноза“ L37-50 (L50 — без измислен процент „доверие“);
+    - интерфейс L52-67;
+    - история L69-73;
+    - неясен въпрос / липсващ tool L75-81;
+    - OCR и чернови L83-87;
+    - работа без AI L89-91;
+    - „Какво НЕ трябва да позволява“ L93-103;
+    - „Какво трябва да вижда Крум“ L105-114;
+    - Implementation Gate L116-124;
+  - FLOW-043:
+    - D-07 (AI активира ново СМР само при потвърден Master СМР, одобрено търговско третиране, човек с право и пълен AuditEvent — „иначе създава само чернова“);
+    - D-08 (един AuditEvent за domain и AI действия);
+    - D-12 (AI и интернет не са single point of failure);
+    - D-15 (отделен AI context per tenant; всички входни точки през Tenant Guard);
+    - „Общи забрани“ L151 (AI договорно/финансово действие без одобрение), L152 (chat не редактира официален запис);
+  - CLAUDE.md:
+    - §2 правило 10;
+    - §10 (един Brain; read-only tools first; write само draft → confirmation → permission → Approval → domain service; без измислени ID/цена/количество/причина/одобрение; source links + timestamp; raw AI content не е official record; „не може да провери“; AI не е SPOF);
+    - §11 (План+AI: Start 100 / Control 500 / Pro 2000 действия + add-on);
+    - §14, §16;
+  - решения на Крум (`RECOVERY_EXECUTION_PROPOSAL_2026-10-17.md` на `claude/happy-meitner-bmcnel`):
+    - Р20 (пари само за Owner/Admin/Accountant; SiteManager — само бюджет/изхарчено/остатък по своите обекти; наблюдател, техник, шофьор, склад — без пари);
+    - Р48 (3) (ЕГН пълно само за Собственик/Счетоводител);
+    - Р75 (махат се скриптовете на Emergent);
+    - Р76 (AI директно с Anthropic, ключ и модел в настройките, никога в кода; без тях AI е изключен, ръчните процеси продължават);
+  - Waves: BEG Brain е Wave 3 (AI/Decision Intelligence). Subscription/Billing/Entitlements/AI Usage Ledger е Wave 0. Gate Matrix няма зелен ред за FLOW-030.
+- Прочетени:
+  - `services/ai_proposal.py` (155-391);
+  - `routes/extra_works.py` (1-60, 270-470);
+  - `routes/missing_smr.py` (500-520, 536-540, 645-800);
+  - `services/project_pnl.py` (30-170);
+  - `routes/project_pnl.py` (15-30);
+  - `routes/smr_analysis.py` (370-420, 975-1096);
+  - `routes/assets_ai_intake.py` (целият);
+  - `routes/assets_batch_intake.py` (100-185);
+  - `master_data/intake_hooks.py` (30-140, 196-237);
+  - `routes/ai_calibration.py` (role/tenant редовете, 401-411);
+  - `routes/historical_offers.py` (364-400);
+  - `deps/modules.py` (102-103);
+  - `constants.py` (20-56);
+  - `frontend/src/components/ExtraWorkModal.js` (250, 406), `ExtraWorksDraftPanel.js` (109), `ProjectPnLDashboard.js` (118-135), `App.js` (72, 257), `DashboardLayout.js` (46);
+  - grep:
+    - `git grep -iE 'openai|anthropic|llm|ai_|brain|assistant|gpt|claude' 3863610 -- backend frontend/src`;
+    - за `LlmChat|emergentintegrations|EMERGENT_*_KEY` — 4 места с извикване на модел;
+    - за brain / assistant / chat / voice / speech / transcri / tool catalog / ai_usage / ai_budget / ai_enabled — 0 съвпадения в `backend/app` и `frontend/src`.
+
+Карта на AI кода на main (всички пътища към модел):
+
+| Път | Модел / ключ | Какво връща / пише |
+|---|---|---|
+| `services/ai_proposal.py:245-326` `llm_proposal`, през `get_ai_proposal` :331 | `openai/gpt-4.1-mini`, `EMERGENT_LLM_KEY` | цена материал/труд, материали, „confidence 0.90“; извиква се от `extra-works/ai-proposal` :283, `ai-batch` :293, `ai-refine` :375, `{id}/apply-ai` :413, `missing-smr/{id}/ai-estimate` :651, `smr-analyses/{id}/ai-suggest` :378 |
+| `routes/smr_analysis.py:1026-1041` `ai-breakdown` | `claude-sonnet-4-20250514`, `EMERGENT_API_KEY` (друг ключ) | разбивка материал/труд в редовете на анализа; при грешка 60/40 |
+| `routes/assets_ai_intake.py:60-124` | `openai/gpt-4.1-mini`, `EMERGENT_LLM_KEY` | предложение за актив от снимка (нищо не пише; име → pending Master Data) |
+| `routes/assets_batch_intake.py:102-181` | `openai/gpt-4.1`, `EMERGENT_LLM_KEY` | същото, партидно |
+| (без модел) `extra-works/ai-fast` :337, `rule_based_proposal` :155 | — | твърда таблица с цени, представена като „AI“ |
+
+| Правило във FLOW-030 / CLAUDE.md §10 | Състояние | Къде / бележка |
+|---|---|---|
+| „Един централен AI асистент върху защитени backend tools… не е отделна база“, L9; „Един Brain, много шапки“, шест области, L11-20; §10 „Един BEG Brain“ | ❌ PROVEN (код) | BEG Brain няма. Grep за brain/assistant/chat/tool catalog — 0. Има 4 отделни пътя към модел с **два** ключа (`EMERGENT_LLM_KEY`, `EMERGENT_API_KEY`) и **три** модела, записани в кода (`ai_proposal.py:265`, `assets_batch_intake.py:128`, `smr_analysis.py:1038`). Нито един не е Finance/Warehouse/Workforce/Assets/OCR/Daily Brief асистент — всички са генеративни ценови предложения или разпознаване на снимка. Wave 3 — очаквано липсва, но съществуващото е паралелен AI извън Brain. Моделът в кода противоречи на Р76 (поправено на клона #90 SEC-03) — FG-583 |
+| „AI получава само разрешени, структурирани резултати. Всеки tool връща стойност, дата/час, scope, включени/изключени записи, чакащи процеси и линкове“, L26; Gate L118, L120 | ❌ PROVEN | Няма tool слой и response schema. P5: ключовете на `/extra-works/ai-proposal` са `confidence, explanation, fallback_reason, hourly_info, internal_price_hint, materials, pricing, provider, recognized, related_smr` — без `as_of`, източник, scope и валута. P1: същото за `ai-estimate` — FG-583, FG-325 (reference) |
+| Всеки важен отговор: директен отговор, дата и час, разбивка, аларми, линкове, прогноза само при поискване, L41-48; „отговор без източник/час при критична справка“, L102; §10 source links + timestamp | ❌ PROVEN | P1/P5: няма дата/час и линк. Цената е прогноза, но се показва като стойност — FG-325 (reference: цена без данни, без източник и дата), FG-328 (reference: BGN срещу EUR) |
+| „Не се използва измислен общ процент „доверие““, L50 | ❌ PROVEN | `ai_proposal.py:324` `"confidence": 0.90` (константа за всеки LLM отговор); `:212` `0.85` / `0.3`; `smr_analysis.py:1063` `uverenost` по подразбиране 50, `:1089` 30 при 60/40; `assets_ai_intake.py:42` моделът сам си дава „0-100 колко си сигурен“; `ExtraWorkModal.js:250` 0.5 за ръчен ред. UI го показва като % (`ExtraWorkModal.js:406`) и го пази в черновата (`extra_works.py:431` `ai_confidence`). P1: `confidence 0.85` за rule-based — FG-582 |
+| „При въведен, но незавършен процес AI го показва отделно, без да представя черновата като официален факт“, L50; „чернова да се представя като официален запис“, L98; §10 „Raw AI content не е official record“ | ❌ PROVEN | P1-P4: AI оценката (`ai_estimated_price`) се пише в `missing_smr`. P&L на обекта я сумира като приход „Допълнителни (оферирани)“ (`project_pnl.py:53-57, 152`; `ProjectPnLDashboard.js:127`). P3: офертата е коригирана на 50 и **отказана** → P&L пак показва 205. P4: Technician пуска нова AI оценка след `offered` (количество 40) → 200, `ai_estimated_price` 820, P&L 820, офертата не е пипната, AuditEvent Δ0 — FG-580. За активите е ✅: името от AI отива само като pending Master Data (`intake_hooks.py:196-218`), нищо не се пише в активите (`assets_ai_intake.py:118-123`). За цената на актива — FG-185 (reference) |
+| „стар чат отговор да се използва като текущ source of truth“, L103; „Новият въпрос винаги изпълнява нова справка“, L73 | ❌ PROVEN | P3: P&L чете старата AI стойност, не текущата оферта. `ai-breakdown` прилага кеширан AI резултат (`smr_analysis.py:989-1005`; кешът при изключен AI — FG-518, на клона). FG-580 |
+| „AI не измисля ID, цена, количество, причина или одобрение“, §10; „измисляне на стойности“, L96 | ❌ PROVEN | Цена — FG-325, FG-361 (reference). При липсващо поле LLM пътят слага 10/15 (`ai_proposal.py:280-281`). Количества на материалите от `qty_per_unit` на модела (`:294`). `reason` на материал — от модела/таблицата. P2: при `batch-to-offer` целият AI сбор (материал 8.5 + труд 12) влиза като **труд** 20.5, материал 0 (`missing_smr.py:742-756`) — FG-581 |
+| Writes само draft → confirmation → permission → Approval → domain service, §10; D-07 („иначе създава само чернова“); L101 („заобикаляне на DQ/Approval“); FLOW-043 L151 | ⚠️ / ❌ PROVEN | `apply-ai` пише само в черновата (`extra_works.py:413-441`) — допустимо. Но: `ai-suggest` / `fetch-prices` презаписват цената в анализа — FG-326 (reference). `ai-breakdown` пише в анализа от всяка роля — FG-360 (reference). P1/P4: `ai-estimate` пише в запис със статус `offered` от Viewer/Technician (само `require_m2`, `deps/modules.py:102-103`), без потвърждение — FG-580. P2: Viewer създава оферта от AI оценките (`missing_smr.py:708-799`), без роля и без AuditEvent — FG-581 |
+| AI да не плаща, фактурира, одобрява, променя заплати или отписва актив, L100 | ✅ | Нито един AI път не пише във `finance_payments`, `invoices`, одобрения, `pay_runs` или статус на актив. AI създава само оферта в `Draft` (FG-581) |
+| „свободен директен достъп до MongoDB“, L95, L79; §2.10 | ✅ (тривиално) / ⚠️ | Моделът няма tools и не вижда базата. Получава само текст, сглобен от маршрута. Но резултатът на модела се пише директно в колекции от кода на маршрута, не през domain service (`smr_analysis.py:1068`, `missing_smr.py:693`, `extra_works.py:438`) — FG-580, FG-360 (reference) |
+| „данни извън правата на потребителя“, L97; Gate L119 „server-side permission enforcement“; Р20 | ❌ PROVEN | Само `/extra-works/ai-proposal` е със `strip_money_for_non_finance` (`extra_works.py:284`). `ai-batch`, `ai-fast`, `ai-refine`, `ai-suggest`, `ai-estimate` връщат цени на всички роли — FG-327 (reference). P1 го потвърждава за Viewer: `ai-estimate` → 200, `estimated_price 205`, разбивка материал/труд. `assets/ai-intake` е за Admin/Owner/SiteManager/Accountant (`assets_ai_intake.py:21, 62`), с цена на актива (FG-185 reference) |
+| Context isolation между tenants/обекти, L121; D-15 (AI context per tenant) | ✅ / ⚠️ | Всеки извикване е нова сесия (`session_id` с uuid, `ai_proposal.py:263`, `assets_ai_intake.py:79`). Калибрацията и подсказката четат през `TenantData.for_resolved_org` (`ai_calibration.py:403`, `historical_offers.py:366`). Кешът на `ai-breakdown` е по tenant и `org_id` (`smr_analysis.py:993`). Изолация по **обект** няма: `ai-estimate` / `ai-suggest` не проверяват членство в обекта (само `require_m2`) — сродно на FG-327 |
+| „При липсващ разрешен tool не измисля отговор“, L79; „При tool грешка казва, че справката не е изпълнена и данните не са променени“, L81; §10 „казва, че не може да провери“ | ❌ PROVEN | Без ключ `get_ai_proposal` тихо връща таблицата с цени (`ai_proposal.py:340-343`; P5: `provider rule-based`, `fallback_reason` — „LLM недостъпен…“, но цена 20.5 като отговор) — FG-325 (reference). `ai-breakdown` при грешка **пише** 60/40 в анализа и връща `"error": str(e)` (`smr_analysis.py:1078-1095`) — FG-360 (reference) и FG-584. Активите: без ключ → **500** (`assets_ai_intake.py:70-71`, `assets_batch_intake.py:118-119`), при грешка → 502 със суровия текст на изключението (`:95`, `:140`) — FG-584 (на клона #90: 503 „AI не е настроен“) |
+| Различава „няма намерени записи“ от `0`, L80; Gate L124 | ⚠️ | `get_internal_price_hint` различава (`historical_offers.py:386-387` `available: False`). Но при намерени редове без цена на труда връща `median_labor 0` (`:398`). `rule_based_proposal` винаги дава число, дори при `DEFAULT_KNOWLEDGE` (`ai_proposal.py:157-159`) — FG-325 (reference) |
+| При неясен въпрос — едно кратко уточнение, L77 | ⏳ | Няма разговор. Неразпознато СМР получава цената по подразбиране, без въпрос — FG-325 (reference) |
+| Интерфейс: постоянен бутон и страничен панел, автоматичен контекст, бързи въпроси, L54-67 | ⏳ | Няма (grep: 0). AI е бутони в отделни форми (`ExtraWorkModal.js`, `MissingSMRPage.js`, `SMRAnalysisPage.js`, `AssetsItemsPage.js`). Единственото AI меню е `/ai-calibration` (`App.js:257`, `DashboardLayout.js:46`) — FG-583 |
+| История: заглавие, дата/час, потребител, контекст, въпроси, отговори, tools; премахване не заличава AuditEvent, L71-73; Krum вижда историята и tools, L111 | ⏳ / ❌ | Не се пази нито въпрос, нито отговор. Остават само полетата в черновата (`ai_raw_response_summary`, `ai_provider_used`, `extra_works.py:426, 432`) и кешът на `ai-breakdown` — FG-583 |
+| OCR: източник/страница/секция за всяко поле; човек преглежда черновата, L85-87 | ⚠️ | OCR на фактури не е LLM (`services/ocr_invoice.py`). Счупен е и е без права — FG-404, FG-405, FG-406 (reference). AI на активите връща полета без източник/табелка (`assets_ai_intake.py:103-116`). Формата се попълва за преглед от човек — ✅ за прегледа |
+| „Работа без AI“ — ръчна форма за всеки основен процес, L91; D-12; Gate L123 | ✅ / ⚠️ | Ръчните форми за допълнително СМР, анализ, оферта и актив съществуват; AI бутоните са по избор. Но без ключ формата за актив дава 500 (FG-584), а ценовите пътища тихо слагат таблична цена (FG-325) |
+| AuditEvent за AI действията, L113; Gate L122 „audit на prompt/tool/result без изтичане на secrets“; D-08 | ❌ PROVEN | P1, P2, P4: `audit_events` Δ0 и `audit_logs` Δ0 при AI оценка, повторна оценка и оферта от AI. Изключение: AI имената на активи при `MASTER_DATA_MODE ≠ off` минават през pending с модел (`intake_hooks.py:48-52, 208-218`). По подразбиране режимът е `off` (`:228`) — FG-519 (на main още open; на клона #90 — `ai.call.completed/failed`) |
+| AI usage ledger и бюджет по плана (§11: Start 100 / Control 500 / Pro 2000 + add-on) | ❌ PROVEN (код) | На main няма `ai_usage`, `ai_budget`, `ai_enabled` (grep: 0). AI работи за всеки tenant, план и роля с M2, щом има ключ. Каталогът на плановете е `free/pro/enterprise` с лимит на потребителите и без AI бюджет (`constants.py:24-54`) — FG-586. На клона #90: ledger без проверка — FG-537 (reference) |
+| Без secrets/PII към модела; „audit … без изтичане на secrets“, L122; Р48 (3) | ⚠️ SUSPECTED | Ключът не отива в prompt-а. Но на main нищо не се маскира: свободният текст на СМР (`ai_proposal.py:254-259`), снимки на табелки и цените на офертата (`ed_cena`, `smr_analysis.py:1012-1020, 1034`) отиват към външния модел. Логовете пишат текста на изключението (`ai_proposal.py:341`) — FG-585. На клона #90 — маскиране на ЕГН/IBAN (FG-517, FG-535 reference) |
+| „кои tools липсват или са дали грешка“; „система/AI/integration status“, L112, L114 | ❌ | Няма AI статус. `/billing` показва само Stripe (`billing.py:112`) — FG-583 |
+| Тестове за hallucination prevention, zero/no-record и tool failure, L124 | ⚠️ | `tests/test_hybrid_ai_proposal.py`, `test_two_stage_ai.py`, `test_ai_offer_module.py` проверяват, че има цена и резервен път. Не проверяват, че AI **не** дава стойност без източник |
+| Плащане извън FLOW-006 (D-03) | ✅ | AI пътищата не пишат плащания |
+
+Извод: BEG Brain по FLOW-030 на main не съществува. Липсват:
+- tool catalog и structured response schema;
+- история;
+- страничен панел;
+- AI статус;
+- AI usage ledger и бюджет.
+
+Това е очаквано: FLOW-030 е Wave 3, а ledger-ът е Wave 0 (SEC-03 на клона).
+
+Съществуващите AI функции обаче са паралелен AI извън Brain. Те нарушават канона на §10 сега:
+- AI оценката на допълнително СМР става приход в P&L. Остава там и след корекция и отказ на офертата. Пише се отново от всяка роля с M2 след `offered`. Всичко е без AuditEvent;
+- от тази оценка Viewer създава оферта, а целият AI сбор влиза като труд;
+- навсякъде се показва измислен процент „доверие“;
+- без ключ формата за актив дава 500, а `ai-breakdown` връща суровия текст на грешката;
+- два ключа и три модела са записани в кода (Р76 — поправено само на клона).
+
+Следващ FLOW в бавния преглед: FLOW-031.
+
+### Предишни FG по темите на FLOW-030
+
+- **FG-325** (AI измисля цена на труда без данни, източник и дата; тихият резервен път) → open, reference за L26, L41-48, L79, L96, L102. P5 го потвърждава отново на `3863610`.
+- **FG-326** (`ai-suggest` / `fetch-prices` презаписват одобрен анализ) → open, reference за §10 write path.
+- **FG-327** (партидните AI ценови пътища показват цени на роли без пари) → open, reference за L97 / Р20. P1: Viewer на `ai-estimate` → 200 с цената и разбивката (потвърждение на `3863610`).
+- **FG-328** (BGN срещу EUR, без валута) → open, reference за L26.
+- **FG-360** (`ai-breakdown` пише 60/40 в заключен анализ, без AuditEvent) → open, reference за L81, L98.
+- **FG-361** (симулирани магазини с цени и URL) → open, reference за L96.
+- **FG-185** (AI цената на актив става `purchase_price`) и **FG-522** (оригиналът не се пази преди AI) → reference.
+- **FG-331**, **FG-332**, **FG-333**, **FG-335** (калибрация и коефициенти) → reference. Изолацията по tenant е ✅.
+- **FG-404..406** (OCR) → reference за L85.
+- **FG-518** (кеш на `ai-breakdown` при изключен AI) → на клона #90. На main кешът се прилага безусловно.
+- **FG-519** (без canonical AuditEvent и запис за потребление при AI) → на main още open, на клона #90 partial.
+- **FG-535..539** (SEC-03 — маскиране, ledger преди AuditEvent, бюджет не се прилага, `PUT /ai/settings`, сливане) → само на клона #90, не на main. FG-586 и FG-585 описват състоянието на main и сочат към тях.
