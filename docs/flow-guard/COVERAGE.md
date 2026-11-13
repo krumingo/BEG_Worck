@@ -1271,3 +1271,106 @@
 - **FG-518** (кеш на `ai-breakdown` при изключен AI) → на клона #90. На main кешът се прилага безусловно.
 - **FG-519** (без canonical AuditEvent и запис за потребление при AI) → на main още open, на клона #90 partial.
 - **FG-535..539** (SEC-03 — маскиране, ledger преди AuditEvent, бюджет не се прилага, `PUT /ai/settings`, сливане) → само на клона #90, не на main. FG-586 и FG-585 описват състоянието на main и сочат към тях.
+
+## Проход 52 — FLOW-031 (Модулни AI агенти / специализирани шапки)
+
+- main @ `3863610` (= `38636107`, merge #88 PWA-01), 13.11.2026.
+- Проба (P1–P4):
+  - `scratchpad/fg52_031/test_probe_031.py` → `scratchpad/fg52_031/out.json`;
+  - реален Mongo `fgmongo2` (`127.0.0.1:27039`, rs0), **една** база `fg52sw031_*`, изтрита (`dbs_left: []`);
+  - дървото е от `git archive 3863610` (същото като в проход 46). Harness и seed — от `tests/test_oh_01_overhead_no_hard_delete.py` (регистриран tenant, 6 роли, режим `enforce`);
+  - външен AI не е викан: `EMERGENT_LLM_KEY` е махнат, а `emergentintegrations` е блокиран. Всички AI пътища минават по собствения си rule-based път, т.е. **един и същ вход** към „модела“;
+  - seed: одобрена калибрация `Мокри процеси / Мазилка`, без град, нормално количество, коефициент 1.2. Тя е като одобрена от Owner през `/ai-calibration/approve`.
+- Канон:
+  - FLOW-031 (BUSINESS LOCK, 20.07.2026):
+    - цел L9;
+    - основно правило L13-15 („Един BEG Brain → общи права, общ контекст и общ AuditEvent → различни tool групи/шапки“);
+    - 12 шапки L17-65 (Procurement L57 — „Не създава сам поръчка“);
+    - общи правила L69-73;
+    - нива на автономност L75-104 (Ниво 4 L89-91, Ниво 5 L93-104);
+    - координация L106-112;
+    - „Какво НЕ трябва да позволява“ L114-123;
+    - „Какво трябва да вижда Крум“ L125-133;
+    - Implementation Gate L144-151;
+  - FLOW-030 (проход 46) — централният асистент и UI;
+  - FLOW-043:
+    - D-07 (AI само чернова, освен при пълния списък условия);
+    - D-08 (един AuditEvent за domain и AI);
+    - D-12 (AI не е SPOF);
+    - D-15 (AI context per tenant; Tenant Guard);
+    - „Общи забрани“ L149 (паралелни регистри), L151 (AI финансово действие без одобрение);
+  - CLAUDE.md:
+    - §2.10;
+    - §2.12 (Brain/чатове са проекции, не втори source of truth);
+    - §10 (един Brain, много шапки; read-only first; write само чрез draft → confirmation → permission → Approval → domain service);
+    - §14, §16;
+  - решения на Крум: Р20 (пари само за Owner/Admin/Accountant), Р76 (AI директно с Anthropic, ключ и модел в настройките);
+  - Waves: BEG Brain и Procurement са Wave 3. Gate Matrix няма зелен ред за FLOW-031.
+- Прочетени (освен картата на AI кода от проход 46):
+  - `services/pricing_engine.py:1-5, 85-345` (трите „агента“ и кешът `material_prices`);
+  - `routes/pricing.py` (маршрути и guard-ове: 31-161);
+  - `routes/procurement.py:108, 122, 230-309` (заявка за материали от оферта);
+  - `routes/extra_works.py:63-168` (модели, `DEMO_WORKER_RATES`, `ACTIVITY_TO_WORKER`, `apply_hourly_pricing`), `:413-441`, `:515-530`, `:610-620`;
+  - `routes/ai_calibration.py:401-431` (`get_calibration_factor`);
+  - `services/ai_proposal.py:144-152` (`_find_rule_knowledge`), `:219-242` (LLM prompt);
+  - `routes/missing_smr.py:651-697`;
+  - grep:
+    - `agent` в `backend/app` — само `pricing_engine.py` и `pricing.py` („3 AI agents“);
+    - skill / rating / рейтинг заедно с ai / auto / llm — 0;
+    - `ai` / `llm` / `agent` в `procurement.py` — само `:287` („От AI checklist“);
+    - orchestration / tool registry / hat / шапка — 0.
+
+Кои „шапки“ съществуват на main (по картата от проход 46):
+
+| Шапка (FLOW-031) | На main | Път |
+|---|---|---|
+| Finance, Workforce, Payroll, Logistics, Subcontractors, Quality, Documents, Daily Brief / Risk | ⏳ няма | — |
+| Offers / Pricing (L33) | ⚠️ генеративно, 6 входни точки | `extra-works/ai-proposal`, `ai-batch`, `ai-fast`, `ai-refine`, `{id}/apply-ai`; `missing-smr/{id}/ai-estimate`; `smr-analyses/{id}/ai-suggest`, `ai-breakdown` |
+| Materials / Warehouse (L37) | ⚠️ | „3 AI agents“ за цени (`pricing_engine.py`); AI checklist на материалите → заявка (`procurement.py:271-290`) |
+| Tools / Assets (L45) | ⚠️ само разпознаване от снимка | `assets/ai-intake`, `assets/batch-intake/recognize` |
+| Procurement (L57) | ⏳ | AI не търси доставчици; няма поръчка от AI |
+
+| Правило във FLOW-031 | Състояние | Къде / бележка |
+|---|---|---|
+| „Един BEG Brain → общи права, общ контекст и общ AuditEvent → различни tool групи/шапки“, L13; „Не се изграждат … отделни технически агента със собствени бази и различни правила“, L15; Крум вижда „един BEG Brain, а не списък от отделни ботове“, L127 | ❌ PROVEN | Няма Brain и няма tool групи — FG-583 (reference). Вместо това: 8 AI входни точки за цени, 3 „агента“ с отделен кеш, 2 за активи. Те са с различни ключове/модели и различни правила за цената. P1 — FG-611 |
+| „отделни агенти с различни права и противоречиви отговори“, L116 | ❌ PROVEN | P1: един и същ потребител (Owner), същият вход „Мазилка, m2“, без LLM:<br>• **qty 10:** `ai-proposal` / `ai-batch` / `ai-estimate` → 24.6 за ед. (с калибрация 1.2); `ai-fast` → **20.5** (`extra_works.py:345` вика `rule_based_proposal` направо, без калибрация).<br>• **qty 3:** `extra-works/*` → 31.48 (минимална цена на работата: труд 20.0, `extra_works.py:155-163`); `missing-smr ai-estimate` → **27.68** (труд 16.2 — `missing_smr.py:663` не вика `apply_hourly_pricing`).<br>P2: правата също са различни. Viewer на `ai-proposal` → цените са `null`; на `ai-fast` → 20.5 и `grand_total` 205 — FG-327 (reference). Противоречивите отговори — FG-611 |
+| „Всички шапки използват едни и същи Master Data, права, AuditEvent и source-of-truth регистри“, L69 | ❌ / ⚠️ | **Master Data:** ценовите шапки класифицират със собствена таксономия. Това е твърд речник `ACTIVITY_KNOWLEDGE` + `SYNONYMS` (`ai_proposal.py:144-152`) или свободен текст от LLM (`:223-224`), не Master Data id. С тези низове се търсят калибрацията (`ai_calibration.py:405-412`) и ставката (`extra_works.py:106-112, 128`). Те се записват в черновата и в реда на офертата (`extra_works.py:424-425, 525-526`) — FG-612. Активите са ✅: името отива в pending Master Data (`intake_hooks.py:196-218`). **Права** — различни (FG-327). **AuditEvent** — няма (FG-519, FG-580 reference) |
+| „Шапките не копират данни в свои таблици като официална истина“, L70; „agent-specific source of truth“, L117 | ❌ PROVEN | Кешът `material_prices` на трите „агента“ (`pricing_engine.py:317-337`) се показва като ценови каталог (`pricing.py:83-97`) и влиза в анализа (`fetch-prices`, FG-361 / FG-326 reference). P4: Viewer пуска `ai-estimate` → 200; страничният ефект са **8 реда** в `material_prices` (`missing_smr.py:669` → `batch_get_prices`). Пример — „Грунд“, медиана 3.75 от цени 3.75 / 3.5 / 17.0, валидна 7 дни. Owner вижда същите 8 реда в `/pricing/catalog`. `ai_calibrations` и `ai_cache` също са AI таблици, които променят официалната цена (FG-331, FG-332, FG-518 reference) — FG-614 |
+| „При конфликт между домейни BEG Brain показва конфликта и насочва към правилния FLOW“, L71 | ⏳ | Няма Brain. P1: разликата между пътищата не се показва никъде (FG-611) |
+| „AI отговаря само в рамките на правата на конкретния потребител“, L72; „tool от една шапка да вижда данни извън scope“, L119 | ❌ PROVEN | P2 и P4: Viewer получава цени от `ai-fast` и `ai-estimate` — FG-327 (reference), Р20. Няма проверка за членство в обекта за `ai-estimate` / `ai-suggest` (само `require_m2`, `deps/modules.py:102-103`) |
+| „Въпросът може да бъде прехвърлен между шапки, но потребителят вижда един общ разговор“, L73; „скрито прехвърляне на решение между шапки“, L121; Krum вижда „history/audit на прехвърлянето“, L133 | ⏳ / ❌ PROVEN | Разговор няма (FG-583). Има **скрито** прехвърляне: материалите, предложени от ценовия AI (`extra_work_drafts.suggested_materials`, `extra_works.py:435`), влизат в заявката за материали (`procurement.py:271-290`) само с бележка „От AI checklist“, без AuditEvent. P3 — FG-613 |
+| Нива на автономност 1–4, L77-91; Gate L146-149 (identity/context service, permission gateway, versioned tool registry по шапка, общ orchestration state) | ❌ PROVEN (код) | Нивата не са моделирани. Никой път не носи ниво и няма общ gateway. Различните пътища са на различно ниво без правило:<br>• Ниво 2: `ai-proposal`, `ai-fast` — само отговор;<br>• Ниво 3: `apply-ai` — в черновата;<br>• над Ниво 3 без потвърждение: `ai-estimate` пише в записа (FG-580), `ai-suggest` / `ai-breakdown` пишат в анализа (FG-326, FG-360);<br>• `batch-to-offer` — оферта от Viewer (FG-581).<br>Няма „предварително одобрено правило“ за Ниво 4 — FG-615 |
+| Ниво 5 — AI никога самостоятелно не плаща, фактурира окончателно, трие официални данни, променя заплати, отписва скъп актив, приема акт/договор, променя заключен FLOW, прави правно/финансово обвързване, L95-104; „автоматично финансово/договорно действие“, L120 | ✅ / ⚠️ | Нито един AI път не пише плащане, фактура, заплата, отписване, приемане или изтриване. ⚠️ Финансово влияние без човек: AI оценката става приход в P&L (FG-580, reference); AI сборът става оферта като труд (FG-581). Оферта в `Draft` не е обвързване. Забраните не са записани централно, а пазени само от отсъствието на код (FG-615) |
+| Procurement „Не създава сам поръчка; официалният процес остава във FLOW-020/038 и Approval Center“, L57; „AI да прескача Approval Center“, L118 | ⚠️ PROVEN | AI не създава поръчка. Approval Center за заявки няма (FLOW-034 — Wave 0 DQ/Approval). P3: от **отказана** оферта Viewer създава заявка (201, `draft`) с AI количество „Гипсова мазилка 12 кг“. Ред на офертата („Мазилка 10 m2“) става материал. Заявката после се подава с `submit` (`procurement.py:214-227`, само `require_m2`) — FG-613 |
+| Координационна верига „одобрена допълнителна оферта → Offer → Workforce/WP → Materials → Logistics → Finance → Quality“, L108-112 | ❌ PROVEN | Няма оркестрация. Съществуващите стъпки не изискват **одобрена** оферта:<br>• WP и планирани материали — FG-363 (reference);<br>• заявката за материали — P3, FG-613.<br>Logistics, Finance и Quality не са свързани |
+| „AI да променя Skill Matrix или оценки без одобрение на Крум“, L122 | ✅ (тривиално) | AI не пише в Skill Matrix и в рейтинги (grep: 0). Калибрационните коефициенти се одобряват от Admin/Owner (`ai_calibration.py:328`), а събитията за тях идват от всяка роля с M2 — FG-335 (reference) |
+| „agent action да остане без AuditEvent“, L123; Gate L150 „audit на tool routing“ | ❌ PROVEN | P3: `audit_events` Δ0, `audit_logs` Δ0. P4: страничният запис в `material_prices` — без събитие. FG-519 (main open; клонът #90 — `ai.call.*`), FG-580, FG-581 (reference), FG-613, FG-614 |
+| Крум вижда коя шапка/tool е използвана, защо е дадена препоръката, кои официални източници, L128-130 | ❌ PROVEN | Отговорът носи само `provider` (`llm` / `rule-based`) и `explanation` („Разпознато като … чрез ключови думи“, `ai_proposal.py:213`). Пътят, калибрацията и минималната цена не се виждат като отделни стъпки; при `ai-estimate` `hourly_info` липсва. Източниците на „агентите“ са симулирани (FG-361). Без дата/линк — FG-583, FG-325 (reference) |
+| Крум вижда какво е чернова, какво чака потвърждение и какво е изпълнено, L131; критичните действия, които AI няма право да извърши, L132 | ❌ | Няма такъв изглед. `ai_estimated_price` и AI материалите нямат статус „чернова/потвърдено“ (FG-580, FG-613) — FG-615 |
+| Тестове за cross-agent conflict, permission leakage и forbidden autonomy, L151 | ❌ | `tests/test_hybrid_ai_proposal.py`, `test_two_stage_ai.py`, `test_ai_offer_module.py` не сравняват пътищата помежду им. Не проверяват ролите на `ai-fast`/`ai-batch`/`ai-estimate` и забранените действия |
+| Tenant isolation (D-15) | ✅ | Калибрацията, подсказката, ставките и кешът `material_prices` четат и пишат през `TenantData.for_resolved_org` с `org_id` (`ai_calibration.py:403`, `extra_works.py:119`, `pricing_engine.py:255`) |
+
+Извод: моделът „един Brain → общи права/контекст/AuditEvent → шапки“ на main не съществува (Wave 3). Това, което има, е точно забраненото от L15 и L116 — отделни AI пътища с различни правила:
+- един и същ въпрос за цена дава различен отговор според бутона:
+  - qty 10: 24.6 срещу 20.5 (калибрацията се пропуска в `ai-fast`);
+  - qty 3: 31.48 срещу 27.68 (минималната цена се пропуска в `ai-estimate`);
+- различните пътища имат различни права за парите;
+- класификацията не е по Master Data, а по собствен речник или свободен текст на LLM;
+- „агентите“ за цени имат собствена таблица, показвана като каталог. Всяка роля я пълни като страничен ефект;
+- материалите от ценовия AI минават скрито в заявка за материали — и от **отказана** оферта, от Viewer, без AuditEvent;
+- нивата на автономност не са моделирани. Забраните на Ниво 5 се пазят само защото кодът липсва.
+
+Следващ FLOW в бавния преглед: FLOW-032.
+
+### Предишни FG по темите на FLOW-031
+
+- **FG-583** (няма BEG Brain, tool catalog, история, AI статус; модели в кода) → reference за L13, L15, L73, L127-130, Gate L146-148. FG-611..615 са конкретните нарушения на FLOW-031 от тази липса.
+- **FG-580** (AI оценката е приход в P&L) и **FG-581** (оферта от AI, целият сбор като труд) → reference за L118, L120, Ниво 3.
+- **FG-582** (измислен процент „доверие“) → reference за L129.
+- **FG-584** (500/суров текст на грешката) → reference за D-12. **FG-585** (данни към модела) → reference. **FG-586** (няма AI флаг, бюджет и entitlement на main) → reference за „общи права“.
+- **FG-325** (цена без данни/източник), **FG-326** (`ai-suggest`/`fetch-prices` презаписват анализа), **FG-327** (пари за роли без пари в партидните AI пътища), **FG-360** (`ai-breakdown`) → reference за L72, L119, L128-130.
+- **FG-361** (симулирани магазини) → reference за L70/L117. FG-614 добавя: кешът е отделен регистър на „агента“, служи като каталог и се пълни от всяка роля.
+- **FG-362** (`/pricing/batch` за роли без пари) → reference.
+- **FG-363** (WP и планирани материали от неприета оферта) → reference за L108-112. FG-613 е същият модел за заявката за материали плюс AI количествата.
+- **FG-331**, **FG-332**, **FG-335** (калибрация) → reference за L69-70, L122.
+- **FG-519** (без canonical AuditEvent за AI) → main open; на клона #90 partial. **FG-535..539** — само на клона #90.
