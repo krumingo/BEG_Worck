@@ -542,27 +542,59 @@ async def void_labor_approvals(tenant: TenantData, org_id: str, report_id: str,
                                collection: str = "employee_daily_reports", bump: bool = True,
                                session=None) -> int:
     """LAB-01-D (FG-72): any change or reset of a report bumps its ``report_version`` and
-    voids every labor approval of it. The approval records stay (no delete), marked void."""
+    voids every labor approval of it. The approval records stay (no delete), marked void.
+
+    FG-568: the bump, the voids and the R77 flags of the rows that used a voided quantity (with
+    their AuditEvents and alarms) are ONE transaction — the caller's ``session`` when it has
+    one, else its own. A retry repairs a half-done earlier state: an approved row whose
+    quantity approval of this report is void but which was never flagged is flagged now."""
     from datetime import datetime, timezone
     now = datetime.now(timezone.utc).isoformat()
-    if bump:  # LAB-01-M: a reset bumps the version inside its own compare-and-set
-        await tenant.collection(collection).update_one(
-            {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}}, session=session)
-    voided = [a["id"] for a in await tenant.labor_quantity_approvals.find(
-        {"org_id": org_id, "report_id": report_id, "status": "approved"}, {"_id": 0, "id": 1},
-        session=session).to_list(500)]
-    res = await tenant.labor_quantity_approvals.update_many(
-        {"org_id": org_id, "report_id": report_id, "status": "approved"},
-        {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
-        session=session)
-    # R77 (FG-507): an APPROVED manual akord row priced from a voided quantity is flagged
-    await flag_rows_of_changed_quantities(tenant, org_id, voided, actor_id, reason, session=session)
-    # LAB-02: the approver's DOWNTIME classification of the old version is void as well
-    await tenant.labor_line_classifications.update_many(
-        {"org_id": org_id, "report_id": report_id, "status": "active"},
-        {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
-        session=session)
-    return getattr(res, "modified_count", 0)
+
+    async def body(s):
+        if bump:  # LAB-01-M: a reset bumps the version inside its own compare-and-set
+            await tenant.collection(collection).update_one(
+                {"id": report_id, "org_id": org_id}, {"$inc": {"report_version": 1}}, session=s)
+        voided = [a["id"] for a in await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "report_id": report_id, "status": "approved"}, {"_id": 0, "id": 1},
+            session=s).to_list(500)]
+        res = await tenant.labor_quantity_approvals.update_many(
+            {"org_id": org_id, "report_id": report_id, "status": "approved"},
+            {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
+            session=s)
+        # FG-568 repair: void approvals of this report whose approved rows were never flagged
+        all_void = [a["id"] for a in await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "report_id": report_id, "status": "void"}, {"_id": 0, "id": 1},
+            session=s).to_list(500)]
+        missed = []
+        if all_void:
+            for r in await tenant.labor_entries.find(
+                    {"org_id": org_id, "quantity_approval_id": {"$in": all_void},
+                     "approval_status": MANUAL_APPROVED, "reversed_by_entry_id": None,
+                     "entry_kind": {"$ne": "reversal"}, "correction_required": None},
+                    {"_id": 0, "quantity_approval_id": 1}, session=s).to_list(500):
+                missed.append(r["quantity_approval_id"])
+        # R77 (FG-507): an APPROVED manual akord row priced from a voided quantity is flagged
+        await flag_rows_of_changed_quantities(tenant, org_id, sorted(set(voided) | set(missed)),
+                                              actor_id, reason, session=s)
+        # LAB-02: the approver's DOWNTIME classification of the old version is void as well
+        await tenant.labor_line_classifications.update_many(
+            {"org_id": org_id, "report_id": report_id, "status": "active"},
+            {"$set": {"status": "void", "voided_at": now, "voided_by": actor_id, "void_reason": reason}},
+            session=s)
+        return getattr(res, "modified_count", 0)
+
+    if session is not None:
+        return await body(session)
+    from app.services.auth_tx import TransactionsUnavailable, run_in_transaction
+    try:
+        await ensure_labor_day_locks(db)
+        return await run_in_transaction(db, body)
+    except (TransactionsUnavailable, NotImplementedError):
+        # a deployment without transactions (and the DB-free test backend, which has no
+        # sessions) changed reports before FG-568 and still does: the same steps, not atomic —
+        # the repair above completes a half-done state on the next change
+        return await body(None)
 
 
 # R62 (Krum 09.11.2026, FG-340 / FG-58): a manual labor row counts only after the Owner

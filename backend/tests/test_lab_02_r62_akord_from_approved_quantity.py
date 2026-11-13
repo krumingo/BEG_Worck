@@ -9,7 +9,7 @@ project P, worker w1, the same app and both backends.
 import pytest
 
 from tests.test_lab_01_s_r62_one_labor_cost import (  # noqa: F401
-    ORG, P, _decision, _key, run)
+    ORG, P, _decision, _key, backend, run)
 
 AK_PKG = "pkg-ak"
 AK_DAY = "2026-11-12"
@@ -343,3 +343,59 @@ def test_fg534_the_correction_void_insert_and_flag_are_one_transaction(monkeypat
         assert "correction_required" not in await op.labor_entries.find_one({"id": rid})
         assert await op.audit_events.count_documents({"action": "labor_quantity.corrected"}) == 0
     run(monkeypatch, scenario, backend="real")
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 46: FG-568
+
+@pytest.mark.skipif(bool(__import__("tests.test_lab_01_s_r62_one_labor_cost", fromlist=["x"])._real_refusal()),
+                    reason="real Mongo only (a transaction)")
+def test_fg568_a_crash_while_flagging_rolls_the_void_back_and_a_retry_completes_it(monkeypatch):
+    from app.services import labor_cost
+    from app.tenancy.data_access import TenantData
+    _with_lab02_and_alarms(monkeypatch)
+
+    async def scenario(c, op):
+        await _report_of_the_quantity(op)
+        rid = await _approved_akord_row(c, op)
+        tenant = TenantData.for_resolved_org(op, ORG)
+        real_flag = labor_cost.flag_rows_of_changed_quantities
+
+        async def boom(*a, **k):
+            raise RuntimeError("simulated crash while flagging")
+        monkeypatch.setattr(labor_cost, "flag_rows_of_changed_quantities", boom)
+        with pytest.raises(RuntimeError):
+            await labor_cost.void_labor_approvals(tenant, ORG, "R-Q", "sm", "report_corrected")
+        # nothing half-done: the approval is still approved, the report not bumped, no flag
+        assert (await op.labor_quantity_approvals.find_one({"id": "qa-1"}))["status"] == "approved"
+        assert (await op.employee_daily_reports.find_one({"id": "R-Q"}))["report_version"] == 0
+        assert "correction_required" not in await op.labor_entries.find_one({"id": rid})
+        assert await op.alarm_events.count_documents({"type": "labor_correction_required"}) == 0
+        monkeypatch.setattr(labor_cost, "flag_rows_of_changed_quantities", real_flag)
+        await labor_cost.void_labor_approvals(tenant, ORG, "R-Q", "sm", "report_corrected")   # the retry
+        assert (await op.labor_quantity_approvals.find_one({"id": "qa-1"}))["status"] == "void"
+        assert (await op.labor_entries.find_one({"id": rid}))["correction_required"]["sequence"] == 1
+        assert await op.alarm_events.count_documents({"type": "labor_correction_required"}) == 1
+        assert await op.audit_events.count_documents(
+            {"entity_id": rid, "action": "labor.manual_entry.correction_required"}) == 1
+    run(monkeypatch, scenario, backend="real")
+
+
+def test_fg568_a_retry_repairs_a_half_done_void_from_before(monkeypatch, backend):
+    """A void written before FG-568 without its flag (a crash in between): the next void of
+    that report flags the row once — and only once."""
+    from app.services.labor_cost import void_labor_approvals
+    from app.tenancy.data_access import TenantData
+    _with_lab02_and_alarms(monkeypatch)
+
+    async def scenario(c, op):
+        await _report_of_the_quantity(op)
+        rid = await _approved_akord_row(c, op)
+        await op.labor_quantity_approvals.update_one({"id": "qa-1"}, {"$set": {"status": "void"}})   # half-done
+        assert "correction_required" not in await op.labor_entries.find_one({"id": rid})
+        tenant = TenantData.for_resolved_org(op, ORG)
+        await void_labor_approvals(tenant, ORG, "R-Q", "sm", "report_corrected")
+        assert (await op.labor_entries.find_one({"id": rid}))["correction_required"]["sequence"] == 1
+        await void_labor_approvals(tenant, ORG, "R-Q", "sm", "report_corrected")     # again: no second flag
+        assert (await op.labor_entries.find_one({"id": rid}))["correction_required"]["sequence"] == 1
+        assert await op.alarm_events.count_documents({"type": "labor_correction_required"}) == 1
+    run(monkeypatch, scenario, backend)
