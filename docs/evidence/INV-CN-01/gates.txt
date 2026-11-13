@@ -1,45 +1,42 @@
-# INV-CN-01 gates (Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3863610 merged), 2026-11-09T18:16:00Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (FG-572 + FG-571; Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3863610 merged), 2026-11-13T19:30:09Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 246 module(s) checked, 0 violation(s)
 ## A1 guard
 W0-03E-A1 tenant access guard: 496 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-183 passed, 1 warning in 145.10s (0:02:25)
-## PAY-01 family (real mongo + mongomock)
-630 passed, 1 warning in 142.89s (0:02:22)
+195 passed, 1 warning in 144.23s (0:02:24)
+## PAY-01 family (real mongo + mongomock) — in this run 2 failed: test_04_cancel_allocation_keeps_rows_and_balances[mongomock-enforce] / [real-enforce]
+## (TENANT_DATA_PATH_NOT_MIGRATED: the PAY-01 harness did not patch app.permissions.money_write.db, which the FG-572 cancel route now reads in enforce — a harness gap, fixed in the harness)
+## re-run after the harness fix, same tree:
+630 passed, 1 warning in 138.04s (0:02:18)
 ## R0 (real mongo)
-814 passed, 10 warnings in 155.64s (0:02:35)
+814 passed, 10 warnings in 150.08s (0:02:30)
 ## W0 (real mongo)
-16 failed, 1176 passed, 10 warnings in 148.19s (0:02:28)
+16 failed, 1176 passed, 10 warnings in 142.72s (0:02:22)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
       1 FAILED tests/test_w0_03e_real_mongo.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 91.53s (0:01:31)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 85.21s (0:01:25)
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## ACT-01 (#77, no regression, real mongo)
-113 passed in 54.45s
+113 passed in 47.76s
 ## OH-01 (#74, no regression, real mongo)
-231 passed, 1 warning in 70.82s (0:01:10)
+231 passed, 1 warning in 66.62s (0:01:06)
 ## OFF-01 (#79) + SUB-ADV-01 (#76), no regression, real mongo
-246 passed, 10 warnings in 169.21s (0:02:49)
+246 passed, 10 warnings in 153.46s (0:02:33)
 ## WH-FIX-01 (#81), no regression, real mongo
-308 passed, 6 warnings in 77.57s (0:01:17)
+308 passed, 6 warnings in 75.89s (0:01:15)
 ## PRJ-01 (#86), no regression, real mongo
-9 passed in 13.87s
+9 passed in 12.75s
 ## SEC-01 (real mongo, -rs)
-30 passed, 10 warnings in 111.26s (0:01:51)
+30 passed, 10 warnings in 99.66s (0:01:39)
 ## SEC-02 (real mongo, -rs)
-31 passed, 10 warnings in 235.25s (0:03:55)
+31 passed, 10 warnings in 192.36s (0:03:12)
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 233.54s (0:03:53)
-## frontend yarn test — in this run 1 failed: src/lib/__tests__/analytics.test.js (Cannot find module 'posthog-js/package.json': main 3863610 (#88) added the posthog-js 1.200.0 dependency and the local node_modules predated the merge; the same failure on a clean main 3863610 worktree here). After `yarn install --frozen-lockfile`:
+6 passed, 10 warnings in 184.70s (0:03:04)
+## frontend yarn test
 Test Suites: 28 passed, 28 total
 Tests:       257 passed, 257 total
 ## warehouse suite: see warehouse_suite.txt
-## SEC-02 flake hunt (orchestrator, item 3): three further runs on the same tree with -rfs, rs1 :27019, in parallel with this gate set (same load)
-run 1: 31 passed, 10 warnings in 251.17s
-run 2: 31 passed, 10 warnings in 231.35s
-run 3: 31 passed, 10 warnings in 225.45s
-gate-set run above: 31 passed — the earlier single failure (gate run at 4b1e0855, -rs, no test id) did NOT recur in 4 runs; -rfs now captures the id if it does

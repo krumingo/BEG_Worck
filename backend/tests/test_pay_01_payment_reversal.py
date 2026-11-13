@@ -138,7 +138,10 @@ def _app(monkeypatch, op, sysdb, mode):
 
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", mode)
-    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit):
+    # INV-CN-01 FG-572: the invoice cancel / edit routes now take require_money_write, whose
+    # legacy data-path guard (enforce) reads the money_write module's db handle
+    from app.permissions import money_write as perm_money
+    for module in (appdb, deps_auth, deps_modules, r_finance, project_pnl, u_audit, perm_money):
         monkeypatch.setattr(module, "db", op)
     monkeypatch.setattr(registry, "system_db", sysdb)
     for coll in ("tenant_registry", "tenant_memberships", "tenant_role_assignments"):
