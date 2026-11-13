@@ -1,0 +1,189 @@
+{
+ "checks": [
+  {
+   "name": "device registered at login (flag ON for tenant A)",
+   "ok": true
+  },
+  {
+   "name": "roster saved online before the signal is lost",
+   "ok": true,
+   "detail": 200
+  },
+  {
+   "name": "offline attendance: Записано на телефона",
+   "ok": true,
+   "detail": "Записано на телефона — ще се изпрати, когато има връзка"
+  },
+  {
+   "name": "offline daily report kept on the phone, back to Днес (badge counts it)",
+   "ok": true,
+   "detail": "2"
+  },
+  {
+   "name": "offline photo captured on the site screen",
+   "ok": true
+  },
+  {
+   "name": "queue holds the records, payload not in clear",
+   "ok": true,
+   "detail": [
+    {
+     "op": "technician.daily_report",
+     "status": "saved",
+     "plain": false
+    },
+    {
+     "op": "attendance.mark",
+     "status": "saved",
+     "plain": false
+    },
+    {
+     "op": "media.upload",
+     "status": "saved",
+     "plain": false
+    }
+   ]
+  },
+  {
+   "name": "online: attendance Синхронизирано",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "online: photo Чака качване на файл (no File Registry)",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "server: today's attendance recorded from the phone",
+   "ok": true,
+   "detail": {
+    "status": "Late",
+    "source": "offline_sync"
+   }
+  },
+  {
+   "name": "online: daily report Синхронизирано",
+   "ok": true,
+   "detail": [
+    "Чака качване на файл",
+    "Синхронизирано",
+    "Синхронизирано"
+   ]
+  },
+  {
+   "name": "same key twice + resend: identical, never duplicated",
+   "ok": true
+  },
+  {
+   "name": "differing mark → Конфликт",
+   "ok": true
+  },
+  {
+   "name": "yesterday's mark → Закъснял",
+   "ok": true
+  },
+  {
+   "name": "console lists the conflict with both versions",
+   "ok": true
+  },
+  {
+   "name": "console lists the late record",
+   "ok": true
+  },
+  {
+   "name": "console shows the device blocked",
+   "ok": true
+  },
+  {
+   "name": "phone: Устройството е блокирано",
+   "ok": true
+  },
+  {
+   "name": "phone: local queue, keys and device id wiped",
+   "ok": true
+  }
+ ],
+ "queue_offline": [
+  {
+   "op": "technician.daily_report",
+   "status": "saved",
+   "plain": false
+  },
+  {
+   "op": "attendance.mark",
+   "status": "saved",
+   "plain": false
+  },
+  {
+   "op": "media.upload",
+   "status": "saved",
+   "plain": false
+  }
+ ],
+ "statuses_online": [
+  "Чака качване на файл",
+  "Синхронизирано",
+  "Синхронизирано"
+ ],
+ "attendance_today": {
+  "entry": {
+   "id": "9fa62fa0-b8df-4890-ac80-e759eed28c0f",
+   "org_id": "76cf14ce-dfbe-4893-8581-b6010539e530",
+   "date": "2026-11-13",
+   "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+   "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "status": "Late",
+   "note": "",
+   "marked_at": "2026-11-13T18:43:40.027924+00:00",
+   "marked_by_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
+   "source": "offline_sync",
+   "version": 1,
+   "sync_local_id": "6e6a3953-aeb9-4e9c-8ad7-6eaf0e376810",
+   "captured_at": "2026-11-13T18:43:35.776000+00:00",
+   "captured_tz": "UTC",
+   "device_id": "bd71a684-bf25-490b-b0bb-55658761cf5e"
+  },
+  "date": "2026-11-13",
+  "past_deadline": true,
+  "deadline": "10:00",
+  "active_projects": [
+   {
+    "id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+    "code": "ST01-A-001",
+    "name": "ST01 A — синтетичен обект"
+   }
+  ]
+ },
+ "duplicate": {
+  "first": [
+   "conflict",
+   "conflict"
+  ],
+  "again": {
+   "local_id": "7d0105f6-8fb8-4a3a-91e4-0e2a7daf728f",
+   "idempotency_key": "4a34630e-1d9d-4aff-bae3-3d4f39099fce",
+   "status": "conflict",
+   "result": {
+    "conflict_id": "d33d6c5a-5482-4808-932a-db3063449d55",
+    "kind": "already_recorded"
+   },
+   "replay": true,
+   "received_at": "2026-11-13T18:43:44.141281+00:00",
+   "captured_at": "2026-11-13T18:43:44.131000+00:00"
+  }
+ },
+ "history_status": 404,
+ "summary": {
+  "passed": 18,
+  "failed": 0
+ }
+}
