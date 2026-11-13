@@ -10,7 +10,7 @@
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
 | #84 INV-CN-01 | `faaa2d0` | **PASS** (INV84-R64-1, M1, N2 closed) | 2026-11-09 |
 | #83 CP-01 | `781d185` | **PASS** (pass 41) | 2026-11-09 |
-| #90 SEC-03 | `bc52843` | **PASS** (N1 deploy JWT_SECRET ≥32; N2 ai_enabled per-tenant path) | 2026-11-09 |
+| #90 SEC-03 | `aaef24f` | **PASS** (main `3863610` merged; N2/N3/N5 closed; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `7cfeae5` | **PASS** (R67 closes OFF89-N1; FG-472) | 2026-11-09 |
 | #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
 | #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
@@ -6535,3 +6535,42 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
   - #83 `781d185` conflicts in code (`routes/projects.py`, `tenancy/ownership.py`) + `run_meta`.
   - #90 `bc52843` conflicts in `frontend/public/index.html` + `run_meta`.
   - Both need a re-merge of main and a re-audit.
+
+## 2026-11-13 18:50 UTC: #90 SEC-03 `aaef24f` (merge `bbb98cfe` of main `3863610` + passes 42 / 44 + SEC90-N5): PASS, no blocking finding
+
+- **Merge `bbb98cfe`:** = merge-tree except the resolved `index.html` + `run_meta`. Role-union 0. Clean onto main.
+- **`index.html`:** #88's PWA tags kept; 0 inline script; 0 `phc_`. The nginx header carries only directives that do not depend on configuration; `connect-src` comes from the build-templated meta CSP.
+- **SEC90-N5 (found on `2b70152`, PROVED):** a host with a path, e.g. `REACT_APP_POSTHOG_HOST=http://localhost:4177/__posthog`, put that path into `connect-src`, so `/__posthog/e/` was blocked (28 / 30). Fixed in `aaef24f`: the CSP gets `new URL(x).origin`.
+- **e2e (production build + nginx + uvicorn + real Mongo):**
+
+| Build | Result |
+|---|---|
+| no key | 30 / 30, 0 CSP violations |
+| key + path host | 30 / 30, 0 violations, 9 analytics requests allowed |
+
+- **Pass 42 / 44 review:**
+  - Owner-only `PUT /api/ai/settings`: Idempotency-Key + reason + AuditEvent in one transaction. Closes N2.
+  - Broadened redaction: any case, NBSP / dash separators, any digit run of 10 or more. Closes N3 for text.
+  - Photo AI refused until W0-06.
+  - `ai_usage_ledger` classified.
+  - The removed unused pins: nothing imports them; a clean venv from exactly these requirements imports `server`.
+- **Gates:**
+
+| Gate | Result |
+|---|---|
+| sec_03 | 95 |
+| w0_03e_c02 | 25 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| PAY | 630 |
+| R0 | 814 |
+| W0 | main's 16 |
+| A2C / A1 | 0/244, 0/492 |
+| **warehouse** | **44 / 1121** |
+| ops/release | 81 |
+| ST-02 | 162 |
+| jest | 30 / 270 |
+
+- **N1 (Release Manifest):** production needs `JWT_SECRET` ≥ 32 bytes before deploy; replace the live `nginx.conf`; then update `LIVE_NGINX_BLOB`.
+- **Environment:** the container restarted three times (2026-11-09 17:55, 19:04 and 2026-11-10 06:01). Docker was recovered each time, and runs cut by a restart were repeated. No verdict uses an interrupted result.
