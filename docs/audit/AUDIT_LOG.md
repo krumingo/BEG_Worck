@@ -15,7 +15,7 @@
 | #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
 | #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
-| #82 WH-REV-01 | `d6de7db` | **PASS** (contains main `3863610`; warehouse 44/1121 enforce; PM-01 regen 0 cells) | 2026-11-13 |
+| #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
@@ -6599,3 +6599,21 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 - **Environment:** root cause of today's mongod exit-14 aborts: WiredTiger `Too many open files` (dockerd nofile 20000; WT keeps dropped/idle table handles ~28h by default).
   - Fix: runtime `file_manager=(close_idle_time=20)` on the audit mongods, plus DB drops after every file.
   - No verdict uses an interrupted run.
+
+## 2026-11-13 — #82 WH-REV-01 `cd454eaa` — PASS (delta)
+
+- **Delta over `d6de7db4`** (PASS above): one commit, FG-573, changing only `docs/evidence/PM-01/run_meta.json`; no code or test change.
+- The new `run_meta` equals the meta written by my independent PM-01 harness regeneration on `d6de7db4`, except `seconds` (timing). 779 routes, 18696 cells, same roles / role_ids / modes.
+- Still merges cleanly onto main `3863610`; d6de7db4's gates stand.
+
+## 2026-11-13 — SEC-02 pulse "7777" (P1 from orchestrator) — closed as a probe false positive
+
+- **Mechanism:**
+  - `GET /api/sites/{id}/pulse` regenerates today's pulse with a new `uuid4` `id` (`pulse_generator.py:168`) and a microsecond `generated_at` (`:14`).
+  - For non-finance roles `strip_pulse_for_non_finance` keeps those, correctly: they are not money.
+  - The probe tested `"7777" in resp.text`.
+- **Deterministic repro (local only):**
+  - uuid4 was forced to `…000000007777` for pulse_generator only.
+  - Result: 99 non-finance responses flagged, and all 129 "7777" occurrences are inside `"id"`. hidden_budget_keys / money_keys were `[]`.
+- **Scope:** main `3863610` has the same flake.
+  - Fix: FG-567 (field-aware probe) on #73 `b1f7e902`.
