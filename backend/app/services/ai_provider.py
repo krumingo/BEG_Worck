@@ -106,8 +106,6 @@ _IBAN_GROUP = re.compile(r"(%s*)([A-Za-z0-9]+)" % _SEP)
 IBAN_MIN_LEN, IBAN_MAX_LEN = 15, 34
 # ЕГН / ЛНЧ (both 10 digits) and any longer id: a run of digits, single _SEP
 # characters allowed between them, of 10 digits or more.
-_DIGIT_RUN = re.compile(r"\d(?:%s?\d)*" % _SEP)
-ID_MIN_DIGITS = 10
 
 
 def _redact_ibans(text: str) -> str:
@@ -137,21 +135,19 @@ def _redact_ibans(text: str) -> str:
     return "".join(out)
 
 
-def _redact_ids(text: str) -> str:
-    def repl(m):
-        digits = sum(ch.isdigit() for ch in m.group(0))
-        return REDACTED if digits >= ID_MIN_DIGITS else m.group(0)
-    return _DIGIT_RUN.sub(repl, text)
+# SEC-03 FG-604: one switch for EVERY ЕГН-shaped form (bare 10 digits, 6+4 and
+# 2+2+2+4 with any single separator). False (default, until Krum decides):
+# everything ЕГН-shaped is hidden. True: only those whose month + checksum are valid.
+REDACT_EGN_REQUIRE_CHECKSUM = False
 
-
-# SEC-03 FG-535 (pass 46): invisible characters are dropped before anything else —
-# they can split an ЕГН so that no digit-run rule sees it, and they carry no
-# meaning for the model.
+# Unicode spaces (NBSP, thin, hair, figure, narrow NBSP, ideographic …) become a
+# plain space; invisible characters (zero-width, soft hyphen …) are dropped.
+_UNICODE_SPACES = re.compile("[\u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]")
 _INVISIBLE = re.compile("[\u200b\u200c\u200d\u2060\u2061\u2062\u2063\u2064\ufeff\u00ad\u180e]")
-# ЕГН written as 6+4 with a dot or slash (800101.0008, 800101/0008 — common in
-# Bulgarian documents). A dot could also be a decimal amount, so this form is
-# hidden only when the ЕГН month and checksum are valid.
-_EGN_6_4 = re.compile(r"(?<![\d.,/])(\d{6})[./](\d{4})(?![\d]|[.,/]\d)")
+# Any run of digits with single separators between them (space . - / _), not
+# touching further digits. Exactly 10 digits = ЕГН/ЛНЧ-shaped (the switch
+# applies); 11 or more = a long id, always hidden.
+_ID_RUN = re.compile(r"(?<!\d)\d(?:[ .\-/_]?\d)*(?!\d)")
 _EGN_WEIGHTS = (2, 4, 8, 5, 10, 9, 7, 3, 6)
 
 
@@ -165,16 +161,25 @@ def egn_checksum_valid(digits: str) -> bool:
     return (0 if check == 10 else check) == int(digits[9])
 
 
-def _redact_egn_6_4(text: str) -> str:
-    return _EGN_6_4.sub(lambda m: REDACTED if egn_checksum_valid(m.group(1) + m.group(2)) else m.group(0), text)
+def _redact_digit_ids(text: str) -> str:
+    def repl(m):
+        digits = re.sub(r"\D", "", m.group(0))
+        if len(digits) > 10:
+            return REDACTED
+        if len(digits) == 10 and (not REDACT_EGN_REQUIRE_CHECKSUM or egn_checksum_valid(digits)):
+            return REDACTED
+        return m.group(0)
+    return _ID_RUN.sub(repl, text)
 
 
 def redact_personal(text: str) -> str:
-    """Replace anything IBAN-like and any ЕГН/ЛНЧ-like digit run before the model sees it."""
+    """Replace anything IBAN-like and any ЕГН/ЛНЧ-shaped or longer digit id before
+    the model sees it (one rule for every ЕГН form, governed by
+    REDACT_EGN_REQUIRE_CHECKSUM)."""
     if not text:
         return text
-    text = _INVISIBLE.sub("", text)
-    return _redact_ids(_redact_egn_6_4(_redact_ibans(text)))
+    text = _UNICODE_SPACES.sub(" ", _INVISIBLE.sub("", text))
+    return _redact_digit_ids(_redact_ibans(text))
 
 
 _DATA_URL_RE = re.compile(r"^data:(image/[a-zA-Z0-9.+-]+);base64,", re.IGNORECASE)

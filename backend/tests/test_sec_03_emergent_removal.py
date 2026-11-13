@@ -497,12 +497,46 @@ def test_pass46_invisible_characters_and_the_6_4_form_are_redacted(text):
     assert "[скрито]" in out and "0008" not in out, (text, out)
 
 
-@pytest.mark.parametrize("text", [
-    "сума 800101.0009 лв", "цена 123456.7890", "1234.5678", "800101.0000", "дата 12.03/2026",
-])
-def test_pass46_a_6_4_number_with_a_bad_checksum_is_an_amount_not_an_egn(text):
-    from app.services.ai_provider import redact_personal
-    assert redact_personal(text) == text
+# ── FG-604: one switch for every ЕГН-shaped form; Unicode spaces normalised ──
+EGN_FORMS_VALID = ["8001010008", "800101 0008", "800101.0008", "800101/0008", "800101-0008", "800101_0008",
+                   "80.01.01.0008", "80 01 01 0008", "80-01-01-0008", "80/01/01/0008",
+                   "8001\u2009010008", "80\u200a01\u200201\u20030008", "800101\u202f0008", "800101\u30000008"]
+EGN_FORMS_BAD_CHECKSUM = ["8001010000", "800101 0009", "800101.0009", "800101/0009", "80.01.01.0000",
+                          "123456.7890", "8001\u2009010000"]
+
+
+@pytest.mark.parametrize("require_checksum", [False, True])
+@pytest.mark.parametrize("form", EGN_FORMS_VALID)
+def test_fg604_every_egn_form_with_a_valid_checksum_is_hidden_under_both_settings(monkeypatch, form, require_checksum):
+    from app.services import ai_provider
+    monkeypatch.setattr(ai_provider, "REDACT_EGN_REQUIRE_CHECKSUM", require_checksum)
+    out = ai_provider.redact_personal("лице %s, адрес" % form)
+    assert out == "лице [скрито], адрес", (form, out)
+
+
+@pytest.mark.parametrize("form", EGN_FORMS_BAD_CHECKSUM)
+def test_fg604_the_switch_applies_the_same_way_to_every_form_bare_10_digits_included(monkeypatch, form):
+    from app.services import ai_provider
+    assert ai_provider.REDACT_EGN_REQUIRE_CHECKSUM is False           # default until Krum decides
+    assert ai_provider.redact_personal("x %s y" % form) == "x [скрито] y"       # default: hide everything ЕГН-shaped
+    monkeypatch.setattr(ai_provider, "REDACT_EGN_REQUIRE_CHECKSUM", True)
+    out = ai_provider.redact_personal("x %s y" % form)
+    assert "[скрито]" not in out and out.startswith("x ") and out.endswith(" y")   # checksum required → kept
+
+
+@pytest.mark.parametrize("text", ["1234.5678", "дата 12.03/2026", "12.03.2026", "тел. 02 123 456"])
+def test_fg604_shorter_numbers_are_never_egn_shaped(monkeypatch, text):
+    from app.services import ai_provider
+    for flag in (False, True):
+        monkeypatch.setattr(ai_provider, "REDACT_EGN_REQUIRE_CHECKSUM", flag)
+        assert ai_provider.redact_personal(text) == text
+
+
+def test_fg604_longer_ids_are_always_hidden(monkeypatch):
+    from app.services import ai_provider
+    for flag in (False, True):
+        monkeypatch.setattr(ai_provider, "REDACT_EGN_REQUIRE_CHECKSUM", flag)
+        assert ai_provider.redact_personal("№ 12345678901 и 123 456 789 0123") == "№ [скрито] и [скрито]"
 
 
 @pytest.mark.parametrize("text", [
@@ -920,6 +954,64 @@ def test_real_mongo_a_crash_after_the_commit_never_strands_the_key(monkeypatch):
         finally:
             await real_db.client.drop_database(real_db.name)
     run(scenario())
+
+
+def test_real_mongo_fg603_a_stale_attempt_that_resumes_after_a_takeover_writes_nothing(monkeypatch):
+    """FG-603: A reserves the key and stalls; the key goes stale; B takes it over and
+    commits; A resumes. A's completion CAS (its attempt token) matches nothing, so A's
+    transaction aborts: exactly ONE event, and A answers with B's result."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+    from app.routes import auth as auth_routes
+    from app.services import ai_provider
+    from app.services.auth_tx import run_in_transaction
+    monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
+
+    async def scenario():
+        real_db = _real_mongo_db()
+        try:
+            monkeypatch.setattr(ai_provider, "db", real_db)
+            monkeypatch.setattr(auth_routes, "db", real_db)
+            a_reserved, a_go = asyncio.Event(), asyncio.Event()
+
+            async def stall_first_then_run(database, body):
+                if not a_reserved.is_set():          # attempt A: reserved, now stalls
+                    a_reserved.set()
+                    await a_go.wait()
+                return await run_in_transaction(database, body)
+            monkeypatch.setattr(auth_routes, "run_ai_settings_transaction", stall_first_then_run)
+            body = auth_routes.AISettingsUpdate(enabled=True, reason="тест на живо")
+            task_a = asyncio.create_task(
+                auth_routes.put_ai_settings(body, None, dict(OWNER), idempotency_key="race-1"))
+            await a_reserved.wait()
+            # A's reservation goes stale (it has been stuck for longer than the limit)
+            await real_db["audit_idempotency"].update_one({"key": "race-1"}, {"$set": {
+                "reserved_at": (datetime.now(timezone.utc) - timedelta(minutes=10)).isoformat()}})
+            res_b = await auth_routes.put_ai_settings(body, None, dict(OWNER), idempotency_key="race-1")
+            assert res_b["enabled"] is True
+            a_go.set()
+            res_a = await task_a                      # A resumes: its CAS loses → rollback → replay
+            assert res_a == res_b
+            assert await real_db["audit_events"].count_documents({"action": "ai.settings.changed"}) == 1
+            rec = await real_db["audit_idempotency"].find_one({"key": "race-1"})
+            assert rec["status"] == "completed"
+        finally:
+            await real_db.client.drop_database(real_db.name)
+    run(scenario())
+
+
+def test_fg603_completion_with_a_lost_token_raises_and_a_held_one_completes(ai, monkeypatch):
+    from app.audit.idempotency import IdempotencyAttemptLost, begin_idempotent, complete_idempotent
+    ai_provider, db, fake = ai
+    state = run(begin_idempotent(db, tenant_id=ORG_A, key="tok-1", action="t.a"))
+    token = state["record"]["attempt_token"]
+    assert token
+    with pytest.raises(IdempotencyAttemptLost):
+        run(complete_idempotent(db, tenant_id=ORG_A, key="tok-1", action="t.a", result_reference="{}",
+                                attempt_token="someone-else"))
+    run(complete_idempotent(db, tenant_id=ORG_A, key="tok-1", action="t.a", result_reference="{}",
+                            attempt_token=token))
+    assert _idem(db, "tok-1")["status"] == "completed"
 
 
 def test_real_mongo_the_switch_and_its_event_commit_together(monkeypatch):

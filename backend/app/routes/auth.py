@@ -669,7 +669,8 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
     import json
     from app.audit.envelope import RETENTION_R3_SECURITY_ACCESS, build_event
     from app.audit.idempotency import (IDEMPOTENCY_COLLECTION, IDEMPOTENCY_COMPLETED, IDEMPOTENCY_DUPLICATE,
-                                       IDEMPOTENCY_FAILED, IDEMPOTENCY_STARTED, IdempotencyConflict,
+                                       IDEMPOTENCY_FAILED, IDEMPOTENCY_STARTED, IdempotencyAttemptLost,
+                                       IdempotencyConflict,
                                        begin_idempotent, complete_idempotent, ensure_idempotency_ttl_index,
                                        request_fingerprint)
     from app.audit.idempotency import _record_id as idempotency_record_id
@@ -741,6 +742,8 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
             return json.loads(state["result_reference"])
     if state["status"] != IDEMPOTENCY_STARTED:
         raise in_progress
+    # FG-603: this attempt's token; the completion inside the transaction is a CAS on it.
+    attempt_token = (state.get("record") or {}).get("attempt_token")
     tenant = _tenant(user)
 
     async def body(session):
@@ -762,7 +765,8 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
         # SEC-03 FG-563: the key completes in the SAME transaction — a crash after
         # the commit leaves it COMPLETED (a retry replays), never STARTED forever.
         await complete_idempotent(db, tenant_id=org_id, key=key, action=AI_SETTINGS_ACTION,
-                                  result_reference=result_ref, session=session)
+                                  result_reference=result_ref, session=session,
+                                  attempt_token=attempt_token)
     from app.services.auth_tx import TransactionsUnavailable
 
     async def release(error_code):
@@ -771,11 +775,20 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
         # COMPLETED inside it) must not turn it into FAILED — a retry would write twice.
         await db[IDEMPOTENCY_COLLECTION].update_one(
             {"id": idempotency_record_id(org_id, AI_SETTINGS_ACTION, key), "tenant_id": org_id,
-             "status": IDEMPOTENCY_STARTED},
+             "status": IDEMPOTENCY_STARTED, "attempt_token": attempt_token},
             {"$set": {"status": IDEMPOTENCY_FAILED, "error_code": error_code,
                       "completed_at": datetime.now(timezone.utc).isoformat()}})
     try:
         await run_ai_settings_transaction(db, body)
+    except IdempotencyAttemptLost:
+        # FG-603: another attempt took this (stale) key over; our writes rolled back
+        # with the transaction. Answer with its result, or 409 while it runs.
+        current = await db[IDEMPOTENCY_COLLECTION].find_one(
+            {"id": idempotency_record_id(org_id, AI_SETTINGS_ACTION, key), "tenant_id": org_id},
+            {"_id": 0, "status": 1, "result_reference": 1})
+        if current and current.get("status") == IDEMPOTENCY_COMPLETED and current.get("result_reference"):
+            return json.loads(current["result_reference"])
+        raise in_progress
     except TransactionsUnavailable:
         await release("TRANSACTIONS_UNAVAILABLE")
         raise HTTPException(status_code=503, detail={"error_code": "TRANSACTIONS_UNAVAILABLE",
