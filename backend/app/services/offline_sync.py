@@ -118,6 +118,11 @@ async def ensure_sync_indexes(database) -> None:
         [("org_id", 1), ("sync_local_id", 1), ("sync_entry_index", 1)], unique=True,
         name="pwa02_daily_report_sync_unique",
         partialFilterExpression={"sync_local_id": {"$type": "string"}})
+    # FG-627: one attendance entry per worker and day (create_attendance_entry stamps the key;
+    # older rows without it are untouched by the partial index).
+    await database["attendance_entries"].create_index(
+        [("attendance_day_key", 1)], unique=True, name="pwa02_attendance_day_unique",
+        partialFilterExpression={"attendance_day_key": {"$type": "string"}})
     await database["sync_receipts"].create_index([("org_id", 1), ("device_id", 1), ("received_at", -1)],
                                                  name="pwa02_receipt_device")
     for name in ("sync_conflicts", "sync_late", "sync_quarantine"):
@@ -320,14 +325,29 @@ def local_day(dt: datetime, tz) -> str:
     return dt.astimezone(tz).date().isoformat()
 
 
+def capture_on_server_clock(env: Dict[str, Any], received: datetime) -> datetime:
+    """FG-634: the capture moment on the SERVER clock — the phone's time corrected by the
+    offset it measured against the server (device − server), never later than the receipt."""
+    corrected = env["captured_dt"] - timedelta(milliseconds=int(env.get("device_clock_offset_ms") or 0))
+    return min(corrected, received)
+
+
+def capture_day(env: Dict[str, Any], received: datetime, tz) -> str:
+    """The tenant-local day a record belongs to: never "tomorrow" relative to the receipt."""
+    return local_day(capture_on_server_clock(env, received), tz)
+
+
 def late_reason(env: Dict[str, Any], received: datetime, tz) -> Optional[str]:
-    """R61-3: before today (tenant zone, server clock) or a phone clock off by > 10 min."""
+    """R61-3: before today (tenant zone, server clock) or a phone clock off by > 10 min.
+    FG-634: a capture time in the future beyond the tolerance goes to the console."""
     if abs(env["device_clock_offset_ms"]) > CLOCK_SKEW_LIMIT_MS:
         return "clock_skew"
-    if local_day(env["captured_dt"], tz) < local_day(received, tz):
-        return "previous_day"
-    if env["captured_dt"] > received + timedelta(milliseconds=CLOCK_SKEW_LIMIT_MS):
+    corrected = env["captured_dt"] - timedelta(milliseconds=int(env.get("device_clock_offset_ms") or 0))
+    if env["captured_dt"] > received + timedelta(milliseconds=CLOCK_SKEW_LIMIT_MS) \
+            or corrected > received + timedelta(milliseconds=CLOCK_SKEW_LIMIT_MS):
         return "clock_skew"  # captured "in the future"
+    if capture_day(env, received, tz) < local_day(received, tz):
+        return "previous_day"
     return None
 
 
@@ -540,7 +560,7 @@ async def _process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked:
         return await _finish(user, receipt, LATE, {"late_id": doc["id"], "reason": why_late})
 
     ctx = {"device_id": device_id, "received_at": iso(received), "tz": tz,
-           "captured_date": local_day(env["captured_dt"], tz)}
+           "captured_date": capture_day(env, received, tz)}
     try:
         result = await handler(user, env, ctx)
     except SyncConflict as c:
@@ -746,7 +766,7 @@ async def decide_late(user: Dict[str, Any], late_id: str, decision: str, reason:
     tz = await tenant_zone(user)
     env = _env_of(doc, used)
     ctx = {"confirmed_by": user["id"], "confirmed_at": stamp, "tz": tz,
-           "captured_date": local_day(env["captured_dt"], tz)}
+           "captured_date": capture_day(env, datetime.fromisoformat(doc["received_at"]), tz)}
     try:
         author = await _author(user, doc["author_id"])
         result = await confirm(author, env, ctx)

@@ -30,8 +30,6 @@ from app.db import db
 from app.services import offline_sync as sync
 from app.tenancy.data_access import TenantData
 
-PHOTO_MAX_BYTES = 25 * 1024 * 1024
-VIDEO_MAX_BYTES = 200 * 1024 * 1024
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -80,7 +78,7 @@ def _att_view(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 
 async def _attendance(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, Any],
-                      marked_by: str) -> Dict[str, Any]:
+                      marked_by: str, _retried: bool = False) -> Dict[str, Any]:
     from app.routes.attendance import ATTENDANCE_STATUSES, create_attendance_entry
     from app.services.project_guards import check_project_writable
     p = env["payload"]
@@ -111,8 +109,15 @@ async def _attendance(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, 
         raise sync.SyncConflict(entity_type="attendance", entity_id="%s:%s" % (user["id"], date),
                                 office={"date": date, "closed": kind}, field=phone, kind=kind)
     await check_project_writable(project_id, org, "присъствия")
-    entry = await create_attendance_entry(org, date, project_id, user["id"], status, note,
-                                          marked_by, "offline_sync", extra=_stamp(env, ctx))
+    try:
+        entry = await create_attendance_entry(org, date, project_id, user["id"], status, note,
+                                              marked_by, "offline_sync", extra=_stamp(env, ctx))
+    except HTTPException as exc:
+        # FG-627: another mark for the same worker and day won the race (unique day key) —
+        # decide against it exactly as if it had been there first: identical or conflict
+        if exc.status_code == 400 and not _retried:
+            return await _attendance(user, env, ctx, marked_by, _retried=True)
+        raise
     return {"entity_type": "attendance", "entity_id": entry["id"], "date": date,
             "status": entry["status"]}
 
@@ -139,14 +144,27 @@ async def attendance_apply(user: Dict[str, Any], conflict: Dict[str, Any],
                                                        {"_id": 0})
     if not current:
         raise sync.refuse(409, "RECORD_GONE", "Офисният запис вече не съществува")
-    if (current.get("version", 0)) != (conflict["office_version"].get("version", 0)):
-        raise sync.refuse(409, "OFFICE_CHANGED_AGAIN", "Офисът промени записа след конфликта — отворете го отново")
+    seen = conflict.get("office_version") or {}
+    now_view = _att_view(current)
+    # FG-626: re-compare the CURRENT record with the one the conflict captured — every field
+    # shown in the console, not only ``version`` (an older office writer may not bump it).
+    if any(now_view.get(k) != seen.get(k) for k in ("date", "project_id", "status", "note", "version")):
+        await tenant.sync_conflicts.update_one(
+            {"org_id": org, "id": conflict["id"]},
+            {"$set": {"office_version": now_view,
+                      "diff": sync.diff_versions(now_view, conflict.get("field_version") or {}),
+                      "office_changed_at": sync.iso(sync.now_utc())}})
+        raise sync.refuse(409, "CONFLICT_STALE",
+                          "Офисът промени записа след конфликта — вижте новата стойност",
+                          office=now_view)
     kind = await closed_day(user, current["user_id"], current["date"])
     if kind:
         raise sync.refuse(409, "CORRECTION_OR_REVERSAL_REQUIRED",
                           "Записът е одобрен/платен — промяна само чрез корекция или сторно", kind=kind)
     version = current.get("version", 0)
-    flt = {"org_id": org, "id": current["id"]}
+    # CAS on the whole snapshot the decision was made on, in the same write as the bump
+    flt = {"org_id": org, "id": current["id"], "status": current.get("status"),
+           "project_id": current.get("project_id"), "note": current.get("note")}
     flt["$or"] = [{"version": version}] + ([{"version": {"$exists": False}}] if version == 0 else [])
     res = await tenant.attendance_entries.update_one(
         flt, {"$set": {"status": status, "project_id": values.get("project_id", current.get("project_id")),
@@ -154,7 +172,7 @@ async def attendance_apply(user: Dict[str, Any], conflict: Dict[str, Any],
                        "updated_at": sync.iso(sync.now_utc()), "updated_by": user["id"],
                        "update_source": "offline_conflict_resolution"}})
     if res.modified_count != 1:
-        raise sync.refuse(409, "OFFICE_CHANGED_AGAIN", "Офисът промени записа междувременно")
+        raise sync.refuse(409, "CONFLICT_STALE", "Офисът промени записа междувременно")
     return {"entity_type": "attendance", "entity_id": current["id"], "version": version + 1}
 
 
@@ -216,25 +234,37 @@ async def daily_report_confirm(author, env, ctx):
 
 # ─────────────────────────────────────────────────────────────────── photo
 async def media_upload(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """FG-632 / R83: the same upload guard as ``POST /media/upload`` — the role, the context
+    (type + access) and the same image types and size; never SVG, never video here."""
+    from app.deps.media_acl import MEDIA_CONTEXT_TYPES, enforce_context_access
+    from app.routes.media import ALLOWED_MEDIA_TYPES, MAX_MEDIA_SIZE_MB
     p = env["payload"]
+    if user.get("role") == "Viewer":
+        raise HTTPException(status_code=403, detail={"error_code": "MEDIA_UPLOAD_FORBIDDEN",
+                                                     "message": "Нямате право да качвате снимки"})
+    context_type, context_id = p.get("context_type"), p.get("context_id")
+    if context_type and context_id:
+        if context_type not in MEDIA_CONTEXT_TYPES:
+            raise sync.SyncRejected("INVALID_CONTEXT_TYPE", "Невалиден контекст на снимката")
+        await enforce_context_access(user, context_type, str(context_id))
+    elif context_type or context_id:
+        raise sync.SyncRejected("INCOMPLETE_CONTEXT", "Контекстът на снимката е непълен")
     sha = str(p.get("sha256") or "").lower()
     if not SHA256_RE.match(sha):
         raise sync.SyncRejected("CHECKSUM_INVALID", "Невалидна контролна сума на файла")
-    mime = str(p.get("mime") or "")
+    mime = str(p.get("mime") or "").lower()
+    if mime not in ALLOWED_MEDIA_TYPES:
+        raise sync.SyncRejected("TYPE_INVALID", "Само снимка (JPEG, PNG, WebP, HEIC)")
     size = p.get("size")
-    if not isinstance(size, int) or size <= 0:
+    if not isinstance(size, int) or isinstance(size, bool) or size <= 0:
         raise sync.SyncRejected("SIZE_INVALID", "Невалиден размер на файла")
-    if mime.startswith("image/"):
-        limit = PHOTO_MAX_BYTES
-    elif mime.startswith("video/"):
-        limit = VIDEO_MAX_BYTES
-    else:
-        raise sync.SyncRejected("TYPE_INVALID", "Само снимка или видео")
-    if size > limit:
+    if size > MAX_MEDIA_SIZE_MB * 1024 * 1024:
         raise sync.SyncRejected("FILE_TOO_LARGE", "Файлът е твърде голям")
-    # Q1: no File Registry → the original stays on the phone; never final here.
+    # Q1: no File Registry → the original stays on the phone; never final here. The bytes are
+    # not uploaded in this build, so the SHA-256 is checked against them only at the upload
+    # step that a File Registry will add (HANDOFF D18).
     raise sync.SyncWaitingFile({"sha256": sha, "size": size, "mime": mime,
-                                "context_type": p.get("context_type"), "context_id": p.get("context_id"),
+                                "context_type": context_type, "context_id": context_id,
                                 "file_registry": "unavailable"})
 
 

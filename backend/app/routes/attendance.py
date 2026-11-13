@@ -4,6 +4,7 @@ Attendance, Work Reports, Reminders & Notifications routes.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 from typing import Optional, List
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
@@ -136,7 +137,13 @@ async def create_attendance_entry(org_id, date, project_id, user_id, status, not
     }
     for k, v in (extra or {}).items():
         entry.setdefault(k, v)
-    await tenant.attendance_entries.insert_one(entry)
+    # FG-627: one entry per worker and day, enforced by a partial unique index (PWA-02,
+    # ``ensure_sync_indexes``) — the check above alone is check-then-insert.
+    entry["attendance_day_key"] = "%s|%s|%s" % (org_id, user_id, date)
+    try:
+        await tenant.attendance_entries.insert_one(entry)
+    except DuplicateKeyError:
+        raise HTTPException(status_code=400, detail="Attendance already marked for this user today")
     await auto_resolve_reminders(org_id, "MissingAttendance", date, user_id, user_id)
     return {k: v for k, v in entry.items() if k != "_id"}
 

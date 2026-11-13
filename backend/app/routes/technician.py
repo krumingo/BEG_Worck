@@ -479,7 +479,7 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
         if existing_att:
             await tenant.attendance_entries.update_one(
                 {"id": existing_att["id"]},
-                {"$set": {"status": status, "project_id": project_id, "updated_at": now, "note": ""}}
+                {"$inc": {"version": 1}, "$set": {"status": status, "project_id": project_id, "updated_at": now, "note": ""}}
             )
         else:
             await tenant.attendance_entries.insert_one({
@@ -1425,7 +1425,7 @@ async def update_draft(draft_id: str, data: DraftLineUpdate, user: dict = Depend
     if data.notes is not None:
         update["notes"] = data.notes
 
-    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$set": update})
+    await tenant.employee_daily_reports.update_one({"id": draft_id}, {"$inc": {"version": 1}, "$set": update})
     return await tenant.employee_daily_reports.find_one({"id": draft_id}, {"_id": 0})
 
 

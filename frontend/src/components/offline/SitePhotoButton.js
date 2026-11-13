@@ -45,7 +45,7 @@ export default function SitePhotoButton({ projectId, className = "" }) {
   };
   return (
     <>
-      <input ref={input} type="file" accept="image/*" capture="environment" className="hidden" onChange={onFile} data-testid="site-photo-input" />
+      <input ref={input} type="file" accept="image/jpeg,image/png,image/webp,image/heic" capture="environment" className="hidden" onChange={onFile} data-testid="site-photo-input" />
       <Button variant="outline" disabled={busy || !projectId} onClick={() => input.current && input.current.click()}
         className={`h-16 rounded-2xl flex-col text-xs ${className}`} data-testid="site-photo-button">
         <Camera className="w-5 h-5 mb-1 text-emerald-400" />Снимка на обекта

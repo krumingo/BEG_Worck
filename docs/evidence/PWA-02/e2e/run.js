@@ -94,7 +94,8 @@ async function api(page, method, url, body, headers = {}) {
   // return to Днес and the queue below, not a toast)
   const backToDay = await tech.getByTestId("tech-my-day").waitFor({ timeout: 10000 }).then(() => true, () => false);
   const badge = await tech.locator("[data-testid=offline-unsent-badge]:visible").first().innerText().catch(() => "");
-  check("offline daily report kept on the phone, back to Днес (badge counts it)", backToDay && badge.includes("2"), badge);
+  check("offline daily report kept on the phone, back to Днес (badge: Записано на телефона · 2)",
+    backToDay && badge.includes("Записано на телефона") && badge.includes("2"), badge);
   await shot(tech, "phone-offline-report-saved.png");
   // a site photo, with no signal
   await tech.waitForTimeout(800);

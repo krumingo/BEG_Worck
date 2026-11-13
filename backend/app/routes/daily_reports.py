@@ -261,7 +261,7 @@ async def update_daily_report(report_id: str, data: dict, user: dict = Depends(r
         update["total_hours"] = round(sum(float(e.get("hours_worked", 0)) for e in update["day_entries"]), 2)
 
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": update})
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$inc": {"version": 1}, "$set": update})
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
 
 
@@ -275,7 +275,7 @@ async def submit_daily_report(report_id: str, user: dict = Depends(require_m4)):
         raise HTTPException(status_code=400, detail="Only DRAFT/REJECTED can be submitted")
 
     now = datetime.now(timezone.utc).isoformat()
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$inc": {"version": 1}, "$set": {
         "approval_status": "SUBMITTED", "submitted_by": user["id"], "updated_at": now,
     }})
     return await tenant.employee_daily_reports.find_one({"id": report_id}, {"_id": 0})
@@ -450,7 +450,7 @@ async def approve_report_one(report: dict, actor: dict, override: dict | None = 
         "overtime_reason": reason_text if line_is_overtime else None,
         "labor_cost": labor_cost,
     }
-    await tenant.employee_daily_reports.update_one({"id": rid}, {"$set": update})
+    await tenant.employee_daily_reports.update_one({"id": rid}, {"$inc": {"version": 1}, "$set": update})
     result = await tenant.employee_daily_reports.find_one({"id": rid}, {"_id": 0})
 
     # E) Hours warnings (informational)
@@ -479,7 +479,7 @@ async def reject_report_one(report: dict, actor: dict, reason: str = "") -> dict
         return {"status": "failed", "report_id": rid, "reason": "cannot_reject_approved"}
     if status == "REJECTED":
         return {"status": "skipped", "report_id": rid, "reason": "already_rejected"}
-    await tenant.employee_daily_reports.update_one({"id": rid}, {"$set": {
+    await tenant.employee_daily_reports.update_one({"id": rid}, {"$inc": {"version": 1}, "$set": {
         "approval_status": "REJECTED", "status": "REJECTED",
         "reject_reason": reason, "rejected_by": actor["id"], "updated_at": now,
     }})
@@ -596,7 +596,7 @@ async def reset_daily_report(report_id: str, user: dict = Depends(require_m4)):
                 )
 
     # Reset report
-    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$set": {
+    await tenant.employee_daily_reports.update_one({"id": report_id}, {"$inc": {"version": 1}, "$set": {
         "approval_status": "SUBMITTED", "status": "SUBMITTED",
         "approved_by": None, "approved_at": None,
         "payroll_ready": False, "sessions_created": 0,
@@ -972,7 +972,7 @@ async def batch_save_daily_entries(data: dict, user: dict = Depends(require_m4))
             kept = [e for e in old_entries if e.get("project_id") != project_id]
             merged = kept + emp_entries
             merged_total = round(sum(e["hours_worked"] for e in merged), 2)
-            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$set": {
+            await tenant.employee_daily_reports.update_one({"id": existing["id"]}, {"$inc": {"version": 1}, "$set": {
                 "day_entries": merged, "total_hours": merged_total, "updated_at": now,
             }})
         else:

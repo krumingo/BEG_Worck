@@ -141,6 +141,14 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         os.environ["PERMISSION_SERVICE_MODE"] = "off"
         A, B = fx["A"], fx["B"]
         tech = A["users"]["technician"]
+        # the technician (and the viewer, to prove the photo's ROLE check) work on project P —
+        # the same team row the e2e setup writes; /media/upload checks it (FG-632)
+        for key in ("technician", "viewer"):
+            q_now = datetime.now(timezone.utc).isoformat()
+            tc.portal.call(lambda k=key, t=q_now: op_db.project_team.insert_one({
+                "id": str(uuid.uuid4()), "org_id": A["tenant_id"], "project_id": A["project_id"],
+                "user_id": A["users"][k]["id"], "role_in_project": "Technician", "active": True,
+                "created_at": t, "updated_at": t}))
 
         def call(method, url, role="technician", tkey="A", key: Optional[str] = None, **kw):
             headers = {"Authorization": "Bearer " + tokens[(tkey, role)]}
@@ -535,6 +543,69 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                               json={"decision": "reject", "reason": "двоен"})["status"]
         obs["audit2"] = a2
 
+        # ─────────────────────────────────────────────── FLOW Guard pass 55 (FG-626/627/629/632)
+        fg: Dict[str, Any] = {}
+        adm = A["users"]["admin"]
+        # FG-626: office Present → phone Absent (conflict) → office changes to SickLeave →
+        # "accept the phone's" must be refused, and the console shows the new office value
+        site = "/api/technician/site/%s/attendance" % P
+        fg["office_present"] = call("POST", site, role="owner", json={
+            "date": today, "workers": [{"worker_id": adm["id"], "status": "Present"}]})["status"]
+        call("POST", "/api/sync/devices/register", role="admin", json={"device_id": DEVICE_A})
+        conf = batch([att(adm["id"], status="Absent")], role="admin")["body"]["results"][0]
+        fg["conflict"] = conf["status"]
+        cid626 = conf["result"].get("conflict_id")
+        fg["office_sick"] = call("POST", site, role="owner", json={
+            "date": today, "workers": [{"worker_id": adm["id"], "status": "SickLeave"}]})["status"]
+        fg["version_after_office_edit"] = att_rows(adm["id"], today)[0].get("version")
+        stale = call("POST", "/api/sync/conflicts/%s/resolve" % cid626, role="owner", key=str(uuid.uuid4()),
+                     json={"decision": "accept_field", "reason": "по телефона"})
+        fg["stale"] = {"status": stale["status"], "error_code": stale["error_code"]}
+        cdoc = q(lambda: op_db.sync_conflicts.find_one({"id": cid626}, {"_id": 0}))
+        fg["stale_conflict"] = {"status": cdoc["status"], "office_status": cdoc["office_version"]["status"]}
+        fg["row_after_stale"] = att_rows(adm["id"], today)[0]["status"]
+        # an older writer that does NOT bump the version is caught by the snapshot compare
+        q(lambda: op_db.attendance_entries.update_one({"user_id": adm["id"], "date": today},
+                                                      {"$set": {"status": "Vacation"}}))
+        stale2 = call("POST", "/api/sync/conflicts/%s/resolve" % cid626, role="owner", key=str(uuid.uuid4()),
+                      json={"decision": "accept_field", "reason": "по телефона"})
+        fg["stale_no_bump"] = stale2["error_code"]
+        # nothing changed since the console showed it → accepted, version bumped in the same write
+        ok = call("POST", "/api/sync/conflicts/%s/resolve" % cid626, role="owner", key=str(uuid.uuid4()),
+                  json={"decision": "accept_field", "reason": "по телефона"})
+        fg["accept_fresh"] = ok["status"]
+        row = att_rows(adm["id"], today)[0]
+        fg["row_after_accept"] = {"status": row["status"], "version": row.get("version")}
+        # FG-627: six concurrent marks (different records, same worker and day) → one entry
+        vw = A["users"]["viewer"]
+        call("POST", "/api/sync/devices/register", role="viewer", json={"device_id": DEVICE_A})
+        six = [att(vw["id"]) for _ in range(6)]
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            outs = list(pool.map(lambda e: batch([e], role="viewer"), six))
+        fg["six_http"] = sorted({o["status"] for o in outs})
+        fg["six_statuses"] = sorted(o["body"]["results"][0]["status"] for o in outs)
+        fg["six_rows"] = len(att_rows(vw["id"], today))
+        # FG-629: the legacy toggle writes the same canonical event
+        before_flag = count("audit_events", {"action": "sync.flag_set"})
+        fg["legacy_toggle"] = call("PUT", "/api/feature-flags", role="owner",
+                                   json={"module_code": "offline_queue", "enabled": True})["status"]
+        fg["legacy_toggle_events"] = count("audit_events", {"action": "sync.flag_set"}) - before_flag
+        fg["flag_still_on"] = call("GET", "/api/sync/status")["body"].get("enabled")
+        # FG-632: the photo goes through the same guard as /media/upload
+        def photo(role, uid, **p):
+            body = {"sha256": "cd" * 32, "size": 1000, "mime": "image/jpeg",
+                    "context_type": "project", "context_id": P, **p}
+            return batch([envelope(uid, A["tenant_id"], "media.upload", body)], role=role)["body"]["results"][0]
+        v = photo("viewer", vw["id"])
+        fg["photo_viewer"] = {"status": v["status"], "http": v["result"].get("http_status"),
+                              "code": v["result"].get("error_code")}
+        fg["photo_svg"] = photo("technician", tech["id"], mime="image/svg+xml")["result"].get("error_code")
+        fg["photo_video"] = photo("technician", tech["id"], mime="video/mp4")["result"].get("error_code")
+        foreign = photo("technician", tech["id"], context_id=B["project_id"])
+        fg["photo_foreign_context"] = {"status": foreign["status"], "http": foreign["result"].get("http_status")}
+        fg["photo_ok"] = photo("technician", tech["id"])["status"]
+        obs["flowguard"] = fg
+
         # ─────────────────────────────────────────────── console permissions
         k: Dict[str, Any] = {}
         for role in ROLE_KEYS:
@@ -879,6 +950,46 @@ def test_a_daily_report_crash_or_takeover_never_writes_it_twice(obs):
     assert a["online_status"] == 200 and a["online_row_untagged"] is True
     assert a["online_keys"] == ["attendance_warnings", "draft_report_ids", "hours_warnings",
                                 "missing_smr_created", "report_id", "roster_id", "total_hours"]
+
+
+@real
+def test_accepting_the_phone_version_never_overwrites_a_newer_office_edit(obs):
+    """FG-626: office Present → phone Absent → office SickLeave → accept phone → refused."""
+    f = obs["flowguard"]
+    assert f["office_present"] == 200 and f["conflict"] == "conflict" and f["office_sick"] == 200
+    assert f["version_after_office_edit"] == 1                # the office writer bumps it now
+    assert f["stale"] == {"status": 409, "error_code": "CONFLICT_STALE"}
+    assert f["stale_conflict"] == {"status": "open", "office_status": "SickLeave"}
+    assert f["row_after_stale"] == "SickLeave"
+    assert f["stale_no_bump"] == "CONFLICT_STALE"             # caught even without a bump
+    assert f["accept_fresh"] == 200
+    assert f["row_after_accept"] == {"status": "Absent", "version": 2}
+
+
+@real
+def test_six_concurrent_marks_for_one_worker_and_day_make_one_entry(obs):
+    """FG-627: unique day key + duplicate-key handled as already marked."""
+    f = obs["flowguard"]
+    assert f["six_http"] == [200]
+    assert f["six_rows"] == 1
+    assert f["six_statuses"] == ["synced"] * 6                # the rest are identical confirmations
+
+
+@real
+def test_the_legacy_flag_toggle_writes_the_canonical_event(obs):
+    f = obs["flowguard"]
+    assert f["legacy_toggle"] == 200 and f["legacy_toggle_events"] == 1 and f["flag_still_on"] is True
+
+
+@real
+def test_the_offline_photo_has_the_same_guard_as_the_upload(obs):
+    """FG-632 / R83."""
+    f = obs["flowguard"]
+    assert f["photo_viewer"] == {"status": "rejected", "http": 403, "code": "MEDIA_UPLOAD_FORBIDDEN"}
+    assert f["photo_svg"] == "TYPE_INVALID" and f["photo_video"] == "TYPE_INVALID"
+    assert f["photo_foreign_context"]["status"] == "rejected"
+    assert f["photo_foreign_context"]["http"] in (403, 404)
+    assert f["photo_ok"] == "waiting_file"
 
 
 @real

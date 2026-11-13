@@ -75,3 +75,30 @@ def test_a_phone_clock_more_than_ten_minutes_off_is_late(offset_min, late):
 def test_a_record_from_the_future_is_late():
     now = at("2026-07-10T09:00:00+00:00")
     assert late_reason(env((now + timedelta(minutes=11)).isoformat()), now, SOFIA) == "clock_skew"
+
+
+# ── FG-634: the day comes from the server clock at receipt, never "tomorrow"
+from app.services.offline_sync import capture_day  # noqa: E402
+
+
+def test_a_capture_a_few_minutes_in_the_future_across_midnight_is_still_today():
+    # server 23:55 Sofia (20:55 UTC, summer); the phone says 00:03 next day, within tolerance
+    received = at("2026-07-10T20:55:00+00:00")
+    e = env("2026-07-10T21:03:00+00:00")
+    assert capture_day(e, received, SOFIA) == "2026-07-10"
+    assert late_reason(e, received, SOFIA) is None
+
+
+def test_the_measured_phone_offset_corrects_the_capture_day():
+    # the phone runs 5 min fast (device − server = +5 min) and says 00:02; really 23:57
+    received = at("2026-07-10T21:30:00+00:00")
+    e = env("2026-07-10T21:02:00+00:00", 5 * 60 * 1000)
+    assert capture_day(e, received, SOFIA) == "2026-07-10"
+    assert late_reason(e, received, SOFIA) == "previous_day"
+
+
+def test_a_capture_beyond_the_tolerance_in_the_future_goes_to_the_console():
+    received = at("2026-07-10T20:55:00+00:00")
+    assert late_reason(env("2026-07-10T21:06:00+00:00"), received, SOFIA) == "clock_skew"
+    # within tolerance per phone, but beyond it once corrected by the measured offset
+    assert late_reason(env("2026-07-10T21:01:00+00:00", -9 * 60 * 1000), received, SOFIA) == "clock_skew"

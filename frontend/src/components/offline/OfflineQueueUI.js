@@ -28,7 +28,9 @@ export function UnsentBadge({ className = "" }) {
   return (
     <Link to="/my-unsent" className={`relative inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-1 text-xs font-semibold text-amber-400 ${className}`}
       data-testid="offline-unsent-badge" title="Моите неизпратени">
-      <CloudOff className="h-3.5 w-3.5" />{unsent}
+      {/* FG-633: the app shows no toasts (HANDOFF D12) — this stays on screen until sent */}
+      <CloudOff className="h-3.5 w-3.5" /><span data-testid="offline-unsent-label">Записано на телефона</span>
+      <span data-testid="offline-unsent-count">· {unsent}</span>
     </Link>
   );
 }
