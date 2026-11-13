@@ -15,7 +15,7 @@
 | #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
 | #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
-| #82 WH-REV-01 | `108afc0` | **PASS** (WHREV82-M1 closed) | 2026-11-09 |
+| #82 WH-REV-01 | `d6de7db` | **PASS** (contains main `3863610`; warehouse 44/1121 enforce; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
@@ -6574,3 +6574,28 @@ Carried non-blocking notes: the FG-233 receipt linked only by `invoice_id` (debt
 
 - **N1 (Release Manifest):** production needs `JWT_SECRET` ≥ 32 bytes before deploy; replace the live `nginx.conf`; then update `LIVE_NGINX_BLOB`.
 - **Environment:** the container restarted three times (2026-11-09 17:55, 19:04 and 2026-11-10 06:01). Docker was recovered each time, and runs cut by a restart were repeated. No verdict uses an interrupted result.
+
+## 2026-11-13 — #82 WH-REV-01 `d6de7db4` — PASS
+
+- **Merge check:**
+  - `d6de7db4` contains main `3863610`;
+  - the merge equals `git merge-tree --write-tree` except PM-01 `run_meta`;
+  - role-union 0;
+  - it still merges cleanly onto main `3863610`.
+- **Gates** (real Mongo 7.0 rs; warehouse in `PERMISSION_SERVICE_MODE=enforce`):
+
+| Gate | Result |
+|---|---|
+| R0 | 814 |
+| W0 | 16 = main's 16 (identical set) |
+| A2C / A1 | 0/245, 0/494 |
+| PAY | 630 |
+| SEC-01 | 30 |
+| SEC-02 | 31; committed `results.json` 176 probes = code 176 |
+| PM-01 | 6 / 0 skipped; harness regen 0 differing cells |
+| **warehouse** | **44 files / 1121** |
+| WH-REV-01 own + probes | `wh_rev_01` 120, `probe_whrev01` 144, `silock` 3, `wh_fix_01` post_55 47 / a3_r44 138 / f81 132 |
+
+- **Environment:** root cause of today's mongod exit-14 aborts: WiredTiger `Too many open files` (dockerd nofile 20000; WT keeps dropped/idle table handles ~28h by default).
+  - Fix: runtime `file_manager=(close_idle_time=20)` on the audit mongods, plus DB drops after every file.
+  - No verdict uses an interrupted run.
