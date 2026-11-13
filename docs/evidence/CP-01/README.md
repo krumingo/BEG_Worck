@@ -580,3 +580,26 @@ Gates for the final head: **`gates_pass41.txt`**.
   Red on `781d185`: 23 of 23 (`pass43_red_on_781d185_real_mongo.txt`).
 
 Gates for the final head: **`gates_pass43.txt`**.
+
+## 23. FLOW Guard pass 46 (FG-562) and the gates of the pass 43 head
+
+- **Pass 43 head gates** (`62543b3` / `ddc6e9a`, run before pass 46 arrived; `gates_pass43.txt`). Against a fresh main `3863610` baseline:
+  - W0: 10 failed, all among main's 16.
+  - Full suite: **0 new** failures, both DB-free and real Mongo.
+  - A2C 0, PM-01 6 / 0.
+- **FG-562: a masked value is never stored.** A value containing `*` is accepted only as the form's echo of the stored value's own mask (`cr.vat_update`, `cr.keep_stored_if_masked`), and then the stored value stays untouched. Any other value with `*` → **422** `VAT_NUMBER_MASKED` / `VALUE_MASKED`, nothing written. That covers:
+  - nothing stored;
+  - a different mask;
+  - `BG*…`;
+  - a masked IBAN with no stored IBAN;
+  - any masked value on a project **create**.
+
+  This applies on counterparty update (`counterparties.py`, the place FG-562 named), company update, invoice update, and project create / update.
+  - *Why the echo stays allowed:* the edit forms show the value masked and send it back with the other fields. Refusing the echo would make every such record uneditable. The echo never writes anything; the stored value is kept as it is.
+- **Not changed, waiting for Krum:**
+  - FG-560: legacy odd-spelled VAT values (mask now and / or a DQ cleanup);
+  - FG-561: whether 10 digits in the ЕИК field means ЕГН;
+  - R78: whether separators, dashes and zero-width characters are stripped silently, and whether Cyrillic / full-width BG may be mapped. The current FG-526 behaviour stays as it is.
+- **Test:** `test_fg562_a_masked_value_is_never_stored`. Red on `ddc6e9a`: 6 of 6 (`pass46_red_on_ddc6e9a_real_mongo.txt`).
+
+Gates for the final head: **`gates_pass46.txt`**.

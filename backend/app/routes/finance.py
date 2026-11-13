@@ -1113,10 +1113,9 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
     # FG-294: the edit form shows the ЕГН masked — sending it back keeps the stored value
     if cr.is_masked_egn(data.counterparty_eik):
         data.counterparty_eik = None
-    if cr.is_masked_vat(data.counterparty_vat_no):        # FG-429: the same for BG + ЕГН
-        data.counterparty_vat_no = None
-    elif data.counterparty_vat_no:
-        data.counterparty_vat_no = cr.canonical_vat_input(data.counterparty_vat_no)   # FG-496
+    # FG-429 / FG-526 / FG-562: canonical, or the echo of the stored value's mask (kept)
+    _vat_action, _vat_value = cr.vat_update(data.counterparty_vat_no, invoice.get("counterparty_vat_no"))
+    data.counterparty_vat_no = _vat_value if _vat_action == "set" else None
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
     eik_check = validate_eik(data.counterparty_eik or "" if data.counterparty_eik is not None else "")

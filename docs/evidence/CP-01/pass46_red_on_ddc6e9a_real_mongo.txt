@@ -1,0 +1,7 @@
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg562_a_masked_value_is_never_stored[mongomock-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg562_a_masked_value_is_never_stored[mongomock-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg562_a_masked_value_is_never_stored[mongomock-enforce]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg562_a_masked_value_is_never_stored[real-off]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg562_a_masked_value_is_never_stored[real-shadow]
+FAILED tests/test_cp_01_counterparty_iban_egn.py::test_fg562_a_masked_value_is_never_stored[real-enforce]
+6 failed, 762 deselected, 1 warning in 2.96s

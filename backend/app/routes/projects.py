@@ -250,7 +250,9 @@ async def create_project(data: ProjectCreate, request: Request,
         "object_type": data.object_type,
         "structured_address": data.structured_address,
         "contacts": data.contacts,
-        "invoice_details": await _store_invoice_details(tenant, user, data.invoice_details,
+        # FG-562: a masked value on CREATE has nothing to echo — refused (422), never stored
+        "invoice_details": await _store_invoice_details(tenant, user, cr.keep_stored_if_masked(
+                                                            data.invoice_details, {}),
                                                         data.owner_type, data.owner_id),  # CP83-03
         "object_details": data.object_details,
         "created_at": now,
@@ -315,7 +317,9 @@ async def _store_vat_copy(tenant, user, details, owner_type, owner_id):
     if not isinstance(details, dict) or not details.get("vat_number"):
         return details
     out = dict(details)
-    if cr.is_masked_vat(out["vat_number"]):
+    if "*" in str(out["vat_number"]):
+        # FG-562: reached only with the stored value itself (keep_stored_if_masked put it back:
+        # a redundant copy stored masked) — any other mask was refused there with 422
         return out
     out["vat_number"] = cr.canonical_vat_input(out["vat_number"])    # FG-526: 422 if not BG + digits
     if not cr.vat_is_egn(out["vat_number"]):
@@ -1315,10 +1319,13 @@ async def update_company(company_id: str, data: CompanyUpdate, user: dict = Depe
                 update[k] = v.strip()
             else:
                 update[k] = v
-    if cr.is_masked_vat(update.get("vat_number")):   # FG-482: a masked value keeps the stored one
-        update.pop("vat_number")
-    elif update.get("vat_number"):
-        update["vat_number"] = cr.canonical_vat_input(update["vat_number"])  # FG-496 / FG-526
+    if "vat_number" in update:     # FG-482 / FG-526 / FG-562: canonical, or the echo of its mask
+        stored = await _tenant(user).companies.get(company_id, {"_id": 0, "vat_number": 1}) or {}
+        action, value = cr.vat_update(update["vat_number"], stored.get("vat_number"))
+        if action == "keep":
+            update.pop("vat_number")
+        else:
+            update["vat_number"] = value
     return await mr.update(db, user, idempotency_key, collection="companies", record_id=company_id,
                            changes=update, fingerprint={"id": company_id, "body": data.model_dump()},
                            result=cr.mask_vat_egn)

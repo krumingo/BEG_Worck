@@ -495,9 +495,47 @@ def keep_stored_if_masked(incoming: Any, stored: Any,
     out = dict(incoming)
     for k in keys:
         v = out.get(k)
-        if isinstance(v, str) and (v.startswith("****") or is_masked_vat(v)) and stored.get(k):
-            out[k] = stored[k]
+        if isinstance(v, str) and "*" in v:
+            # FG-562: a mask is only ever the form's echo of what IS stored — then the stored
+            # value stays; any other value with '*' (nothing stored, or another mask) → 422,
+            # never written
+            if stored.get(k) and (v.strip() == str(stored[k]).strip()
+                                  or v.strip() in _masks_of(k, stored[k])):
+                out[k] = stored[k]
+            else:
+                raise _masked_input(k)
     return out
+
+
+def _masks_of(key: str, stored: Any) -> set:
+    """The masked forms a reader may have shown for ``stored`` under ``key``."""
+    s = str(stored or "")
+    out = {mask_iban(s), mask_egn(s)}
+    if vat_is_egn(s):
+        out.add(mask_vat(s))
+    return out
+
+
+def _masked_input(key: str) -> HTTPException:
+    return HTTPException(status_code=422, detail={
+        "error_code": "VAT_NUMBER_MASKED" if key in VAT_KEYS else "VALUE_MASKED",
+        "message": "Стойност със звездички (маскирана) не се записва — въведи пълната стойност "
+                   "или остави полето непроменено (FG-562)", "field": key})
+
+
+def vat_update(incoming: Any, stored: Any) -> tuple:
+    """FG-562 + FG-526 for an UPDATE of a VAT number: ``("keep", None)`` when the field is
+    absent or is the form's echo of the stored value's own mask (the stored value stays,
+    untouched); ``("set", canonical)`` for a canonical BG + digits value; any other value
+    with '*' → 422 VAT_NUMBER_MASKED, any other non-canonical value → 422 (FG-526)."""
+    if incoming is None:
+        return ("keep", None)
+    if isinstance(incoming, str) and "*" in incoming:
+        if stored and (incoming.strip() == str(stored).strip()
+                       or incoming.strip() in _masks_of("vat_number", stored)):
+            return ("keep", None)
+        raise _masked_input("vat_number")
+    return ("set", canonical_vat_input(incoming))
 
 
 def public_bank_account(doc: Dict[str, Any], full_allowed: bool) -> Dict[str, Any]:

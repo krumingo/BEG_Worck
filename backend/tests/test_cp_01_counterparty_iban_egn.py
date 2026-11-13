@@ -2245,3 +2245,51 @@ def test_fg528_529_egn_digits_match_only_for_finance_and_every_such_search_is_au
         ev = await rows(op, "audit_events", {"action": "party.egn_search"})
         assert len(ev) == n and no_full(ev, TYPED) and no_full(ev, TYPED[:6]), len(ev)
     run(monkeypatch, backend, mode, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 46 (#83 @ ddc6e9a)
+def test_fg562_a_masked_value_is_never_stored(monkeypatch, backend, mode):
+    """FG-562: a value with '*' is accepted only as the form's echo of the stored value's own
+    mask (the stored value stays untouched); any other masked value → 422, nothing written —
+    on a counterparty / company / invoice update and on a project create / update."""
+    async def scenario(c, op):
+        mask = "BG******1111"
+        # nothing stored: the mask is refused, not stored
+        for method, url, body in (
+                ("put", "/api/counterparties/cp2", {"name": "Доставчик cp2", "vat_number": mask}),
+                ("put", "/api/companies/co1", {"name": "Фирма", "vat_number": mask}),
+                ("put", "/api/finance/invoices/inv-r1", {"counterparty_vat_no": mask}),
+                ("post", "/api/counterparties", {"name": "Нов", "type": "supplier", "vat_number": mask}),
+                ("put", "/api/counterparties/cp2", {"name": "Доставчик cp2", "vat_number": "BG*7501011111"})):
+            before = {k: await rows(op, k) for k in ("counterparties", "companies", "invoices")}
+            r = await getattr(c, method)(url, headers=hdr("acct-a"), json=body)
+            assert r.status_code == 422 and r.json()["detail"]["error_code"] in (
+                "VAT_NUMBER_MASKED", "VAT_NUMBER_INVALID"), (url, r.status_code, r.text)
+            for k, v in before.items():
+                assert await rows(op, k) == v, (url, k)
+        for method, url, body in (
+                ("post", "/api/projects", {"code": "P-562", "name": "P-562",
+                                           "invoice_details": {"company_name": "X", "vat_number": mask}}),
+                ("put", "/api/projects/prj-1", {"invoice_details": {"company_name": "X", "vat_number": mask}}),
+                ("put", "/api/projects/prj-1", {"invoice_details": {"company_name": "X", "iban": "****1234"}})):
+            before = await rows(op, "projects")
+            r = await getattr(c, method)(url, headers=hdr("admin-a"), json=body)
+            assert r.status_code == 422, (url, r.status_code, r.text)
+            assert await rows(op, "projects") == before, url
+        # stored: the echo of its own mask keeps the stored value; another mask → 422
+        await op.counterparties.update_one({"id": "cp2"}, {"$set": {"vat_number": VAT_EGN}})
+        shown = (await c.get("/api/counterparties/cp2", headers=hdr("acct-a"))).json()
+        assert shown["vat_number"] == "BG******" + TYPED[-4:]
+        r = await c.put("/api/counterparties/cp2", headers=hdr("acct-a"),
+                        json={"name": shown["name"], "vat_number": shown["vat_number"], "notes": "н"})
+        assert r.status_code == 200, r.text
+        assert (await rows(op, "counterparties", {"id": "cp2"}))[0]["vat_number"] == VAT_EGN
+        r = await c.put("/api/counterparties/cp2", headers=hdr("acct-a"),
+                        json={"name": shown["name"], "vat_number": "BG******9999"})
+        assert r.status_code == 422 and r.json()["detail"]["error_code"] == "VAT_NUMBER_MASKED"
+        assert (await rows(op, "counterparties", {"id": "cp2"}))[0]["vat_number"] == VAT_EGN
+        for k in ("counterparties", "companies", "invoices", "projects"):
+            for row in await rows(op, k):
+                assert "*" not in json.dumps(row, ensure_ascii=False).replace(
+                    '"BG******' + TYPED[-4:] + '"', ""), (k, row.get("id"))
+    run(monkeypatch, backend, mode, scenario)

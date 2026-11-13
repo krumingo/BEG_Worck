@@ -309,12 +309,16 @@ async def update_counterparty(counterparty_id: str, data: CounterpartyUpdate, us
     new_eik = cr.normalize_eik(raw.pop("eik", None)) if data.eik else ""
     old_eik = cr.normalize_eik(counterparty.get("eik"))
     changes = {k: v for k, v in raw.items() if v is not None}
-    if "vat_number" in changes and not cr.is_masked_vat(changes["vat_number"]):   # FG-496 / FG-526
-        changes["vat_number"] = cr.canonical_vat_input(changes["vat_number"])
-    # FG-429: the form shows a BG + ЕГН VAT number masked — sending it back keeps the stored one
+    if "vat_number" in changes:      # FG-496 / FG-526 / FG-562: canonical, or the echo of its mask
+        action, value = cr.vat_update(changes["vat_number"], counterparty.get("vat_number"))
+        if action == "keep":
+            changes.pop("vat_number")
+        else:
+            changes["vat_number"] = value
+    # FG-429 / FG-562: a masked IBAN echo keeps the stored one; any other mask → 422
     changes = {k: v for k, v in cr.keep_stored_if_masked(changes, counterparty,
-                                                          keys=("vat_number", "iban")).items()
-               if not (k in ("vat_number", "iban") and v == counterparty.get(k))}
+                                                          keys=("iban",)).items()
+               if not (k == "iban" and v == counterparty.get(k))}
     eik_request = None
     if new_eik and new_eik != old_eik:
         if old_eik:
