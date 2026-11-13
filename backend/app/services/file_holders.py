@@ -248,6 +248,9 @@ async def mark_pending(tenant, org_id: str, refs: Iterable[Any], *, route: str,
             seen.add(media["id"])
             marker = {"id": "ph-" + _uuid.uuid4().hex, "route": route, "user": user_id,
                       "ref": ref, "action": action, "at": _now_iso()}
+            # recorded BEFORE the write: a cancel between the write and this line would
+            # otherwise leave a marker no rollback knows (pulling an unplaced id is a no-op)
+            placed.append({"media_id": media["id"], "marker_id": marker["id"]})
             res = await tenant.media_files.update_one(
                 {"id": media["id"], "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
                  "retire_request_pending": None},
@@ -257,9 +260,12 @@ async def mark_pending(tenant, org_id: str, refs: Iterable[Any], *, route: str,
                     raise _refuse(409, "MEDIA_RETIRED", "Файлът е скрит и не може да се използва")
                 raise _refuse(409, "RETIRE_REQUEST_PENDING",
                               "За файла има чакаща заявка за премахване")
-            placed.append({"media_id": media["id"], "marker_id": marker["id"]})
-    except Exception:
-        await settle_pending(tenant, org_id, placed, confirmed=False)
+    except BaseException:
+        # FLOW Guard pass 49: ANY exit — a 409, an error, a CancelledError between two files
+        # — rolls back the markers already placed (shielded: the rollback itself survives a
+        # second cancel), then re-raises
+        import asyncio
+        await asyncio.shield(settle_pending(tenant, org_id, placed, confirmed=False))
         raise
     return placed
 
@@ -280,20 +286,6 @@ async def settle_pending(tenant, org_id: str, markers: List[Dict[str, str]], *,
     return removed
 
 
-async def _audit_release(tenant, actor, media_id, action, reason, diff, key):
-    """FG-598: the release (granted OR refused) is an AuditEvent — a refusal in its own
-    transaction, since the refused request writes nothing else."""
-    from app.services.auth_tx import run_in_transaction
-    from app.services import project_lifecycle as lifecycle
-
-    async def body(session):
-        await lifecycle.audit(session, actor, action=action, entity_type="media_file",
-                              entity_id=media_id, reason=reason, key=key,
-                              source_flow="FLOW-029", diff=diff)
-        return True
-    await run_in_transaction(tenant._db, body)   # pylint: disable=protected-access
-
-
 async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, actor: Dict[str, Any],
                         min_age_seconds: int, key: str) -> Dict[str, Any]:
     """Condition 4 + FG-595 / FG-598 — settle a marker that its writer left behind.
@@ -312,8 +304,9 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
     * no such movement AND younger → 409 ``PENDING_HOLDER_TOO_RECENT``; nothing changes.
 
     Never retires. Every outcome — the refusal included — is an AuditEvent with the actor,
-    the marker and the proof (FG-598); the settle runs under the ``Idempotency-Key`` with a
-    CAS on the marker and a ``ref_version`` bump."""
+    the marker and the proof (FG-598), written inside the ``Idempotency-Key``'s transaction
+    (FG-610: a replay answers the same and writes nothing); the settle is a CAS on that
+    marker id with a ``ref_version`` bump."""
     from datetime import datetime, timezone
     from app.services import project_lifecycle as lifecycle
     media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
@@ -344,10 +337,20 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
     elif age >= min_age_seconds:
         outcome, action = "released", "media.file.pending_holder_release"
     else:
-        await _audit_release(tenant, actor, media_id, "media.file.pending_holder_release_refused",
-                             "marker too recent", dict(base, refused="too_recent"), key)
-        raise _refuse(409, "PENDING_HOLDER_TOO_RECENT",
-                      "Маркерът е по-нов от минималната възраст за освобождаване")
+        # FG-610: the refusal's AuditEvent is written INSIDE the keyed transaction and the
+        # refusal is the key's stored answer — a replayed key gets the same 409, no new event
+        async def refused(session):
+            await lifecycle.audit(session, actor, action="media.file.pending_holder_release_refused",
+                                  entity_type="media_file", entity_id=media_id,
+                                  reason="marker too recent", key=key, source_flow="FLOW-029",
+                                  diff=dict(base, refused="too_recent"))
+            return {"released": False, "refused": "too_recent", "marker_id": marker_id}
+        out = await lifecycle.keyed_transaction(actor, key, "media.file.pending_holder_release",
+                                                fingerprint, refused)
+        if out.get("refused") == "too_recent":
+            raise _refuse(409, "PENDING_HOLDER_TOO_RECENT",
+                          "Маркерът е по-нов от минималната възраст за освобождаване")
+        return out
     # the proof: the marker's own movements, and the holders that keep the file held
     holders = await find_holders(tenant, org_id, dict(media, pending_holders=[]))
     proof = {"decision": "confirm" if own else "release",

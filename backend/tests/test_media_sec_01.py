@@ -914,7 +914,13 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             mk3 = q(lambda: fhp.mark_pending(T, org, [m3["id"]], route="test", user_id=tech))[0]["marker_id"]
             rel = "/api/media/%s/pending-holders/%s/release" % (m3["id"], mk3)
             g["s3_no_key"] = call("POST", rel, role="admin")["status"]
-            g["s3_too_recent"] = call("POST", rel, role="admin", key="auto")["error_code"]
+            k3r = uuid.uuid4().hex                # FG-610: the SAME key twice
+            r1, r2 = (call("POST", rel, role="admin", key=k3r) for _ in range(2))
+            g["s3_too_recent"] = r1["error_code"]
+            g["s3_refusal_replay"] = {"first": [r1["status"], r1["error_code"]],
+                                      "replay": [r2["status"], r2["error_code"]],
+                                      "events": len(events(m3["id"],
+                                                           "media.file.pending_holder_release_refused"))}
             g["s3_technician"] = call("POST", rel, role="technician", key="auto")["status"]
             q(lambda: op_db.media_files.update_one({"id": m3["id"], "pending_holders.id": mk3},
                                                    {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
@@ -1131,6 +1137,42 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             g["s595_cancel"] = {"pending": pend(m12["id"]),
                                 "delete": call("DELETE", "/api/media/%s" % m12["id"], role="technician",
                                                key="auto", json={"reason": "x"})["error_code"]}
+        if has_mark:
+            import asyncio as _asyncio
+            import app.routes.warehouse_canonical as whc
+            # pass 49: a cancel BETWEEN the 1st and the 2nd file rolls back the 1st marker
+            c1, c2 = upload(), upload()
+
+            def files_then_cancel():
+                yield c1["id"]
+                raise _asyncio.CancelledError()   # the request is cancelled before file 2
+
+            async def cancel_between():
+                try:
+                    await fhp.mark_pending(T, org, files_then_cancel(), route="test", user_id=tech,
+                                           ref="kc")
+                    return "no_cancel"
+                except _asyncio.CancelledError:
+                    return "cancelled"
+            g["p49_cancel_between"] = {"raised": q(cancel_between),
+                                       "pending": [pend(c1["id"]), pend(c2["id"])]}
+            if hasattr(whc, "_markers_for"):
+                # FG-609: _markers_for's replay check is THIS user's movement — another user's
+                # committed movement under the same key + action does not skip the marker
+                f9 = upload()
+                k9 = "wh-key-" + uuid.uuid4().hex
+                q(lambda: op_db.warehouse_transactions.insert_one({
+                    "id": pid("A", "mv_609"), "movement_id": "mv-609", "org_id": org, "tenant_id": org,
+                    "idempotency_key": k9, "actor_id": tech, "action": "receive_from_supplier",
+                    "file_ids": [], "created_at": NOW}))
+                WT = T                                # the server-resolved tenant A
+                other = q(lambda: whc._markers_for(WT, users_a["admin"], k9, "receive_from_supplier",
+                                                  [f9["id"]], "test"))
+                same = q(lambda: whc._markers_for(WT, users_a["technician"], k9,
+                                                 "receive_from_supplier", [f9["id"]], "test"))
+                g["fg609_markers_for"] = {"other_user": len(other), "same_user": len(same),
+                                          "pending": len(pend(f9["id"]))}
+                q(lambda: fhp.settle_pending(T, org, other, confirmed=False))
         # (6) the real warehouse route with a stub service: a retire DURING the movement
         import app.routes.warehouse_canonical as whc
         import app.routes.media as media_routes
@@ -1743,6 +1785,9 @@ def test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref(obs):
     g = obs["pass47"]["fg588"]
     assert g["s3_no_key"] == 428                                        # FG-598
     assert g["s3_too_recent"] == "PENDING_HOLDER_TOO_RECENT" and g["s3_technician"] == 403
+    # FG-610: a refused key replayed → the same 409, ONE refusal event
+    assert g["s3_refusal_replay"] == {"first": [409, "PENDING_HOLDER_TOO_RECENT"],
+                                      "replay": [409, "PENDING_HOLDER_TOO_RECENT"], "events": 1}
     # another key's movement only + age passed → RELEASED; the file stays held by that movement
     o = g["s3_other_key_only"]
     assert (o["status"], o["outcome"], o["pending"]) == (200, "released", [])
@@ -1783,6 +1828,18 @@ def test_fg598_own_means_the_full_idempotency_scope_not_the_key_string(obs):
     assert u["proof"] == {"decision": "release", "own": [], "age": True, "actor_is_admin": True,
                           "events": 1}
     assert u["delete"] == [409, "MEDIA_IN_USE"]          # the other user's movement holds it
+
+
+@real
+def test_pass49_a_cancel_between_two_files_rolls_back_the_first_marker(obs):
+    c = obs["pass47"]["fg588"]["p49_cancel_between"]
+    assert c == {"raised": "cancelled", "pending": [[], []]}
+
+
+@real
+def test_fg609_the_markers_for_replay_check_is_this_users_movement(obs):
+    m = obs["pass47"]["fg588"]["fg609_markers_for"]
+    assert m == {"other_user": 1, "same_user": 0, "pending": 1}
 
 
 @real

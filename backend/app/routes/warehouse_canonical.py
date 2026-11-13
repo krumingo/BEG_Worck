@@ -126,20 +126,24 @@ class MovementCommandResponse(BaseModel):
 async def _markers_for(tenant, user, idempotency_key, action, file_ids, route):
     """MEDIA-SEC-01 (FG-588 / FG-596): the pending-holder markers for a movement's files.
 
-    FG-596: a REPLAY (a committed movement of this action under this Idempotency-Key)
+    FG-596 / FG-609: a REPLAY (THIS user's committed movement of this action under this
+    Idempotency-Key — the same actor_id the service records)
     places no marker — the service answers with the stored result, which writes no new
     reference, so a replay works even while a retire request is pending."""
     from app.services.file_holders import mark_pending
     if not file_ids:
         return []
     action = str(getattr(action, "value", action))
+    actor = str(user.get("id") or user.get("_id") or "unknown")   # = inp.actor_id
+    # FG-609: the replay is THIS user's committed movement (org + actor + action + key)
     done = await tenant.warehouse_transactions.find_one(
-        {"org_id": tenant.org_id, "idempotency_key": idempotency_key, "action": action},
+        {"org_id": tenant.org_id, "idempotency_key": idempotency_key, "action": action,
+         "actor_id": actor},
         {"_id": 0, "movement_id": 1})
     if done:
         return []
     return await mark_pending(tenant, tenant.org_id, list(file_ids),
-                              route=route, user_id=str(user.get("id")), ref=idempotency_key,
+                              route=route, user_id=actor, ref=idempotency_key,
                               action=action)
 
 

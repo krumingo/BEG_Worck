@@ -1,0 +1,25 @@
+# MEDIA-SEC-01 FLOW Guard pass 49 (FG-609, FG-610, mark_pending rollback on BaseException) — the NEW tests/test_media_sec_01.py run against 700629f, real Mongo rs0
+E       AssertionError: assert {'events': 2,..._TOO_RECENT']} == {'events': 1,..._TOO_RECENT']}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'events': 2} != {'events': 1}
+E         Use -v to get more diff
+E       AssertionError: assert {'pending': [...: 'cancelled'} == {'pending': [...: 'cancelled'}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'pending': [['ph-b89bd367761f4a76b9000ec4dda3e4fc'], []]} != {'pending': [[], []]}
+E         Use -v to get more diff
+E       AssertionError: assert {'other_user'...same_user': 0} == {'other_user'...same_user': 0}
+E         
+E         Omitting 1 identical items, use -vv to show
+E         Differing items:
+E         {'pending': 0} != {'pending': 1}
+E         {'other_user': 0} != {'other_user': 1}
+E         Use -v to get more diff
+FAILED tests/test_media_sec_01.py::test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref
+FAILED tests/test_media_sec_01.py::test_pass49_a_cancel_between_two_files_rolls_back_the_first_marker
+FAILED tests/test_media_sec_01.py::test_fg609_the_markers_for_replay_check_is_this_users_movement
+3 failed, 52 passed in 13.25s
+# fg588_3: a replayed refused key wrote a 2nd refusal event (FG-610); pass49 cancel: the 1st file's marker leaked (rollback caught Exception only); fg609: another user's same-key movement skipped the marker

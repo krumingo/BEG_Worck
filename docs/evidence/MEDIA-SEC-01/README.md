@@ -54,12 +54,24 @@ Interleavings (FLOW Guard condition 6), each a test: claim → DELETE 409 → mo
 |---|---|
 | FG-595 (medium) | A marker that outlived its COMMITTED movement no longer blocks the Owner retire forever. `release_stale` (Owner/Admin, `Idempotency-Key`) decides by the marker's OWN `ref` only (orchestrator, pass 48): the marker's OWN movement exists — the FULL idempotency scope (FLOW Guard, as in R29): this tenant + the marker's user as the movement's `actor_id` + `idempotency_key == marker.ref` + the marker's action (recorded on the marker since pass 48) → **late-confirmed**; another user's movement under the same key string is NOT own (even when other holders exist, at any age — its movement committed); no such row AND older than `PENDING_HOLDER_MIN_AGE_SECONDS` → **released** (even when other holders exist); no such row AND younger → 409 `PENDING_HOLDER_TOO_RECENT`, nothing changes. Other holders stay real holders: every retire path still sees them. CAS on the marker + `ref_version` +1, Only that marker id is pulled (CAS). AuditEvent `media.file.pending_holder_confirm_late` / `media.file.pending_holder_release`: the actor, `proof.decision` (`confirm` / `release`), the own movement ids (or none) plus `age_seconds`, the own scope and the other holders. The routes' `finally` settles through `file_holders.settle_shielded` (`asyncio.shield`), so a client disconnect / middleware cancel after the commit cannot skip the settle. Tests: a marker left behind by a committed movement → late-confirmed → retire request 201 → Owner approve 200 → `retired`; own movement + another holder → confirmed, DELETE still 409; another key's movement only + age passed → released, DELETE still 409 (`warehouse_movement`); same key, different user → not own (young 409, old released, no confirm event; the release audit names the Admin); a request cancelled twice (during the movement and during the settle) → marker settled. |
 | FG-596 | `warehouse_canonical._markers_for`: the Idempotency-Key replay check runs BEFORE the marker — when a movement with the same `{org_id, idempotency_key, action}` already committed, no marker is placed and the service returns its stored result. Test: a replay while a retire request is pending → 200, no marker (on cb19aeb: 409 `RETIRE_REQUEST_PENDING`). |
-| FG-598 | `POST /api/media/{id}/pending-holders/{marker}/release` requires `Idempotency-Key` (428 without); the granted settle runs in `lifecycle.keyed_transaction` (a replay returns the same answer, also after the marker is gone). A refused release (too recent) → 409 AND an AuditEvent `media.file.pending_holder_release_refused` (actor, marker, age, proof). |
+| FG-598 | `POST /api/media/{id}/pending-holders/{marker}/release` requires `Idempotency-Key` (428 without); the granted settle runs in `lifecycle.keyed_transaction` (a replay returns the same answer, also after the marker is gone). A refused release (too recent) → 409 AND an AuditEvent `media.file.pending_holder_release_refused` (actor, marker, age) — inside the keyed transaction since pass 49 (FG-610). |
 | FG-597 | Stays debt (OCR from-media, below). |
 
 Mixed case (orchestrator, pass 48): settled by the marker's own ref only — other holders keep the file held, so removing the marker is safe.
 
 Red-before: `red_pass48_on_cb19aeb.txt` — the new tests on cb19aeb: 5 failed; `red_pass48_scope_on_35cc099.txt` — on 35cc099 (key-string-only own): 2 failed, incl. another user's same-key movement confirming the marker.
+
+## FLOW Guard pass 49 on 35cc099 — fixed
+
+FG-607, FG-608, FG-595, FG-596 resolved by FLOW Guard; the own-ref rule proven.
+
+| Finding | Fix |
+|---|---|
+| FG-609 | "Own" = org + `actor_id` + action + key in `release_stale` (above), AND in `warehouse_canonical._markers_for`: the replay pre-check is THIS user's committed movement (`actor_id` = the same value the route gives the service and the marker). Test: another user's committed movement under the same key + action → the marker IS placed; the same user's → none. |
+| FG-610 | The refusal's AuditEvent is written INSIDE `keyed_transaction`; the refusal is the key's stored answer. A replayed key → the same 409, ONE `media.file.pending_holder_release_refused` event. |
+| `mark_pending` rollback | Catches `BaseException` (incl. `CancelledError`), rolls back the markers already placed (shielded), re-raises; the marker is recorded before its write, so a cancel between the write and the bookkeeping leaves nothing behind. Test: a cancel between the 1st and the 2nd file → no marker on either. |
+
+Red-before: `red_pass49_on_700629f.txt` — 3 failed (2 refusal events on a replay; the 1st file's marker leaked; another user's movement skipped the marker). `red_pass48_on_cb19aeb.txt` regenerated with the same tests: 7 failed.
 
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
