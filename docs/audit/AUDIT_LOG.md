@@ -9,7 +9,7 @@
 |---|---|---|---|
 | #86 PRJ-01 | `49eb546` | **PASS** (main `1525a1e` merged; SEC-02 / PM-01 regen 0 cells) | 2026-11-09 |
 | #84 INV-CN-01 | `38d3244` | **PASS** (F-84-01, FG-571 / 572 / 599; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells; R47 wiring notes for the 2nd merger) | 2026-11-13 |
-| #83 CP-01 | `5695f97` | **PASS** (FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
+| #83 CP-01 | `eb8138f` | **PASS** (evidence-only over `5695f97`; FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
@@ -6846,3 +6846,13 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 - R47 wiring: `ic.payable_until_credit_note` fits #82's call sites.
   - **Units trap:** `ic.cents` is a 0.01 Decimal; `credit_note_rule.cents` is integer cents.
   - #82's reversal guard should use `ic.payable_net`.
+
+## 2026-11-13 — #83 CP-01 `eb8138fc` — PASS (evidence-only delta over `5695f974`)
+
+- **Diff:** `5695f974..eb8138fc` changes only `docs/` (regenerated evidence, SEC-02 and SUB-ADV-01 included).
+- **Merge check:** clean onto main `3863610`.
+- **On `eb8138fc`, real Mongo:**
+  - SEC-02 31, so the committed `results.json` matches the code;
+  - PM-01 6 / 0 skipped.
+- **Other gates:** the `5695f974` PASS gates stand.
+- **Environment:** the container restarted at 21:53 (Docker recovered, mongods back with the fd setting re-applied). The interrupted runs were discarded and re-run.
