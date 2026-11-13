@@ -15,26 +15,46 @@ Branch `claude/media-sec-01` from main `3863610`. Canon: CLAUDE.md §2 rules 9 a
 
 | # | Decision | Implementation |
 |---|---|---|
-| R83(1) | A project Viewer, even a member, only reads photos | `POST /api/projects/{id}/photos`: company role `Viewer` or project role `Viewer` → **403** before the file is read (no file, no row). List/file stay readable for members. Off / shadow / enforce tested. |
-| R83(2) | A file used in an (approved) record is removed only with the Owner's approval + reason + AuditEvent; the file stays; the record keeps its reference and shows the file was retired; no approval → 409 | No generic Approval runtime exists on main, so a minimal flow (collection `media_retire_requests`): `POST /api/media/{id}/retire-request` (file owner / Admin / Owner, reason + `Idempotency-Key`, one pending per file, AuditEvent `media.file.retire_request`) → `POST /api/media/retire-requests/{rid}/approve` (role **Owner** only, **not the requester** → `SELF_APPROVAL_FORBIDDEN`; retires with `retired_in_use`, `retired_uses`, `retire_approved_by`; AuditEvent `media.file.retire` with requester + approver) or `/reject` (Owner, reason; AuditEvent `media.file.retire_request.reject`). `GET /api/media-retire-requests` for Owner/Admin. The record is not touched; `GET /api/media/{id}` answers a reader **410 `MEDIA_RETIRED`** (`{media_id, retired: true}`, no metadata). `DELETE` of a used file stays **409 `MEDIA_IN_USE`** (with `request_path`). With a single Owner, an Owner's own request can only be rejected — a second Owner is needed to approve it. |
+| R83(1) | A project Viewer, even a member, only reads photos | The one upload guard (`app/deps/upload_guard.py`, FG-575) at every upload entry point: company role `Viewer` or project role `Viewer` → **403** before the file is read (no file, no row). List/file stay readable for members. Off / shadow / enforce tested. |
+| R83(2) | A file used in an (approved) record is removed only with the Owner's approval + reason + AuditEvent; the file stays; the record keeps its reference and shows the file was retired; no approval → 409 | No generic Approval runtime exists on main, so a minimal flow (collection `media_retire_requests`): `POST /api/media/{id}/retire-request` (`media_policy.RETIRE_REQUEST_ROLES` — interim: **Admin** only, reason + `Idempotency-Key`, one pending per file, AuditEvent `media.file.retire_request`) → `POST /api/media/retire-requests/{rid}/approve` (`RETIRE_APPROVER_ROLES` — **Owner**, **not the requester** → `SELF_APPROVAL_FORBIDDEN`; retires with `retired_in_use`, `retired_uses`, `retire_approved_by`; AuditEvent `media.file.retire` with requester + approver) or `/reject` (Owner, reason; AuditEvent `media.file.retire_request.reject`). `GET /api/media-retire-requests` for Owner/Admin. The record is not touched; `GET /api/media/{id}` answers a reader **410 `MEDIA_RETIRED`** (`{media_id, retired: true}`, no metadata). `DELETE` of a used file stays **409 `MEDIA_IN_USE`** (with `request_path`). An Owner's own request is an open question to Krum (interim: Owners do not file). |
 | R83(3) | Only a fresh profile upload is an avatar; no linking as avatar; avatar changes audited; old avatars retired by owner or Admin | `POST /media/upload` with `context_type="profile"` sets `media_files.avatar = true`; `/api/media/avatar/...` serves only such rows. `POST /media/link` with `profile` → **409 `AVATAR_LINK_REFUSED`**. `PUT /api/users/{id}` and `PUT /api/employees/{id}/basic` accept `avatar_url` only as `/api/media/avatar/<name>` of a non-retired avatar row of THAT user in the tenant (or empty to clear), else **400 `AVATAR_NOT_ALLOWED`** before any write; every change writes AuditEvent **`user.avatar.change`** (`app/services/media_avatar.py`). An avatar's own profile link is not a "use"; being someone's current avatar is — so the current one → 409, an old one is retired (direct `DELETE`) by the file owner, the profile's user or Admin/Owner; others → 403. |
 | R83(4) | Backfill for legacy avatars: dry run counts only; apply idempotent with AuditEvent; never automatic; deploy needs Krum's "да" | `backend/scripts/media_sec_01_avatar_backfill.py` — see below. **Not run anywhere but the scratch test database.** |
+
+## FLOW Guard pass 46 on d634bf4 — fixed
+
+| Finding | Fix |
+|---|---|
+| FG-576 (high) | **One file-holders registry** `backend/app/services/file_holders.py` (`HOLDERS` + `register_finder`). Added the holders the 409 missed: `offers.approval.evidence_file_id`, `warehouse_transactions.file_ids`, `finance_payments` / `subcontractor_payments.cash_receipt_file_id` (the real #83 field), `audit_events.related_file_ids` (read only through `app.audit.store.event_with_related_file`). One test per holder. |
+| FG-577 (medium, §8) | The retire request stores the holders, `uses_version` (hash) and the file's `ref_version`; the approval re-reads and refuses **409 `RETIRE_REQUEST_STALE`** on any difference. While a request is pending, `/media/link` and every reference writer refuse **409 `RETIRE_REQUEST_PENDING`**. |
+| FG-575 (medium) | **One upload guard** `backend/app/deps/upload_guard.require_uploader` at every upload entry point: `/media/upload`, `/technician/photo-invoice`, `/ocr-invoice/upload`, `/supplier-invoices/{id}/upload-file`, `/projects/{id}/photos`. Company or project Viewer → 403 before the file is read (nothing written). `/smr-analyses/import-excel` already allowed only Admin/Owner/SiteManager. |
+| FG-579 (write skew) | Every reference writer calls `file_holders.claim` — a CAS `$inc ref_version` on the file row (refuses retired / pending) — **in the same transaction as its reference write** (`claimed_write`): missing-SMR attachment + client signature, extra-work draft, technician report photos + missing-SMR photos, scan doc, OCR pending expense, offer acceptance evidence (inside its transaction), avatar (`users.avatar_url`), `/media/link`. The retire paths CAS on `ref_version`. Tested with a forced race: the retire sees the conflict and refuses 409. |
+| FG-578 | Backfill: only files UPLOADED as profile (no `linked_at`); `--approved-by` = an active Owner's **user id** (the run is that Owner's tenant only); every `update_one` checked (`conflict` → transaction rolled back); `--revert` mode; dry run default. |
+| minor | `uses` (record ids) only for Owner/Admin (`file_holders.redact`; others get `use_kinds` + `uses_count`); `hr.py` / `auth.py` avatar write + `user.avatar.change` in ONE transaction; `/media/link` writes AuditEvent `media.file.link` (FG-544). |
+
+**Interim decisions, one constant each** (`backend/app/services/media_policy.py`), until Krum answers: avatars visible to everyone in the firm (`AVATAR_VISIBILITY`); an **Admin** files the retire request and an **Owner** approves (`RETIRE_REQUEST_ROLES` / `RETIRE_APPROVER_ROLES`); no restore (`RESTORE_ENABLED = False`).
+
+**The Owner-approval flow is INTERIM** — debt to **W0-07** (canonical Approval runtime); it must not become a second Approval source of truth. Each request carries `interim_until: "W0-07"`.
+
+Red before / green after: the new `tests/test_media_sec_01.py` on `d634bf4` → **19 failed** (`red_pass46_on_d634bf4.txt`); on this branch → **42 passed**.
 
 ## R83(4) — legacy avatar backfill (runbook, needs Krum's "да")
 
 Until it is applied, a legacy avatar (uploaded before MEDIA-SEC-01, no `avatar` flag) shows initials instead of the photo.
 
 ```bash
-# 1. dry run — counts and plan, writes nothing
-MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_backfill.py
+# 1. dry run — counts and plan, writes nothing (the tenant = the approving Owner's)
+MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_backfill.py \
+    --approved-by <Owner user id>
 # 2. after Krum's "да" for THAT plan
 MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_backfill.py \
-    --apply --approved-by "Крум" --plan-sha <plan_sha from step 1>
+    --approved-by <Owner user id> --plan-sha <plan_sha from step 1> --apply
+# undo: the same two steps with --revert
 ```
 
-* `flag` — `media_files` row of the same tenant with the stored name, not retired, `context_type="profile"`, `context_id` = the user → `avatar: true` (+ `avatar_url` rewritten from `/api/media/file/` to `/api/media/avatar/` form), one transaction per user with AuditEvent `media.avatar.backfill` (actor `system`, approver in the diff).
-* `already` — nothing to do. `skip:*` (`url_shape`, `no_media_in_tenant`, `retired`, `not_a_profile_photo`, `another_users_profile`) — reported only; a person re-uploads.
-* `--apply` without `--approved-by`, or with a plan SHA that is not the current plan → refused, nothing written. A second apply writes 0.
+* `flag` — `media_files` row of the same tenant with the stored name, not retired, UPLOADED as the user's profile photo (`context_type="profile"`, `context_id` = the user, no `linked_at`) → `avatar: true` (+ `avatar_url` rewritten from `/api/media/file/` to `/api/media/avatar/` form), one transaction per user with AuditEvent `media.avatar.backfill` (actor `system`, approver in the diff).
+* `already` — nothing to do. `skip:*` (`url_shape`, `no_media_in_tenant`, `retired`, `not_a_profile_photo`, `another_users_profile`, `linked_not_uploaded_as_profile`) — reported only; a person re-uploads.
+* `--approved-by` that is not an active Owner's user id, or a plan SHA that is not the current plan → refused, nothing written. A write that matches nothing aborts that user's transaction (`conflict`). A second apply writes 0.
+* `--revert` — removes exactly the flags this script set and restores the user's previous `avatar_url` while it is still the one the backfill wrote; AuditEvent `media.avatar.backfill_revert`.
 
 ## Evidence
 
@@ -45,8 +65,12 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 
 * **FG-543, FG-545, FG-546** — out of scope by instruction (FG-545 = the FLOW-029 archive model, Wave 2).
 * `MissingSMRPage.js:712` still shows attachments with a plain `<img src=".../api/media/file/...">`. That route already required a login before this change, so these images most likely don't load today. The same `AuthImage` fix applies.
-* `EmployeesPage.js` uploads a new employee's avatar with `context_type="avatar"`, which is not in `MEDIA_CONTEXT_TYPES` → 400, swallowed silently (pre-existing).
-* Retired media has no "restore" path yet (same as retired project photos).
+* `EmployeesPage.js` uploads a new employee's avatar with `context_type="avatar"`, which is not in `MEDIA_CONTEXT_TYPES` → 400, swallowed silently (**pre-existing debt**, recorded per pass 46).
+* Retired media has no "restore" path yet (same as retired project photos) — open question to Krum (`media_policy.RESTORE_ENABLED`).
+* **W0-07**: the interim Owner-approval flow (`media_retire_requests`) moves into the canonical Approval runtime.
+* **FG-579 residual — warehouse canonical**: the movement routes claim the attached `file_ids` BEFORE `service.execute`, which runs its own transaction that a caller cannot join (the warehouse service is locked; joining needs a hook in it). A retire racing a movement inside that gap is not excluded; the holder check still sees the movement afterwards. Fix with a pre-commit hook in the warehouse service (separate task).
+* **FG-579 residual — OCR from-media**: `create_ocr_intake` (service) inserts without a session; the claim runs just before it.
+* **#83 merge (FG-555)**: CP-01's `bank_account_guard.receipt_references` should read the registry (`file_holders.find_holders(..., kinds=RECEIPT_KINDS)`) instead of its own `_RECEIPT_HOLDERS` loop, and the CP-01 payment writers that set `cash_receipt_file_id` should call `file_holders.claimed_write`. FLOW Guard's 5-point recipe applies.
 * The frontend has no screen yet for the retire request / Owner approval (API only); `EmployeesPage` new-employee avatar keeps failing silently (now also refused by R83(3), as it passes a `/api/media/file/` URL).
 * `GET /api/media/{id}` order changed: the media ACL runs first, then the retired rule (403 for a user without access, 410 for a reader with access).
 
@@ -54,6 +78,7 @@ MONGO_URL=... DB_NAME=<tenant db> python backend/scripts/media_sec_01_avatar_bac
 
 * **FG-555** — the merge with #83 is done by whichever of the two PRs merges second (orchestrator decision). This PR does not merge #83.
 
-## Waiting for the orchestrator
+## Resolved / waiting
 
-* **FG-557** — not touched until the orchestrator answers.
+* **FG-557** — RESOLVED (FLOW Guard pass 46).
+* Waiting for Krum: who sees avatars; an Owner's own retire request; restoring a retired file — each one constant in `media_policy.py`.
