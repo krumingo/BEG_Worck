@@ -12,8 +12,8 @@
 | #83 CP-01 | `eb8138f` | **PASS** (evidence-only over `5695f97`; FG-562; CP83-M6 + M7 closed; warehouse 44/1121 on `ec346f8`; W0 10 ⊂ main) | 2026-11-13 |
 | #90 SEC-03 | `66dd1ae` | **PASS** (delta over `aaef24f`: FG-563 / 603 / 604 / 535 / 515; live TTL check; warehouse 44/1121; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #75 LAB-02 | `a665932` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `ed6e88d`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) — needs re-merge of #73 `3d39a9d` | 2026-11-13 |
+| #73 LAB-01 | `a1859bf` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
+| #75 LAB-02 | `c7d8464` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #91 MEDIA-SEC-01 | `582eb9d` | **PASS** (code `fdd3ec7`; MEDIA91-M1 closed; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-13 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
@@ -6885,3 +6885,31 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 
 - **FLOW Guard:** pass 50 found nothing medium or above (orchestrator).
 - **Open for whichever of #83 / #91 merges second:** FG-555 / FG-589.
+
+## 2026-11-13 — #73 `a1859bf4` / #75 `c7d8464b` — PASS (delta; pending Krum FG-565 / FG-569)
+
+### #73 `a1859bf4`
+
+- `a1859bf4` = `3d39a9df` (FG-591 UI: no 0 € for absent money; FG-592 SEC-02 child seed) + regenerated evidence (FG-618).
+- Clean onto main; role-union 0.
+- Real Mongo:
+  - SEC-02 31;
+  - **independent SEC-02 regen = committed: 0 differing cells**. The only 7777 rows are Owner / Admin / Accountant, and 0 non-finance `/aggregate` rows carry money keys.
+  - PM-01 6 / 0 skipped.
+- Earlier on `3d39a9df`: PM-01 6, A2C / A1 0/246, 0/496; `ProjectDetailPage.aggregate.test.js` 2 / 2.
+- The `ed6e88d4` gates stand.
+
+### #75 `c7d8464b`
+
+- Merge check:
+  - `d8f59c31` = merge-tree(`a665932b`, #73 `a1859bf4`) except `docs/evidence`;
+  - the code delta over `a665932b` is #73's (SEC-02 test seed + frontend);
+  - clean onto main; role-union 0.
+- Real Mongo:
+  - SEC-02 31; **regen 0 cells** (same role picture as #73);
+  - PM-01 6 / 0 skipped;
+  - LAB-01 + 02: 314 + the 1 env-only test (`MONGO_URL`, passes with it as before);
+  - A2C / A1 0/247, 0/498.
+- jest `ProjectDetailPage.aggregate` 2 / 2.
+- The `a665932b` gates stand (warehouse 44 / 1121 etc.).
+- **Environment:** the container restarted again at about 23:00; recovered. No verdict uses an interrupted run.
