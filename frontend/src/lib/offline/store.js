@@ -30,7 +30,11 @@ export function idbStore(indexedDB = typeof window !== "undefined" ? window.inde
           if (!db.objectStoreNames.contains(s)) db.createObjectStore(s);
         });
       };
-      dbp = req(r);
+      dbp = req(r).then((db) => {
+        // another tab deletes the database (a blocked device): let go at once
+        db.onversionchange = () => { db.close(); dbp = null; };
+        return db;
+      });
     }
     return dbp;
   };
@@ -54,13 +58,26 @@ export function idbStore(indexedDB = typeof window !== "undefined" ? window.inde
       const values = await req(s.getAll());
       return keys.map((k, i) => [k, values[i]]);
     }),
-    // R61-6: a blocked device wipes everything local.
+    // R61-6: a blocked device wipes everything local. The stores are emptied first, so
+    // nothing is left even while another open tab still holds the database; the delete
+    // itself then completes as soon as that tab lets go (onversionchange above).
     destroy: async () => {
-      if (dbp) {
-        (await dbp).close();
-        dbp = null;
+      try {
+        const db = await open();
+        const t = db.transaction(STORES, "readwrite");
+        STORES.forEach((s) => t.objectStore(s).clear());
+        await new Promise((resolve) => { t.oncomplete = resolve; t.onerror = resolve; t.onabort = resolve; });
+        db.close();
+      } catch { /* nothing to clear */ }
+      dbp = null;
+      if (indexedDB) {
+        await new Promise((resolve) => {
+          const r = indexedDB.deleteDatabase(DB_NAME);
+          r.onsuccess = resolve;
+          r.onerror = resolve;
+          r.onblocked = resolve; // finishes later; the data is already gone
+        });
       }
-      if (indexedDB) await req(indexedDB.deleteDatabase(DB_NAME)).catch(() => {});
     },
   };
 }

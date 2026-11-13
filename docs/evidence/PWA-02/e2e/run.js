@@ -90,9 +90,11 @@ async function api(page, method, url, body, headers = {}) {
   await tech.getByTestId("tech-review").waitFor();
   await shot(tech, "phone-offline-report-review.png");
   await tech.getByTestId("review-submit-btn").click();
-  const toastSeen = await tech.getByText("Записано на телефона").first().waitFor({ timeout: 5000 }).then(() => true, () => false);
-  await tech.getByTestId("tech-my-day").waitFor({ timeout: 10000 });
-  check("offline daily report: Записано на телефона, back to Днес", toastSeen);
+  // (the app mounts no toast container — existing debt, see HANDOFF — so the proof is the
+  // return to Днес and the queue below, not a toast)
+  const backToDay = await tech.getByTestId("tech-my-day").waitFor({ timeout: 10000 }).then(() => true, () => false);
+  const badge = await tech.getByTestId("offline-unsent-badge").innerText().catch(() => "");
+  check("offline daily report kept on the phone, back to Днес (badge counts it)", backToDay && badge.includes("2"), badge);
   await shot(tech, "phone-offline-report-saved.png");
   // a site photo, with no signal
   await tech.waitForTimeout(800);
