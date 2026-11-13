@@ -905,7 +905,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 155.9,
+ "seconds": 159.4,
  "rows": [
   {
    "mode": "off",
@@ -17460,8 +17460,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "off",
@@ -17474,8 +17499,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "off",
@@ -17516,8 +17566,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "off",
@@ -18550,7 +18625,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -18588,7 +18664,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -18673,7 +18750,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -42772,8 +42850,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "off",
@@ -42786,8 +42889,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "off",
@@ -42828,8 +42956,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "off",
@@ -43862,7 +44015,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -43900,7 +44054,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -43985,7 +44140,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -71546,8 +71702,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "shadow",
@@ -71560,8 +71741,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "shadow",
@@ -71602,8 +71808,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "shadow",
@@ -72636,7 +72867,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -72674,7 +72906,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -72759,7 +72992,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -96858,8 +97092,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "shadow",
@@ -96872,8 +97131,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "shadow",
@@ -96914,8 +97198,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "shadow",
@@ -97948,7 +98257,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -97986,7 +98296,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -98071,7 +98382,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -125672,8 +125984,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "enforce",
@@ -125686,8 +126023,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "enforce",
@@ -125728,8 +126090,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "enforce",
@@ -126762,7 +127149,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -126800,7 +127188,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -126885,7 +127274,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -151200,8 +151590,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "enforce",
@@ -151214,8 +151629,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "enforce",
@@ -151256,8 +151696,33 @@
    "status": 200,
    "written": [],
    "foreign_ids": false,
-   "money_keys": [],
-   "leaks_7777": false
+   "money_keys": [
+    "ex_vat",
+    "expenses",
+    "inc_vat",
+    "labor_cost",
+    "paid",
+    "paid_invoices",
+    "paid_invoices_label",
+    "paid_labor",
+    "profit",
+    "revenue",
+    "revenue_basis",
+    "unpaid"
+   ],
+   "leaks_7777": true,
+   "leak_fields": [
+    "children[0].invoices.invoiced",
+    "children[0].invoices.unpaid",
+    "children[0].invoices.issued_net",
+    "invoices.children.invoiced",
+    "invoices.children.unpaid",
+    "invoices.children.issued_net",
+    "invoices.total.issued_net",
+    "invoices.total.unpaid",
+    "invoices.total.invoiced",
+    "pnl.revenue"
+   ]
   },
   {
    "mode": "enforce",
@@ -152290,7 +152755,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -152328,7 +152794,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -152413,7 +152880,8 @@
    "hidden_budget_keys": [],
    "sites_with_money": [
     "P1",
-    "P2"
+    "P2",
+    "other"
    ],
    "leaks_7777": false,
    "actual_keys": [
@@ -163780,7 +164248,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -163789,13 +164257,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "scope_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -163811,7 +164279,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 26,
-     "integrity_hash": "93bdcdf76483b6173ccec2f2db5ff9952f5dc92cd3c0355050e0d7cac9f1543c"
+     "integrity_hash": "95a83bb2ff21b53568e43bd7ac8624cf0055faa612c30ba2c244f1e0a880a23b"
     }
    ]
   },
@@ -163822,7 +164290,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -163831,7 +164299,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -163856,7 +164324,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 27,
-     "integrity_hash": "1a61cfa32075fe282df7ca57dde8f47f37a45e5f2f30d8b760bdb5b4d51823de"
+     "integrity_hash": "7111368e22c25fa5a681468c0af566b316fbafb2d4a6de779100fbe7b9e4c296"
     }
    ]
   },
@@ -163867,7 +164335,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -163879,7 +164347,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -163888,7 +164356,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -163914,7 +164382,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 28,
-     "integrity_hash": "46823c2d9353195d8fd5098ba49014d75d576f244a4d1455a17d0710ac1cf458"
+     "integrity_hash": "365bc4ee56e399166ec80fbdda1bc6474d9a3de86a2c65e685f484a88ad8706f"
     }
    ]
   },
@@ -163925,7 +164393,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -163937,7 +164405,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -163949,7 +164417,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -163958,13 +164426,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "scope_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -163982,7 +164450,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 29,
-     "integrity_hash": "e3b8b239d809269be413e8a786b202ca7bdbb5d4987740bc5c4b9c0800cbd459"
+     "integrity_hash": "a276252fe0304fb86f57c61d5eb95a73541004ff5162732fbe9128d90c8bd3e6"
     }
    ]
   },
@@ -163993,7 +164461,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -164002,7 +164470,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164028,7 +164496,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 30,
-     "integrity_hash": "06870baf91161d72a40ea60ddd8093c2eb037c84b115c4b17e5603baa79da0a8"
+     "integrity_hash": "d97e5b15624442f8c49c2098cc9ffae2795d6de2868219f0e5a9bc21f41acd80"
     }
    ]
   },
@@ -164039,7 +164507,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -164051,7 +164519,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -164060,7 +164528,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164086,7 +164554,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 31,
-     "integrity_hash": "f8593f898730e9926ca41579649e4b5f21969a8e265f6856d665a96e4248221b"
+     "integrity_hash": "c447574004f3f6c49bf316e65eda837e0cc8ba11efc9f1254ca86dcb89c86f95"
     }
    ]
   },
@@ -164097,7 +164565,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -164109,7 +164577,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -164121,7 +164589,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -164130,13 +164598,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "scope_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -164154,7 +164622,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 32,
-     "integrity_hash": "0ea8db652209605cbda9a00fd13c8783090bffb9a9fdd130377fc08bc138f997"
+     "integrity_hash": "9a02633d1e9ba7d661a2d11eee89aadcd480f15974ed4ffefc64567fb127ad35"
     }
    ]
   },
@@ -164165,7 +164633,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -164174,7 +164642,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164200,7 +164668,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 33,
-     "integrity_hash": "fc10446a70d09e01ffac9ce21b313c977c6354afd2e828a75a00c5d3d5e88c1d"
+     "integrity_hash": "4043918e38429201be8466b7dc8dbf62a4f7e434f944d35ef18e5a2bc663d6c3"
     }
    ]
   },
@@ -164211,7 +164679,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -164223,7 +164691,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -164232,7 +164700,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+     "tenant_id": "45c05e94-9306-4e13-8cfc-58eac547fc34",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164258,7 +164726,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 35,
-     "integrity_hash": "5347fb1b87b229c434a8b7363366507b9ae930d000aae6f0f0e884eda83a34b6"
+     "integrity_hash": "245e7e80e751f30b2638502753360ee7e95abde80dc51195361275bccf60f9df"
     }
    ]
   },
@@ -164269,7 +164737,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -164281,7 +164749,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
+   "expected_tenant": "45c05e94-9306-4e13-8cfc-58eac547fc34",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []

@@ -983,9 +983,13 @@ function AggRow({ label, own, children, total, suffix = "", color = "" }) {
 }
 
 
-function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
+export function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
   const agg = aggregate;
   const childrenData = agg?.children || [];
+  // FG-591 (FG-566 / R20): the aggregate carries money only for the finance roles — for a member
+  // (SiteManager / Technician) the money blocks are absent: hide those rows, cards and bars,
+  // never show an absent value as "0 €"
+  const hasMoney = !!(agg && agg.invoices && agg.pnl);
   const fmt = (n) => n == null ? "—" : typeof n === "number" ? n.toLocaleString("bg-BG", { maximumFractionDigits: 0 }) : n;
 
   return (
@@ -1008,8 +1012,8 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               {cd && (
                 <div className="grid grid-cols-3 gap-1 text-[10px]">
                   <div><span className="text-gray-500">Часове: </span><span className="text-white font-mono">{cd.work?.hours || cd.team?.count || 0}</span></div>
-                  <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.issued_net || 0)}</span></div>{/* FG-530: issued, net */}
-                  <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.work?.labor_cost || 0)}</span></div>{/* FG-505 (R62): approved labor */}
+                  {cd.invoices && <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices.issued_net || 0)}</span></div>}{/* FG-530: issued, net */}
+                  {cd.work?.labor_cost !== undefined && <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.work.labor_cost || 0)}</span></div>}{/* FG-505 (R62); FG-591 */}
                 </div>
               )}
             </button>
@@ -1034,26 +1038,30 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
             <tbody>
               <AggRowMulti label="Хора" childrenData={childrenData} field={c => c?.team?.count} total={agg.team?.total?.count} />
               <AggRowMulti label="Часове днес" childrenData={childrenData} field={c => c?.team?.hours} total={agg.team?.total?.hours} suffix="ч" />
+              {hasMoney && <>
               <AggRowMulti label="Фактури" childrenData={childrenData} field={c => c?.invoices?.count} total={agg.invoices?.total?.count} />
               <AggRowMulti label="Фактурирано" childrenData={childrenData} field={c => c?.invoices?.invoiced} total={agg.invoices?.total?.invoiced} suffix=" €" color="text-primary" />
               <AggRowMulti label="Платено" childrenData={childrenData} field={c => c?.invoices?.paid} total={agg.invoices?.total?.paid} suffix=" €" color="text-emerald-400" />
               <AggRowMulti label="Неплатено" childrenData={childrenData} field={c => c?.invoices?.unpaid} total={agg.invoices?.total?.unpaid} suffix=" €" color="text-amber-400" />
-              {(agg.invoices?.total?.overdue || 0) > 0 && (
+              </>}
+              {hasMoney && (agg.invoices?.total?.overdue || 0) > 0 && (
                 <AggRowMulti label="Просрочено" childrenData={childrenData} field={c => c?.invoices?.overdue} total={agg.invoices?.total?.overdue} suffix=" €" color="text-red-400" />
               )}
               <AggRowMulti label="Оферти" childrenData={childrenData} field={c => c?.offers?.count} total={agg.offers?.total?.count} />
               <AggRowMulti label="Отчети" childrenData={childrenData} field={c => c?.reports?.count} total={agg.reports?.total?.count} />
               <AggRowMulti label="Общо часове" childrenData={childrenData} field={c => c?.reports?.hours} total={agg.reports?.total?.hours} suffix="ч" />
+              {hasMoney && <>
               <AggRowMulti label="Труд (одобрен)" childrenData={childrenData} field={c => c?.work?.labor_cost} total={agg.work?.total?.labor_cost} suffix=" €" color="text-blue-400" />
               <AggRowMulti label="Материали" childrenData={childrenData} field={c => c?.materials?.ex_vat} total={agg.materials?.total?.ex_vat} suffix=" €" color="text-cyan-400" />
               <AggRowMulti label="Платен труд" childrenData={childrenData} field={c => c?.paid_labor?.gross_labor} total={agg.paid_labor?.total?.gross_labor} suffix=" €" color="text-orange-400" />
+              </>}
             </tbody>
           </table>
         </div>
       )}
 
       {/* Revenue vs Expenses comparison chart */}
-      {childrenData.length > 1 && (
+      {hasMoney && childrenData.length > 1 && (
         <div className="rounded-lg border border-gray-700/50 p-3" data-testid="sub-chart">
           <p className="text-[10px] text-gray-400 mb-2 font-semibold">Приходи / Разходи по под-обекти</p>
           <div className="h-48">
@@ -1080,7 +1088,9 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
 }
 
 function AggRowMulti({ label, childrenData, field, total, suffix = "", color = "" }) {
-  const fmt = (n) => n == null || n === 0 ? "0" : typeof n === "number" ? n.toLocaleString("bg-BG", { maximumFractionDigits: 1 }) : n;
+  // FG-591: an absent value is "—", never "0" (absent money is not zero money)
+  const fmt = (n) => n == null ? "—" : n === 0 ? "0" : typeof n === "number" ? n.toLocaleString("bg-BG", { maximumFractionDigits: 1 }) : n;
+  if (total == null && childrenData.every(c => field(c) == null)) return null;
 
   return (
     <tr className="border-b border-gray-800/50">

@@ -145,6 +145,16 @@ async def seed_sec02_records(op_db, fx: Dict[str, Any]) -> None:
     for tkey, t in fx.items():
         org, p1 = t["tenant_id"], t["project_id"]
         tech = t["users"]["technician"]["id"]
+        # FG-592: a sub-project of P1 with money (an issued invoice of 7777), so the parent
+        # aggregate (FG-566) has a child whose money must be stripped as well
+        await op_db.projects.insert_one({
+            "id": sid(tkey, "p1child"), "org_id": org, "code": "SEC02-%s-1A" % tkey,
+            "name": "P1 child", "status": "Active", "parent_project_id": p1, "created_at": now})
+        await op_db.invoices.insert_one({
+            "id": sid(tkey, "inv_child"), "org_id": org, "project_id": sid(tkey, "p1child"),
+            "direction": "Issued", "kind": "Invoice", "status": "Sent", "invoice_no": "SEC02-C-%s" % tkey,
+            "subtotal": 7777.0, "total": 7777.0, "vat_amount": 0, "paid_amount": 0,
+            "due_date": "2026-12-01", "created_at": now})
         await op_db.activity_budgets.insert_one({
             "id": sid(tkey, "ab1"), "org_id": org, "project_id": p1, "type": "Мазилка",
             "labor_budget": 5000, "material_budget": 0, "coefficient": 1,
