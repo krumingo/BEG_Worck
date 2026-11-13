@@ -1,41 +1,39 @@
-# INV-CN-01 gates (FG-572 + FG-571; Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3863610 merged), 2026-11-13T19:30:09Z, branch claude/inv-cn-01-credit-notes
+# INV-CN-01 gates (FG-599 Р49(4) on baafdf3a; FG-572 + FG-571; Codex F-84-01 + INV84-N2 + Р74 FG-453 + FG-465 one DQ schema; INV84-R64-1 + #81 interactions; Р64 + FG-416 + FG-282; FG-278 + Р63; FG pass 28; FG pass 27; Q007 + Р58/FG-265 + FG-264 + Addenda A-D, main 3863610 merged), 2026-11-13T20:47:27Z, branch claude/inv-cn-01-credit-notes
 # real Mongo: disposable local mongo:7.0 replica set rs0 (docker, tmpfs), a FRESH container before each block (the local container caps open files at 20000), from backend/ with PYTHONPATH=.
 ## A2C guard
 W0-03E-A2C tenant boundary guard: 246 module(s) checked, 0 violation(s)
 ## A1 guard
 W0-03E-A1 tenant access guard: 496 unit(s) checked, 0 violation(s)
 ## INV-CN-01 (real mongo, 3 modes)
-195 passed, 1 warning in 144.23s (0:02:24)
-## PAY-01 family (real mongo + mongomock) — in this run 2 failed: test_04_cancel_allocation_keeps_rows_and_balances[mongomock-enforce] / [real-enforce]
-## (TENANT_DATA_PATH_NOT_MIGRATED: the PAY-01 harness did not patch app.permissions.money_write.db, which the FG-572 cancel route now reads in enforce — a harness gap, fixed in the harness)
-## re-run after the harness fix, same tree:
-630 passed, 1 warning in 138.04s (0:02:18)
+198 passed, 1 warning in 151.52s (0:02:31)
+## PAY-01 family (real mongo + mongomock)
+630 passed, 1 warning in 141.06s (0:02:21)
 ## R0 (real mongo)
-814 passed, 10 warnings in 150.08s (0:02:30)
+814 passed, 10 warnings in 151.80s (0:02:31)
 ## W0 (real mongo)
-16 failed, 1176 passed, 10 warnings in 142.72s (0:02:22)
+16 failed, 1176 passed, 10 warnings in 147.09s (0:02:27)
 failures by file:
      15 FAILED tests/test_w0_03e_legacy_routes.py
       1 FAILED tests/test_w0_03e_real_mongo.py
 ## W0 DB-free
-15 failed, 1094 passed, 83 skipped, 10 warnings in 85.21s (0:01:25)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 91.00s (0:01:30)
      15 FAILED tests/test_w0_03e_legacy_routes.py
 ## ACT-01 (#77, no regression, real mongo)
-113 passed in 47.76s
+113 passed in 50.98s
 ## OH-01 (#74, no regression, real mongo)
-231 passed, 1 warning in 66.62s (0:01:06)
+231 passed, 1 warning in 67.89s (0:01:07)
 ## OFF-01 (#79) + SUB-ADV-01 (#76), no regression, real mongo
-246 passed, 10 warnings in 153.46s (0:02:33)
+246 passed, 10 warnings in 157.42s (0:02:37)
 ## WH-FIX-01 (#81), no regression, real mongo
-308 passed, 6 warnings in 75.89s (0:01:15)
+308 passed, 6 warnings in 76.85s (0:01:16)
 ## PRJ-01 (#86), no regression, real mongo
-9 passed in 12.75s
+9 passed in 13.65s
 ## SEC-01 (real mongo, -rs)
-30 passed, 10 warnings in 99.66s (0:01:39)
+30 passed, 10 warnings in 107.00s (0:01:46)
 ## SEC-02 (real mongo, -rs)
-31 passed, 10 warnings in 192.36s (0:03:12)
+31 passed, 10 warnings in 210.73s (0:03:30)
 ## PM-01 (real mongo, -rs)
-6 passed, 10 warnings in 184.70s (0:03:04)
+6 passed, 10 warnings in 196.78s (0:03:16)
 ## frontend yarn test
 Test Suites: 28 passed, 28 total
 Tests:       257 passed, 257 total

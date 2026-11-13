@@ -278,7 +278,7 @@ Red proofs against 5242cba: `r64_fg416_fg282_red_on_5242cba.txt`.
 | D20 Р63 "Completed" | **Closed by Р64.** Every status other than Active / Paused needs the Owner, even for the same place. |
 | SEC-01 (#69, now in main) | **Open.** `finance.py` routes, old and new, still use `finance_permission` (Owner/Admin/Accountant); #69 did not migrate `finance.py`. Moving the whole module to `require_money_write` plus catalog actions is one follow-up, so the module keeps a single rule. |
 
-## Gates (`gates.txt`, FG-572 + FG-571 head 1a3ef757 + the PAY-01 harness fix; main 3863610 merged; real Mongo = disposable local mongo:7.0 rs0, a fresh container per block)
+## Gates (`gates.txt`, FG-599 head baafdf3a; FG-572 + FG-571 + the PAY-01 harness fix; main 3863610 merged; real Mongo = disposable local mongo:7.0 rs0, a fresh container per block)
 
 | Gate | Result |
 |---|---|
