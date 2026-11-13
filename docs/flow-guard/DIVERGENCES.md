@@ -440,16 +440,16 @@
 | FG-538 | low | #90 SEC-03 `863876b` | `PUT /api/ai/settings` включва флага преди събитието — при срив връща 500, но AI остава включен без събитие; без Idempotency-Key, причина и Approval | PROVEN | open (+ Krum) |
 | FG-539 | low | #90 SEC-03 `863876b` × main `3863610` | `git merge-tree` с текущия main — конфликт в `frontend/public/index.html` (клонът пази стария inline PostHog с вграден ключ, махнат от #88) и в PM-01 `run_meta.json`; нито една страна изцяло не е вярна | PROVEN | open |
 | FG-540 | high | main `3863610` | `/api/media/avatar/{filename}` сервира всеки качен файл (снимки, бележки, фактури) без вход и без tenant | PROVEN | resolved (MEDIA-SEC-01 `35df04e`, PROVEN: без вход → 401; файл само през ред `media_files` на tenant-а със `context_type="profile"`, пътят от реда (`media.py:243-279`); снимка от обект/бон/непознато име → 404; друг tenant → 404; 15 трика с пътя → 404; собствен аватар → 200) |
-| FG-541 | medium | main `3863610` | `project_photos`: качване, списък и файл от всяка роля за всеки обект, без членство; само legacy одит | PROVEN | partial (MEDIA-SEC-01 `35df04e`, PROVEN: не-член Viewer/Technician/SiteManager/Accountant → 403 за качване/списък/файл, друг tenant → 404 (`projects.py:1199, 1230, 1289, 1320`)); остават: член Viewer качва (201); качването — само legacy `log_audit` (`:1264`), без Idempotency-Key; Крум реши — Р83 (`b0278cb7`), проверка в проход 46 |
-| FG-542 | high | main `3863610` | използвана медия (одобрен отчет, ново СМР) се трие физически през `DELETE /api/media/{id}`, без AuditEvent | PROVEN | partial (MEDIA-SEC-01 `35df04e`, PROVEN: без физическо изтриване; свързан/използван файл → 409 `MEDIA_IN_USE` (сценарият от проход 44 — 409); неизползван → оттегляне с причина, ключ и `media.file.retire`, файлът остава (`media.py:506-592`)); остатък → FG-555, FG-556; единствен друг път — `scan_docs.py:220,228` (FG-145); Крум реши — Р83 (`b0278cb7`), проверка в проход 46 |
+| FG-541 | medium | main `3863610` | `project_photos`: качване, списък и файл от всяка роля за всеки обект, без членство; само legacy одит | PROVEN | partial (#91 `d634bf4` (код `f3cf9f1`), PROVEN: член Viewer → 403 на `POST /projects/{id}/photos` (`projects.py:1234-1239`)); остават: само legacy `log_audit` (`:1270`), без Idempotency-Key (201 без ключ); други пътища за качване от Viewer → FG-575 |
+| FG-542 | high | main `3863610` | използвана медия (одобрен отчет, ново СМР) се трие физически през `DELETE /api/media/{id}`, без AuditEvent | PROVEN | partial (#91 `d634bf4` (код `f3cf9f1`), PROVEN: без физическо изтриване; използван файл → 409 `MEDIA_IN_USE` + път за заявка към Собственика (`media.py:613-618`); файлът остава след одобрение); остават: проверката за използване не вижда всички записи → FG-555, FG-576, FG-579; `scan_docs.py:220-228` (FG-145) |
 | FG-543 | medium | main `3863610` | прикачени файлове към ново СМР / снимки в отчета приемат всеки `media_id` и външен URL, за чужд обект, без одит | PROVEN | open |
-| FG-544 | medium | main `3863610` | медията има една връзка; `/media/link` тихо я мести и сменя кой я вижда | PROVEN | partial (MEDIA-SEC-01 `35df04e`, PROVEN: повторно свързване → 409 `MEDIA_ALREADY_LINKED`; запис с CAS — 10 паралелни, нищо не се мести (`media.py:175-206`)); остава: свързването без AuditEvent |
+| FG-544 | medium | main `3863610` | медията има една връзка; `/media/link` тихо я мести и сменя кой я вижда | PROVEN | partial (свързването без AuditEvent — #91 `d634bf4`, PROVEN: `media.py:196-213`, link 200, Δ0 събития) |
 | FG-545 | medium | main `3863610` | моделът на фото/видео архива (видео, thumbnail, GPS, тагове MD, статуси, галерия, актуване, портфолио, restore) не е реализиран | PROVEN | open |
 | FG-546 | low | main `3863610` | контекстите `message`/`site` и `photo-invoice` заобикалят видимостта по обекти | SUSPECTED | open |
-| FG-555 | medium | MEDIA-SEC-01 `35df04e` × #83 `ddc6e9a` | конфликт в `delete_media`: на клона касов бон от `finance_payments` се оттегля с 200 (Счетоводителят губи файла); след сливане `"retired"` липсва в `_INACTIVE_FILE_STATES` на #83 — оттеглен файл минава за нов бон | PROVEN | open |
-| FG-556 | medium | MEDIA-SEC-01 `35df04e` | `_media_usages` не проверява `work_reports.photos`, `extra_work_drafts.photos`, `pending_expenses.media_id`, `finance_payments` — снимка от одобрен отчет се оттегля (200), авторът губи достъп; няма възстановяване | PROVEN | open (+ Krum); Крум реши — Р83 (`b0278cb7`), проверка в проход 46 |
-| FG-557 | low | MEDIA-SEC-01 `35df04e` | всеки файл, свързан с профил, се вижда от всички в tenant-а през аватара; Admin може да свърже всеки файл (напр. бон) с профил без одит; стар аватар не може да се оттегли | PROVEN | open (+ Krum); Крум реши — Р83 (`b0278cb7`), проверка в проход 46 |
-| FG-558 | low | MEDIA-SEC-01 `35df04e` | `GET /media/{id}` връща метаданни на оттеглен файл на не-админи; няма списък на оттеглените и възстановяване | PROVEN (код) | open |
+| FG-555 | medium | MEDIA-SEC-01 `35df04e` × #83 `ddc6e9a` | конфликт в `delete_media`: на клона касов бон от `finance_payments` се оттегля с 200 (Счетоводителят губи файла); след сливане `"retired"` липсва в `_INACTIVE_FILE_STATES` на #83 — оттеглен файл минава за нов бон | PROVEN | open (#91 `d634bf4`, PROVEN: `git merge-tree` с #83 `ddc6e9a` — пак конфликт в `delete_media`; и без сливане `_media_usages` (`media.py:556-558`) търси измислени полета — `finance_payments`/`subcontractor_payments.cash_receipt_file_id` → DELETE 200, оттеглен; `_INACTIVE_FILE_STATES` на #83 (`bank_account_guard.py:103`) пак без `"retired"`) |
+| FG-556 | medium | MEDIA-SEC-01 `35df04e` | `_media_usages` не проверява `work_reports.photos`, `extra_work_drafts.photos`, `pending_expenses.media_id`, `finance_payments` — снимка от одобрен отчет се оттегля (200), авторът губи достъп; няма възстановяване | PROVEN | partial (#91 `d634bf4` (код `f3cf9f1`), PROVEN: `work_reports.photos`, `extra_work_drafts.photos`, `pending_expenses.media_id/url` покрити (`media.py:545-561`)); `finance_payments` — грешно поле (FG-555); останалите записи → FG-576 |
+| FG-557 | low | MEDIA-SEC-01 `35df04e` | всеки файл, свързан с профил, се вижда от всички в tenant-а през аватара; Admin може да свърже всеки файл (напр. бон) с профил без одит; стар аватар не може да се оттегли | PROVEN | resolved по Р83 (#91 `d634bf4` (код `f3cf9f1`), PROVEN: аватар само от ново качване с контекст profile (`media.py:136-138`); свързване като profile → 409 (`:197-200`); `check_avatar_url` само собствен ред на tenant-а (`media_avatar.py:40-61`); смяната → `user.avatar.change` (`auth.py:510-521`, `hr.py:193-204`); стар аватар може да се оттегли); остатък в скрипта → FG-578; видимостта на аватарите в tenant-а — въпрос към Крум (оркестратор) |
+| FG-558 | low | MEDIA-SEC-01 `35df04e` | `GET /media/{id}` връща метаданни на оттеглен файл на не-админи; няма списък на оттеглените и възстановяване | PROVEN (код) | partial (#91 `d634bf4` (код `f3cf9f1`), PROVEN: метаданни на оттеглен файл → 410 за не-Owner/Admin (`media.py:236-240`)); остават: `GET /api/media` крие оттеглените и от Собственика (`:308`), `?status=retired` празно, няма възстановяване (404) (+ Krum) |
 | FG-565 | low | #73 LAB-01 `2ca349e` (+ P&L на main) | `issued_revenue_net` няма филтър по вид: изпратена проформа се брои за приход (и като `proforma_future`); фактура без `subtotal` брои брутото за нето | PROVEN | open (+ Krum) |
 | FG-566 | high | main `3863610` (+ #73 `2ca349e` разширява) | `GET /projects/{id}/aggregate` проверява само вход — без SEC-02 и членство: Driver/Viewer/Technician/Warehousekeeper/ТР (не членове) получават приход, печалба, труд, платени/неплатени фактури | PROVEN | open |
 | FG-567 | low | #73/#75 (тест `test_sec_02_finance_read.py:504, 523`) | „SEC-02 intermittent pulse leak“ е фалшив: тестът търси подниз `7777` в целия отговор, който съвпада с `generated_at`/uuid (~5×10⁻⁴ на пулс); пари не изтичат | PROVEN | open |
@@ -462,6 +462,11 @@
 | FG-584 | low | main `3863610` | при липсващ ключ/грешка AI връща 500/502 със суровия текст на изключението; ai-breakdown записва 60/40 и връща `error` | PROVEN (код) | open |
 | FG-585 | low | main `3863610` | цени от офертите, описания, град и снимки отиват към външния модел без маскиране и без audit на prompt/резултат | SUSPECTED | open (+ Krum) |
 | FG-586 | medium | main `3863610` | няма AI флаг/entitlement, дневник и бюджет — AI работи за всеки tenant/план/роля с M2; плановете в `constants.py:24-54` (free/pro/enterprise) нямат AI бюджет | PROVEN (код) | open (+ Krum, виж FG-537) |
+| FG-575 | medium | #91 `d634bf4` | Viewer още качва снимки: `/media/upload` без проверка на ролята (без контекст или като член на обекта → 200), `/technician/photo-invoice` → 201; само `/projects/{id}/photos` → 403 | PROVEN | open |
+| FG-576 | high | #91 `d634bf4` | `_media_usages` не вижда одобрени/финансови записи: доказателство за клиентско одобрение на оферта (`offers.approval.evidence_file_id`), бракуване (`warehouse_transactions.file_ids`), касови бележки (`cash_receipt_file_id` на #83), `audit_events.related_file_ids` — оттегляне от качилия (Счетоводител) 200 без Собственика | PROVEN | open |
+| FG-577 | medium | #91 `d634bf4` | одобрението на оттегляне не сочи точното състояние: заявката пази само `uses`, при одобрение се преизчисляват без сравнение; `/media/link` по време на чакаща заявка → 200 — Собственикът оттегля файл, на който вече стои плащане | PROVEN | open |
+| FG-578 | low | #91 `d634bf4` | скриптът за старите аватари маркира и съществуващ файл, свързан като профил (`linked_at`), за аватар (`media_sec_01_avatar_backfill.py:79-94`); `approved_by` — свободен текст; резултатът на `update_one` не се проверява; няма връщане | PROVEN | open |
+| FG-579 | medium | #91 `d634bf4` | write skew: оттеглянето чете препращащите колекции и пише само `media_files`; нова препратка (напр. плащане с бон на #83) пише в друга колекция — двете транзакции минават | SUSPECTED (код) | open |
 | FG-480 | low | #83 CP-01 `a5176b2` | редът на пакета записва `payment_method` от заявката (по подразбиране „bank“), а регистърът — от сметката: аванс в брой е „bank“ в пакета и „Cash“ в регистъра | PROVEN | resolved (#83 CP-01 `b4a775f`, PROVEN: методът на реда на пакета — от сметката (`subcontractors.py:732-733, 1217-1219`); сметка банка + заявка „cash“ → `bank`/`Bank`; каса + „bank“ → `cash`/`Cash`) |
 | FG-481 | low | #83 CP-01 `a5176b2` | проверките вървят преди replay-а по Idempotency-Key: повтор на изпълнен аванс след архивиране на подизпълнителя връща 422 вместо записаното 201 | PROVEN | resolved за аванса и плащането (#83 CP-01 `b4a775f`, PROVEN off/enforce: `completed_replay` (`money_input.py:184-213`) преди проверките (`subcontractors.py:660-670, 1150-1157`); повтор след архивиране → 201 със същия id; друго тяло → 409 IDEMPOTENCY_CONFLICT; ключът е изолиран по tenant (B → 404, подправен ред → None)); удръжката → FG-499 |
 | FG-482 | medium | #83 CP-01 `a5176b2` | ДДС номер BG+ЕГН на клиент-фирма се показва изцяло на всички роли в `/clients/search/unified` (търсене и по цифрите на ЕГН), `/projects/{id}/client-info`, `/projects/{id}/invoice-context` | PROVEN | partial (#83 CP-01 `b4a775f`, PROVEN: `BG******1111` за всички 6 роли в unified search, client-info, invoice-context, `/companies`, find-by-eik, табло, `/projects`; търсене по цифрите на ЕГН — само Owner/Accountant; `POST /companies/{id}/vat/reveal` Owner/Accountant 200 + AuditEvent `company.vat_egn.revealed` само с маскираното, останалите 403); остатък → FG-496, FG-497, FG-498 |
@@ -4658,6 +4663,45 @@
 - **Код:** няма `ai_enabled`, entitlement, дневник или проверка на бюджета; `constants.py:24-54` — free/pro/enterprise с лимит на потребители (противоречие с FLOW-050 — за прегледа на FLOW-050).
 - **Решение:** промяна в кода след отговорите на FG-537 (единица действие, поведение при изчерпване, сега или с W0 Subscription).
 
+## FG-575 — Наблюдателят още качва снимки по други пътища
+
+- **Тежест:** medium. **Статус:** open. **PROVEN** (проход 46, `scratchpad/fg46media/probe/probe.py` → `out.json`, fgmongo2).
+- **Канон:** Р83 „Наблюдател (дори член на обекта) не качва снимки — само гледа.“
+- **Код (#91 `d634bf4`):** `routes/media.py:55-145` (`/media/upload` без проверка на ролята; контекст project минава за член; без контекст — всеки); `routes/technician.py:1140-1194` (photo-invoice).
+- **Проба (Viewer):** `/media/upload` без контекст → 200; с контекст project като член → 200; `/technician/photo-invoice` → 201; само `/projects/{id}/photos` → 403.
+- **Решение:** промяна в кода — обща проверка при качване (Viewer → 403 по фирмена или обектова роля) на всички входни точки, преди запис; забранителни тестове.
+
+## FG-576 — използван в одобрен/финансов запис файл се оттегля без Собственика
+
+- **Тежест:** high. **Статус:** open. **PROVEN**.
+- **Канон:** Р83 „Файл в одобрен запис … се премахва само с одобрение от Собственика“; Р71 „използвана касова бележка не се изтрива“; CLAUDE.md §8.
+- **Код (#91 `d634bf4`):** `routes/media.py:545-563` пропуска `offers.approval.evidence_file_id` (`offers.py:161-176` позволява несвързан файл), `warehouse_transactions.file_ids`, `finance_payments`/`subcontractor_payments.cash_receipt_file_id`, `audit_events.related_file_ids`.
+- **Проба:** за всеки от тях — DELETE от качилия (Счетоводител) → 200, оттеглен, без одобрение.
+- **Решение:** промяна в кода — един регистър на „държателите на файл“ (общ с `receipt_references` на #83), тест за всеки.
+
+## FG-577 — одобрението на оттегляне не е за точна версия
+
+- **Тежест:** medium. **Статус:** open. **PROVEN**.
+- **Канон:** CLAUDE.md §8 „Approval винаги сочи към exact version и evidence.“
+- **Код:** `routes/media.py:687-691` (заявката пази само `uses`), `:744-752` (одобрението ги преизчислява без сравнение), `:201-209` (`link_media` не гледа `retire_request_pending`).
+- **Проба:** заявка с uses = [work_reports]; докато чака — плащане започва да ползва файла, `/media/link` → 200; одобрение → 200, `retired_uses` = [link, work_reports, finance_payments].
+- **Решение:** промяна в кода — снимка на състоянието (контекст, файл, uses, брояч на версия) в заявката; при одобрение различно състояние → 409 `RETIRE_REQUEST_STALE`; записите, които добавят препратка, отказват при чакаща заявка.
+
+## FG-578 — скриптът за аватари маркира свързани (не качени) файлове
+
+- **Тежест:** low. **Статус:** open. **PROVEN**.
+- **Канон:** Р83 „съществуващ файл не става аватар“; „пуснат само с „да“ от Крум“.
+- **Код:** `backend/scripts/media_sec_01_avatar_backfill.py:79-94` (не гледа `linked_at`), `:131-134` (резултатът от `update_one` не се проверява); `approved_by` — свободен текст.
+- **Проба:** стар ред с контекст profile и `linked_at` → действие „flag“.
+- **Решение:** промяна в кода — пропуск при `linked_at` (`skip:linked_not_uploaded`), проверка на резултата, опция за връщане. По подразбиране скриптът наистина е проба (`:156-161`).
+
+## FG-579 — write skew между оттегляне и нова препратка
+
+- **Тежест:** medium. **Статус:** open. **SUSPECTED** (по код).
+- **Канон:** CLAUDE.md §2 правило 9; Р71.
+- **Код:** `routes/media.py:613-627` — чете препращащите колекции, пише само `media_files`; нова препратка (напр. `_require_registered_receipt` на #83 + запис на плащане) чете `media_files` и пише другаде — при snapshot isolation и двете минават.
+- **Решение:** промяна в кода — всеки, който добавя препратка, прави CAS върху реда в `media_files` (`$inc ref_version`, `status != retired`) в своята транзакция.
+
 ## FG-485 — Р69 не е изпълнено: смяна на окончателно разпределение без Собственика
 
 - **Тежест:** medium. **Статус:** open. **PROVEN** (проход 39, проба P1, 3 режима).
@@ -5630,6 +5674,9 @@
 - Нови решения на Крум на `claude/happy-meitner-bmcnel` `b0278cb7`: Р78 (FG-525/526/527 — само каноничен ДДС/ЕГН вход, иначе 422), Р79 (FG-528/529 — търсене по ЕГН само Owner/Accountant, винаги AuditEvent), Р80 (FG-530 — приход в агрегата = издадени фактури), Р81 (FG-532 — старата сума остава до одобрението на новия ред; денят не пада на 0), Р82 (PWA-02 — Q011: първи етап присъствие/отчет/снимка без приемане; ден по Europe/Sofia; еднакво отбелязване = съгласувано), Р83 (MEDIA-SEC-01 — FG-541/542/556/557).
 - Нови глави: #73 `2ca349e`, #75 `9e34641`, #84 `e8be2b3`, #90 `aaef24f`; без промяна: #82 `d6de7db`, #83 `ddc6e9a`, #89 `58d0e40`. Нов PR #91 (MEDIA-SEC-01, draft) `d634bf4` (код `f3cf9f1`).
 - Проверките, спрени от лимита в проход 45, продължават срещу новите глави и Р78..Р83.
+- LAB-01 #73 `2ca349e` / LAB-02 #75 `9e34641`: FG-530 (Р80), FG-531, FG-532 (Р81), FG-534 → resolved; FG-533 partial; нови FG-565..569 (FG-566 high — агрегатът на обекта показва пари на всяка роля, на main).
+- FLOW-030 (преглед): нови FG-580..586 (FG-580 high — суровата AI оценка влиза в P&L като приход).
+- #91 MEDIA-SEC-01 `d634bf4`: FG-557 → resolved по Р83; FG-541/542/544/556/558 partial; FG-555 open; нови FG-575..579 (FG-576 high). Минималният поток за одобрение от Собственика (`media_retire_requests`) — допустим като временен, записан като дълг към W0-07 (DQ/Approval runtime); изпълнява Owner-only, одобряващ ≠ заявител, AuditEvent, CAS (4 паралелни → 1×200), файлът остава; не изпълнява „exact version“ (FG-577). Krum: (1) при един Собственик — собствената му заявка достатъчна ли е, или заявява винаги Admin; (2) възстановяване на оттеглен файл и от кого (FG-558); (3) кога се пуска скриптът — до пускането старите аватари се показват като инициали; (4) ред на сливане #83 / MEDIA-SEC-01 (FG-555); (5) видимост на аватарите в tenant-а. Тестове: MEDIA-SEC-01 29 passed.
 
 ## Бележки, които не са разминавания
 
