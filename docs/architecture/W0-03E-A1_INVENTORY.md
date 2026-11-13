@@ -335,6 +335,7 @@
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | clients | get(id = owner_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:import_client_invoice | POST /projects/{project_id}/import-client-invoice | persons | get(id = owner_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/projects.py:delete_person | DELETE /persons/{person_id} | persons | get(id = person_id) | TenantData org_id (session) | scoped@base | SAFE |
+| app/routes/projects.py:update_company | PUT /companies/{company_id} | companies | get(id = company_id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/projects.py:delete_company | DELETE /companies/{company_id} | companies | get(id = company_id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | users | get(id = adv['user_id']) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/hr.py:list_advances | GET /advances | advances | find(query) | TenantData org_id (session) | BARE@base | FIXED |
@@ -382,4 +383,4 @@
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | delete_one(id) | TenantData org_id (session) | scoped@base | SAFE |
 | app/routes/warehouses.py:dev_reset_warehouses | POST /dev/reset-warehouses | warehouses | find((tenant only)) | TenantData org_id (session) | scoped@base | SAFE |
 
-Totals: 380 accesses — FIXED 123, SAFE 257
+Totals: 381 accesses — FIXED 124, SAFE 257
