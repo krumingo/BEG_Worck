@@ -251,7 +251,9 @@ async def complete_idempotent(
             "result_reference": result_reference,
             "completed_at": _now_iso(),
         }},
-        session=session,
+        # only when given: every existing caller (and its test doubles) sees the
+        # exact call it always made
+        **({"session": session} if session is not None else {}),
     )
 
 
