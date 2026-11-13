@@ -331,7 +331,7 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
             scope["action"] = marker["action"]
         own = await tenant.warehouse_transactions.find(
             scope, {"_id": 0, "id": 1, "movement_id": 1, "idempotency_key": 1,
-                    "actor_id": 1}).to_list(50)
+                    "actor_id": 1}).to_list(None)
     if own:
         outcome, action = "confirmed_late", "media.file.pending_holder_confirm_late"
     elif age >= min_age_seconds:
