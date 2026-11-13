@@ -15,9 +15,9 @@
 | #70 `claude/pay-01-payment-reversal` | `16a886f` | 13 | слят в main (`d226c49`) |
 | #71 `claude/sec-02-finance-read` | `021a078` | 24b | слят в main (`0750d75`);  SEC-02, Р20/Р31 |
 | #72 `claude/w0-04-c01-audit-indexes` | `04e0a1b` | 13 | слят в main (`7b6da64`) |
-| #73 `claude/lab-01-labor-cost` | `06a309d` | 44 | LAB-01, FLOW-019/028 |
+| #73 `claude/lab-01-labor-cost` | `2ca349e` | 46 | LAB-01, FLOW-019/028 |
 | `claude/oh-01-overhead` (OH-01) | `4c8b313` | 27 | слят в main (`1ea98fe2`);  FLOW-024 |
-| #75 `claude/lab-02-quantity-approval` (LAB-02) | `b35d0c7` | 44 | FLOW-028, Р33 |
+| #75 `claude/lab-02-quantity-approval` (LAB-02) | `9e34641` | 46 | FLOW-028, Р33 |
 | `claude/sub-adv-01-advance` (SUB-ADV-01) | `aa369d8` | 31 | слят в main (`ea57121`);  FLOW-021, Р39/Р40 |
 | `claude/act-01-client-act-from-offer` (ACT-01) | `c7df7ca` | 27 | слят в main (`fddb0185`);  FLOW-004 |
 | #79 `claude/off-01-offer-version-accept` (OFF-01) | `25c9ae8` | 33 | слят в main (`44e8d97`);  FLOW-003, FLOW-002 magic link |
