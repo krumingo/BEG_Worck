@@ -1,0 +1,34 @@
+CP-01 gates, pass 46 + CP83-M6 + CP83-M7, head 5695f97 (evidence commit on top), real Mongo mongo:7.0 rs0
+baseline: main 3863610 (/tmp b7 run)
+
+cp01       759 passed, 15 skipped, 1 warning in 229.40s (0:03:49)
+pay01      630 passed, 1 warning in 148.54s (0:02:28)
+sec01      30 passed, 10 warnings in 94.31s (0:01:34)
+sec02      31 passed, 10 warnings in 165.07s (0:02:45)
+subadv     9 passed, 10 warnings in 21.10s
+r0         814 passed, 10 warnings in 141.78s (0:02:21)
+pm01       6 passed, 10 warnings in 158.56s (0:02:38)
+w0         10 failed, 1164 passed, 10 warnings in 122.44s (0:02:02)
+warehouse  1438 passed, 19 warnings in 663.48s (0:11:03)
+pm01 SKIPPED lines: 0
+a2c       W0-03E-A2C tenant boundary guard: 248 module(s) checked, 0 violation(s)
+
+W0: 10 failures, all a subset of main's 16; test_the_committed_inventory_is_the_generated_one passes (A1 381 / FIXED 124)
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
+  FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
+  FAILED tests/test_w0_03e_real_mongo.py::test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server
+
+full suite DB-free : 160 failed, 3164 passed, 2688 skipped, 11 warnings, 993 errors in 388.59s (0:06:28)  -> 0 failures/errors not on main
+full suite real Mongo: 161 failed, 4810 passed, 1038 skipped, 11 warnings, 996 errors in 1668.90s (0:27:48) -> 0 failures/errors not on main
+
+Harnesses re-run on this head (results.json regenerated): SEC-01-C01, SEC-01, SUB-ADV-01, SEC-02, SEC-01-C02, SEC-01-C03, ACT-01, PRJ-01, PM-01 (run_meta).
+Diffs are run-volatile only: uuids, timings, dates, hashes, idempotency keys; SUB-ADV-01 concurrent advance/payment race swaps which guard code (ADVANCE_/PAYMENT_EXCEEDS_PACKAGE_VALUE) wins - totals unchanged.
+SUB-ADV-01 harness 500s are its injected-crash recovery probes (RuntimeError injected crash after step ...).
+Inventories (5695f97): A1 381/FIXED 124/SAFE 257; A2C 248 modules 0 UNSCOPED; A2 project_team 69 sites; A2B unchanged.

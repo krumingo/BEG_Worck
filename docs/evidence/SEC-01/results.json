@@ -60,7 +60,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 11.9,
+ "seconds": 9.9,
  "rows": [
   {
    "mode": "off",
