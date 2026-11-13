@@ -12,7 +12,7 @@
 | #83 CP-01 | `781d185` | **PASS** (pass 41) | 2026-11-09 |
 | #90 SEC-03 | `aaef24f` | **PASS** (main `3863610` merged; N2/N3/N5 closed; N1 deploy JWT_SECRET ≥32) | 2026-11-13 |
 | #89 OFF-02 | `5763bd8` | **PASS** (main `3863610` merged; OFF89-M2 closed — SEC-02 188 probes, regen 0 cells; warehouse 44/1121) | 2026-11-13 |
-| #73 LAB-01 | `d34d41b` | **PASS** (LAB73-R1, M2..M4 closed; N1 design question open) | 2026-11-09 |
+| #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #75 LAB-02 | `4fa4957` | **PASS** (contains #73 `d34d41b` + main) | 2026-11-09 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
@@ -6649,3 +6649,34 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | **warehouse** | **44 / 1121** (enforce) |
 
 - **Run on `58d0e402`** (same code as `5763bd86`): SEC-01 30; own suites `off_02_offer_money_strip` 34, `off_01_offer_version_accept` 90, `off_01_audit_probe` 147; probe off01 675.
+
+## 2026-11-13 — #73 LAB-01 `ed6e88d4` — PASS (pending Krum: FG-565 proforma, FG-569 akord→payroll)
+
+- **Heads:**
+  - `ed6e88d4` = `b1f7e902` (FG-566 aggregate access, FG-567 field-aware SEC-02 probe, FG-530 isolation) + `docs/evidence` only;
+  - `b1f7e902` contains main `3863610` via `4a63a1e`.
+- **Merge check:**
+  - `4a63a1e` = merge-tree(`cf6fd3d4`, `3863610`) except the conflict files.
+  - The one code conflict, `projects.py` `count_invoices(subtree_ids)` + `issued_net`, is resolved correctly. The rest is PM-01 / SEC-02 evidence.
+  - Role-union 0 (merge and head); clean onto main; no unclassified collections.
+- **FG-566 (static):**
+  - non-finance callers need current `project_team` membership (else 403);
+  - `_aggregate_without_money` drops invoices / pnl / paid_labor / materials / labor_cost, top level and per child;
+  - plus `strip_money_for_non_finance(keep=("total",))`;
+  - registered R20-5M.
+- **Gates** (real Mongo; code gates on `b1f7e902`, evidence gates on `ed6e88d4`):
+
+| Gate | Result |
+|---|---|
+| R0 | 814 |
+| W0 | 16 = main's 16 |
+| A2C / A1 | 0/246, 0/496 |
+| PAY | 630 |
+| SEC-01 | 30 |
+| SEC-02 (`ed6e88d4`) | 31; 177 probes; **independent harness regen on `b1f7e902` = committed: 0 differing cells**; every 7777 row in the regen is a finance role |
+| PM-01 (`ed6e88d4`) | 6 / 0 skipped; **regen = committed: 0 cells** (includes the 15 `/aggregate` cells) |
+| **warehouse** | **44 / 1121** (enforce) |
+| LAB-01 suites | 227 |
+| probes | lab01e_payrun_r29 4, lab01f_sources 5, lab01h_r36 3, lab01t_fg463_race 20 |
+
+- **Note:** on the stale `b1f7e902` evidence, SEC-02 and PM-01 failed (176 vs 177 probes; 15 `/aggregate` cells), as expected before the regen. `ed6e88d4` closes that.
