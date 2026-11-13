@@ -6648,4 +6648,4 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | PM-01 | 6 / 0 skipped; regen 0 cells |
 | **warehouse** | **44 / 1121** (enforce) |
 
-- **Not re-run on `5763bd86`:** SEC-01 30 and OFF-02 own suite / probe off02 from the previous pass on `edd450d7`; the code is unchanged since then.
+- **Run on `58d0e402`** (same code as `5763bd86`): SEC-01 30; own suites `off_02_offer_money_strip` 34, `off_01_offer_version_accept` 90, `off_01_audit_probe` 147; probe off01 675.
