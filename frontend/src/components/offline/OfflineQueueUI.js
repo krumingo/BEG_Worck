@@ -38,7 +38,7 @@ export function MyUnsentPage() {
   const [busy, setBusy] = useState(false);
   const sync = async () => {
     setBusy(true);
-    try { await offlineQueue.flush(); } finally { setBusy(false); }
+    try { await offlineQueue.flush({ force: true }); } finally { setBusy(false); }
   };
   return (
     <div className="mx-auto max-w-2xl p-4 md:p-6" data-testid="my-unsent-page">

@@ -124,6 +124,27 @@ test("network errors back off 1s → 5 min and stop after 10 attempts for a huma
   await q2.flush();
   await q2.flush();
   expect((await s2.get("queue", id2)).attempts).toBe(1);
+  // while it waits for the network the worker reads „Чака синхронизация“, not „Грешка“
+  expect((await s2.get("queue", id2)).status).toBe("pending");
+  // „Изпрати сега“ / back online skips the backoff
+  api2.batchError = null;
+  await q2.flush({ force: true });
+  expect((await s2.get("queue", id2)).status).toBe("synced");
+});
+
+test("no attempts are spent while the browser says it is offline", async () => {
+  const { q, store, api } = await setup();
+  const id = await q.enqueue("attendance.mark", {});
+  const nav = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  Object.defineProperty(globalThis, "navigator", { value: { onLine: false }, configurable: true });
+  try {
+    await q.flush();
+    await q.flush();
+  } finally {
+    if (nav) Object.defineProperty(globalThis, "navigator", nav); else delete globalThis.navigator;
+  }
+  expect(api.calls.filter((c) => c[1] === "/sync/batch")).toHaveLength(0);
+  expect((await store.get("queue", id)).attempts).toBe(0);
 });
 
 test("a validation refusal goes to Изисква проверка at once, without retry", async () => {

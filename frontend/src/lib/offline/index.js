@@ -29,7 +29,7 @@ let wired = false;
 function wireOnce() {
   if (wired || typeof window === "undefined") return;
   wired = true;
-  window.addEventListener("online", () => { offlineQueue.flush().catch(() => {}); });
+  window.addEventListener("online", () => { offlineQueue.flush({ force: true }).catch(() => {}); });
   // Background Sync (where the browser has it): the service worker asks an open page to flush.
   if (navigator.serviceWorker) {
     navigator.serviceWorker.addEventListener("message", (e) => {

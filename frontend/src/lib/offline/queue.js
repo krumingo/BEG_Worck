@@ -56,6 +56,8 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
   let clockOffsetMs = 0; // device - server
   let enabled = false;
   let flushing = null;
+  let recheckSoon = false;
+  const later = (fn, ms) => (typeof setTimeout === "function" ? setTimeout(fn, ms) : null);
   const state = createObservable({ enabled: false, unsent: 0, revoked: false, lastSyncAt: null, items: [] });
 
   const owner = () => (session ? ownerOf(session.tenantId, session.userId) : null);
@@ -169,13 +171,17 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
     return next;
   }
 
-  async function sendOnce() {
+  const offlineNow = () => typeof navigator !== "undefined" && navigator.onLine === false;
+
+  async function sendOnce(force = false) {
     if (!session || !enabled) return { sent: 0 };
+    // no connection at all: do not burn attempts (the `online` event flushes again)
+    if (offlineNow()) { await refresh(); return { sent: 0 }; }
     const o = owner();
     const key = await ownerKey(store, o, subtle);
     const t = now();
     const due = (await rows())
-      .filter((r) => ["saved", "pending", "error"].includes(r.status) && (r.next_at || 0) <= t && r.sealed)
+      .filter((r) => ["saved", "pending", "error"].includes(r.status) && (force || (r.next_at || 0) <= t) && r.sealed)
       .slice(0, BATCH_SIZE);
     // housekeeping: forget synced rows after 7 days
     for (const r of await rows()) {
@@ -207,7 +213,8 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
           const attempts = (fresh.attempts || 0) + 1;
           await update(fresh, attempts >= MAX_ATTEMPTS
             ? { status: "needs_review", attempts, last_error: "RETRY_LIMIT" }
-            : { status: "error", attempts, next_at: now() + backoffMs(attempts), last_error: "NETWORK" });
+            // still waiting for the network: „Чака синхронизация“, retried with backoff
+            : { status: "pending", attempts, next_at: now() + backoffMs(attempts), last_error: "NETWORK" });
         } else if (status === 403 && code(err) === "OFFLINE_QUEUE_DISABLED") {
           await update(fresh, { status: "pending", last_error: "DISABLED" });
         } else {
@@ -226,7 +233,11 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
         continue;
       }
       if (res.status === "synced") await update(fresh, { status: "synced", result: res.result, last_error: null });
-      else if (res.status === "processing") await update(fresh, { status: "pending", next_at: now() + 2000 });
+      else if (res.status === "processing") {
+        // another sender has it right now: look again shortly (the receipt answers then)
+        await update(fresh, { status: "pending", next_at: now() + 2000 });
+        recheckSoon = true;
+      }
       else if (res.status === "conflict") await update(fresh, { status: "conflict", result: res.result });
       else if (res.status === "late") await update(fresh, { status: "needs_review", sub: "late", result: res.result });
       else if (res.status === "waiting_file") await update(fresh, { status: "waiting_file", result: res.result });
@@ -267,18 +278,30 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
     return changed;
   }
 
-  async function flush() {
+  // force: a person pressed „Изпрати сега“ or the connection just came back — skip the backoff
+  // Two tabs of the app share one queue: the Web Locks API (where present) lets only one of
+  // them send at a time, so the other does not race it into a „processing“ answer.
+  const withLock = (fn) => (typeof navigator !== "undefined" && navigator.locks && navigator.locks.request
+    ? navigator.locks.request("bw-offline-flush", fn) : fn());
+
+  async function flush({ force = false } = {}) {
     if (flushing) return flushing;
-    flushing = (async () => {
+    flushing = withLock(async () => {
       let total = 0;
       for (let i = 0; i < 20; i += 1) {
-        const r = await sendOnce();
+        const r = await sendOnce(force && i === 0);
         total += r.sent || 0;
         if (!r.sent || r.revoked || r.error) break;
       }
       await refreshReceipts();
       return total;
-    })().finally(() => { flushing = null; });
+    }).finally(() => {
+      flushing = null;
+      if (recheckSoon) {
+        recheckSoon = false;
+        later(() => { flush().catch(() => {}); }, 2500);
+      }
+    });
     return flushing;
   }
 

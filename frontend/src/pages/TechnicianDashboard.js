@@ -296,8 +296,10 @@ export default function TechnicianDashboard() {
       const sent = await sendOrQueue({ opType: "technician.daily_report", projectId: selectedSite.project_id,
         payload: body, send: () => API.post("/technician/daily-report", body) });
       if (sent.queued) {
+        // same exit as online, so the report is not sent twice from the review screen
         toast.success(STATUS.saved);
-        setSubmitting(false);
+        setScreen("myDay");
+        setSelectedSite(null);
         return;
       }
       const res = sent.response;
