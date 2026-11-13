@@ -17,15 +17,15 @@
   "traversal": {
    "%2E%2E": 404,
    "%2Fetc%2Fpasswd": 404,
-   "%2e%2e%2f33722282-3cf0-49a5-8e21-08613b2": 404,
-   ".%2F33722282-3cf0-49a5-8e21-08613b2b6a03": 404,
-   "..%252F33722282-3cf0-49a5-8e21-08613b2b6": 404,
+   "%2e%2e%2ff56e5fe3-16e3-4b00-816c-f29a0f8": 404,
+   ".%2Ff56e5fe3-16e3-4b00-816c-f29a0f8bc814": 404,
+   "..%252Ff56e5fe3-16e3-4b00-816c-f29a0f8bc": 404,
    "..%2F..%2Fetc%2Fpasswd": 404,
-   "..%2f33722282-3cf0-49a5-8e21-08613b2b6a0": 404,
-   "..%5C33722282-3cf0-49a5-8e21-08613b2b6a0": 404,
+   "..%2ff56e5fe3-16e3-4b00-816c-f29a0f8bc81": 404,
+   "..%5Cf56e5fe3-16e3-4b00-816c-f29a0f8bc81": 404,
    "...": 404,
-   "33722282-3cf0-49a5-8e21-08613b2b6a03.jpg": 404,
-   "projects%2F33722282-3cf0-49a5-8e21-08613": 404,
+   "f56e5fe3-16e3-4b00-816c-f29a0f8bc814.jpg": 404,
+   "projects%2Ff56e5fe3-16e3-4b00-816c-f29a0": 404,
    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
   },
   "unknown": 404
@@ -34,12 +34,12 @@
   "enforce": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 56,
+    "files": 137,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 56,
+    "files": 137,
     "photos": 1
    },
    "file_accountant": 403,
@@ -65,12 +65,12 @@
   "off": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 54,
+    "files": 135,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 54,
+    "files": 135,
     "photos": 1
    },
    "file_accountant": 403,
@@ -102,12 +102,12 @@
   "shadow": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 55,
+    "files": 136,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 55,
+    "files": 136,
     "photos": 1
    },
    "file_accountant": 403,
@@ -142,7 +142,7 @@
     "file_kept": true,
     "status": 409,
     "status_after": null,
-    "use_kind": "extra_work_drafts"
+    "use_kind": "extra_work_draft"
    },
    "other_tenant_row": 200,
    "payment_receipt": {
@@ -150,35 +150,35 @@
     "file_kept": true,
     "status": 409,
     "status_after": null,
-    "use_kind": "finance_payments"
+    "use_kind": "payment_receipt"
    },
    "pending_expense": {
     "error_code": "MEDIA_IN_USE",
     "file_kept": true,
     "status": 409,
     "status_after": null,
-    "use_kind": "pending_expenses"
+    "use_kind": "pending_expense"
    },
    "pending_expense_url": {
     "error_code": "MEDIA_IN_USE",
     "file_kept": true,
     "status": 409,
     "status_after": null,
-    "use_kind": "pending_expenses"
+    "use_kind": "pending_expense"
    },
    "work_report_id": {
     "error_code": "MEDIA_IN_USE",
     "file_kept": true,
     "status": 409,
     "status_after": null,
-    "use_kind": "work_reports"
+    "use_kind": "work_report"
    },
    "work_report_url": {
     "error_code": "MEDIA_IN_USE",
     "file_kept": true,
     "status": 409,
     "status_after": null,
-    "use_kind": "work_reports"
+    "use_kind": "work_report"
    }
   },
   "linked": {
@@ -197,7 +197,7 @@
    "again": "MEDIA_ALREADY_RETIRED",
    "body": {
     "ok": true,
-    "retired": "305ca3a3-b7a3-4726-894a-364b58148fbb"
+    "retired": "3a29ed4e-73d4-49e4-b239-6066555c5e35"
    },
    "events": [
     {
@@ -209,13 +209,13 @@
       "before": {
        "status": "active"
       },
-      "stored_filename": "305ca3a3-b7a3-4726-894a-364b58148fbb.jpg"
+      "stored_filename": "3a29ed4e-73d4-49e4-b239-6066555c5e35.jpg"
      },
      "entity_type": "media_file",
-     "idempotency_key": "5ccfce64fcbb49c3a837b70ddaf6014a",
+     "idempotency_key": "6da66c37c35f426da9e7d7595a09aaa2",
      "reason": "дублирана снимка",
      "source_flow": "FLOW-029",
-     "tenant_id": "8fa1a877-e703-48bd-9a19-c0fdd12de168"
+     "tenant_id": "45b6f7df-3af6-461d-80cc-a084c9a13b96"
     }
    ],
    "file_kept": true,
@@ -247,10 +247,7 @@
    "status": 409,
    "status_after": null,
    "uses": [
-    {
-     "id": "mediasec01-A-smr_used",
-     "kind": "missing_smr"
-    }
+    "missing_smr"
    ]
   }
  },
@@ -269,6 +266,110 @@
    "status": 409
   },
   "same_again": 200
+ },
+ "pass46": {
+  "fg544_link": {
+   "events": [
+    {
+     "action": "media.file.link",
+     "after": {
+      "context_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
+      "context_type": "project"
+     }
+    }
+   ],
+   "ref_version": 1,
+   "status": 200
+  },
+  "fg575": {
+   "media_upload_no_context": 403,
+   "media_upload_project_member": 403,
+   "ocr_upload": 403,
+   "photo_invoice": 403,
+   "project_photo": 403,
+   "project_viewer_sitemanager_media_upload": 403,
+   "supplier_invoice_file": 403,
+   "tech_media_upload": 200,
+   "tech_photo_invoice": 201,
+   "tech_photo_invoice_other_project": 403,
+   "written": {
+    "files": 0,
+    "media_rows": 0,
+    "pending_expenses": 0
+   }
+  },
+  "fg576": {
+   "audit_event": {
+    "error_code": "MEDIA_IN_USE",
+    "kinds_shown_to_uploader": [
+     "audit_event"
+    ],
+    "status": 409,
+    "status_after": null
+   },
+   "offer_acceptance": {
+    "admin_sees": [
+     "offer_acceptance"
+    ],
+    "error_code": "MEDIA_IN_USE",
+    "file_kept": true,
+    "ids_hidden_from_uploader": true,
+    "kinds_shown_to_uploader": [
+     "offer_acceptance"
+    ],
+    "status": 409,
+    "status_after": null
+   },
+   "other_tenant_row": 200,
+   "payment_receipt": {
+    "admin_sees": [
+     "payment_receipt"
+    ],
+    "error_code": "MEDIA_IN_USE",
+    "file_kept": true,
+    "ids_hidden_from_uploader": true,
+    "kinds_shown_to_uploader": [
+     "payment_receipt"
+    ],
+    "status": 409,
+    "status_after": null
+   },
+   "subcontractor_payment_receipt": {
+    "admin_sees": [
+     "subcontractor_payment_receipt"
+    ],
+    "error_code": "MEDIA_IN_USE",
+    "file_kept": true,
+    "ids_hidden_from_uploader": true,
+    "kinds_shown_to_uploader": [
+     "subcontractor_payment_receipt"
+    ],
+    "status": 409,
+    "status_after": null
+   },
+   "warehouse_movement": {
+    "admin_sees": [
+     "warehouse_movement"
+    ],
+    "error_code": "MEDIA_IN_USE",
+    "file_kept": true,
+    "ids_hidden_from_uploader": true,
+    "kinds_shown_to_uploader": [
+     "warehouse_movement"
+    ],
+    "status": 409,
+    "status_after": null
+   }
+  },
+  "fg579": {
+   "attach_retired": "MEDIA_RETIRED",
+   "error_code": "MEDIA_IN_USE",
+   "media_status": null,
+   "race_happened": true,
+   "ref_version": 1,
+   "reference_kept": true,
+   "status": 409
+  }
  },
  "r83": {
   "approval": {
@@ -296,7 +397,7 @@
     "meta_technician": 410,
     "meta_technician_detail": {
      "error_code": "MEDIA_RETIRED",
-     "media_id": "ba95a6ef-cdb0-4efc-9baa-413d4365238c",
+     "media_id": "7e04ad8c-6f45-4881-9b3d-96e3b7caf8be",
      "retired": true
     },
     "pending": null,
@@ -310,6 +411,8 @@
    "approve_no_key": 428,
    "approve_other_tenant": 404,
    "approve_technician": "OWNER_APPROVAL_REQUIRED",
+   "attach_not_written": true,
+   "attach_while_pending": "RETIRE_REQUEST_PENDING",
    "before_approve": {
     "events": [
      "media.file.retire_request"
@@ -320,19 +423,40 @@
     409,
     "MEDIA_IN_USE"
    ],
+   "delete_detail_admin_uses": [
+    "work_report"
+   ],
+   "delete_detail_technician": [
+    "error_code",
+    "message",
+    "request_path",
+    "use_kinds",
+    "uses_count"
+   ],
    "delete_while_pending": "MEDIA_IN_USE",
+   "link_while_pending": "RETIRE_REQUEST_PENDING",
    "pending_list_owner": [
-    "7b2a1ddc-05c4-4a9b-ad4c-cb9730cc0280"
+    "e29ea616-7b4f-400f-bbf2-2d1d8381229d"
    ],
    "pending_list_technician": 403,
    "req_no_key": 428,
    "req_no_reason": 400,
    "req_other_tenant": 404,
-   "req_other_user": 403,
+   "req_owner": "RETIRE_REQUEST_NOT_ALLOWED",
+   "req_technician_owner_of_file": "RETIRE_REQUEST_NOT_ALLOWED",
    "request": {
+    "has_version": true,
+    "interim_until": "W0-07",
     "replay_same": true,
     "req_status": "pending",
     "status": 201
+   },
+   "request_row": {
+    "ref_version_kept": true,
+    "uses_kinds": [
+     "work_report"
+    ],
+    "uses_version": true
    },
    "second_request": "RETIRE_REQUEST_PENDING",
    "self": {
@@ -348,6 +472,15 @@
     "request": 201,
     "request_again": 201
    },
+   "stale": {
+    "approve": [
+     409,
+     "RETIRE_REQUEST_STALE"
+    ],
+    "media_status": null,
+    "request": true,
+    "request_status": "pending"
+   },
    "unused_request": "MEDIA_NOT_IN_USE"
   },
   "avatars": {
@@ -357,11 +490,11 @@
    "avatar_events": [
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/33722282-3cf0-49a5-8e21-08613b2b6a03.jpg"
+     "after": "/api/media/avatar/f56e5fe3-16e3-4b00-816c-f29a0f8bc814.jpg"
     },
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/739680b5-0100-4e67-acf6-51d27205f97c.jpg"
+     "after": "/api/media/avatar/308c8b02-015c-40d7-81f9-dc98e0b06b50.jpg"
     }
    ],
    "basic_put": 200,
@@ -383,30 +516,57 @@
   },
   "backfill": {
    "apply": {
+    "conflict": 0,
     "events": [
      {
       "action": "media.avatar.backfill",
-      "approved": "Крум"
+      "approved_by_owner": true
      }
     ],
     "flag": true,
+    "linked_flag": null,
     "served_after": 200,
     "site_photo_served": 404,
     "viewer_url": true,
     "written": 1
    },
-   "apply_unapproved": "NotApproved",
    "apply_wrong_sha": "PlanMismatch",
+   "b_owner_sees_only_b": true,
+   "conflict": "conflict",
+   "conflict_rolled_back": true,
    "dry": {
     "accountant": "skip:not_a_profile_photo",
+    "admin_linked": "skip:linked_not_uploaded_as_profile",
     "applied": false,
     "audit_written": 0,
     "flag_written": null,
+    "only_tenant_a": true,
     "requester": "skip:url_shape",
     "technician": "already",
     "viewer": "flag"
    },
+   "dry_admin_id": "NotApproved",
+   "dry_free_text": "NotApproved",
+   "dry_no_approver": "NotApproved",
+   "revert": {
+    "events": [
+     "media.avatar.backfill",
+     "media.avatar.backfill_revert"
+    ],
+    "flag": null,
+    "served": 404,
+    "viewer_url_restored": true,
+    "written": 1
+   },
+   "revert_dry": {
+    "applied": false,
+    "counts": {
+     "revert": 1
+    },
+    "flag_still": true
+   },
    "second_apply_written": 0,
+   "second_revert_rows": 0,
    "second_viewer_action": "already",
    "served_before": 404
   },

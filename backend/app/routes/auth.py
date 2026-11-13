@@ -507,7 +507,7 @@ async def update_user(
     # Owner touches an Owner, the last active Owner stays — refused before any write.
     await check_user_update(tenant, actor=user, target=target, update=update,
                             mode=ctx.mode, tenant_id=ctx.tenant_id)
-    from app.services.media_avatar import audit_avatar_change, check_avatar_url
+    from app.services.media_avatar import check_avatar_url, write_user_with_avatar
     if "avatar_url" in update:
         # MEDIA-SEC-01 / R83(3): only a fresh profile photo of THIS user — checked before any write
         update["avatar_url"] = await check_avatar_url(tenant, org_id, user_id, update["avatar_url"])
@@ -515,17 +515,19 @@ async def update_user(
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
     async def _audit_change():
-        if "avatar_url" in update:
-            await audit_avatar_change(tdb, user, target_user_id=user_id,
-                                      before=target.get("avatar_url"), after=update["avatar_url"],
-                                      endpoint="PUT /api/users/{user_id}")
         if diff["after"]:
             await audit_user_change(tdb, tenant_id=org_id, actor_id=user["id"], action="user.role_status_changed",
                                     target_id=user_id, diff=diff, reason="user role/status changed",
                                     tool_or_endpoint="PUT /api/users/{user_id}")
 
     async def _business():
-        await tenant.users.update_one({"id": user_id}, {"$set": update})
+        if "avatar_url" in update:
+            # MEDIA-SEC-01 (FG-579 + pass 46): claim, write and AuditEvent in ONE transaction
+            await write_user_with_avatar(tdb, tenant, user, target_user_id=user_id, update=update,
+                                         before=target.get("avatar_url"),
+                                         endpoint="PUT /api/users/{user_id}")
+        else:
+            await tenant.users.update_one({"id": user_id}, {"$set": update})
         return user_id
 
     if ctx.mode != MODE_ENFORCE or "role" not in update:

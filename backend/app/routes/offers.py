@@ -651,6 +651,12 @@ async def accept_offer(offer_id: str, data: Optional[OfferAccept] = None,
             from pymongo import ReturnDocument
             now = datetime.now(timezone.utc).isoformat()
             await _family_guard(tenant, offer, session)
+            if data.evidence_file_id:
+                # MEDIA-SEC-01 (FG-579): the acceptance evidence becomes a holder of the file
+                # — claimed inside the acceptance's transaction
+                from app.services.file_holders import claim as _claim_files
+                await _claim_files(tenant, user["org_id"], [data.evidence_file_id],
+                                   session=session)
             approval = {"method": data.approval_method, "channel": "internal",
                         "evidence_file_id": data.evidence_file_id, "note": data.note,
                         "version": version, "accepted_by": user["id"], "accepted_at": now}

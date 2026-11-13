@@ -306,8 +306,8 @@
 | app/routes/ocr_invoice.py:review_intake | PUT /ocr-invoice/{intake_id}/review | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/ocr_invoice.py:review_intake | PUT /ocr-invoice/{intake_id}/review | ocr_invoice_intake | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
-| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | pending_expenses | insert_one(expense) | TenantData org_id (session) | new read | SAFE |
 | app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | ocr_invoice_intake | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
+| app/routes/ocr_invoice.py:approve_intake | PUT /ocr-invoice/{intake_id}/approve | pending_expenses | insert_one(expense) | TenantData org_id (session) | new read | SAFE |
 | app/routes/ocr_invoice.py:reject_intake | PUT /ocr-invoice/{intake_id}/reject | ocr_invoice_intake | find_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/ocr_invoice.py:reject_intake | PUT /ocr-invoice/{intake_id}/reject | ocr_invoice_intake | update_one(id) | TenantData org_id (session) | BARE@base | FIXED |
 | app/routes/assets_batch_intake.py:_match_existing_item | (helper) | asset_items | find(is_active) | TenantData org_id (session) | scoped@base | SAFE |

@@ -243,6 +243,10 @@ async def post_movement(
             # all SERVER-DERIVED by the command service — never
             # accepted from the request body.
         )
+        # MEDIA-SEC-01 (FG-579): attached documents are references to files — touch
+        # each file's row first (a retired file / a pending retire request → 409)
+        from app.services.file_holders import claim as _claim_files
+        await _claim_files(tenant, tenant.org_id, list(body.file_ids or []))
         result = await service.execute(
             ctx=ctx,
             tenant_db=tenant._db,            # pylint: disable=protected-access
@@ -417,6 +421,10 @@ async def post_project_writeoff(
     source_id = body.subproject_id or body.project_id
     service = _service()
     try:
+        # MEDIA-SEC-01 (FG-579): attached documents are references to files — touch
+        # each file's row first (a retired file / a pending retire request → 409)
+        from app.services.file_holders import claim as _claim_files
+        await _claim_files(tenant, tenant.org_id, list(body.file_ids or []))
         result = await service.execute(
             ctx=ctx,
             tenant_db=tenant._db,            # pylint: disable=protected-access

@@ -222,7 +222,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                  json={"reason": "грешна снимка"})
         d["used_by_approved_smr"] = {
             "status": r["status"], "error_code": r["error_code"],
-            "uses": ((r["body"] or {}).get("detail") or {}).get("uses")
+            "uses": ((r["body"] or {}).get("detail") or {}).get("use_kinds")
             if isinstance(r["body"], dict) else None,
             "row_kept": bool(media_row(used["id"])),
             "status_after": media_row(used["id"]).get("status"),
@@ -253,7 +253,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             "pending_expense": ("pending_expenses", lambda m: {"media_id": m["id"],
                                                                "status": "pending_approval"}),
             "pending_expense_url": ("pending_expenses", lambda m: {"media_url": by_url(m)}),
-            "payment_receipt": ("finance_payments", lambda m: {"receipt_media_id": m["id"],
+            "payment_receipt": ("finance_payments", lambda m: {"cash_receipt_file_id": m["id"],
                                                                "direction": "Outflow",
                                                                "amount": 10}),
         }
@@ -267,7 +267,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                      json={"reason": "x"})
             d["fg556"][label] = {
                 "status": r["status"], "error_code": r["error_code"],
-                "use_kind": (((r["body"] or {}).get("detail") or {}).get("uses") or [{}])[0].get("kind")
+                "use_kind": ((((r["body"] or {}).get("detail") or {}).get("use_kinds")) or [None])[0]
                 if isinstance(r["body"], dict) else None,
                 "status_after": media_row(m["id"]).get("status"),
                 "file_kept": (UPLOADS / stored(m)).is_file()}
@@ -370,6 +370,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         r83["viewer"] = v
 
         # R83(2) — a USED file is retired only by a request the Owner approves
+        # (pass 46 interim policy: an Admin files, an Owner approves — media_policy)
         a2: Dict[str, Any] = {}
         used2 = upload()
         q(lambda: op_db.work_reports.insert_one({
@@ -378,23 +379,49 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         rq_url = "/api/media/%s/retire-request" % used2["id"]
         r = call("DELETE", "/api/media/%s" % used2["id"], role="technician", key="auto",
                  json={"reason": "грешна"})
+        det = ((r["body"] or {}).get("detail") or {}) if isinstance(r["body"], dict) else {}
         a2["delete"] = (r["status"], r["error_code"])
-        a2["req_no_key"] = call("POST", rq_url, role="technician", json={"reason": "x"})["status"]
-        a2["req_no_reason"] = call("POST", rq_url, role="technician", key="auto", json={})["status"]
-        a2["req_other_user"] = call("POST", rq_url, role="requester", key="auto",
-                                    json={"reason": "x"})["status"]
-        a2["req_other_tenant"] = call("POST", rq_url, tkey="B", key="auto",
+        a2["delete_detail_technician"] = sorted(det.keys())
+        r = call("DELETE", "/api/media/%s" % used2["id"], role="admin", key="auto",
+                 json={"reason": "грешна"})
+        det = ((r["body"] or {}).get("detail") or {}) if isinstance(r["body"], dict) else {}
+        a2["delete_detail_admin_uses"] = [u.get("kind") for u in det.get("uses") or []]
+        a2["req_no_key"] = call("POST", rq_url, role="admin", json={"reason": "x"})["status"]
+        a2["req_no_reason"] = call("POST", rq_url, role="admin", key="auto", json={})["status"]
+        a2["req_technician_owner_of_file"] = call("POST", rq_url, role="technician", key="auto",
+                                                  json={"reason": "x"})["error_code"]
+        a2["req_owner"] = call("POST", rq_url, key="auto", json={"reason": "x"})["error_code"]
+        a2["req_other_tenant"] = call("POST", rq_url, tkey="B", role="admin", key="auto",
                                       json={"reason": "x"})["status"]
         k = uuid.uuid4().hex
-        r = call("POST", rq_url, role="technician", key=k, json={"reason": "снимката е на друг обект"})
-        r2 = call("POST", rq_url, role="technician", key=k, json={"reason": "снимката е на друг обект"})
+        r = call("POST", rq_url, role="admin", key=k, json={"reason": "снимката е на друг обект"})
+        r2 = call("POST", rq_url, role="admin", key=k, json={"reason": "снимката е на друг обект"})
         rid = (r["body"] or {}).get("id")
         a2["request"] = {"status": r["status"], "req_status": (r["body"] or {}).get("status"),
-                         "replay_same": r2["body"] == r["body"]}
-        a2["second_request"] = call("POST", rq_url, role="technician", key="auto",
+                         "replay_same": r2["body"] == r["body"],
+                         "has_version": bool((r["body"] or {}).get("uses_version")),
+                         "interim_until": (r["body"] or {}).get("interim_until")}
+        req_row = q(lambda: op_db.media_retire_requests.find_one({"id": rid}, {"_id": 0})) or {}
+        a2["request_row"] = {"uses_kinds": [u.get("kind") for u in req_row.get("uses") or []],
+                             "uses_version": bool(req_row.get("uses_version")),
+                             "ref_version_kept": "ref_version" in req_row}
+        a2["second_request"] = call("POST", rq_url, role="admin", key="auto",
                                     json={"reason": "пак"})["error_code"]
         a2["delete_while_pending"] = call("DELETE", "/api/media/%s" % used2["id"], role="technician",
                                           key="auto", json={"reason": "x"})["error_code"]
+        # FG-577: no new reference while the request is pending — /media/link and the writers
+        a2["link_while_pending"] = call("POST", "/api/media/link", role="technician", json={
+            "media_id": used2["id"], "context_type": "project",
+            "context_id": A["project_id"]})["error_code"]
+        smr_item = pid("A", "smr_pending_target")
+        q(lambda: op_db.missing_smr.insert_one({
+            "id": smr_item, "org_id": A["tenant_id"], "project_id": A["project_id"],
+            "status": "reported", "attachments": [], "created_at": NOW}))
+        a2["attach_while_pending"] = call(
+            "POST", "/api/missing-smr/%s/attachments" % smr_item, role="admin",
+            json={"media_id": used2["id"], "url": used2["url"], "filename": "x.jpg"})["error_code"]
+        a2["attach_not_written"] = (q(lambda: op_db.missing_smr.find_one(
+            {"id": smr_item}, {"_id": 0, "attachments": 1})) or {}).get("attachments") == []
         ap_url = "/api/media/retire-requests/%s/approve" % rid
         a2["approve_admin"] = call("POST", ap_url, role="admin", key="auto", json={})["error_code"]
         a2["approve_technician"] = call("POST", ap_url, role="technician", key="auto",
@@ -415,7 +442,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             "status": r["status"], "replay_same": r2["body"] == r["body"],
             "media_status": row.get("status"), "in_use": row.get("retired_in_use"),
             "approved_by_owner": row.get("retire_approved_by") == users_a["owner"]["id"],
-            "retired_by_requester": row.get("retired_by") == users_a["technician"]["id"],
+            "retired_by_requester": row.get("retired_by") == users_a["admin"]["id"],
             "reason": row.get("retired_reason"), "pending": row.get("retire_request_pending"),
             "file_kept": (UPLOADS / stored(used2)).is_file(),
             "record_keeps_ref": (q(lambda: op_db.work_reports.find_one(
@@ -427,33 +454,63 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
             "again": call("POST", ap_url, key="auto", json={})["error_code"],
             "events": [{"action": e["action"], "reason": e["reason"],
                         "approved_by": (e["diff"] or {}).get("approved_by") == users_a["owner"]["id"],
-                        "requested_by": (e["diff"] or {}).get("requested_by") == users_a["technician"]["id"]}
+                        "requested_by": (e["diff"] or {}).get("requested_by") == users_a["admin"]["id"]}
                        for e in events(used2["id"], "media.")]}
-        # the second-person check: the Owner asks, the same Owner cannot approve -> reject
-        used3 = upload(role="owner")
-        q(lambda: op_db.pending_expenses.insert_one({
-            "id": pid("A", "pe_used3"), "org_id": A["tenant_id"], "media_id": used3["id"],
-            "status": "approved", "created_at": NOW}))
-        r = call("POST", "/api/media/%s/retire-request" % used3["id"], key="auto",
+        # FG-577: the holders changed after the request → approve 409 RETIRE_REQUEST_STALE
+        used4 = upload()
+        q(lambda: op_db.work_reports.insert_one({
+            "id": pid("A", "wr_stale"), "org_id": A["tenant_id"], "status": "Approved",
+            "photos": [used4["id"]], "created_at": NOW}))
+        r = call("POST", "/api/media/%s/retire-request" % used4["id"], role="admin", key="auto",
                  json={"reason": "дубликат"})
-        rid3 = (r["body"] or {}).get("id")
-        a2["self"] = {
-            "request": r["status"],
-            "approve": call("POST", "/api/media/retire-requests/%s/approve" % rid3, key="auto",
-                            json={})["error_code"],
-            "reject_no_reason": call("POST", "/api/media/retire-requests/%s/reject" % rid3,
-                                     key="auto", json={})["status"],
-            "reject": call("POST", "/api/media/retire-requests/%s/reject" % rid3, key="auto",
-                           json={"reason": "остава"})["status"]}
-        row = media_row(used3["id"])
-        a2["self"].update({"media_status": row.get("status"), "pending": row.get("retire_request_pending"),
-                           "events": [e["action"] for e in events(used3["id"], "media.")],
-                           "request_again": call("POST", "/api/media/%s/retire-request" % used3["id"],
-                                                 key="auto", json={"reason": "пак"})["status"]})
+        rid4 = (r["body"] or {}).get("id")
+        q(lambda: op_db.pending_expenses.insert_one({     # a second holder appears (raw write)
+            "id": pid("A", "pe_stale"), "org_id": A["tenant_id"], "media_id": used4["id"],
+            "status": "approved", "created_at": NOW}))
+        r = call("POST", "/api/media/retire-requests/%s/approve" % rid4, key="auto", json={})
+        a2["stale"] = {"request": rid4 is not None, "approve": (r["status"], r["error_code"]),
+                       "media_status": media_row(used4["id"]).get("status"),
+                       "request_status": (q(lambda: op_db.media_retire_requests.find_one(
+                           {"id": rid4}, {"_id": 0, "status": 1})) or {}).get("status")}
+        # the second-person check — exercised with the policy widened to let an Owner file
+        # (an open question to Krum; interim: only an Admin files)
+        try:                                   # absent on code before pass 46 → recorded as None
+            import app.services.media_policy as media_policy
+        except ImportError:
+            media_policy = None
+        saved_roles = getattr(media_policy, "RETIRE_REQUEST_ROLES", None)
+        if media_policy is not None:
+            media_policy.RETIRE_REQUEST_ROLES = frozenset({"Admin", "Owner"})
+        try:
+            used3 = upload(role="owner")
+            q(lambda: op_db.pending_expenses.insert_one({
+                "id": pid("A", "pe_used3"), "org_id": A["tenant_id"], "media_id": used3["id"],
+                "status": "approved", "created_at": NOW}))
+            r = call("POST", "/api/media/%s/retire-request" % used3["id"], key="auto",
+                     json={"reason": "дубликат"})
+            rid3 = (r["body"] or {}).get("id")
+            a2["self"] = {
+                "request": r["status"],
+                "approve": call("POST", "/api/media/retire-requests/%s/approve" % rid3, key="auto",
+                                json={})["error_code"],
+                "reject_no_reason": call("POST", "/api/media/retire-requests/%s/reject" % rid3,
+                                         key="auto", json={})["status"],
+                "reject": call("POST", "/api/media/retire-requests/%s/reject" % rid3, key="auto",
+                               json={"reason": "остава"})["status"]}
+            row = media_row(used3["id"])
+            a2["self"].update({"media_status": row.get("status"),
+                               "pending": row.get("retire_request_pending"),
+                               "events": [e["action"] for e in events(used3["id"], "media.")],
+                               "request_again": call("POST", "/api/media/%s/retire-request"
+                                                     % used3["id"], key="auto",
+                                                     json={"reason": "пак"})["status"]})
+        finally:
+            if media_policy is not None:
+                media_policy.RETIRE_REQUEST_ROLES = saved_roles
         # an UNUSED file has no request path: it is retired directly
         free2 = upload()
         a2["unused_request"] = call("POST", "/api/media/%s/retire-request" % free2["id"],
-                                    role="technician", key="auto", json={"reason": "x"})["error_code"]
+                                    role="admin", key="auto", json={"reason": "x"})["error_code"]
         r83["approval"] = a2
 
         # R83(3) — avatars: only a fresh profile upload; changes audited; old ones retirable
@@ -498,22 +555,29 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         a3["current_served"] = call("GET", "/api/media/avatar/%s" % stored(av2), role="viewer")["status"]
         r83["avatars"] = a3
 
-        # R83(4) — the legacy-avatar backfill: dry run counts, apply idempotent + AuditEvent
+        # R83(4) + FG-578 — the legacy-avatar backfill: dry run counts; apply needs an Owner's
+        # USER ID; only files UPLOADED as profile; matched_count checked; revert mode
         a4: Dict[str, Any] = {}
         spec = importlib.util.spec_from_file_location(
             "mediasec01_backfill", BACKEND / "scripts" / "media_sec_01_avatar_backfill.py")
         bf = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(bf)
+        owner_id, admin_id = users_a["owner"]["id"], users_a["admin"]["id"]
         viewer_id = users_a["viewer"]["id"]
-        legacy_name = "%s.jpg" % uuid.uuid4()
-        (UPLOADS / legacy_name).write_bytes(JPEG)
-        q(lambda: op_db.media_files.insert_one({
-            "id": pid("A", "legacy_av"), "org_id": A["tenant_id"], "owner_user_id": viewer_id,
-            "filename": "legacy.jpg", "stored_filename": legacy_name,
-            "url": "/api/media/file/%s" % legacy_name, "content_type": "image/jpeg",
-            "context_type": "profile", "context_id": viewer_id, "created_at": NOW}))
-        q(lambda: op_db.users.update_one({"id": viewer_id},
-                                         {"$set": {"avatar_url": "/api/media/file/%s" % legacy_name}}))
+
+        def legacy(row_id, uid, **extra):
+            name = "%s.jpg" % uuid.uuid4()
+            (UPLOADS / name).write_bytes(JPEG)
+            q(lambda: op_db.media_files.insert_one({
+                "id": pid("A", row_id), "org_id": A["tenant_id"], "owner_user_id": uid,
+                "filename": "legacy.jpg", "stored_filename": name,
+                "url": "/api/media/file/%s" % name, "content_type": "image/jpeg",
+                "context_type": "profile", "context_id": uid, "created_at": NOW, **extra}))
+            q(lambda: op_db.users.update_one({"id": uid},
+                                             {"$set": {"avatar_url": "/api/media/file/%s" % name}}))
+            return name
+        legacy_name = legacy("legacy_av", viewer_id)
+        legacy("legacy_linked", admin_id, linked_at=NOW)          # only LINKED to a profile
         site_url = "/api/media/file/%s" % stored(site_a)
         q(lambda: op_db.users.update_one({"id": users_a["accountant"]["id"]},
                                          {"$set": {"avatar_url": site_url}}))
@@ -521,14 +585,6 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                          {"$set": {"avatar_url": "/static/x.png"}}))
         a4["served_before"] = call("GET", "/api/media/avatar/%s" % legacy_name)["status"]
         audit_before = q(lambda: op_db.audit_events.count_documents({"action": "media.avatar.backfill"}))
-        dry = q(lambda: bf.migrate(op_db))
-        mine = {r["user_id"]: r["action"] for r in dry["plan"]}
-        a4["dry"] = {"viewer": mine.get(viewer_id), "accountant": mine.get(users_a["accountant"]["id"]),
-                     "requester": mine.get(users_a["requester"]["id"]),
-                     "technician": mine.get(tech), "applied": dry["applied"],
-                     "flag_written": media_row(pid("A", "legacy_av")).get("avatar"),
-                     "audit_written": q(lambda: op_db.audit_events.count_documents(
-                         {"action": "media.avatar.backfill"})) - audit_before}
 
         async def _try(**kw):
             try:
@@ -536,22 +592,222 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 return "ran"
             except (bf.PlanMismatch, bf.NotApproved) as exc:
                 return type(exc).__name__
-        a4["apply_unapproved"] = q(lambda: _try(apply=True, plan_sha=dry["plan_sha"]))
-        a4["apply_wrong_sha"] = q(lambda: _try(apply=True, approved_by="Крум", plan_sha="0" * 64))
-        res = q(lambda: bf.migrate(op_db, apply=True, approved_by="Крум", plan_sha=dry["plan_sha"]))
-        a4["apply"] = {"written": res.get("written"),
+        a4["dry_no_approver"] = q(lambda: _try())
+        a4["dry_free_text"] = q(lambda: _try(approved_by="Крум"))
+        a4["dry_admin_id"] = q(lambda: _try(approved_by=admin_id))
+        dry = q(lambda: bf.migrate(op_db, approved_by=owner_id))
+        mine = {r["user_id"]: r["action"] for r in dry["plan"]}
+        a4["dry"] = {"viewer": mine.get(viewer_id), "admin_linked": mine.get(admin_id),
+                     "accountant": mine.get(users_a["accountant"]["id"]),
+                     "requester": mine.get(users_a["requester"]["id"]),
+                     "technician": mine.get(tech), "applied": dry["applied"],
+                     "only_tenant_a": {r["org_id"] for r in dry["plan"]} == {A["tenant_id"]},
+                     "flag_written": media_row(pid("A", "legacy_av")).get("avatar"),
+                     "audit_written": q(lambda: op_db.audit_events.count_documents(
+                         {"action": "media.avatar.backfill"})) - audit_before}
+        b_dry = q(lambda: bf.migrate(op_db, approved_by=fx["B"]["users"]["owner"]["id"]))
+        a4["b_owner_sees_only_b"] = all(r["org_id"] == fx["B"]["tenant_id"] for r in b_dry["plan"])
+        a4["apply_wrong_sha"] = q(lambda: _try(apply=True, approved_by=owner_id, plan_sha="0" * 64))
+        # FG-578: a write that matches nothing aborts the user's transaction ("conflict")
+        flag_row = next(r for r in dry["plan"] if r["user_id"] == viewer_id)
+        stale_row = dict(flag_row, avatar_url="/api/media/file/not-the-current-one.jpg")
+        a4["conflict"] = (q(lambda: bf._apply_flag(op_db, stale_row, owner_id))
+                          if hasattr(bf, "_apply_flag") else "no _apply_flag (pre pass 46)")
+        a4["conflict_rolled_back"] = media_row(pid("A", "legacy_av")).get("avatar") is None
+        res = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry["plan_sha"]))
+        a4["apply"] = {"written": res.get("written"), "conflict": res.get("conflict"),
                        "flag": media_row(pid("A", "legacy_av")).get("avatar"),
+                       "linked_flag": media_row(pid("A", "legacy_linked")).get("avatar"),
                        "viewer_url": user_row(viewer_id).get("avatar_url") == "/api/media/avatar/%s" % legacy_name,
                        "served_after": call("GET", "/api/media/avatar/%s" % legacy_name)["status"],
                        "site_photo_served": call("GET", "/api/media/avatar/%s" % stored(site_a))["status"],
-                       "events": [{"action": e["action"], "approved": (e["diff"] or {}).get("approved_by")}
+                       "events": [{"action": e["action"],
+                                   "approved_by_owner": (e["diff"] or {}).get("approved_by") == owner_id}
                                   for e in events(pid("A", "legacy_av"), "media.avatar")]}
-        dry2 = q(lambda: bf.migrate(op_db))
-        res2 = q(lambda: bf.migrate(op_db, apply=True, approved_by="Крум", plan_sha=dry2["plan_sha"]))
+        dry2 = q(lambda: bf.migrate(op_db, approved_by=owner_id))
+        res2 = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, plan_sha=dry2["plan_sha"]))
         a4["second_apply_written"] = res2.get("written")
         a4["second_viewer_action"] = {r["user_id"]: r["action"] for r in dry2["plan"]}.get(viewer_id)
+        # revert: dry run first, then the approved plan
+        try:
+            rdry = q(lambda: bf.migrate(op_db, approved_by=owner_id, revert=True))
+        except TypeError:                      # pre pass 46: no revert mode
+            rdry = {"counts": None, "applied": None, "plan_sha": None, "plan": [None]}
+        a4["revert_dry"] = {"counts": rdry["counts"], "applied": rdry["applied"],
+                            "flag_still": media_row(pid("A", "legacy_av")).get("avatar")}
+        try:
+            rres = q(lambda: bf.migrate(op_db, apply=True, approved_by=owner_id, revert=True,
+                                        plan_sha=rdry["plan_sha"]))
+        except TypeError:
+            rres = {}
+        a4["revert"] = {"written": rres.get("written"),
+                        "flag": media_row(pid("A", "legacy_av")).get("avatar"),
+                        "viewer_url_restored": user_row(viewer_id).get("avatar_url")
+                        == "/api/media/file/%s" % legacy_name,
+                        "served": call("GET", "/api/media/avatar/%s" % legacy_name)["status"],
+                        "events": [e["action"] for e in events(pid("A", "legacy_av"), "media.avatar")]}
+        try:
+            rdry2 = q(lambda: bf.migrate(op_db, approved_by=owner_id, revert=True))
+        except TypeError:
+            rdry2 = {"plan": [None]}
+        a4["second_revert_rows"] = len(rdry2["plan"])
         r83["backfill"] = a4
         obs["r83"] = r83
+
+        # ─────────────────────────────────────────────── FLOW Guard pass 46
+        p46: Dict[str, Any] = {}
+        os.environ["PERMISSION_SERVICE_MODE"] = "off"
+        # FG-576 — one test per holder the registry was missing (the real field names)
+        holders = {
+            "offer_acceptance": ("offers", lambda m: {"status": "Accepted",
+                                                     "approval": {"evidence_file_id": m["id"]}}),
+            "warehouse_movement": ("warehouse_transactions",
+                                   lambda m: {"tenant_id": A["tenant_id"], "file_ids": [m["id"]]}),
+            "payment_receipt": ("finance_payments", lambda m: {"cash_receipt_file_id": m["id"]}),
+            "subcontractor_payment_receipt": ("subcontractor_payments",
+                                              lambda m: {"cash_receipt_file_id": m["id"]}),
+        }
+        p46["fg576"] = {}
+        for kind, (coll, shape) in holders.items():
+            m = upload()
+            row = {"id": pid("A", "h_" + kind), "org_id": A["tenant_id"], "created_at": NOW,
+                   **shape(m)}
+            q(lambda: op_db[coll].insert_one(row))
+            r = call("DELETE", "/api/media/%s" % m["id"], role="technician", key="auto",
+                     json={"reason": "x"})
+            ra = call("DELETE", "/api/media/%s" % m["id"], role="admin", key="auto",
+                      json={"reason": "x"})
+            p46["fg576"][kind] = {
+                "status": r["status"], "error_code": r["error_code"],
+                "kinds_shown_to_uploader": ((r["body"] or {}).get("detail") or {}).get("use_kinds"),
+                "ids_hidden_from_uploader": "uses" not in ((r["body"] or {}).get("detail") or {}),
+                "admin_sees": [u.get("kind") for u in ((ra["body"] or {}).get("detail") or {}).get("uses") or []],
+                "status_after": media_row(m["id"]).get("status"),
+                "file_kept": (UPLOADS / stored(m)).is_file()}
+        # audit_events.related_file_ids — the chain is written only through the audit store
+        m = upload()
+        from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+        from app.audit.store import record_event
+        ev = build_event(tenant_id=A["tenant_id"], actor_type=ACTOR_HUMAN,
+                         actor_id=users_a["owner"]["id"], action="probe.evidence",
+                         source_flow="FLOW-029", retention_class=RETENTION_R1_CRITICAL_BUSINESS,
+                         entity_type="probe", entity_id=pid("A", "probe_ev"), reason="probe",
+                         structured_diff={}, related_file_ids=[m["id"]], source_channel="api")
+        q(lambda: record_event(op_db, ev))
+        r = call("DELETE", "/api/media/%s" % m["id"], role="technician", key="auto",
+                 json={"reason": "x"})
+        p46["fg576"]["audit_event"] = {
+            "status": r["status"], "error_code": r["error_code"],
+            "kinds_shown_to_uploader": ((r["body"] or {}).get("detail") or {}).get("use_kinds"),
+            "status_after": media_row(m["id"]).get("status")}
+        # the same holders in ANOTHER tenant never block
+        m = upload()
+        q(lambda: op_db.finance_payments.insert_one({
+            "id": pid("B", "h_pay"), "org_id": fx["B"]["tenant_id"], "cash_receipt_file_id": m["id"],
+            "created_at": NOW}))
+        p46["fg576"]["other_tenant_row"] = call("DELETE", "/api/media/%s" % m["id"],
+                                                role="technician", key="auto",
+                                                json={"reason": "x"})["status"]
+
+        # FG-575 — ONE upload guard at every entry point (Viewer → 403, nothing written)
+        def files_now():
+            return len(list(UPLOADS.glob("*"))) + (len(list((UPLOADS / "projects").glob("*")))
+                                                   if (UPLOADS / "projects").is_dir() else 0)
+        f = lambda: {"file": ("v.jpg", io.BytesIO(JPEG), "image/jpeg")}
+        before_files = files_now()
+        before_media = q(lambda: op_db.media_files.count_documents({}))
+        before_pe = q(lambda: op_db.pending_expenses.count_documents({}))
+        up = {}
+        up["media_upload_no_context"] = call("POST", "/api/media/upload", role="viewer", files=f())["status"]
+        up["media_upload_project_member"] = call("POST", "/api/media/upload", role="viewer",
+                                                 data={"context_type": "project",
+                                                       "context_id": A["project_id"]},
+                                                 files=f())["status"]
+        up["photo_invoice"] = call("POST", "/api/technician/photo-invoice", role="viewer",
+                                   data={"project_id": A["project_id"], "amount": "1"},
+                                   files=f())["status"]
+        up["ocr_upload"] = call("POST", "/api/ocr-invoice/upload", role="viewer",
+                                data={"project_id": A["project_id"]}, files=f())["status"]
+        up["supplier_invoice_file"] = call("POST", "/api/supplier-invoices/%s/upload-file"
+                                           % pid("A", "no_inv"), role="viewer", files=f())["status"]
+        up["project_photo"] = call("POST", "/api/projects/%s/photos" % A["project_id"],
+                                   role="viewer", files=f())["status"]
+        up["project_viewer_sitemanager_media_upload"] = call(
+            "POST", "/api/media/upload", role="requester",
+            data={"context_type": "project", "context_id": A["project_id"]}, files=f())["status"]
+        up["written"] = {"files": files_now() - before_files,
+                         "media_rows": q(lambda: op_db.media_files.count_documents({})) - before_media,
+                         "pending_expenses": q(lambda: op_db.pending_expenses.count_documents({})) - before_pe}
+        # positives: the member Technician still uploads
+        r = tc.post("/api/projects/%s/team" % A["project_id"],
+                    json={"user_id": tech, "role_in_project": "Technician"},
+                    headers={"Authorization": "Bearer " + tokens[("A", "admin")]})
+        up["tech_photo_invoice"] = call("POST", "/api/technician/photo-invoice", role="technician",
+                                        data={"project_id": A["project_id"], "amount": "1"},
+                                        files=f())["status"]
+        up["tech_media_upload"] = call("POST", "/api/media/upload", role="technician", files=f())["status"]
+        up["tech_photo_invoice_other_project"] = call(
+            "POST", "/api/technician/photo-invoice", role="technician",
+            data={"project_id": pid("A", "other"), "amount": "1"}, files=f())["status"]
+        p46["fg575"] = up
+
+        # FG-579 — write skew: a reference committed while a retire runs → the retire refuses
+        try:                                   # absent on code before pass 46 → no race possible
+            import app.services.file_holders as fh
+        except ImportError:
+            fh = None
+        from app.db import db as app_db
+        from app.tenancy.data_access import TenantData
+        racy = upload()
+        real_find = getattr(fh, "find_holders", None)
+        state = {"done": False}
+
+        async def racing_find(tenant, org_id, media, session=None, kinds=None):
+            out = await real_find(tenant, org_id, media, session=session, kinds=kinds)
+            if media.get("id") == racy["id"] and not state["done"]:
+                state["done"] = True
+                t = TenantData.for_resolved_org(app_db, A["tenant_id"])
+                await fh.claimed_write(t, A["tenant_id"], [racy["id"]],
+                                       lambda s: t.scan_docs.insert_one(
+                                           {"id": pid("A", "race_scan"), "org_id": A["tenant_id"],
+                                            "media_id": racy["id"], "created_at": NOW},
+                                           session=s))
+            return out
+        if fh is not None:
+            fh.find_holders = racing_find
+        try:
+            r = call("DELETE", "/api/media/%s" % racy["id"], role="technician", key="auto",
+                     json={"reason": "x"})
+        finally:
+            if fh is not None:
+                fh.find_holders = real_find
+        p46["fg579"] = {"race_happened": state["done"], "status": r["status"],
+                        "error_code": r["error_code"],
+                        "media_status": media_row(racy["id"]).get("status"),
+                        "reference_kept": q(lambda: op_db.scan_docs.count_documents(
+                            {"id": pid("A", "race_scan")})) == 1,
+                        "ref_version": media_row(racy["id"]).get("ref_version")}
+        # …and a writer refuses a file retired just before (claim sees "retired")
+        gone = upload()
+        call("DELETE", "/api/media/%s" % gone["id"], role="technician", key="auto", json={"reason": "x"})
+        smr2 = pid("A", "smr_after_retire")
+        q(lambda: op_db.missing_smr.insert_one({
+            "id": smr2, "org_id": A["tenant_id"], "project_id": A["project_id"],
+            "status": "reported", "attachments": [], "created_at": NOW}))
+        p46["fg579"]["attach_retired"] = call(
+            "POST", "/api/missing-smr/%s/attachments" % smr2, role="admin",
+            json={"media_id": gone["id"], "url": gone["url"], "filename": "g.jpg"})["error_code"]
+
+        # FG-544 — the link is an AuditEvent
+        lk = upload()
+        r = call("POST", "/api/media/link", role="technician", json={
+            "media_id": lk["id"], "context_type": "project", "context_id": A["project_id"]})
+        p46["fg544_link"] = {"status": r["status"],
+                             "events": [{"action": e["action"],
+                                         "after": (e["diff"] or {}).get("after")}
+                                        for e in events(lk["id"], "media.file.link")],
+                             "ref_version": media_row(lk["id"]).get("ref_version")}
+        obs["pass46"] = p46
 
         # ─────────────────────────────────────────────── FG-541 — project photos
         other = pid("A", "other")
@@ -733,7 +989,7 @@ def test_fg542_a_linked_file_is_409_and_stays(obs):
 def test_fg542_a_photo_used_by_an_approved_record_is_409_and_stays(obs):
     d = obs["fg542"]["used_by_approved_smr"]
     assert (d["status"], d["error_code"]) == (409, "MEDIA_IN_USE")
-    assert d["uses"] and d["uses"][0]["kind"] == "missing_smr"
+    assert d["uses"] == ["missing_smr"]          # the uploader sees kinds, never record ids
     assert d["row_kept"] and d["file_kept"] and d["status_after"] is None
     assert d["events"] == []
     s = obs["fg542"]["used_as_signature"]
@@ -774,9 +1030,9 @@ def test_fg542_an_unused_file_is_retired_kept_and_audited(obs):
 @real
 def test_fg556_a_photo_used_by_a_report_draft_expense_or_payment_is_409(obs):
     d = obs["fg542"]["fg556"]
-    kinds = {"work_report_id": "work_reports", "work_report_url": "work_reports",
-             "extra_work_draft": "extra_work_drafts", "pending_expense": "pending_expenses",
-             "pending_expense_url": "pending_expenses", "payment_receipt": "finance_payments"}
+    kinds = {"work_report_id": "work_report", "work_report_url": "work_report",
+             "extra_work_draft": "extra_work_draft", "pending_expense": "pending_expense",
+             "pending_expense_url": "pending_expense", "payment_receipt": "payment_receipt"}
     for label, kind in kinds.items():
         cell = d[label]
         assert (cell["status"], cell["error_code"]) == (409, "MEDIA_IN_USE"), (label, cell)
@@ -848,12 +1104,22 @@ def test_r83_1_a_viewer_reads_project_photos_but_never_uploads(obs, mode):
 
 
 @real
-def test_r83_2_a_used_file_needs_a_request_and_the_owners_approval(obs):
+def test_r83_2_a_used_file_needs_an_admin_request_and_the_owners_approval(obs):
     a = obs["r83"]["approval"]
     assert list(a["delete"]) == [409, "MEDIA_IN_USE"]
+    # pass 46 minor: the uploader sees no record ids; Owner/Admin see which records
+    assert "uses" not in a["delete_detail_technician"]
+    assert {"use_kinds", "uses_count"} <= set(a["delete_detail_technician"])
+    assert a["delete_detail_admin_uses"] == ["work_report"]
     assert a["req_no_key"] == 428 and a["req_no_reason"] == 400
-    assert a["req_other_user"] == 403 and a["req_other_tenant"] == 404
-    assert a["request"] == {"status": 201, "req_status": "pending", "replay_same": True}
+    # interim policy (media_policy): an Admin files; the file's uploader / an Owner do not
+    assert a["req_technician_owner_of_file"] == "RETIRE_REQUEST_NOT_ALLOWED"
+    assert a["req_owner"] == "RETIRE_REQUEST_NOT_ALLOWED"
+    assert a["req_other_tenant"] == 404
+    assert a["request"] == {"status": 201, "req_status": "pending", "replay_same": True,
+                            "has_version": True, "interim_until": "W0-07"}
+    assert a["request_row"] == {"uses_kinds": ["work_report"], "uses_version": True,
+                                "ref_version_kept": True}
     assert a["second_request"] == "RETIRE_REQUEST_PENDING"
     assert a["delete_while_pending"] == "MEDIA_IN_USE"
     assert a["approve_admin"] == "OWNER_APPROVAL_REQUIRED"
@@ -861,6 +1127,22 @@ def test_r83_2_a_used_file_needs_a_request_and_the_owners_approval(obs):
     assert a["approve_no_key"] == 428 and a["approve_other_tenant"] == 404
     assert a["before_approve"] == {"status": None, "events": ["media.file.retire_request"]}
     assert len(a["pending_list_owner"]) >= 1 and a["pending_list_technician"] == 403
+
+
+@real
+def test_fg577_no_new_reference_while_a_retire_request_is_pending(obs):
+    a = obs["r83"]["approval"]
+    assert a["link_while_pending"] == "RETIRE_REQUEST_PENDING"
+    assert a["attach_while_pending"] == "RETIRE_REQUEST_PENDING"
+    assert a["attach_not_written"] is True
+
+
+@real
+def test_fg577_an_approval_of_a_changed_set_of_holders_is_stale(obs):
+    st = obs["r83"]["approval"]["stale"]
+    assert st["request"] is True
+    assert list(st["approve"]) == [409, "RETIRE_REQUEST_STALE"]
+    assert st["media_status"] is None and st["request_status"] == "pending"
 
 
 @real
@@ -921,24 +1203,102 @@ def test_r83_3_an_old_avatar_is_retired_by_its_owner_or_an_admin_the_current_one
 
 
 @real
-def test_r83_4_the_backfill_dry_runs_then_applies_once_with_an_audit_event(obs):
+def test_r83_4_fg578_the_backfill_needs_an_owners_id_and_flags_only_uploaded_profiles(obs):
     b = obs["r83"]["backfill"]
     assert b["served_before"] == 404
-    assert b["dry"] == {"viewer": "flag", "accountant": "skip:not_a_profile_photo",
+    assert b["dry_no_approver"] == "NotApproved"
+    assert b["dry_free_text"] == "NotApproved" and b["dry_admin_id"] == "NotApproved"
+    assert b["dry"] == {"viewer": "flag", "admin_linked": "skip:linked_not_uploaded_as_profile",
+                        "accountant": "skip:not_a_profile_photo",
                         "requester": "skip:url_shape", "technician": "already",
-                        "applied": False, "flag_written": None, "audit_written": 0}
-    assert b["apply_unapproved"] == "NotApproved" and b["apply_wrong_sha"] == "PlanMismatch"
+                        "applied": False, "only_tenant_a": True, "flag_written": None,
+                        "audit_written": 0}
+    assert b["b_owner_sees_only_b"] is True
+    assert b["apply_wrong_sha"] == "PlanMismatch"
+
+
+@real
+def test_r83_4_fg578_a_write_that_matches_nothing_rolls_back(obs):
+    b = obs["r83"]["backfill"]
+    assert b["conflict"] == "conflict" and b["conflict_rolled_back"] is True
+
+
+@real
+def test_r83_4_the_backfill_applies_once_with_an_audit_event(obs):
+    b = obs["r83"]["backfill"]
     ap = b["apply"]
-    assert ap["written"] == 1 and ap["flag"] is True and ap["viewer_url"] is True
+    assert ap["written"] == 1 and ap["conflict"] == 0
+    assert ap["flag"] is True and ap["linked_flag"] is None and ap["viewer_url"] is True
     assert ap["served_after"] == 200 and ap["site_photo_served"] == 404
-    assert ap["events"] == [{"action": "media.avatar.backfill", "approved": "Крум"}]
+    assert ap["events"] == [{"action": "media.avatar.backfill", "approved_by_owner": True}]
     assert b["second_apply_written"] == 0 and b["second_viewer_action"] == "already"
+
+
+@real
+def test_r83_4_fg578_revert_dry_runs_then_undoes_exactly_the_backfill(obs):
+    b = obs["r83"]["backfill"]
+    assert b["revert_dry"] == {"counts": {"revert": 1}, "applied": False, "flag_still": True}
+    rv = b["revert"]
+    assert rv["written"] == 1 and rv["flag"] is None and rv["viewer_url_restored"] is True
+    assert rv["served"] == 404
+    assert rv["events"] == ["media.avatar.backfill", "media.avatar.backfill_revert"]
+    assert b["second_revert_rows"] == 0
+
+
+@real
+@pytest.mark.parametrize("kind", ["offer_acceptance", "warehouse_movement", "payment_receipt",
+                                  "subcontractor_payment_receipt"])
+def test_fg576_every_holder_blocks_the_uploaders_delete(obs, kind):
+    c = obs["pass46"]["fg576"][kind]
+    assert (c["status"], c["error_code"]) == (409, "MEDIA_IN_USE"), c
+    assert c["kinds_shown_to_uploader"] == [kind] and c["ids_hidden_from_uploader"] is True
+    assert c["admin_sees"] == [kind]
+    assert c["status_after"] is None and c["file_kept"] is True
+
+
+@real
+def test_fg576_an_audit_event_naming_the_file_is_a_holder(obs):
+    c = obs["pass46"]["fg576"]["audit_event"]
+    assert (c["status"], c["error_code"]) == (409, "MEDIA_IN_USE")
+    assert c["kinds_shown_to_uploader"] == ["audit_event"] and c["status_after"] is None
+    assert obs["pass46"]["fg576"]["other_tenant_row"] == 200
+
+
+@real
+def test_fg575_one_upload_guard_refuses_a_viewer_everywhere_and_writes_nothing(obs):
+    up = obs["pass46"]["fg575"]
+    for k in ("media_upload_no_context", "media_upload_project_member", "photo_invoice",
+              "ocr_upload", "supplier_invoice_file", "project_photo",
+              "project_viewer_sitemanager_media_upload"):
+        assert up[k] == 403, (k, up[k])
+    assert up["written"] == {"files": 0, "media_rows": 0, "pending_expenses": 0}
+    assert up["tech_photo_invoice"] == 201 and up["tech_media_upload"] == 200
+    assert up["tech_photo_invoice_other_project"] == 403
+
+
+@real
+def test_fg579_a_reference_written_during_a_retire_wins_and_the_retire_refuses(obs):
+    c = obs["pass46"]["fg579"]
+    assert c["race_happened"] is True
+    assert (c["status"], c["error_code"]) == (409, "MEDIA_IN_USE")
+    assert c["media_status"] is None and c["reference_kept"] is True
+    assert c["ref_version"] == 1
+    assert c["attach_retired"] == "MEDIA_RETIRED"
+
+
+@real
+def test_fg544_a_link_writes_an_audit_event(obs):
+    c = obs["pass46"]["fg544_link"]
+    assert c["status"] == 200 and c["ref_version"] == 1
+    assert c["events"] == [{"action": "media.file.link",
+                            "after": {"context_type": "project",
+                                      "context_id": c["events"][0]["after"]["context_id"]}}]
 
 
 @real
 def test_the_committed_evidence_is_a_run_of_this_harness():
     data = json.loads(RESULTS_JSON.read_text(encoding="utf-8"))
-    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83"}
+    assert set(data) == {"fg540", "fg541", "fg542", "fg544", "r83", "pass46"}
 
 
 if __name__ == "__main__":

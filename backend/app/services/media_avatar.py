@@ -76,3 +76,27 @@ async def audit_avatar_change(db_handle, actor: Dict[str, Any], *, target_user_i
         effective_role_assignments=[actor.get("role") or ""],
         tool_or_endpoint=endpoint, source_channel="api")
     await record_event(db_handle, event, session=session)
+
+
+async def write_user_with_avatar(db_handle, tenant, actor: Dict[str, Any], *, target_user_id: str,
+                                 update: Dict[str, Any], before: Any, endpoint: str) -> None:
+    """ONE transaction: the claim on the new avatar's file row (FG-579 — a concurrent retire
+    and this new reference cannot both commit), the ``users`` write, and the canonical
+    AuditEvent ``user.avatar.change`` (pass 46: the audit inside the transaction)."""
+    from app.services.auth_tx import run_in_transaction
+    from app.services.file_holders import claim
+
+    async def body(session):
+        after = update.get("avatar_url")
+        if after:
+            await claim(tenant, actor["org_id"], [after], session=session)
+        res = await tenant.users.update_one({"id": target_user_id}, {"$set": update},
+                                            session=session)
+        if res.matched_count != 1:
+            raise HTTPException(status_code=404, detail="User not found")
+        await audit_avatar_change(db_handle, actor, target_user_id=target_user_id,
+                                  before=before, after=after, endpoint=endpoint,
+                                  session=session)
+        return True
+
+    await run_in_transaction(db_handle, body)

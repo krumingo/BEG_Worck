@@ -284,13 +284,14 @@ async def add_attachment(
         "added_at": datetime.now(timezone.utc).isoformat(),
         "added_by": user["id"],
     }
-    await tenant.missing_smr.update_one(
-        {"id": item_id},
-        {
-            "$push": {"attachments": attachment},
-            "$set": {"updated_at": datetime.now(timezone.utc).isoformat()},
-        },
-    )
+    # MEDIA-SEC-01 (FG-579): claim the file and write the reference in ONE transaction
+    from app.services.file_holders import claimed_write
+    await claimed_write(tenant, user["org_id"], [data.media_id, data.url],
+                        lambda s: tenant.missing_smr.update_one(
+                            {"id": item_id},
+                            {"$push": {"attachments": attachment},
+                             "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}},
+                            session=s))
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
@@ -372,7 +373,9 @@ async def bridge_to_analysis(item_id: str, user: dict = Depends(require_m2)):
         "group_batch_id": None,
         "source_missing_smr_id": item_id,
     }
-    await tenant.extra_work_drafts.insert_one(draft)
+    from app.services.file_holders import claimed_write   # MEDIA-SEC-01 FG-579
+    await claimed_write(tenant, user["org_id"], draft.get("photos") or [],
+                        lambda s: tenant.extra_work_drafts.insert_one(draft, session=s))
 
     await tenant.missing_smr.update_one(
         {"id": item_id},
@@ -611,12 +614,13 @@ async def client_approve(item_id: str, data: ClientDecisionBody, user: dict = De
     approval["decided_by"] = user["id"]
     approval["client_notes"] = data.client_notes or approval.get("client_notes")
     approval["signature_media_id"] = data.signature_media_id
-
-    await tenant.missing_smr.update_one({"id": item_id}, {"$set": {
-        "status": "approved_by_client",
-        "client_approval": approval,
-        "updated_at": now,
-    }})
+    from app.services.file_holders import claimed_write   # MEDIA-SEC-01 FG-579
+    await claimed_write(tenant, user["org_id"], [data.signature_media_id],
+                        lambda s: tenant.missing_smr.update_one({"id": item_id}, {"$set": {
+                            "status": "approved_by_client",
+                            "client_approval": approval,
+                            "updated_at": now,
+                        }}, session=s))
     return await tenant.missing_smr.find_one({"id": item_id}, {"_id": 0})
 
 
