@@ -1374,3 +1374,139 @@
 - **FG-363** (WP и планирани материали от неприета оферта) → reference за L108-112. FG-613 е същият модел за заявката за материали плюс AI количествата.
 - **FG-331**, **FG-332**, **FG-335** (калибрация) → reference за L69-70, L122.
 - **FG-519** (без canonical AuditEvent за AI) → main open; на клона #90 partial. **FG-535..539** — само на клона #90.
+
+## Проход 54 — FLOW-032 (Master Data / единна база)
+
+- main @ `3863610` (= `38636107`, merge #88 PWA-01), 13.11.2026.
+- Проба (P1–P3):
+  - `scratchpad/fg54_032/test_probe_032.py` → `scratchpad/fg54_032/out.json`;
+  - реален Mongo `fgmongo2` (`127.0.0.1:27039`, rs0), **една** база `fg54sw032_*`, изтрита (`dbs_left: []`);
+  - P1/P2 на ниво service, `mode="enforce"` подаден изрично (по подразбиране режимът е `off`). Контекстът и репозиторито са като в `tests/test_w0_03c_real_mongo.py:64-73`;
+  - P3 през HTTP с harness-а от `tests/test_oh_01_overhead_no_hard_delete.py` (регистриран tenant, 6 роли, `enforce`), в същата база. Дървото е от `git archive 3863610`. AI не участва.
+- Канон:
+  - FLOW-032 (BUSINESS LOCK, 20.07.2026):
+    - цел L9;
+    - златно правило L13-25;
+    - хора и роли, Skill Matrix L29-31;
+    - фирми и контрагенти L35-46;
+    - Master СМР / обектово СМР L50-55;
+    - локации и `ALL` L59-63;
+    - материали и доставни алиаси L67-76;
+    - мерни единици и конверсии L80-82;
+    - инструменти и активи L88-91;
+    - тагове L95;
+    - импорт, OCR и AI мапване L99;
+    - merge и архивиране L103-105;
+    - права L109-112;
+    - „Какво НЕ трябва да позволява“ L116-125;
+    - „Какво трябва да вижда Крум“ L129-139;
+    - Implementation Gate L147-152;
+  - FLOW-043:
+    - D-08 (един AuditEvent);
+    - D-10 (Business Lock ≠ Implementation Gate);
+    - D-15 (Master Data per tenant; Tenant Guard);
+    - „Общи забрани“ L149 (паралелни регистри), L153 (hard delete на използвани), L155 (global Master Data с търговска стойност);
+  - CLAUDE.md §2.9, §3 („per-tenant Master Data“), §8 (Approval), §13 Wave 0 („Master Data per tenant“), §14, §16;
+  - договор `docs/architecture/W0-03_MASTER_DATA_INVENTORY_AND_CONTRACT.md`:
+    - §5.3 — релации `person_skill`, `organization_role`, `project_smr`, `item_unit` / `item_unit_conversion`, `physical_asset.asset_type_id`, `location.parent_id`;
+    - §6 W0-03C/D;
+    - Q7a/Q7b (fuzzy matching — решение на Крум);
+  - решения на Крум: Р48 (5) (контрагенти създават Счетоводител/Админ/Собственик, другите предлагат); решението от 20.09.2026 (Master Person само с изрично потвърждение, `review.py:221-223`);
+  - Gate Matrix L22 („W0-BLOCKER“), L37, L95.
+- Прочетени:
+  - `master_data/deps.py` (целият);
+  - `master_data/models.py:20-60, 87-125, 148-230`;
+  - `master_data/service.py:208-276`;
+  - `master_data/pending.py:1-60, 230-262, 350-426`;
+  - `master_data/repository.py:1-120`;
+  - `master_data/review.py:1-80, 207-300, 367-388`;
+  - `master_data/matching.py` (целият);
+  - `master_data/merge.py:1-120`;
+  - `master_data/uniqueness.py:95-142`;
+  - `master_data/intake_hooks.py:1-60, 196-237`;
+  - `routes/master_data.py` (маршрути и guard-ове 140-747);
+  - `permissions/catalog.py:40-70, 270-392`;
+  - `routes/offers.py:1239-1460`, `models/offers.py:11-16`;
+  - `frontend/src/pages/MasterDataReviewPage.js` (заявките 89, 311-360), `lib/masterDataAccess.js`, `App.js:290`, `DashboardLayout.js:105, 247`;
+  - `docs/architecture/IMPLEMENTATION_GATE_MATRIX.md:22, 37, 95`;
+  - grep:
+    - `MASTER_DATA_MODE` извън кода/тестовете — 0 (няма deploy конфигурация, т.е. production е `off`);
+    - `person_skill|organization_role|item_unit|item_unit_conversion` — 0;
+    - `skill` в `backend/app` и `frontend/src/pages` — 0;
+    - `conversion` — само отказ в склада (`warehouse_movements/service.py:1941, 1989`);
+    - `STATUS_ARCHIVED` — само миграция/rollback.
+
+Състояние накратко: W0-03 Master Data на main е **фундамент**:
+- модел;
+- pending mapping;
+- преглед от човек;
+- детерминистично съвпадение;
+- план за уникални индекси;
+- merge с preview;
+- legacy миграция.
+
+Той е **изключен по подразбиране** (`deps.py:69-70`). Merge и unmerge не могат да се изпълнят, защото W0-07 Approval липсва (`merge.py:31-39`). Домейнните пътища остават на свободен текст. Затова таблицата разделя:
+- (а) какво казва FLOW-032 за самия Master слой;
+- (б) какво става с данните в production сега (`off`).
+
+| Правило във FLOW-032 | Състояние | Къде / бележка |
+|---|---|---|
+| „Всеки важен обект има един официален Master запис“ — 9 типа, L13-23 | ✅ (модел) / ⏳ (runtime) | `models.py:20-33` — точно 9 типа, по една колекция `md_<type>`. В `off` нищо не се записва и домейните не сочат към Master id — FG-162, FG-166 (reference) |
+| „Свободният текст може да бъде вход/алиас, но не е source of truth“, L25 | ❌ PROVEN (production) | В `off` всички intake hooks са no-op (`intake_hooks.py:7, 225-237`), а редовете на оферти, СМР, материали и фактури пазят свободен текст. P3: Excel КСС създава оферта само със свободни имена; `activity_type "Общо"` (`offers.py:1416`) — FG-162, FG-612 (reference) |
+| Един човек, много RoleAssignment; ролите не се дублират като лица, L29 | ⚠️ | RoleAssignment е W0-02 (`catalog.py`). Master `person` съществува само в модела. На main има `users`, `persons`, `employees`, контакти на клиенти — FG-166/171 (reference за двойните регистри на лица/фирми) |
+| „Skill Matrix в първата версия се създава и поддържа ръчно от Крум. AI я използва за препоръки, но не променя нивата“, L31; L123 | ⏳ / ❌ | Няма Skill Matrix (grep `skill`: 0). Договорът §5.3 предвижда `person_skill {…, set_by, approval_id?}` — не е изградено — FG-622. AI не я пипа (няма я) |
+| Една фирма — много роли; „една фирма да се дублира за всяка роля“, L35-44, L118 | ❌ | Master `organization` няма роли: `organization_role` от §5.3 не съществува (grep: 0). Домейните — FG-166, FG-174 (reference) — FG-622 |
+| „ЕИК/идентификатор е ключов контрол срещу дублиране“, L46 | ⚠️ PROVEN | Уникалният ключ за организации е `identifiers.key` (`uniqueness.py:124-131`). Но пътят на офиса `approve(create_new)` вика `create_entity` само с `display_name` (`review.py:266-273`; `service.py:208-219` няма параметър за идентификатори). Master организация, създадена от прегледа, **не може** да носи ЕИК. Индексите не са построени (W0-03C в ревю, Gate Matrix L37). P1 — FG-619 |
+| „Промяна на банкови данни е критична и минава през Approval Center“, L46 | ⚠️ | Не е в Master слоя. Покрито от CP-01 (#83) и Р48 — reference (FG-165, FG-225, FG-243) |
+| Master СМР ≠ обектово СМР; „Master СМР да се смесва с конкретен обектов ред“, L50-53, L119 | ⚠️ | Моделът ги разделя (`models.py:22` „never a project-specific row“). `project_smr` (§5.3) няма. Редовете на офертата и анализа носят свободен `activity_name` / `activity_type` (FG-612 reference) |
+| „Теренният потребител не създава директно окончателен Master СМР. Новият текст става „За мапване“, системата предлага сходни записи, а офис/упълномощен човек потвърждава“, L55; права L109-110 | ✅ (Master слой) / ⚠️ | `worker` има само `master_data.pending.propose` (`catalog.py:386-387`). Одобрява `office`/`owner`/`admin` (`:379-385`), като `confirmation=True` е задължително (`review.py:378-381`). UI показва кандидатите (`MasterDataReviewPage.js:311-322`). „Сходни“ = само идентично нормализирано име или алиас (`matching.py:1-16`). Fuzzy е Q7b — Крум. ⚠️ P1: при `create_new` бекендът **не** проверява кандидатите — FG-619 |
+| Локации, йерархия, `ALL` не се дублира по децата, roll-up, L59-63 | ⏳ | Master `location` е само име. `parent_id` има в legacy `locations` (`routes/locations.py`) и в плана за миграция (`legacy_plan.py`), не в Master модела — FG-622. Домейнът на локациите — проход 26 (FLOW-001) |
+| Официален артикул: стандартно име, категория, марка/модел/размер/разфасовка, базова единица, характеристики, supplier aliases и OCR варианти, L67-74; „aliases по доставчик“, L137 | ❌ PROVEN | P2: полетата на Master `item` са само `aliases, created_at, display_name, entity_type, id, legacy_refs, merged_into, normalization_version, normalized_name, status, tenant_id, updated_at`. Алиасът е `added_at, added_by, normalization_version, normalized, source, value` — **без доставчик**. Няма категория, единица, марка или характеристики — FG-622 |
+| Доставните имена сочат към един артикул „след потвърдено мапване“, L76; „След потвърждение алиасът може да се използва автоматично следващия път“, L99 | ⚠️ PROVEN | P2: „Баумит леп. бяло 25“ е потвърден като алиас на „Лепило Баумит StarContact White 25kg“. Същият текст от OCR **отваря нов pending ред** (`status pending`, нов id). Алиасът се показва само като кандидат (`known_alias`) за ново ръчно решение. `review.py:9-11` и `uniqueness.py:113-116` твърдят, че алиасът се ползва автоматично. Тестът го фиксира обратно (`test_w0_03c_real_mongo.py:142-144`) — FG-620 |
+| Контролиран списък единици: бр., м, л.м., м², м³, кг, т, л, комплект, палет, торба, кашон…, L80 | ❌ PROVEN | Master `unit` е само модел. В кода има един списък `OFFER_UNITS = ["m2","m","pcs","hours","lot","kg","l"]` (`models/offers.py:11`), на латиница и без м³, т, л.м., палет, торба, кашон. Другаде единицата е свободен низ с различни подразбирания: `"бр."` (`models/items.py:12`), `"бр"` (`procurement.py:68`), `"m2"` (`missing_smr.py:64`), `"pcs"` (`models/offers.py:16`). P3 — FG-621 |
+| „Конверсиите са допустими само когато са известни и конкретни за артикула“, L82; „конверсия без артикулно основание“, L124 | ❌ PROVEN / ✅ | Складът отказва различна единица без конверсия (`warehouse_movements/service.py:1941-1989`) — ✅. Но P3: Excel КСС **тихо превръща** `м3`, `т`, `торба`, `палет` и дори каноничното `м²` в `pcs` и запазва числото (`offers.py:1275, 1312-1316`). „Бетон В25 10 м3“ става „10 pcs“ за 1500. Има само предупреждение в preview. `import-confirm` приема всеки низ (`"кофа-и-половина"` → 201, `offers.py:1406`) — FG-621. `item_unit_conversion` (§5.3) няма — FG-622 |
+| Тип/модел актив ≠ физически актив с QR/сериен, L88-91; „физически актив да се смесва с модел/тип“, L120 | ⚠️ | Два Master типа (`asset_type`, `physical_asset`); сериен/QR/инвентарен като идентификатори (`models.py:55`). Връзката `physical_asset.asset_type_id` е само в legacy миграцията (`legacy_migration.py`, `legacy_sources.py`), не в модела — FG-622. AI имената на активи отиват в pending (`intake_hooks.py:196-218`) — ✅ |
+| Таговете — контролирани Master записи с алиаси, L95 | ✅ (модел) / ⏳ | `tag` с алиаси и уникално име (`uniqueness.py:117-123`). Домейн с тагове няма (FG-545 reference) |
+| „Excel, OCR и AI не създават автоматично нов Master хаос. Неразпознатото влиза в „За мапване““, L99; „AI да променя … Master Data самостоятелно“, L123 | ✅ (enforce) / ⚠️ (off) | `propose` е единственото, което автоматичен канал може (`pending.py:350-356`). Записът с вече попълнено решение се отказва (`:246-251`). Има един ред на текст (open slot, `repository.py:87-112`) и AuditEvent (`:392-398`). В `off` нищо не влиза в „За мапване“ — свободният текст остава в домейна (P3) |
+| „Дубликатите се обединяват чрез merge … Пази се кой, кога, кои записи и към кой Master“, L103; „merge без preview и AuditEvent“, L122; Gate L149-150 | ⚠️ PROVEN (код) | Preview, токен, история, AuditEvent, без пренаписване на препратки — изградени (`merge.py:11-58`). Но merge/unmerge **не могат да се изпълнят**: `ApprovalRuntimeUnavailable` отказва всичко до W0-07 (`merge.py:31-39`). Дубликатът от P1 не може да бъде слят — FG-623 |
+| „Използван запис … не се изтрива. Позволени са архивиране, merge и корекция с история“, L105; „администратор: merge/архивиране“, L111 | ❌ PROVEN (код) | Master записът няма hard delete — ✅. Но няма и маршрут или service за **архивиране** и **корекция** (преименуване, смяна на вид) на Master запис. `STATUS_ARCHIVED` се поставя само от rollback на миграцията (`legacy_migration.py:1110`). Маршрутите са само pending/merge/legacy/read (`routes/master_data.py:351-747`). Legacy изтриванията в `enforce` стават архивиране (`legacy_adapter.py:310-359`) — FG-623 |
+| „Крум/Owner: одобрява критични промени с финансова/историческа тежест“, L112 | ⚠️ | Merge изисква Approval — fail-closed (`merge.py:28-39`). Нов Master **организация/човек** се създава от `office` без Owner (`catalog.py:379-385`). Кое е „критично“ не е определено (`merge.py:28-30`). Сродно с FG-619; решение на Крум, записано там |
+| „един човек/фирма/материал/СМР да се създава многократно без проверка“, L116; Gate L152 (тестове за дубликати) | ❌ PROVEN | P1: „Баумит ЕООД“ и „БАУМИТ  еоод“ (нормализирани до едно и също `баумит еоод`) — две одобрения `create_new` → **два активни** Master записа, 2 събития за създаване. `find_duplicates` преди второто одобрение намира първия запис (`true`), но `approve` не го вика (`review.py:254-273`). `suggested_matches` на втория ред е `[]` — FG-619 |
+| „tenant A да вижда Master Data на tenant B, освен изрично споделени каталози“, L125; Gate L147 | ✅ | Всеки запис носи `tenant_id` от resolver-а (`models.py:148-170`). `_reject_tenant_override` (`service.py:96-110`). `require_tenant_context` отказва legacy контекст (`deps.py:101-124`). Уникалните ключове са per tenant (`uniqueness.py:102-131`). Споделени каталози няма |
+| Какво вижда Крум: нови записи, възможни дубликати, неразпознати материали/СМР, фирми със същия ЕИК, хора с подобни имена/телефони, артикули без категория/единица, СМР без Master тип, активи без тип/QR, aliases по доставчик, preview и история на merge, DQ ефект, L129-139 | ⚠️ / ❌ | Има само опашката „За мапване“ с кандидати (`MasterDataReviewPage.js:89, 311-360`; меню `DashboardLayout.js:105`). Няма изглед за дубликати сред Master записите, за същия ЕИК, за подобни лица, за непълни артикули, за СМР без тип, за активи без QR и за история на merge (бекендът има `/merge-history`, `routes/master_data.py:718`, но UI не го ползва) — FG-625 |
+| Gate: unique constraints, alias/matching service, merge transaction с rollback plan, reference remapping, permissions и critical approvals, тестове, L147-152 | ⚠️ | Индекси — план и bootstrap (ръчен, на чисти данни). Matching — детерминистичен. Merge — възстановима последователност, не транзакция (`merge.py:41-58`). Remapping — чрез redirect, без пренаписване. Approval — липсва (W0-07). Статусът в Gate Matrix е остарял — FG-624 |
+| AuditEvent (D-08) | ✅ (Master слой) | `create_entity`, `propose`, `approve`/`reject`, merge пишат canonical AuditEvent и се отказват, ако той се провали (`service.py:268-274`, `pending.py:392-398`). P1: 2 събития за създаване. Excel импортът пише само legacy `log_audit` (`offers.py:1450`) |
+
+Извод: самият Master слой на main е внимателно изграден и в повечето правила спазва FLOW-032:
+- tenant изолация;
+- pending вместо автоматичен запис;
+- човешко потвърждение;
+- един ред на текст;
+- AuditEvent;
+- без hard delete;
+- merge с preview и fail-closed Approval.
+
+В production обаче е изключен, затова FLOW-032 там на практика не се прилага. Отделно има празнини вътре в самия слой:
+- одобрението „нов запис“ създава дубликат, макар системата да знае за него;
+- организация от прегледа не може да носи ЕИК;
+- потвърденият алиас не се ползва следващия път (противно на L99 и на собствените docstring-ове);
+- Master записът е само име — без категория, единица, роли на фирмата, конверсии и Skill Matrix;
+- грешен Master запис не може нито да се слее, нито да се архивира, нито да се коригира.
+
+Извън Master слоя: Excel импортът на КСС тихо сменя `м³`, `т`, `торба`, `палет` и `м²` с `pcs` и пази количеството.
+
+Следващ FLOW в бавния преглед: FLOW-033.
+
+Странично (не е FLOW-032, само бележка): `offers.py:1327-1331` — при само обща цена импортът дели 40/60 материал/труд (коментарът казва 50/50); офертата е в `BGN` по подразбиране (`:1391`) — сродно с FG-328 и FG-360.
+
+### Предишни FG по темите на FLOW-032
+
+- **FG-162** (материалът е свободен текст, не Master артикул) → open, reference за L25, L67-76.
+- **FG-166** (дублирани контрагенти по ЕИК и роля в 5 регистъра), **FG-171**, **FG-174** (ролята е едно поле) → reference за L29, L35-44, L118.
+- **FG-167** (hard delete на контрагент) → resolved с #83. Legacy изтриванията в `enforce` → архивиране (`legacy_adapter.py`).
+- **FG-192** (проверката срещу Master артикул в склада е изключена по подразбиране) → reference за „off в production“.
+- **FG-165**, **FG-225**, **FG-243** (IBAN) → reference за L46.
+- **FG-612** (AI класифицира със собствен речник/свободен текст, не Master Data) → reference за L25, L50-55.
+- **FG-614** (кешът `material_prices` на „агентите“) → reference за L25 (паралелен ценови каталог по свободно име).
+- **FG-545** (няма тагове и категории на снимките) → reference за L95.
+- **FG-498**, **FG-561**, **FG-562** (ЕГН/ДДС в контрагентите и в плана за миграция) → reference за идентификаторите.
