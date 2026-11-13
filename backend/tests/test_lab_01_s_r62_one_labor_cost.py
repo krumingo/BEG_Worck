@@ -134,6 +134,7 @@ def _app(monkeypatch, op):
     from app.routes import activity_budgets, centralized_reports, projects, revenue_snapshot, work_sessions  # noqa: F401
     from app.routes import daily_reports  # noqa: F401
     from app.services import morning_briefing, project_financial_results, pulse_generator  # noqa: F401
+    from app.services import project_pnl  # noqa: F401 — FG-530 isolation: loaded before the db patch
     monkeypatch.setenv(ENV_MODE, "off")
     monkeypatch.setenv("PERMISSION_SERVICE_MODE", "off")
     real = appdb.db
@@ -993,4 +994,48 @@ def test_fg530_the_aggregate_revenue_is_issued_invoices_like_the_pnl_report(monk
         assert a["pnl"]["paid_invoices"] == 300.0 and a["pnl"]["paid_invoices_label"]
         mat = a["materials"]["total"]["ex_vat"]
         assert a["pnl"]["profit"] == round(1000.0 - 180.0 - mat, 2)
+    run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 46 (FG-566)
+AGG_MONEY = {"invoices", "pnl", "paid_labor", "materials"}
+
+
+@pytest.mark.parametrize("role,member,expect", [
+    ("Owner", False, "money"), ("Admin", False, "money"), ("Accountant", False, "money"),
+    ("SiteManager", True, "no_money"), ("Technician", True, "no_money"),
+    ("SiteManager", False, 403), ("Technician", False, 403), ("Driver", False, 403),
+    ("Viewer", False, 403), ("Warehousekeeper", False, 403)])
+def test_fg566_the_project_aggregate_needs_the_finance_right_or_membership(monkeypatch, backend, role, member, expect):
+    """FG-566 (R20 / SEC-02): finance roles see the whole aggregate; any other role only a
+    project he is a current member of, and then no revenue / profit / invoices / labor cost;
+    a non-member gets 403."""
+    from app.deps.auth import create_token
+
+    async def scenario(c, op):
+        uid = "u-" + role.lower()
+        await op.users.insert_one({"id": uid, "org_id": ORG, "role": role, "is_active": True,
+                                   "email": uid + "@r62.example", "first_name": uid, "last_name": ""})
+        if member:
+            await op.project_team.insert_one({"id": "pt-" + uid, "org_id": ORG, "project_id": P,
+                                              "user_id": uid, "active": True})
+        await op.invoices.insert_one({"id": "inv-566", "org_id": ORG, "project_id": P, "direction": "Issued",
+                                      "status": "Sent", "subtotal": 900.0, "total": 1080.0, "paid_amount": 0})
+        hdr = {"Authorization": "Bearer " + create_token({"user_id": uid, "org_id": ORG, "role": role})}
+        r = await c.get(f"/api/projects/{P}/aggregate", headers=hdr)
+        if expect == 403:
+            assert r.status_code == 403, r.text
+            return
+        assert r.status_code == 200, r.text
+        a = r.json()
+        assert a["has_children"] is True and a["team"]["total"]["count"] >= 0
+        child = a["children"][0]
+        if expect == "money":
+            assert a["pnl"]["revenue"] == 900.0 and a["work"]["total"]["labor_cost"] == 180.0
+            assert {"invoices", "pnl"} <= set(child) or {"invoices"} <= set(child)
+        else:
+            assert not AGG_MONEY & set(a) and not AGG_MONEY & set(child), (set(a), set(child))
+            assert "labor_cost" not in a["work"]["total"] and "labor_cost" not in a["work"]["own"]
+            assert "900" not in r.text and "180.0" not in r.text
+            assert a["work"]["total"]["hours"] >= 0                     # hours stay
     run(monkeypatch, scenario, backend)

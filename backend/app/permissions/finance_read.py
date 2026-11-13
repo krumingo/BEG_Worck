@@ -244,6 +244,8 @@ FINANCE_READS: List[FinanceRead] = [
     _E("GET", "/api/work-sessions/overtime", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/work-sessions/{session_id}/detail", MONEY_VALUES_READ, R20_5M, CANON_B),
     _E("GET", "/api/projects/{project_id}/site-workers", MONEY_VALUES_READ, R20_5M, CANON_B),
+    # FG-566: the parent aggregate (invoices, P&L, labor) — members only, money for finance
+    _E("GET", "/api/projects/{project_id}/aggregate", MONEY_VALUES_READ, R20_5M, CANON_B + "; FG-566"),
     # PRJ-01 / FG-255: the subcontractor rating with the ledger "paid" (R54-2)
     _E("GET", "/api/subcontractor-performance", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),
     _E("GET", "/api/subcontractor-performance/compact", MONEY_VALUES_READ, R20_5M, CANON_B + "; R54-2"),

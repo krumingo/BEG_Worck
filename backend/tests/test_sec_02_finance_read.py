@@ -275,6 +275,38 @@ def url_values(fx: Dict[str, Any], tkey: str) -> Dict[str, str]:
             "version_number": "1", "draft_id": sid(tkey, "none"), "module_code": "M2"}
 
 
+_SEED_MONEY = 7777.0
+_ID_OR_TIME_KEY = __import__("re").compile(r"(^id$|_id$|^ids?$|_ids$|_at$|^date$|_date$|token|hash|key$)")
+_UUID_OR_TIME = __import__("re").compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$|^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}", __import__("re").I)
+
+
+def money_value_leaks(value: Any, needle: float = _SEED_MONEY, path: str = "") -> List[str]:
+    """FG-567: the seeded money value (7777) in a parsed JSON body, FIELD-AWARE — a number
+    equal to it under ANY key, or a text field that shows it ("… 7777 лв", "7777.0") — but
+    never an id, a timestamp or a uuid that merely contains the digits 7777 (the earlier raw
+    substring test flagged those: a false positive). Returns the paths of the leaking fields."""
+    out: List[str] = []
+    if isinstance(value, dict):
+        for k, v in value.items():
+            if isinstance(k, str) and _ID_OR_TIME_KEY.search(k) and not isinstance(v, (dict, list)):
+                continue
+            out += money_value_leaks(v, needle, f"{path}.{k}" if path else str(k))
+    elif isinstance(value, list):
+        for i, v in enumerate(value):
+            out += money_value_leaks(v, needle, f"{path}[{i}]")
+    elif isinstance(value, bool) or value is None:
+        pass
+    elif isinstance(value, (int, float)):
+        if abs(float(value) - needle) < 0.005:
+            out.append(path)
+    elif isinstance(value, str):
+        if not _UUID_OR_TIME.match(value.strip()) and __import__("re").search(
+                r"(?<![0-9a-fA-F-])7[\s.,]?777(?![0-9a-fA-F-])", value):
+            out.append(path)
+    return out
+
+
 def body_money_keys(value: Any, keep=()) -> List[str]:
     """Every money key (finance_read.is_money_key) anywhere in a JSON body."""
     found = set()
@@ -501,11 +533,12 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                     row["sites_with_money"] = sorted({
                         sites.get(it.get("site_id"), "other") for it in body.get("items", [])
                         if body_money_keys(it)})
-                row["leaks_7777"] = "7777" in resp.text
-                if row["leaks_7777"]:
-                    # the text around the leaked value — so an intermittent leak names its field
-                    at_ = resp.text.index("7777")
-                    row["leak_context"] = resp.text[max(0, at_ - 160):at_ + 40]
+                # FG-567: field-aware — the seeded money value in the parsed body, never a
+                # uuid / timestamp that only contains the digits
+                leak_paths = money_value_leaks(body)
+                row["leaks_7777"] = bool(leak_paths)
+                if leak_paths:
+                    row["leak_fields"] = leak_paths[:10]
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
             if p["rule"] in (R20_2B, R20_5B) and p["action"] != EMPLOYEE_FILE_ACTION \
@@ -520,7 +553,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                           else body.get("top_overruns", {}).get("groups")) or []
                 row["groups"] = len(groups)
                 row["group_price_keys"] = money_keys_in(groups, EXPECTED_ACTUAL_CLIENT_PRICE_FIELDS)
-                row["leaks_7777"] = "7777" in resp.text
+                row["leaks_7777"] = bool(money_value_leaks(body))       # FG-567: field-aware
             return row
 
         rows: List[Dict[str, Any]] = []

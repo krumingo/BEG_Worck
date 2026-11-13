@@ -2441,16 +2441,45 @@ async def get_site_workers(project_id: str, user: dict = Depends(get_current_use
 
 # ── Parent aggregate (own + children, read-only) ──────────────────
 
+AGGREGATE_MONEY_BLOCKS = ("invoices", "pnl", "paid_labor", "materials")
+
+
+def _aggregate_without_money(out: dict) -> dict:
+    """FG-566 (R20): the aggregate for a caller without the finance right — counts and hours
+    only: no invoices, P&L, paid labor, materials or labor cost (top level and per child)."""
+    for blk in (out, *[c for c in out.get("children") or [] if isinstance(c, dict)]):
+        for k in AGGREGATE_MONEY_BLOCKS:
+            blk.pop(k, None)
+        work = blk.get("work")
+        if isinstance(work, dict):
+            for part in (work, *[v for v in work.values() if isinstance(v, dict)]):
+                part.pop("labor_cost", None)
+    return out
+
+
 @router.get("/projects/{project_id}/aggregate")
-async def get_project_aggregate(project_id: str, user: dict = Depends(get_current_user)):
+@strip_money_for_non_finance(keep=("total",))   # FG-566 (R20-5M): plus the explicit view below
+async def get_project_aggregate(project_id: str, request: Request, user: dict = Depends(get_current_user)):
     """Read-only aggregate: own data + all children data (a child includes its warranty
-    sub-projects — R60, FG-280)."""
+    sub-projects — R60, FG-280). FG-566 (R20 / SEC-02): finance roles see everything; any
+    other caller only a project he is a CURRENT member of, and no money."""
+    from app.permissions.money_write import money_values_visible
     tenant = _tenant(user)
     org_id = user["org_id"]
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     if not await tenant.projects.get(project_id, {"_id": 0, "id": 1}):
         # PRJ-01 / FG-280: another tenant's (or an unknown) project is not found here
         raise HTTPException(status_code=404, detail="Project not found")
+    sees_money = await money_values_visible(request, user)
+    if not sees_money and not await project_team.is_member(_team(user), user["id"], project_id):
+        # FG-566: object visibility — a non-finance caller only on a project he works on
+        raise HTTPException(status_code=403, detail="Access denied")
+    out = await _project_aggregate(tenant, org_id, project_id, today, user)
+    return out if sees_money else _aggregate_without_money(out)
+
+
+async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, user: dict) -> dict:
+    """The full aggregate (money included) — callers apply FG-566's view."""
 
     # Get all project IDs (parent + children)
     children = await tenant.projects.find(
