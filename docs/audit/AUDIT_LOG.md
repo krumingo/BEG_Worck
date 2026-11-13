@@ -15,6 +15,7 @@
 | #73 LAB-01 | `ed6e88d` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #75 LAB-02 | `a665932` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `ed6e88d`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) — needs re-merge of #73 `3d39a9d` | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
+| #91 MEDIA-SEC-01 | `582eb9d` | **PASS** (code `fdd3ec7`; MEDIA91-M1 closed; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-13 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
@@ -6856,3 +6857,31 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
   - PM-01 6 / 0 skipped.
 - **Other gates:** the `5695f974` PASS gates stand.
 - **Environment:** the container restarted at 21:53 (Docker recovered, mongods back with the fd setting re-applied). The interrupted runs were discarded and re-run.
+
+## 2026-11-13 — #91 MEDIA-SEC-01 `582eb9d3` (code `fdd3ec7f`) — PASS
+
+- **Head:**
+  - `582eb9d3` = `fdd3ec7f` + evidence (`206262a0` PM-01 regen, `582eb9d3` gates);
+  - `fdd3ec7f` is a one-line change over `a15b6145`.
+- **MEDIA91-M1 (raised on `a15b6145`, closed):**
+  - `backend/app/services/file_holders.py:334` read `warehouse_transactions` with `.to_list(50)`, a capped canonical read.
+  - It broke warehouse `test_c12_10_static_scan_zero_offenders_overall` and `test_c13_6_scanner_zero_offenders_on_clean_tree` (1 scanner hit).
+  - Fixed: `.to_list(None)`.
+- **Merge check:** head tree = merge-tree(main `3863610`, head); role-union 0; no unclassified collections.
+- **Gates** (real Mongo, warehouse in enforce):
+
+| Gate | `582eb9d3` | `a15b6145` (code = `fdd3ec7` except that one line) |
+|---|---|---|
+| MEDIA-SEC-01 own suite | 55 | 55 |
+| PM-01 | 6 / 0 skipped; **regen 0 cells** | — |
+| SEC-02 | 31; **harness regen 0 differing cells** | 31 |
+| **warehouse** | **44 / 1121** | — |
+| frontend jest | 28 suites / 259 tests | — |
+| SEC-01 | — | 30 |
+| PAY | — | 630 |
+| A2C / A1 | — | 0/247, 0/498 |
+| R0 | — | 814 |
+| W0 | — | 16 = main's 16 |
+
+- **FLOW Guard:** pass 50 found nothing medium or above (orchestrator).
+- **Open for whichever of #83 / #91 merges second:** FG-555 / FG-589.
