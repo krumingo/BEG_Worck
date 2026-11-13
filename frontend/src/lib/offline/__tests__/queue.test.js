@@ -158,6 +158,26 @@ test("a validation refusal goes to Изисква проверка at once, with
   expect(api.calls.filter((c) => c[1] === "/sync/batch")).toHaveLength(1);
 });
 
+test("a temporary server error on one record keeps it on the phone and retries it (AUDIT-2 N1)", async () => {
+  const { q, store, api, tick } = await setup();
+  const a = await q.enqueue("attendance.mark", {});
+  const b = await q.enqueue("attendance.mark", {});
+  let first = true;
+  api.batchAnswer = (body) => ({ results: body.items.map((i) => ({ local_id: i.local_id,
+    status: first && i.local_id === a ? "retry" : "synced",
+    result: first && i.local_id === a ? { error_code: "SERVER_ERROR_RETRY" } : { ok: 1 } })) });
+  await q.flush();
+  const kept = await store.get("queue", a);
+  expect(kept.status).toBe("pending");
+  expect(kept.sealed).toBeTruthy();
+  expect(kept.last_error).toBe("SERVER_RETRY");
+  expect((await store.get("queue", b)).status).toBe("synced");
+  first = false;
+  tick(backoffMs(1) + 1);
+  await q.flush();
+  expect((await store.get("queue", a)).status).toBe("synced");
+});
+
 test("conflict and late answers are shown, not retried", async () => {
   const { q, store, api } = await setup();
   const a = await q.enqueue("attendance.mark", {});

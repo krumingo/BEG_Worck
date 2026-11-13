@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -38,6 +39,8 @@ from pymongo.errors import DuplicateKeyError
 
 from app.db import db
 from app.tenancy.data_access import TenantData
+
+logger = logging.getLogger(__name__)
 
 try:  # Python 3.9+
     from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -60,6 +63,9 @@ LATE = "late"
 REJECTED = "rejected"
 QUARANTINED = "quarantined"
 PROCESSING = "processing"
+#: AUDIT-2 PWA92-N1: an unexpected server error on ONE item — nothing official was kept, the
+#: phone keeps the record and sends it again later (the receipt may be taken over at once).
+RETRY = "retry"
 #: a photo/video whose metadata and checksum arrived; the original stays on the phone until
 #: a File Registry confirms the same checksum (FLOW-037 L192). Never final in this build.
 WAITING_FILE = "waiting_file"
@@ -106,6 +112,12 @@ async def ensure_sync_indexes(database) -> None:
         [("org_id", 1), ("user_id", 1), ("idempotency_key", 1)], unique=True,
         name="pwa02_receipt_key_unique",
         partialFilterExpression={"idempotency_key": {"$type": "string"}})
+    # AUDIT-2 PWA92-M1 backstop: one draft per offline record entry, ever. Partial — only rows
+    # written by the offline path carry sync_local_id; online drafts are untouched.
+    await database["employee_daily_reports"].create_index(
+        [("org_id", 1), ("sync_local_id", 1), ("sync_entry_index", 1)], unique=True,
+        name="pwa02_daily_report_sync_unique",
+        partialFilterExpression={"sync_local_id": {"$type": "string"}})
     await database["sync_receipts"].create_index([("org_id", 1), ("device_id", 1), ("received_at", -1)],
                                                  name="pwa02_receipt_device")
     for name in ("sync_conflicts", "sync_late", "sync_quarantine"):
@@ -398,6 +410,13 @@ async def _claim(user: Dict[str, Any], env: Dict[str, Any], device_id: str,
         raise EnvelopeError("RETRY", "Опитайте отново")
     if prior.get("fingerprint") != fp:
         raise EnvelopeError("IDEMPOTENCY_KEY_REUSED", "Ключът вече е използван за друг запис")
+    if prior.get("status") == RETRY:
+        took = await tenant.sync_receipts.update_one(
+            {"org_id": user["org_id"], "id": prior["id"], "status": RETRY},
+            {"$set": {"status": PROCESSING, "received_at": iso(received), "result": None}})
+        if took.modified_count == 1:
+            return {"claimed": {**prior, "status": PROCESSING, "received_at": iso(received)}}
+        return {"replay": {**prior, "status": PROCESSING}}
     if prior.get("status") == PROCESSING:
         started = datetime.fromisoformat(prior["received_at"])
         if received - started < PROCESSING_STALE:
@@ -442,8 +461,38 @@ def _side_doc(user: Dict[str, Any], env: Dict[str, Any], device_id: str, receive
 
 
 # ─────────────────────────────────────────────────────────────────── batch
+def _retry_answer(raw: Any, receipt: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    src = receipt or (raw if isinstance(raw, dict) else {})
+    return {"local_id": src.get("local_id"), "idempotency_key": src.get("idempotency_key"),
+            "status": RETRY, "result": {"error_code": "SERVER_ERROR_RETRY",
+                                        "message": "Временна грешка — ще се изпрати отново"},
+            "replay": False}
+
+
 async def process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked: bool,
                        received: datetime, tz) -> Dict[str, Any]:
+    """One item; AUDIT-2 PWA92-N1: an unexpected error stays with THIS item (retryable,
+    a safe code, no internals), the rest of the batch goes on, never a 500 for the batch."""
+    holder: Dict[str, Any] = {}
+    try:
+        return await _process_item(user, raw, device_id, revoked, received, tz, holder)
+    except Exception:                                          # noqa: BLE001 — per-item isolation
+        logger.exception("PWA-02 sync item failed (op=%s)",
+                         (raw or {}).get("op_type") if isinstance(raw, dict) else None)
+        receipt = holder.get("receipt")
+        if receipt:
+            try:
+                await _tenant(user).sync_receipts.update_one(
+                    {"org_id": user["org_id"], "id": receipt["id"], "status": PROCESSING},
+                    {"$set": {"status": RETRY, "result": {"error_code": "SERVER_ERROR_RETRY"},
+                              "finished_at": iso(now_utc())}})
+            except Exception:                                  # noqa: BLE001 — stays processing → stale takeover
+                logger.exception("PWA-02 could not mark the receipt retryable")
+        return _retry_answer(raw, receipt)
+
+
+async def _process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked: bool,
+                        received: datetime, tz, holder: Dict[str, Any]) -> Dict[str, Any]:
     try:
         env = validate_envelope(user, raw, device_id)
     except EnvelopeError as e:
@@ -461,6 +510,7 @@ async def process_item(user: Dict[str, Any], raw: Any, device_id: str, revoked: 
         prior = claim["replay"]
         return _answer(prior, prior.get("status"), prior.get("result"), replay=True)
     receipt = claim["claimed"]
+    holder["receipt"] = receipt
     tenant = _tenant(user)
 
     if revoked:  # R61-6: kept for the console, never official
@@ -614,10 +664,11 @@ async def _claim_decision(user: Dict[str, Any], coll: str, item_id: str, key: st
     """Compare-and-set open → deciding, so two people cannot decide the same item; the same
     Idempotency-Key again returns the decision already made."""
     tenant = _tenant(user)
+    at = now_utc()
+    claim = {"status": "deciding", "decision_key": key, "decided_by": user["id"], "deciding_at": iso(at)}
     doc = await tenant.collection(coll).find_one_and_update(
         {"org_id": user["org_id"], "id": item_id, "status": "open"},
-        {"$set": {"status": "deciding", "decision_key": key, "decided_by": user["id"]}},
-        projection={"_id": 0})
+        {"$set": claim}, projection={"_id": 0})
     if doc:
         return {"doc": doc}
     current = await tenant.collection(coll).find_one({"org_id": user["org_id"], "id": item_id},
@@ -626,13 +677,33 @@ async def _claim_decision(user: Dict[str, Any], coll: str, item_id: str, key: st
         raise refuse(404, "NOT_FOUND", "Няма такъв запис")
     if current.get("decision_key") == key and current.get("status") != "deciding":
         return {"replay": current}
+    if current.get("status") == "deciding":
+        # AUDIT-2: a decision that crashed half-way must not stay stuck — after the same
+        # stale window as a receipt it may be taken over (compare-and-set on the stamp it left;
+        # the domain handlers find what an earlier attempt already wrote by sync_local_id).
+        since = current.get("deciding_at")
+        stale = True
+        if since:
+            try:
+                stale = at - datetime.fromisoformat(since) >= PROCESSING_STALE
+            except ValueError:
+                stale = True
+        if stale:
+            took = await tenant.collection(coll).find_one_and_update(
+                {"org_id": user["org_id"], "id": item_id, "status": "deciding", "deciding_at": since},
+                {"$set": claim}, projection={"_id": 0})
+            if took:
+                await audit(user, action="sync.decision_taken_over", entity_type=coll, entity_id=item_id,
+                            diff={"previous_decided_by": current.get("decided_by"),
+                                  "previous_deciding_at": since}, reason="stale", key="%s:takeover" % key)
+                return {"doc": took}
     raise refuse(409, "ALREADY_DECIDED", "Записът вече е решен", current_status=current.get("status"))
 
 
 async def _reopen(user: Dict[str, Any], coll: str, item_id: str) -> None:
     await _tenant(user).collection(coll).update_one(
         {"org_id": user["org_id"], "id": item_id, "status": "deciding"},
-        {"$set": {"status": "open"}, "$unset": {"decision_key": "", "decided_by": ""}})
+        {"$set": {"status": "open"}, "$unset": {"decision_key": "", "decided_by": "", "deciding_at": ""}})
 
 
 def _env_of(doc: Dict[str, Any], payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -690,6 +761,9 @@ async def decide_late(user: Dict[str, Any], late_id: str, decision: str, reason:
         if isinstance(e, HTTPException):
             raise
         raise refuse(e.http_status, e.code, e.message)
+    except Exception:
+        await _reopen(user, "sync_late", late_id)
+        raise
     status = "corrected" if decision == "correct" else "confirmed"
     await tenant.sync_late.update_one(
         {"org_id": user["org_id"], "id": late_id},
@@ -741,7 +815,7 @@ async def resolve_conflict(user: Dict[str, Any], conflict_id: str, decision: str
         values = payload if decision == "correct" else doc["field_version"]
         try:
             result = await applier(user, doc, values)
-        except HTTPException:
+        except Exception:
             await _reopen(user, "sync_conflicts", conflict_id)
             raise
         status = "corrected" if decision == "correct" else "accepted_field"

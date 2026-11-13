@@ -24,6 +24,7 @@ import re
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
+from pymongo.errors import DuplicateKeyError
 
 from app.db import db
 from app.services import offline_sync as sync
@@ -159,16 +160,26 @@ async def attendance_apply(user: Dict[str, Any], conflict: Dict[str, Any],
 
 # ──────────────────────────────────────────────────────── technician daily report
 async def _daily_report(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
-    from app.routes.technician import DailyReportSubmit, submit_daily_report
+    from app.routes.technician import DailyReportSubmit, submit_daily_report_core
     p = dict(env["payload"])
     date = ctx["captured_date"]
     tenant = _tenant(user)
     org = user["org_id"]
-    mine = await tenant.employee_daily_reports.find(
-        {"org_id": org, "sync_local_id": env["local_id"]}, {"_id": 0, "id": 1}).to_list(100)
-    if mine:
+    async def already() -> Optional[Dict[str, Any]]:
+        # an earlier attempt (crashed, slow or taken over) already wrote it — the drafts carry
+        # sync_local_id from the insert itself, in one transaction (AUDIT-2 PWA92-M1)
+        mine = await tenant.employee_daily_reports.find(
+            {"org_id": org, "sync_local_id": env["local_id"]},
+            {"_id": 0, "id": 1, "sync_entry_index": 1}).to_list(100)
+        if not mine:
+            return None
+        mine.sort(key=lambda m: m.get("sync_entry_index") or 0)
         return {"entity_type": "daily_report", "entity_id": mine[0]["id"],
                 "draft_report_ids": [m["id"] for m in mine], "date": date, "already": True}
+
+    done = await already()
+    if done:
+        return done
     try:
         data = DailyReportSubmit(**{**p, "date": date})
     except Exception as exc:                                   # noqa: BLE001 — pydantic
@@ -181,11 +192,16 @@ async def _daily_report(user: Dict[str, Any], env: Dict[str, Any], ctx: Dict[str
                                     office={"date": date, "worker_id": wid, "closed": kind},
                                     field={"date": date, "worker_id": wid, "hours": entry.hours,
                                            "smr_type": entry.smr_type}, kind=kind)
-    result = await submit_daily_report(data, user)
+    try:
+        result = await submit_daily_report_core(data, user, sync_stamp=_stamp(env, ctx))
+    except DuplicateKeyError:
+        # backstop: a concurrent attempt committed the same record first (unique
+        # org_id + sync_local_id + sync_entry_index) — answer with what it wrote
+        done = await already()
+        if done:
+            return done
+        raise
     ids = list(result.get("draft_report_ids") or [])
-    if ids:
-        await tenant.employee_daily_reports.update_many(
-            {"org_id": org, "id": {"$in": ids}}, {"$set": _stamp(env, ctx)})
     return {"entity_type": "daily_report", "entity_id": ids[0] if ids else env["local_id"],
             "draft_report_ids": ids, "date": date}
 

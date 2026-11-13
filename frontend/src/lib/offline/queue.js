@@ -243,6 +243,13 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
         await update(fresh, { status: "pending", next_at: now() + 2000 });
         recheckSoon = true;
       }
+      else if (res.status === "retry") {
+        // a temporary server error on this one record: it stays on the phone, sent again later
+        const attempts = (fresh.attempts || 0) + 1;
+        await update(fresh, attempts >= MAX_ATTEMPTS
+          ? { status: "needs_review", attempts, last_error: "RETRY_LIMIT" }
+          : { status: "pending", attempts, next_at: now() + backoffMs(attempts), last_error: "SERVER_RETRY" });
+      }
       else if (res.status === "conflict") await update(fresh, { status: "conflict", result: res.result });
       else if (res.status === "late") await update(fresh, { status: "needs_review", sub: "late", result: res.result });
       else if (res.status === "waiting_file") await update(fresh, { status: "waiting_file", result: res.result });
@@ -272,7 +279,7 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
     let changed = 0;
     for (const r of waiting) {
       const rc = byLocal.get(r.local_id);
-      if (!rc || rc.status === "conflict" || rc.status === "late") continue;
+      if (!rc || rc.status === "conflict" || rc.status === "late" || rc.status === "retry" || rc.status === "processing") continue;
       changed += 1;
       if (rc.status === "synced") await update(r, { status: "synced", sub: null, result: rc.result });
       else if (rc.status === "waiting_file") await update(r, { status: "waiting_file", sub: null, result: rc.result });

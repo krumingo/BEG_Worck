@@ -1,31 +1,129 @@
 {
+ "audit2": {
+  "backstop": "DuplicateKeyError",
+  "deciding_fresh": "ALREADY_DECIDED",
+  "deciding_legacy_no_stamp": 200,
+  "deciding_stale_status": "rejected",
+  "deciding_takeover_event": 1,
+  "m1_crash_http": 200,
+  "m1_crash_item": {
+   "idempotency_key": "31a7dda8-8f9d-4af0-910c-713b07802670",
+   "local_id": "23451643-391a-4c6b-8497-e0acb9ab8313",
+   "replay": false,
+   "result": {
+    "error_code": "SERVER_ERROR_RETRY",
+    "message": "Временна грешка — ще се изпрати отново"
+   },
+   "status": "retry"
+  },
+  "m1_receipt_after_crash": "retry",
+  "m1_replay": {
+   "captured_at": "2026-11-13T23:28:20.681722+00:00",
+   "idempotency_key": "31a7dda8-8f9d-4af0-910c-713b07802670",
+   "local_id": "23451643-391a-4c6b-8497-e0acb9ab8313",
+   "received_at": "2026-11-13T23:28:20.716353+00:00",
+   "replay": true,
+   "result": {
+    "date": "2026-11-14",
+    "draft_report_ids": [
+     "7ecec9a6-11db-4a0f-abeb-b46e35259496",
+     "bc15aaf2-0421-472c-8384-c2f235ff8fa5"
+    ],
+    "entity_id": "7ecec9a6-11db-4a0f-abeb-b46e35259496",
+    "entity_type": "daily_report"
+   },
+   "status": "synced"
+  },
+  "m1_retry": "synced",
+  "m1_rows_after_crash": 0,
+  "m1_rows_after_replay": 2,
+  "m1_rows_after_retry": [
+   0,
+   1
+  ],
+  "m2_first": "retry",
+  "m2_rows_after_first": 2,
+  "m2_rows_after_takeover": 2,
+  "m2_takeover": {
+   "captured_at": "2026-11-13T23:28:20.760603+00:00",
+   "idempotency_key": "e8109824-c815-4885-a90f-d38e17f05c2b",
+   "local_id": "5a792f37-8527-4efd-a779-b2381db80d63",
+   "received_at": "2026-11-13T23:28:20.796878+00:00",
+   "replay": false,
+   "result": {
+    "already": true,
+    "date": "2026-11-14",
+    "draft_report_ids": [
+     "0dc94945-aed7-4ccd-b717-0be60eb32374",
+     "2ae475f7-050e-4358-add0-ea364684ccbd"
+    ],
+    "entity_id": "0dc94945-aed7-4ccd-b717-0be60eb32374",
+    "entity_type": "daily_report"
+   },
+   "status": "synced"
+  },
+  "n1_body_text": "{\"server_time\": \"2026-11-13T23:28:20.830096+00:00\", \"results\": [{\"local_id\": \"a0c4d7d1-fac6-47f2-9646-3e2aa4b6a336\", \"idempotency_key\": \"c6c55131-acac-49f8-affc-5139ce1b6a42\", \"status\": \"retry\", \"result\": {\"error_code\": \"SERVER_ERROR_RETRY\", \"message\": \"Временна грешка — ще се изпрати отново\"}, \"replay\": false}, {\"local_id\": \"fad3f234-0aae-4a9d-993b-be2ae757597e\", \"idempotency_key\": \"c0df9224-21f7-487c-950d-b4c64b5587c1\", \"status\": \"synced\", \"result\": {\"entity_type\": \"probe\", \"entity_id\": \"fad3f234-0aae-4a9d-993b-be2ae757597e\", \"ok\": true}, \"replay\": false, \"received_at\": \"2026-11-13T23:28:20.830096+00:00\", \"captured_at\": \"2026-11-13T23:28:20.826196+00:00\"}]}",
+  "n1_boom_calls": 2,
+  "n1_http": 200,
+  "n1_items": [
+   {
+    "result": {
+     "error_code": "SERVER_ERROR_RETRY",
+     "message": "Временна грешка — ще се изпрати отново"
+    },
+    "status": "retry"
+   },
+   {
+    "result": {
+     "entity_id": "fad3f234-0aae-4a9d-993b-be2ae757597e",
+     "entity_type": "probe",
+     "ok": true
+    },
+    "status": "synced"
+   }
+  ],
+  "n1_receipt": "retry",
+  "n1_resend": "retry",
+  "online_keys": [
+   "attendance_warnings",
+   "draft_report_ids",
+   "hours_warnings",
+   "missing_smr_created",
+   "report_id",
+   "roster_id",
+   "total_hours"
+  ],
+  "online_row_untagged": true,
+  "online_status": 200
+ },
  "calls": {
+  "boom": 2,
   "confirm": 0,
   "edit": 1,
-  "note": 3
+  "note": 4
  },
  "conflict": {
   "conflict_rows": 1,
   "replay": {
-   "captured_at": "2026-11-10T06:07:35.093741+00:00",
-   "idempotency_key": "c227d50a-150b-407e-82a1-267230453299",
-   "local_id": "8d375e9f-00e0-4129-900c-d952cf003cc2",
-   "received_at": "2026-11-10T06:07:35.098498+00:00",
+   "captured_at": "2026-11-13T23:28:20.283927+00:00",
+   "idempotency_key": "bf1abfc4-7ab0-40fc-ab85-20e0aba65ad4",
+   "local_id": "91e74cd9-6648-4422-b856-fa3c8dae91ed",
+   "received_at": "2026-11-13T23:28:20.287634+00:00",
    "replay": true,
    "result": {
-    "conflict_id": "b13b2425-e1ac-4d4e-9178-ba329d9534ae",
+    "conflict_id": "309d8fe6-1439-4b0f-9fe9-c843bca25fa5",
     "kind": "approved"
    },
    "status": "conflict"
   },
   "result": {
-   "captured_at": "2026-11-10T06:07:35.093741+00:00",
-   "idempotency_key": "c227d50a-150b-407e-82a1-267230453299",
-   "local_id": "8d375e9f-00e0-4129-900c-d952cf003cc2",
-   "received_at": "2026-11-10T06:07:35.098498+00:00",
+   "captured_at": "2026-11-13T23:28:20.283927+00:00",
+   "idempotency_key": "bf1abfc4-7ab0-40fc-ab85-20e0aba65ad4",
+   "local_id": "91e74cd9-6648-4422-b856-fa3c8dae91ed",
+   "received_at": "2026-11-13T23:28:20.287634+00:00",
    "replay": false,
    "result": {
-    "conflict_id": "b13b2425-e1ac-4d4e-9178-ba329d9534ae",
+    "conflict_id": "309d8fe6-1439-4b0f-9fe9-c843bca25fa5",
     "kind": "approved"
    },
    "status": "conflict"
@@ -89,13 +187,13 @@
   "devices_rows": 1,
   "register": {
    "body": {
-    "created_at": "2026-11-10T06:07:34.861633+00:00",
+    "created_at": "2026-11-13T23:28:20.106039+00:00",
     "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
     "label": "Телефон Иван",
-    "last_seen_at": "2026-11-10T06:07:34.861633+00:00",
+    "last_seen_at": "2026-11-13T23:28:20.106039+00:00",
     "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
     "last_user_name": "ST01 A technician",
-    "org_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+    "org_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
     "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
     "revoked_at": null,
     "user_agent": "testclient"
@@ -105,13 +203,13 @@
   },
   "register_again": {
    "body": {
-    "created_at": "2026-11-10T06:07:34.861633+00:00",
+    "created_at": "2026-11-13T23:28:20.106039+00:00",
     "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
     "label": "Телефон Иван",
-    "last_seen_at": "2026-11-10T06:07:34.872165+00:00",
+    "last_seen_at": "2026-11-13T23:28:20.115478+00:00",
     "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
     "last_user_name": "ST01 A technician",
-    "org_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+    "org_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
     "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
     "revoked_at": null,
     "user_agent": "testclient"
@@ -172,22 +270,22 @@
   "status_B_still_off": {
    "enabled": false,
    "revoked": false,
-   "server_time": "2026-11-10T06:07:34.855929+00:00",
-   "tenant_id": "ecd22b04-023b-4c7a-b687-a87f3a57d7a8",
+   "server_time": "2026-11-13T23:28:20.101291+00:00",
+   "tenant_id": "19f7d50c-aa83-469a-affa-53732ba3bfc2",
    "user_id": "76e13e35-b362-5593-b92a-e3342cf6b3bf"
   },
   "status_off": {
    "enabled": false,
    "revoked": false,
-   "server_time": "2026-11-10T06:07:34.817289+00:00",
-   "tenant_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+   "server_time": "2026-11-13T23:28:20.056902+00:00",
+   "tenant_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
    "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
   },
   "status_on": {
    "enabled": true,
    "revoked": false,
-   "server_time": "2026-11-10T06:07:34.851946+00:00",
-   "tenant_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+   "server_time": "2026-11-13T23:28:20.087208+00:00",
+   "tenant_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
    "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
   }
  },
@@ -207,80 +305,80 @@
    "Present"
   ],
   "att_again": {
-   "captured_at": "2026-11-10T06:07:35.125079+00:00",
-   "idempotency_key": "56826782-4d19-4a61-87f5-4fc57b54c953",
-   "local_id": "eb6c9975-a14d-4858-ba71-bcbf0d3e373f",
-   "received_at": "2026-11-10T06:07:35.129747+00:00",
+   "captured_at": "2026-11-13T23:28:20.308577+00:00",
+   "idempotency_key": "ff3e9532-84e4-4d1d-a9df-61f4b8610465",
+   "local_id": "776451ae-3964-45ba-b61b-a01b61c9baf9",
+   "received_at": "2026-11-13T23:28:20.312354+00:00",
    "replay": true,
    "result": {
-    "date": "2026-11-10",
-    "entity_id": "09fad03b-fe30-471f-a657-f0362f8553be",
+    "date": "2026-11-14",
+    "entity_id": "0ff3c94e-2a2f-4902-b6cc-339a8c00abda",
     "entity_type": "attendance",
     "status": "Present"
    },
    "status": "synced"
   },
   "att_diff": {
-   "captured_at": "2026-11-10T06:07:35.223513+00:00",
-   "idempotency_key": "656a2f86-f305-431d-9554-0ebac069e09f",
-   "local_id": "c8ac4289-85b2-4557-8bb1-d62259fa31f3",
-   "received_at": "2026-11-10T06:07:35.228445+00:00",
+   "captured_at": "2026-11-13T23:28:20.385328+00:00",
+   "idempotency_key": "028c6eea-2f76-4ed2-91e1-1f7468bf4177",
+   "local_id": "423bfd3e-db3a-4c24-9451-9eb9b9d670e6",
+   "received_at": "2026-11-13T23:28:20.389028+00:00",
    "replay": false,
    "result": {
-    "conflict_id": "bb7256c7-3aed-47d5-bd7c-9019bf250e3d",
+    "conflict_id": "1b29a12e-423f-42cd-aea4-28a77109079f",
     "kind": "already_recorded"
    },
    "status": "conflict"
   },
   "att_events": 1,
   "att_first": {
-   "captured_at": "2026-11-10T06:07:35.125079+00:00",
-   "idempotency_key": "56826782-4d19-4a61-87f5-4fc57b54c953",
-   "local_id": "eb6c9975-a14d-4858-ba71-bcbf0d3e373f",
-   "received_at": "2026-11-10T06:07:35.129747+00:00",
+   "captured_at": "2026-11-13T23:28:20.308577+00:00",
+   "idempotency_key": "ff3e9532-84e4-4d1d-a9df-61f4b8610465",
+   "local_id": "776451ae-3964-45ba-b61b-a01b61c9baf9",
+   "received_at": "2026-11-13T23:28:20.312354+00:00",
    "replay": false,
    "result": {
-    "date": "2026-11-10",
-    "entity_id": "09fad03b-fe30-471f-a657-f0362f8553be",
+    "date": "2026-11-14",
+    "entity_id": "0ff3c94e-2a2f-4902-b6cc-339a8c00abda",
     "entity_type": "attendance",
     "status": "Present"
    },
    "status": "synced"
   },
   "att_identical": {
-   "captured_at": "2026-11-10T06:07:35.205442+00:00",
-   "idempotency_key": "23f6b412-4467-4793-a286-9b57121e9911",
-   "local_id": "fc0892a9-4245-421d-8520-af66adc2a95d",
-   "received_at": "2026-11-10T06:07:35.210391+00:00",
+   "captured_at": "2026-11-13T23:28:20.371886+00:00",
+   "idempotency_key": "83bd7099-cfbd-4ed5-bb74-252ece38076b",
+   "local_id": "1c78a5c7-8f9e-43db-8ec0-2af26d8568ac",
+   "received_at": "2026-11-13T23:28:20.375418+00:00",
    "replay": false,
    "result": {
-    "date": "2026-11-10",
-    "entity_id": "09fad03b-fe30-471f-a657-f0362f8553be",
+    "date": "2026-11-14",
+    "entity_id": "0ff3c94e-2a2f-4902-b6cc-339a8c00abda",
     "entity_type": "attendance",
     "identical": true
    },
    "status": "synced"
   },
   "att_row": {
-   "captured_at": "2026-11-10T06:07:35.125079+00:00",
-   "date": "2026-11-10",
+   "captured_at": "2026-11-13T23:28:20.308577+00:00",
+   "date": "2026-11-14",
    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
    "marked_by_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
    "source": "offline_sync",
    "status": "Present",
-   "sync_local_id": "eb6c9975-a14d-4858-ba71-bcbf0d3e373f",
+   "sync_local_id": "776451ae-3964-45ba-b61b-a01b61c9baf9",
    "version": 1
   },
   "att_rows": 1,
   "att_rows_after_identical": 1,
   "late": {
-   "captured_at": "2026-11-09T06:07:35.124099+00:00",
-   "idempotency_key": "1958a344-9dd8-45ec-b1cb-ad922c2bcf29",
-   "local_id": "e103d440-4305-473a-add6-dd75582b807f",
-   "received_at": "2026-11-10T06:07:35.522761+00:00",
+   "captured_at": "2026-11-12T23:28:20.307423+00:00",
+   "idempotency_key": "faa0c8e9-973a-4abb-9f01-09c722121328",
+   "local_id": "2e4c2255-362c-43b7-b051-5290ceb0f328",
+   "received_at": "2026-11-13T23:28:20.603649+00:00",
    "replay": false,
    "result": {
-    "late_id": "ef13a956-a50e-4e4b-b263-8f77ec9d270c",
+    "late_id": "1cb50c80-7501-4f4b-90f9-f3221ea347f6",
     "reason": "previous_day"
    },
    "status": "late"
@@ -292,20 +390,21 @@
     "author_name": "ST01 A technician",
     "author_role": "Technician",
     "base_version": null,
-    "captured_at": "2026-11-09T06:07:35.124099+00:00",
+    "captured_at": "2026-11-12T23:28:20.307423+00:00",
     "captured_tz": "Europe/Sofia",
-    "created_at": "2026-11-10T06:07:35.522761+00:00",
-    "decided_at": "2026-11-10T06:07:35.544167+00:00",
-    "decided_by": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
+    "created_at": "2026-11-13T23:28:20.603649+00:00",
+    "decided_at": "2026-11-13T23:28:20.620756+00:00",
+    "decided_by": "48f00464-e237-4a34-91f5-d602ba74324e",
+    "deciding_at": "2026-11-13T23:28:20.618995+00:00",
     "decision": "confirm",
-    "decision_key": "f0bed0a0-179e-4dbb-a214-5a8392a97013",
+    "decision_key": "8b226706-aedd-4dab-939b-04c548636659",
     "device_clock_offset_ms": 0,
     "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
-    "id": "ef13a956-a50e-4e4b-b263-8f77ec9d270c",
-    "idempotency_key": "1958a344-9dd8-45ec-b1cb-ad922c2bcf29",
-    "local_id": "e103d440-4305-473a-add6-dd75582b807f",
+    "id": "1cb50c80-7501-4f4b-90f9-f3221ea347f6",
+    "idempotency_key": "faa0c8e9-973a-4abb-9f01-09c722121328",
+    "local_id": "2e4c2255-362c-43b7-b051-5290ceb0f328",
     "op_type": "attendance.mark",
-    "org_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+    "org_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
     "payload": {
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -313,10 +412,10 @@
     },
     "project_id": null,
     "reason": "Беше без покритие на обекта",
-    "received_at": "2026-11-10T06:07:35.522761+00:00",
+    "received_at": "2026-11-13T23:28:20.603649+00:00",
     "result": {
-     "date": "2026-11-09",
-     "entity_id": "e2d51e38-0565-4013-b76c-021d5077a731",
+     "date": "2026-11-13",
+     "entity_id": "46a74e14-9cbb-47bd-b254-0f836d053f1c",
      "entity_type": "attendance",
      "status": "Present"
     },
@@ -328,7 +427,7 @@
   "late_confirm_replay": 200,
   "late_decide_again": "ALREADY_DECIDED",
   "late_event": {
-   "actor_id": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
+   "actor_id": "48f00464-e237-4a34-91f5-d602ba74324e",
    "reason": "Беше без покритие на обекта",
    "structured_diff": {
     "after": {
@@ -342,10 +441,10 @@
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "status": "Present"
     },
-    "captured_at": "2026-11-09T06:07:35.124099+00:00",
-    "late_id": "ef13a956-a50e-4e4b-b263-8f77ec9d270c",
+    "captured_at": "2026-11-12T23:28:20.307423+00:00",
+    "late_id": "1cb50c80-7501-4f4b-90f9-f3221ea347f6",
     "op_type": "attendance.mark",
-    "received_at": "2026-11-10T06:07:35.522761+00:00"
+    "received_at": "2026-11-13T23:28:20.603649+00:00"
    }
   },
   "late_receipt": {
@@ -361,10 +460,10 @@
   },
   "late_reject_rows": 0,
   "late_row": {
-   "captured_at": "2026-11-09T06:07:35.124099+00:00",
-   "date": "2026-11-09",
-   "late_confirmed_by": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
-   "marked_by_user_id": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
+   "captured_at": "2026-11-12T23:28:20.307423+00:00",
+   "date": "2026-11-13",
+   "late_confirmed_by": "48f00464-e237-4a34-91f5-d602ba74324e",
+   "marked_by_user_id": "48f00464-e237-4a34-91f5-d602ba74324e",
    "source": "offline_sync"
   },
   "late_rows_after": 1,
@@ -399,13 +498,13 @@
    "status": 409
   },
   "paid_day": {
-   "captured_at": "2026-11-10T06:07:35.346845+00:00",
-   "idempotency_key": "cda801d6-c673-46a9-b8c0-0767ae16a73a",
-   "local_id": "b28e604c-3165-465f-8a69-118f39919e46",
-   "received_at": "2026-11-10T06:07:35.351434+00:00",
+   "captured_at": "2026-11-13T23:28:20.477165+00:00",
+   "idempotency_key": "4df1b625-8873-4d12-9661-5fbdefa071fe",
+   "local_id": "b8188c70-cbe9-40a5-b378-c336f20e9d41",
+   "received_at": "2026-11-13T23:28:20.481358+00:00",
    "replay": false,
    "result": {
-    "conflict_id": "7e890222-c479-4edf-8a9f-2d3bc7d09477",
+    "conflict_id": "e59d63a7-2a2e-4452-9822-360993c33474",
     "kind": "paid"
    },
    "status": "conflict"
@@ -413,10 +512,10 @@
   "paid_rows": 0,
   "paid_rows_after": 0,
   "photo": {
-   "captured_at": "2026-11-10T06:07:35.481855+00:00",
-   "idempotency_key": "e8c9dbac-19cc-4ded-b05b-cbb09f9064e8",
-   "local_id": "0e0d33bd-4517-4538-a595-326c2fc3a35d",
-   "received_at": "2026-11-10T06:07:35.486068+00:00",
+   "captured_at": "2026-11-13T23:28:20.569280+00:00",
+   "idempotency_key": "aba6a9f8-89bb-4142-add4-4168bafe9672",
+   "local_id": "1c9142ba-f377-48de-8e9f-cce29aa883d3",
+   "received_at": "2026-11-13T23:28:20.572606+00:00",
    "replay": false,
    "result": {
     "context_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -429,10 +528,10 @@
    "status": "waiting_file"
   },
   "photo_bad_sha": {
-   "captured_at": "2026-11-10T06:07:35.495682+00:00",
-   "idempotency_key": "1dc0bc7b-3e4c-43e6-bb8f-c1c8b6942bc8",
-   "local_id": "89770a27-952f-4a96-8d9c-bdd8def49468",
-   "received_at": "2026-11-10T06:07:35.499816+00:00",
+   "captured_at": "2026-11-13T23:28:20.580508+00:00",
+   "idempotency_key": "4709f9ff-b644-48af-8899-a00985043792",
+   "local_id": "6ff07a4a-d0da-4b1a-b716-78b9fe9c18f4",
+   "received_at": "2026-11-13T23:28:20.584055+00:00",
    "replay": false,
    "result": {
     "error_code": "CHECKSUM_INVALID",
@@ -442,10 +541,10 @@
   },
   "photo_media_rows": 0,
   "photo_too_big": {
-   "captured_at": "2026-11-10T06:07:35.506896+00:00",
-   "idempotency_key": "33125f4b-2839-4c45-afc2-bccfa5ca1b1b",
-   "local_id": "7c22aa38-e534-40c3-8a7e-426209c7ea4d",
-   "received_at": "2026-11-10T06:07:35.511078+00:00",
+   "captured_at": "2026-11-13T23:28:20.590237+00:00",
+   "idempotency_key": "fec9ee13-6d08-4a73-9d41-42807d9f1503",
+   "local_id": "0b02e5b6-bae4-45cd-994a-a95d6d3f495a",
+   "received_at": "2026-11-13T23:28:20.593654+00:00",
    "replay": false,
    "result": {
     "error_code": "FILE_TOO_LARGE",
@@ -461,36 +560,36 @@
    "status": "rejected"
   },
   "report": {
-   "captured_at": "2026-11-10T06:07:35.376957+00:00",
-   "idempotency_key": "704a1118-b3df-4401-bbde-aa8411a42ea0",
-   "local_id": "f46055ca-9d86-4c9c-bf4a-a442042f97df",
-   "received_at": "2026-11-10T06:07:35.381664+00:00",
+   "captured_at": "2026-11-13T23:28:20.502637+00:00",
+   "idempotency_key": "bb8722d4-c4b3-47d2-a08f-f998faa75b56",
+   "local_id": "c7c3bec0-b871-4b9d-80c7-8c4e743b172c",
+   "received_at": "2026-11-13T23:28:20.506094+00:00",
    "replay": false,
    "result": {
-    "date": "2026-11-10",
+    "date": "2026-11-14",
     "draft_report_ids": [
-     "a6208c39-2238-41a9-9c41-31dd2c06b12a"
+     "84418b52-a4d8-46f0-9ee5-34f9f000d6b2"
     ],
-    "entity_id": "a6208c39-2238-41a9-9c41-31dd2c06b12a",
+    "entity_id": "84418b52-a4d8-46f0-9ee5-34f9f000d6b2",
     "entity_type": "daily_report"
    },
    "status": "synced"
   },
   "report_closed": {
-   "captured_at": "2026-11-10T06:07:35.463554+00:00",
-   "idempotency_key": "ed117209-df77-400a-9310-5e842464e405",
-   "local_id": "9f9fceea-d510-42af-98ad-a629d78511d1",
-   "received_at": "2026-11-10T06:07:35.467659+00:00",
+   "captured_at": "2026-11-13T23:28:20.553044+00:00",
+   "idempotency_key": "cc88bf14-b093-40e5-9f7e-c7141792006e",
+   "local_id": "ad00763a-6abb-4bf9-8ebc-4cb21f420da0",
+   "received_at": "2026-11-13T23:28:20.556537+00:00",
    "replay": false,
    "result": {
-    "conflict_id": "fe45605b-5182-472a-aa15-07360ecf94ce",
+    "conflict_id": "af954542-7e8c-4233-8126-558b08b84c00",
     "kind": "approved"
    },
    "status": "conflict"
   },
   "report_closed_rows": 1,
   "report_row": {
-   "date": "2026-11-10",
+   "date": "2026-11-14",
    "hours": 6.5,
    "status": "Draft",
    "version": 1,
@@ -503,13 +602,14 @@
     "author_name": "ST01 A technician",
     "author_role": "Technician",
     "base_version": null,
-    "captured_at": "2026-11-10T06:07:35.283896+00:00",
+    "captured_at": "2026-11-13T23:28:20.433802+00:00",
     "captured_tz": "Europe/Sofia",
-    "created_at": "2026-11-10T06:07:35.288584+00:00",
-    "decided_at": "2026-11-10T06:07:35.312167+00:00",
+    "created_at": "2026-11-13T23:28:20.437255+00:00",
+    "decided_at": "2026-11-13T23:28:20.453737+00:00",
     "decided_by": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
+    "deciding_at": "2026-11-13T23:28:20.451604+00:00",
     "decision": "accept_field",
-    "decision_key": "5e79441f-694d-42c9-96dd-e0f67e3a5f1d",
+    "decision_key": "ec3d63c9-5b3b-429b-b096-901987295606",
     "device_clock_offset_ms": 0,
     "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
     "diff": [
@@ -524,28 +624,28 @@
       "phone": null
      }
     ],
-    "entity_id": "09fad03b-fe30-471f-a657-f0362f8553be",
+    "entity_id": "0ff3c94e-2a2f-4902-b6cc-339a8c00abda",
     "entity_type": "attendance",
     "field_version": {
-     "date": "2026-11-10",
+     "date": "2026-11-14",
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "status": "Late",
      "version": null
     },
-    "id": "2ed7ecc4-8200-4ccd-be26-0bf10c0c04d2",
-    "idempotency_key": "13074d8d-bb36-4882-a579-7cdf3f6437c9",
+    "id": "7e5b9b7b-6434-4dc9-ba5e-6605150347b4",
+    "idempotency_key": "241547f2-eff6-461f-b833-e2e66c2cb931",
     "kind": "already_recorded",
-    "local_id": "1cc1e7f7-6341-4858-84fc-ab7cc000bfa3",
+    "local_id": "132aff09-69af-40e7-9c18-342793b7c6e3",
     "office_version": {
-     "date": "2026-11-10",
+     "date": "2026-11-14",
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "status": "Present",
      "version": 1
     },
     "op_type": "attendance.mark",
-    "org_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+    "org_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
     "payload": {
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -553,9 +653,9 @@
     },
     "project_id": null,
     "reason": "Потвърдено по телефона",
-    "received_at": "2026-11-10T06:07:35.288584+00:00",
+    "received_at": "2026-11-13T23:28:20.437255+00:00",
     "result": {
-     "entity_id": "09fad03b-fe30-471f-a657-f0362f8553be",
+     "entity_id": "0ff3c94e-2a2f-4902-b6cc-339a8c00abda",
      "entity_type": "attendance",
      "version": 2
     },
@@ -571,13 +671,14 @@
     "author_name": "ST01 A technician",
     "author_role": "Technician",
     "base_version": null,
-    "captured_at": "2026-11-10T06:07:35.223513+00:00",
+    "captured_at": "2026-11-13T23:28:20.385328+00:00",
     "captured_tz": "Europe/Sofia",
-    "created_at": "2026-11-10T06:07:35.228445+00:00",
-    "decided_at": "2026-11-10T06:07:35.259287+00:00",
-    "decided_by": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
+    "created_at": "2026-11-13T23:28:20.389028+00:00",
+    "decided_at": "2026-11-13T23:28:20.413974+00:00",
+    "decided_by": "48f00464-e237-4a34-91f5-d602ba74324e",
+    "deciding_at": "2026-11-13T23:28:20.412153+00:00",
     "decision": "keep_office",
-    "decision_key": "8416a25a-54f0-4b17-96ea-0588435f6ce1",
+    "decision_key": "4492d8ad-8b43-4cea-9b6f-00e96b16d9ea",
     "device_clock_offset_ms": 0,
     "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
     "diff": [
@@ -592,28 +693,28 @@
       "phone": null
      }
     ],
-    "entity_id": "09fad03b-fe30-471f-a657-f0362f8553be",
+    "entity_id": "0ff3c94e-2a2f-4902-b6cc-339a8c00abda",
     "entity_type": "attendance",
     "field_version": {
-     "date": "2026-11-10",
+     "date": "2026-11-14",
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "status": "Absent",
      "version": null
     },
-    "id": "bb7256c7-3aed-47d5-bd7c-9019bf250e3d",
-    "idempotency_key": "656a2f86-f305-431d-9554-0ebac069e09f",
+    "id": "1b29a12e-423f-42cd-aea4-28a77109079f",
+    "idempotency_key": "028c6eea-2f76-4ed2-91e1-1f7468bf4177",
     "kind": "already_recorded",
-    "local_id": "c8ac4289-85b2-4557-8bb1-d62259fa31f3",
+    "local_id": "423bfd3e-db3a-4c24-9451-9eb9b9d670e6",
     "office_version": {
-     "date": "2026-11-10",
+     "date": "2026-11-14",
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "status": "Present",
      "version": 1
     },
     "op_type": "attendance.mark",
-    "org_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+    "org_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
     "payload": {
      "note": "офлайн",
      "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
@@ -621,7 +722,7 @@
     },
     "project_id": null,
     "reason": "Говорих с техника — беше на обекта",
-    "received_at": "2026-11-10T06:07:35.228445+00:00",
+    "received_at": "2026-11-13T23:28:20.389028+00:00",
     "result": {
      "error_code": "CONFLICT_KEPT_OFFICE",
      "message": "Говорих с техника — беше на обекта"
@@ -651,33 +752,33 @@
  "idempotency": {
   "calls_note": 2,
   "event_fields": {
-   "idempotency_key": "5b48031b-87c9-44db-bf7e-37cacc30a060",
+   "idempotency_key": "c1befd76-cd0c-49a8-b1da-e91674e6d622",
    "source_channel": "offline_sync",
    "source_flow": "FLOW-037",
    "structured_diff": {
-    "captured_at": "2026-11-10T06:07:34.885984+00:00",
+    "captured_at": "2026-11-13T23:28:20.127423+00:00",
     "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
     "op_type": "probe.note",
-    "received_at": "2026-11-10T06:07:34.891255+00:00"
+    "received_at": "2026-11-13T23:28:20.131767+00:00"
    },
-   "tenant_id": "bcc8022a-014d-4821-a000-08dbe21a6405"
+   "tenant_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c"
   },
   "first": {
-   "captured_at": "2026-11-10T06:07:34.885984+00:00",
-   "idempotency_key": "5b48031b-87c9-44db-bf7e-37cacc30a060",
-   "local_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
-   "received_at": "2026-11-10T06:07:34.891255+00:00",
+   "captured_at": "2026-11-13T23:28:20.127423+00:00",
+   "idempotency_key": "c1befd76-cd0c-49a8-b1da-e91674e6d622",
+   "local_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
+   "received_at": "2026-11-13T23:28:20.131767+00:00",
    "replay": false,
    "result": {
-    "entity_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
+    "entity_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
     "entity_type": "probe",
     "ok": true
    },
    "status": "synced"
   },
   "key_reused": {
-   "idempotency_key": "5b48031b-87c9-44db-bf7e-37cacc30a060",
-   "local_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
+   "idempotency_key": "c1befd76-cd0c-49a8-b1da-e91674e6d622",
+   "local_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
    "replay": false,
    "result": {
     "error_code": "IDEMPOTENCY_KEY_REUSED",
@@ -693,13 +794,13 @@
   "receipts_env1": 1,
   "receipts_par": 1,
   "second": {
-   "captured_at": "2026-11-10T06:07:34.885984+00:00",
-   "idempotency_key": "5b48031b-87c9-44db-bf7e-37cacc30a060",
-   "local_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
-   "received_at": "2026-11-10T06:07:34.891255+00:00",
+   "captured_at": "2026-11-13T23:28:20.127423+00:00",
+   "idempotency_key": "c1befd76-cd0c-49a8-b1da-e91674e6d622",
+   "local_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
+   "received_at": "2026-11-13T23:28:20.131767+00:00",
    "replay": true,
    "result": {
-    "entity_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
+    "entity_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
     "entity_type": "probe",
     "ok": true
    },
@@ -707,13 +808,13 @@
   },
   "synced_events": 2,
   "third": {
-   "captured_at": "2026-11-10T06:07:34.885984+00:00",
-   "idempotency_key": "5b48031b-87c9-44db-bf7e-37cacc30a060",
-   "local_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
-   "received_at": "2026-11-10T06:07:34.891255+00:00",
+   "captured_at": "2026-11-13T23:28:20.127423+00:00",
+   "idempotency_key": "c1befd76-cd0c-49a8-b1da-e91674e6d622",
+   "local_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
+   "received_at": "2026-11-13T23:28:20.131767+00:00",
    "replay": true,
    "result": {
-    "entity_id": "fd636d3b-7565-4fd8-a52f-18384efeb976",
+    "entity_id": "c10dffae-aa5c-4b77-be64-5b878f1c76be",
     "entity_type": "probe",
     "ok": true
    },
@@ -722,13 +823,13 @@
  },
  "late": {
   "clock_skew": {
-   "captured_at": "2026-11-10T06:07:35.058097+00:00",
-   "idempotency_key": "6616b451-038d-4aa6-9e93-0507a7076a28",
-   "local_id": "58cdb94d-ef31-4948-ad37-df1a2b67a995",
-   "received_at": "2026-11-10T06:07:35.063432+00:00",
+   "captured_at": "2026-11-13T23:28:20.257369+00:00",
+   "idempotency_key": "a1007bb4-7b4d-4091-928c-fff861641aef",
+   "local_id": "62511761-58d7-4511-8dfa-c454d91399b7",
+   "received_at": "2026-11-13T23:28:20.261193+00:00",
    "replay": false,
    "result": {
-    "late_id": "a619df23-b766-4cce-b105-798c71d1ac9e",
+    "late_id": "70748312-5f61-4da3-a912-8c9b4d1cec6e",
     "reason": "clock_skew"
    },
    "status": "late"
@@ -736,22 +837,22 @@
   "handler_not_called": true,
   "late_row": {
    "author_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
-   "captured_at": "2026-11-09T04:07:35.038995+00:00",
+   "captured_at": "2026-11-12T21:28:20.243494+00:00",
    "device_id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
    "reason": "previous_day",
-   "received_at": "2026-11-10T06:07:35.043515+00:00",
+   "received_at": "2026-11-13T23:28:20.247344+00:00",
    "status": "open"
   },
   "late_rows": 2,
   "nine_minutes_is_fine": "synced",
   "previous_day": {
-   "captured_at": "2026-11-09T04:07:35.038995+00:00",
-   "idempotency_key": "ad770580-0ae3-493b-aab3-70c5c318316c",
-   "local_id": "b1a82702-e9f0-468f-9c88-b4f744e65eda",
-   "received_at": "2026-11-10T06:07:35.043515+00:00",
+   "captured_at": "2026-11-12T21:28:20.243494+00:00",
+   "idempotency_key": "aac1ce32-1f6c-4191-8d74-5224b586a325",
+   "local_id": "1124177c-d0b9-4fc9-ad75-e9ef19f3a6c7",
+   "received_at": "2026-11-13T23:28:20.247344+00:00",
    "replay": false,
    "result": {
-    "late_id": "9ff8d35f-2604-4892-9f3d-1d4e89a60cab",
+    "late_id": "cfe9e9e8-845e-437c-9143-ab421654d625",
     "reason": "previous_day"
    },
    "status": "late"
@@ -780,10 +881,10 @@
   },
   "empty_batch": 422,
   "online_only_approve": {
-   "captured_at": "2026-11-10T06:07:34.981711+00:00",
-   "idempotency_key": "ab9cff24-5b2e-4b4b-ab63-6264efa23cc2",
-   "local_id": "7054f2e4-8dfe-495c-bce3-91c6384fef23",
-   "received_at": "2026-11-10T06:07:34.986101+00:00",
+   "captured_at": "2026-11-13T23:28:20.198377+00:00",
+   "idempotency_key": "df95581f-6d20-4655-90a9-77ec0d3bdde6",
+   "local_id": "dc4ae93b-04b8-4525-8106-0036ffc34fff",
+   "received_at": "2026-11-13T23:28:20.202172+00:00",
    "replay": false,
    "result": {
     "error_code": "ONLINE_ONLY",
@@ -792,10 +893,10 @@
    "status": "rejected"
   },
   "online_only_payment": {
-   "captured_at": "2026-11-10T06:07:34.968560+00:00",
-   "idempotency_key": "14854a0f-21c6-45ee-a5ec-015fae490dbe",
-   "local_id": "a955a476-9090-47a4-a9bc-ddd79606d311",
-   "received_at": "2026-11-10T06:07:34.974308+00:00",
+   "captured_at": "2026-11-13T23:28:20.188419+00:00",
+   "idempotency_key": "14f3a156-fda3-4214-957b-45b41e93c1a1",
+   "local_id": "24a1b9b1-83d7-4c19-9608-45aaf6c2f792",
+   "received_at": "2026-11-13T23:28:20.192273+00:00",
    "replay": false,
    "result": {
     "error_code": "ONLINE_ONLY",
@@ -804,8 +905,8 @@
    "status": "rejected"
   },
   "tenant_mismatch": {
-   "idempotency_key": "266b398b-b6ab-4966-8f33-3e08b3fbffa7",
-   "local_id": "aef1db6e-8188-46f1-ba4c-ac75688696d9",
+   "idempotency_key": "f2fb7840-a98c-454a-b8e7-30ed86d9e613",
+   "local_id": "86458931-ef60-4c58-87ce-4bf237b46ac4",
    "replay": false,
    "result": {
     "error_code": "TENANT_MISMATCH",
@@ -814,10 +915,10 @@
    "status": "rejected"
   },
   "unsupported": {
-   "captured_at": "2026-11-10T06:07:34.993592+00:00",
-   "idempotency_key": "4dddfbb2-a6a5-498f-8645-ce7488d8586e",
-   "local_id": "df3b0322-6734-4871-94af-504bf971ff97",
-   "received_at": "2026-11-10T06:07:34.997423+00:00",
+   "captured_at": "2026-11-13T23:28:20.207682+00:00",
+   "idempotency_key": "744c0b83-c388-4cad-b773-d2693af9d4f9",
+   "local_id": "7824e935-ccc3-4c9e-9110-ddae1e03d271",
+   "received_at": "2026-11-13T23:28:20.211785+00:00",
    "replay": false,
    "result": {
     "error_code": "UNSUPPORTED_OP",
@@ -826,8 +927,8 @@
    "status": "rejected"
   },
   "user_mismatch": {
-   "idempotency_key": "61ba68df-2dbb-4001-a8e5-67f71843d285",
-   "local_id": "5a81948b-36a3-49ac-a6ab-cf50c2acbf59",
+   "idempotency_key": "781276cf-48e0-4ae1-81d8-952b7069ebf6",
+   "local_id": "7136dc9e-e1d9-4bc5-8490-a67332b96445",
    "replay": false,
    "result": {
     "error_code": "USER_MISMATCH",
@@ -841,13 +942,13 @@
    "error_code": "DEVICE_REVOKED",
    "results": [
     {
-     "captured_at": "2026-11-10T06:07:35.728822+00:00",
-     "idempotency_key": "a45b4d09-61ab-4e08-b5d0-5c20c8964ec9",
-     "local_id": "26ce6ed8-c31a-40f1-83ed-6f7ea020bf75",
-     "received_at": "2026-11-10T06:07:35.733166+00:00",
+     "captured_at": "2026-11-13T23:28:20.959460+00:00",
+     "idempotency_key": "666109ec-69da-4f6f-bcc3-7d4d45222a31",
+     "local_id": "422fd987-24c3-4c85-9429-9185e018d3e5",
+     "received_at": "2026-11-13T23:28:20.962448+00:00",
      "replay": false,
      "result": {
-      "quarantine_id": "686d775d-b8ad-4804-b02d-b13e3f7b2baf"
+      "quarantine_id": "f3681d3f-6053-46b0-b00e-f5e7182ed3f0"
      },
      "status": "quarantined"
     }
@@ -866,18 +967,18 @@
   },
   "by_owner": {
    "body": {
-    "created_at": "2026-11-10T06:07:34.861633+00:00",
+    "created_at": "2026-11-13T23:28:20.106039+00:00",
     "id": "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f",
     "label": "",
-    "last_seen_at": "2026-11-10T06:07:35.460240+00:00",
-    "last_sync_at": "2026-11-10T06:07:35.588805+00:00",
+    "last_seen_at": "2026-11-13T23:28:20.550411+00:00",
+    "last_sync_at": "2026-11-13T23:28:20.855753+00:00",
     "last_user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
     "last_user_name": "ST01 A technician",
-    "org_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+    "org_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
     "registered_by": "f0cf50a7-9567-582b-8331-2c873a0f9d64",
     "revoke_reason": "Изгубен телефон",
-    "revoked_at": "2026-11-10T06:07:35.714939+00:00",
-    "revoked_by": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
+    "revoked_at": "2026-11-13T23:28:20.951109+00:00",
+    "revoked_by": "48f00464-e237-4a34-91f5-d602ba74324e",
     "revoked_by_name": "ST01 A owner",
     "user_agent": "testclient"
    },
@@ -926,15 +1027,15 @@
    "status": 403
   },
   "revoke_event": {
-   "actor_id": "678a4844-a7c4-4c9c-919a-9eb489125b7c",
+   "actor_id": "48f00464-e237-4a34-91f5-d602ba74324e",
    "reason": "Изгубен телефон",
-   "tenant_id": "bcc8022a-014d-4821-a000-08dbe21a6405"
+   "tenant_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c"
   },
   "status_revoked": {
    "enabled": true,
    "revoked": true,
-   "server_time": "2026-11-10T06:07:35.728187+00:00",
-   "tenant_id": "bcc8022a-014d-4821-a000-08dbe21a6405",
+   "server_time": "2026-11-13T23:28:20.958953+00:00",
+   "tenant_id": "988ea8ef-cad5-4747-9794-8e6708e4c00c",
    "user_id": "f0cf50a7-9567-582b-8331-2c873a0f9d64"
   },
   "user_can_still_log_in": 200
@@ -951,6 +1052,6 @@
    "status": 403
   },
   "off": 200,
-  "receipts_kept": 22
+  "receipts_kept": 27
  }
 }

@@ -87,8 +87,13 @@ def install_probe_handlers(sync) -> Dict[str, Any]:
                                     kind="approved" if office["status"] == "APPROVED" else "version")
         return {"entity_type": "probe", "entity_id": "rec-1"}
 
+    async def boom(user, env, ctx):
+        calls["boom"] = calls.get("boom", 0) + 1
+        raise RuntimeError("internal detail that must never reach the phone")
+
     sync.register("probe.note", note, confirm=confirm)
     sync.register("probe.edit", edit)
+    sync.register("probe.boom", boom)
     return calls
 
 
@@ -413,6 +418,122 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         my = call("GET", "/api/sync/receipts?device_id=" + DEVICE_A)["body"]
         h["my_receipts_statuses"] = sorted({r["status"] for r in my})
         obs["handlers"] = h
+
+        # ─────────────────────────────────────────────── AUDIT-2 (PWA92-M1 / N1 / deciding)
+        from app.tenancy.data_access import TenantCollection
+        a2: Dict[str, Any] = {}
+        crash = {"work_reports": 0, "synced_event": 0}
+        orig_insert, orig_update = TenantCollection.insert_one, TenantCollection.update_one
+        orig_audit = sync.audit
+
+        async def insert_one(self, doc, **kw):
+            if self.name == "work_reports" and crash["work_reports"]:
+                crash["work_reports"] -= 1
+                raise RuntimeError("crash after the drafts, before the end of the write")
+            return await orig_insert(self, doc, **kw)
+
+        async def update_one(self, flt, update, **kw):
+            if self.name == "work_reports" and crash["work_reports"]:
+                crash["work_reports"] -= 1
+                raise RuntimeError("crash after the drafts, before the end of the write")
+            return await orig_update(self, flt, update, **kw)
+
+        async def audit(user, **kw):
+            if kw.get("action") == "sync.item_synced" and crash["synced_event"]:
+                crash["synced_event"] -= 1
+                raise RuntimeError("crash after the domain commit, before the receipt")
+            return await orig_audit(user, **kw)
+
+        TenantCollection.insert_one, TenantCollection.update_one = insert_one, update_one
+        sync.audit = audit
+        try:
+            def rep_rows(local_id):
+                return q(lambda: op_db.employee_daily_reports.find(
+                    {"sync_local_id": local_id}, {"_id": 0, "id": 1, "sync_entry_index": 1}).to_list(None))
+
+            def receipt(env):
+                return q(lambda: op_db.sync_receipts.find_one(
+                    {"idempotency_key": env["idempotency_key"]}, {"_id": 0}))
+
+            two = {"project_id": P, "entries": [{"smr_type": "Шпакловка", "hours": 1},
+                                                 {"smr_type": "Грунд", "hours": 0.5}]}
+            # M1-a: a crash between the draft inserts and the end of the write → nothing kept
+            m1 = envelope(tech["id"], A["tenant_id"], "technician.daily_report", two)
+            crash["work_reports"] = 1
+            r1 = batch([m1])
+            a2["m1_crash_http"] = r1["status"]
+            a2["m1_crash_item"] = r1["body"]["results"][0]
+            a2["m1_rows_after_crash"] = len(rep_rows(m1["local_id"]))
+            a2["m1_receipt_after_crash"] = receipt(m1)["status"]
+            a2["m1_retry"] = batch([m1])["body"]["results"][0]["status"]
+            a2["m1_rows_after_retry"] = sorted(r.get("sync_entry_index") for r in rep_rows(m1["local_id"]))
+            a2["m1_replay"] = batch([m1])["body"]["results"][0]
+            a2["m1_rows_after_replay"] = len(rep_rows(m1["local_id"]))
+            # M1-b: the write committed, the request died before the receipt; a stale takeover
+            # (2+ minutes later) must find the drafts, never write a second set
+            m2 = envelope(tech["id"], A["tenant_id"], "technician.daily_report", two)
+            crash["synced_event"] = 1
+            a2["m2_first"] = batch([m2])["body"]["results"][0]["status"]
+            a2["m2_rows_after_first"] = len(rep_rows(m2["local_id"]))
+            old = _iso(datetime.now(timezone.utc) - timedelta(minutes=3))
+            q(lambda: op_db.sync_receipts.update_one({"idempotency_key": m2["idempotency_key"]},
+                                                     {"$set": {"status": "processing", "received_at": old}}))
+            a2["m2_takeover"] = batch([m2])["body"]["results"][0]
+            a2["m2_rows_after_takeover"] = len(rep_rows(m2["local_id"]))
+            # backstop: the unique index refuses a second draft for the same record entry
+            dup = dict(q(lambda: op_db.employee_daily_reports.find_one(
+                {"sync_local_id": m2["local_id"], "sync_entry_index": 0}, {"_id": 0})))
+            dup["id"] = str(uuid.uuid4())
+            try:
+                q(lambda: op_db.employee_daily_reports.insert_one(dict(dup)))
+                a2["backstop"] = "inserted"
+            except Exception as exc:                            # noqa: BLE001
+                a2["backstop"] = type(exc).__name__
+            # the online route is unchanged: no transaction, no sync fields, same answer shape
+            on = call("POST", "/api/technician/daily-report",
+                      json={"project_id": P, "entries": [{"smr_type": "Онлайн отчет", "hours": 1}]})
+            a2["online_status"] = on["status"]
+            a2["online_keys"] = sorted(on["body"].keys()) if isinstance(on["body"], dict) else on["body"]
+            orow = q(lambda: op_db.employee_daily_reports.find_one({"smr_type": "Онлайн отчет"}, {"_id": 0}))
+            a2["online_row_untagged"] = bool(orow) and "sync_local_id" not in orow \
+                and "sync_entry_index" not in orow and orow.get("entry_mode") == "technician_portal"
+        finally:
+            TenantCollection.insert_one, TenantCollection.update_one = orig_insert, orig_update
+            sync.audit = orig_audit
+        # N1: one item breaks unexpectedly → only that item is retryable, the batch goes on
+        nb = envelope(tech["id"], A["tenant_id"], "probe.boom", {})
+        nn = envelope(tech["id"], A["tenant_id"], "probe.note", {"text": "след грешка"})
+        rb1 = batch([nb, nn])
+        a2["n1_http"] = rb1["status"]
+        a2["n1_items"] = [{k: x.get(k) for k in ("status", "result")} for x in rb1["body"]["results"]]
+        a2["n1_body_text"] = json.dumps(rb1["body"], ensure_ascii=False)
+        a2["n1_receipt"] = receipt(nb)["status"]
+        a2["n1_resend"] = batch([nb])["body"]["results"][0]["status"]
+        a2["n1_boom_calls"] = calls.get("boom")
+        # deciding: a decision that crashed half-way is taken over after the stale window
+        e_dec = envelope(tech["id"], A["tenant_id"], "technician.daily_report",
+                         {"project_id": P, "entries": [{"smr_type": "Мазилка", "hours": 2}]},
+                         captured=yesterday_dt)
+        lid3 = batch([e_dec])["body"]["results"][0]["result"].get("late_id")
+        fresh = _iso(datetime.now(timezone.utc))
+        q(lambda: op_db.sync_late.update_one({"id": lid3}, {"$set": {
+            "status": "deciding", "decision_key": "crashed", "decided_by": "x", "deciding_at": fresh}}))
+        a2["deciding_fresh"] = call("POST", "/api/sync/late/%s/decide" % lid3, role="owner", key=str(uuid.uuid4()),
+                                    json={"decision": "reject", "reason": "двоен"})["error_code"]
+        q(lambda: op_db.sync_late.update_one({"id": lid3}, {"$set": {
+            "deciding_at": _iso(datetime.now(timezone.utc) - timedelta(minutes=3))}}))
+        dk = str(uuid.uuid4())
+        a2["deciding_stale"] = call("POST", "/api/sync/late/%s/decide" % lid3, role="owner", key=dk,
+                                    json={"decision": "reject", "reason": "двоен"})
+        a2["deciding_stale_status"] = (a2.pop("deciding_stale")["body"] or {}).get("status")
+        a2["deciding_takeover_event"] = count("audit_events", {"action": "sync.decision_taken_over",
+                                                               "entity_id": lid3})
+        q(lambda: op_db.sync_late.update_one({"id": lid3}, {"$set": {"status": "deciding"},
+                                                            "$unset": {"deciding_at": ""}}))
+        a2["deciding_legacy_no_stamp"] = call("POST", "/api/sync/late/%s/decide" % lid3, role="owner",
+                                              key=str(uuid.uuid4()),
+                                              json={"decision": "reject", "reason": "двоен"})["status"]
+        obs["audit2"] = a2
 
         # ─────────────────────────────────────────────── console permissions
         k: Dict[str, Any] = {}
@@ -739,6 +860,47 @@ def test_a_late_record_becomes_official_only_by_owner_admin_with_the_captured_da
     assert h["late_reject"] == 200 and h["late_reject_rows"] == 0
     assert h["late_reject_receipt"]["status"] == "rejected"
     assert {"synced", "conflict", "waiting_file", "rejected"} <= set(h["my_receipts_statuses"])
+
+
+@real
+def test_a_daily_report_crash_or_takeover_never_writes_it_twice(obs):
+    """AUDIT-2 PWA92-M1: drafts are inserted already tagged, in one transaction."""
+    a = obs["audit2"]
+    assert a["m1_crash_http"] == 200 and a["m1_crash_item"]["status"] == "retry"
+    assert a["m1_rows_after_crash"] == 0                      # rolled back, nothing untagged left
+    assert a["m1_receipt_after_crash"] == "retry"
+    assert a["m1_retry"] == "synced" and a["m1_rows_after_retry"] == [0, 1]
+    assert a["m1_replay"]["status"] == "synced" and a["m1_replay"]["replay"] is True
+    assert a["m1_rows_after_replay"] == 2
+    assert a["m2_first"] == "retry" and a["m2_rows_after_first"] == 2
+    assert a["m2_takeover"]["status"] == "synced" and a["m2_takeover"]["result"].get("already") is True
+    assert a["m2_rows_after_takeover"] == 2
+    assert a["backstop"] == "DuplicateKeyError"
+    assert a["online_status"] == 200 and a["online_row_untagged"] is True
+    assert a["online_keys"] == ["attendance_warnings", "draft_report_ids", "hours_warnings",
+                                "missing_smr_created", "report_id", "roster_id", "total_hours"]
+
+
+@real
+def test_one_broken_item_is_retryable_and_never_fails_the_batch(obs):
+    """AUDIT-2 PWA92-N1."""
+    a = obs["audit2"]
+    assert a["n1_http"] == 200
+    assert a["n1_items"][0]["status"] == "retry"
+    assert a["n1_items"][0]["result"]["error_code"] == "SERVER_ERROR_RETRY"
+    assert a["n1_items"][1]["status"] == "synced"
+    assert "internal detail" not in a["n1_body_text"] and "Traceback" not in a["n1_body_text"]
+    assert a["n1_receipt"] == "retry"
+    assert a["n1_resend"] == "retry" and a["n1_boom_calls"] == 2   # taken over at once, retried
+
+
+@real
+def test_a_stuck_decision_is_taken_over_only_after_the_stale_window(obs):
+    a = obs["audit2"]
+    assert a["deciding_fresh"] == "ALREADY_DECIDED"
+    assert a["deciding_stale_status"] == "rejected"
+    assert a["deciding_takeover_event"] == 1
+    assert a["deciding_legacy_no_stamp"] == 200               # stuck with no stamp (older row) → recoverable
 
 
 if __name__ == "__main__":

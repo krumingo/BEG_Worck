@@ -843,6 +843,17 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     work_sessions are created on APPROVE, not here.
     See /app/memory/SOURCE_OF_TRUTH.md for full policy.
     """
+    return await submit_daily_report_core(data, user)
+
+
+async def submit_daily_report_core(data: DailyReportSubmit, user: dict, sync_stamp: Optional[dict] = None):
+    """The daily-report write (the route above and the PWA-02 offline sync).
+
+    ``sync_stamp`` (PWA-02 only, additive): the offline record's fields — every draft is
+    inserted already carrying ``sync_local_id`` (+ ``sync_entry_index``), and all writes run in
+    ONE transaction, so a crash or a stale takeover can never leave an untagged duplicate
+    (AUDIT-2 PWA92-M1). Without it the online path behaves exactly as before.
+    """
     tenant = _tenant(user)
     org_id = user["org_id"]
     today = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -912,132 +923,150 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
 
     missing_smr_created = []
     draft_ids = []
+    report = {}
 
-    for entry in data.entries:
-        wid = entry.worker_id or user["id"]
+    async def _write(session):
+        # may run more than once (a transaction retry): start clean every time
+        kw = {} if session is None else {"session": session}
+        missing_smr_created.clear()
+        draft_ids.clear()
+        report.clear()
 
-        # Validate worker is in roster (if roster exists)
-        if roster_ids and wid not in roster_ids and wid != user["id"]:
-            raise HTTPException(status_code=400, detail=f"Worker {wid} not in today's roster")
+        for entry_index, entry in enumerate(data.entries):
+            wid = entry.worker_id or user["id"]
 
-        # Get worker name
-        worker_name = entry.worker_name
-        if not worker_name and roster:
-            for rw in roster.get("workers", []):
-                if rw.get("worker_id") == wid:
-                    worker_name = rw.get("worker_name", "")
-                    break
-        if not worker_name:
-            worker_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
+            # Validate worker is in roster (if roster exists)
+            if roster_ids and wid not in roster_ids and wid != user["id"]:
+                raise HTTPException(status_code=400, detail=f"Worker {wid} not in today's roster")
 
-        # Determine SMR source
-        smr_source = "known" if entry.smr_type.lower() in known_types else "manual"
+            # Get worker name
+            worker_name = entry.worker_name
+            if not worker_name and roster:
+                for rw in roster.get("workers", []):
+                    if rw.get("worker_id") == wid:
+                        worker_name = rw.get("worker_name", "")
+                        break
+            if not worker_name:
+                worker_name = f"{user.get('first_name', '')} {user.get('last_name', '')}".strip()
 
-        # Create DRAFT in employee_daily_reports
-        is_admin_entry = user["role"] in ["Admin", "Owner", "SiteManager"]
-        draft = {
+            # Determine SMR source
+            smr_source = "known" if entry.smr_type.lower() in known_types else "manual"
+
+            # Create DRAFT in employee_daily_reports
+            is_admin_entry = user["role"] in ["Admin", "Owner", "SiteManager"]
+            draft = {
+                "id": str(uuid.uuid4()),
+                "org_id": org_id,
+                "project_id": data.project_id,
+                "date": today,
+                "worker_id": wid,
+                "worker_name": worker_name,
+                "smr_type": entry.smr_type,
+                "smr_subtype": entry.smr_subtype or "",
+                "hours": round(entry.hours, 2),
+                "notes": entry.notes or "",
+                "location_id": entry.location_id,
+                "smr_source": smr_source,
+                "status": "Draft",
+                "submitted_by": user["id"],
+                "entered_by_admin": is_admin_entry,
+                "entry_mode": "admin_field_portal" if is_admin_entry else "technician_portal",
+                "created_at": now,
+                "updated_at": now,
+            }
+            if sync_stamp:
+                draft.update(sync_stamp)
+                draft["sync_entry_index"] = entry_index
+            await tenant.employee_daily_reports.insert_one(draft, **kw)
+            draft_ids.append(draft["id"])
+
+            # Auto-create attendance_entry if not exists (report = present)
+            existing_att = await tenant.attendance_entries.find_one(
+                {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}, **kw
+            )
+            if not existing_att:
+                await tenant.attendance_entries.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "date": today,
+                    "project_id": data.project_id,
+                    "user_id": wid,
+                    "status": "Present",
+                    "note": "Автоматично от дневен отчет",
+                    "marked_at": now,
+                    "marked_by_user_id": user["id"],
+                    "source": "DailyReport",
+                }, **kw)
+
+            # Check if SMR type is unknown → create missing_smr
+            if smr_source == "manual":
+                ms = {
+                    "id": str(uuid.uuid4()),
+                    "org_id": org_id,
+                    "project_id": data.project_id,
+                    "project_name": project.get("name", ""),
+                    "smr_type": entry.smr_type,
+                    "activity_type": entry.smr_type,
+                    "activity_subtype": entry.smr_subtype or "",
+                    "qty": entry.hours,
+                    "unit": "часа",
+                    "source": "mobile",
+                    "status": "reported",
+                    "urgency_type": "emergency",
+                    "emergency_reason": "Въведено от терена",
+                    "notes": entry.notes,
+                    "created_at": now,
+                    "updated_at": now,
+                    "created_by": user["id"],
+                    "created_by_name": worker_name,
+                    "attachments": [],
+                    "client_approval": None,
+                    "ai_estimated_price": None,
+                    "ai_price_breakdown": None,
+                    "offer_line_ids": [],
+                    "linked_extra_work_id": None,
+                    "linked_offer_id": None,
+                    "linked_change_order_id": None,
+                }
+                await tenant.missing_smr.insert_one(ms, **kw)
+                missing_smr_created.append(ms["id"])
+
+        # Create/update work_report summary
+        total_hours = round(sum(e.hours for e in data.entries), 2)
+        report.update({
             "id": str(uuid.uuid4()),
             "org_id": org_id,
             "project_id": data.project_id,
+            "user_id": user["id"],
             "date": today,
-            "worker_id": wid,
-            "worker_name": worker_name,
-            "smr_type": entry.smr_type,
-            "smr_subtype": entry.smr_subtype or "",
-            "hours": round(entry.hours, 2),
-            "notes": entry.notes or "",
-            "location_id": entry.location_id,
-            "smr_source": smr_source,
-            "status": "Draft",
             "submitted_by": user["id"],
-            "entered_by_admin": is_admin_entry,
-            "entry_mode": "admin_field_portal" if is_admin_entry else "technician_portal",
-            "created_at": now,
-            "updated_at": now,
-        }
-        await tenant.employee_daily_reports.insert_one(draft)
-        draft_ids.append(draft["id"])
-
-        # Auto-create attendance_entry if not exists (report = present)
-        existing_att = await tenant.attendance_entries.find_one(
-            {"org_id": org_id, "date": today, "user_id": wid, "project_id": data.project_id}
+            "submitted_at": now,
+            "entries_count": len(data.entries),
+            "total_hours": total_hours,
+            "general_notes": data.general_notes,
+            "photos": data.photos,
+            "source": "technician_mobile",
+            "status": "Draft",
+        })
+        existing_report = await tenant.work_reports.find_one(
+            {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}, **kw
         )
-        if not existing_att:
-            await tenant.attendance_entries.insert_one({
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "date": today,
-                "project_id": data.project_id,
-                "user_id": wid,
-                "status": "Present",
-                "note": "Автоматично от дневен отчет",
-                "marked_at": now,
-                "marked_by_user_id": user["id"],
-                "source": "DailyReport",
-            })
+        if existing_report:
+            await tenant.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
+                "entries_count": report["entries_count"], "total_hours": total_hours,
+                "general_notes": report["general_notes"], "photos": report["photos"],
+                "submitted_at": now, "status": "Draft",
+            }}, **kw)
+            report["id"] = existing_report["id"]
+        else:
+            await tenant.work_reports.insert_one(report, **kw)
 
-        # Check if SMR type is unknown → create missing_smr
-        if smr_source == "manual":
-            ms = {
-                "id": str(uuid.uuid4()),
-                "org_id": org_id,
-                "project_id": data.project_id,
-                "project_name": project.get("name", ""),
-                "smr_type": entry.smr_type,
-                "activity_type": entry.smr_type,
-                "activity_subtype": entry.smr_subtype or "",
-                "qty": entry.hours,
-                "unit": "часа",
-                "source": "mobile",
-                "status": "reported",
-                "urgency_type": "emergency",
-                "emergency_reason": "Въведено от терена",
-                "notes": entry.notes,
-                "created_at": now,
-                "updated_at": now,
-                "created_by": user["id"],
-                "created_by_name": worker_name,
-                "attachments": [],
-                "client_approval": None,
-                "ai_estimated_price": None,
-                "ai_price_breakdown": None,
-                "offer_line_ids": [],
-                "linked_extra_work_id": None,
-                "linked_offer_id": None,
-                "linked_change_order_id": None,
-            }
-            await tenant.missing_smr.insert_one(ms)
-            missing_smr_created.append(ms["id"])
-
-    # Create/update work_report summary
-    total_hours = round(sum(e.hours for e in data.entries), 2)
-    report = {
-        "id": str(uuid.uuid4()),
-        "org_id": org_id,
-        "project_id": data.project_id,
-        "user_id": user["id"],
-        "date": today,
-        "submitted_by": user["id"],
-        "submitted_at": now,
-        "entries_count": len(data.entries),
-        "total_hours": total_hours,
-        "general_notes": data.general_notes,
-        "photos": data.photos,
-        "source": "technician_mobile",
-        "status": "Draft",
-    }
-    existing_report = await tenant.work_reports.find_one(
-        {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}
-    )
-    if existing_report:
-        await tenant.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
-            "entries_count": report["entries_count"], "total_hours": total_hours,
-            "general_notes": report["general_notes"], "photos": report["photos"],
-            "submitted_at": now, "status": "Draft",
-        }})
-        report["id"] = existing_report["id"]
+    if sync_stamp:
+        from app.services.invoice_line_lock import run_transaction
+        await run_transaction(tenant, _write)
     else:
-        await tenant.work_reports.insert_one(report)
+        await _write(None)
+    total_hours = round(sum(e.hours for e in data.entries), 2)
 
     # Hours warnings per unique worker
     hours_warnings = []
