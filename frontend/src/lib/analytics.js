@@ -34,7 +34,7 @@ export const ROUTE_TEMPLATES = [
   "/", "/login", "/signup", "/forgot-password", "/reset-password", "/plans", "/billing", "/billing/success", "/billing/cancel",
   "/offers/review/:reviewToken", "/projects", "/projects/:projectId", "/projects/:projectId/financial",
   "/projects/:projectId/novo-smr", "/projects/:projectId/operations", "/projects/:projectId/progress",
-  "/projects/:projectId/smr-analysis/:analysisId", "/sites", "/sites/:siteId", "/my-day", "/attendance-history",
+  "/projects/:projectId/smr-analysis/:analysisId", "/sites", "/sites/:siteId", "/my-day", "/attendance-history", "/labor-quantities",
   "/my-payslips", "/tech", "/tech/tools", "/tech/my-money", "/s/:qrId", "/notifications", "/site-attendance",
   "/work-reports/new", "/work-reports/:reportId", "/review-reports", "/reports", "/reports/finance-details", "/reminders",
   "/offers", "/offers/new", "/offers/:offerId", "/historical-offers", "/activity-catalog", "/employees",

@@ -34,13 +34,13 @@
     "user_id": "<tenant A user_id>",
     "org_id": "<tenant A org_id>"
   },
-  "seconds": 232.4,
+  "seconds": 187.8,
   "slow_calls": [
     {
       "route": "GET /api/warehouse/migration-readiness/legacy-writer-inventory",
       "role": "owner",
       "mode": "off",
-      "seconds": 4.91
+      "seconds": 4.5
     }
   ],
   "mongo": "local replica set (oplog)",
