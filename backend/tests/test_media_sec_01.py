@@ -936,7 +936,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                             ref=k5))[0]["marker_id"]
             q(lambda: op_db.warehouse_transactions.insert_one({
                 "id": pid("A", "mv_5own"), "movement_id": "mv-5own", "org_id": org, "tenant_id": org,
-                "idempotency_key": k5, "file_ids": [m5["id"]], "created_at": NOW}))
+                "idempotency_key": k5, "actor_id": tech, "file_ids": [m5["id"]], "created_at": NOW}))
             mov_row(m5["id"], "mv_5other")     # another movement, another key
             r = call("POST", "/api/media/%s/pending-holders/%s/release" % (m5["id"], mk5),
                      role="admin", key="auto")
@@ -947,8 +947,44 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                              "pending": pend(m5["id"]),
                              "proof_own": ((ev5[0]["diff"] or {}).get("proof") or {}).get("own_movements")
                              if ev5 else None,
+                             "decision": ((ev5[0]["diff"] or {}).get("proof") or {}).get("decision")
+                             if ev5 else None,
                              "delete": [d["status"], d["error_code"]],
                              "media_status": media_row(m5["id"]).get("status")}
+            # FLOW Guard pass 48: the SAME key string under ANOTHER user is not "own"
+            m6 = upload()
+            k6 = "wh-key-" + uuid.uuid4().hex
+            import inspect as _inspect
+            kw6 = ({"action": "receive_from_supplier"}
+                   if "action" in _inspect.signature(fhp.mark_pending).parameters else {})
+            mk6 = q(lambda: fhp.mark_pending(T, org, [m6["id"]], route="test", user_id=tech,
+                                            ref=k6, **kw6))[0]["marker_id"]
+            q(lambda: op_db.warehouse_transactions.insert_one({
+                "id": pid("A", "mv_6"), "movement_id": "mv-6", "org_id": org, "tenant_id": org,
+                "idempotency_key": k6, "actor_id": "another-user-" + uuid.uuid4().hex[:6],
+                "action": "receive_from_supplier", "file_ids": [m6["id"]], "created_at": NOW}))
+            rel6 = "/api/media/%s/pending-holders/%s/release" % (m6["id"], mk6)
+            young = call("POST", rel6, role="admin", key="auto")
+            q(lambda: op_db.media_files.update_one({"id": m6["id"], "pending_holders.id": mk6},
+                                                   {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
+            old = call("POST", rel6, role="admin", key="auto")
+            d = call("DELETE", "/api/media/%s" % m6["id"], role="technician", key="auto",
+                     json={"reason": "x"})
+            ev6 = q(lambda: op_db.audit_events.find(
+                {"entity_id": m6["id"], "action": "media.file.pending_holder_release"},
+                {"_id": 0}).to_list(None))
+            ev6 = [dict(e, diff=e.get("structured_diff")) for e in ev6]
+            p6 = ((ev6[0]["diff"] or {}).get("proof") or {}) if ev6 else {}
+            g["s3_other_user_same_key"] = {
+                "young": [young["status"], young["error_code"]],
+                "old": [old["status"], (old["body"] or {}).get("outcome")],
+                "pending": pend(m6["id"]),
+                "confirm_events": len(events(m6["id"], "media.file.pending_holder_confirm_late")),
+                "proof": {"decision": p6.get("decision"), "own": p6.get("own_movements"),
+                          "age": (ev6[0]["diff"] or {}).get("age_seconds", 0) > 3600 if ev6 else None,
+                          "actor_is_admin": (ev6[0].get("actor_id") == users_a["admin"]["id"])
+                          if ev6 else None, "events": len(ev6)},
+                "delete": [d["status"], d["error_code"]]}
             m4 = upload()
             mk4 = q(lambda: fhp.mark_pending(T, org, [m4["id"]], route="test", user_id=tech))[0]["marker_id"]
             q(lambda: op_db.media_files.update_one({"id": m4["id"], "pending_holders.id": mk4},
@@ -1039,7 +1075,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                              ref=k11))[0]["marker_id"]
             q(lambda: op_db.warehouse_transactions.insert_one({
                 "id": pid("A", "mv_11"), "movement_id": "mv-11", "org_id": org, "tenant_id": org,
-                "idempotency_key": k11, "action": "receive_from_supplier",
+                "idempotency_key": k11, "actor_id": tech, "action": "receive_from_supplier",
                 "file_ids": [m11["id"]], "created_at": NOW}))
             g["s595_request_blocked"] = call("POST", "/api/media/%s/retire-request" % m11["id"],
                                             role="admin", key="auto",
@@ -1129,6 +1165,7 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                 await op_db.warehouse_transactions.insert_one({
                     "id": "mv-" + fid, "movement_id": "mv-" + fid, "org_id": org,
                     "tenant_id": org, "file_ids": [fid], "idempotency_key": inp.idempotency_key,
+                    "actor_id": inp.actor_id,
                     "action": "receive_from_supplier", "created_at": NOW})
                 return _Res("mv-" + fid)
 
@@ -1714,7 +1751,7 @@ def test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref(obs):
     # own movement + another holder → LATE-CONFIRMED; the file is still not retirable
     x = g["s3_mixed"]
     assert (x["status"], x["outcome"], x["pending"]) == (200, "confirmed_late", [])
-    assert x["proof_own"] == ["mv-5own"]
+    assert x["proof_own"] == ["mv-5own"] and x["decision"] == "confirm"
     assert x["delete"] == [409, "MEDIA_IN_USE"] and x["media_status"] is None
     w = g["s3_without_reference"]
     assert w["released"] is True and w["outcome"] == "released"
@@ -1732,6 +1769,20 @@ def test_fg588_4_retire_and_claim_in_parallel_exactly_one_wins(obs):
     assert g["s4b"]["claim"] == "placed" and list(g["s4b"]["delete"])[0] == 409
     assert g["s4b"]["status"] is None and g["s4b"]["pending"] == 1
     assert g["s4c"] == "MEDIA_RETIRED"
+
+
+@real
+def test_fg598_own_means_the_full_idempotency_scope_not_the_key_string(obs):
+    """FLOW Guard pass 48: another user's movement under the SAME key string never confirms
+    someone else's marker (nor names the wrong actor): young → 409, old → released."""
+    g = obs["pass47"]["fg588"]
+    # the SAME key under ANOTHER user is not own: young → 409, old → released (not confirmed)
+    u = g["s3_other_user_same_key"]
+    assert u["young"] == [409, "PENDING_HOLDER_TOO_RECENT"]
+    assert u["old"] == [200, "released"] and u["pending"] == [] and u["confirm_events"] == 0
+    assert u["proof"] == {"decision": "release", "own": [], "age": True, "actor_is_admin": True,
+                          "events": 1}
+    assert u["delete"] == [409, "MEDIA_IN_USE"]          # the other user's movement holds it
 
 
 @real

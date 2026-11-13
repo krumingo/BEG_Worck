@@ -226,7 +226,8 @@ def _now_iso() -> str:
 
 
 async def mark_pending(tenant, org_id: str, refs: Iterable[Any], *, route: str,
-                       user_id: str, ref: Optional[str] = None) -> List[Dict[str, str]]:
+                       user_id: str, ref: Optional[str] = None,
+                       action: Optional[str] = None) -> List[Dict[str, str]]:
     """Condition 1: ONE conditional update per file — filter "not retired AND no pending
     retire request"; ``$push`` {id, route, user, ref, at} and ``$inc ref_version``. A miss →
     409 and the movement must not run (markers already placed by this call are released).
@@ -246,7 +247,7 @@ async def mark_pending(tenant, org_id: str, refs: Iterable[Any], *, route: str,
                 continue
             seen.add(media["id"])
             marker = {"id": "ph-" + _uuid.uuid4().hex, "route": route, "user": user_id,
-                      "ref": ref, "at": _now_iso()}
+                      "ref": ref, "action": action, "at": _now_iso()}
             res = await tenant.media_files.update_one(
                 {"id": media["id"], "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
                  "retire_request_pending": None},
@@ -301,8 +302,11 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
     other holders stay real holders and every retire path still sees them (orchestrator,
     pass 48):
 
-    * a warehouse movement with ``idempotency_key == marker.ref`` exists → the marker is
-      LATE-CONFIRMED (its movement committed and the writer missed ``settle_pending``);
+    * the marker's OWN movement exists — the FULL idempotency scope (R29): this tenant, the
+      marker's user as the movement's ``actor_id``, ``idempotency_key == marker.ref`` and,
+      when recorded, the marker's action — → LATE-CONFIRMED (its movement committed and the
+      writer missed ``settle_pending``). Another user's movement under the same key string
+      is NOT own: it never confirms someone else's marker;
     * no such movement AND the marker is older than ``min_age_seconds`` → RELEASED (its
       movement never committed), even when other holders exist;
     * no such movement AND younger → 409 ``PENDING_HOLDER_TOO_RECENT``; nothing changes.
@@ -327,11 +331,14 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
     age = (datetime.now(timezone.utc) - datetime.fromisoformat(marker["at"])).total_seconds()
     base = {"marker": marker, "age_seconds": int(age)}
     own = []
-    if marker.get("ref"):
+    if marker.get("ref") and marker.get("user"):
+        scope = {"org_id": org_id, "idempotency_key": marker["ref"],
+                 "actor_id": marker["user"], "file_ids": {"$in": references_of(media)}}
+        if marker.get("action"):
+            scope["action"] = marker["action"]
         own = await tenant.warehouse_transactions.find(
-            {"org_id": org_id, "idempotency_key": marker["ref"],
-             "file_ids": {"$in": references_of(media)}},
-            {"_id": 0, "id": 1, "movement_id": 1, "idempotency_key": 1}).to_list(50)
+            scope, {"_id": 0, "id": 1, "movement_id": 1, "idempotency_key": 1,
+                    "actor_id": 1}).to_list(50)
     if own:
         outcome, action = "confirmed_late", "media.file.pending_holder_confirm_late"
     elif age >= min_age_seconds:
@@ -343,7 +350,10 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
                       "Маркерът е по-нов от минималната възраст за освобождаване")
     # the proof: the marker's own movements, and the holders that keep the file held
     holders = await find_holders(tenant, org_id, dict(media, pending_holders=[]))
-    proof = {"own_movements": [m.get("movement_id") or m.get("id") for m in own],
+    proof = {"decision": "confirm" if own else "release",
+             "own_movements": [m.get("movement_id") or m.get("id") for m in own],
+             "own_scope": {"user": marker.get("user"), "ref": marker.get("ref"),
+                           "action": marker.get("action")},
              "other_holders": holders,
              "checked": [h.kind for h in HOLDERS] + ["audit_event"]}
 

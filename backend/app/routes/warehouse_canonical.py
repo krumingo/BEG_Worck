@@ -132,13 +132,15 @@ async def _markers_for(tenant, user, idempotency_key, action, file_ids, route):
     from app.services.file_holders import mark_pending
     if not file_ids:
         return []
+    action = str(getattr(action, "value", action))
     done = await tenant.warehouse_transactions.find_one(
         {"org_id": tenant.org_id, "idempotency_key": idempotency_key, "action": action},
         {"_id": 0, "movement_id": 1})
     if done:
         return []
     return await mark_pending(tenant, tenant.org_id, list(file_ids),
-                              route=route, user_id=str(user.get("id")), ref=idempotency_key)
+                              route=route, user_id=str(user.get("id")), ref=idempotency_key,
+                              action=action)
 
 
 async def _settled(markers, tenant, run):

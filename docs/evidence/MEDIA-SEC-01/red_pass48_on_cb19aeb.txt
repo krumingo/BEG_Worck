@@ -1,5 +1,9 @@
-# MEDIA-SEC-01 pass 48 / FG-595, FG-596, FG-598 + the orchestrator's own-ref rule — the NEW tests/test_media_sec_01.py run against the OLD code cb19aeb (worktree), real Mongo rs0
+# MEDIA-SEC-01 pass 48 / FG-595, FG-596, FG-598 + the own-ref rule (full idempotency scope) — the NEW tests/test_media_sec_01.py run against the OLD code cb19aeb (worktree), real Mongo rs0
 E       assert 409 == 428
+E       AssertionError: assert ([200, None] == [200, 'released']
+E         
+E         At index 1 diff: None != 'released'
+E         Use -v to get more diff)
 E       KeyError: 's595_request_blocked'
 E       KeyError: 's595_cancel'
 E       AssertionError: assert {'error_code'...request': 201} == {'error_code'...request': 201}
@@ -10,8 +14,9 @@ E         {'error_code': 'RETIRE_REQUEST_PENDING'} != {'error_code': None}
 E         {'replay': 409} != {'replay': 200}
 E         Use -v to get more diff
 FAILED tests/test_media_sec_01.py::test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref
+FAILED tests/test_media_sec_01.py::test_fg598_own_means_the_full_idempotency_scope_not_the_key_string
 FAILED tests/test_media_sec_01.py::test_fg595_a_marker_that_outlived_its_movement_is_late_confirmed_and_retire_reopens
 FAILED tests/test_media_sec_01.py::test_fg595_a_cancelled_request_still_settles_its_marker
 FAILED tests/test_media_sec_01.py::test_fg588_6_the_warehouse_route_a_retire_during_the_movement_is_refused
-4 failed, 48 passed in 10.35s
-# fg588_3 stops at its first assert: cb19aeb releases without an Idempotency-Key (FG-598); fg595_*: cb19aeb has no late-confirm / no shielded settle (scenario absent → KeyError); fg588_6: the replay is refused 409 RETIRE_REQUEST_PENDING (FG-596)
+5 failed, 48 passed in 10.58s
+# fg588_3 stops at its first assert: cb19aeb releases without an Idempotency-Key (FG-598); fg595_*: cb19aeb has no late-confirm / no shielded settle (scenario absent → KeyError); fg588_6: the replay is refused 409 RETIRE_REQUEST_PENDING (FG-596); the scope test vs 35cc099: red_pass48_scope_on_35cc099.txt
