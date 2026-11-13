@@ -67,14 +67,17 @@ def child(mongo_url, out):
                                           {"status": "Present", "project_id": A["project_id"]})])["body"]["results"][0]["status"]
         e = P.envelope(tech["id"], A["tenant_id"], "technician.daily_report",
                        {"project_id": A["project_id"], "entries": [{"smr_type": "Шпакловка", "hours": 4}]})
-        real_stamp = H._stamp; state = {"n": 0}
-        def crashing(env, ctx):
-            state["n"] += 1
-            if state["n"] == 1: raise RuntimeError("audit probe: crash after submit")
-            return real_stamp(env, ctx)
-        H._stamp = crashing
+        # crash AFTER the handler committed the report, BEFORE the receipt is finished:
+        # the first sync.item_synced AuditEvent raises (the post-write window).
+        real_audit = sync.audit; state = {"n": 0}
+        async def crashing(user, **kw):
+            if kw.get("action") == "sync.item_synced" and state["n"] == 0:
+                state["n"] += 1
+                raise RuntimeError("audit probe: crash after the domain write")
+            return await real_audit(user, **kw)
+        sync.audit = crashing
         first = batch([e])
-        H._stamp = real_stamp
+        sync.audit = real_audit
         q(lambda: op.sync_receipts.update_one({"idempotency_key": e["idempotency_key"]},
                                               {"$set": {"received_at": (today - timedelta(minutes=5)).isoformat()}}))
         second = batch([e])
@@ -114,6 +117,15 @@ def child(mongo_url, out):
         obs["S6"] = {"statuses": [r["body"]["results"][0]["status"] if isinstance(r["body"], dict) and "results" in r["body"] else r["status"] for r in res],
                      "rows": q(lambda: op.attendance_entries.count_documents({"user_id": techB["id"]})),
                      "receipts": q(lambda: op.sync_receipts.count_documents({"idempotency_key": e6["idempotency_key"]}))}
+        # S7 — the same record (local_id) under two keys, in parallel: the unique backstop
+        lid = str(uuid.uuid4())
+        e7 = [P.envelope(techB["id"], B["tenant_id"], "technician.daily_report",
+                         {"project_id": B["project_id"], "entries": [{"smr_type": "Боя", "hours": 3}]},
+                         device_id=P.DEVICE_A2, local_id=lid) for _ in range(2)]
+        with ThreadPoolExecutor(2) as ex:
+            res7 = list(ex.map(lambda e: batch([e], tk="B", dev=P.DEVICE_A2), e7))
+        obs["S7"] = {"statuses": [r["body"]["results"][0]["status"] if isinstance(r["body"], dict) and "results" in r["body"] else r["status"] for r in res7],
+                     "rows": q(lambda: op.employee_daily_reports.count_documents({"sync_local_id": lid}))}
     Path(out).write_text(json.dumps(obs, ensure_ascii=False, default=str, indent=1), encoding="utf-8")
 
 
@@ -135,6 +147,7 @@ def test_probe_pwa02(tmp_path):
     assert o["S5"]["revoke_A_device_as_B"] == 404 and not (o["S5"]["A_device_revoked"] or {}).get("revoked_at"), o["S5"]
     assert "0d6f6a2e-7b1c-4c55-9d1e-1a2b3c4d5e6f" not in o["S5"]["console_B_devices"], o["S5"]
     assert o["S6"]["rows"] == 1 and o["S6"]["receipts"] == 1, o["S6"]
+    if "S7" in o: assert o["S7"]["rows"] <= 1, o["S7"]
 
 
 if __name__ == "__main__":
