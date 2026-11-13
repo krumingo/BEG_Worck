@@ -660,7 +660,10 @@ def test_debit_note_requires_an_approved_act(monkeypatch, mode):
 def test_author_cannot_approve_only_owner_exact_version(monkeypatch, mode):
     async def scenario(c, op):
         inv = await sent(c)
-        own = (await note(c, inv, who="owner-a")).json()
+        # FG-599: the Owner can no longer author an outgoing note; the author ≠ approver guard
+        # stays as defence in depth — a (legacy) note authored by the Owner → 409
+        own = (await note(c, inv)).json()
+        await op.credit_debit_notes.update_one({"id": own["id"]}, {"$set": {"created_by": "owner-a"}})
         r = await approve(c, own["id"], who="owner-a")
         assert r.status_code == 409 and code(r) == "SAME_PERSON_APPROVAL"
         n = (await note(c, inv)).json()
@@ -673,6 +676,53 @@ def test_author_cannot_approve_only_owner_exact_version(monkeypatch, mode):
         assert (await approve(c, n["id"])).status_code == 200
         r = await approve(c, n["id"])
         assert r.status_code == 409 and code(r) == "NOT_PENDING_APPROVAL"
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg599_r49_4_outgoing_note_issued_by_accountant_approved_by_owner(monkeypatch, mode):
+    """FG-599, Р49(4): "известие към клиент: Счетоводител издава, Собственик одобрява (двама
+    различни)" — for a credit AND a debit note to a client. In every mode (the catalog grants
+    finance.credit_note.create to Owner / Admin / Accountant, so the narrower rule lives in the
+    route, like REGISTRAR_ROLE_REQUIRED): Owner / Admin → 403 ISSUER_ROLE_REQUIRED and nothing
+    written; Viewer / Site → 403; Accountant → 201. Only an Owner approves; the Accountant and
+    the Admin cannot. A supplier (incoming) note keeps its rule: the Accountant registers it."""
+    async def scenario(c, op):
+        inv = await sent(c)
+        line = inv["lines"][0]["id"]
+        debit = {"kind": "debit", "basis": {"type": "act", "id": "act-1"}}
+        counters = await op.org_counters.find({}, {"_id": 0}).to_list(None)
+        for extra in ({"kind": "credit"}, debit):
+            for who in ("owner-a", "owner2-a", "admin-a"):
+                r = await note(c, inv, who=who, lines=[{"original_line_id": line, "qty": 1}], **extra)
+                assert r.status_code == 403 and code(r) == "ISSUER_ROLE_REQUIRED", (who, extra, r.text)
+            for who in ("viewer-a", "site-a"):
+                r = await note(c, inv, who=who, lines=[{"original_line_id": line, "qty": 1}], **extra)
+                assert r.status_code == 403, (who, extra, r.text)
+        assert await op.credit_debit_notes.count_documents({}) == 0      # nothing written
+        assert await op.org_counters.find({}, {"_id": 0}).to_list(None) == counters   # no number taken
+        made = {}
+        for extra in ({"kind": "credit"}, debit):
+            r = await note(c, inv, lines=[{"original_line_id": line, "qty": 1}], **extra)   # acct-a
+            assert r.status_code == 201, (extra, r.text)
+            assert r.json()["created_by"] == "acct-a" and r.json()["status"] == "pending_approval"
+            made[extra["kind"]] = r.json()["id"]
+        for nid in made.values():
+            for who in ("acct-a", "admin-a", "viewer-a"):
+                assert (await approve(c, nid, who=who)).status_code == 403, who
+        assert (await approve(c, made["credit"], who="owner-a")).status_code == 200
+        assert (await approve(c, made["debit"], who="owner2-a")).status_code == 200
+        for nid in made.values():
+            doc = await op.credit_debit_notes.find_one({"id": nid})
+            assert doc["status"] == "approved" and doc["created_by"] == "acct-a"
+            assert doc["approved_by"] in ("owner-a", "owner2-a") and doc["approved_by"] != doc["created_by"]
+        # incoming (supplier) notes are unchanged: the Accountant registers, Owner / Admin cannot
+        bill = await sent(c, direction="Received")
+        for who in ("owner-a", "admin-a"):
+            r = await note(c, bill, who=who, number="CN-%s" % who,
+                           lines=[{"original_line_id": bill["lines"][0]["id"], "qty": 1}])
+            assert r.status_code == 403 and code(r) == "REGISTRAR_ROLE_REQUIRED", (who, r.text)
+        r = await note(c, bill, number="CN-ACCT", lines=[{"original_line_id": bill["lines"][0]["id"], "qty": 1}])
+        assert r.status_code == 201, r.text
     run(monkeypatch, mode, scenario)
 
 
@@ -1990,8 +2040,10 @@ def test_f84_01_every_correction_route_goes_through_the_permission_service(monke
         else:
             # off / shadow: the legacy users.role rule (SEC-01) — the Admin is still served
             assert (await c.get("/api/finance/credit-notes/%s" % n["id"], headers=hdr("admin-a"))).status_code == 200
+            # … through the Permission Service up to the route's own Р49(4) rule (FG-599):
+            # an Admin never issues an outgoing note
             r = await note(c, inv, who="admin-a", lines=[{"original_line_id": inv["lines"][0]["id"], "qty": 1}])
-            assert r.status_code == 201, r.text
+            assert r.status_code == 403 and code(r) == "ISSUER_ROLE_REQUIRED", r.text
         # a Viewer is refused in every mode, nothing written
         before = await business()
         r = await c.post("/api/finance/credit-notes", headers=hdr("viewer-a"),

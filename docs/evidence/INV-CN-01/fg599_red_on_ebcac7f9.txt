@@ -1,0 +1,8 @@
+# FG-599 red proof: tests/test_inv_cn_01_credit_notes.py -k fg599 on ebcac7f9 (route unchanged), real Mongo rs0
+E               assert (201 == 403)
+E               assert (201 == 403)
+E               assert (201 == 403)
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg599_r49_4_outgoing_note_issued_by_accountant_approved_by_owner[off]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg599_r49_4_outgoing_note_issued_by_accountant_approved_by_owner[shadow]
+FAILED tests/test_inv_cn_01_credit_notes.py::test_fg599_r49_4_outgoing_note_issued_by_accountant_approved_by_owner[enforce]
+3 failed, 186 deselected, 1 warning in 3.56s

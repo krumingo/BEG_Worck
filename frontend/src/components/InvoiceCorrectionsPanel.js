@@ -22,6 +22,8 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
   const [busy, setBusy] = useState(false);
   const canWrite = ["Admin", "Owner", "Accountant"].includes(user?.role);
   const isOwner = user?.role === "Owner";
+  // Р49(4) / FG-599 + Р55(2): a note (to a client or from a supplier) is created by the Accountant
+  const canIssue = user?.role === "Accountant";
   const outgoing = invoice?.direction === "Issued";
   const invoiceId = invoice?.id;
 
@@ -157,7 +159,7 @@ export default function InvoiceCorrectionsPanel({ invoice, user, onChanged }) {
     <div className="rounded-lg border border-border p-4 space-y-3" data-testid="invoice-corrections-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold">Корекции (кредитни / дебитни известия)</h3>
-        {canWrite && invoice.status !== "Cancelled" && (
+        {canIssue && invoice.status !== "Cancelled" && (
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={busy} onClick={() => createNote("credit")} data-testid="credit-note-btn">
               Кредитно известие

@@ -134,6 +134,12 @@ async def create_note(body: dict = Body(...), _sec: dict = Depends(require_money
             raise HTTPException(status_code=403, detail={
                 "error_code": "REGISTRAR_ROLE_REQUIRED",
                 "message": "Входящо известие регистрира Счетоводителят"})
+        if direction == ic.OUTGOING and user.get("role") != "Accountant":
+            # Р49(4) / FG-599: an outgoing note (credit or debit) to a client is issued by the
+            # Accountant and approved by the Owner — two different persons
+            raise HTTPException(status_code=403, detail={
+                "error_code": "ISSUER_ROLE_REQUIRED",
+                "message": "Известие към клиент издава Счетоводителят; Собственикът одобрява"})
         lines = await ic.build_note_lines(tenant, invoice, body.get("lines"))
         totals = ic.note_totals(lines)
         basis = None
