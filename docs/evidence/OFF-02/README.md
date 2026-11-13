@@ -241,3 +241,30 @@ UI: `OffersListPage` / `OfferEditorPage` show the write buttons to Owner / Admin
 | Warehouse canonical | **44 files / 1121 passed, 0 skipped** (= main), enforce, file by file |
 | A2C / A1 guards | 242 modules / 488 units, 0 violations; inventories unchanged |
 | Review-link scan | 389 GET routes × 5 roles × 3 modes = 6984 calls: **0 hits** (3 routes before the fix) |
+
+## Merge of main `3863610` (#86 projects, #88 PWA) and AUDIT-2 OFF89-M2
+
+- **Merge `58d0e40`:** conflicts only in two generated files (`PM-01/run_meta.json`, `SEC-02/results.json`), resolved by taking main's copies. **That was wrong (OFF89-M2):** main's SEC-02 results hold 176 probes, the merged code has 188. At `58d0e40`, `test_sec_02` gives 2 failed / 29 passed.
+- **Fix `5f64a60`:** every generated evidence file re-run by its own harness on the merged code, output committed as written:
+  - SEC-02: 188 probes.
+  - PM-01: `matrix.csv` byte-identical to the merged copy; `run_meta.json` regenerated.
+  - SEC-01-C02.
+  - The review-link scan: 0 hits, the Owner control sees the link on the same 3 routes. The dashboard strip still holds after #86.
+  - A1 and A2B inventories: unchanged.
+
+### Gates on the merged code with the regenerated evidence (real `mongo:7.0` rs0, sequential, a fresh Mongo per suite)
+
+| Gate | Result |
+|---|---|
+| SEC-02 | **31 passed, 0 skipped** (re-run on `5f64a60`) |
+| OFF-02 | **34** |
+| OFF-01 + probe | **237** |
+| ACT-01 | **113** |
+| PM-01 | **6 passed, 0 skipped** |
+| PAY | **630** (+8 helpers) |
+| SEC-01 | **30** |
+| SUB-ADV-01 | **9** |
+| R0 | **814** |
+| W0 | 1176 + **the same 16 as main** |
+| Warehouse canonical | **44 files / 1121, 0 skipped** |
+| A2C / A1 guards | 243 modules / 490 units, 0 violations |
