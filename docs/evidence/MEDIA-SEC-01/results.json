@@ -17,15 +17,15 @@
   "traversal": {
    "%2E%2E": 404,
    "%2Fetc%2Fpasswd": 404,
-   "%2e%2e%2f1b9848b1-bc1c-45a7-9736-8d5a1f4": 404,
-   ".%2F1b9848b1-bc1c-45a7-9736-8d5a1f4d589d": 404,
-   "..%252F1b9848b1-bc1c-45a7-9736-8d5a1f4d5": 404,
+   "%2e%2e%2fa6400347-944f-4732-b178-975cf88": 404,
+   ".%2Fa6400347-944f-4732-b178-975cf8821530": 404,
+   "..%252Fa6400347-944f-4732-b178-975cf8821": 404,
    "..%2F..%2Fetc%2Fpasswd": 404,
-   "..%2f1b9848b1-bc1c-45a7-9736-8d5a1f4d589": 404,
-   "..%5C1b9848b1-bc1c-45a7-9736-8d5a1f4d589": 404,
+   "..%2fa6400347-944f-4732-b178-975cf882153": 404,
+   "..%5Ca6400347-944f-4732-b178-975cf882153": 404,
    "...": 404,
-   "1b9848b1-bc1c-45a7-9736-8d5a1f4d589d.jpg": 404,
-   "projects%2F1b9848b1-bc1c-45a7-9736-8d5a1": 404,
+   "a6400347-944f-4732-b178-975cf8821530.jpg": 404,
+   "projects%2Fa6400347-944f-4732-b178-975cf": 404,
    "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx": 404
   },
   "unknown": 404
@@ -34,12 +34,12 @@
   "enforce": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 274,
+    "files": 298,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 274,
+    "files": 298,
     "photos": 1
    },
    "file_accountant": 403,
@@ -65,12 +65,12 @@
   "off": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 272,
+    "files": 296,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 272,
+    "files": 296,
     "photos": 1
    },
    "file_accountant": 403,
@@ -102,12 +102,12 @@
   "shadow": {
    "counts_after": {
     "audit_logs": 1,
-    "files": 273,
+    "files": 297,
     "photos": 1
    },
    "counts_before": {
     "audit_logs": 1,
-    "files": 273,
+    "files": 297,
     "photos": 1
    },
    "file_accountant": 403,
@@ -197,7 +197,7 @@
    "again": "MEDIA_ALREADY_RETIRED",
    "body": {
     "ok": true,
-    "retired": "891e21ae-8d9b-4118-b75c-08f3261eda69"
+    "retired": "9c687c82-7f17-4dde-9a83-2fb134036c18"
    },
    "events": [
     {
@@ -209,13 +209,13 @@
       "before": {
        "status": "active"
       },
-      "stored_filename": "891e21ae-8d9b-4118-b75c-08f3261eda69.jpg"
+      "stored_filename": "9c687c82-7f17-4dde-9a83-2fb134036c18.jpg"
      },
      "entity_type": "media_file",
-     "idempotency_key": "34b52659806f415cb00fabf289fd8c9d",
+     "idempotency_key": "0213b4769907405ea9fd63320fb58886",
      "reason": "дублирана снимка",
      "source_flow": "FLOW-029",
-     "tenant_id": "637dfbd0-a9fa-4ac4-b38a-120117515b8d"
+     "tenant_id": "80abb321-c6a0-4862-91ee-8f60994a19c3"
     }
    ],
    "file_kept": true,
@@ -400,7 +400,7 @@
       "warehouse_movement"
      ]
     ],
-    "commit_key": "2d8a906239f046bd9be56537856279bf",
+    "commit_key": "fe1c371fda554f4a86a169a9fcf34797",
     "fail": {
      "media_status": null,
      "pending_after": 0,
@@ -409,7 +409,7 @@
      "status": 400
     },
     "fail_delete_after": 200,
-    "fail_key": "08489d271b7e4674a08bbf0f1506827a",
+    "fail_key": "72fcd344a7a4426a9ceb8418dcd33f56",
     "replay_while_pending": {
      "error_code": null,
      "pending_after": 0,
@@ -444,19 +444,39 @@
     []
    ],
    "s2_released": 1,
+   "s3_mixed": {
+    "delete": [
+     409,
+     "MEDIA_IN_USE"
+    ],
+    "media_status": null,
+    "outcome": "confirmed_late",
+    "pending": [],
+    "proof_own": [
+     "mv-5own"
+    ],
+    "status": 200
+   },
    "s3_no_key": 428,
+   "s3_other_key_only": {
+    "delete": [
+     409,
+     "MEDIA_IN_USE",
+     [
+      "warehouse_movement"
+     ]
+    ],
+    "media_status": null,
+    "outcome": "released",
+    "pending": [],
+    "refusals": [
+     "media.file.pending_holder_release_refused"
+    ],
+    "status": 200
+   },
    "s3_replay_same": true,
    "s3_technician": 403,
    "s3_too_recent": "PENDING_HOLDER_TOO_RECENT",
-   "s3_with_reference": {
-    "error_code": "PENDING_HOLDER_REFERENCED",
-    "kept": true,
-    "refusals": [
-     "media.file.pending_holder_release_refused",
-     "media.file.pending_holder_release_refused"
-    ],
-    "status": 409
-   },
    "s3_without_reference": {
     "events": [
      {
@@ -546,7 +566,7 @@
     "meta_technician": 410,
     "meta_technician_detail": {
      "error_code": "MEDIA_RETIRED",
-     "media_id": "3c4908f7-033c-42e5-8cd0-f0dcb9f0d2e8",
+     "media_id": "13e41e6a-6853-476f-9d7f-2def1fe8de57",
      "retired": true
     },
     "pending": null,
@@ -585,7 +605,7 @@
    "delete_while_pending": "MEDIA_IN_USE",
    "link_while_pending": "RETIRE_REQUEST_PENDING",
    "pending_list_owner": [
-    "6bc17131-2743-4c47-b4a7-570900e540ee"
+    "83675a62-17e5-485d-b630-d05c40fb1b27"
    ],
    "pending_list_technician": 403,
    "req_no_key": 428,
@@ -639,11 +659,11 @@
    "avatar_events": [
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/1b9848b1-bc1c-45a7-9736-8d5a1f4d589d.jpg"
+     "after": "/api/media/avatar/a6400347-944f-4732-b178-975cf8821530.jpg"
     },
     {
      "action": "user.avatar.change",
-     "after": "/api/media/avatar/50245d1a-64bd-4b56-82ae-f08d40457dbb.jpg"
+     "after": "/api/media/avatar/0f66966b-3e8d-42bf-bf82-e44fd27f2aff.jpg"
     }
    ],
    "basic_put": 200,

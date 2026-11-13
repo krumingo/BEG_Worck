@@ -297,17 +297,19 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
                         min_age_seconds: int, key: str) -> Dict[str, Any]:
     """Condition 4 + FG-595 / FG-598 — settle a marker that its writer left behind.
 
-    Only when the marker is older than ``min_age_seconds`` (far above the movement
-    transaction's lifetime). Then the registry decides:
+    The rule is decided by the marker's OWN ``ref`` (its movement's idempotency key) only —
+    other holders stay real holders and every retire path still sees them (orchestrator,
+    pass 48):
 
-    * no holder at all → the marker is RELEASED (its movement never committed);
-    * the only holders are warehouse movements written under the marker's own
-      idempotency key (``marker.ref``) → the marker is LATE-CONFIRMED (its movement
-      committed and the writer missed ``settle_pending``) — FG-595;
-    * anything else → 409 ``PENDING_HOLDER_REFERENCED`` with the proof; nothing changes.
+    * a warehouse movement with ``idempotency_key == marker.ref`` exists → the marker is
+      LATE-CONFIRMED (its movement committed and the writer missed ``settle_pending``);
+    * no such movement AND the marker is older than ``min_age_seconds`` → RELEASED (its
+      movement never committed), even when other holders exist;
+    * no such movement AND younger → 409 ``PENDING_HOLDER_TOO_RECENT``; nothing changes.
 
-    Never retires. Every outcome — refusals included — is an AuditEvent with the actor, the
-    marker and the proof (FG-598); the granted settle runs under the ``Idempotency-Key``."""
+    Never retires. Every outcome — the refusal included — is an AuditEvent with the actor,
+    the marker and the proof (FG-598); the settle runs under the ``Idempotency-Key`` with a
+    CAS on the marker and a ``ref_version`` bump."""
     from datetime import datetime, timezone
     from app.services import project_lifecycle as lifecycle
     media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
@@ -324,31 +326,25 @@ async def release_stale(tenant, org_id: str, media_id: str, marker_id: str, *, a
                                                  fingerprint, nothing)
     age = (datetime.now(timezone.utc) - datetime.fromisoformat(marker["at"])).total_seconds()
     base = {"marker": marker, "age_seconds": int(age)}
-    if age < min_age_seconds:
+    own = []
+    if marker.get("ref"):
+        own = await tenant.warehouse_transactions.find(
+            {"org_id": org_id, "idempotency_key": marker["ref"],
+             "file_ids": {"$in": references_of(media)}},
+            {"_id": 0, "id": 1, "movement_id": 1, "idempotency_key": 1}).to_list(50)
+    if own:
+        outcome, action = "confirmed_late", "media.file.pending_holder_confirm_late"
+    elif age >= min_age_seconds:
+        outcome, action = "released", "media.file.pending_holder_release"
+    else:
         await _audit_release(tenant, actor, media_id, "media.file.pending_holder_release_refused",
                              "marker too recent", dict(base, refused="too_recent"), key)
         raise _refuse(409, "PENDING_HOLDER_TOO_RECENT",
                       "Маркерът е по-нов от минималната възраст за освобождаване")
-    probe = dict(media, pending_holders=[])
-    holders = await find_holders(tenant, org_id, probe)
-    refs = references_of(media)
-    moves = await tenant.warehouse_transactions.find(
-        {"org_id": org_id, "file_ids": {"$in": refs}},
-        {"_id": 0, "movement_id": 1, "idempotency_key": 1}).to_list(50)
-    others = [u for u in holders if u.get("kind") != "warehouse_movement"]
-    own = [m for m in moves if marker.get("ref") and m.get("idempotency_key") == marker.get("ref")]
-    if not holders:
-        outcome, action = "released", "media.file.pending_holder_release"
-    elif not others and moves and len(own) == len(moves):
-        outcome, action = "confirmed_late", "media.file.pending_holder_confirm_late"
-    else:
-        proof = {"holders": holders, "movements": moves}
-        await _audit_release(tenant, actor, media_id, "media.file.pending_holder_release_refused",
-                             "referenced", dict(base, refused="referenced", proof=proof), key)
-        raise HTTPException(status_code=409, detail={
-            "error_code": "PENDING_HOLDER_REFERENCED",
-            "message": "Файлът се използва — маркерът не се освобождава", "proof": proof})
-    proof = {"holders": holders, "own_movements": [m.get("movement_id") for m in own],
+    # the proof: the marker's own movements, and the holders that keep the file held
+    holders = await find_holders(tenant, org_id, dict(media, pending_holders=[]))
+    proof = {"own_movements": [m.get("movement_id") or m.get("id") for m in own],
+             "other_holders": holders,
              "checked": [h.kind for h in HOLDERS] + ["audit_event"]}
 
     async def work(session):

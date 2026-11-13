@@ -920,10 +920,35 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                                                    {"$set": {"pending_holders.$.at": "2026-01-01T00:00:00+00:00"}}))
             mov_row(m3["id"], "mv_3")          # a movement NOT under this marker's key
             r = call("POST", rel, role="admin", key="auto")
-            g["s3_with_reference"] = {"status": r["status"], "error_code": r["error_code"],
-                                      "kept": pend(m3["id"]) == [mk3],
+            d = call("DELETE", "/api/media/%s" % m3["id"], role="technician", key="auto",
+                     json={"reason": "x"})
+            g["s3_other_key_only"] = {"status": r["status"], "outcome": (r["body"] or {}).get("outcome"),
+                                      "pending": pend(m3["id"]),
                                       "refusals": [e["action"] for e in events(
-                                          m3["id"], "media.file.pending_holder_release_refused")]}
+                                          m3["id"], "media.file.pending_holder_release_refused")],
+                                      "delete": [d["status"], d["error_code"],
+                                                 ((d["body"] or {}).get("detail") or {}).get("use_kinds")],
+                                      "media_status": media_row(m3["id"]).get("status")}
+            # orchestrator pass 48: own movement + ANOTHER holder → late-confirmed, still held
+            m5 = upload()
+            k5 = "wh-key-" + uuid.uuid4().hex
+            mk5 = q(lambda: fhp.mark_pending(T, org, [m5["id"]], route="test", user_id=tech,
+                                            ref=k5))[0]["marker_id"]
+            q(lambda: op_db.warehouse_transactions.insert_one({
+                "id": pid("A", "mv_5own"), "movement_id": "mv-5own", "org_id": org, "tenant_id": org,
+                "idempotency_key": k5, "file_ids": [m5["id"]], "created_at": NOW}))
+            mov_row(m5["id"], "mv_5other")     # another movement, another key
+            r = call("POST", "/api/media/%s/pending-holders/%s/release" % (m5["id"], mk5),
+                     role="admin", key="auto")
+            d = call("DELETE", "/api/media/%s" % m5["id"], role="technician", key="auto",
+                     json={"reason": "x"})
+            ev5 = events(m5["id"], "media.file.pending_holder_confirm_late")
+            g["s3_mixed"] = {"status": r["status"], "outcome": (r["body"] or {}).get("outcome"),
+                             "pending": pend(m5["id"]),
+                             "proof_own": ((ev5[0]["diff"] or {}).get("proof") or {}).get("own_movements")
+                             if ev5 else None,
+                             "delete": [d["status"], d["error_code"]],
+                             "media_status": media_row(m5["id"]).get("status")}
             m4 = upload()
             mk4 = q(lambda: fhp.mark_pending(T, org, [m4["id"]], route="test", user_id=tech))[0]["marker_id"]
             q(lambda: op_db.media_files.update_one({"id": m4["id"], "pending_holders.id": mk4},
@@ -1677,14 +1702,20 @@ def test_fg588_2_a_failed_movement_releases_and_the_file_can_be_retired(obs):
 
 
 @real
-def test_fg588_3_a_stale_marker_is_released_only_when_old_and_unreferenced(obs):
+def test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref(obs):
     g = obs["pass47"]["fg588"]
     assert g["s3_no_key"] == 428                                        # FG-598
     assert g["s3_too_recent"] == "PENDING_HOLDER_TOO_RECENT" and g["s3_technician"] == 403
-    assert g["s3_with_reference"] == {"status": 409, "error_code": "PENDING_HOLDER_REFERENCED",
-                                      "kept": True,
-                                      # one audit for the too-recent refusal, one for this one
-                                      "refusals": ["media.file.pending_holder_release_refused"] * 2}
+    # another key's movement only + age passed → RELEASED; the file stays held by that movement
+    o = g["s3_other_key_only"]
+    assert (o["status"], o["outcome"], o["pending"]) == (200, "released", [])
+    assert o["refusals"] == ["media.file.pending_holder_release_refused"]   # the too-recent try
+    assert o["delete"] == [409, "MEDIA_IN_USE", ["warehouse_movement"]] and o["media_status"] is None
+    # own movement + another holder → LATE-CONFIRMED; the file is still not retirable
+    x = g["s3_mixed"]
+    assert (x["status"], x["outcome"], x["pending"]) == (200, "confirmed_late", [])
+    assert x["proof_own"] == ["mv-5own"]
+    assert x["delete"] == [409, "MEDIA_IN_USE"] and x["media_status"] is None
     w = g["s3_without_reference"]
     assert w["released"] is True and w["outcome"] == "released"
     assert w["pending"] == [] and w["status"] is None                   # never retired

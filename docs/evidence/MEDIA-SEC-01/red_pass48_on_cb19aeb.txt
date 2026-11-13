@@ -1,4 +1,4 @@
-# MEDIA-SEC-01 pass 48 / FG-595, FG-596, FG-598 — the NEW tests/test_media_sec_01.py run against the OLD code cb19aeb (worktree), real Mongo rs0
+# MEDIA-SEC-01 pass 48 / FG-595, FG-596, FG-598 + the orchestrator's own-ref rule — the NEW tests/test_media_sec_01.py run against the OLD code cb19aeb (worktree), real Mongo rs0
 E       assert 409 == 428
 E       KeyError: 's595_request_blocked'
 E       KeyError: 's595_cancel'
@@ -9,9 +9,9 @@ E         Differing items:
 E         {'error_code': 'RETIRE_REQUEST_PENDING'} != {'error_code': None}
 E         {'replay': 409} != {'replay': 200}
 E         Use -v to get more diff
-FAILED tests/test_media_sec_01.py::test_fg588_3_a_stale_marker_is_released_only_when_old_and_unreferenced
+FAILED tests/test_media_sec_01.py::test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref
 FAILED tests/test_media_sec_01.py::test_fg595_a_marker_that_outlived_its_movement_is_late_confirmed_and_retire_reopens
 FAILED tests/test_media_sec_01.py::test_fg595_a_cancelled_request_still_settles_its_marker
 FAILED tests/test_media_sec_01.py::test_fg588_6_the_warehouse_route_a_retire_during_the_movement_is_refused
-4 failed, 48 passed in 9.65s
-# fg588_3: no Idempotency-Key required (FG-598); fg595_*: cb19aeb has no late-confirm / no shielded settle (scenario absent → KeyError); fg588_6: the replay is refused 409 RETIRE_REQUEST_PENDING (FG-596)
+4 failed, 48 passed in 10.35s
+# fg588_3 stops at its first assert: cb19aeb releases without an Idempotency-Key (FG-598); fg595_*: cb19aeb has no late-confirm / no shielded settle (scenario absent → KeyError); fg588_6: the replay is refused 409 RETIRE_REQUEST_PENDING (FG-596)
