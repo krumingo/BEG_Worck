@@ -82,10 +82,11 @@ node docs/evidence/PWA-02/e2e/run.js http://localhost:4180 run.json <out>
   идемпотентност, конфликт/закъснял/карантина, решения, реалните handler-и R1–R10; `results.json`.
 - `tests/test_pwa_02_local_day.py` — 25 чисти теста: денят около полунощ по София, двете смени на
   часовото време 2026, разлика в часовника, бъдеще.
-- Гейтове: виж `gates.txt`.
+- Гейтове (`gates.txt`): R0 814 · PAY 630 · SEC-01 30 · SEC-02 31 · PM-01 6 (матрицата само през harness-а) ·
+  A1/A2C 0 нарушения · W0 16 = точно наборът на main (`w0_failed.txt`) · Warehouse 44 файла / 1121 (= main).
 
 ### Frontend (jest)
-`src/lib/offline/__tests__/` (queue, sendOrQueue), `PwaBanners`, `DashboardLayout` — виж `gates.txt`.
+`src/lib/offline/__tests__/` (queue, sendOrQueue), `PwaBanners`, `DashboardLayout` — 29 suites / 276 passed; build без нови предупреждения.
 
 ## Дългове и отворени точки (не са решавани — за Крум / следваща задача)
 - **D1 — migration runner** няма в main; индексите се създават идемпотентно при старт/onboarding.
