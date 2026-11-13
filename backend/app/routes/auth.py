@@ -732,8 +732,8 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
         # reserved_at), then retake it like a failed key — of concurrent retries
         # only one wins the retake; the others get 409.
         await db[IDEMPOTENCY_COLLECTION].update_one(
-            {"id": idempotency_record_id(org_id, AI_SETTINGS_ACTION, key), "status": IDEMPOTENCY_STARTED,
-             "reserved_at": record.get("reserved_at")},
+            {"id": idempotency_record_id(org_id, AI_SETTINGS_ACTION, key), "tenant_id": org_id,
+             "status": IDEMPOTENCY_STARTED, "reserved_at": record.get("reserved_at")},
             {"$set": {"status": IDEMPOTENCY_FAILED, "error_code": "STALE_IN_PROGRESS",
                       "completed_at": datetime.now(timezone.utc).isoformat()}})
         state = await begin()
@@ -770,7 +770,8 @@ async def put_ai_settings(data: AISettingsUpdate, request: Request, user: dict =
         # did not commit. An error raised AFTER the commit (the key is already
         # COMPLETED inside it) must not turn it into FAILED — a retry would write twice.
         await db[IDEMPOTENCY_COLLECTION].update_one(
-            {"id": idempotency_record_id(org_id, AI_SETTINGS_ACTION, key), "status": IDEMPOTENCY_STARTED},
+            {"id": idempotency_record_id(org_id, AI_SETTINGS_ACTION, key), "tenant_id": org_id,
+             "status": IDEMPOTENCY_STARTED},
             {"$set": {"status": IDEMPOTENCY_FAILED, "error_code": error_code,
                       "completed_at": datetime.now(timezone.utc).isoformat()}})
     try:
