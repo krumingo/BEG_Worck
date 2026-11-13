@@ -906,6 +906,25 @@ async def record_index_health(tenant, database) -> List[dict]:
 
 
 # ═══════════════════════════════════════════════════════════════ shared reads
+async def payable_net(tenant, invoice: dict, *, session=None) -> Decimal:
+    """FG-571 — THE payable net of an invoice: its own total after the APPROVED credit /
+    debit notes, offsets and refunds (``adjusted_total`` of the derived sums read in
+    ``session``), before payments. The one function every check of "how much is owed on
+    this invoice" uses — #82's Р47 payment check calls it at merge instead of the raw
+    ``invoice.total`` (whichever merges second)."""
+    derived = await derived_sums(tenant, invoice["id"], session=session)
+    return adjusted_total({**invoice, **derived})
+
+
+async def payable_until_credit_note(tenant, invoice: dict, *, session=None) -> Decimal:
+    """FG-571 / Р47 — what may still be paid (or offset) on a supplier invoice while it
+    awaits credit notes: payable net − active payments − the open awaited credit. Not
+    clamped (< 0 means nothing may be paid). #82's Р47 check and the Р74 offset check
+    both read this."""
+    return (await current_open(tenant, invoice, session=session)
+            - await awaited_credit(tenant, invoice["id"], session=session))
+
+
 async def current_open(tenant, invoice: dict, *, session=None) -> Decimal:
     """The invoice's open amount NOW, from the source rows read in ``session``:
     > 0 still owed, < 0 owed back (credit balance)."""
@@ -914,8 +933,7 @@ async def current_open(tenant, invoice: dict, *, session=None) -> Decimal:
     async for a in tenant.payment_allocations.find(active_allocations({"invoice_id": invoice["id"]}),
                                                    {"_id": 0, "amount_allocated": 1}, session=session):
         paid += cents(a.get("amount_allocated"))
-    derived = await derived_sums(tenant, invoice["id"], session=session)
-    return adjusted_total({**invoice, **derived}) - paid
+    return await payable_net(tenant, invoice, session=session) - paid
 
 
 INVOICE_AWAITS_CREDIT_NOTE = "INVOICE_AWAITS_CREDIT_NOTE"     # the code #82 (Р47) uses

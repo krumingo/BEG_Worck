@@ -17,6 +17,7 @@ from app.services.invoice_line_lock import run_transaction
 from app.services.invoice_state import NOT_DRAFT, STATUS_CHANGED, claim_invoice, status_conflict
 from app.deps.auth import get_current_user
 from app.tenancy.data_access import TenantData, assigned_project_ids
+from app.permissions.money_write import require_money_write  # FG-572
 from app.deps.modules import require_m5, enforce_limit
 from app.utils.audit import log_audit
 from app.services.money_amount import check_reason, positive_amount
@@ -1117,7 +1118,10 @@ async def list_invoice_versions(invoice_id: str, user: dict = Depends(require_m5
 
 
 @router.put("/finance/invoices/{invoice_id}")
-async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depends(require_m5)):
+async def update_invoice(invoice_id: str, data: InvoiceUpdate,
+                         _sec: dict = Depends(require_money_write(
+                             "finance.invoice.update", module="M5", resource_type="invoice")),  # FG-572
+                         user: dict = Depends(require_m5)):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
     
@@ -1651,6 +1655,8 @@ async def _set_cancelled(tenant: TenantData, user: dict, current: dict, reason: 
 async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
                          reason: Optional[str] = Query(None),
                          idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
+                         _sec: dict = Depends(require_money_write(
+                             "finance.invoice_cancellation.create", module="M5", resource_type="invoice")),  # FG-572: PermissionService first
                          user: dict = Depends(require_m5)):
     """INV-CN-01 / Р49.2 + Р51 — cancellation (анулиране), always with a reason.
 
@@ -1736,7 +1742,9 @@ async def cancel_invoice(invoice_id: str, body: Optional[dict] = Body(None),
 @router.post("/finance/invoices/{invoice_id}/cancel/approve")
 async def approve_invoice_cancellation(invoice_id: str, body: Optional[dict] = Body(None),
                                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
-                                       user: dict = Depends(require_m5)):
+                                       _sec: dict = Depends(require_money_write(
+                             "finance.invoice_cancellation.approve", module="M5", resource_type="invoice")),  # FG-572: PermissionService first
+                         user: dict = Depends(require_m5)):
     """Р51(1): the Owner — not the person who proposed it — approves the EXACT version of
     a cancellation proposal; every condition is checked again in the same transaction."""
     from app.services import invoice_corrections as ic
@@ -1789,7 +1797,9 @@ async def approve_invoice_cancellation(invoice_id: str, body: Optional[dict] = B
 async def reject_invoice_cancellation(invoice_id: str, body: Optional[dict] = Body(None),
                                       reason: Optional[str] = Query(None),
                                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key"),
-                                      user: dict = Depends(require_m5)):
+                                      _sec: dict = Depends(require_money_write(
+                             "finance.invoice_cancellation_reject.execute", module="M5", resource_type="invoice")),  # FG-572: PermissionService first
+                         user: dict = Depends(require_m5)):
     """Debt D10 closed: a pending cancellation proposal is rejected by the Owner, or
     withdrawn by the person who proposed it — with a reason; the invoice stays as it is."""
     from app.services import invoice_corrections as ic

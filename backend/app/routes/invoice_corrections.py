@@ -948,12 +948,13 @@ async def _check_offset(tenant, src_id: str, tgt_id: str, amount, session,
             await ensure_payable(tenant, inv, session=session)
     if tgt.get("direction") == "Received":
         awaited = await ic.awaited_credit(tenant, tgt_id, session=session)
-        if awaited > 0 and ic.cents(amount) > open_tgt - awaited:
+        payable = await ic.payable_until_credit_note(tenant, tgt, session=session)   # FG-571
+        if awaited > 0 and ic.cents(amount) > payable:
             raise ic.conflict(ic.INVOICE_AWAITS_CREDIT_NOTE,
                               "Фактурата очаква кредитно известие за сторнирана доставка — "
                               "прихващане над нетно полученото не се записва",
                               invoice_id=tgt_id, awaited_credit=ic.money(awaited),
-                              payable_until_credit_note=ic.money(max(open_tgt - awaited, Decimal(0))))
+                              payable_until_credit_note=ic.money(max(payable, Decimal(0))))
 
 
 @router.post("/finance/offsets/{offset_id}/approve")

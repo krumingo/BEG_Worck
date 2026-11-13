@@ -654,6 +654,11 @@ ENFORCE_EXTRA_WRITES = {
     ("POST", "/api/subcontractor-packages/{pkg_id}/advances"): "denial",
     ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction"): "denial",
     # INV-CN-01 (#84, Codex F-84-01): notes, refunds, offsets, the accepted-difference journal.
+    # INV-CN-01 FG-572: the invoice edit and the cancellation proposal / approval / rejection.
+    ("PUT", "/api/finance/invoices/{invoice_id}"): "denial",
+    ("POST", "/api/finance/invoices/{invoice_id}/cancel"): "denial",
+    ("POST", "/api/finance/invoices/{invoice_id}/cancel/approve"): "denial",
+    ("POST", "/api/finance/invoices/{invoice_id}/cancel/reject"): "denial",
     ("POST", "/api/finance/credit-notes"): "denial",
     ("POST", "/api/finance/credit-notes/{note_id}/approve"): "denial",
     ("POST", "/api/finance/credit-notes/{note_id}/reject"): "denial",

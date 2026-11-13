@@ -234,6 +234,12 @@ SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS: Set[str] = {"subcontract.advance_deduct
 # Kept apart from MONEY_WRITE_ACTIONS (SEC-01-C01's frozen set); checked in
 # tests/test_inv_cn_01_credit_notes.py.
 INVOICE_CORRECTION_ACTIONS: Set[str] = {
+    # FG-572 (CLAUDE.md §14): the invoice edit (incl. the due date after issue) and the
+    # cancellation proposal / approval / rejection
+    "finance.invoice.update",
+    "finance.invoice_cancellation.create",
+    "finance.invoice_cancellation.approve",
+    "finance.invoice_cancellation_reject.execute",
     "finance.credit_note.approve",
     "finance.credit_note.create",
     "finance.credit_note_difference.approve",

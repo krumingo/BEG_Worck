@@ -464,6 +464,11 @@ def test_every_guarded_route_carries_its_action_first_and_no_other_route_does():
         ("POST", "/api/subcontractor-acts/{act_id}/advance-deduction")} | {
         # INV-CN-01 (#84, Codex F-84-01): the note / refund / offset / journal writes,
         # INVOICE_CORRECTION_ACTIONS — checked in tests/test_inv_cn_01_credit_notes.py
+        # INV-CN-01 FG-572: the invoice edit (due date after issue) and the cancellation
+        ("PUT", "/api/finance/invoices/{invoice_id}"),
+        ("POST", "/api/finance/invoices/{invoice_id}/cancel"),
+        ("POST", "/api/finance/invoices/{invoice_id}/cancel/approve"),
+        ("POST", "/api/finance/invoices/{invoice_id}/cancel/reject"),
         ("POST", "/api/finance/credit-notes"),
         ("POST", "/api/finance/credit-notes/{note_id}/approve"),
         ("POST", "/api/finance/credit-notes/{note_id}/reject"),

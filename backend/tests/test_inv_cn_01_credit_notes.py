@@ -2003,6 +2003,105 @@ def test_f84_01_every_correction_route_goes_through_the_permission_service(monke
     run(monkeypatch, mode, scenario)
 
 
+@pytest.mark.parametrize("assignment", ["revoked", "expired", "missing"])
+def test_fg572_cancellation_and_due_date_go_through_the_permission_service(monkeypatch, mode, assignment):
+    """FG-572 (CLAUDE.md §14): the cancellation proposal / approval / rejection and the
+    invoice edit (the due date after issue) take the Permission Service first. enforce:
+    Admin / Accountant / Owner whose assignment is revoked / expired / missing → 403 with
+    the reason, nothing written; off / shadow keep the legacy role rule."""
+    async def scenario(c, op):
+        sysdb = op.client["invcn_sys_" + op.name.split("invcn_op_", 1)[1]]
+        inv = await issued(c)                                    # issued, not sent
+        inv2 = await issued(c)
+        r = await c.post("/api/finance/invoices/%s/cancel" % inv2["id"], headers=hdr("acct-a"),
+                         json={"reason": "грешка"})              # a pending proposal to decide
+        assert r.status_code == 200, r.text
+        for uid in ("admin-a", "acct-a", "owner-a"):
+            flt = {"user_id": uid, "tenant_id": ORG_A}
+            if assignment == "revoked":
+                await sysdb.tenant_role_assignments.update_one(flt, {"$set": {"status": "revoked"}})
+            elif assignment == "expired":
+                await sysdb.tenant_role_assignments.update_one(
+                    flt, {"$set": {"valid_to": "2020-01-01T00:00:00+00:00"}})
+            else:
+                await sysdb.tenant_role_assignments.delete_one(flt)
+
+        async def business():
+            return {coll: sorted((await op[coll].find({}, {"_id": 0}).to_list(None)), key=repr)
+                    for coll in F8401_BUSINESS}
+
+        reason = {"revoked": "ASSIGNMENT_REVOKED", "expired": "ASSIGNMENT_EXPIRED",
+                  "missing": "NO_ASSIGNMENT"}[assignment]
+        calls = [
+            ("admin-a", "post", "/api/finance/invoices/%s/cancel" % inv["id"], {"reason": "грешка"}),
+            ("acct-a", "put", "/api/finance/invoices/%s" % inv["id"],
+             {"due_date": "2099-06-30", "reason": "разсрочване"}),
+            ("owner-a", "post", "/api/finance/invoices/%s/cancel/approve" % inv2["id"], {"version": 1}),
+            ("owner-a", "post", "/api/finance/invoices/%s/cancel/reject" % inv2["id"], {"reason": "не"}),
+        ]
+        if mode == "enforce":
+            before = await business()
+            for who, method, url, body in calls:
+                r = await getattr(c, method)(url, headers=hdr(who), json=body)
+                assert r.status_code == 403 and reason in r.text, (who, url, r.text)
+            assert await business() == before                     # nothing written
+        else:
+            # off / shadow: the legacy role rule — the same callers are served
+            r = await c.put("/api/finance/invoices/%s" % inv["id"], headers=hdr("acct-a"),
+                            json={"due_date": "2099-06-30", "reason": "разсрочване"})
+            assert r.status_code == 200, r.text
+            r = await c.post("/api/finance/invoices/%s/cancel" % inv["id"], headers=hdr("admin-a"),
+                             json={"reason": "грешка"})
+            assert r.status_code == 200, r.text
+        # a Viewer is refused in every mode
+        r = await c.put("/api/finance/invoices/%s" % inv["id"], headers=hdr("viewer-a"),
+                        json={"due_date": "2099-01-01", "reason": "x"})
+        assert r.status_code == 403
+    run(monkeypatch, mode, scenario)
+
+
+def test_fg571_one_payable_net_after_credit_and_debit_notes(monkeypatch, mode):
+    """FG-571 (#82 × #84): ONE function for what is owed on an invoice — the payable net
+    after the approved credit / debit notes (``payable_net``) and, for Р47, what may still
+    be paid while a credit is awaited (``payable_until_credit_note``). The raw invoice.total
+    would let a second reversal through (120 − 72 = 48 ≥ 48) and refuse a payment an
+    approved debit note made due."""
+    async def scenario(c, op):
+        from app.services import invoice_corrections as ic
+        from app.tenancy.data_access import TenantData
+        tenant = TenantData.for_resolved_org(op, ORG_A)
+        one = [{"description": "Плочки", "unit": "бр", "qty": 1, "unit_price": 100}]
+        # total 120, paid 72, credited 48 → payable net 72, open 0; a second reversal awaits 48
+        a = await sent(c, direction="Received", lines=one)
+        assert a["total"] == 120.0
+        assert (await quick_pay(c, a["id"], 72.0)).status_code == 201
+        r = await note(c, a, number="CN-571", lines=[{"original_line_id": a["lines"][0]["id"], "amount": 40.0}])
+        assert r.status_code == 201 and r.json()["gross"] == 48.0 and r.json()["applied"], r.text
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_571", "org_id": ORG_A, "invoice_id": a["id"], "amount": 48.0, "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        doc = await op.invoices.find_one({"id": a["id"]}, {"_id": 0})
+        assert ic.cents(doc["total"]) - ic.cents(doc["paid_amount"]) == ic.cents(48)   # the raw view: "48 left"
+        assert await ic.payable_net(tenant, doc) == ic.cents(72)
+        assert await ic.current_open(tenant, doc) == ic.cents(0)
+        assert await ic.payable_until_credit_note(tenant, doc) == ic.cents(-48)        # nothing payable
+        # an approved supplier debit note: total 120 + 24 → payable net 144; paid 72, awaiting 48
+        b = await sent(c, direction="Received", lines=one)
+        dn = (await note(c, b, kind="debit", number="DN-571",
+                         lines=[{"original_line_id": b["lines"][0]["id"], "amount": 20.0}],
+                         basis={"type": "additional_delivery", "ref": "доставка"}, file_id="file-571")).json()
+        assert (await approve(c, dn["id"])).status_code == 200
+        assert (await quick_pay(c, b["id"], 72.0)).status_code == 201
+        await op.expected_credit_notes.insert_one({
+            "id": "ecn_571b", "org_id": ORG_A, "invoice_id": b["id"], "amount": 48.0, "status": "open",
+            "created_at": datetime.now(timezone.utc).isoformat()})
+        docb = await op.invoices.find_one({"id": b["id"]}, {"_id": 0})
+        assert ic.cents(docb["total"]) - ic.cents(docb["paid_amount"]) - ic.cents(48) == ic.cents(0)  # raw: refuse
+        assert await ic.payable_net(tenant, docb) == ic.cents(144)
+        assert await ic.payable_until_credit_note(tenant, docb) == ic.cents(24)      # 24 still payable
+    run(monkeypatch, mode, scenario)
+
+
 def test_fg264_parallel_creates_of_one_supplier_number_one_wins_with_or_without_the_index(monkeypatch, mode):
     async def scenario(c, op):
         body = {"direction": "Received", "issue_date": "2026-11-08", "due_date": "2099-12-31",
