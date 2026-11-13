@@ -286,3 +286,21 @@ test("a photo keeps its original sealed on the phone while it waits for the file
   expect(f.b64).toBe("AQIDBA==");
   expect(q.state.get().unsent).toBe(1); // still on the phone
 });
+
+test("records are sent in the order they were captured, whatever their ids", async () => {
+  // IndexedDB returns rows by KEY order — the memory store is made to do the same here
+  const mem = memoryStore();
+  const store = { ...mem, all: async (st) => (await mem.all(st)).sort(([a], [b]) => (a < b ? -1 : 1)) };
+  const api = fakeApi({});
+  const ids = ["ffffffff-0000-4000-8000-000000000001", "eeeeeeee-0000-4000-8000-000000000002",
+    "11111111-0000-4000-8000-000000000003", "dddddddd-0000-4000-8000-000000000004"];
+  let n = 0;
+  const q = createQueue({ store, api, now: () => Date.parse("2026-11-09T10:00:00.000Z"), newId: () => ids[n++] });
+  await q.start(A);
+  api.calls.length = 0;
+  await q.enqueue("attendance.mark", { status: "Present" });       // first, same millisecond
+  await q.enqueue("technician.daily_report", { entries: [] });     // depends on the mark
+  await q.flush();
+  const items = api.calls.find((c) => c[1] === "/sync/batch")[2].items;
+  expect(items.map((i) => i.op_type)).toEqual(["attendance.mark", "technician.daily_report"]);
+});

@@ -57,6 +57,9 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
   let enabled = false;
   let flushing = null;
   let recheckSoon = false;
+  let seqCounter = 0;
+  const nextSeq = () => now() * 1000 + ((seqCounter += 1) % 1000);
+  const orderOf = (r) => (typeof r.seq === "number" ? r.seq : Date.parse(r.created_at || 0) * 1000);
   const later = (fn, ms) => (typeof setTimeout === "function" ? setTimeout(fn, ms) : null);
   const state = createObservable({ enabled: false, unsent: 0, revoked: false, lastSyncAt: null, items: [] });
 
@@ -74,7 +77,9 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
   async function rows() {
     const o = owner();
     if (!o) return [];
-    return (await store.all("queue")).map(([, v]) => v).filter((r) => r.owner === o);
+    // capture order: a report can depend on the attendance marked a minute earlier
+    return (await store.all("queue")).map(([, v]) => v).filter((r) => r.owner === o)
+      .sort((a, b) => orderOf(a) - orderOf(b));
   }
 
   async function refresh() {
@@ -152,7 +157,7 @@ export function createQueue({ store, api, subtle = globalThis.crypto && globalTh
       project_id: projectId, base_version: baseVersion, payload,
     };
     const row = { owner: o, local_id: localId, op_type: opType, status: "saved", captured_at: capturedAt,
-      created_at: capturedAt, attempts: 0, next_at: 0, last_error: null,
+      created_at: capturedAt, seq: nextSeq(), attempts: 0, next_at: 0, last_error: null,
       sealed: await seal(key, o, envelope, subtle),
       ...(file ? { file_sealed: await sealFile(key, o, file) } : {}) };
     await store.put("queue", localId, row);

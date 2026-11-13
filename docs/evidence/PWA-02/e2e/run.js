@@ -93,7 +93,7 @@ async function api(page, method, url, body, headers = {}) {
   // (the app mounts no toast container — existing debt, see HANDOFF — so the proof is the
   // return to Днес and the queue below, not a toast)
   const backToDay = await tech.getByTestId("tech-my-day").waitFor({ timeout: 10000 }).then(() => true, () => false);
-  const badge = await tech.getByTestId("offline-unsent-badge").innerText().catch(() => "");
+  const badge = await tech.locator("[data-testid=offline-unsent-badge]:visible").first().innerText().catch(() => "");
   check("offline daily report kept on the phone, back to Днес (badge counts it)", backToDay && badge.includes("2"), badge);
   await shot(tech, "phone-offline-report-saved.png");
   // a site photo, with no signal
