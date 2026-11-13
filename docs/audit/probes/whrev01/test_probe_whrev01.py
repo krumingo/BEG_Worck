@@ -248,7 +248,11 @@ async def test_r8_reversal_races_full_payment(canonical_mongo_db, allow_always_g
     assert not (st(pay) == "ok" and st(rev) == "ok" and order == "credit-first"), \
         "a full payment committed after the invoice started awaiting a credit"
     if st(rev) != "ok":
-        assert st(rev) == (409, "INVOICE_BUSY") and not ecn
+        # F-82-01: when the full payment committed first, the reversal is refused because it
+        # would leave the net (72) below what is already paid (120) — INVOICE_PAID_ABOVE_NET
+        assert (st(rev) == (409, "INVOICE_BUSY")
+                or (st(rev) == (409, "INVOICE_PAID_ABOVE_NET") and st(pay) == "ok"
+                    and float(alloc.get("amount_allocated") or 0) == 120.0)) and not ecn
     if st(pay) != "ok":
         assert st(pay) == (409, "INVOICE_AWAITS_CREDIT_NOTE") and not alloc
 
