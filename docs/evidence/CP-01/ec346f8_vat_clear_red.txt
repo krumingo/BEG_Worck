@@ -1,0 +1,1 @@
+test_ec346f8_an_explicit_empty_vat_clears_the_stored_value on ec346f8 (real Mongo + mongomock, 3 modes): 6 failed; with the fix: 6 passed

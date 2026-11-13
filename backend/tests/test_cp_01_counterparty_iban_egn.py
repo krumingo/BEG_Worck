@@ -2293,3 +2293,19 @@ def test_fg562_a_masked_value_is_never_stored(monkeypatch, backend, mode):
                 assert "*" not in json.dumps(row, ensure_ascii=False).replace(
                     '"BG******' + TYPED[-4:] + '"', ""), (k, row.get("id"))
     run(monkeypatch, backend, mode, scenario)
+
+
+def test_ec346f8_an_explicit_empty_vat_clears_the_stored_value(monkeypatch, backend, mode):
+    """AUDIT-2 note on ec346f8: "" clears a VAT number (invoice, counterparty, company), as before."""
+    async def scenario(c, op):
+        for url, body, coll, rid_, field in (
+                ("/api/finance/invoices/inv-r1", {}, "invoices", "inv-r1", "counterparty_vat_no"),
+                ("/api/counterparties/cp2", {"name": "Доставчик cp2"}, "counterparties", "cp2", "vat_number"),
+                ("/api/companies/co1", {"name": "Фирма"}, "companies", "co1", "vat_number")):
+            r = await c.put(url, headers=hdr("acct-a"), json=dict(body, **{field: "BG123456789"}))
+            assert r.status_code == 200, (url, r.text)
+            assert (await rows(op, coll, {"id": rid_}))[0][field] == "BG123456789", url
+            r = await c.put(url, headers=hdr("acct-a"), json=dict(body, **{field: ""}))
+            assert r.status_code == 200, (url, r.text)
+            assert (await rows(op, coll, {"id": rid_}))[0].get(field) in (None, ""), url
+    run(monkeypatch, backend, mode, scenario)

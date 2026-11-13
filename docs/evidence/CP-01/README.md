@@ -602,4 +602,7 @@ Gates for the final head: **`gates_pass43.txt`**.
   - R78: whether separators, dashes and zero-width characters are stripped silently, and whether Cyrillic / full-width BG may be mapped. The current FG-526 behaviour stays as it is.
 - **Test:** `test_fg562_a_masked_value_is_never_stored`. Red on `ddc6e9a`: 6 of 6 (`pass46_red_on_ddc6e9a_real_mongo.txt`).
 
+- **AUDIT-2 note on `ec346f8`: clearing a VAT number with `""`.** On `update_invoice`, `cr.vat_update("")` returned `("set", None)`, and the `v is not None` update filter then dropped the field, so the old value stayed. Now an explicit `""` stores `""`, which clears the value as before. Counterparty and company updates already cleared it.
+  - Test: `test_ec346f8_an_explicit_empty_vat_clears_the_stored_value` (invoice, counterparty, company). Red on `ec346f8`: 6 of 6.
+
 Gates for the final head: **`gates_pass46.txt`**.

@@ -1115,7 +1115,10 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
         data.counterparty_eik = None
     # FG-429 / FG-526 / FG-562: canonical, or the echo of the stored value's mask (kept)
     _vat_action, _vat_value = cr.vat_update(data.counterparty_vat_no, invoice.get("counterparty_vat_no"))
-    data.counterparty_vat_no = _vat_value if _vat_action == "set" else None
+    if _vat_action == "set" and _vat_value is None:
+        data.counterparty_vat_no = ""          # an explicit clear ("") empties the stored value
+    else:
+        data.counterparty_vat_no = _vat_value if _vat_action == "set" else None
     # Validate EIK / VAT
     from app.utils.validators import validate_eik, validate_vat_number
     eik_check = validate_eik(data.counterparty_eik or "" if data.counterparty_eik is not None else "")
