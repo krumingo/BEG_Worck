@@ -502,6 +502,10 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                         sites.get(it.get("site_id"), "other") for it in body.get("items", [])
                         if body_money_keys(it)})
                 row["leaks_7777"] = "7777" in resp.text
+                if row["leaks_7777"]:
+                    # the text around the leaked value — so an intermittent leak names its field
+                    at_ = resp.text.index("7777")
+                    row["leak_context"] = resp.text[max(0, at_ - 160):at_ + 40]
                 if p["action"] == EMPLOYEE_FILE_ACTION and isinstance(body, dict):
                     row["has_payroll"] = "payroll" in body or "advances" in body
             if p["rule"] in (R20_2B, R20_5B) and p["action"] != EMPLOYEE_FILE_ACTION \

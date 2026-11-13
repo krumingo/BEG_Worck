@@ -980,3 +980,25 @@ def test_fg506_the_cash_balance_reads_paid_salaries_from_the_pay_run_ledger_only
         # cash expenses = the paid salaries (999, the ledger) + materials (none in this seed)
         assert d["balance"]["expenses"] == 999.0, d["balance"]
     run(monkeypatch, scenario, backend)
+
+
+def test_fg530_the_aggregate_revenue_is_issued_invoices_like_the_pnl_report(monkeypatch, backend):
+    """FG-530 (Krum): the aggregate P&L revenue = ISSUED invoices, net — the P&L report's
+    own rule; the PAID invoices are shown apart, labelled."""
+    from app.services.project_pnl import compute_project_pnl
+
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-1", "org_id": ORG, "project_id": P, "direction": "Issued", "kind": "Invoice",
+             "status": "PartiallyPaid", "subtotal": 1000.0, "total": 1200.0, "paid_amount": 300.0},
+            {"id": "inv-d", "org_id": ORG, "project_id": P, "direction": "Issued", "kind": "Invoice",
+             "status": "Draft", "subtotal": 50.0, "total": 60.0, "paid_amount": 0},
+            {"id": "inv-s", "org_id": ORG, "project_id": P, "direction": "Received", "kind": "Invoice",
+             "status": "Paid", "subtotal": 70.0, "total": 84.0, "paid_amount": 84.0}])
+        a = (await c.get(f"/api/projects/{P}/aggregate", headers=_token("owner"))).json()
+        pnl = (await compute_project_pnl(ORG, P))["revenue"]["total_revenue"]
+        assert a["pnl"]["revenue"] == 1000.0 == pnl, (a["pnl"], pnl)    # issued, net — not paid
+        assert a["pnl"]["paid_invoices"] == 300.0 and a["pnl"]["paid_invoices_label"]
+        mat = a["materials"]["total"]["ex_vat"]
+        assert a["pnl"]["profit"] == round(1000.0 - 180.0 - mat, 2)
+    run(monkeypatch, scenario, backend)

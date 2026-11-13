@@ -87,7 +87,9 @@ ORG_KEYED: Dict[str, str] = {
     **_family(FAMILY_PARTIES,
               "companies", "clients", "counterparties", "subcontractors",
               "subcontractor_packages", "subcontractor_package_lines", "subcontractor_acts",
-              "subcontractor_payments", "subcontractor_performance"),
+              "subcontractor_payments", "subcontractor_performance",
+              # PRJ-01 (R54-2): the append-only versions of a subcontractor rating
+              "subcontractor_performance_versions"),
     **_family(FAMILY_COMMERCIAL,
               "offers", "offer_versions", "offer_events", "offer_line_budgets",
               "change_orders", "client_acts", "client_act_line_totals", "contract_payments",

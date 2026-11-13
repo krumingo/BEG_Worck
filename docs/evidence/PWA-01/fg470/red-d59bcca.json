@@ -1,0 +1,385 @@
+{
+  "expect": "on",
+  "checks": [
+    {
+      "name": "real posthog-js loaded from the local test host",
+      "ok": true,
+      "detail": {
+        "loaded": true,
+        "real_library": true,
+        "disable_session_recording": true,
+        "autocapture": false,
+        "mask_all_text": true,
+        "recording_started": false
+      }
+    },
+    {
+      "name": "client: disable_session_recording true",
+      "ok": true
+    },
+    {
+      "name": "client: autocapture false, text masked",
+      "ok": true
+    },
+    {
+      "name": "client: recording not started despite /decide asking for it",
+      "ok": true,
+      "detail": false
+    },
+    {
+      "name": "no recording/snapshot request left the app",
+      "ok": true,
+      "detail": []
+    },
+    {
+      "name": "events: only $pageview / app_error",
+      "ok": true,
+      "detail": [
+        "$pageview",
+        "app_error"
+      ]
+    },
+    {
+      "name": "events: no $snapshot / $autocapture / $exception",
+      "ok": true
+    },
+    {
+      "name": "no field content (ЕГН / IBAN / amounts / names / password) in any request",
+      "ok": false,
+      "detail": [
+        "rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "p-SECRET-4711"
+      ]
+    },
+    {
+      "name": "FG-470: review link page loads no analytics",
+      "ok": false,
+      "detail": {
+        "posthog": true,
+        "script": true
+      }
+    },
+    {
+      "name": "FG-470: reset-password page loads no analytics",
+      "ok": false,
+      "detail": {
+        "posthog": true,
+        "script": true
+      }
+    },
+    {
+      "name": "FG-470: review token in no request (page, referrer, SPA, decide, cookies)",
+      "ok": false,
+      "detail": "referrer was set"
+    },
+    {
+      "name": "FG-470: reset token / project id in no request",
+      "ok": false
+    },
+    {
+      "name": "FG-470: only route templates are sent",
+      "ok": false,
+      "detail": [
+        "/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "/reset-password",
+        "/login",
+        "/projects/p-SECRET-4711",
+        "/tech"
+      ]
+    },
+    {
+      "name": "page URLs carry no query string or hash",
+      "ok": true,
+      "detail": [
+        "http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "http://localhost:4174/reset-password",
+        "http://localhost:4174/login",
+        "http://localhost:4174/login",
+        "http://localhost:4174/projects/p-SECRET-4711",
+        "http://localhost:4174/tech",
+        "http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF"
+      ]
+    },
+    {
+      "name": "app_error carries only error_kind",
+      "ok": true,
+      "detail": [
+        "TypeError"
+      ]
+    }
+  ],
+  "review_page": {
+    "posthog": true,
+    "script": true
+  },
+  "reset_page": {
+    "posthog": true,
+    "script": true
+  },
+  "referrer_seen_by_page": "http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+  "client_state": {
+    "loaded": true,
+    "real_library": true,
+    "disable_session_recording": true,
+    "autocapture": false,
+    "mask_all_text": true,
+    "recording_started": false
+  },
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "GET",
+      "path": "/static/array.js"
+    },
+    {
+      "method": "POST",
+      "path": "/decide/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    },
+    {
+      "method": "POST",
+      "path": "/e/"
+    }
+  ],
+  "events": [
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "$host": "localhost:4174",
+        "$pathname": "/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "ysxl86q6mkl0gial",
+        "$time": 1794217363.305,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-4752-7ad8-9de8-7f7ea4ada7c9",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/reset-password",
+        "$host": "localhost:4174",
+        "$pathname": "/reset-password",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "2ttte9cmzhi4csu4",
+        "$time": 1794217365.871,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-4752-7ad8-9de8-7f7ea4ada7c9",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/login",
+        "$host": "localhost:4174",
+        "$pathname": "/login",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "12mg5xudxyxxdow1",
+        "$time": 1794217367.695,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-5878-7819-b9ff-c03aeda978a3",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/login",
+        "$host": "localhost:4174",
+        "$pathname": "/login",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "ujgzya7nwq5ogplf",
+        "$time": 1794217370.558,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-639c-7c67-91c1-9364b7fe4479",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/projects/p-SECRET-4711",
+        "$host": "localhost:4174",
+        "$pathname": "/projects/p-SECRET-4711",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "47toy7b0w02lq9dg",
+        "$time": 1794217371.156,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-639c-7c67-91c1-9364b7fe4479",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "app_error",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/tech",
+        "$host": "localhost:4174",
+        "$pathname": "/tech",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "eku32lv3myx6s1g6",
+        "$time": 1794217371.157,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "error_kind": "TypeError",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-639c-7c67-91c1-9364b7fe4479",
+        "$process_person_profile": false
+      }
+    },
+    {
+      "event": "$pageview",
+      "properties": {
+        "$os": "Linux",
+        "$browser": "Chrome",
+        "$device_type": "Desktop",
+        "$current_url": "http://localhost:4174/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "$host": "localhost:4174",
+        "$pathname": "/offers/review/rvTOKEN_9f3Kq2xY7pL0aB4cD8eF",
+        "$browser_version": 126,
+        "$screen_height": 800,
+        "$screen_width": 1280,
+        "$viewport_height": 800,
+        "$viewport_width": 1280,
+        "$lib": "web",
+        "$lib_version": "1.200.0",
+        "$insert_id": "p2m6luxbyr06g33s",
+        "$time": 1794217371.159,
+        "distinct_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "$device_id": "01a1bfb0-4753-7b71-a30b-6e9f0b074030",
+        "token": "phc_r68_test_only",
+        "$session_id": "01a1bfb0-4752-7ad8-9de8-7f7d084f5f91",
+        "$window_id": "01a1bfb0-639c-7c67-91c1-9364b7fe4479",
+        "$process_person_profile": false
+      }
+    }
+  ],
+  "external_requests": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 6
+  }
+}

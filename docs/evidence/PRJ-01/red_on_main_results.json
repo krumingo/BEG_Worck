@@ -1,0 +1,245 @@
+{
+ "fg236": {
+  "create_billable": 201,
+  "create_warranty": {
+   "error_code": null,
+   "status": 201,
+   "written": 1
+  },
+  "migration": {
+   "available": false,
+   "error": "ImportError"
+  },
+  "to_warranty": {
+   "error_code": null,
+   "status": 200,
+   "type": "Warranty"
+  },
+  "type_empty": {
+   "status": 200,
+   "type": "Overhead"
+  },
+  "type_used": {
+   "error_code": null,
+   "status": 200,
+   "type": "Overhead"
+  }
+ },
+ "fg237": {
+  "again_while_active": 404,
+  "bad_kind": 404,
+  "cross_tenant": 404,
+  "current_reopen_after_close": false,
+  "current_reopen_id": false,
+  "cycles": [],
+  "cycles_after_close": [],
+  "enforce_owner": 404,
+  "enforce_viewer": 404,
+  "events": [],
+  "no_key": 404,
+  "no_reason": 404,
+  "ok": 404,
+  "put_reopen": 400,
+  "reclose": 200,
+  "replay": 404,
+  "replay_same": true,
+  "role_accountant": 404,
+  "role_requester": 404,
+  "role_technician": 404,
+  "role_viewer": 404,
+  "status_after": "Completed",
+  "status_before": "Completed",
+  "writable_after": false,
+  "writable_before": false
+ },
+ "fg238": {
+  "events": [],
+  "file_kept": false,
+  "listed": false,
+  "no_key": 404,
+  "no_reason": 200,
+  "other_user": 403,
+  "retire": 404,
+  "row_kept": false,
+  "row_reason": null,
+  "row_status": null,
+  "upload": 201
+ },
+ "fg239": {
+  "active_empty": {
+   "error_code": null,
+   "project_kept": false,
+   "status": 200
+  },
+  "archive": {
+   "events": [],
+   "from_active": 404,
+   "from_active_code": null,
+   "no_key": 404,
+   "no_reason": 404,
+   "ok": 404,
+   "reason": null,
+   "replay": 404,
+   "replay_same": true,
+   "site_manager": 404,
+   "status": "Completed"
+  },
+  "cancel": {
+   "events": [],
+   "project_status": "Draft",
+   "reason": null,
+   "status": 404
+  },
+  "cross_tenant": {
+   "project_kept": true,
+   "status": 404
+  },
+  "empty_draft": {
+   "events": [],
+   "project_kept": false,
+   "replay_same": false,
+   "replay_status": 404,
+   "status": 200
+  },
+  "link_attendance": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_child_project": {
+   "error_code": null,
+   "links": null,
+   "project_kept": true,
+   "row_kept": true,
+   "status": 400
+  },
+  "link_client_act": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_file": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_invoice": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_labor": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_material_waste": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_offer": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_payment": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_photo": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_subcontract": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_warehouse": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "link_work_report": {
+   "error_code": null,
+   "links": null,
+   "project_kept": false,
+   "row_kept": true,
+   "status": 200
+  },
+  "no_key": {
+   "error_code": null,
+   "project_kept": false,
+   "status": 200
+  },
+  "put_cancel_by_site_manager": {
+   "error_code": null,
+   "pause": 200,
+   "project_status": "Cancelled",
+   "status": 200
+  },
+  "role_accountant": {
+   "project_kept": true,
+   "status": 403
+  },
+  "role_requester": {
+   "project_kept": true,
+   "status": 403
+  },
+  "role_technician": {
+   "project_kept": true,
+   "status": 403
+  },
+  "role_viewer": {
+   "project_kept": true,
+   "status": 403
+  }
+ },
+ "fg240": {
+  "create_accountant": 201,
+  "create_no_key": 201,
+  "create_paid_field": 201,
+  "create_site_manager": 201,
+  "create_site_manager_p2": 201,
+  "create_technician": 201,
+  "create_unknown_sub": 201,
+  "create_viewer": 201,
+  "created_version": null,
+  "events": [],
+  "legacy_manual_exposed": null,
+  "legacy_manual_kept": 999,
+  "legacy_paid_shown": 999,
+  "legacy_paid_source": null,
+  "update_owner": 200,
+  "update_paid_field": 200,
+  "update_replay_same": false,
+  "update_viewer": 200,
+  "version_after": null,
+  "versions": []
+ }
+}

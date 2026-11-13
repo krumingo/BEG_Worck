@@ -1,0 +1,36 @@
+{
+  "expect": "off",
+  "checks": [
+    {
+      "name": "no key: window.posthog absent and no analytics script",
+      "ok": false,
+      "detail": {
+        "loaded": true,
+        "real_library": false
+      }
+    },
+    {
+      "name": "no key: no request to any PostHog host",
+      "ok": false,
+      "detail": [
+        "https://us-assets.i.posthog.com/static/array.js"
+      ]
+    }
+  ],
+  "client_state": {
+    "loaded": true,
+    "real_library": false
+  },
+  "requests": [],
+  "events": [],
+  "external_requests": [
+    "https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap",
+    "https://assets.emergent.sh/scripts/emergent-main.js",
+    "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap",
+    "https://us-assets.i.posthog.com/static/array.js"
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 2
+  }
+}

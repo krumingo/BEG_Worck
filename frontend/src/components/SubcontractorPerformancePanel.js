@@ -1,9 +1,10 @@
 /**
  * SubcontractorPerformancePanel — Performance tracking for subcontractors.
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import API from "@/lib/api";
+import { apiErrorText, createIdempotencyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,8 +32,9 @@ export default function SubcontractorPerformancePanel({ projectId }) {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
+  const keys = useRef(createIdempotencyHolder()).current;   // R29: one key per submission
   const [form, setForm] = useState({
-    subcontractor_id: "", project_id: projectId || "", promised_amount: "", actual_paid_amount: "",
+    subcontractor_id: "", project_id: projectId || "", promised_amount: "",
     promised_end_date: "", actual_end_date: "", quality_score: "", notes: "",
   });
 
@@ -50,17 +52,20 @@ export default function SubcontractorPerformancePanel({ projectId }) {
   const handleAdd = async () => {
     if (!form.subcontractor_id) { toast.error(t("subcontractorPerformance.fillRequired")); return; }
     try {
-      await API.post("/subcontractor-performance", {
+      // PRJ-01 / R54(2): "paid" is computed from the Payment ledger, never typed in.
+      const payload = {
         ...form,
         project_id: form.project_id || projectId,
         promised_amount: parseFloat(form.promised_amount) || null,
-        actual_paid_amount: parseFloat(form.actual_paid_amount) || null,
         quality_score: parseInt(form.quality_score) || null,
-      });
+      };
+      await API.post("/subcontractor-performance", payload,
+        idempotencyHeaders(keys.keyFor("/subcontractor-performance", payload)));
+      keys.done();
       toast.success(t("subcontractorPerformance.added"));
       setShowAdd(false);
       load();
-    } catch (err) { toast.error(err.response?.data?.detail || t("common.error")); }
+    } catch (err) { if (err.response) keys.done(); toast.error(apiErrorText(err, t("common.error"))); }
   };
 
   if (loading) return <div className="flex items-center justify-center py-6"><Loader2 className="w-5 h-5 animate-spin" /></div>;
@@ -131,7 +136,6 @@ export default function SubcontractorPerformancePanel({ projectId }) {
             <div className="space-y-1"><Label className="text-xs">{t("subcontractorPerformance.subId")} *</Label><Input value={form.subcontractor_id} onChange={e => setForm(f => ({ ...f, subcontractor_id: e.target.value }))} data-testid="perf-sub-id" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label className="text-xs">{t("subcontractorPerformance.promised")}</Label><Input type="number" value={form.promised_amount} onChange={e => setForm(f => ({ ...f, promised_amount: e.target.value }))} /></div>
-              <div className="space-y-1"><Label className="text-xs">{t("subcontractorPerformance.paid")}</Label><Input type="number" value={form.actual_paid_amount} onChange={e => setForm(f => ({ ...f, actual_paid_amount: e.target.value }))} /></div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1"><Label className="text-xs">{t("subcontractorPerformance.promisedDate")}</Label><Input type="date" value={form.promised_end_date} onChange={e => setForm(f => ({ ...f, promised_end_date: e.target.value }))} /></div>

@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { canReadFinance, canReadBudgetView } from "@/lib/financeAccess";
 import API from "@/lib/api";
 import AssetQrBlock from "@/components/AssetQrBlock";
+import ProjectReopenButton from "@/components/ProjectReopenButton";
 import { formatDate, formatCurrency } from "@/lib/i18nUtils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -311,6 +312,7 @@ export default function ProjectDetailPage() {
         )}
 
         <AssetQrBlock entityType="project" entityId={projectId} name={project.name} code={project.code} />
+        <ProjectReopenButton project={project} role={user?.role} onDone={() => fetchDashboard()} />
         <Badge className={STATUS_COLORS[project.status] || ""}>{project.status}</Badge>
       </div>
 
@@ -1006,7 +1008,7 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
               {cd && (
                 <div className="grid grid-cols-3 gap-1 text-[10px]">
                   <div><span className="text-gray-500">Часове: </span><span className="text-white font-mono">{cd.work?.hours || cd.team?.count || 0}</span></div>
-                  <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.paid || 0)}</span></div>
+                  <div><span className="text-gray-500">Приход: </span><span className="text-emerald-400 font-mono">{fmt(cd.invoices?.issued_net || 0)}</span></div>{/* FG-530: issued, net */}
                   <div><span className="text-gray-500">Труд: </span><span className="text-red-400 font-mono">{fmt(cd.work?.labor_cost || 0)}</span></div>{/* FG-505 (R62): approved labor */}
                 </div>
               )}
@@ -1058,13 +1060,15 @@ function SubProjectsSummaryView({ sub_projects, aggregate, navigate }) {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={childrenData.map(c => ({
                 name: c.code?.split("-").pop() || c.name,
-                Приходи: c.invoices?.paid || 0,
+                "Приходи (издадени)": c.invoices?.issued_net || 0,   // FG-530: issued invoices, net
+                "Платено (касово)": c.invoices?.paid || 0,
                 Разходи: (c.work?.labor_cost || 0) + (c.materials?.ex_vat || 0),   // FG-505 (R62): approved labor
               }))} barGap={2}>
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#888" }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 10, fill: "#666" }} axisLine={false} tickLine={false} />
                 <Tooltip contentStyle={{ background: "#1a1a2e", border: "1px solid #333", borderRadius: 8, fontSize: 11 }} />
-                <Bar dataKey="Приходи" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Приходи (издадени)" fill="#10b981" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="Платено (касово)" fill="#60a5fa" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="Разходи" fill="#ef4444" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
