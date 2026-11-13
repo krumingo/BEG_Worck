@@ -153,9 +153,6 @@ async def onboard_tenant(op_db, system_db, *, org_name: str, owner_email: str,
     # first overhead record (placed after the writes so no inventoried line moves).
     from app.services.overhead_lifecycle import ensure_overhead_indexes
     await ensure_overhead_indexes(op_db)
-    # PWA-02: the offline sync ledger indexes for the new tenant database too.
-    from app.services.offline_sync import ensure_sync_indexes
-    await ensure_sync_indexes(op_db)
     for doc in (organization, owner, tenant):
         doc.pop("_id", None)
     owner.pop("password_hash", None)

@@ -100,6 +100,12 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
     from fastapi.testclient import TestClient
     from app.services import offline_sync as sync
 
+    # The attendance deadline ("Present" after it becomes "Late") is existing behaviour that
+    # reads the wall clock at write time (HANDOFF D6). These cells test the SYNC rules, so
+    # the harness runs at a fixed 07:00 — the result must not depend on when it is run.
+    import app.routes.attendance as attendance_routes
+    attendance_routes.now_hour = lambda: 7
+
     app = server.app
     app.router.on_startup.clear()
     app.router.on_shutdown.clear()
@@ -737,3 +743,38 @@ def test_a_late_record_becomes_official_only_by_owner_admin_with_the_captured_da
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+@real
+def test_the_unique_indexes_tolerate_old_keyless_rows_and_still_refuse_a_duplicate():
+    """Partial unique indexes: created over a database that already holds rows without the
+    key fields (an old backup, the W0-03E fixtures), and two real receipts with the same
+    (org, user, idempotency_key) are still refused."""
+    import asyncio
+    import uuid as _uuid
+    from motor.motor_asyncio import AsyncIOMotorClient
+    from pymongo.errors import DuplicateKeyError
+    from app.services.offline_sync import ensure_sync_indexes
+
+    async def body():
+        name = DB_PREFIX_OP + "idx_" + _uuid.uuid4().hex[:8]
+        c = AsyncIOMotorClient(os.environ["W0_03_REAL_MONGO_URL"])
+        d = c[name]
+        try:
+            for coll in ("sync_receipts", "sync_devices"):
+                for v in ({"org_id": "o", "marker": 1}, {"marker": 2}, {"org_id": None, "marker": 3},
+                          {"org_id": "o", "marker": 4}):
+                    await d[coll].insert_one(dict(v))
+            await ensure_sync_indexes(d)
+            await ensure_sync_indexes(d)                      # idempotent
+            r = {"org_id": "o", "user_id": "u", "idempotency_key": "k"}
+            await d.sync_receipts.insert_one(dict(r))
+            with pytest.raises(DuplicateKeyError):
+                await d.sync_receipts.insert_one(dict(r))
+            await d.sync_devices.insert_one({"org_id": "o", "id": "dev-1"})
+            with pytest.raises(DuplicateKeyError):
+                await d.sync_devices.insert_one({"org_id": "o", "id": "dev-1"})
+        finally:
+            await c.drop_database(name)
+            c.close()
+    asyncio.run(body())

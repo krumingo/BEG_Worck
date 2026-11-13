@@ -96,11 +96,16 @@ def _tenant(user: Dict[str, Any]) -> TenantData:
 async def ensure_sync_indexes(database) -> None:
     """Idempotent; at startup and for every tenant database (no request creates a
     collection). There is no migration runner in main — same pattern as OH-01."""
-    await database["sync_devices"].create_index([("org_id", 1), ("id", 1)], unique=True,
-                                                name="pwa02_device_unique")
+    # Unique only over rows that carry the key (partial index): a database that already
+    # holds rows without these fields (an old backup) must not stop the index from being
+    # created, and two real rows with the same key are still refused.
+    await database["sync_devices"].create_index(
+        [("org_id", 1), ("id", 1)], unique=True, name="pwa02_device_unique",
+        partialFilterExpression={"id": {"$type": "string"}})
     await database["sync_receipts"].create_index(
         [("org_id", 1), ("user_id", 1), ("idempotency_key", 1)], unique=True,
-        name="pwa02_receipt_key_unique")
+        name="pwa02_receipt_key_unique",
+        partialFilterExpression={"idempotency_key": {"$type": "string"}})
     await database["sync_receipts"].create_index([("org_id", 1), ("device_id", 1), ("received_at", -1)],
                                                  name="pwa02_receipt_device")
     for name in ("sync_conflicts", "sync_late", "sync_quarantine"):
