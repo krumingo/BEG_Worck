@@ -15,6 +15,7 @@
 | #73 LAB-01 | `a1859bf` | **PASS — pending Krum decisions FG-565 / FG-569** (FG-566 / 567 / 530; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121) | 2026-11-13 |
 | #75 LAB-02 | `c7d8464` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
+| #92 PWA-02 | `614510e` | **FAIL** (PWA92-M1 daily-report crash-retry duplicate; gates green; FLOW Guard pending) | 2026-11-13 |
 | #91 MEDIA-SEC-01 | `582eb9d` | **PASS** (code `fdd3ec7`; MEDIA91-M1 closed; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-13 |
 | #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
@@ -6913,3 +6914,51 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 - jest `ProjectDetailPage.aggregate` 2 / 2.
 - The `a665932b` gates stand (warehouse 44 / 1121 etc.).
 - **Environment:** the container restarted again at about 23:00; recovered. No verdict uses an interrupted run.
+
+## 2026-11-13 — #92 PWA-02 `614510e8` — FAIL (PWA92-M1); FLOW Guard pending
+
+### Merge check
+
+- Contains main `3863610`; clean; role-union 0.
+- New collections are classified (`sync_*`).
+
+### Gates (real Mongo)
+
+| Gate | Result |
+|---|---|
+| PWA-02 suites | 43 |
+| SEC-01 | 30 |
+| SEC-02 | 31; harness regen 0 cells |
+| PM-01 | 6 / 0 skipped; regen 0 cells |
+| PAY | 630 |
+| A2C / A1 | 0/246, 0/496 |
+| R0 | 814 |
+| W0 | 16 = main's 16 |
+| **warehouse** | **44 / 1121** |
+| jest | 29 / 276 |
+
+### PWA92-M1 (blocking) — a crash-retry writes the daily report twice
+
+- **Where:** `offline_sync_handlers._daily_report`.
+  - `submit_daily_report` inserts the drafts.
+  - Only afterwards does `update_many` tag them with `sync_local_id`.
+  - The retake guard (`mine`) looks for that tag, and the write and the tag are not atomic.
+- **Probe:** `docs/audit/probes/pwa02/test_probe_pwa02.py`.
+  1. Attendance is synced first.
+  2. The first item crashes after submit, before the tag. The batch answers 500 and the receipt stays "processing".
+  3. After `PROCESSING_STALE` (2 min) the same item is resent and the takeover re-runs the handler.
+- **Result:** **2 rows, 1 tagged**, while the receipt says synced.
+- **Fix:** tag inside the insert, or use one transaction, or add a unique partial index on `sync_local_id`.
+
+### Non-blocking
+
+- **PWA92-N1:** a generic Exception from a handler escapes `process_item`. The whole batch answers 500 and the receipt is left "processing".
+- **PWA92-N2:** `attendance.mark` (online on main too) accepts a foreign tenant's `project_id`; `check_project_writable` returns on "not found". Debt.
+- **Minor debt:** a crash mid-decision leaves the item "deciding" with no takeover.
+
+### Passed in the probe
+
+- Daily report into a foreign project: 404, nothing written.
+- Foreign device: 409.
+- Cross-tenant revoke: 404, and the console is isolated.
+- Same key in parallel: 1 row, 1 receipt.
