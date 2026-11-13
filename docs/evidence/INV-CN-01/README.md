@@ -282,7 +282,7 @@ Red proofs against 5242cba: `r64_fg416_fg282_red_on_5242cba.txt`.
 
 | Gate | Result |
 |---|---|
-| INV-CN-01 (`test_inv_cn_01_credit_notes.py`, 55 scenarios (+ 4 allocation shapes, + 2 × 3 assignment states) × 3 modes, + `test_inv_cn_01_fg233_receipt_race.py`, 3 × 3) | **195 passed**, 0 skipped |
+| INV-CN-01 (`test_inv_cn_01_credit_notes.py`, 56 scenarios (+ 4 allocation shapes, + 2 × 3 assignment states) × 3 modes, + `test_inv_cn_01_fg233_receipt_race.py`, 3 × 3) | **198 passed**, 0 skipped |
 | ACT-01 (#77, no regression) | 113 passed |
 | OH-01 (#74, no regression) | 231 passed |
 | OFF-01 (#79) + SUB-ADV-01 (#76), no regression | 246 passed |
