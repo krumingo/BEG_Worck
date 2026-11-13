@@ -643,6 +643,11 @@
    "finance.money_values.read"
   ],
   [
+   "GET /api/projects/{project_id}/aggregate",
+   "R20-5M",
+   "finance.money_values.read"
+  ],
+  [
    "GET /api/subcontractor-performance",
    "R20-5M",
    "finance.money_values.read"
@@ -900,7 +905,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 225.2,
+ "seconds": 155.9,
  "rows": [
   {
    "mode": "off",
@@ -15519,7 +15524,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15537,7 +15544,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15583,7 +15592,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15643,7 +15654,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15661,7 +15674,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15707,7 +15722,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -15965,7 +15982,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -15989,7 +16010,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -16041,7 +16066,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -16106,7 +16135,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -16129,7 +16162,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -17417,6 +17454,218 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -17774,7 +18023,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -17793,7 +18044,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -17840,7 +18093,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -18016,7 +18271,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -18038,7 +18297,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -18088,7 +18351,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -19034,7 +19301,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -19072,7 +19341,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -19151,7 +19422,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -21531,7 +21804,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "03.054876+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -21560,7 +21837,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "03.108578+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -40555,7 +40836,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40573,7 +40856,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40619,7 +40904,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40679,7 +40966,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40697,7 +40986,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -40743,7 +41034,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "off",
@@ -41001,7 +41294,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -41025,7 +41322,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -41077,7 +41378,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "off",
@@ -41142,7 +41447,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -41165,7 +41474,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -42453,6 +42766,218 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -42810,7 +43335,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42829,7 +43356,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -42876,7 +43405,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -43052,7 +43583,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -43074,7 +43609,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -43124,7 +43663,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "off",
@@ -44070,7 +44613,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -44108,7 +44653,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -44187,7 +44734,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -46567,7 +47116,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "32.615763+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -46596,7 +47149,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "32.673362+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "off",
@@ -53171,6 +53728,66 @@
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "off",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "off",
@@ -68993,7 +69610,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69011,7 +69630,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69057,7 +69678,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69117,7 +69740,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69135,7 +69760,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69181,7 +69808,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69439,7 +70068,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69463,7 +70096,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69515,7 +70152,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69580,7 +70221,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -69603,7 +70248,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -70891,6 +71540,218 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -71248,7 +72109,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71267,7 +72130,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71314,7 +72179,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71490,7 +72357,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71512,7 +72383,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -71562,7 +72437,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -72508,7 +73387,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -72546,7 +73427,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -72625,7 +73508,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -75005,7 +75890,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "07.054099+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -75034,7 +75923,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "07.115680+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94029,7 +94922,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94047,7 +94942,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94093,7 +94990,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94153,7 +95052,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94171,7 +95072,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94217,7 +95120,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94475,7 +95380,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94499,7 +95408,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94551,7 +95464,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94616,7 +95533,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -94639,7 +95560,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -95927,6 +96852,218 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -96284,7 +97421,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96303,7 +97442,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96350,7 +97491,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96526,7 +97669,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96548,7 +97695,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -96598,7 +97749,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "shadow",
@@ -97544,7 +98699,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -97582,7 +98739,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -97661,7 +98820,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -100041,7 +101202,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "36.595996+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -100070,7 +101235,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "36.652537+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "shadow",
@@ -106645,6 +107814,66 @@
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "shadow",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "shadow",
@@ -122507,7 +123736,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122525,7 +123756,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122571,7 +123804,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122631,7 +123866,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122649,7 +123886,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122695,7 +123934,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122953,7 +124194,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -122977,7 +124222,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -123029,7 +124278,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -123094,7 +124347,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -123117,7 +124374,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -124405,6 +125666,218 @@
    "tenant": "A",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "A",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -124762,7 +126235,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124781,7 +126256,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -124828,7 +126305,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "3a-a611-969267d4af4b\",\"project_id\":\"6bd62732-cb67-5522-8b76-c2efbe56ed29\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -125004,7 +126483,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -125026,7 +126509,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -125076,7 +126563,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-A-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -126022,7 +127513,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -126060,7 +127553,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -126139,7 +127634,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"f0cf50a7-9567-582b-8331-2c873a0f9d64\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -128665,7 +130162,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "18.094212+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -128694,7 +130195,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "18.157216+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147759,7 +149264,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147777,7 +149284,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147823,7 +149332,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}],\"to"
+   "leak_fields": [
+    "items[0].lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147883,7 +149394,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147901,7 +149414,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -147947,7 +149462,9 @@
     "labor_price_per_unit"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10}]}"
+   "leak_fields": [
+    "lines[0].final_total"
+   ]
   },
   {
    "mode": "enforce",
@@ -148205,7 +149722,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -148229,7 +149750,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -148281,7 +149806,11 @@
     "vat_percent"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "[1].lines[0].line_total",
+    "[1].subtotal",
+    "[1].total"
+   ]
   },
   {
    "mode": "enforce",
@@ -148346,7 +149875,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -148369,7 +149902,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "T08:00:00+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -149657,6 +151194,218 @@
    "tenant": "B",
    "role": "owner",
    "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P1",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 200,
+   "written": [],
+   "foreign_ids": false,
+   "money_keys": [],
+   "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "warehousekeeper",
+   "legacy_role": "Warehousekeeper",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "driver",
+   "legacy_role": "Driver",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "P2",
+   "status": 403,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "owner",
+   "legacy_role": "Owner",
    "probe": "GET /api/subcontractor-performance",
    "rule": "R20-5M",
    "target": null,
@@ -150014,7 +151763,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -150033,7 +151784,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -150080,7 +151833,9 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "16-9933-caac061258e8\",\"project_id\":\"f98582a0-08fd-54a4-9ecb-ee7f268834b7\",\"name\":\"Probe group\",\"created_at\":\"2026-11-06T08:00:00+00:00\",\"summary\":{\"total_cost\":7777.0,\"total_labor\":100,\"total_material"
+   "leak_fields": [
+    "items[0].summary.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -150256,7 +152011,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -150278,7 +152037,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -150328,7 +152091,11 @@
     "total_material"
    ],
    "leaks_7777": true,
-   "leak_context": "eated_at\":\"2026-11-06T08:00:00+00:00\",\"lines\":[{\"line_id\":\"l1\",\"group_id\":\"pm01probe-B-sec02-grp1\",\"is_active\":true,\"smr_type\":\"Мазилка\",\"qty\":10,\"final_total\":7777.0,\"labor_price_per_unit\":10,\"source"
+   "leak_fields": [
+    "tree[0].groups[0].lines[0].final_total",
+    "tree[0].groups[0].summary.total_cost",
+    "grand_total.total_cost"
+   ]
   },
   {
    "mode": "enforce",
@@ -151274,7 +153041,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -151312,7 +153081,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -151391,7 +153162,9 @@
    ],
    "hidden_budget_keys": [],
    "leaks_7777": true,
-   "leak_context": "11-06T08:00:00+00:00\",\"total_workers\":1,\"total_hours\":8,\"workers\":[{\"worker_id\":\"76e13e35-b362-5593-b92a-e3342cf6b3bf\",\"worker_name\":\"T\",\"hours\":8,\"labor_cost\":7777.0}],\"smr_summary\":[{\"smr_type\":\"Маз",
+   "leak_fields": [
+    "items[1].workers[0].labor_cost"
+   ],
    "actual_keys": [
     "labor_cost",
     "remaining",
@@ -153917,7 +155690,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "56.235617+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -153946,7 +155723,11 @@
     "vat_amount"
    ],
    "leaks_7777": true,
-   "leak_context": "56.302571+00:00\",\"lines\":[{\"id\":\"ol1\",\"activity_name\":\"Мазилка\",\"unit\":\"m2\",\"qty\":10,\"material_unit_cost\":3,\"labor_unit_cost\":4,\"unit_price\":777.7,\"line_total\":7777.0}],\"subtotal\":7777.0,\"vat_amount\":"
+   "leak_fields": [
+    "lines[0].line_total",
+    "subtotal",
+    "total"
+   ]
   },
   {
    "mode": "enforce",
@@ -160551,6 +162332,66 @@
    "foreign_ids": false,
    "money_keys": [],
    "leaks_7777": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "admin",
+   "legacy_role": "Admin",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "accountant",
+   "legacy_role": "Accountant",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "requester",
+   "legacy_role": "SiteManager",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "technician",
+   "legacy_role": "Technician",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
+  },
+  {
+   "mode": "enforce",
+   "tenant": "B",
+   "role": "viewer",
+   "legacy_role": "Viewer",
+   "probe": "GET /api/projects/{project_id}/aggregate",
+   "rule": "R20-5M",
+   "target": "XA",
+   "status": 404,
+   "written": [],
+   "foreign_ids": false
   },
   {
    "mode": "enforce",
@@ -161939,7 +163780,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -161948,13 +163789,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "scope_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -161970,7 +163811,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 26,
-     "integrity_hash": "a34be077a142bfd91cdde2576a725017f18d0f03ae1c5c9bd29f83976de1de31"
+     "integrity_hash": "93bdcdf76483b6173ccec2f2db5ff9952f5dc92cd3c0355050e0d7cac9f1543c"
     }
    ]
   },
@@ -161981,7 +163822,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -161990,7 +163831,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -162015,7 +163856,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 27,
-     "integrity_hash": "12d2fb81719ee1a4a89938dd7f0c314b8aee7250f87b4a08589e765d8e428afb"
+     "integrity_hash": "1a61cfa32075fe282df7ca57dde8f47f37a45e5f2f30d8b760bdb5b4d51823de"
     }
    ]
   },
@@ -162026,7 +163867,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -162038,7 +163879,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -162047,7 +163888,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -162073,7 +163914,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 28,
-     "integrity_hash": "22071748c102af5551f0b35de3d055098310e3b28960ac1e3f08869c83ce37cf"
+     "integrity_hash": "46823c2d9353195d8fd5098ba49014d75d576f244a4d1455a17d0710ac1cf458"
     }
    ]
   },
@@ -162084,7 +163925,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -162096,7 +163937,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -162108,7 +163949,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -162117,13 +163958,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "scope_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -162141,7 +163982,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 29,
-     "integrity_hash": "0ad5cad43ef04ec6e6246ac817be95dd39bded8cd0453ccee560ea266fa58f4d"
+     "integrity_hash": "e3b8b239d809269be413e8a786b202ca7bdbb5d4987740bc5c4b9c0800cbd459"
     }
    ]
   },
@@ -162152,7 +163993,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -162161,7 +164002,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -162187,7 +164028,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 30,
-     "integrity_hash": "f732580a0d71f130f33b568b64b35ef981c1798ec53df15f65e70a9891a44a91"
+     "integrity_hash": "06870baf91161d72a40ea60ddd8093c2eb037c84b115c4b17e5603baa79da0a8"
     }
    ]
   },
@@ -162198,7 +164039,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -162210,7 +164051,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -162219,7 +164060,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -162245,7 +164086,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 31,
-     "integrity_hash": "cbc35a5ab94399e27fbd7070396d1ad3a312c52b94e2a16e80d98e786eef5710"
+     "integrity_hash": "f8593f898730e9926ca41579649e4b5f21969a8e265f6856d665a96e4248221b"
     }
    ]
   },
@@ -162256,7 +164097,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -162268,7 +164109,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -162280,7 +164121,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -162289,13 +164130,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "scope_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -162313,7 +164154,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 32,
-     "integrity_hash": "3c119de1268aee6806232b4e5054322ebee8d0220e7b89d837f0d308816ab567"
+     "integrity_hash": "0ea8db652209605cbda9a00fd13c8783090bffb9a9fdd130377fc08bc138f997"
     }
    ]
   },
@@ -162324,7 +164165,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -162333,7 +164174,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -162359,7 +164200,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 33,
-     "integrity_hash": "7111827ce9e91fda61e6a1469e14e8145b5601432b1c570d79c8add1ffbf8f41"
+     "integrity_hash": "fc10446a70d09e01ffac9ce21b313c977c6354afd2e828a75a00c5d3d5e88c1d"
     }
    ]
   },
@@ -162370,7 +164211,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -162382,7 +164223,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -162391,7 +164232,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+     "tenant_id": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -162417,7 +164258,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 35,
-     "integrity_hash": "12723b82a6d7dc9d3dbc4725987640a6d819a16c6616955c9ef3d94d53c43776"
+     "integrity_hash": "5347fb1b87b229c434a8b7363366507b9ae930d000aae6f0f0e884eda83a34b6"
     }
    ]
   },
@@ -162428,7 +164269,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -162440,7 +164281,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "a05ec00a-20ab-4e3a-a611-969267d4af4b",
+   "expected_tenant": "7a50c1c0-85f2-4d55-87ba-604bc3768628",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
