@@ -30,8 +30,9 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # Cash in: actual payments received
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-        {"_id": 0, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1},
-    ).to_list(500)
+        {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "kind": 1,
+         "due_date": 1, "advance_proforma_ids": 1},
+    ).to_list(5000)
     cash_in = round(sum(i.get("paid_amount") or 0 for i in invoices), 2)
 
     # Invoice breakdown: invoiced vs paid vs unpaid vs overdue
@@ -144,17 +145,13 @@ async def compute_financial_results(org_id: str, project_id: str) -> dict:
     # B) OPERATING RESULT
     # ══════════════════════════════════════════════════════════════
 
-    # Invoiced revenue (accrual): total of all non-draft/cancelled invoices
-    invoiced_revenue = round(sum(
-        (i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) for i in invoices
-        if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
-    ), 2)
-
-    # Earned revenue (cash basis): only actual paid amounts
-    earned_revenue = round(sum(
-        (i.get("paid_amount") or 0) for i in invoices
-        if i.get("status") in ["Sent", "Paid", "PartiallyPaid"]
-    ), 2)
+    # FG-696 (R86, interim default — Krum to confirm): "оперативен приход" = the payments
+    # RECEIVED (FLOW-006 ledger), net, no proforma — the one shared rule of the project P&L;
+    # the invoiced amount = issued (Overdue included), net, no proforma
+    from app.services.project_pnl import received_revenue
+    rec = await received_revenue(tenant, org_id, [project_id], invoices=invoices)
+    invoiced_revenue = rec["invoiced_net"]
+    earned_revenue = rec["received_net"]
     revenue_mode = "cash"
     if earned_revenue == 0 and invoiced_revenue > 0:
         warnings.append("Има фактурирани суми, но няма реални плащания — оперативен приход = 0")

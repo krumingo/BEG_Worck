@@ -8,23 +8,37 @@ from app.services.labor_cost import project_labor_cost
 from app.services.payment_state import active_payments
 
 
-# FG-530: the ISSUED documents — direction Issued, a sent / paid / partly paid status. Since
-# R86 they are the INVOICED amount ("фактурирано"), shown apart, not the revenue.
+# FG-530: the statuses the P&L used for revenue / output VAT (kept for the VAT figure).
 REVENUE_STATUSES = ("Sent", "Paid", "PartiallyPaid")
-ISSUED_STATUSES = REVENUE_STATUSES
+# FG-695 (R86): ISSUED = every issued, not cancelled status — Overdue included. Since R86 the
+# issued amount is the INVOICED amount ("фактурирано"), shown apart, not the revenue.
+NOT_ISSUED_STATUSES = ("Draft", "Cancelled")
+PROFORMA = "Proforma"
+CREDIT_NOTE = "CreditNote"
 
 
 def _net(i) -> float:
     return float((i.get("subtotal") if i.get("subtotal") is not None else i.get("total", 0)) or 0)
 
 
-def issued_revenue_net(invoices) -> float:
-    """Net INVOICED amount of Issued invoice rows (R86: invoiced, not revenue)."""
-    return round(sum(_net(i) for i in invoices if i.get("status") in ISSUED_STATUSES), 2)
+def _kind(i) -> str:
+    return i.get("kind") or "Invoice"
 
 
 def _is_proforma(i) -> bool:
-    return (i.get("kind") or "Invoice") == "Proforma"
+    return _kind(i) == PROFORMA
+
+
+def is_issued(i) -> bool:
+    """FG-695: an issued document — not a draft, not cancelled (Overdue included)."""
+    return i.get("status") not in NOT_ISSUED_STATUSES
+
+
+def issued_revenue_net(invoices) -> float:
+    """Net INVOICED amount of Issued invoice rows (R86: invoiced, not revenue): every issued,
+    not cancelled status (FG-695), never a proforma or a credit note."""
+    return round(sum(_net(i) for i in invoices
+                     if is_issued(i) and _kind(i) not in (PROFORMA, CREDIT_NOTE)), 2)
 
 
 # R86 (Krum 14.11.2026, FG-565; changes R80): THE project revenue rule — "Приход" = only the
@@ -33,7 +47,21 @@ def _is_proforma(i) -> bool:
 # (active payment_allocations) to an Issued, non-proforma invoice of the project. A proforma
 # alone is never revenue. Issued but unpaid is "фактурирано, чака плащане", shown apart.
 # The net share of a payment = allocated × invoice subtotal / invoice total.
+#
+# FG-698 — INTERIM defaults per R86, Krum to confirm:
+#  (a) a final invoice issued against a proforma advance names it (``advance_proforma_ids``):
+#      the advance received on that proforma then counts as revenue and reduces the final
+#      invoice's "чака плащане". A proforma no final invoice names stays out (R86).
+#  (b) an outgoing refund (an active Outflow payment allocated to an issued CreditNote of the
+#      project) reduces the revenue. (The credit-note flow itself is #84.)
 REVENUE_BASIS = "received payments (FLOW-006 ledger), net of VAT"
+INVOICE_REVENUE_FIELDS = {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "status": 1, "kind": 1,
+                          "advance_proforma_ids": 1}
+
+
+def _ratio(inv) -> float:
+    total = float(inv.get("total") or 0)
+    return (_net(inv) / total) if total else 0.0
 
 
 async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str = None,
@@ -41,22 +69,31 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
     """R86: the received revenue of ``project_ids`` (``date_from`` ≤ payment date < ``date_to``).
 
     Returns ``received_net`` (THE revenue), ``received_gross``, ``invoiced_net``,
-    ``invoiced_gross`` and ``awaiting_payment_net`` / ``_gross`` (invoiced, not yet received).
-    The invoiced / awaiting amounts are not limited by the payment dates."""
+    ``invoiced_gross``, ``awaiting_payment_net`` / ``_gross`` (invoiced, not yet received),
+    ``advance_net`` (FG-698a) and ``refunded_net`` (FG-698b). The invoiced / awaiting amounts
+    are not limited by the payment dates. ``invoices`` must carry INVOICE_REVENUE_FIELDS."""
     from app.services.payment_state import active_allocations
     project_ids = list(project_ids)
     if invoices is None:
         invoices = await tenant.invoices.find(
             {"org_id": org_id, "project_id": {"$in": project_ids}, "direction": "Issued"},
-            {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "status": 1, "kind": 1},
-        ).to_list(5000)
-    docs = {i["id"]: i for i in invoices
-            if i.get("id") and not _is_proforma(i) and i.get("status") not in ("Draft", "Cancelled")}
-    issued = [i for i in docs.values() if i.get("status") in ISSUED_STATUSES]
-    out = {"invoiced_gross": round(sum(float(i.get("total") or 0) for i in issued), 2),
-           "invoiced_net": issued_revenue_net(issued),
-           "received_gross": 0.0, "received_net": 0.0, "revenue_basis": REVENUE_BASIS}
-    paid_gross_all = paid_net_all = 0.0
+            INVOICE_REVENUE_FIELDS).to_list(5000)
+    issued = [i for i in invoices if i.get("id") and is_issued(i)]
+    finals = {i["id"]: i for i in issued if _kind(i) not in (PROFORMA, CREDIT_NOTE)}
+    credits = {i["id"]: i for i in issued if _kind(i) == CREDIT_NOTE}
+    profs = {i["id"]: i for i in issued if _kind(i) == PROFORMA}
+    # FG-698a: the proformas a final invoice names, in final-invoice order
+    named = []
+    for f in finals.values():
+        for pid in f.get("advance_proforma_ids") or []:
+            if pid in profs and pid not in named:
+                named.append(pid)
+    out = {"invoiced_gross": round(sum(float(i.get("total") or 0) for i in finals.values()), 2),
+           "invoiced_net": issued_revenue_net(finals.values()),
+           "received_gross": 0.0, "received_net": 0.0, "advance_net": 0.0, "refunded_net": 0.0,
+           "revenue_basis": REVENUE_BASIS}
+    paid_on = {k: 0.0 for k in list(finals) + named}       # gross received per document
+    docs = {**finals, **{k: profs[k] for k in named}, **credits}
     if docs:
         allocs = await tenant.payment_allocations.find(
             active_allocations({"invoice_id": {"$in": list(docs)}}),
@@ -66,28 +103,48 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
         pays = {}
         if pay_ids:
             for p in await tenant.finance_payments.find(
-                    active_payments({"id": {"$in": pay_ids}, "direction": "Inflow"}),
-                    {"_id": 0, "id": 1, "date": 1}).to_list(20000):
+                    active_payments({"id": {"$in": pay_ids}}),
+                    {"_id": 0, "id": 1, "date": 1, "direction": 1}).to_list(20000):
                 pays[p["id"]] = p
         for a in allocs:
             pay = pays.get(a.get("payment_id"))
-            if not pay:
-                continue                      # reversed / not an inflow: not money received
-            inv = docs[a["invoice_id"]]
-            gross = float(a.get("amount_allocated") or 0)
-            total = float(inv.get("total") or 0)
-            net = gross * (_net(inv) / total) if total else 0.0
-            paid_gross_all += gross
-            paid_net_all += net
+            inv = docs.get(a.get("invoice_id"))
+            if not pay or not inv:
+                continue                      # reversed: not money received
+            refund = a["invoice_id"] in credits
+            if pay.get("direction") != ("Outflow" if refund else "Inflow"):
+                continue
+            gross = abs(float(a.get("amount_allocated") or 0))
+            net = gross * abs(_ratio(inv))
+            if not refund:
+                paid_on[a["invoice_id"]] += gross
             d = (pay.get("date") or "")[:10]
             if (date_from and d < date_from) or (date_to and d >= date_to):
                 continue
-            out["received_gross"] += gross
-            out["received_net"] += net
-    out["received_gross"] = round(out["received_gross"], 2)
-    out["received_net"] = round(out["received_net"], 2)
-    out["awaiting_payment_gross"] = round(max(0.0, out["invoiced_gross"] - paid_gross_all), 2)
-    out["awaiting_payment_net"] = round(max(0.0, out["invoiced_net"] - paid_net_all), 2)
+            sign = -1.0 if refund else 1.0
+            out["received_gross"] += sign * gross
+            out["received_net"] += sign * net
+            if refund:
+                out["refunded_net"] += net
+            elif a["invoice_id"] in profs:
+                out["advance_net"] += net
+    # "чака плащане" per final invoice: its total − what was received on it − the advance of
+    # the proformas it names (FG-698a), never below 0
+    advance_left = {k: paid_on[k] for k in named}
+    await_gross = await_net = 0.0
+    for f in finals.values():
+        left = max(0.0, float(f.get("total") or 0) - paid_on[f["id"]])
+        for pid in f.get("advance_proforma_ids") or []:
+            if pid in advance_left and left > 0:
+                take = min(left, advance_left[pid])
+                advance_left[pid] -= take
+                left -= take
+        await_gross += left
+        await_net += left * _ratio(f)
+    for k in ("received_gross", "received_net", "advance_net", "refunded_net"):
+        out[k] = round(out[k], 2)
+    out["awaiting_payment_gross"] = round(await_gross, 2)
+    out["awaiting_payment_net"] = round(await_net, 2)
     return out
 
 
@@ -113,7 +170,7 @@ async def compute_project_pnl(org_id: str, project_id: str) -> dict:
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
         {"_id": 0, "total": 1, "subtotal": 1, "vat_amount": 1, "status": 1, "paid_amount": 1,
-         "id": 1, "kind": 1},
+         "id": 1, "kind": 1, "advance_proforma_ids": 1},
     ).to_list(5000)
     _rev_statuses = list(REVENUE_STATUSES)   # FG-530: the one revenue rule
     # Gross (с ДДС) — invoiced / received, the cash view
@@ -308,8 +365,7 @@ async def compute_pnl_trend(org_id: str, project_id: str, months: int = 6) -> li
     trend = []
     project_invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued"},
-        {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "status": 1, "kind": 1},
-    ).to_list(5000)
+        INVOICE_REVENUE_FIELDS).to_list(5000)
 
     for i in range(months - 1, -1, -1):
         dt = now - timedelta(days=30 * i)

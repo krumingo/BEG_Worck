@@ -450,15 +450,20 @@ async def get_project_profit_summary(
     ).to_list(100)
     earned_revenue = sum(a.get("subtotal", 0) for a in accepted_acts)
 
-    # R3: Billed (issued invoices)
+    # R3: Billed (issued invoices) — FG-696 (R86, interim default, Krum to confirm):
+    # "фактурирано" = issued (Overdue included), net, no proforma; "получено" = the payments
+    # received (FLOW-006 ledger), net, no proforma — the one shared rule
     issued_invoices = await tenant.invoices.find(
         {"project_id": project_id, "org_id": org_id, "direction": "Issued", "status": {"$nin": ["Draft", "Cancelled"]}},
-        {"_id": 0, "subtotal": 1, "total": 1, "paid_amount": 1}
+        {"_id": 0, "id": 1, "subtotal": 1, "total": 1, "paid_amount": 1, "status": 1, "kind": 1,
+         "advance_proforma_ids": 1}
     ).to_list(100)
-    billed_revenue = sum(i.get("subtotal", 0) or i.get("total", 0) for i in issued_invoices)
+    from app.services.project_pnl import received_revenue
+    _rec = await received_revenue(tenant, org_id, [project_id], invoices=issued_invoices)
+    billed_revenue = _rec["invoiced_net"]
 
-    # R5: Collected
-    collected_revenue = sum(i.get("paid_amount", 0) for i in issued_invoices)
+    # R5: Collected — "получено" (R86)
+    collected_revenue = _rec["received_net"]
 
     # ── EXPENSES ──
     # Material cost — 5C-C22: the ONE shared helper (canonical consumption
@@ -576,6 +581,9 @@ async def get_project_profit_summary(
             "earned": round(earned_revenue, 2),
             "billed": round(billed_revenue, 2),
             "collected": round(collected_revenue, 2),
+            "billed_label": "Фактурирано (без ДДС, без проформа)",
+            "collected_label": "Получено (без ДДС, без проформа)",
+            "revenue_rule": _rec["revenue_basis"],
             "receivables": receivables,
         },
 

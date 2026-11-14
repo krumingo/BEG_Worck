@@ -267,14 +267,16 @@ async def get_cash_vs_earned(
     ).to_list(200)
     earned = sum(a.get("subtotal", 0) for a in acts)
 
-    # Billed
+    # Billed / collected — FG-696 (R86, interim default, Krum to confirm): "фактурирано" =
+    # issued (Overdue included), net, no proforma; "получено" = the payments received
+    # (FLOW-006 ledger), net, no proforma — the one shared rule of the project P&L
+    from app.services.project_pnl import INVOICE_REVENUE_FIELDS, received_revenue
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued",
-         "status": {"$nin": ["Draft", "Cancelled"]}},
-        {"_id": 0, "subtotal": 1, "total": 1, "paid_amount": 1, "remaining_amount": 1}
-    ).to_list(500)
-    billed = sum(i.get("subtotal", 0) or i.get("total", 0) for i in invoices)
-    collected = sum(i.get("paid_amount", 0) for i in invoices)
+         "status": {"$nin": ["Draft", "Cancelled"]}}, INVOICE_REVENUE_FIELDS).to_list(5000)
+    rec = await received_revenue(tenant, org_id, [project_id], invoices=invoices)
+    billed = rec["invoiced_net"]
+    collected = rec["received_net"]
 
     # Costs paid (outflows)
     sub_payments = await tenant.subcontractor_payments.find(
@@ -301,10 +303,12 @@ async def get_cash_vs_earned(
             "earned_vs_billed": round(earned - billed, 2) if earned > 0 else None,
         },
         "collection_percent": round(collected / billed * 100, 1) if billed > 0 else None,
+        "labels": {"billed": "Фактурирано (без ДДС, без проформа)",
+                   "collected": "Получено (без ДДС, без проформа)"},
         "basis_labels": {
             "earned": "client_acts_accepted",
-            "billed": "invoices_issued",
-            "collected": "invoice_payments",
+            "billed": "invoices_issued_net_no_proforma",
+            "collected": "received_payments_net_no_proforma (FLOW-006)",
             "costs_paid": "subcontractor_payments",
         },
     }

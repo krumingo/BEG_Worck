@@ -2538,7 +2538,8 @@ async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, u
     async def count_invoices(pids):
         invs = await tenant.invoices.find(
             {"org_id": org_id, "project_id": {"$in": pids}, "direction": "Issued"},  # WH81-03: revenue = Issued only (a supplier invoice is a cost, not revenue)
-            {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1},
+            {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "paid_amount": 1, "status": 1, "due_date": 1, "kind": 1,
+             "advance_proforma_ids": 1},
         ).to_list(5000)
         # R86 (FG-565): revenue = the payments RECEIVED (FLOW-006 ledger), net — the P&L
         # report's own rule; the issued (invoiced) amount is a separate field
@@ -2549,9 +2550,11 @@ async def _project_aggregate(tenant, org_id: str, project_id: str, today: str, u
         real = [i for i in invs if (i.get("kind") or "Invoice") != "Proforma"]
         profs = [i for i in invs if (i.get("kind") or "Invoice") == "Proforma"]
         count = len(real)
-        invoiced = round(sum(i.get("total", 0) for i in real if i.get("status") not in ["Draft", "Cancelled"]), 2)
-        paid = round(sum(i.get("paid_amount", 0) or 0 for i in real), 2)
-        unpaid = round(invoiced - paid, 2)
+        # FG-695 / FG-698 (R86): invoiced and "чака плащане" by the shared rule (every issued
+        # status, Overdue included; no proforma / credit note; a named advance reduces it)
+        invoiced = rec["invoiced_gross"]
+        paid = round(sum(i.get("paid_amount", 0) or 0 for i in real if (i.get("kind") or "Invoice") != "CreditNote"), 2)
+        unpaid = rec["awaiting_payment_gross"]
         overdue = round(sum(
             (i.get("total", 0) - (i.get("paid_amount") or 0))
             for i in real
