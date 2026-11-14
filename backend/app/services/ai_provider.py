@@ -99,7 +99,8 @@ async def require_ai(org_id: Optional[str]) -> None:
 # spaces, NBSP, several spaces or dashes between the groups, and next to commas,
 # dots or other numbers. Over-redaction (e.g. a 10-digit phone or invoice number)
 # is accepted; a leaked personal id is not.
-_SEP = r"[ \t\u00a0\u202f\-]"
+# R92 (Krum): also . _ / between the groups ("BG80.BNBG.9661\u2026", "FR76_3000_\u2026").
+_SEP = r"[ \t\u00a0\u202f\-._/]"
 # IBAN: 2 letters + 2 digits, then alphanumeric groups separated by _SEP runs.
 _IBAN_START = re.compile(r"(?<![A-Za-z0-9])[A-Za-z]{2}\d{2}")
 _IBAN_GROUP = re.compile(r"(%s*)([A-Za-z0-9]+)" % _SEP)

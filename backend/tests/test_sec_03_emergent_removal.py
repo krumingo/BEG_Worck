@@ -548,6 +548,36 @@ def test_ordinary_amounts_and_short_ids_stay_readable(text):
     assert redact_personal(text) == text
 
 
+# ── R92 (Krum, b9c6063a): an IBAN written with . _ / separators is hidden too ──
+@pytest.mark.parametrize("text", [
+    "IBAN BG80.BNBG.9661.1020.3456.78", "BG80_BNBG_9661_1020_3456_78", "BG80/BNBG/9661/1020/3456/78",
+    "iban: bg80.bnbg.9661.1020.3456.78.", "BG80 BNBG.9661_1020/3456-78 за плащане",
+    "GB82.WEST.1234.5698.7654.32", "BG80.BNBG.9661.1020.3456.79",   # bad checksum — still hidden
+    "MT84/MALT/0110/0001/2345/MTLC/AST0/01S", "FR76_3000_6000_0112_3456_7890_189",  # letters in the account part
+])
+def test_r92_iban_with_dot_underscore_slash_separators_is_hidden(text):
+    """The WHOLE IBAN is one [скрито]: no country/bank prefix, no account letters left."""
+    from app.services.ai_provider import redact_personal
+    out = redact_personal(text)
+    assert "[скрито]" in out, out
+    for leaked in ("BG80", "bg80", "BNBG", "bnbg", "GB82", "WEST", "MT84", "MALT", "MTLC", "FR76"):
+        assert leaked not in out, (text, out)
+    digits = re.sub(r"\D", "", out)
+    for leaked in ("96611020345678", "96611020345679", "12345698765432", "9661", "345678"):
+        assert leaked not in digits, (text, out)
+    if "за плащане" in text:
+        assert out.endswith(" за плащане"), out
+
+
+@pytest.mark.parametrize("text", [
+    "ул. Витоша 12/3, ап. 5", "т. 12.50 лв", "фактура 2026/0012", "v2_final.pdf", "ISO 9001/2015",
+    "BG80 е кодът", "Обект №17/3, етаж 3",
+])
+def test_r92_ordinary_slashes_dots_and_underscores_stay_readable(text):
+    from app.services.ai_provider import redact_personal
+    assert redact_personal(text) == text
+
+
 # ── FG-536: audit + ledger in one transaction ──
 def test_forbidden_if_the_audit_fails_no_counted_action_remains(ai, monkeypatch):
     from app.audit import store
