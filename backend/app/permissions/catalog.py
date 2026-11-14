@@ -227,6 +227,24 @@ SUBCONTRACTOR_ADVANCE_ACTIONS: Set[str] = {"finance.subcontractor_advance.create
 # same holders as the subcontractor payment it accompanies (Owner/Admin/Accountant, R14).
 SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS: Set[str] = {"subcontract.advance_deduction.execute"}
 
+# ASSET-REP-01 (FG-723; FLOW-011 two-phase custody, R16 by analogy, R20): asset repairs.
+#   ASSET_REPAIR_CUSTODY_ACTIONS  initiate send / return, accept / refuse / problem — the
+#                                 field and custody roles (site_manager, project_manager,
+#                                 warehouse, worker; Owner/Admin through their full set).
+#                                 Viewer and Driver never. The legacy Technician's company set
+#                                 stays exactly {"asset_intake.submit"} (W0-02 invariant): in
+#                                 enforce a Technician holder cannot initiate yet (debt
+#                                 D-ASSETREP-01, Krum's mapping of LEGACY_TECHNICIAN).
+#   ASSET_REPAIR_COST_ACTIONS     enter / change the repair cost: Owner/Admin/Accountant only
+#                                 (R20). INTERIM until Krum decides on field roles.
+ASSET_REPAIR_CUSTODY_ACTIONS: Set[str] = {
+    "asset_repair.send.create",
+    "asset_repair.return.create",
+    "asset_repair.handover.execute",
+}
+ASSET_REPAIR_COST_ACTIONS: Set[str] = {"asset_repair.cost.update"}
+ACTIONS |= ASSET_REPAIR_CUSTODY_ACTIONS | ASSET_REPAIR_COST_ACTIONS
+
 # SEC-01-C01 (R16, Krum 06.11.2026): labor entries and material waste. Owner/Admin/
 # Accountant everywhere (company scope, above); SiteManager and Technician ONLY on the
 # projects they are members of — granted on the project-scope assignment that mirrors
@@ -283,6 +301,7 @@ CANONICAL_ROLES: Dict[str, dict] = {
     "owner":           {"label_bg": "Owner / Крум",          "actions": set(_ALL)},
     "admin":           {"label_bg": "Администратор",          "actions": set(_ALL) - SUBCONTRACTOR_ADVANCE_ACTIONS},
     "site_manager":    {"label_bg": "Технически ръководител", "actions": {"user.read", "asset_intake.submit",
+                                                                      *ASSET_REPAIR_CUSTODY_ACTIONS,  # ASSET-REP-01
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
                                                                       "master_data.entity.read",
@@ -304,6 +323,7 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       # SEC-02 (R20, D9): the employee file, no money
                                                                       *SEC02_SITE_MANAGER_COMPANY_ACTIONS}},
     "project_manager": {"label_bg": "Проектен мениджър",      "actions": {"user.read", "asset_intake.submit",
+                                                                      *ASSET_REPAIR_CUSTODY_ACTIONS,  # ASSET-REP-01
                                                                       "master_data.pending.propose",
                                                                       "master_data.pending.read",
                                                                       "master_data.entity.read",
@@ -342,10 +362,13 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       # project's budget — company
                                                                       # scope, read only.
                                                                       "budget.read",
+                                                                      # ASSET-REP-01 (R20): the repair cost
+                                                                      *ASSET_REPAIR_COST_ACTIONS,
                                                                       # SUB-ADV-01 (R39): the advance and its deduction
                                                                       *SUBCONTRACTOR_ADVANCE_ACTIONS,
                                                                       *SUBCONTRACTOR_ADVANCE_DEDUCTION_ACTIONS}},
     "warehouse":       {"label_bg": "Склад",                  "actions": {"asset_intake.submit",
+                                                                      *ASSET_REPAIR_CUSTODY_ACTIONS,  # ASSET-REP-01
                                                                       "master_data.pending.propose",
                                                                       "master_data.entity.read",
                                                                       # TASK 5C: warehouse operator — stock-floor commands only.
@@ -384,6 +407,7 @@ CANONICAL_ROLES: Dict[str, dict] = {
                                                                       "master_data.entity.read",
                                                                       "master_data.migration.map"}},
     "worker":          {"label_bg": "Работник",               "actions": {"asset_intake.submit",
+                                                                      *ASSET_REPAIR_CUSTODY_ACTIONS,  # ASSET-REP-01
                                                                       "master_data.pending.propose"}},
     "driver":          {"label_bg": "Шофьор",                 "actions": set()},
     # AI gets no blanket actions; it acts <= the delegating human (FLOW-002).

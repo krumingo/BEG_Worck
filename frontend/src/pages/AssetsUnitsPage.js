@@ -24,6 +24,9 @@ import { Plus, Search, Loader2, Trash2, MapPin, Calendar, User, History, LayoutG
 import { warrantyStatus } from "@/lib/warranty";
 import UnitQrBlock from "@/components/UnitQrBlock";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { canReadFinance } from "@/lib/financeAccess";
+import { createIdempotencyHolder, idempotencyHeaders, apiErrorText } from "@/lib/idempotency";
 
 const STATUS = {
   available: { label: "наличен", color: "#16a34a" },
@@ -89,6 +92,37 @@ export default function AssetsUnitsPage() {
   const [repairReturn, setRepairReturn] = useState(null); // { unit } | null
   const [rForm, setRForm] = useState({ sent_by: "", sent_by_name: "", service: "", issue: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
   const [rSaving, setRSaving] = useState(false);
+  // ASSET-REP-01: one Idempotency-Key per submitted payload; the cost is entered only by
+  // the finance roles (R20, interim) — the server refuses it for everyone else.
+  const { user } = useAuth();
+  const seesCost = canReadFinance(user?.role);
+  const [repairKeys] = useState(() => createIdempotencyHolder());
+  const [pendingHandovers, setPendingHandovers] = useState([]);
+  const loadPending = useCallback(async () => {
+    try {
+      const r = await API.get("/assets/repairs/my-pending");
+      setPendingHandovers(r.data?.items || []);
+    } catch { setPendingHandovers([]); }
+  }, []);
+  useEffect(() => { loadPending(); }, [loadPending]);
+  // FLOW-011 two-phase: only the named receiver accepts / refuses; custody changes on ACCEPTED.
+  const decideHandover = async (h, decision) => {
+    let payload = {};
+    if (decision !== "accept") {
+      const reason = window.prompt(decision === "refuse" ? "Причина за отказа" : "Опишете проблема");
+      if (!reason || !reason.trim()) return;
+      payload = { reason: reason.trim() };
+    }
+    const endpoint = `/assets/repairs/${h.repair_id}/handovers/${h.handover_id}/${decision}`;
+    try {
+      await API.post(endpoint, payload, idempotencyHeaders(repairKeys.keyFor(endpoint, payload)));
+      repairKeys.done();
+      loadPending();
+      load();
+    } catch (e) {
+      alert(apiErrorText(e, "Грешка при приемане"));
+    }
+  };
   const [employees, setEmployees] = useState([]);
   const [form, setForm] = useState(EMPTY);
   const [saving, setSaving] = useState(false);
@@ -224,61 +258,74 @@ export default function AssetsUnitsPage() {
     return d <= 0 ? " · днес" : ` · преди ${d} ${d === 1 ? "ден" : "дни"}`;
   };
   const openHistory = async (unit) => {
-    setMoveHist({ unit, items: null, repairs: null, totalPaid: 0 });
+    setMoveHist({ unit, items: null, repairs: null, totalCost: null, ledgerPaid: null });
     try {
       const r = await API.get(`/assets/units/${unit.id}/movements`);
       setMoveHist((prev) => ({ ...prev, unit, items: r.data?.items || [] }));
     } catch { setMoveHist((prev) => ({ ...prev, unit, items: [] })); }
     try {
       const rp = await API.get(`/assets/units/${unit.id}/repairs`);
-      setMoveHist((prev) => ({ ...prev, repairs: rp.data?.items || [], totalPaid: rp.data?.total_paid || 0 }));
+      setMoveHist((prev) => ({ ...prev, repairs: rp.data?.items || [], totalCost: rp.data?.total_cost, ledgerPaid: rp.data?.paid }));
     } catch { setMoveHist((prev) => ({ ...prev, repairs: [] })); }
   };
 
   const openRepairSend = (unit) => {
-    setRForm({ sent_by: "", sent_by_name: "", service: "", issue: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false });
+    setRForm({ sent_by: "", sent_by_name: "", receiver_user_id: "", service: "", issue: "", condition: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: false, warranty_override_reason: "" });
     setRepairSend({ unit });
   };
   const openRepairReturn = async (unit) => {
     const w = warrantyStatus(unit.purchase_date, unit.warranty_months);
-    setRForm({ sent_by: "", sent_by_name: "", service: "", issue: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: w.inWarranty });
-    setRepairReturn({ unit, open: null });
+    setRForm({ sent_by: "", sent_by_name: "", receiver_user_id: "", service: "", issue: "", condition: "", returned_by: "", returned_by_name: "", cost: "", work_done: "", is_warranty: w.inWarranty, warranty_override_reason: "" });
+    setRepairReturn({ unit, open: null, inWarranty: w.inWarranty });
     try {
       const r = await API.get(`/assets/units/${unit.id}/repairs`);
-      setRepairReturn({ unit, open: r.data?.open || null });
+      setRepairReturn({ unit, open: r.data?.open || null, inWarranty: w.inWarranty });
     } catch { /* данните от изпращането са по желание */ }
   };
   const submitRepairSend = async () => {
     if (!repairSend) return;
     setRSaving(true);
     try {
-      await API.post(`/assets/units/${repairSend.unit.id}/repair/send`, {
+      const endpoint = `/assets/units/${repairSend.unit.id}/repair/send`;
+      const payload = {
+        receiver_user_id: rForm.receiver_user_id || null,
         sent_by: rForm.sent_by || null,
         sent_by_name: empName(employees.find((e) => e.id === rForm.sent_by)) || rForm.sent_by_name || null,
         service: rForm.service || null,
         issue: rForm.issue || null,
-      });
+        condition: rForm.condition || null,
+      };
+      await API.post(endpoint, payload, idempotencyHeaders(repairKeys.keyFor(endpoint, payload)));
+      repairKeys.done();
       setRepairSend(null);
+      toast.success("Изпратено — чака приемане от получателя");
       load();
     } catch (e) {
-      alert(e?.response?.data?.detail || "Грешка при изпращане на ремонт");
+      alert(apiErrorText(e, "Грешка при изпращане на ремонт"));
     } finally { setRSaving(false); }
   };
   const submitRepairReturn = async () => {
     if (!repairReturn) return;
     setRSaving(true);
     try {
-      await API.post(`/assets/units/${repairReturn.unit.id}/repair/return`, {
+      const endpoint = `/assets/units/${repairReturn.unit.id}/repair/return`;
+      const payload = {
+        receiver_user_id: rForm.receiver_user_id || null,
         returned_by: rForm.returned_by || null,
         returned_by_name: empName(employees.find((e) => e.id === rForm.returned_by)) || rForm.returned_by_name || null,
-        cost: rForm.cost === "" ? null : Number(rForm.cost),
         work_done: rForm.work_done || null,
+        condition: rForm.condition || null,
         is_warranty: rForm.is_warranty,
-      });
+        warranty_override_reason: rForm.warranty_override_reason || null,
+      };
+      if (seesCost && rForm.cost !== "") payload.cost = Number(rForm.cost);
+      await API.post(endpoint, payload, idempotencyHeaders(repairKeys.keyFor(endpoint, payload)));
+      repairKeys.done();
       setRepairReturn(null);
+      toast.success("Върнато — чака приемане от получателя");
       load();
     } catch (e) {
-      alert(e?.response?.data?.detail || "Грешка при връщане от ремонт");
+      alert(apiErrorText(e, "Грешка при връщане от ремонт"));
     } finally { setRSaving(false); }
   };
 
@@ -297,6 +344,22 @@ export default function AssetsUnitsPage() {
           <Plus className="w-4 h-4 mr-2" /> Нов актив
         </Button>
       </div>
+
+      {pendingHandovers.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 space-y-2" data-testid="repair-pending-handovers">
+          <p className="text-sm font-medium flex items-center gap-1.5"><Wrench className="w-4 h-4 text-amber-500" />Чакат вашето приемане</p>
+          {pendingHandovers.map((h) => (
+            <div key={h.handover_id} className="flex items-center justify-between gap-2 text-sm flex-wrap">
+              <span>{h.kind === "send" ? "Към ремонт" : "От ремонт"} · {(units.find((u) => u.id === h.unit_id) || {}).item_name || h.unit_id}{h.issue ? ` · ${h.issue}` : ""}</span>
+              <span className="flex gap-1.5">
+                <Button size="sm" onClick={() => decideHandover(h, "accept")} data-testid={`handover-accept-${h.handover_id}`}>Приемам</Button>
+                <Button size="sm" variant="outline" onClick={() => decideHandover(h, "refuse")}>Отказ</Button>
+                <Button size="sm" variant="outline" onClick={() => decideHandover(h, "problem")}>Проблем</Button>
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* status summary */}
       <div className="flex flex-wrap gap-2">
@@ -553,7 +616,7 @@ export default function AssetsUnitsPage() {
             <div className="mt-4 pt-4 border-t border-border">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-medium flex items-center gap-1.5"><Wrench className="w-4 h-4 text-amber-500" />Ремонти</p>
-                <span className="text-xs text-muted-foreground">Похарчено общо: <b className="text-amber-400">{(moveHist.totalPaid || 0).toLocaleString("bg-BG")} €</b></span>
+                {moveHist.totalCost != null && <span className="text-xs text-muted-foreground">Обща цена на ремонтите: <b className="text-amber-400">{(moveHist.totalCost || 0).toLocaleString("bg-BG")} €</b> · платено (по регистъра): <b>{(moveHist.ledgerPaid || 0).toLocaleString("bg-BG")} €</b></span>}
               </div>
               <div className="space-y-2">
                 {moveHist.repairs.map((rp, i) => (
@@ -600,8 +663,19 @@ export default function AssetsUnitsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Получател (приема актива) *</Label>
+              <Select value={rForm.receiver_user_id || "none"} onValueChange={(v) => setRForm({ ...rForm, receiver_user_id: v === "none" ? "" : v })}>
+                <SelectTrigger data-testid="repair-receiver"><SelectValue placeholder="Избери служител" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {employees.map((e) => <SelectItem key={e.id} value={e.id}><span className="inline-flex items-center gap-2"><Avatar name={empName(e)} url={e.avatar_url} size={22} />{empName(e)}</span></SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <div><Label>Сервиз / при кого</Label><Input value={rForm.service} onChange={(e) => setRForm({ ...rForm, service: e.target.value })} data-testid="repair-service" /></div>
-            <div><Label>Повреда</Label><Input value={rForm.issue} onChange={(e) => setRForm({ ...rForm, issue: e.target.value })} data-testid="repair-issue" /></div>
+            <div><Label>Повреда *</Label><Input value={rForm.issue} onChange={(e) => setRForm({ ...rForm, issue: e.target.value })} data-testid="repair-issue" /></div>
+            <div><Label>Състояние / комплектовка</Label><Input value={rForm.condition} onChange={(e) => setRForm({ ...rForm, condition: e.target.value })} data-testid="repair-condition" /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRepairSend(null)}>Отказ</Button>
@@ -644,16 +718,29 @@ export default function AssetsUnitsPage() {
                 </SelectContent>
               </Select>
             </div>
+            <div>
+              <Label>Получател (приема актива) *</Label>
+              <Select value={rForm.receiver_user_id || "none"} onValueChange={(v) => setRForm({ ...rForm, receiver_user_id: v === "none" ? "" : v })}>
+                <SelectTrigger data-testid="repair-return-receiver"><SelectValue placeholder="Избери служител" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">—</SelectItem>
+                  {employees.map((e) => <SelectItem key={e.id} value={e.id}><span className="inline-flex items-center gap-2"><Avatar name={empName(e)} url={e.avatar_url} size={22} />{empName(e)}</span></SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
             <label className="flex items-center gap-2 text-sm cursor-pointer">
               <input type="checkbox" checked={rForm.is_warranty} onChange={(e) => setRForm({ ...rForm, is_warranty: e.target.checked })} data-testid="repair-is-warranty" />
               Покрито от гаранция
             </label>
-            <div><Label>Цена (€){rForm.is_warranty ? " · диагностика/транспорт може да се плащат" : ""}</Label><Input type="number" min="0" step="0.01" placeholder="0" value={rForm.cost} onChange={(e) => setRForm({ ...rForm, cost: e.target.value })} data-testid="repair-cost" /></div>
+            {repairReturn?.inWarranty && !rForm.is_warranty && (
+              <div><Label>Причина да не е гаранционен * (активът е в гаранция)</Label><Input value={rForm.warranty_override_reason} onChange={(e) => setRForm({ ...rForm, warranty_override_reason: e.target.value })} data-testid="repair-warranty-reason" /></div>
+            )}
+            {seesCost && <div><Label>Цена на ремонта (€) — задължение, не плащане{rForm.is_warranty ? " · диагностика/транспорт може да се плащат" : ""}</Label><Input type="number" min="0" step="0.01" placeholder="0" value={rForm.cost} onChange={(e) => setRForm({ ...rForm, cost: e.target.value })} data-testid="repair-cost" /></div>}
             <div><Label>Какво е направено</Label><Input value={rForm.work_done} onChange={(e) => setRForm({ ...rForm, work_done: e.target.value })} data-testid="repair-work-done" /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRepairReturn(null)}>Отказ</Button>
-            <Button onClick={submitRepairReturn} disabled={rSaving} data-testid="repair-return-submit">{rSaving ? "Връща…" : "Готов · върни в наличност"}</Button>
+            <Button onClick={submitRepairReturn} disabled={rSaving} data-testid="repair-return-submit">{rSaving ? "Връща…" : "Върни · чака приемане"}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
