@@ -109,8 +109,8 @@ export default function ProjectFinancialPage() {
           <div className="grid grid-cols-5 gap-4">
             <Metric label="Договорено" value={r.contracted} partial={!ma.revenue} />
             <Metric label="Изпълнено" value={r.earned} color="text-emerald-400" partial={!ma.earned} />
-            <Metric label="Фактурирано" value={r.billed} />
-            <Metric label="Събрано" value={r.collected} color="text-emerald-400" />
+            <Metric label="Фактурирано (без ДДС)" value={r.billed} />
+            <Metric label="Получено (без ДДС)" value={r.collected} color="text-emerald-400" />{/* FG-696 (R86) */}
             <Metric label="Вземания" value={r.receivables} color={r.receivables > 0 ? "text-amber-400" : ""} />
           </div>
         </div>

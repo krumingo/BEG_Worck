@@ -114,3 +114,98 @@ def test_r86_the_monthly_trend_counts_the_payment_in_the_month_it_was_received(m
         assert trend[-1]["month"] == today[:7] and trend[-1]["revenue"] == 400.0, trend
         assert trend[0]["revenue"] == 0.0, trend
     run(monkeypatch, scenario)
+
+
+# ═══════════════════════════════════════════════ FLOW Guard pass 67 (FG-695 / FG-696 / FG-698)
+
+def test_fg695_an_overdue_invoice_is_issued_and_waits_for_payment(monkeypatch, backend):
+    """FG-695: issued = every issued, not cancelled status — Overdue included."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-s", **INV},
+            {"id": "inv-o", **INV, "status": "Overdue", "subtotal": 100.0, "vat_amount": 20.0, "total": 120.0,
+             "invoice_no": "R86-O", "due_date": "2020-01-01"},
+            {"id": "inv-c", **INV, "status": "Cancelled", "invoice_no": "R86-C"}])
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["invoiced_net"] == 1100.0 == pnl["invoiced_net"], (a["pnl"], pnl)
+        assert a["pnl"]["awaiting_payment_net"] == 1100.0 == pnl["awaiting_payment_net"]
+        assert a["invoices"]["total"]["unpaid"] == 1320.0                          # "чака плащане", gross
+        assert a["pnl"]["revenue"] == 0.0
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg696_every_reader_labelled_revenue_follows_r86(monkeypatch, backend):
+    """FG-696 (interim default, Krum to confirm): "оперативен приход", /project-profit and
+    /cash-vs-earned — фактурирано = issued, net, no proforma; получено = received, net."""
+    from app.services.project_financial_results import compute_financial_results
+
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-r86", **INV},
+            {"id": "inv-o", **INV, "status": "Overdue", "subtotal": 100.0, "vat_amount": 20.0, "total": 120.0,
+             "invoice_no": "R86-O"},
+            {"id": "pf-r86", **INV, "kind": "Proforma", "invoice_no": "PF-1"}])
+        await _pay(c, "inv-r86", 480.0, "fg696-a")                  # 400 net received
+        await _pay(c, "pf-r86", 600.0, "fg696-p")                   # a proforma alone: never revenue
+        fr = await compute_financial_results(ORG, P)
+        assert fr["operating"]["earned_revenue"] == 400.0, fr["operating"]
+        assert fr["operating"]["invoiced_revenue"] == 1100.0
+        prof = await c.get(f"/api/project-profit/{P}", headers=_token("owner"))
+        assert prof.status_code == 200, prof.text
+        rv = prof.json()["revenue"]
+        assert (rv["billed"], rv["collected"]) == (1100.0, 400.0), rv
+        assert rv["billed_label"].startswith("Фактурирано") and rv["collected_label"].startswith("Получено")
+        cve = await c.get(f"/api/cash-vs-earned/{P}", headers=_token("owner"))
+        assert cve.status_code == 200, cve.text
+        cv = cve.json()
+        assert (cv["billed_revenue"], cv["collected_cash"]) == (1100.0, 400.0), cv
+        assert cv["labels"] == {"billed": "Фактурирано (без ДДС, без проформа)",
+                                "collected": "Получено (без ДДС, без проформа)"}
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg698a_a_final_invoice_against_a_proforma_advance_counts_the_advance(monkeypatch, backend):
+    """FG-698(a) (interim default, Krum to confirm): the advance received on a proforma
+    counts as revenue once a final invoice names it, and reduces its "чака плащане"."""
+    async def scenario(c, op):
+        await op.invoices.insert_one({"id": "pf-r86", **INV, "kind": "Proforma", "invoice_no": "PF-1",
+                                      "subtotal": 500.0, "vat_amount": 100.0, "total": 600.0})
+        await _pay(c, "pf-r86", 600.0, "fg698-p")
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 0.0 == pnl["total_revenue"]              # a proforma alone
+        await op.invoices.insert_one({"id": "inv-fin", **INV, "invoice_no": "R86-F",
+                                      "advance_proforma_ids": ["pf-r86"]})
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 500.0 == pnl["total_revenue"], (a["pnl"], pnl)
+        assert a["pnl"]["invoiced_net"] == 1000.0                              # the final invoice
+        assert a["pnl"]["awaiting_payment_net"] == 500.0 == pnl["awaiting_payment_net"]
+        await _pay(c, "inv-fin", 600.0, "fg698-f")                            # the rest
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 1000.0 and a["pnl"]["awaiting_payment_net"] == 0.0
+    run(monkeypatch, scenario, backend)
+
+
+def test_fg698b_an_outgoing_credit_note_refund_reduces_the_revenue(monkeypatch, backend):
+    """FG-698(b) (interim default, Krum to confirm; the credit-note flow is #84): an active
+    Outflow payment allocated to an issued CreditNote of the project reduces the revenue."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-r86", **INV},
+            {"id": "cn-1", **INV, "kind": "CreditNote", "invoice_no": "CN-1",
+             "subtotal": 200.0, "vat_amount": 40.0, "total": 240.0}])
+        await _pay(c, "inv-r86", 1200.0, "fg698-b")
+        a, _ = await _revenue(c)
+        assert a["pnl"]["revenue"] == 1000.0 and a["pnl"]["invoiced_net"] == 1000.0
+        # the seeded refund (the #84 hook): a ledger Outflow allocated to the credit note
+        await op.finance_payments.insert_one({"id": "pay-ref", "org_id": ORG, "direction": "Outflow",
+                                              "amount": 240.0, "date": "2026-11-12", "account_id": "acc"})
+        await op.payment_allocations.insert_one({"id": "al-ref", "org_id": ORG, "payment_id": "pay-ref",
+                                                 "invoice_id": "cn-1", "amount_allocated": 240.0})
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 800.0 == pnl["total_revenue"], (a["pnl"], pnl)
+        assert a["pnl"]["invoiced_net"] == 1000.0                              # a credit note is not invoiced
+        # a reversed refund no longer reduces it
+        await op.finance_payments.update_one({"id": "pay-ref"}, {"$set": {"status": "reversed"}})
+        a, _ = await _revenue(c)
+        assert a["pnl"]["revenue"] == 1000.0
+    run(monkeypatch, scenario, backend)
