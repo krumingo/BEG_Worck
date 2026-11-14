@@ -13,8 +13,8 @@
 |---|---|---|---|---|
 | session_01UghxKYBSwr1mKUv5xSvtcK | Програмист | #84 INV-CN-01 | 14.11 17:13 | чака Q015 |
 | session_01UghxKaJf6FbnqneQdArRtq | Програмист | #90 SEC-03 | 14.11 16:59 | чака AUDIT/Codex; своята проверка на PR е спряна |
-| session_01UghxKZAcsMwqKnHJ6QLbuu | Програмист | #94 t49 | 14.11 | пауза поискана 17:43, чака потвърждение (до тогава се брои за работеща) |
-| session_01UghxKYUf3x1ThVCYfSUQVp | Програмист | #93 t51 | 14.11 | пауза поискана 17:43, чака потвърждение |
+| session_01UghxKZAcsMwqKnHJ6QLbuu | Програмист | #94 t49 | 14.11 | на пауза (потвърдено 17:43): FG-723/724/727 са готови; липсва складовият gate |
+| session_01UghxKYUf3x1ThVCYfSUQVp | Програмист | #93 t51 | 14.11 | на пауза (потвърдено 17:43) |
 | session_01UghxKZb6nGrVuwnvXzQ5P3 | AUDIT-2 | одит | 14.11 15:13 | следващ одит на #90, #73/#75, #84 |
 | session_01UghxKbySVZYp1kedZMoyvJ | FLOW Guard | канон | 14.11 17:22 | **периодичното будене е СПРЯНО** |
 | session_01UghxKZ3s59CKXFqWsBnC8i | Програмист | #83 CP-01 | 13.11 | чака „да“ |
