@@ -905,7 +905,7 @@
  ],
  "mongo": "local replica set (oplog)",
  "outbound_http": "closed local port",
- "seconds": 169.7,
+ "seconds": 178.2,
  "rows": [
   {
    "mode": "off",
@@ -17461,13 +17461,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -17479,13 +17479,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -17500,13 +17500,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -17518,13 +17518,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -17567,13 +17567,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -17585,13 +17585,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -42851,13 +42851,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -42869,13 +42869,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -42890,13 +42890,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -42908,13 +42908,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -42957,13 +42957,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -42975,13 +42975,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -71703,13 +71703,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -71721,13 +71721,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -71742,13 +71742,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -71760,13 +71760,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -71809,13 +71809,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -71827,13 +71827,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -97093,13 +97093,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -97111,13 +97111,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -97132,13 +97132,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -97150,13 +97150,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -97199,13 +97199,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -97217,13 +97217,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -125985,13 +125985,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -126003,13 +126003,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -126024,13 +126024,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -126042,13 +126042,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -126091,13 +126091,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -126109,13 +126109,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -151591,13 +151591,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -151609,13 +151609,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -151630,13 +151630,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -151648,13 +151648,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -151697,13 +151697,13 @@
    "written": [],
    "foreign_ids": false,
    "money_keys": [
+    "awaiting_payment_label",
+    "awaiting_payment_net",
     "ex_vat",
     "expenses",
     "inc_vat",
     "labor_cost",
     "paid",
-    "paid_invoices",
-    "paid_invoices_label",
     "paid_labor",
     "profit",
     "revenue",
@@ -151715,13 +151715,13 @@
     "children[0].invoices.invoiced",
     "children[0].invoices.unpaid",
     "children[0].invoices.issued_net",
+    "children[0].invoices.awaiting_payment_net",
     "invoices.children.invoiced",
     "invoices.children.unpaid",
     "invoices.children.issued_net",
-    "invoices.total.issued_net",
-    "invoices.total.unpaid",
-    "invoices.total.invoiced",
-    "pnl.revenue"
+    "invoices.children.awaiting_payment_net",
+    "invoices.total.awaiting_payment_net",
+    "invoices.total.unpaid"
    ]
   },
   {
@@ -164248,7 +164248,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 6,
    "events": [
@@ -164257,13 +164257,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "scope_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "structured_diff": {
       "before": {
        "modifiers": {},
@@ -164279,7 +164279,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-off-admin-org",
      "sequence": 26,
-     "integrity_hash": "e3b0dc9c6c9e822d5f96c11fa214139daf495db6115682d8ad7269622d55053f"
+     "integrity_hash": "d55c886b499374ee7d37e8bd5f328548afbfeb7aed3cd4eced961ffe493dd482"
     }
    ]
   },
@@ -164290,7 +164290,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 7,
    "events": [
@@ -164299,7 +164299,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164324,7 +164324,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-admin-project",
      "sequence": 27,
-     "integrity_hash": "a3d3d360db95f4bff8c57dea2bb3eb2cf75e515f332c9925ec05816d98bf823d"
+     "integrity_hash": "4d9905b2fdedd1d3f3a90f2cd1146a6fe4d7c87855011a4588a2a9ab110b8980"
     }
    ]
   },
@@ -164335,7 +164335,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 8,
    "events": []
@@ -164347,7 +164347,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 9,
    "events": [
@@ -164356,7 +164356,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164382,7 +164382,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-off-accountant-project",
      "sequence": 28,
-     "integrity_hash": "8cde3e1e627725794cce0d87f774d803b9fbf17a2096f5be62840291efa8d532"
+     "integrity_hash": "81b93216e27043867fd2c50caae2d4c6819c42afbf8ca1ab5418c164184b3502"
     }
    ]
   },
@@ -164393,7 +164393,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 10,
    "events": []
@@ -164405,7 +164405,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 11,
    "events": []
@@ -164417,7 +164417,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 12,
    "events": [
@@ -164426,13 +164426,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "scope_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -164450,7 +164450,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-shadow-admin-org",
      "sequence": 29,
-     "integrity_hash": "bcdcc9b9f87b45c5773a6f491f752ba17fb4d47af66aee1cb710b88a8bf1a2c6"
+     "integrity_hash": "63287d3ba5db54f68997751537c3602df519a6bb7f70788e582732c9b6ab4b0a"
     }
    ]
   },
@@ -164461,7 +164461,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 13,
    "events": [
@@ -164470,7 +164470,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164496,7 +164496,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-admin-project",
      "sequence": 30,
-     "integrity_hash": "cebb70dee240c60538ef5d44fa735a0c6245b774d278237487a3b437c9ceae7c"
+     "integrity_hash": "2cf3fbb91eac80a30998729116a4d52d920a44a18e8ab40524b1cc6418637957"
     }
    ]
   },
@@ -164507,7 +164507,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 14,
    "events": []
@@ -164519,7 +164519,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 15,
    "events": [
@@ -164528,7 +164528,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164554,7 +164554,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-shadow-accountant-project",
      "sequence": 31,
-     "integrity_hash": "982cef56119305eb63b98a6db2fc40a7b5a172e3964dad1c6e090532cb4decd1"
+     "integrity_hash": "ffe90ee045319d6fb0a966eedda74fe734975bcfc421b9de5e1eb5368eabf835"
     }
    ]
   },
@@ -164565,7 +164565,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 16,
    "events": []
@@ -164577,7 +164577,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 17,
    "events": []
@@ -164589,7 +164589,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 18,
    "events": [
@@ -164598,13 +164598,13 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
      "entity_id": "pm01probe-A-pm-org",
      "scope_type": "company",
-     "scope_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "scope_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "structured_diff": {
       "before": {
        "modifiers": {
@@ -164622,7 +164622,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/org",
      "idempotency_key": "sec02f-enforce-admin-org",
      "sequence": 32,
-     "integrity_hash": "e46566cb029ad36124279519aaf4c9a41febfecd1b7964c888418cfa67308bd7"
+     "integrity_hash": "129418ccfbdc14c44d7bf0fc4d0f29b588b4ca0b02fb44f8b37d46e99c71bf46"
     }
    ]
   },
@@ -164633,7 +164633,7 @@
    "status": 200,
    "legacy_role": "Admin",
    "user_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 19,
    "events": [
@@ -164642,7 +164642,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "18e2072c-c072-5aa6-9d53-a81d983b56a4",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164668,7 +164668,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-admin-project",
      "sequence": 33,
-     "integrity_hash": "597525ba89882268c8137599b5bcfe88728d1b292c1ff98c281eed2f6adbb936"
+     "integrity_hash": "30d23e93a8957a94cd75d98359dd40f60055d7a52a2ac98a3b01391af1358ada"
     }
    ]
   },
@@ -164679,7 +164679,7 @@
    "status": 403,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 20,
    "events": []
@@ -164691,7 +164691,7 @@
    "status": 200,
    "legacy_role": "Accountant",
    "user_id": "369712bd-f368-5d8d-bf43-0851f544db32",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 21,
    "events": [
@@ -164700,7 +164700,7 @@
      "result": "success",
      "retention_class": "R1",
      "source_flow": "FLOW-023",
-     "tenant_id": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+     "tenant_id": "ffdd5410-1c39-495b-9481-cb437c767767",
      "actor_id": "369712bd-f368-5d8d-bf43-0851f544db32",
      "actor_type": "human",
      "entity_type": "price_modifiers_config",
@@ -164726,7 +164726,7 @@
      "tool_or_endpoint": "PUT /api/price-modifiers/project/6bd62732-cb67-5522-8b76-c2efbe56ed29",
      "idempotency_key": "sec02f-enforce-accountant-project",
      "sequence": 35,
-     "integrity_hash": "787fa4b46a2805cbb7c9bb553ae2d64363a724c30b786f15f45c2d768c340cfc"
+     "integrity_hash": "1a6af61b453dfc566cc80e577da31028c93349a9b064bac7ace82ca6877b7899"
     }
    ]
   },
@@ -164737,7 +164737,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 22,
    "events": []
@@ -164749,7 +164749,7 @@
    "status": 403,
    "legacy_role": "Viewer",
    "user_id": "97e68a39-31af-5487-ab45-b21e80bceddc",
-   "expected_tenant": "47286300-ba9b-4895-b59e-d2ef06b05dc2",
+   "expected_tenant": "ffdd5410-1c39-495b-9481-cb437c767767",
    "project_id": "6bd62732-cb67-5522-8b76-c2efbe56ed29",
    "risk_pct": 23,
    "events": []
