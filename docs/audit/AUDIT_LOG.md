@@ -16,7 +16,7 @@
 | #75 LAB-02 | `c7d8464` | **PASS — pending Krum FG-565 / FG-569** (contains #73 `a1859bf`; FG-568; SEC-02 + PM-01 regen 0 cells; warehouse 44/1121 on `a665932`) | 2026-11-13 |
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
-| #91 MEDIA-SEC-01 | `2de0f85` | **PASS** (code `900dc9c`; R88 Owner-only restore + review screen + paging; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
+| #91 MEDIA-SEC-01 | `39a1e27` | **PASS** (code `c41da0b`; R88 restore + review screen; FG-706 keyset paging; FG-707 --approval-ref required for --apply) | 2026-11-14 |
 | #82 WH-REV-01 | `558dfdf` | **PASS** (code `642227b`; R84 supplier claim replaces 409 PAID_ABOVE_NET; warehouse 44/1121; PM-01 regen 0; for the record — superseded by FG-690: after #84 merges, the overpaid part becomes an open expected credit in #84 expected_credit_notes) | 2026-11-14 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
@@ -7099,3 +7099,33 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 - **Note:** a claim no longer `open` (settled later) is not subtracted by a later return's `claimed`. Correct as long as settling also changes `paid` / credit. Check when t26 lands.
 
 - **2026-11-14 update:** FG-690 decision — #82 will drop `supplier_claims` after #84 merges; the overpaid part becomes an open expected supplier credit in #84's `expected_credit_notes`. The `558dfdff` PASS stands for the record only; the union trial with `supplier_claims` was skipped on the orchestrator's instruction.
+
+## 2026-11-14 — #91 MEDIA-SEC-01 `39a1e277` (code `c41da0ba`) — PASS (delta over `2de0f859`)
+
+- **Head:** `39a1e277` = `c41da0ba` + `docs/evidence` only. Clean onto main; role-union 0.
+
+### FG-706 keyset paging
+
+- Covers `/media-retire-requests` and `/media-retired`. The response is `{items, total, limit, next_cursor}`, and the cursor encodes (sort key, id).
+- `_after` gives the rows strictly after the cursor in the (field desc, id asc) order.
+- The null / missing sort key has its own branch, since null sorts last in descending order.
+- A bad cursor → 400 `BAD_CURSOR`; limit 1..200.
+- The only caller (`mediaReview.js`) is updated.
+
+### FG-707
+
+- `migrate(apply=True)` without `--approval-ref` raises `NotApproved` before any read. The dry run needs none.
+
+### Gates on `c41da0ba` (real Mongo)
+
+| Gate | Result |
+|---|---|
+| MEDIA-SEC-01 | 62 |
+| PM-01 | 6; **regen 0 cells** |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| A2C / A1 | 0/247, 0/498 |
+| W0 | 16 = main's 16 |
+| jest | 29 / 283 |
+
+- **Not re-run:** warehouse / PAY / R0. The delta touches only `media.py` list routes, the backfill script and the frontend; the `900dc9c3` runs stand (44 / 1121, 630, 814).
