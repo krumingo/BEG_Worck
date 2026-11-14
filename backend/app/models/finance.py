@@ -84,7 +84,7 @@ class InvoiceCreate(BaseModel):
     vat_percent: float = 20.0
     notes: Optional[str] = None
     lines: List[InvoiceLineInput] = []
-    # FG-710 (FG-698a, R86 interim): the proforma advances a FINAL invoice settles — same
+    # FG-710 (R90 — final): the proforma advances a FINAL invoice settles — same
     # project and client, each proforma used once
     advance_proforma_ids: Optional[List[str]] = None
 

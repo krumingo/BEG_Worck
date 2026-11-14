@@ -133,12 +133,18 @@ async def get_profit_by_period(
         {"_id": 0, "act_date": 1, "subtotal": 1}
     ).to_list(200)
 
-    # Billed by month (invoices)
+    # Billed by month (invoices) — R89 (Krum 14.11.2026): "фактурирано" = final invoices −
+    # credit notes, net, no proforma, by issue month; "получено" (THE revenue) = the payments
+    # received (FLOW-006 ledger, R90), net, by PAYMENT month — the one shared rule
+    from app.services.project_pnl import (CREDIT_NOTE, INVOICE_REVENUE_FIELDS, PROFORMA, _kind, _net,
+                                          received_revenue)
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued",
          "status": {"$nin": ["Draft", "Cancelled"]}},
-        {"_id": 0, "issue_date": 1, "subtotal": 1, "total": 1, "paid_amount": 1}
-    ).to_list(500)
+        {**INVOICE_REVENUE_FIELDS, "issue_date": 1}
+    ).to_list(5000)
+    received_by_month = (await received_revenue(tenant, org_id, [project_id],
+                                                invoices=invoices))["received_by_month_net"]
 
     # Labor by month — R62 (FG-420): THE labor cost's lines (approved reports + Owner-approved
     # manual rows), never the raw labor_entries (pending manual rows / synced projection)
@@ -183,10 +189,14 @@ async def get_profit_by_period(
 
     for inv in invoices:
         pk = (inv.get("issue_date") or "")[:7]
+        if pk and _kind(inv) != PROFORMA:
+            ensure_period(pk)
+            net = abs(_net(inv))
+            periods[pk]["billed"] += -net if _kind(inv) == CREDIT_NOTE else net
+    for pk, amount in received_by_month.items():
         if pk:
             ensure_period(pk)
-            periods[pk]["billed"] += inv.get("subtotal", 0) or inv.get("total", 0)
-            periods[pk]["collected"] += inv.get("paid_amount", 0)
+            periods[pk]["collected"] += amount
 
     for le in labor_lines:
         pk = (le.get("date") or "")[:7]
@@ -230,13 +240,17 @@ async def get_profit_by_period(
         # FG-116 (R38): the same two fields as every other overhead reader, per month
         from app.services.overhead_lifecycle import recalculating_fields
         p.update(recalculating_fields(p.get("overhead_recalculating", False)))
-        rev = p["earned"] if p["earned"] > 0 else p["billed"]
+        # R89: the month's revenue is what was RECEIVED in it (never earned / billed)
+        rev = p["collected"]
         p["gross_profit"] = round(rev - gross_cost, 2) if rev > 0 else None
         p["net_profit"] = round(rev - p["total_cost"], 2) if rev > 0 else None
 
     result = sorted(periods.values(), key=lambda x: x["period"], reverse=True)
     undated = mat_by_period.get(None) or {}
     return {"project_id": project_id, "currency": "EUR", "periods": result,
+            "labels": {"billed": "Фактурирано (без ДДС, без проформа, по дата на издаване)",
+                       "collected": "Получено (без ДДС, по дата на плащане)"},
+            "revenue_basis": "received (R89): profit = получено − разходи, per payment month",
             # 5C-C23 F-14 — Σ periods.material + material_undated ==
             # consumption_cost, Σ periods.waste + waste_undated == waste_cost,
             # and the two together == the project material total every other
@@ -267,9 +281,10 @@ async def get_cash_vs_earned(
     ).to_list(200)
     earned = sum(a.get("subtotal", 0) for a in acts)
 
-    # Billed / collected — FG-696 (R86, interim default, Krum to confirm): "фактурирано" =
-    # issued (Overdue included), net, no proforma; "получено" = the payments received
-    # (FLOW-006 ledger), net, no proforma — the one shared rule of the project P&L
+    # Billed / collected — R89 (Krum 14.11.2026, FG-696 — final): "фактурирано" = final
+    # invoices − credit notes (Overdue included), net, no proforma; "получено" = the payments
+    # received (FLOW-006 ledger), net — R90: paid proforma advances in, credit-note refunds
+    # out — the one shared rule of the project report
     from app.services.project_pnl import INVOICE_REVENUE_FIELDS, received_revenue
     invoices = await tenant.invoices.find(
         {"org_id": org_id, "project_id": project_id, "direction": "Issued",
@@ -304,11 +319,11 @@ async def get_cash_vs_earned(
         },
         "received_percent": round(collected / billed * 100, 1) if billed > 0 else None,
         "labels": {"billed": "Фактурирано (без ДДС, без проформа)",
-                   "collected": "Получено (без ДДС, без проформа)"},
+                   "collected": "Получено (без ДДС)"},
         "basis_labels": {
             "earned": "client_acts_accepted",
             "billed": "invoices_issued_net_no_proforma",
-            "collected": "received_payments_net_no_proforma (FLOW-006)",
+            "collected": "received_payments_net (FLOW-006; R90: proforma advances in, refunds out)",
             "costs_paid": "subcontractor_payments",
         },
     }

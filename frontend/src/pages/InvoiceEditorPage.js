@@ -3,7 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import API from "@/lib/api";
-import { apiErrorText, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
+import { apiErrorText, createIdempotencyHolder, createKeyHolder, idempotencyHeaders } from "@/lib/idempotency";
 import { formatCurrency, formatDate } from "@/lib/i18nUtils";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -79,6 +79,10 @@ const METHOD_LABELS = {
 
 export default function InvoiceEditorPage() {
   const payKey = useRef(createKeyHolder()).current; // R29: one Idempotency-Key per submission
+  // F-73-01 (R29): the invoice writes that link / unlink a proforma advance (create, edit,
+  // cancel, delete) carry a key — the same key while the request is the same (a retry is a
+  // replay), a new one once it succeeded or the payload changed
+  const writeKey = useRef(createIdempotencyHolder()).current;
   const { t } = useTranslation();
   const { invoiceId } = useParams();
   const [searchParams] = useSearchParams();
@@ -308,10 +312,12 @@ export default function InvoiceEditorPage() {
         })),
       };
       if (isNew) {
-        const res = await API.post("/finance/invoices", payload);
+        const res = await API.post("/finance/invoices", payload,
+          idempotencyHeaders(writeKey.keyFor("POST /finance/invoices", payload)));
+        writeKey.done();
         navigate(`/finance/invoices/${res.data.id}`, { replace: true });
       } else {
-        await API.put(`/finance/invoices/${invoiceId}`, {
+        const header = {
           invoice_no: invoiceNo, kind, counterparty_name: counterpartyName || null,
           counterparty_eik: counterpartyEik || null, counterparty_vat_no: counterpartyVatNo || null,
           counterparty_address: counterpartyAddress || null, counterparty_mol: counterpartyMol || null,
@@ -319,7 +325,10 @@ export default function InvoiceEditorPage() {
           project_id: projectId || null, issue_date: issueDate, due_date: dueDate,
           vat_percent: vatPercent, notes: notes || null,
           ...(direction === "Issued" && kind === "Invoice" ? { advance_proforma_ids: advanceIds } : {}),
-        });
+        };
+        await API.put(`/finance/invoices/${invoiceId}`, header,
+          idempotencyHeaders(writeKey.keyFor(`PUT /finance/invoices/${invoiceId}`, header)));
+        writeKey.done();
         await API.put(`/finance/invoices/${invoiceId}/lines`, {
           lines: lines.map((l) => ({
             description: l.description || "", unit: l.unit || "pcs",
@@ -349,7 +358,9 @@ export default function InvoiceEditorPage() {
     if (!window.confirm(t("finance.confirmCancel"))) return;
     setSaving(true);
     try {
-      await API.post(`/finance/invoices/${invoiceId}/cancel`);
+      await API.post(`/finance/invoices/${invoiceId}/cancel`, null,
+        idempotencyHeaders(writeKey.keyFor(`POST /finance/invoices/${invoiceId}/cancel`, null)));
+      writeKey.done();
       await fetchData();
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.saveFailed"));
@@ -359,7 +370,9 @@ export default function InvoiceEditorPage() {
   const handleDelete = async () => {
     if (!window.confirm(t("finance.confirmDeleteInvoice"))) return;
     try {
-      await API.delete(`/finance/invoices/${invoiceId}`);
+      await API.delete(`/finance/invoices/${invoiceId}`,
+        idempotencyHeaders(writeKey.keyFor(`DELETE /finance/invoices/${invoiceId}`, null)));
+      writeKey.done();
       navigate("/finance/invoices");
     } catch (err) {
       alert(err.response?.data?.detail || t("toast.deleteFailed"));
@@ -1053,7 +1066,7 @@ export default function InvoiceEditorPage() {
 
 
 /**
- * FG-710 (FG-698a, R86 interim default — Krum to confirm): the proforma advances a final
+ * FG-710 (R90, Krum 14.11.2026 — final): the proforma advances a final
  * invoice settles. Only issued proformas of the same project, not used by another invoice;
  * the server checks the project, the client and the single use.
  */

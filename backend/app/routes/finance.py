@@ -842,7 +842,7 @@ async def list_subcontractor_documents(
     return docs
 
 
-# ── FG-710 (FG-698a, R86 interim default — Krum to confirm): proforma advances ─────────────
+# ── FG-710 (R90, Krum 14.11.2026 — final): proforma advances named by a final invoice ──
 ADVANCE_USED_BY = "advance_used_by_invoice_id"
 
 
@@ -899,7 +899,8 @@ ADVANCE_LINK_FIELDS = ("direction", "kind", "project_id", "counterparty_eik", "c
 
 
 async def _audit_advance_link(tenant: TenantData, user: dict, action: str, invoice_id: str,
-                              proforma_id: str, reason: str, session=None) -> None:
+                              proforma_id: str, reason: str, session=None,
+                              idempotency_key: Optional[str] = None) -> None:
     """FG-720: canonical W0-04 AuditEvent of one link / unlink, in the caller's transaction."""
     from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
     from app.audit.store import record_event
@@ -910,12 +911,14 @@ async def _audit_advance_link(tenant: TenantData, user: dict, action: str, invoi
         entity_type="finance.invoice", entity_id=invoice_id, reason=reason,
         structured_diff={"proforma_id": proforma_id, ADVANCE_USED_BY: {
             "before": None if linked else invoice_id, "after": invoice_id if linked else None}},
-        effective_role_assignments=[user.get("role") or ""], source_channel="api")
+        effective_role_assignments=[user.get("role") or ""], idempotency_key=idempotency_key,
+        source_channel="api")
     await record_event(tenant._db, event, session=session)   # pylint: disable=protected-access
 
 
 async def _claim_advance_proformas(tenant: TenantData, invoice_id: str, ids: list, previous: list,
-                                   session=None, *, user: dict, reason: str) -> None:
+                                   session=None, *, user: dict, reason: str,
+                                   idempotency_key: Optional[str] = None) -> None:
     """Mark each named proforma as used by ``invoice_id`` (a write on the proforma, so two
     invoices claiming it concurrently conflict — one wins, the other gets 409); release the
     proformas the invoice no longer names. FG-720: every real link / unlink (a changed
@@ -929,12 +932,14 @@ async def _claim_advance_proformas(tenant: TenantData, invoice_id: str, ids: lis
                 "code": "ADVANCE_PROFORMA_IN_USE", "proforma_id": pid,
                 "message": "Авансът по тази проформа вече е посочен в друга фактура"})
         if res.modified_count:
-            await _audit_advance_link(tenant, user, ADVANCE_LINKED, invoice_id, pid, reason, session)
+            await _audit_advance_link(tenant, user, ADVANCE_LINKED, invoice_id, pid, reason, session,
+                                      idempotency_key)
     for pid in sorted(set(previous or []) - set(ids)):
         res = await tenant.invoices.update_one({"id": pid, ADVANCE_USED_BY: invoice_id},
                                                {"$set": {ADVANCE_USED_BY: None}}, session=session)
         if res.modified_count:
-            await _audit_advance_link(tenant, user, ADVANCE_UNLINKED, invoice_id, pid, reason, session)
+            await _audit_advance_link(tenant, user, ADVANCE_UNLINKED, invoice_id, pid, reason, session,
+                                      idempotency_key)
 
 
 async def _revalidate_advance_link(tenant: TenantData, target: dict, ids: list, session=None) -> None:
@@ -952,10 +957,109 @@ async def _revalidate_advance_link(tenant: TenantData, target: dict, ids: list, 
                        "премахнете аванса или върнете обекта/клиента"}) from e
 
 
+# ── F-73-01 (Codex, R29): every invoice write that links / unlinks a proforma advance, and
+# the proforma cancel, runs under its Idempotency-Key. The key is reserved, the write is
+# done and the key is completed with the stored result IN ONE TRANSACTION on the tenant's
+# database: a replay returns the first result byte for byte (no second write, no second
+# AuditEvent), the same key with another body → 409, no key → 428 before any write.
+INVOICE_ACTIONS = {"create": "finance.invoice.create", "update": "finance.invoice.update",
+                   "cancel": "finance.invoice.cancel", "delete": "finance.invoice.delete"}
+
+
+def _invoice_key_required(key: Optional[str]) -> None:
+    """428 IDEMPOTENCY_KEY_REQUIRED — before anything is read or written (R29)."""
+    if not key:
+        raise HTTPException(status_code=428, detail={
+            "error_code": IDEMPOTENCY_KEY_REQUIRED,
+            "message": "Липсва Idempotency-Key — връзката с авансова проформа не е записана"})
+
+
+def _clean_key(header) -> Optional[str]:
+    return header.strip() if isinstance(header, str) and header.strip() else None
+
+
+async def _peek_invoice_key(tenant: TenantData, user: dict, key: Optional[str], action: str,
+                            fingerprint: dict):
+    """Read-only, before any write (numbering included): a COMPLETED key with the same body →
+    its stored result; the same key with another body → 409; else None."""
+    if not key:
+        return None
+    import json
+    from app.audit.idempotency import (IDEMPOTENCY_COMPLETED, IdempotencyConflict, peek_idempotent,
+                                       request_fingerprint)
+    try:
+        rec = await peek_idempotent(tenant._db, tenant_id=user["org_id"], key=key,   # pylint: disable=protected-access
+                                    action=action, request_fingerprint=request_fingerprint(fingerprint))
+    except IdempotencyConflict:
+        raise HTTPException(status_code=409, detail={
+            "error_code": "IDEMPOTENCY_KEY_REUSED",
+            "message": "Този Idempotency-Key вече е използван за друга заявка"})
+    if rec and rec.get("status") == IDEMPOTENCY_COMPLETED:
+        return json.loads(rec["result_reference"])
+    return None
+
+
+async def _invoice_write_once(tenant: TenantData, user: dict, key: Optional[str], action: str,
+                              fingerprint: dict, work) -> dict:
+    """``work(session) -> result`` in ONE transaction with the key's reservation and
+    completion (no key: just the transaction). Returns {"result", "replay"}."""
+    import json
+    from app.audit.idempotency import (IDEMPOTENCY_REPLAY, IdempotencyConflict, IdempotencyInProgress,
+                                       complete_idempotent_in_session, ensure_idempotency_index,
+                                       fail_idempotent, request_fingerprint,
+                                       reserve_idempotent_in_session)
+    from app.audit.store import ensure_chain_index
+    idb = tenant._db                                           # pylint: disable=protected-access
+    await ensure_chain_index(idb)
+    out = {"replay": False}
+    if not key:
+        async def plain(session):
+            out["result"] = await work(session)
+        await run_transaction(tenant, plain)
+        return out
+    await ensure_idempotency_index(idb)
+    fp = request_fingerprint(fingerprint)
+    ids = {"tenant_id": user["org_id"], "key": key, "action": action}
+
+    async def body(session):
+        out["replay"] = False
+        try:
+            state = await reserve_idempotent_in_session(idb, request_fingerprint=fp, session=session, **ids)
+        except IdempotencyConflict:
+            raise HTTPException(status_code=409, detail={
+                "error_code": "IDEMPOTENCY_KEY_REUSED",
+                "message": "Този Idempotency-Key вече е използван за друга заявка"})
+        except IdempotencyInProgress:
+            raise _key_in_progress()       # only outside a transaction: an attempt in flight
+        if state["status"] == IDEMPOTENCY_REPLAY:
+            out["result"], out["replay"] = json.loads(state["result_reference"]), True
+            return
+        try:
+            result = await work(session)
+        except Exception as exc:
+            if session is None:                                 # no transaction to roll back
+                await fail_idempotent(idb, error_code="HTTP_%d" % exc.status_code
+                                      if isinstance(exc, HTTPException) else "ERROR", **ids)
+            raise
+        stored = json.dumps(result, sort_keys=True, default=str)
+        await complete_idempotent_in_session(idb, result_reference=stored, session=session, **ids)
+        out["result"] = json.loads(stored)
+    await run_transaction(tenant, body)
+    return out
+
+
 @router.post("/finance/invoices", status_code=201)
-async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
+async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
+    key = _clean_key(idempotency_key)
+    if any(i for i in (data.advance_proforma_ids or [])):
+        _invoice_key_required(key)                 # F-73-01: a link write needs its key (428)
+    fingerprint = {"body": data.model_dump()}
+    replay = await _peek_invoice_key(_tenant(user), user, key, INVOICE_ACTIONS["create"], fingerprint)
+    if replay is not None:
+        return replay                              # nothing numbered, nothing written
     
     # Enforce invoice limit (monthly)
     await enforce_limit(user["org_id"], "invoices")
@@ -1048,19 +1152,21 @@ async def create_invoice(data: InvoiceCreate, user: dict = Depends(require_m5)):
         if advance_ids:                            # FG-710: re-checked and claimed in the transaction
             await _check_advance_proformas(tenant, invoice, advance_ids, session=session)
             await _claim_advance_proformas(tenant, invoice["id"], advance_ids, [], session=session,
-                                           user=user, reason="FG-710: аванс по проформа при създаване")
+                                           user=user, reason="FG-710: аванс по проформа при създаване",
+                                           idempotency_key=key)
         await tenant.invoices.insert_one(dict(invoice), session=session)
         for ch in stamped:
             await audit_allocation_change(tenant, user, ch["line_id"], ch["before"], ch["after"],
                                           session=session,
                                           reason="Р45: заглавната дестинация е записана на реда")
         await refresh_invoice_dq(tenant, invoice["id"], actor=user, session=session)
-    await run_transaction(tenant, _create)
-    await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
-                    {"invoice_no": data.invoice_no, "direction": data.direction,
-                     "advance_proforma_ids": advance_ids})
-    
-    return {k: v for k, v in invoice.items() if k != "_id"}
+        return {k: v for k, v in invoice.items() if k != "_id"}
+    done = await _invoice_write_once(tenant, user, key, INVOICE_ACTIONS["create"], fingerprint, _create)
+    if not done["replay"]:
+        await log_audit(user["org_id"], user["id"], user["email"], "invoice_created", "invoice", invoice["id"],
+                        {"invoice_no": data.invoice_no, "direction": data.direction,
+                         "advance_proforma_ids": advance_ids})
+    return done["result"]
 
 
 @router.get("/finance/invoices/{invoice_id}")
@@ -1114,10 +1220,18 @@ async def list_invoice_versions(invoice_id: str, user: dict = Depends(require_m5
 
 
 @router.put("/finance/invoices/{invoice_id}")
-async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depends(require_m5)):
+async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depends(require_m5),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
+    key = _clean_key(idempotency_key)
+    if data.advance_proforma_ids is not None:
+        _invoice_key_required(key)                 # F-73-01: a link / unlink write needs its key
+    fingerprint = {"invoice_id": invoice_id, "body": data.model_dump()}
+    replay = await _peek_invoice_key(_tenant(user), user, key, INVOICE_ACTIONS["update"], fingerprint)
+    if replay is not None:
+        return replay
+
     tenant = _tenant(user)
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
@@ -1185,7 +1299,8 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             await _check_advance_proformas(tenant, target, update["advance_proforma_ids"], session=session)
             await _claim_advance_proformas(tenant, invoice_id, update["advance_proforma_ids"],
                                            current.get("advance_proforma_ids") or [], session=session,
-                                           user=user, reason="FG-710: авансите по проформа са променени")
+                                           user=user, reason="FG-710: авансите по проформа са променени",
+                                           idempotency_key=key)
         elif current.get("advance_proforma_ids") and any(
                 f in update and update[f] != current.get(f) for f in ADVANCE_LINK_FIELDS):
             # FG-719: the kept link re-validated against the CURRENT document
@@ -1207,15 +1322,13 @@ async def update_invoice(invoice_id: str, data: InvoiceUpdate, user: dict = Depe
             # Recalculate status
             await update_invoice_status(tenant, invoice_id, session=session)
         await _stamp_and_refresh(tenant, user, invoice_id, session)
-    from app.audit.store import ensure_chain_index
-    await ensure_chain_index(tenant._db)
-    await run_transaction(tenant, _body)
-    if advance_change:
+        return await tenant.invoices.get(invoice_id, {"_id": 0}, session=session)
+    done = await _invoice_write_once(tenant, user, key, INVOICE_ACTIONS["update"], fingerprint, _body)
+    if advance_change and not done["replay"]:
         await log_audit(user["org_id"], user["id"], user["email"], "invoice_advance_proformas_set", "invoice",
                         invoice_id, {"before": invoice.get("advance_proforma_ids") or [],
                                      "after": update["advance_proforma_ids"]})
-
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+    return done["result"]
 
 
 async def _stamp_and_refresh(tenant: TenantData, user: dict, invoice_id: str, session) -> None:
@@ -1379,6 +1492,12 @@ async def send_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     return await tenant.invoices.get(invoice_id, {"_id": 0})
 
 
+def _advance_link_write(invoice: dict) -> bool:
+    """F-73-01: a cancel that unlinks advances (a final invoice naming proformas) or cancels
+    a proforma (the advance side) is a link write — it needs its Idempotency-Key."""
+    return bool(invoice.get("advance_proforma_ids")) or (invoice.get("kind") or "Invoice") == "Proforma"
+
+
 async def _refuse_cancel_of_a_used_advance(tenant: TenantData, proforma: dict, session=None) -> None:
     """LAB73-N2: a proforma named as the advance of a final invoice that is not Cancelled
     cannot be cancelled → 409 ADVANCE_PROFORMA_IN_USE, nothing written. The advance is
@@ -1399,14 +1518,21 @@ async def _refuse_cancel_of_a_used_advance(tenant: TenantData, proforma: dict, s
 
 
 @router.post("/finance/invoices/{invoice_id}/cancel")
-async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
+async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
+    key = _clean_key(idempotency_key)
+    fingerprint = {"invoice_id": invoice_id}
     tenant = _tenant(user)
+    replay = await _peek_invoice_key(tenant, user, key, INVOICE_ACTIONS["cancel"], fingerprint)
+    if replay is not None:
+        return replay
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    if _advance_link_write(invoice):
+        _invoice_key_required(key)                 # F-73-01: an unlink / the proforma cancel
     if invoice["status"] == "Paid":
         raise HTTPException(status_code=400, detail="Cannot cancel paid invoices")
     
@@ -1418,6 +1544,8 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         # racing the cancel writes the same invoice document → serialized.
         current = await claim_invoice(tenant, invoice_id, session=session,
                                       forbidden=("Paid", "Cancelled"), code=STATUS_CHANGED) or invoice
+        if _advance_link_write(current):
+            _invoice_key_required(key)             # the link appeared meanwhile: rolled back
         await _refuse_cancel_of_a_used_advance(tenant, current, session=session)
         # Check for allocations
         alloc_count = await tenant.payment_allocations.count(
@@ -1431,26 +1559,32 @@ async def cancel_invoice(invoice_id: str, user: dict = Depends(require_m5)):
         # FG-710: a cancelled final invoice releases its proforma advances
         await _claim_advance_proformas(tenant, invoice_id, [], current.get("advance_proforma_ids") or [],
                                        session=session, user=user,
-                                       reason="FG-718: анулирана фактура освобождава аванса")
-    from app.audit.store import ensure_chain_index
-    await ensure_chain_index(tenant._db)
-    await run_transaction(tenant, _body)
-    
-    await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
-                    {"invoice_no": invoice["invoice_no"]})
-    
-    return await tenant.invoices.get(invoice_id, {"_id": 0})
+                                       reason="FG-718: анулирана фактура освобождава аванса",
+                                       idempotency_key=key)
+        return await tenant.invoices.get(invoice_id, {"_id": 0}, session=session)
+    done = await _invoice_write_once(tenant, user, key, INVOICE_ACTIONS["cancel"], fingerprint, _body)
+    if not done["replay"]:
+        await log_audit(user["org_id"], user["id"], user["email"], "invoice_cancelled", "invoice", invoice_id,
+                        {"invoice_no": invoice["invoice_no"]})
+    return done["result"]
 
 
 @router.delete("/finance/invoices/{invoice_id}")
-async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
+async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5),
+                         idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
     if not finance_permission(user):
         raise HTTPException(status_code=403, detail="Insufficient permissions")
-    
+    key = _clean_key(idempotency_key)
+    fingerprint = {"invoice_id": invoice_id}
     tenant = _tenant(user)
+    replay = await _peek_invoice_key(tenant, user, key, INVOICE_ACTIONS["delete"], fingerprint)
+    if replay is not None:
+        return replay
     invoice = await tenant.invoices.get(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    if invoice.get("advance_proforma_ids"):
+        _invoice_key_required(key)                 # F-73-01: the delete unlinks its advances
     # PAY-01: only an unused Draft may be removed. An official invoice, or a draft that
     # ever had a payment allocation (cancelled ones included), is used → 409.
     if invoice["status"] != "Draft":
@@ -1463,16 +1597,18 @@ async def delete_invoice(invoice_id: str, user: dict = Depends(require_m5)):
     # are one transaction, so a deleted draft never keeps a proforma claimed.
     async def _body(session):
         current = await tenant.invoices.get(invoice_id, session=session) or {}
+        if current.get("advance_proforma_ids"):
+            _invoice_key_required(key)             # the link appeared meanwhile: rolled back
         res = await tenant.invoices.delete_one({"id": invoice_id, "status": "Draft"}, session=session)
         if res.deleted_count == 0:
             raise status_conflict(NOT_DRAFT, invoice_id, current.get("status"))
         await _claim_advance_proformas(tenant, invoice_id, [], current.get("advance_proforma_ids") or [],
                                        session=session, user=user,
-                                       reason="FG-718: изтрита чернова освобождава аванса")
-    from app.audit.store import ensure_chain_index
-    await ensure_chain_index(tenant._db)
-    await run_transaction(tenant, _body)
-    return {"ok": True}
+                                       reason="FG-718: изтрита чернова освобождава аванса",
+                                       idempotency_key=key)
+        return {"ok": True}
+    return (await _invoice_write_once(tenant, user, key, INVOICE_ACTIONS["delete"], fingerprint,
+                                      _body))["result"]
 
 
 # ── Invoice Direct Payments ────────────────────────────────────────

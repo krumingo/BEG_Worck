@@ -48,12 +48,16 @@ def issued_revenue_net(invoices) -> float:
 # alone is never revenue. Issued but unpaid is "фактурирано, чака плащане", shown apart.
 # The net share of a payment = allocated × invoice subtotal / invoice total.
 #
-# FG-698 — INTERIM defaults per R86, Krum to confirm:
-#  (a) a final invoice issued against a proforma advance names it (``advance_proforma_ids``):
-#      the advance received on that proforma then counts as revenue and reduces the final
-#      invoice's "чака плащане". A proforma no final invoice names stays out (R86).
-#  (b) an outgoing refund (an active Outflow payment allocated to an issued CreditNote of the
-#      project) reduces the revenue. (The credit-note flow itself is #84.)
+# R90 (Krum 14.11.2026, FG-698 — final):
+#  (a) the advance PAID on an issued proforma is revenue (the money received on it, net),
+#      whether or not a final invoice names it yet. An unpaid proforma alone is never revenue
+#      (R86). A final invoice that names the proforma (``advance_proforma_ids``) counts the
+#      advance against its own "чака плащане" — the advance is never counted twice.
+#  (b) the money returned on a credit note (an active Outflow payment allocated to an issued
+#      CreditNote of the project) reduces the revenue. (The credit-note flow itself is #84.)
+# R89 (Krum 14.11.2026, FG-696 — final): every reader that says "приход" reads THIS rule
+# (project report, "Печалба по обект", "Пари срещу заработено"); the separate columns are
+# named "фактурирано" and "получено".
 REVENUE_BASIS = "received payments (FLOW-006 ledger), net of VAT"
 INVOICE_REVENUE_FIELDS = {"_id": 0, "id": 1, "total": 1, "subtotal": 1, "status": 1, "kind": 1,
                           "advance_proforma_ids": 1}
@@ -68,7 +72,8 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
                            date_to: str = None, invoices=None) -> dict:
     """R86: the received revenue of ``project_ids`` (``date_from`` ≤ payment date < ``date_to``).
 
-    Returns ``received_net`` (THE revenue), ``received_gross``, ``invoiced_net``,
+    Returns ``received_net`` (THE revenue, R89), ``received_by_month_net`` ({YYYY-MM: net}
+    by payment date), ``received_gross``, ``invoiced_net``,
     ``invoiced_gross``, ``awaiting_payment_net`` / ``_gross`` (invoiced, not yet received),
     ``advance_net`` (FG-698a) and ``refunded_net`` (FG-698b). The invoiced / awaiting amounts
     are not limited by the payment dates. ``invoices`` must carry INVOICE_REVENUE_FIELDS."""
@@ -82,7 +87,8 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
     finals = {i["id"]: i for i in issued if _kind(i) not in (PROFORMA, CREDIT_NOTE)}
     credits = {i["id"]: i for i in issued if _kind(i) == CREDIT_NOTE}
     profs = {i["id"]: i for i in issued if _kind(i) == PROFORMA}
-    # FG-698a: the proformas a final invoice names, in final-invoice order
+    # R90 (a): the proformas a final invoice names, in final-invoice order (their advance
+    # reduces that invoice's "чака плащане"); EVERY issued proforma's receipts are revenue
     named = []
     for f in finals.values():
         for pid in f.get("advance_proforma_ids") or []:
@@ -96,9 +102,9 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
            "invoiced_net": round(issued_revenue_net(finals.values()) - cn_net, 2),
            "credit_notes_net": round(cn_net, 2),
            "received_gross": 0.0, "received_net": 0.0, "advance_net": 0.0, "refunded_net": 0.0,
-           "revenue_basis": REVENUE_BASIS}
-    paid_on = {k: 0.0 for k in list(finals) + named + list(credits)}   # gross received / refunded per document
-    docs = {**finals, **{k: profs[k] for k in named}, **credits}
+           "received_by_month_net": {}, "revenue_basis": REVENUE_BASIS}
+    paid_on = {k: 0.0 for k in list(finals) + list(profs) + list(credits)}   # gross received / refunded per document
+    docs = {**finals, **profs, **credits}
     if docs:
         allocs = await tenant.payment_allocations.find(
             active_allocations({"invoice_id": {"$in": list(docs)}}),
@@ -128,6 +134,8 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
             sign = -1.0 if refund else 1.0
             out["received_gross"] += sign * gross
             out["received_net"] += sign * net
+            month = d[:7]
+            out["received_by_month_net"][month] = out["received_by_month_net"].get(month, 0.0) + sign * net
             if refund:
                 out["refunded_net"] += net
             elif a["invoice_id"] in profs:
@@ -154,6 +162,7 @@ async def received_revenue(tenant, org_id: str, project_ids, *, date_from: str =
     await_gross, await_net = max(0.0, await_gross), max(0.0, await_net)
     for k in ("received_gross", "received_net", "advance_net", "refunded_net"):
         out[k] = round(out[k], 2)
+    out["received_by_month_net"] = {m: round(v, 2) for m, v in sorted(out["received_by_month_net"].items())}
     out["awaiting_payment_gross"] = round(await_gross, 2)
     out["awaiting_payment_net"] = round(await_net, 2)
     return out

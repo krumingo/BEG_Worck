@@ -105,12 +105,12 @@ export default function ProjectFinancialPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6" data-testid="financial-overview">
         {/* Revenue */}
         <div className="rounded-xl border border-border bg-card p-4 col-span-2 md:col-span-4">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> Приходи (EUR)</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center gap-1"><DollarSign className="w-3.5 h-3.5" /> Договорено, изпълнено, фактурирано, получено (EUR)<span className="text-[8px] px-1 py-px rounded-full bg-emerald-500/15 text-emerald-300 normal-case ml-1" data-testid="revenue-is-received">приход = получено</span></h3>
           <div className="grid grid-cols-5 gap-4">
             <Metric label="Договорено" value={r.contracted} partial={!ma.revenue} />
             <Metric label="Изпълнено" value={r.earned} color="text-emerald-400" partial={!ma.earned} />
             <Metric label="Фактурирано (без ДДС)" value={r.billed} />
-            <Metric label="Получено (без ДДС)" value={r.collected} color="text-emerald-400" />{/* FG-696 (R86) */}
+            <Metric label="Получено (без ДДС)" value={r.collected} color="text-emerald-400" />{/* R89: приход = получено */}
             <Metric label="Вземания" value={r.receivables} color={r.receivables > 0 ? "text-amber-400" : ""} />
           </div>
         </div>
@@ -137,7 +137,7 @@ export default function ProjectFinancialPage() {
           <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-3 flex items-center">Печалба<span className="text-[8px] px-1 py-px rounded-full bg-blue-500/15 text-blue-300 normal-case ml-1">без ДДС</span></h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-[10px] text-muted-foreground">Бруто печалба</p>
+              <p className="text-[10px] text-muted-foreground" data-testid="gross-profit-label">Бруто печалба (получено − разходи)</p>
               <p className={`font-mono text-2xl font-bold ${(p.gross_profit || 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                 {p.gross_profit != null ? p.gross_profit.toLocaleString("en", {minimumFractionDigits: 2}) : "—"}
               </p>

@@ -135,8 +135,9 @@ def test_fg695_an_overdue_invoice_is_issued_and_waits_for_payment(monkeypatch, b
 
 
 def test_fg696_every_reader_labelled_revenue_follows_r86(monkeypatch, backend):
-    """FG-696 (interim default, Krum to confirm): "оперативен приход", /project-profit and
-    /cash-vs-earned — фактурирано = issued, net, no proforma; получено = received, net."""
+    """R89 (Krum 14.11.2026, FG-696 — final): "оперативен приход", /project-profit and
+    /cash-vs-earned — фактурирано = issued, net, no proforma; получено = received, net
+    (R90: the paid proforma advance is received money too)."""
     from app.services.project_financial_results import compute_financial_results
 
     async def scenario(c, op):
@@ -146,36 +147,37 @@ def test_fg696_every_reader_labelled_revenue_follows_r86(monkeypatch, backend):
              "invoice_no": "R86-O"},
             {"id": "pf-r86", **INV, "kind": "Proforma", "invoice_no": "PF-1"}])
         await _pay(c, "inv-r86", 480.0, "fg696-a")                  # 400 net received
-        await _pay(c, "pf-r86", 600.0, "fg696-p")                   # a proforma alone: never revenue
+        await _pay(c, "pf-r86", 600.0, "fg696-p")                   # R90: the paid advance (500 net) counts
         fr = await compute_financial_results(ORG, P)
-        assert fr["operating"]["earned_revenue"] == 400.0, fr["operating"]
+        assert fr["operating"]["earned_revenue"] == 900.0, fr["operating"]
         assert fr["operating"]["invoiced_revenue"] == 1100.0
         prof = await c.get(f"/api/project-profit/{P}", headers=_token("owner"))
         assert prof.status_code == 200, prof.text
         rv = prof.json()["revenue"]
-        assert (rv["billed"], rv["collected"]) == (1100.0, 400.0), rv
+        assert (rv["billed"], rv["collected"]) == (1100.0, 900.0), rv
         assert rv["billed_label"].startswith("Фактурирано") and rv["collected_label"].startswith("Получено")
         cve = await c.get(f"/api/cash-vs-earned/{P}", headers=_token("owner"))
         assert cve.status_code == 200, cve.text
         cv = cve.json()
-        assert (cv["billed_revenue"], cv["received_net"]) == (1100.0, 400.0), cv
+        assert (cv["billed_revenue"], cv["received_net"]) == (1100.0, 900.0), cv
         assert set(cv["gaps"]) == {"received_vs_earned", "received_vs_billed", "earned_vs_billed"}
         # FG-711: no field calls the net received amount cash
         assert "collected_cash" not in cv and "cash_position" not in cv
         assert cv["labels"] == {"billed": "Фактурирано (без ДДС, без проформа)",
-                                "collected": "Получено (без ДДС, без проформа)"}
+                                "collected": "Получено (без ДДС)"}
     run(monkeypatch, scenario, backend)
 
 
 def test_fg698a_a_final_invoice_against_a_proforma_advance_counts_the_advance(monkeypatch, backend):
-    """FG-698(a) (interim default, Krum to confirm): the advance received on a proforma
-    counts as revenue once a final invoice names it, and reduces its "чака плащане"."""
+    """R90 (a) (Krum 14.11.2026 — final; changes the interim FG-698a): the advance PAID on a
+    proforma is revenue at once; a final invoice that names it counts it against its own
+    "чака плащане" — never a second time as revenue."""
     async def scenario(c, op):
         await op.invoices.insert_one({"id": "pf-r86", **INV, "kind": "Proforma", "invoice_no": "PF-1",
                                       "subtotal": 500.0, "vat_amount": 100.0, "total": 600.0})
         await _pay(c, "pf-r86", 600.0, "fg698-p")
         a, pnl = await _revenue(c)
-        assert a["pnl"]["revenue"] == 0.0 == pnl["total_revenue"]              # a proforma alone
+        assert a["pnl"]["revenue"] == 500.0 == pnl["total_revenue"]            # R90: the paid advance
         await op.invoices.insert_one({"id": "inv-fin", **INV, "invoice_no": "R86-F",
                                       "advance_proforma_ids": ["pf-r86"]})
         a, pnl = await _revenue(c)
@@ -189,7 +191,7 @@ def test_fg698a_a_final_invoice_against_a_proforma_advance_counts_the_advance(mo
 
 
 def test_fg698b_an_outgoing_credit_note_refund_reduces_the_revenue(monkeypatch, backend):
-    """FG-698(b) (interim default, Krum to confirm; the credit-note flow is #84): an active
+    """R90 (b) (Krum 14.11.2026 — final; the credit-note flow is #84): an active
     Outflow payment allocated to an issued CreditNote of the project reduces the revenue."""
     async def scenario(c, op):
         await op.invoices.insert_many([
@@ -235,6 +237,12 @@ def test_fg712_a_credit_note_without_a_refund_lowers_invoiced_and_awaiting(monke
     run(monkeypatch, scenario, backend)
 
 
+def _k(headers, key=None):
+    """F-73-01 (R29): an advance link / unlink write carries its own Idempotency-Key."""
+    import uuid
+    return {**headers, "Idempotency-Key": key or str(uuid.uuid4())}
+
+
 def _final(**kw):
     b = {"direction": "Issued", "kind": "Invoice", "project_id": P, "counterparty_name": "Клиент",
          "counterparty_eik": "", "issue_date": "2026-11-10", "due_date": "2099-01-01", "vat_percent": 20,
@@ -263,39 +271,40 @@ def test_fg710_a_final_invoice_names_its_proforma_advance_through_the_api(monkey
         for pid, code in [("pf-other-project", "ADVANCE_PROFORMA_OTHER_PROJECT"),
                           ("pf-other-client", "ADVANCE_PROFORMA_OTHER_CLIENT"),
                           ("pf-draft", "ADVANCE_PROFORMA_INVALID"), ("nope", "ADVANCE_PROFORMA_INVALID")]:
-            r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=[pid]), headers=owner)
+            r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=[pid]), headers=_k(owner))
             assert r.status_code == 422 and r.json()["detail"]["code"] == code, (pid, r.text)
         # forbidden: a proforma cannot name an advance
         r = await c.post("/api/finance/invoices", json=_final(kind="Proforma", advance_proforma_ids=["pf-1"]),
-                         headers=owner)
+                         headers=_k(owner))
         assert r.status_code == 422 and r.json()["detail"]["code"] == "ADVANCE_NOT_A_FINAL_INVOICE", r.text
         assert await op.invoices.count_documents({"invoice_no": {"$nin": ["PF-1", "PF-2", "PF-3", "PF-4"]}}) == 0
 
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1", "pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1", "pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text
         fin = r.json()
         assert fin["advance_proforma_ids"] == ["pf-1"]
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] == fin["id"]
         # forbidden: no double use
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 409 and r.json()["detail"]["code"] == "ADVANCE_PROFORMA_IN_USE", r.text
         # issued → the advance counts (FG-698a) and reduces its "чака плащане"
         await op.invoices.update_one({"id": fin["id"]}, {"$set": {"status": "Sent"}})
         a, _ = await _revenue(c)
         assert a["pnl"]["revenue"] == 500.0 and a["pnl"]["awaiting_payment_net"] == 500.0, a["pnl"]
-        # removed on update → released, the advance is a proforma alone again
-        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=owner)
+        # removed on update → released; R90: the paid advance stays revenue, it no longer
+        # reduces this invoice's "чака плащане"
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=_k(owner))
         assert r.status_code == 200, r.text
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
         a, _ = await _revenue(c)
-        assert a["pnl"]["revenue"] == 0.0 and a["pnl"]["awaiting_payment_net"] == 1000.0
+        assert a["pnl"]["revenue"] == 500.0 and a["pnl"]["awaiting_payment_net"] == 1000.0
         # named again on update, then the final invoice is cancelled → released
-        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": ["pf-1"]}, headers=owner)
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": ["pf-1"]}, headers=_k(owner))
         assert r.status_code == 200 and r.json()["advance_proforma_ids"] == ["pf-1"], r.text
-        r = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=owner)
+        r = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=_k(owner))
         assert r.status_code == 200, r.text
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text                                    # free to use once more
     run(monkeypatch, scenario, backend)
 
@@ -315,37 +324,37 @@ def test_fg718_a_deleted_or_cancelled_draft_final_invoice_releases_its_advance(m
     async def scenario(c, op):
         await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
         owner = _token("owner")
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text
         d1 = r.json()
         assert d1["status"] == "Draft"
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] == d1["id"]
         # forbidden while linked
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 409 and r.json()["detail"]["code"] == "ADVANCE_PROFORMA_IN_USE", r.text
         # the draft is deleted → released
-        r = await c.delete(f"/api/finance/invoices/{d1['id']}", headers=owner)
+        r = await c.delete(f"/api/finance/invoices/{d1['id']}", headers=_k(owner))
         assert r.status_code == 200, r.text
         assert await op.invoices.find_one({"id": d1["id"]}) is None
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
         assert await _link_events(op, d1["id"]) == [("finance.invoice.advance_linked", "pf-1"),
                                                      ("finance.invoice.advance_unlinked", "pf-1")]
         # linked again by a new draft, which is cancelled → released again
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text
         d2 = r.json()
-        r = await c.post(f"/api/finance/invoices/{d2['id']}/cancel", headers=owner)
+        r = await c.post(f"/api/finance/invoices/{d2['id']}/cancel", headers=_k(owner))
         assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
         assert await _link_events(op, d2["id"]) == [("finance.invoice.advance_linked", "pf-1"),
                                                      ("finance.invoice.advance_unlinked", "pf-1")]
         # free once more
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text
         d3 = r.json()
         # a PUT that does not change the list writes no link event (no real change)
         r = await c.put(f"/api/finance/invoices/{d3['id']}", json={"advance_proforma_ids": ["pf-1"]},
-                        headers=owner)
+                        headers=_k(owner))
         assert r.status_code == 200, r.text
         assert await _link_events(op, d3["id"]) == [("finance.invoice.advance_linked", "pf-1")]
         ev = await op.audit_events.find_one({"entity_id": d3["id"], "action": "finance.invoice.advance_linked"})
@@ -363,14 +372,14 @@ def test_fg719_a_put_that_changes_the_project_revalidates_the_link(monkeypatch, 
         await op.projects.insert_one({"id": "prj-other", "org_id": ORG, "name": "друг", "status": "Active"})
         await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
         owner = _token("owner")
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text
         fin = r.json()
         before = await op.invoices.find_one({"id": fin["id"]}, {"_id": 0})
         for change, reason in [({"project_id": "prj-other"}, "ADVANCE_PROFORMA_OTHER_PROJECT"),
                                ({"counterparty_name": "Друг клиент"}, "ADVANCE_PROFORMA_OTHER_CLIENT"),
                                ({"kind": "Proforma"}, "ADVANCE_NOT_A_FINAL_INVOICE")]:
-            r = await c.put(f"/api/finance/invoices/{fin['id']}", json=change, headers=owner)
+            r = await c.put(f"/api/finance/invoices/{fin['id']}", json=change, headers=_k(owner))
             assert r.status_code == 409, (change, r.text)
             assert r.json()["detail"]["code"] == "ADVANCE_LINK_INVALID", r.text
             assert r.json()["detail"]["reason_code"] == reason, r.text
@@ -378,11 +387,11 @@ def test_fg719_a_put_that_changes_the_project_revalidates_the_link(monkeypatch, 
             assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] == fin["id"]
         # positive: a change that keeps the link valid
         r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"notes": "ok", "counterparty_name": "Клиент"},
-                        headers=owner)
+                        headers=_k(owner))
         assert r.status_code == 200, r.text
         # positive: the project change together with the removal of the advance → released, no stale link
         r = await c.put(f"/api/finance/invoices/{fin['id']}",
-                        json={"project_id": "prj-other", "advance_proforma_ids": []}, headers=owner)
+                        json={"project_id": "prj-other", "advance_proforma_ids": []}, headers=_k(owner))
         assert r.status_code == 200, r.text
         assert r.json()["project_id"] == "prj-other" and r.json()["advance_proforma_ids"] == []
         assert (await op.invoices.find_one({"id": "pf-1"}))["advance_used_by_invoice_id"] is None
@@ -401,7 +410,7 @@ def test_lab73_n2_a_proforma_that_backs_a_final_invoice_cannot_be_cancelled(monk
     async def scenario(c, op):
         await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
         owner = _token("owner")
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         assert r.status_code == 201, r.text
         fin = r.json()
         await op.invoices.update_one({"id": fin["id"]}, {"$set": {"status": "Sent"}})
@@ -410,7 +419,7 @@ def test_lab73_n2_a_proforma_that_backs_a_final_invoice_cannot_be_cancelled(monk
         rev_before, _ = await _revenue(c)
         events_before = await op.audit_events.count_documents({})
 
-        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=owner)
+        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=_k(owner))
         assert r.status_code == 409, r.text
         d = r.json()["detail"]
         assert d["code"] == "ADVANCE_PROFORMA_IN_USE" and d["invoice_id"] == fin["id"], d
@@ -421,9 +430,9 @@ def test_lab73_n2_a_proforma_that_backs_a_final_invoice_cannot_be_cancelled(monk
         assert rev_after["pnl"] == rev_before["pnl"]
 
         # positive: the advance is removed from the final invoice first → the cancel succeeds
-        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=owner)
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []}, headers=_k(owner))
         assert r.status_code == 200, r.text
-        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=owner)
+        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=_k(owner))
         assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
         pf = await op.invoices.find_one({"id": "pf-1"}, {"_id": 0})
         f = await op.invoices.find_one({"id": fin["id"]}, {"_id": 0})
@@ -438,10 +447,214 @@ def test_lab73_n2_a_proforma_named_by_a_cancelled_final_invoice_can_be_cancelled
     async def scenario(c, op):
         await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
         owner = _token("owner")
-        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
         fin = r.json()
-        r = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=owner)
+        r = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=_k(owner))
         assert r.status_code == 200, r.text
-        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=owner)
+        r = await c.post("/api/finance/invoices/pf-1/cancel", headers=_k(owner))
         assert r.status_code == 200 and r.json()["status"] == "Cancelled", r.text
     run(monkeypatch, scenario, backend)
+
+
+# ═══════════════════════════════════════════════ Codex F-73-01 (R29): advance link idempotency
+async def _snapshot(op):
+    """every document an advance link write can touch (invoices, the audit chain, the keys)"""
+    return ([d async for d in op.invoices.find({}, {"_id": 0}).sort("id", 1)],
+            await op.audit_events.count_documents({}),
+            await op.audit_idempotency.count_documents({}))
+
+
+@pytest.mark.parametrize("_", [0])
+def test_f73_01_every_advance_link_write_needs_its_idempotency_key(monkeypatch, backend, _):
+    """forbidden: create / PUT with advance_proforma_ids, cancel or delete of an invoice that
+    names advances, and the proforma cancel — without an Idempotency-Key → 428
+    IDEMPOTENCY_KEY_REQUIRED, nothing written (invoices, link, AuditEvent unchanged)."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([{"id": "pf-1", **PF, "invoice_no": "PF-1"},
+                                       {"id": "pf-2", **PF, "invoice_no": "PF-2"}])
+        owner = _token("owner")
+        before = await _snapshot(op)
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=owner)
+        assert r.status_code == 428 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REQUIRED", r.text
+        assert await _snapshot(op) == before
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-1"]), headers=_k(owner))
+        assert r.status_code == 201, r.text
+        fin = r.json()
+        before = await _snapshot(op)
+        for call in (lambda: c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []},
+                                   headers=owner),
+                     lambda: c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": ["pf-1", "pf-2"]},
+                                   headers=owner),
+                     lambda: c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=owner),
+                     lambda: c.delete(f"/api/finance/invoices/{fin['id']}", headers=owner),
+                     lambda: c.post("/api/finance/invoices/pf-2/cancel", headers=owner)):
+            r = await call()
+            assert r.status_code == 428, r.text
+            assert r.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REQUIRED", r.text
+            assert await _snapshot(op) == before                                 # nothing written
+        # positive: an ordinary invoice without advances still needs no key
+        r = await c.post("/api/finance/invoices", json=_final(invoice_no="NO-ADV"), headers=owner)
+        assert r.status_code == 201, r.text
+    run(monkeypatch, scenario, backend)
+
+
+async def _link_event_keys(op, invoice_id):
+    return [e.get("idempotency_key") async for e in op.audit_events.find(
+        {"entity_id": invoice_id, "action": {"$regex": "^finance.invoice.advance_"}}).sort("sequence", 1)]
+
+
+@pytest.mark.parametrize("_", [0])
+def test_f73_01_a_replay_returns_the_first_result_and_another_body_is_409(monkeypatch, backend, _):
+    """positive: the same key + the same body → the first response byte for byte, no second
+    invoice / link / AuditEvent; the AuditEvent carries the key. forbidden: the same key with
+    another body → 409 IDEMPOTENCY_KEY_REUSED, nothing written. For create, PUT, cancel, delete."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([{"id": "pf-1", **PF, "invoice_no": "PF-1"},
+                                       {"id": "pf-2", **PF, "invoice_no": "PF-2"}])
+        owner = _token("owner")
+        body = _final(advance_proforma_ids=["pf-1"])
+        r1 = await c.post("/api/finance/invoices", json=body, headers=_k(owner, "k-create"))
+        assert r1.status_code == 201, r1.text
+        fin = r1.json()
+        snap = await _snapshot(op)
+        r2 = await c.post("/api/finance/invoices", json=body, headers=_k(owner, "k-create"))
+        assert r2.status_code == 201 and r2.content == r1.content                # byte for byte
+        assert await _snapshot(op) == snap                                     # nothing new
+        assert await _link_event_keys(op, fin["id"]) == ["k-create"]
+        r = await c.post("/api/finance/invoices", json=_final(advance_proforma_ids=["pf-2"]),
+                         headers=_k(owner, "k-create"))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REUSED", r.text
+        assert await _snapshot(op) == snap
+
+        # PUT: unlink pf-1, link pf-2 — replay, then another body with the same key
+        put = {"advance_proforma_ids": ["pf-2"]}
+        r1 = await c.put(f"/api/finance/invoices/{fin['id']}", json=put, headers=_k(owner, "k-put"))
+        assert r1.status_code == 200, r1.text
+        snap = await _snapshot(op)
+        r2 = await c.put(f"/api/finance/invoices/{fin['id']}", json=put, headers=_k(owner, "k-put"))
+        assert r2.status_code == 200 and r2.content == r1.content
+        assert await _snapshot(op) == snap
+        r = await c.put(f"/api/finance/invoices/{fin['id']}", json={"advance_proforma_ids": []},
+                        headers=_k(owner, "k-put"))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REUSED", r.text
+        assert await _snapshot(op) == snap
+        assert await _link_event_keys(op, fin["id"]) == ["k-create", "k-put", "k-put"]   # unlink pf-1 + link pf-2
+
+        # cancel (unlinks pf-2): replay → the first result, no second unlink event
+        r1 = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=_k(owner, "k-cancel"))
+        assert r1.status_code == 200, r1.text
+        snap = await _snapshot(op)
+        r2 = await c.post(f"/api/finance/invoices/{fin['id']}/cancel", headers=_k(owner, "k-cancel"))
+        assert r2.status_code == 200 and r2.content == r1.content
+        assert await _snapshot(op) == snap
+        assert await _link_event_keys(op, fin["id"]) == ["k-create", "k-put", "k-put", "k-cancel"]
+
+        # delete of a draft naming pf-1: replay → {"ok": true}, the key reused for another invoice → 409
+        r = await c.post("/api/finance/invoices", json=_final(invoice_no="D-1", advance_proforma_ids=["pf-1"]),
+                         headers=_k(owner))
+        d1 = r.json()
+        r1 = await c.delete(f"/api/finance/invoices/{d1['id']}", headers=_k(owner, "k-del"))
+        assert r1.status_code == 200, r1.text
+        snap = await _snapshot(op)
+        r2 = await c.delete(f"/api/finance/invoices/{d1['id']}", headers=_k(owner, "k-del"))
+        assert r2.status_code == 200 and r2.content == r1.content
+        assert await _snapshot(op) == snap
+        r = await c.delete(f"/api/finance/invoices/{fin['id']}", headers=_k(owner, "k-del"))
+        assert r.status_code == 409 and r.json()["detail"]["error_code"] == "IDEMPOTENCY_KEY_REUSED", r.text
+        # the key is completed (in the same transaction as the write)
+        rec = await op.audit_idempotency.find_one({"key": "k-del"})
+        assert rec["status"] == "completed" and rec["action"] == "finance.invoice.delete", rec
+    run(monkeypatch, scenario, backend)
+
+
+def test_f73_01_a_parallel_replay_links_once(monkeypatch):
+    from tests.test_lab_01_s_r62_one_labor_cost import _real_refusal
+    if _real_refusal():
+        pytest.skip(_real_refusal())
+    """parallel: the same key + body sent twice at once (real rs0) → one invoice, one link,
+    one AuditEvent; both answers are the first result."""
+    import asyncio
+    async def scenario(c, op):
+        await op.invoices.insert_one({"id": "pf-1", **PF, "invoice_no": "PF-1"})
+        owner = _k(_token("owner"), "k-par")
+        body = _final(advance_proforma_ids=["pf-1"])
+        r1, r2 = await asyncio.gather(c.post("/api/finance/invoices", json=body, headers=owner),
+                                      c.post("/api/finance/invoices", json=body, headers=owner))
+        codes = sorted([r1.status_code, r2.status_code])
+        assert codes in ([201, 201], [201, 409]), (r1.text, r2.text)     # 409 = still in flight
+        ok = [r for r in (r1, r2) if r.status_code == 201]
+        assert all(r.content == ok[0].content for r in ok)
+        assert await op.invoices.count_documents({"kind": "Invoice", "direction": "Issued",
+                                                  "advance_proforma_ids": "pf-1"}) == 1
+        fin = ok[0].json()
+        assert await _link_event_keys(op, fin["id"]) == ["k-par"]
+    run(monkeypatch, scenario, "real")
+
+
+# ═══════════════════════════════════════════════ R89 / R90 (Krum 14.11.2026 — final)
+def test_r90_a_paid_proforma_is_revenue_an_unpaid_one_is_not(monkeypatch, backend):
+    """R90 (a): the advance paid on a proforma is revenue (net), named by a final invoice or
+    not; an unpaid proforma is never revenue (R86); a reversed advance payment is not."""
+    async def scenario(c, op):
+        await op.invoices.insert_many([{"id": "pf-paid", **PF, "invoice_no": "PF-1"},
+                                       {"id": "pf-open", **PF, "invoice_no": "PF-2"}])
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 0.0 == pnl["total_revenue"]
+        pay = await _pay(c, "pf-paid", 300.0, "r90-a")                     # half the advance: 250 net
+        a, pnl = await _revenue(c)
+        assert a["pnl"]["revenue"] == 250.0 == pnl["total_revenue"], (a["pnl"], pnl)
+        assert a["pnl"]["invoiced_net"] == 0.0                             # a proforma is not invoiced
+        await op.finance_payments.update_many({}, {"$set": {"status": "reversed"}})
+        a, _ = await _revenue(c)
+        assert a["pnl"]["revenue"] == 0.0, pay
+    run(monkeypatch, scenario, backend)
+
+
+def test_r89_every_profit_reader_takes_the_received_money_as_revenue(monkeypatch, backend):
+    """R89: "Печалба по обект" (/project-profit), /profit-by-period and the financial-results
+    cash card read the received money as revenue; "фактурирано" / "получено" columns apart.
+    Seed: a final invoice 1000 net (paid 480 → 400 net, in 2026-12), a paid proforma 500 net
+    (2026-11), an issued credit note 200 net. The approved labor is 180 (the R62 harness)."""
+    from app.services.project_financial_results import compute_financial_results
+
+    async def scenario(c, op):
+        await op.invoices.insert_many([
+            {"id": "inv-r89", **INV, "issue_date": "2026-11-05"},
+            {"id": "pf-r89", **PF, "invoice_no": "PF-1", "issue_date": "2026-11-01"},
+            {"id": "cn-r89", **INV, "kind": "CreditNote", "invoice_no": "CN-1", "issue_date": "2026-11-20",
+             "subtotal": 200.0, "vat_amount": 40.0, "total": 240.0}])
+        await _pay(c, "pf-r89", 600.0, "r89-p", date="2026-11-03")          # 500 net in November
+        await _pay(c, "inv-r89", 480.0, "r89-f", date="2026-12-02")         # 400 net in December
+        prof = (await c.get(f"/api/project-profit/{P}", headers=_token("owner"))).json()
+        rv, pr, ex = prof["revenue"], prof["profit"], prof["expenses"]
+        assert (rv["billed"], rv["collected"]) == (800.0, 900.0), rv        # 1000 − 200; 500 + 400
+        assert pr["revenue_basis"] == "received"
+        assert pr["gross_profit"] == round(900.0 - ex["total"], 2), (pr, ex)
+        assert ex["labor"] == 180.0
+
+        byp = (await c.get(f"/api/profit-by-period/{P}", headers=_token("owner"))).json()
+        per = {p["period"]: p for p in byp["periods"]}
+        assert per["2026-11"]["billed"] == 800.0                           # final − credit note, no proforma
+        assert per["2026-11"]["collected"] == 500.0                        # by PAYMENT month
+        assert per["2026-12"]["collected"] == 400.0
+        assert per["2026-12"]["billed"] == 0.0
+        assert byp["labels"]["collected"].startswith("Получено")
+        for p in per.values():                                             # profit = received − cost
+            if p["collected"] > 0:
+                assert p["gross_profit"] == round(p["collected"] - p["gross_cost"], 2), p
+            else:
+                assert p["gross_profit"] is None, p
+
+        fr = await compute_financial_results(ORG, P)
+        cash = fr["cash"]
+        assert cash["cash_in"] == 1080.0                                   # 600 + 480 received, with VAT
+        assert cash["invoices"]["invoiced"] == 960.0                       # 1200 − 240, no proforma
+        assert cash["invoices"]["unpaid"] == round(fr_await(cash), 2)
+        assert cash["labels"]["cash_in"] == "Получено (с ДДС)"
+        assert fr["operating"]["earned_revenue"] == 900.0 and fr["operating"]["invoiced_revenue"] == 800.0
+    run(monkeypatch, scenario, backend)
+
+
+def fr_await(cash):
+    """the gross "чака плащане" of the R89 seed: final 1200 − received 480 − the open credit note 240"""
+    return 1200.0 - 480.0 - 240.0
