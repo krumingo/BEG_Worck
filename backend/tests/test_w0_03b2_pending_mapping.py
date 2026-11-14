@@ -347,7 +347,9 @@ def test_ai_proposal_is_attributed_to_its_model():
     e = spy.collections["audit_events"].inserted[0]
     assert e["actor_type"] == "ai"
     assert e["model_and_version"] == MODEL
-    assert e["retention_class"] == "R4"
+    # PRIV-01 (FG-725; FLOW-040 §6 R4): a shown draft / structured metadata inherits the
+    # class of its subject (the pending record, R2) — R4 is raw AI content only.
+    assert e["retention_class"] == "R2"
 
 
 def test_ai_proposal_without_a_model_is_refused_before_any_write():
