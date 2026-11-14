@@ -299,7 +299,9 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
                             {"status": status, "project_id": P, "note": "офлайн"}, captured=captured, **kw)
 
         def att_rows(uid, date):
-            return q(lambda: op_db.attendance_entries.find({"user_id": uid, "date": date},
+            # active presence only — a voided row stays in the database (FG-650) but is no entry
+            return q(lambda: op_db.attendance_entries.find({"user_id": uid, "date": date,
+                                                            "status": {"$ne": "voided"}},
                                                            {"_id": 0}).to_list(None))
 
         h: Dict[str, Any] = {}
@@ -711,13 +713,63 @@ def run_harness(mongo_url: str, out_json: Path) -> Dict[str, Any]:
         utc_day = datetime.now(timezone.utc).strftime("%Y-%m-%d")           # the route's own day (D7)
         fg["stats_marked"] = stats.get("today_marked")
         fg["stats_expected"] = len(q(lambda: op_db.attendance_entries.distinct(
-            "user_id", {"org_id": A["tenant_id"], "date": utc_day})))
-        fg["stats_entries"] = count("attendance_entries", {"org_id": A["tenant_id"], "date": utc_day})
+            "user_id", {"org_id": A["tenant_id"], "date": utc_day, "status": {"$ne": "voided"}})))
+        fg["stats_entries"] = count("attendance_entries", {"org_id": A["tenant_id"], "date": utc_day,
+                                                           "status": {"$ne": "voided"}})
         emp = call("GET", "/api/employees/%s/dashboard" % vw["id"], role="owner")["body"]
         fg["hr_month_days"] = (emp.get("hours_summary") or {}).get("current_month_days")
         fg["hr_expected"] = len(q(lambda: op_db.attendance_entries.distinct(
             "date", {"user_id": vw["id"], "date": {"$gte": utc_day[:8] + "01"}, "status": "Present"}))) + count(
             "employee_daily_reports", {"employee_id": vw["id"], "report_date": {"$gte": utc_day[:8] + "01"}})
+        # FG-650: no hidden delete — a worker left out of the list is VOIDED (reason, event),
+        # refused while a report relies on it; after a void the worker can be marked again
+        from app.tenancy.data_access import TenantData
+        layer = TenantData.for_resolved_org(op_db, A["tenant_id"])
+        P4 = str(uuid.uuid4())
+        q(lambda: op_db.projects.insert_one({"id": P4, "org_id": A["tenant_id"], "name": "ST01 A — четвърти",
+                                             "code": "ST01-A-004", "status": "Active"}))
+        site4 = "/api/technician/site/%s/attendance" % P4
+        w650 = str(uuid.uuid4())
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w650, "status": "Present"}]})
+        fg["void_save"] = call("POST", site4, role="owner", json={"date": today, "workers": []})["status"]
+        raw = q(lambda: op_db.attendance_entries.find({"user_id": w650}, {"_id": 0}).to_list(None))
+        fg["void_row"] = [{k: r.get(k) for k in ("status", "voided_status", "void_reason", "attendance_day_key")}
+                          for r in raw]
+        fg["void_events"] = count("audit_events", {"action": "attendance.voided"})
+        fg["void_visible_through_layer"] = q(lambda: layer.attendance_entries.count_documents({"user_id": w650}))
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w650, "status": "Present"}]})
+        fg["remark_active"] = q(lambda: layer.attendance_entries.count_documents({"user_id": w650}))
+        fg["remark_raw"] = count("attendance_entries", {"user_id": w650})
+        # someone else removing it: a reason is required; with it → voided with that reason
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w650, "status": "Present"}]})
+        by_tech = call("POST", site4, role="technician", json={"date": today, "workers": []})
+        fg["other_hand_no_reason"] = {"status": by_tech["status"], "code": by_tech["error_code"]}
+        fg["other_hand_reason"] = call("POST", site4, role="technician", json={
+            "date": today, "workers": [], "removal_reason": "Прехвърлен на друг обект"})["status"]
+        fg["other_hand_reason_row"] = q(lambda: op_db.attendance_entries.find_one(
+            {"user_id": w650, "void_reason": "Прехвърлен на друг обект"}, {"_id": 0, "status": 1}))
+        # a report relies on the presence (the viewer's report on P2) → 409, nothing voided
+        call("POST", "/api/technician/site/%s/attendance" % P2, role="owner",
+             json={"date": today, "workers": [{"worker_id": vw["id"], "status": "Present"}]})
+        used = call("POST", "/api/technician/site/%s/attendance" % P2, role="owner",
+                    json={"date": today, "workers": [], "removal_reason": "проба"})
+        fg["in_use"] = {"status": used["status"], "code": used["error_code"],
+                        "relies_on": ((used["body"] or {}).get("detail") or {}).get("relies_on")}
+        fg["in_use_still_active"] = q(lambda: layer.attendance_entries.count_documents(
+            {"user_id": vw["id"], "project_id": P2}))
+        # the remove-with-drafts path voids the drafts and the presence too
+        w651 = str(uuid.uuid4())
+        call("POST", site4, role="owner", json={"date": today, "workers": [{"worker_id": w651, "status": "Present"}]})
+        q(lambda: op_db.employee_daily_reports.insert_one({
+            "id": "dr-651", "org_id": A["tenant_id"], "project_id": P4, "date": today, "worker_id": w651,
+            "hours": 2, "status": "Draft"}))
+        rm = call("POST", "/api/technician/site/%s/remove-worker-with-drafts" % P4, role="owner",
+                  json={"worker_id": w651, "reason": "грешно добавен"})
+        fg["rm_drafts"] = {"status": rm["status"], "voided": (rm["body"] or {}).get("drafts_voided")}
+        fg["rm_rows"] = sorted([r.get("status") for r in q(lambda: op_db.employee_daily_reports.find(
+            {"id": "dr-651"}, {"_id": 0}).to_list(None))] + [r.get("status") for r in q(
+            lambda: op_db.attendance_entries.find({"user_id": w651}, {"_id": 0}).to_list(None))])
+        fg["report_void_events"] = count("audit_events", {"action": "daily_report.voided"})
         # FG-639: the site list says where the server would refuse a photo
         def can(role):
             body = call("GET", "/api/technician/my-sites", role=role)["body"]
@@ -1172,6 +1224,31 @@ def test_my_today_lists_every_object_and_the_counts_are_people_and_days(obs):
     if f["stats_entries"] > f["stats_expected"]:
         assert f["stats_marked"] < f["stats_entries"]
     assert f["hr_month_days"] == f["hr_expected"]
+
+
+@real
+def test_presence_is_voided_never_deleted(obs):
+    """FG-650 (CLAUDE.md §2.9, FLOW-037 §12.3)."""
+    f = obs["flowguard"]
+    assert f["void_save"] == 200
+    assert f["void_row"] == [{"status": "voided", "voided_status": "Present",
+                              "void_reason": "Премахнат от списъка за деня", "attendance_day_key": None}]
+    assert f["void_events"] >= 1 and f["void_visible_through_layer"] == 0
+    assert f["remark_active"] == 1 and f["remark_raw"] == 2           # one active, the void kept
+    assert f["other_hand_no_reason"] == {"status": 422, "code": "REASON_REQUIRED"}
+    assert f["other_hand_reason"] == 200 and f["other_hand_reason_row"] == {"status": "voided"}
+    assert f["in_use"] == {"status": 409, "code": "ENTRY_IN_USE", "relies_on": "daily_report"}
+    assert f["in_use_still_active"] == 1
+    assert f["rm_drafts"] == {"status": 200, "voided": 1} and f["rm_rows"] == ["voided", "voided"]
+    assert f["report_void_events"] >= 1
+
+
+def test_no_hard_delete_of_presence_or_reports_remains():
+    """FG-650: the field paths void; no delete of these two collections is left in the code."""
+    import re
+    for path in (BACKEND / "app").rglob("*.py"):
+        text = path.read_text(encoding="utf-8")
+        assert not re.search(r"(attendance_entries|employee_daily_reports)\.delete_(one|many)\(", text), path
 
 
 @real

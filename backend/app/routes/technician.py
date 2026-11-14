@@ -425,6 +425,8 @@ class RosterSubmit(BaseModel):
 class AttendanceRosterSubmit(BaseModel):
     date: Optional[str] = None
     workers: list  # [{worker_id, worker_name, status}]
+    # FG-650: why workers left out of today's list are removed (their presence is VOIDED)
+    removal_reason: Optional[str] = None
     # status: Present, Leave, SickLeave, Absent, Other
 
 
@@ -462,6 +464,30 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
     org_id = user["org_id"]
     d = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
+
+    # FG-650: workers left out of today's list — checked BEFORE anything is written. Their
+    # presence on this object is voided (never deleted), with a reason; refused if in use.
+    from app.services import attendance_void
+    keep_ids = {w.get("worker_id") or w.get("id", "") for w in data.workers} - {""}
+    prev_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
+    removed_ids = set(w.get("worker_id") for w in (prev_roster or {}).get("workers", [])) - keep_ids
+    to_void = []
+    if removed_ids:
+        to_void = await tenant.attendance_entries.find(
+            {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}},
+            {"_id": 0}).to_list(500)
+    reason = (data.removal_reason or "").strip()
+    for e in to_void:
+        why = await attendance_void.attendance_in_use(tenant, e)
+        if why:
+            raise attendance_void.refuse_in_use(e, why)
+        same_day_same_hand = d == datetime.now(timezone.utc).strftime("%Y-%m-%d") \
+            and e.get("marked_by_user_id") == user["id"]
+        if not reason and not same_day_same_hand:
+            raise HTTPException(status_code=422, detail={
+                "error_code": "REASON_REQUIRED",
+                "message": "Посочете причина за премахването от списъка (присъствието се анулира)"})
+    reason = reason or attendance_void.DEFAULT_ROSTER_REASON
 
     workers = []
     submitted_ids = set()
@@ -508,15 +534,9 @@ async def save_site_attendance(project_id: str, data: AttendanceRosterSubmit, us
                 await tenant.attendance_entries.update_one(
                     {"org_id": org_id, "attendance_day_key": day_key}, site_update)
 
-    # Remove attendance_entries for workers who were in previous roster but not in the new list
-    prev_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
-    if prev_roster:
-        prev_ids = set(w.get("worker_id") for w in prev_roster.get("workers", []))
-        removed_ids = prev_ids - submitted_ids
-        if removed_ids:
-            await tenant.attendance_entries.delete_many(
-                {"org_id": org_id, "date": d, "project_id": project_id, "user_id": {"$in": list(removed_ids)}}
-            )
+    # Workers who were in the previous roster but not in the new list: VOID (FG-650)
+    if to_void:
+        await attendance_void.void_attendance(tenant, user, to_void, reason)
 
     # Also save/update roster
     existing_roster = await tenant.site_daily_rosters.find_one({"org_id": org_id, "project_id": project_id, "date": d})
@@ -1447,16 +1467,22 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
     if blocking > 0:
         raise HTTPException(status_code=400, detail="Работникът има подаден или одобрен отчет. Първо коригирайте отчета.")
 
-    # Delete Draft reports
-    del_result = await tenant.employee_daily_reports.delete_many(
+    # FG-650: VOID (never delete) the Draft reports and then the presence, with a reason
+    from app.services import attendance_void
+    reason = (data.get("reason") or "").strip() or attendance_void.DEFAULT_ROSTER_REASON
+    drafts = await tenant.employee_daily_reports.find(
         {"org_id": org_id, "project_id": project_id, "date": today, "worker_id": worker_id,
-         "status": {"$in": ["Draft"]}}
-    )
-
-    # Remove from attendance_entries
-    await tenant.attendance_entries.delete_many(
-        {"org_id": org_id, "project_id": project_id, "date": today, "user_id": worker_id}
-    )
+         "status": {"$in": ["Draft"]}}, {"_id": 0}).to_list(100)
+    entries = await tenant.attendance_entries.find(
+        {"org_id": org_id, "project_id": project_id, "date": today, "user_id": worker_id},
+        {"_id": 0}).to_list(50)
+    draft_ids = [r["id"] for r in drafts]
+    for e in entries:
+        why = await attendance_void.attendance_in_use(tenant, e, ignore_report_ids=draft_ids)
+        if why:
+            raise attendance_void.refuse_in_use(e, why)
+    voided_reports = await attendance_void.void_reports(tenant, user, drafts, reason)
+    await attendance_void.void_attendance(tenant, user, entries, reason)
 
     # Remove from roster
     roster = await tenant.site_daily_rosters.find_one(
@@ -1471,7 +1497,8 @@ async def remove_worker_with_drafts(project_id: str, data: dict, user: dict = De
 
     return {
         "removed": True,
-        "drafts_deleted": del_result.deleted_count,
+        "drafts_deleted": len(voided_reports),   # FG-650: voided, the rows stay
+        "drafts_voided": len(voided_reports),
         "worker_id": worker_id,
     }
 
@@ -1528,7 +1555,9 @@ async def delete_draft(draft_id: str, user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Draft not found")
     if doc.get("status") not in ["Draft"]:
         raise HTTPException(status_code=400, detail="Can only delete Draft entries")
-    await tenant.employee_daily_reports.delete_one({"id": draft_id})
+    # FG-650: voided with a reason and an AuditEvent — the row stays in history
+    from app.services import attendance_void
+    await attendance_void.void_reports(tenant, user, [doc], "Изтрит ред от черновата")
     return {"ok": True}
 
 

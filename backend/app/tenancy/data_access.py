@@ -68,7 +68,13 @@ ENTITY_COLLECTIONS: Dict[str, str] = {
 #: PRJ-01 / D14 (CLAUDE.md §2 rule 9): collections whose "deleted" records stay as
 #: tombstones. Every read/update through this layer skips them.
 TOMBSTONE_STATUS = "deleted"
-TOMBSTONED = frozenset({"projects"})
+#: FG-650 (CLAUDE.md §2.9, FLOW-037 §12.3): presence and the daily report are never hard
+#: deleted — a void keeps the row (status "voided", who/when/why, AuditEvent) and, exactly like a
+#: project tombstone, makes it invisible to every read and update through this layer.
+VOIDED_STATUS = "voided"
+HIDDEN_STATUS = {"projects": TOMBSTONE_STATUS, "attendance_entries": VOIDED_STATUS,
+                 "employee_daily_reports": VOIDED_STATUS}
+TOMBSTONED = frozenset(HIDDEN_STATUS)
 
 #: Aggregation stages that read another collection. Only the scoped
 #: ``lookup`` pair is allowed; the rest would bypass the tenant predicate.
@@ -107,7 +113,7 @@ class TenantCollection:
         is :meth:`tombstone`."""
         out = self._scope.scoped(flt)
         if self.name in TOMBSTONED:
-            out = {"$and": [out, {"status": {"$ne": TOMBSTONE_STATUS}}]}
+            out = {"$and": [out, {"status": {"$ne": HIDDEN_STATUS[self.name]}}]}
         return out
 
     async def tombstone(self, record_id: Any, projection: Optional[Mapping] = None,
@@ -117,7 +123,7 @@ class TenantCollection:
         if record_id in (None, "") or self.name not in TOMBSTONED:
             return None
         return await self._raw.find_one(
-            self._scope.scoped({"id": record_id, "status": TOMBSTONE_STATUS}),
+            self._scope.scoped({"id": record_id, "status": HIDDEN_STATUS[self.name]}),
             _proj(projection), **kw)
 
     @property
