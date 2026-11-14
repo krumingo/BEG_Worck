@@ -43,3 +43,6 @@ W0-03E-A1 tenant access guard: 496 unit(s) checked, 0 violation(s)
 Test Suites: 29 passed, 29 total
 Tests:       257 passed, 257 total
 Done in 36.15s.
+## W0 DB-free re-run after the A1 inventory regeneration (scripts/w0_03e_a1_inventory.py)
+15 failed, 1094 passed, 83 skipped, 10 warnings in 93.53s (0:01:33)
+  non-legacy_routes failures: 0
