@@ -8,9 +8,10 @@ t26) the invoice may be paid only up to its NET value:
 
 The ONE comparison, in canonical integer cents with NO allowance (F-82-02),
 shared by every FLOW-006 path to an invoice (quick-pay, allocate) and by the
-reversal itself (F-82-01: a reversal that would push the payable amount
-below what is already paid is refused — a payment is never cancelled
-automatically).
+reversal itself. Р84 (Крум 14.11.2026, FG-570): a reversal that leaves the
+invoice paid above its net value is still recorded; the overpaid part
+(``overpaid_cents``) becomes a supplier claim — a payment is never cancelled
+or netted automatically.
 """
 from __future__ import annotations
 
@@ -30,6 +31,14 @@ def payable_cents(total, paid, credit) -> int:
 def payment_exceeds_net(amount, total, paid, credit) -> bool:
     """True when paying ``amount`` would bring paid above the net value."""
     return cents(amount) > payable_cents(total, paid, credit)
+
+
+def overpaid_cents(total, paid, credit) -> int:
+    """How much of what is ALREADY paid lies above the net value
+    (total − credit): the Р84 supplier claim. 0 when nothing is paid."""
+    if cents(paid) <= 0:
+        return 0
+    return max(-payable_cents(total, paid, credit), 0)
 
 
 def credit_exceeds_unpaid(total, paid, credit) -> bool:

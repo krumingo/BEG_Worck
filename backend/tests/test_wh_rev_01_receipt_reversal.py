@@ -527,6 +527,7 @@ async def test_r47_reversal_makes_the_invoice_await_a_credit_note(
         {"rule_id": "INVOICE_AWAITS_CREDIT_NOTE", "status": "active"}) == 1
     assert await db["audit_events"].count_documents({"action": "dq.credit_note.opened"}) == 1
     assert (await db["invoices"].find_one({"id": "inv-c26"}))["awaiting_credit_note"] is True
+    assert await db["supplier_claims"].count_documents({}) == 0    # Р84: not paid → no claim
 
     await _pay(finance, 72.0, "k-pay-1")
     allocs = await db["payment_allocations"].count_documents({})
@@ -637,14 +638,24 @@ async def _r47_state(db):
             await db["audit_events"].count_documents({"action": "dq.credit_note.opened"}))
 
 
+async def _claims(db):
+    return await db["supplier_claims"].find({}, {"_id": 0}).to_list(None)
+
+
+async def _claim_events(db):
+    return await db["audit_events"].count_documents({"action": "finance.supplier_claim.opened"})
+
+
 @pytest.mark.parametrize("mode", MODES)
-async def test_f82_01_a_payment_that_commits_first_refuses_the_reversal(
+async def test_r84_paid_120_return_48_is_recorded_and_a_claim_of_48_opens(
         canonical_mongo_db, allow_always_gate, monkeypatch, mode):
-    """Codex F-82-01, forced order. Invoice 120 (10 @10 + 20 %); 4 received
-    and linked. The reversal request passes its permission check, then — held
-    before its transaction — a quick-pay of 120 commits and releases the
-    PAY-01 lock. The reversal would leave net 72 < paid 120: 409
-    INVOICE_PAID_ABOVE_NET, nothing written; the payment stays."""
+    """Р84 (Крум 14.11.2026, FG-570; was F-82-01's 409), forced order.
+    Invoice 120 (10 @10 + 20 %); 4 received and linked. The reversal request
+    passes its permission check, then — held before its transaction — a
+    quick-pay of 120 commits and releases the PAY-01 lock. The return is
+    RECORDED (ledger row, expectation 48), and the overpaid 48 becomes ONE
+    supplier claim with an AuditEvent. Nothing is netted: the payment and the
+    invoice status are untouched."""
     db, finance, wc, receipt = await _r47_scene(canonical_mongo_db, allow_always_gate,
                                                 monkeypatch, mode)
     from app.services import invoice_line_lock
@@ -655,44 +666,72 @@ async def test_f82_01_a_payment_that_commits_first_refuses_the_reversal(
             held.append(await _pay(finance, 120.0, "k-pay-first"))
         return await original(tenant, line_id, *a, **k)
     monkeypatch.setattr(invoice_line_lock, "ensure_line_lock", hold_then_pay)
-    before = await _r47_state(db)
-    with pytest.raises(HTTPException) as exc:
-        await _reverse(wc, mode, receipt)
+    rows = await _rows(db)
+    out = await _reverse(wc, mode, receipt)
     assert held and held[0]["ok"]
-    assert (exc.value.status_code, exc.value.detail["error_code"]) == (
-        409, "INVOICE_PAID_ABOVE_NET"), exc.value.detail
-    assert await _r47_state(db) == before                       # nothing written
+    assert out.envelope["action"] == "reverse_supplier_receipt"
+    assert await _rows(db) == rows + 1                             # the movement is written
+    ecn = await db["expected_credit_notes"].find_one({"status": "open"}, {"_id": 0})
+    assert ecn["amount"] == 48.0
+    claims = await _claims(db)
+    assert len(claims) == 1
+    c = claims[0]
+    assert (c["invoice_id"], c["amount"], c["status"], c["reversal_movement_id"],
+            c["receipt_movement_id"], c["expected_credit_note_id"]) == (
+        "inv-c26", 48.0, "open", out.movement_id, receipt, ecn["id"])
+    assert c["basis"] == {"invoice_total": 120.0, "paid": 120.0, "awaited_credit": 48.0}
+    assert await _claim_events(db) == 1
     from app.services.payment_state import active_allocations
-    assert await db["payment_allocations"].count_documents(
-        active_allocations({"invoice_id": "inv-c26"})) == 1      # never cancelled
+    allocs = await db["payment_allocations"].find(
+        active_allocations({"invoice_id": "inv-c26"}), {"_id": 0}).to_list(None)
+    assert [a["amount_allocated"] for a in allocs] == [120.0]       # never netted
     assert (await db["invoices"].find_one({"id": "inv-c26"}))["status"] == "Paid"
 
 
 @pytest.mark.parametrize("mode", MODES)
-async def test_f82_01_an_already_paid_invoice_refuses_the_reversal(
+async def test_r84_partly_paid_claims_only_the_overpaid_part(
         canonical_mongo_db, allow_always_gate, monkeypatch, mode):
-    """Paid 72.01 > net 72 → the reversal of 4 is 409, nothing written."""
+    """Paid 100, return 48 → net 72: claim 28 (the overpaid part), not 48."""
     db, finance, wc, receipt = await _r47_scene(canonical_mongo_db, allow_always_gate,
                                                 monkeypatch, mode)
-    await _pay(finance, 72.01, "k-pay-a")
-    before = await _r47_state(db)
-    with pytest.raises(HTTPException) as exc:
-        await _reverse(wc, mode, receipt)
-    assert (exc.value.status_code, exc.value.detail["error_code"]) == (
-        409, "INVOICE_PAID_ABOVE_NET")
-    assert await _r47_state(db) == before
+    await _pay(finance, 100.0, "k-pay-a")
+    await _reverse(wc, mode, receipt)
+    claims = await _claims(db)
+    assert [c["amount"] for c in claims] == [28.0]
+    assert await _claim_events(db) == 1
 
 
 @pytest.mark.parametrize("mode", MODES)
-async def test_f82_01_paid_exactly_the_net_lets_the_reversal_through(
+async def test_r84_a_retry_is_one_claim(canonical_mongo_db, allow_always_gate,
+                                        monkeypatch, mode):
+    """The same Idempotency-Key replays: 1 ledger row, 1 claim, 1 AuditEvent."""
+    db, finance, wc, receipt = await _r47_scene(canonical_mongo_db, allow_always_gate,
+                                                monkeypatch, mode)
+    await _pay(finance, 120.0, "k-pay-r")
+    rows = await _rows(db)
+    first = await _reverse(wc, mode, receipt)
+    again = await _reverse(wc, mode, receipt)
+    assert again.movement_id == first.movement_id
+    assert await _rows(db) == rows + 1
+    assert [c["amount"] for c in await _claims(db)] == [48.0]
+    assert await _claim_events(db) == 1
+
+
+@pytest.mark.parametrize("mode", MODES)
+async def test_r84_not_overpaid_keeps_the_r47_path(
         canonical_mongo_db, allow_always_gate, monkeypatch, mode):
-    """Paid exactly 72 (= net after reversing 4 of 10) → 201, credit 48 awaited."""
+    """Not paid, or paid exactly the net (72): no claim — only the R47
+    expectation (48) and its payment limit."""
     db, finance, wc, receipt = await _r47_scene(canonical_mongo_db, allow_always_gate,
                                                 monkeypatch, mode)
     await _pay(finance, 72.0, "k-pay-b")
     await _reverse(wc, mode, receipt)
     c = await db["expected_credit_notes"].find_one({"status": "open"}, {"_id": 0})
     assert c["amount"] == 48.0
+    assert await _claims(db) == [] and await _claim_events(db) == 0
+    with pytest.raises(HTTPException) as exc:
+        await _pay(finance, 0.01, "k-pay-c")
+    assert exc.value.detail["error_code"] == "INVOICE_AWAITS_CREDIT_NOTE"
 
 
 @pytest.mark.parametrize("mode", MODES)
@@ -763,6 +802,10 @@ def test_f82_credit_note_rule_is_integer_cents_without_allowance():
     assert payment_exceeds_net(0.01, 120, 0, 120)          # net 0 → one cent refused
     assert payment_exceeds_net(72.01, 120, 0, 48)          # one cent above net 72
     assert not payment_exceeds_net(72.0, 120, 0, 48)       # exactly the net
+    from app.services.credit_note_rule import overpaid_cents
+    assert overpaid_cents(120, 120, 48) == 4800            # Р84 claim
+    assert overpaid_cents(120, 100, 48) == 2800
+    assert overpaid_cents(120, 72, 48) == 0 and overpaid_cents(0, 0, 120) == 0
     assert credit_exceeds_unpaid(120, 120, 48)             # paid 120 > net 72
     assert credit_exceeds_unpaid(120, 72.01, 48)
     assert not credit_exceeds_unpaid(120, 72, 48)          # paid = net

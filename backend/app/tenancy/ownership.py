@@ -95,6 +95,8 @@ ORG_KEYED: Dict[str, str] = {
               "invoice_lines", "invoice_versions", "invoice_settings", "supplier_invoices",
               # WH-REV-01 / Р47: the credit note a receipt reversal awaits.
               "expected_credit_notes",
+              # WH-REV-01 / Р84: the claim against the supplier for an overpaid return.
+              "supplier_claims",
               "invoice_line_allocation_versions",
               "ocr_invoice_intake", "historical_offer_rows", "historical_import_batches",
               "sales"),

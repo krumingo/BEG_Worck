@@ -2018,6 +2018,47 @@ class CommandService:
         return allocations, (qty * layer.unit_value).quantize(Decimal("0.0001")), line_id
 
     @staticmethod
+    async def _open_supplier_claim(tenant, *, session, env, claim_id: str, ecn_id: str,
+                                   invoice_id: str, invoice_line_id: str, amount: Decimal,
+                                   paid: Decimal, total, credit: Decimal) -> None:
+        """WH-REV-01 — Р84 (Крум 14.11.2026, FG-570), as Р49(6): the overpaid part
+        of a return on an already-paid supplier invoice is a RECEIVABLE (claim)
+        against the supplier — one ``supplier_claims`` record per reversal
+        (deterministic id: a replay never adds a second), linked to the invoice,
+        the reversal movement and its expectation (``expected_credit_notes``),
+        written in the movement's transaction with an AuditEvent (first insert
+        only). It is never netted automatically: the Accountant decides a refund
+        (FLOW-006) or an explicit offset (Р49(6)); both are debt (t26 / #84)."""
+        from app.audit.envelope import ACTOR_HUMAN, RETENTION_R1_CRITICAL_BUSINESS, build_event
+        from app.audit.store import record_event
+        doc = {
+            "id": claim_id, "org_id": tenant.org_id, "kind": "supplier_overpayment",
+            "invoice_id": invoice_id, "invoice_line_id": invoice_line_id,
+            "reversal_movement_id": env.movement_id,
+            "receipt_movement_id": env.reverses_movement_id,
+            "expected_credit_note_id": ecn_id, "amount": float(amount),
+            "currency": env.currency, "status": "open", "reason": env.reason,
+            "basis": {"invoice_total": float(Decimal(str(total or 0))),
+                      "paid": float(paid), "awaited_credit": float(credit)},
+            "created_at": env.recorded_at, "created_by": env.actor_id,
+        }
+        res = await tenant.supplier_claims.update_one(
+            {"id": claim_id}, {"$setOnInsert": doc}, upsert=True, session=session)
+        if res.upserted_id is None:
+            return                                   # replay: the claim already exists
+        event = build_event(
+            tenant_id=tenant.org_id, actor_type=ACTOR_HUMAN, actor_id=env.actor_id,
+            action="finance.supplier_claim.opened", source_flow="FLOW-006",
+            retention_class=RETENTION_R1_CRITICAL_BUSINESS, entity_type="supplier_claim",
+            entity_id=claim_id, reason=env.reason,
+            structured_diff={"status": {"before": None, "after": "open"},
+                             "amount": float(amount), "invoice_id": invoice_id,
+                             "reversal_movement_id": env.movement_id,
+                             "basis": doc["basis"]},
+            effective_role_assignments=[], source_channel="api")
+        await record_event(tenant._db, event, session=session)  # pylint: disable=protected-access
+
+    @staticmethod
     async def _expect_credit_note(tenant_collection, *, session, env,
                                   invoice_line_id: str) -> None:
         """WH-REV-01 — Р47 (Крум 08.11.2026, FG-196): after a reversal the
@@ -2068,34 +2109,39 @@ class CommandService:
         gross = Decimal(str(gross))
         share = (qty / line_qty) if line_qty > 0 else Decimal("1")
         amount = (gross * min(share, Decimal("1"))).quantize(Decimal("0.01"))
-        # F-82-01 (Р47: paid ≤ net received) — decided AFTER the invoice CAS in
+        # Р47 / Р84 (Крум 14.11.2026, FG-570) — decided AFTER the invoice CAS in
         # this transaction: the CAS write conflicts with any payment that takes
         # or releases the PAY-01 row lock meanwhile, so the active allocations
-        # read here are those of the committed payments. A reversal that would
-        # leave the invoice paid above total − awaited credits is refused, and
-        # nothing is written; no payment is cancelled automatically.
-        from app.services.credit_note_rule import credit_exceeds_unpaid
+        # read here are those of the committed payments. The return is ALWAYS
+        # recorded. If the invoice is already paid above the net value this
+        # reversal leaves (total − awaited credits), the overpaid part of THIS
+        # reversal becomes one supplier claim (Р49(6) open balance) — nothing is
+        # netted, no payment is changed or cancelled.
+        from app.services.credit_note_rule import cents, overpaid_cents
         from app.services.payment_state import active_allocations
         ecn_id = f"ecn_{env.movement_id}"
         allocs = await tenant.payment_allocations.find(
             active_allocations({"invoice_id": invoice_id}),
             {"_id": 0, "amount_allocated": 1}, session=session).to_list(None)
-        paid = sum(float(a.get("amount_allocated") or 0) for a in allocs)
+        paid = sum(Decimal(str(a.get("amount_allocated") or 0)) for a in allocs)
         open_credits = await tenant.expected_credit_notes.find(
             {"invoice_id": invoice_id, "status": "open", "id": {"$ne": ecn_id}},
             {"_id": 0, "amount": 1}, session=session).to_list(None)
-        others = sum(float(r.get("amount") or 0) for r in open_credits)
+        others = sum(Decimal(str(r.get("amount") or 0)) for r in open_credits)
         total = invoice.get("total") or 0
-        credit = Decimal(str(others)) + amount
-        if credit_exceeds_unpaid(total, paid, credit):
-            from app.services.warehouse_movements.errors import InvoicePaidAboveNetError
-            raise InvoicePaidAboveNetError(
-                "the supplier invoice is already paid above the net value this reversal "
-                "would leave — reverse the payment first",
-                context={"invoice_id": invoice_id, "paid": round(paid, 2),
-                         "invoice_total": total, "awaited_credit": float(credit),
-                         "payable_after_reversal": round(float(Decimal(str(total))
-                                                               - credit) - paid, 2)})
+        claim_id = f"claim_{env.movement_id}"
+        open_claims = await tenant.supplier_claims.find(
+            {"invoice_id": invoice_id, "status": "open", "id": {"$ne": claim_id}},
+            {"_id": 0, "amount": 1}, session=session).to_list(None)
+        claimed = sum(cents(c.get("amount")) for c in open_claims)
+        claim_cents = min(cents(amount),
+                          max(overpaid_cents(total, paid, others + amount) - claimed, 0))
+        if claim_cents > 0:
+            await CommandService._open_supplier_claim(
+                tenant, session=session, env=env, claim_id=claim_id, ecn_id=ecn_id,
+                invoice_id=invoice_id, invoice_line_id=invoice_line_id,
+                amount=Decimal(claim_cents) / 100, paid=paid, total=total,
+                credit=others + amount)
         await tenant.expected_credit_notes.update_one(
             {"id": ecn_id},
             {"$setOnInsert": {

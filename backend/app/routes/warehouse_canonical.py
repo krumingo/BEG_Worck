@@ -168,7 +168,6 @@ def _render_error(exc: WarehouseMovementError) -> HTTPException:
         "RECEIPT_REVERSAL_CONFLICT": 409,
         "REASON_REQUIRED": 422,
         "INVOICE_BUSY": 409,
-        "INVOICE_PAID_ABOVE_NET": 409,          # WH-REV-01 F-82-01
         "INVOICE_LINE_FULLY_LINKED": 409,
         "INVOICE_LINE_UNIT_MISMATCH": 422,
         "INVOICE_LINE_PRICE_MISMATCH": 422,      # WH-FIX-01 FG-191
