@@ -11,3 +11,6 @@ httpx>=0.27
 # On a fresh modern interpreter where only bcrypt is present, passlib 1.7.x needs
 # bcrypt<4 (bcrypt>=4 dropped the __about__ attribute passlib reads). Install
 # requirements.txt (which pins the working pair) rather than the latest bcrypt.
+# Async test runner for the canonical warehouse suites (tests/warehouse_canonical_conftest.py)
+# and pyproject asyncio_mode=auto. CI-01: was missing here, so those suites could not collect.
+pytest-asyncio>=0.24,<2

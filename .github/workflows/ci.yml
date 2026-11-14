@@ -1,0 +1,120 @@
+# CI-01 — BEG_Work tests without AI (PROTOCOL §2.7, §9, §21.8).
+#
+# Levels:
+#   fast  — every push to a PR: tenant guards, W0 (DB-free), frontend jest.
+#   full  — the pre-merge regression on real MongoDB, run when:
+#             * a PR is marked "Ready for review" (our merge step), or
+#             * a PR gets the label "ci-full", or
+#             * a push lands on main, or
+#             * someone starts it by hand (Actions → CI → Run workflow).
+#
+# No secrets are used. Production data is never touched: MongoDB is a
+# throwaway container inside the runner. Older runs of the same PR are
+# cancelled when a new commit arrives.
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  NODE_VERSION: "22"
+  MONGO_URL: "mongodb://127.0.0.1:27019/?directConnection=true&replicaSet=rs0"
+  CI_OUT: ${{ github.workspace }}/ci-results
+
+jobs:
+  backend-fast:
+    name: fast · ${{ matrix.gate }}
+    if: github.event.action != 'labeled' || github.event.label.name == 'ci-full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [static, w0]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - run: ops/ci/run_gate.sh ${{ matrix.gate }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-fast-${{ matrix.gate }}
+          path: ci-results/
+          retention-days: 14
+
+  frontend:
+    name: fast · frontend jest
+    if: github.event.action != 'labeled' || github.event.label.name == 'ci-full'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+          cache-dependency-path: frontend/yarn.lock
+      - run: yarn install --frozen-lockfile
+      - run: yarn test --watchAll=false
+        env:
+          CI: "true"
+      - name: build (only on the full level)
+        if: >-
+          github.event_name != 'pull_request' ||
+          github.event.action == 'ready_for_review' ||
+          contains(github.event.pull_request.labels.*.name, 'ci-full')
+        # CI=false: existing react-hooks lint warnings are recorded as debt and
+        # must not turn into build errors (CRA treats warnings as errors on CI).
+        run: yarn build
+        env:
+          CI: "false"
+
+  backend-full:
+    name: full · ${{ matrix.gate }}
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.action == 'ready_for_review' ||
+      (github.event.action == 'labeled' && github.event.label.name == 'ci-full') ||
+      (github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'ci-full'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        gate: [r0, sec, pay, warehouse, tasks, release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - run: ops/ci/start_mongo.sh
+      - run: ops/ci/run_gate.sh ${{ matrix.gate }}
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: results-full-${{ matrix.gate }}
+          path: ci-results/
+          retention-days: 30
