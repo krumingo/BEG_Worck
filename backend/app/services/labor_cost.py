@@ -622,6 +622,115 @@ async def approved_manual_rows(tenant: TenantData, org_id: str, project_id: str,
     return rows
 
 
+# R85 (Krum 14.11.2026, FG-569): the APPROVED manual akord rows (approved quantity × labour
+# unit price) go into the payroll Pay Run, priced as they are in THE labor cost (R62) — and
+# never a second time with the daily report: a row whose worker, day and project (or a
+# project-less report of that day) already has an APPROVED report line, or whose LAB-02
+# quantity belongs to an approved report, is not counted (DQ MANUAL_ROW_DUPLICATE_OF_REPORT).
+DQ_MANUAL_DUPLICATE_OF_REPORT = "MANUAL_ROW_DUPLICATE_OF_REPORT"
+MANUAL_PAYROLL_PREFIX = "manual:"
+
+
+def manual_row_duplicates_report(row: dict, approved_lines, approval: dict = None) -> bool:
+    """R85: does an approved daily-report line already pay this manual row's work?"""
+    day = normalize_labor_date(row.get("date"))
+    wid, pid = row.get("employee_id"), row.get("project_id")
+    linked = (approval or {}).get("report_id")
+    for ln in approved_lines or []:
+        if not _is_approved(ln) or ln.get("worker_id") != wid:
+            continue
+        if linked and linked in (ln.get("report_doc_id"), ln.get("id")):
+            return True
+        if ln.get("date") == day and ln.get("project_id") in (pid, None, ""):
+            return True
+    return False
+
+
+async def payroll_manual_akord_records(tenant: TenantData, org_id: str, date_from: str, date_to: str,
+                                       worker_id: str = None, payroll_filter: list = None) -> dict:
+    """R85: the approved manual AKORD rows of the window as Pay Run labor records, by worker.
+
+    Each record has the shape of a ``compute_person_labor`` line (report_id
+    ``manual:<entry id>``) at the row's stored cost (approved quantity × the rate snapshotted
+    in its LAB-02 approval). ``payroll_filter`` (["!paid", "!batched"]) drops rows already in
+    a Pay Run. A row that duplicates an approved report line is left out (``dq``).
+    Returns ``{worker_id: {"records": [...], "dq": [...]}}``."""
+    from app.services.report_normalizer import fetch_normalized_report_lines
+    flt = {"org_id": org_id, "source": {"$ne": SYNC_SOURCE}, "approval_status": MANUAL_APPROVED,
+           "entry_kind": {"$ne": "reversal"}, "reversed_by_entry_id": None, "pay_type": AKORD}
+    if worker_id:
+        flt["employee_id"] = worker_id
+    rows = []
+    for r in await tenant.labor_entries.find(flt, {"_id": 0}).to_list(20000):
+        day = normalize_labor_date(r.get("date"))
+        if not day or (date_from and day < date_from) or (date_to and day > date_to):
+            continue
+        status = r.get("payroll_status") or "none"
+        if payroll_filter and any(f.startswith("!") and status == f[1:] for f in payroll_filter):
+            continue
+        rows.append(r)
+    out = {}
+    if not rows:
+        return out
+    qa_ids = sorted({r.get("quantity_approval_id") for r in rows if r.get("quantity_approval_id")})
+    approvals = {a["id"]: a for a in await tenant.labor_quantity_approvals.find(
+        {"org_id": org_id, "id": {"$in": qa_ids}}, {"_id": 0}).to_list(len(qa_ids) or 1)} if qa_ids else {}
+    pkg_ids = sorted({r.get("execution_package_id") for r in rows if r.get("execution_package_id")})
+    pkgs = {p["id"]: p for p in await tenant.execution_packages.find(
+        {"org_id": org_id, "id": {"$in": pkg_ids}}, {"_id": 0, "id": 1, "activity_name": 1}).to_list(
+        len(pkg_ids) or 1)} if pkg_ids else {}
+    lines_by_worker = {}
+    for wid in sorted({r.get("employee_id") for r in rows}):
+        lines_by_worker[wid] = await fetch_normalized_report_lines(   # ANY payroll status
+            org_id=org_id, date_from=date_from, date_to=date_to, worker_id=wid, status_filter="APPROVED")
+    for r in rows:
+        wid = r.get("employee_id")
+        slot = out.setdefault(wid, {"records": [], "dq": []})
+        rid = MANUAL_PAYROLL_PREFIX + str(r.get("id"))
+        if manual_row_duplicates_report(r, lines_by_worker.get(wid), approvals.get(r.get("quantity_approval_id"))):
+            slot["dq"].append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": rid,
+                               "message": "Ръчният акордов ред повтаря одобрен дневен отчет — не се брои втори път."})
+            continue
+        cost = r.get("labor_cost")
+        q, piece = r.get("quantity"), r.get("piece_rate")
+        slot["records"].append({
+            "report_id": rid, "manual_entry_id": r.get("id"), "worker_id": wid,
+            "date": normalize_labor_date(r.get("date")), "project_id": r.get("project_id", ""),
+            "smr_type": (pkgs.get(r.get("execution_package_id") or "") or {}).get("activity_name")
+                        or r.get("activity_name") or "",
+            "execution_package_id": r.get("execution_package_id") or None,
+            "hours": round(float(r.get("hours") or 0), 2), "status": "APPROVED",
+            "cost_type": LABOR, "pay_type": AKORD, "pay_type_source": "manual_row",
+            "quantity": q, "approved_quantity": q, "unit": r.get("unit") or "",
+            "piece_rate": piece, "rate": piece,
+            "amount": round(float(cost), 2) if cost is not None else 0.0,
+            "formula": (r.get("labor_formula") or "") + " (ръчен акордов ред, R85)",
+            "dq": [] if cost is not None else ["MANUAL_ROW_NO_COST"],
+            "payroll_status": r.get("payroll_status") or "none",
+            "payroll_source": r.get("payroll_source") or "",
+            "quantity_approval_id": r.get("quantity_approval_id")})
+    return out
+
+
+def merge_manual_records(lc: dict, records: list, dq: list = None) -> dict:
+    """R85: ``compute_person_labor``'s result with the manual akord records added (once)."""
+    seen = {x.get("report_id") for x in lc.get("lines", [])}
+    add = [x for x in records or [] if x["report_id"] not in seen]
+    amt = round(sum(x["amount"] for x in add), 2)
+    out = dict(lc)
+    out["lines"] = list(lc.get("lines", [])) + add
+    out["labor_total"] = round(lc.get("labor_total", 0) + amt, 2)
+    out["akord_total"] = round(lc.get("akord_total", 0) + amt, 2)
+    out["total"] = round(lc.get("total", 0) + amt, 2)
+    out["manual_akord_total"] = round(lc.get("manual_akord_total", 0) + amt, 2)
+    out["dq_warnings"] = list(lc.get("dq_warnings", [])) + list(dq or []) + [
+        {"code": c, "report_id": x["report_id"], "message": "Ръчен ред за труд без стойност — 0."}
+        for x in add for c in x["dq"]]
+    out["approved_hours"] = round(lc.get("approved_hours", 0) + sum(x["hours"] for x in add), 1)
+    out["approved_days"] = len({x["date"] for x in out["lines"]})
+    return out
+
+
 _ISO_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 
@@ -770,6 +879,7 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
     manual = await approved_manual_rows(tenant, org_id, project_id, date_from, date_to)
 
     kept, dq = [], []
+    all_by_worker = {}
     if proj_lines:
         workers = sorted({ln["worker_id"] for ln in proj_lines if ln.get("worker_id")})
         dates = sorted({ln["date"] for ln in proj_lines if ln.get("date")})
@@ -779,7 +889,6 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             {"org_id": org_id, "user_id": {"$in": workers}}, {"_id": 0}).to_list(len(workers) or 1)
         prof_map = {p["user_id"]: p for p in profiles}
 
-        all_by_worker = {}
         for wid in workers:
             all_lines = await fetch_normalized_report_lines(
                 org_id=org_id, date_from=d_from, date_to=d_to, worker_id=wid, status_filter="APPROVED")
@@ -818,6 +927,30 @@ async def project_labor_cost(org_id: str, project_id: str, date_from: str = None
             r = by_row.get(a["id"]) or {}
             if a.get("approved_by") and a["approved_by"] in (r.get("employee_id"), r.get("created_by")):
                 self_qty.add(a["id"])
+    # R85 (FG-569): a manual akord row that an approved daily report already pays is not
+    # counted a second time — the same rule as the Pay Run (payroll_manual_akord_records)
+    ak_rows = [r for r in manual if r.get("pay_type") == AKORD]
+    if ak_rows:
+        appr = {a["id"]: a for a in await tenant.labor_quantity_approvals.find(
+            {"org_id": org_id, "id": {"$in": sorted({r.get("quantity_approval_id") for r in ak_rows
+                                                       if r.get("quantity_approval_id")})}},
+            {"_id": 0, "id": 1, "report_id": 1}).to_list(len(ak_rows))}
+        worker_lines = {}
+        dup = set()
+        for r in ak_rows:
+            wid, day = r.get("employee_id"), normalize_labor_date(r.get("date"))
+            if (wid, day) not in worker_lines:
+                worker_lines[(wid, day)] = await fetch_normalized_report_lines(
+                    org_id=org_id, date_from=day, date_to=day, worker_id=wid, status_filter="APPROVED") if day else []
+            lines = list(worker_lines[(wid, day)])
+            a = appr.get(r.get("quantity_approval_id"))
+            if a and a.get("report_id"):
+                lines += [ln for ln in all_by_worker.get(wid, []) if a["report_id"] in (ln.get("report_doc_id"), ln.get("id"))]
+            if manual_row_duplicates_report(r, lines, a):
+                dup.add(r.get("id"))
+                dq.append({"code": DQ_MANUAL_DUPLICATE_OF_REPORT, "report_id": "manual:" + str(r.get("id")),
+                           "message": "Ръчният акордов ред повтаря одобрен дневен отчет — не се брои втори път."})
+        manual = [r for r in manual if r.get("id") not in dup]
     for row in manual:
         cost = row.get("labor_cost")
         row_dq = [] if cost is not None else ["MANUAL_ROW_NO_COST"]

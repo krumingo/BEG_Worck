@@ -19,6 +19,24 @@ Project P&L reads paid labor from v3 (paid_labor_allocations_v3), not payroll_pa
 from app.db import db
 from app.tenancy.data_access import TenantData
 
+MANUAL_PREFIX = "manual:"
+
+
+def manual_entry_ids(er: dict) -> list:
+    """R85 (FG-569): the manual akord rows a Pay Run line pays — the selected ``manual:<id>``
+    reports, else every manual report in the line's day cells."""
+    sel = [r for r in (er.get("selected_report_ids") or []) if str(r).startswith(MANUAL_PREFIX)]
+    if not sel and not er.get("selected_report_ids"):
+        sel = [r.get("report_id") for dc in er.get("day_cells") or [] for r in dc.get("reports") or []
+               if str(r.get("report_id") or "").startswith(MANUAL_PREFIX)]
+    return sorted({str(r)[len(MANUAL_PREFIX):] for r in sel})
+
+
+async def _lock_manual_rows(tenant, org_id: str, eid: str, ids: list, flt: dict, change: dict):
+    if ids:
+        await tenant.labor_entries.update_many(
+            {"org_id": org_id, "employee_id": eid, "id": {"$in": ids}, **flt}, {"$set": change})
+
 
 async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
     """
@@ -118,6 +136,10 @@ async def sync_on_confirm(pay_run: dict, org_id: str, user_id: str):
                      "payroll_status": {"$nin": ["paid", "batched"]}},
                     {"$set": {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"}},
                 )
+        # R85: the manual akord rows of the line → BATCHED, never re-marked once locked
+        await _lock_manual_rows(tenant, org_id, eid, manual_entry_ids(er),
+                                {"approval_status": "approved", "payroll_status": {"$nin": ["paid", "batched"]}},
+                                {"payroll_status": "batched", "payroll_source": f"pay_run:{run_id}"})
 
     # ── C. v1 payslips mirror — RETIRED. Admin HR + cashflow now read v3
     # payment_slips via the legacy_payslips adapter; no mirror is written.
@@ -149,6 +171,10 @@ async def sync_on_paid(pay_run: dict, org_id: str, paid_at: str):
                  "date": {"$in": dates}, "payroll_source": f"pay_run:{run_id}"},
                 {"$set": {"payroll_status": "paid"}},
             )
+        # R85: the manual akord rows this run batched → PAID
+        await _lock_manual_rows(tenant, org_id, er["employee_id"], manual_entry_ids(er),
+                                {"payroll_source": f"pay_run:{run_id}", "payroll_status": "batched"},
+                                {"payroll_status": "paid"})
 
     # C. v1 payslips mirror — RETIRED (no status update needed).
 
@@ -182,6 +208,9 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                      "payroll_status": "batched"},
                     {"$set": {"payroll_status": "none", "payroll_source": None}},
                 )
+            await _lock_manual_rows(tenant, org_id, er["employee_id"], manual_entry_ids(er),
+                                    {"payroll_source": f"pay_run:{run_id}", "payroll_status": "batched"},
+                                    {"payroll_status": "none", "payroll_source": None})
     else:
         for eid in employee_ids:
             await tenant.payroll_payment_allocations.update_many(
@@ -200,3 +229,6 @@ async def sync_on_reopen(pay_run: dict, org_id: str, employee_ids: list = None):
                          "payroll_status": "batched"},
                         {"$set": {"payroll_status": "none", "payroll_source": None}},
                     )
+                await _lock_manual_rows(tenant, org_id, eid, manual_entry_ids(er),
+                                        {"payroll_source": f"pay_run:{run_id}", "payroll_status": "batched"},
+                                        {"payroll_status": "none", "payroll_source": None})

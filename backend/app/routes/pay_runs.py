@@ -17,7 +17,9 @@ from app.permissions.money_write import require_finance_read
 from app.services.report_normalizer import fetch_normalized_report_lines, enrich_hours
 from app.services.payroll_sync import sync_on_confirm, sync_on_paid, sync_on_reopen
 from app.services.payroll_corrections import correction_id, sync_run_corrections
-from app.services.labor_cost import compute_person_labor, load_smr_terms, person_summary_formula
+from app.services.labor_cost import (
+    MANUAL_PAYROLL_PREFIX, compute_person_labor, load_smr_terms, merge_manual_records,
+    payroll_manual_akord_records, person_summary_formula)
 from app.services.slip_payment_state import effective_slip, effective_slip_one, effective_slips, slip_status_clause
 from app.tenancy.data_access import TenantData
 
@@ -315,6 +317,10 @@ async def allocate_paid_sources(tenant: TenantData, org_id: str, employee_id: st
         org_id=org_id, date_from=d_from, date_to=d_to, worker_id=employee_id, status_filter="APPROVED")
     terms = await load_smr_terms(tenant, org_id, lines)
     lc = compute_person_labor(profile or {}, lines, terms)
+    # R85: the approved manual akord rows of those days are earned too (any payroll status)
+    man = (await payroll_manual_akord_records(tenant, org_id, d_from, d_to, worker_id=employee_id)).get(employee_id)
+    if man:
+        lc = merge_manual_records(lc, man["records"], man["dq"])
     earned_by_day = {}
     for rec in lc["lines"]:
         earned_by_day[rec["date"]] = round(earned_by_day.get(rec["date"], 0.0) + rec["amount"], 2)
@@ -355,6 +361,27 @@ def _frozen_labor_fields(row: dict) -> dict:
                                     "labor_dq_warnings", "labor_calc", "correction_item",
                                     "previously_paid_sources", "considered_pay_run_ids",
                                     "previously_paid_total", "receivable_from_overpayment") if k in row}
+
+
+def _manual_day_report(rec: dict, project_name: str) -> dict:
+    """R85: a manual akord record as a day-cell report entry of the Pay Run preview."""
+    status = rec.get("payroll_status") or "none"
+    batch = (rec.get("payroll_source") or "").replace("pay_run:", "") or None
+    return {
+        "report_id": rec["report_id"],
+        "manual_entry_id": rec.get("manual_entry_id"),
+        "kind": "manual_akord",
+        "project_id": rec.get("project_id", ""),
+        "project_name": project_name,
+        "hours": round(float(rec.get("hours") or 0), 1),
+        "value": round(rec["amount"], 2),
+        "report_status": "APPROVED",
+        "payroll_status": status,
+        "payroll_batch_id": batch,
+        "selectable": status not in ("paid", "batched"),
+        "locked_reason": (f"Платен в {batch}" if status == "paid" else
+                          f"В пакет {batch}" if status == "batched" else None),
+    }
 
 
 # ── Models ─────────────────────────────────────────────────────────
@@ -503,21 +530,31 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         status_filter="APPROVED", payroll_filter=["!paid", "!batched"],
     )
     by_id = {ln["id"]: ln for ln in lines if ln.get("id") and ln.get("worker_id") == eid}
-    missing = [rid for rid in wanted if rid not in by_id]
+    # R85: an approved manual akord row of the period, not yet in a Pay Run, is selectable too
+    man = (await payroll_manual_akord_records(
+        tenant, org_id, period_start, period_end, worker_id=eid,
+        payroll_filter=["!paid", "!batched"])).get(eid) or {"records": [], "dq": []}
+    man_by_id = {m["report_id"]: m for m in man["records"]}
+    missing = [rid for rid in wanted if rid not in by_id and rid not in man_by_id]
     if missing:
         raise HTTPException(
             status_code=400,
             detail=(f"selected_report_ids are not eligible approved reports of employee_id={eid} "
                     f"for {period_start}..{period_end}: {missing}"),
         )
-    sel = [enrich_hours(by_id[rid]) for rid in wanted]
+    sel = [enrich_hours(by_id[rid]) for rid in wanted if rid in by_id]
+    sel_man = [man_by_id[rid] for rid in wanted if rid in man_by_id]
 
     prof = await tenant.employee_profiles.find_one({"org_id": org_id, "user_id": eid}, {"_id": 0}) or {}
-    total_hours = round(sum(ln["hours"] for ln in sel), 1)
-    approved_days = len({ln["date"] for ln in sel})
+    total_hours = round(sum(ln["hours"] for ln in sel) + sum(m["hours"] for m in sel_man), 1)
+    approved_days = len({ln["date"] for ln in sel} | {m["date"] for m in sel_man})
     # LAB-01: the one labor calculation, restricted to the selected reports
     smr_terms = await load_smr_terms(tenant, org_id, sel)
     lc = compute_person_labor(prof, sel, smr_terms)
+    if sel_man:                                      # R85: the selected manual akord rows, once
+        lc = merge_manual_records(lc, sel_man)
+    hours_of = {**{rid: ln["hours"] for rid, ln in by_id.items()},
+                **{rid: m["hours"] for rid, m in man_by_id.items()}}
     e = earned_from_labor(lc)
     amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
 
@@ -527,7 +564,7 @@ async def _row_for_selected_reports(tenant: TenantData, org_id: str, row: dict, 
         reports = [r for r in (dc.get("reports") or []) if r.get("report_id") in keep]
         if not reports:
             continue
-        hours = sum(by_id[r["report_id"]]["hours"] for r in reports)
+        hours = sum(hours_of[r["report_id"]] for r in reports)
         rids = [r["report_id"] for r in reports]
         reports = [dict(r, value=amount_by_id.get(r["report_id"], 0.0)) for r in reports]
         sites = []
@@ -630,8 +667,15 @@ async def generate_pay_run(
 
     # LAB-01: SMR/package terms (pay type, piece rate) of the lines' execution packages
     smr_terms = await load_smr_terms(tenant, org_id, lines)
+    # R85 (FG-569): the approved manual akord rows of the period, by worker — in the Pay Run
+    # at their stored cost, never a second time with an approved daily report
+    manual_by_emp = await payroll_manual_akord_records(
+        tenant, org_id, period_start, period_end, payroll_filter=payroll_filter_arg)
+    for wid in manual_by_emp:
+        by_emp.setdefault(wid, [])
 
-    pids = list({ln["project_id"] for ln in lines if ln["project_id"]})
+    pids = list({ln["project_id"] for ln in lines if ln["project_id"]}
+                | {m["project_id"] for v in manual_by_emp.values() for m in v["records"] if m.get("project_id")})
     proj_map = {}
     if pids:
         projects = await tenant.projects.find({"id": {"$in": pids}}, {"_id": 0, "id": 1, "name": 1}).to_list(200)
@@ -691,16 +735,19 @@ async def generate_pay_run(
         if not emp:
             continue
         prof = prof_map.get(wid, {})
+        man = manual_by_emp.get(wid) or {"records": [], "dq": []}
 
-        total_hours = round(sum(ln["hours"] for ln in emp_lines), 1)
+        total_hours = round(sum(ln["hours"] for ln in emp_lines) + sum(m["hours"] for m in man["records"]), 1)
         normal_hours = round(sum(ln.get("normal_hours", 0) for ln in emp_lines), 1)
         overtime_hours = round(sum(ln.get("overtime_hours", 0) for ln in emp_lines), 1)
-        days_set = {ln["date"] for ln in emp_lines}
+        days_set = {ln["date"] for ln in emp_lines} | {m["date"] for m in man["records"]}
         approved_days = len(days_set)
 
         # LAB-01 (FG-48/49): one calculation per report line — salary by approved hours/days,
         # akord by approved quantity × piece rate, DOWNTIME apart; no default rate.
         lc = compute_person_labor(prof, emp_lines, smr_terms)
+        if man["records"] or man["dq"]:
+            lc = merge_manual_records(lc, man["records"], man["dq"])   # R85: once, at their stored cost
         e = earned_from_labor(lc)
         amount_by_id = {r["report_id"]: r["amount"] for r in lc["lines"]}
         # LAB-01-G (F2): "previously paid" counts each paid line only up to the earned of its
@@ -711,7 +758,8 @@ async def generate_pay_run(
         prev_paid = alloc["counted"] if sources else prev_paid_total
         remaining, _shortfall = remaining_and_correction(e["earned"], prev_paid, 0, wid)
         correction = overpayment_item(org_id, wid, alloc)
-        sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]})
+        sites = list({proj_map.get(ln["project_id"], ln["project_id"]) for ln in emp_lines if ln["project_id"]}
+                     | {proj_map.get(m["project_id"], m["project_id"]) for m in man["records"] if m.get("project_id")})
 
         # Per-day breakdown
         # P0-2A: aggregate payroll_status per day so calendar cells know their status.
@@ -768,6 +816,23 @@ async def generate_pay_run(
                     None
                 ),
             })
+        # R85: the manual akord rows, one report entry each (their own payroll lock)
+        for m in man["records"]:
+            d = m["date"]
+            dd = by_day.setdefault(d, {"date": d, "hours": 0, "sites": [], "report_ids": [], "report_count": 0,
+                                       "payroll_statuses": [], "payroll_batch_ids": [],
+                                       "report_statuses": [], "reports": []})
+            entry = _manual_day_report(m, proj_map.get(m.get("project_id"), ""))
+            dd["hours"] += m["hours"]
+            if entry["project_name"] and entry["project_name"] not in dd["sites"]:
+                dd["sites"].append(entry["project_name"])
+            dd["report_ids"].append(m["report_id"])
+            dd["report_count"] += 1
+            dd["payroll_statuses"].append(entry["payroll_status"])
+            if entry["payroll_batch_id"] and entry["payroll_batch_id"] not in dd["payroll_batch_ids"]:
+                dd["payroll_batch_ids"].append(entry["payroll_batch_id"])
+            dd["report_statuses"].append("APPROVED")
+            dd["reports"].append(entry)
         # Compute day values using rate
         day_cells = []
         for d in sorted(by_day.keys()):
