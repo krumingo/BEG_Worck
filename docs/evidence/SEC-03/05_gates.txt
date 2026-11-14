@@ -1,100 +1,89 @@
-# SEC-03 gates — pass 48 head 38a3bfd4 (FG-603 attempt-token CAS, FG-604 one ЕГН switch)
-# venv from the trimmed requirements; fresh mongo:7.0 rs0; from backend/: PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfEs
+# SEC-03 gates — R92/R93 head 4c31f536 (code 4c31f536); fresh mongo:7.0 rs0; trimmed-requirements venv
+# from backend/: PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfEs
 
-## final4 R0
-814 passed in 147.94s (0:02:27)
+## r92 R0
+814 passed in 175.81s (0:02:55)
 skipped: 0
-## final4 W0
-16 failed, 1176 passed in 128.09s (0:02:08)
+## r92 W0
+16 failed, 1176 passed in 148.26s (0:02:28)
 skipped: 0
-## final4 PAY-01
-630 passed in 139.43s (0:02:19)
+## r92 PAY-01
+630 passed in 164.49s (0:02:44)
 skipped: 0
-## final4 SEC-01
-30 passed in 90.84s (0:01:30)
+## r92 SEC-01
+30 passed in 117.19s (0:01:57)
 skipped: 0
-## final4 SEC-02
-31 passed in 163.02s (0:02:43)
+## r92 SEC-02
+1 failed, 30 passed in 220.60s (0:03:40)
 skipped: 0
-## final4 SEC-03
-148 passed in 8.85s
+## r92 SEC-03
+164 passed in 9.38s
 skipped: 0
-## final4 ST-02
-159 passed, 3 errors in 2.74s
+## r92 ST-02
+162 passed in 4.08s
 skipped: 0
-## final4 W0-c02
-25 passed in 2.30s
+## r92 W0-c02
+25 passed in 2.15s
 skipped: 0
-## final4 guards
+## r92 guards
 W0-03E-A2C tenant boundary guard: 244 module(s) checked, 0 violation(s)
 W0-03E-A1 tenant access guard: 492 unit(s) checked, 0 violation(s)
-## final4 warehouse (file by file, enforce)
-tests/test_warehouse_canonical_actions.py: 7 passed in 0.32s [mongo: true]
-tests/test_warehouse_canonical_c12_regressions.py: 14 passed in 1.97s [mongo: true]
-tests/test_warehouse_canonical_c13_mongo.py: 6 passed in 2.03s [mongo: true]
-tests/test_warehouse_canonical_c13_regressions.py: 22 passed in 1.12s [mongo: true]
+## r92 warehouse (file by file, enforce)
+tests/test_warehouse_canonical_actions.py: 7 passed in 0.34s [mongo: true]
+tests/test_warehouse_canonical_c12_regressions.py: 14 passed in 1.95s [mongo: true]
+tests/test_warehouse_canonical_c13_mongo.py: 6 passed in 2.40s [mongo: true]
+tests/test_warehouse_canonical_c13_regressions.py: 22 passed in 1.09s [mongo: true]
 tests/test_warehouse_canonical_c14_regressions.py: 8 passed in 0.03s [mongo: true]
 tests/test_warehouse_canonical_c15_regressions.py: 7 passed in 0.03s [mongo: true]
-tests/test_warehouse_canonical_c16_regressions.py: 5 passed in 0.03s [mongo: true]
-tests/test_warehouse_canonical_c18_corrections.py: 10 passed in 1.03s [mongo: true]
-tests/test_warehouse_canonical_c19_bot_findings.py: 25 passed in 6.77s [mongo: true]
-tests/test_warehouse_canonical_c20_finance_reads.py: 11 passed in 3.03s [mongo: true]
-tests/test_warehouse_canonical_c21_writeoff_transfer.py: 16 passed in 4.17s [mongo: true]
-tests/test_warehouse_canonical_c22_all_reports_cutover.py: 10 passed in 4.18s [mongo: true]
-tests/test_warehouse_canonical_c23_profit_period_waste.py: 10 passed in 3.38s [mongo: true]
-tests/test_warehouse_canonical_c24_fifo_layers_legacy_index.py: 10 passed in 4.68s [mongo: true]
-tests/test_warehouse_canonical_c25_cost_at_accept_transit.py: 16 passed in 7.59s [mongo: true]
-tests/test_warehouse_canonical_c26_one_path_per_lot.py: 12 passed in 4.21s [mongo: true]
-tests/test_warehouse_canonical_c26a_writeoff_rights_values.py: 38 passed in 9.44s [mongo: true]
-tests/test_warehouse_canonical_c26b_project_writeoff_endpoint.py: 22 passed in 4.80s [mongo: true]
-tests/test_warehouse_canonical_c26b_value_leak.py: 4 passed in 1.50s [mongo: true]
-tests/test_warehouse_canonical_c26c_r27_all_modes.py: 40 passed in 10.81s [mongo: true]
-tests/test_warehouse_canonical_c26d_subproject_parent.py: 24 passed in 6.17s [mongo: true]
-tests/test_warehouse_canonical_c26e_r28_all_modes.py: 272 passed in 75.01s (0:01:15) [mongo: true]
-tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed in 15.97s [mongo: true]
-tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed in 6.46s [mongo: true]
-tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed in 4.85s [mongo: true]
-tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed in 17.52s [mongo: true]
-tests/test_warehouse_canonical_c26k_subproject_link.py: 6 passed in 4.74s [mongo: true]
-tests/test_warehouse_canonical_c26l_cross_project_link.py: 11 passed in 3.12s [mongo: true]
-tests/test_warehouse_canonical_c26l_k_line_race.py: 63 passed in 27.17s [mongo: true]
-tests/test_warehouse_canonical_c26l_l_all_paths_lock.py: 153 passed in 292.27s (0:04:52) [mongo: true]
-tests/test_warehouse_canonical_c26l_n_invoice_status.py: 72 passed in 17.51s [mongo: true]
-tests/test_warehouse_canonical_concurrency.py: 2 passed in 0.78s [mongo: true]
-tests/test_warehouse_canonical_envelope.py: 8 passed in 0.33s [mongo: true]
-tests/test_warehouse_canonical_legacy_fail_close.py: 10 passed in 0.34s [mongo: true]
-tests/test_warehouse_canonical_migration_readiness.py: 2 passed in 1.15s [mongo: true]
-tests/test_warehouse_canonical_mongo.py: 11 passed in 2.71s [mongo: true]
-tests/test_warehouse_canonical_mongo_c10.py: 4 passed in 1.63s [mongo: true]
-tests/test_warehouse_canonical_mongo_full.py: 6 passed in 1.74s [mongo: true]
-tests/test_warehouse_canonical_overflow.py: 1 passed in 18.02s [mongo: true]
-tests/test_warehouse_canonical_permissions_catalog.py: 9 passed in 0.34s [mongo: true]
-tests/test_warehouse_canonical_projection_shim.py: 3 passed in 0.33s [mongo: true]
-tests/test_warehouse_canonical_rule_b_split.py: 2 passed in 0.33s [mongo: true]
+tests/test_warehouse_canonical_c16_regressions.py: 5 passed in 0.02s [mongo: true]
+tests/test_warehouse_canonical_c18_corrections.py: 10 passed in 1.12s [mongo: true]
+tests/test_warehouse_canonical_c19_bot_findings.py: 25 passed in 7.88s [mongo: true]
+tests/test_warehouse_canonical_c20_finance_reads.py: 11 passed in 3.64s [mongo: true]
+tests/test_warehouse_canonical_c21_writeoff_transfer.py: 16 passed in 5.58s [mongo: true]
+tests/test_warehouse_canonical_c22_all_reports_cutover.py: 10 passed in 6.23s [mongo: true]
+tests/test_warehouse_canonical_c23_profit_period_waste.py: 10 passed in 4.29s [mongo: true]
+tests/test_warehouse_canonical_c24_fifo_layers_legacy_index.py: 10 passed in 5.59s [mongo: true]
+tests/test_warehouse_canonical_c25_cost_at_accept_transit.py: 16 passed in 10.09s [mongo: true]
+tests/test_warehouse_canonical_c26_one_path_per_lot.py: 12 passed in 6.34s [mongo: true]
+tests/test_warehouse_canonical_c26a_writeoff_rights_values.py: 38 passed in 11.61s [mongo: true]
+tests/test_warehouse_canonical_c26b_project_writeoff_endpoint.py: 22 passed in 5.94s [mongo: true]
+tests/test_warehouse_canonical_c26b_value_leak.py: 4 passed in 1.94s [mongo: true]
+tests/test_warehouse_canonical_c26c_r27_all_modes.py: 40 passed in 13.78s [mongo: true]
+tests/test_warehouse_canonical_c26d_subproject_parent.py: 24 passed in 7.25s [mongo: true]
+tests/test_warehouse_canonical_c26e_r28_all_modes.py: 272 passed in 100.74s (0:01:40) [mongo: true]
+tests/test_warehouse_canonical_c26f_reads_all_modes.py: 61 passed in 20.36s [mongo: true]
+tests/test_warehouse_canonical_c26h_scope_from_locations.py: 21 passed in 8.47s [mongo: true]
+tests/test_warehouse_canonical_c26i_accept_target_no_oracle.py: 15 passed in 6.23s [mongo: true]
+tests/test_warehouse_canonical_c26j_r34_r35_prices.py: 58 passed in 23.75s [mongo: true]
+tests/test_warehouse_canonical_c26k_subproject_link.py: 6 passed in 8.12s [mongo: true]
+tests/test_warehouse_canonical_c26l_cross_project_link.py: 11 passed in 3.86s [mongo: true]
+tests/test_warehouse_canonical_c26l_k_line_race.py: 63 passed in 38.46s [mongo: true]
+tests/test_warehouse_canonical_c26l_l_all_paths_lock.py: 153 passed in 316.12s (0:05:16) [mongo: true]
+tests/test_warehouse_canonical_c26l_n_invoice_status.py: 72 passed in 20.38s [mongo: true]
+tests/test_warehouse_canonical_concurrency.py: 2 passed in 0.79s [mongo: true]
+tests/test_warehouse_canonical_envelope.py: 8 passed in 0.32s [mongo: true]
+tests/test_warehouse_canonical_legacy_fail_close.py: 10 passed in 0.33s [mongo: true]
+tests/test_warehouse_canonical_migration_readiness.py: 2 passed in 1.19s [mongo: true]
+tests/test_warehouse_canonical_mongo.py: 11 passed in 3.18s [mongo: true]
+tests/test_warehouse_canonical_mongo_c10.py: 4 passed in 1.73s [mongo: true]
+tests/test_warehouse_canonical_mongo_full.py: 6 passed in 1.93s [mongo: true]
+tests/test_warehouse_canonical_overflow.py: 1 passed in 26.26s [mongo: true]
+tests/test_warehouse_canonical_permissions_catalog.py: 9 passed in 0.39s [mongo: true]
+tests/test_warehouse_canonical_projection_shim.py: 3 passed in 0.36s [mongo: true]
+tests/test_warehouse_canonical_rule_b_split.py: 2 passed in 0.41s [mongo: true]
 tests/test_warehouse_canonical_shape.py: 12 passed in 0.34s [mongo: true]
-tests/test_warehouse_canonical_static_writer_inventory.py: 2 passed in 1.10s [mongo: true]
-## final4 DONE files=44
+tests/test_warehouse_canonical_static_writer_inventory.py: 2 passed in 1.00s [mongo: true]
+## r92 DONE files=44
+## PM-01 6 passed in 213.59s (0:03:33) skipped=0
+## ops/release 81 passed, 1 skipped, 58 subtests passed in 68.92s (0:01:08)
+## ALL DONE
 
-## W0 failures — IDENTICAL set to main 1525a1e (16)
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-off]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_items-shadow]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-off]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[asset_units-shadow]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-off]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[companies-shadow]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-off]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[persons-shadow]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-off]
-FAILED tests/test_w0_03e_legacy_routes.py::test_a_same_id_record_of_another_org_is_never_deleted[users-shadow]
-FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_items]
-FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[asset_units]
-FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[companies]
-FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[persons]
-FAILED tests/test_w0_03e_legacy_routes.py::test_off_keeps_the_legacy_behaviour_and_touches_no_master_data[users]
-FAILED tests/test_w0_03e_real_mongo.py::test_r1_offer_and_finance_exports_are_tenant_scoped_on_a_real_server
+## W0 failures: IDENTICAL set to main (16), diffed against the pass-48 run
 
-## ST-02 3 errors = the 3 R26 bundle tests that error on main in this environment
+## SEC-02 note: the first run had 1 failure in test_a_fresh_real_mongo_run_on_two_tenants_follows_the_rules_in_every_mode (line 812): leaks_7777 was True while hidden_budget_keys == [].
+## The check is a raw '"7777" in resp.text' substring match; this diff touches no route and no finance read (only ai_provider._SEP + the dev-server plugin).
+## One re-run on the same tree: 31 passed in 228.33s (0:03:48). Recorded as a test-flakiness debt (the substring can occur in random ids/timestamps), not fixed here.
 
-PM-01: 6 passed in 159.54s (0:02:39) skipped=0
-ops/release: 81 passed, 1 skipped, 58 subtests passed in 63.12s (0:01:03)
-frontend jest: 30 suites / 270 passed
+## frontend jest: 31 suites / 279 passed (+ devServerOrigins.sec03, 9)
+
+## red on 66dd1ae6 before the fix: test_r92_iban_* 8 failed; devServerOrigins.sec03 5 failed
