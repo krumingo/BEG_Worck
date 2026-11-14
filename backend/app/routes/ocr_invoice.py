@@ -64,6 +64,9 @@ async def upload_invoice(
     # must be a counterparty of the server-resolved tenant — checked before the
     # file, the media record or the intake is written.
     await require_tenant_identity(user, db, collection="counterparties", legacy_id=supplier_id)
+    # MEDIA-SEC-01 (FG-575, R83(1)): the one upload guard, before the file is read
+    from app.deps.upload_guard import require_uploader
+    await require_uploader(user, project_id)
 
     # Save file
     content = await file.read()
@@ -103,6 +106,8 @@ async def from_media(data: FromMedia, user: dict = Depends(get_current_user)):
     if not media:
         raise HTTPException(status_code=404, detail="Media not found")
     await require_tenant_identity(user, db, collection="counterparties", legacy_id=data.supplier_id)
+    from app.services.file_holders import claim as _claim_files
+    await _claim_files(tenant, user["org_id"], [data.media_id])   # MEDIA-SEC-01 FG-579
 
     intake = await create_ocr_intake(
         user["org_id"], data.media_id, user["id"],
@@ -216,7 +221,9 @@ async def approve_intake(
         "expense_id": None,
         "created_at": now,
     }
-    await tenant.pending_expenses.insert_one(expense)
+    from app.services.file_holders import claimed_write   # MEDIA-SEC-01 FG-579
+    await claimed_write(tenant, user["org_id"], [doc.get("media_id")],
+                        lambda s: tenant.pending_expenses.insert_one(expense, session=s))
 
     await tenant.ocr_invoice_intake.update_one({"id": intake_id, "org_id": user["org_id"]}, {"$set": {
         "status": "approved",

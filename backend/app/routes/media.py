@@ -1,10 +1,12 @@
 """
 Routes - Media (Photos) Endpoints.
 """
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, UploadFile, File, Form
 from fastapi.responses import FileResponse
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional
 from datetime import datetime, timezone
+import re
 import uuid
 from pathlib import Path
 
@@ -12,6 +14,7 @@ from app.db import db
 from app.tenancy import project_team
 from app.deps.auth import get_current_user
 from app.deps.media_acl import enforce_media_access, enforce_context_access, MEDIA_CONTEXT_TYPES, check_media_access
+from app.services import project_lifecycle as lifecycle
 
 router = APIRouter(tags=["Media"])
 
@@ -19,6 +22,16 @@ router = APIRouter(tags=["Media"])
 
 ALLOWED_MEDIA_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"]
 MAX_MEDIA_SIZE_MB = 10
+UPLOAD_DIR = Path("/app/backend/uploads")
+
+# MEDIA-SEC-01 (FG-542): a media file is RETIRED, never deleted (CLAUDE.md §2 rule 9).
+MEDIA_RETIRED = "retired"
+# MEDIA-SEC-01 (FG-540): an avatar is a media row of the caller's tenant linked to a profile.
+AVATAR_CONTEXT_TYPES = ("profile",)
+# The only shape a stored file name has ever been written in (``{uuid4}.{ext}``, upload_media,
+# ocr_invoice, technician): anything else — separators, "..", NUL, encoded tricks — is no
+# avatar and gets the same 404 as an unknown name (no oracle).
+_STORED_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,127}\.[A-Za-z0-9]{1,10}$")
 
 
 # ── Pydantic Models ────────────────────────────────────────────────
@@ -49,6 +62,10 @@ async def upload_media(
     """Upload a media file (photo)"""
     tenant = _tenant(user)
     org_id = user["org_id"]
+    # MEDIA-SEC-01 (FG-575, R83(1), FG-587): the one upload guard, before anything is read;
+    # the project is resolved from ANY context that belongs to a project
+    from app.deps.upload_guard import require_uploader_for_context
+    await require_uploader_for_context(user, context_type, context_id)
     
     # ── Validate context access BEFORE processing file ─────────────────
     # If context is provided, verify user has access to link to it
@@ -120,6 +137,9 @@ async def upload_media(
         "created_at": now,
     }
     
+    if context_type in AVATAR_CONTEXT_TYPES:
+        # MEDIA-SEC-01 / R83(3): only a FRESH profile upload can ever be an avatar
+        media["avatar"] = True
     await tenant.media_files.insert_one(media)
     
     return {
@@ -145,6 +165,11 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
             "message": f"Invalid context type. Allowed: {MEDIA_CONTEXT_TYPES}",
         })
     
+    # MEDIA-SEC-01 (FG-587): linking a file to a record adds it there — the same upload
+    # guard as POST /media/upload (a company or project Viewer → 403), nothing written
+    from app.deps.upload_guard import require_uploader_for_context
+    await require_uploader_for_context(user, data.context_type, data.context_id)
+
     # Find media file
     media = await tenant.media_files.find_one({"id": data.media_id, "org_id": org_id}, {"_id": 0})
     if not media:
@@ -158,6 +183,18 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
             raise HTTPException(status_code=403, detail="Media has no owner; only admin can link")
     elif owner_user_id != user["id"] and user["role"] not in ["Admin", "Owner"]:
         raise HTTPException(status_code=403, detail="Not authorized to link this media")
+
+    # MEDIA-SEC-01 (FG-544): a file has ONE link; linking it again would silently move it
+    # away from the first record. A linked or retired file is refused, nothing written.
+    if media.get("status") == MEDIA_RETIRED:
+        raise lifecycle.refuse(409, "MEDIA_RETIRED", "Файлът е скрит и не може да се свърже")
+    if media.get("context_type") or media.get("context_id"):
+        if (media.get("context_type"), media.get("context_id")) == (data.context_type, data.context_id):
+            return {"id": data.media_id, "context_type": data.context_type,
+                    "context_id": data.context_id, "linked": True}
+        raise lifecycle.refuse(409, "MEDIA_ALREADY_LINKED",
+                               "Файлът вече е свързан с друг запис",
+                               context_type=media.get("context_type"))
     
     # ── TARGET CONTEXT ACCESS CHECK ────────────────────────────────────
     # Verify user has access to the target context before allowing link
@@ -166,14 +203,38 @@ async def link_media(data: MediaLinkRequest, user: dict = Depends(get_current_us
     
     # Update media with context
     now = datetime.now(timezone.utc).isoformat()
-    await tenant.media_files.update_one(
-        {"id": data.media_id},
-        {"$set": {
-            "context_type": data.context_type,
-            "context_id": data.context_id,
-            "linked_at": now,
-        }}
-    )
+    if data.context_type in AVATAR_CONTEXT_TYPES:
+        # MEDIA-SEC-01 / R83(3): an existing file is never linked as a profile photo/avatar
+        raise lifecycle.refuse(409, "AVATAR_LINK_REFUSED",
+                               "Профилна снимка се качва наново, не се свързва")
+    if media.get("retire_request_pending"):
+        # FG-577: no new reference while a retire request waits for the Owner
+        raise lifecycle.refuse(409, "RETIRE_REQUEST_PENDING", "За файла има чакаща заявка за премахване")
+    from app.services.auth_tx import run_in_transaction
+
+    async def _link(session):
+        # compare-and-set: only a file that is STILL unlinked, not retired and with no
+        # pending request gets the link; ref_version moves (FG-579) so a concurrent retire
+        # cannot commit too. FG-544: the link is an AuditEvent.
+        res = await tenant.media_files.update_one(
+            {"id": data.media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
+             "retire_request_pending": None,
+             "$and": [{"$or": [{"context_type": None}, {"context_type": ""}]},
+                      {"$or": [{"context_id": None}, {"context_id": ""}]}]},
+            {"$set": {"context_type": data.context_type, "context_id": data.context_id,
+                      "linked_at": now, "linked_by": user["id"]},
+             "$inc": {"ref_version": 1}}, session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "MEDIA_ALREADY_LINKED", "Файлът вече е свързан с друг запис")
+        await lifecycle.audit(session, user, action="media.file.link", entity_type="media_file",
+                              entity_id=data.media_id, reason="linked", key=None,
+                              source_flow="FLOW-029",
+                              diff={"before": {"context_type": None, "context_id": None},
+                                    "after": {"context_type": data.context_type,
+                                              "context_id": data.context_id}})
+        return True
+
+    await run_in_transaction(db, _link)
     
     return {
         "id": data.media_id,
@@ -195,6 +256,12 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     
     # ACL check: enforces org isolation, owner/admin access, and context-based rules
     await enforce_media_access(user, media, action="meta")
+
+    if media.get("status") == MEDIA_RETIRED and user.get("role") not in ("Owner", "Admin"):
+        # MEDIA-SEC-01 (FG-558): a retired file's metadata is for Owner/Admin only. R83(2):
+        # a record that still points at it learns only THAT it was retired (410), nothing else.
+        raise HTTPException(status_code=410, detail={"error_code": "MEDIA_RETIRED",
+                                                     "media_id": media_id, "retired": True})
     
     # Enrich with owner name (handle legacy records with missing owner_user_id)
     owner_user_id = media.get("owner_user_id")
@@ -207,19 +274,46 @@ async def get_media(media_id: str, user: dict = Depends(get_current_user)):
     return media
 
 
-@router.get("/media/avatar/{filename}")
-async def serve_avatar(filename: str):
-    """Serve avatar/profile image without auth (public)"""
-    from pathlib import Path
-    UPLOAD_DIR = Path("/app/backend/uploads")
-    if "/" in filename or "\\" in filename or ".." in filename:
-        raise HTTPException(status_code=400, detail="Invalid filename")
-    file_path = UPLOAD_DIR / filename
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    from fastapi.responses import FileResponse
-    return FileResponse(file_path, media_type="image/jpeg")
+_optional_bearer = HTTPBearer(auto_error=False)
 
+
+async def _logged_in_user(
+        credentials: Optional[HTTPAuthorizationCredentials] = Depends(_optional_bearer)) -> dict:
+    """The session user, or 401 — also when no Authorization header is sent at all
+    (FastAPI 0.110's ``HTTPBearer`` would answer that case with 403)."""
+    if credentials is None:
+        raise HTTPException(status_code=401, detail="Not authenticated",
+                            headers={"WWW-Authenticate": "Bearer"})
+    return await get_current_user(credentials)
+
+
+@router.get("/media/avatar/{filename}")
+async def serve_avatar(filename: str, user: dict = Depends(_logged_in_user)):
+    """MEDIA-SEC-01 (FG-540; CLAUDE.md §3, §2 rule 11): an avatar for a LOGGED-IN user only.
+
+    The file is resolved ONLY through a ``media_files`` row of the caller's tenant
+    (server-side tenant from the session, never from the request) that is a profile picture
+    (``context_type`` in AVATAR_CONTEXT_TYPES) and is not retired. The path on disk is built
+    from that row's ``stored_filename`` — the raw request name is never mapped to a path.
+    Any other file — another tenant's, a site photo, a receipt, an OCR invoice, a traversal
+    attempt, an unknown name — is the same 404."""
+    not_found = HTTPException(status_code=404, detail="Avatar not found")
+    if not isinstance(filename, str) or not _STORED_NAME.fullmatch(filename):
+        raise not_found
+    tenant = _tenant(user)
+    media = await tenant.media_files.find_one(
+        {"stored_filename": filename, "org_id": user["org_id"],
+         "context_type": {"$in": list(AVATAR_CONTEXT_TYPES)}, "avatar": True,
+         "status": {"$ne": MEDIA_RETIRED}},
+        {"_id": 0, "stored_filename": 1, "content_type": 1})
+    stored = (media or {}).get("stored_filename")
+    if not isinstance(stored, str) or not _STORED_NAME.fullmatch(stored):
+        raise not_found
+    root = UPLOAD_DIR.resolve()
+    file_path = (root / stored).resolve()
+    if file_path.parent != root or not file_path.is_file():
+        raise not_found
+    return FileResponse(file_path, media_type=media.get("content_type") or "image/jpeg")
 
 
 @router.get("/media/file/{filename}")
@@ -249,6 +343,9 @@ async def serve_media_file(filename: str, user: dict = Depends(get_current_user)
     media = await tenant.media_files.find_one({"stored_filename": filename, "org_id": user["org_id"]}, {"_id": 0})
     if not media:
         raise HTTPException(status_code=404, detail="Media not found or access denied")
+    if media.get("status") == MEDIA_RETIRED and user.get("role") not in ("Owner", "Admin"):
+        # MEDIA-SEC-01 (FG-542): a retired file is kept as evidence for Owner/Admin only
+        raise HTTPException(status_code=404, detail="Media not found or access denied")
     
     # Enforce context-based ACL for download action
     await enforce_media_access(user, media, action="download")
@@ -269,7 +366,7 @@ async def list_media(
     user_role = user["role"]
     
     # ── Build base query ───────────────────────────────────────────────
-    query = {"org_id": org_id}
+    query = {"org_id": org_id, "status": {"$ne": MEDIA_RETIRED}}   # FG-542: retired, not deleted
     
     # Apply context filters if provided
     if context_type:
@@ -443,37 +540,454 @@ async def list_media(
     return filtered_list
 
 
+async def _media_usages(tenant, org_id: str, media: dict, session=None) -> list:
+    """MEDIA-SEC-01: every record that uses this file — the ONE registry
+    (``app.services.file_holders``, FG-576). Empty → unused."""
+    from app.services.file_holders import find_holders
+    return await find_holders(tenant, org_id, media, session=session)
+
+
+async def _enforce_retire_rights(user: dict, media: dict) -> None:
+    """Who may retire an UNUSED file: its owner, Admin/Owner (``enforce_media_access``
+    ``delete``) and — R83(3) — for an avatar, the user whose profile photo it is."""
+    if (media.get("avatar") and media.get("context_type") in AVATAR_CONTEXT_TYPES
+            and media.get("org_id") == user.get("org_id")
+            and media.get("context_id") == user.get("id")):
+        return
+    await enforce_media_access(user, media, action="delete")
+
+
+def _in_use(user: dict, media_id: str, uses: list) -> HTTPException:
+    """409 MEDIA_IN_USE; WHICH records use the file only for Owner/Admin (pass 46)."""
+    from app.services.file_holders import redact
+    return lifecycle.refuse(409, "MEDIA_IN_USE", "Файлът се използва и не може да бъде премахнат",
+                            request_path="/api/media/%s/retire-request" % media_id,
+                            **redact(uses, user))
+
+
 @router.delete("/media/{media_id}")
-async def delete_media(media_id: str, user: dict = Depends(get_current_user)):
-    """
-    Delete a media file.
-    
-    ACL Rules:
-    - Must be in same org
-    - Only owner or Admin/Owner can delete
-    """
+async def delete_media(media_id: str, body: Optional[dict] = Body(None),
+                       reason: Optional[str] = None,
+                       user: dict = Depends(get_current_user),
+                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """MEDIA-SEC-01 (FG-542; CLAUDE.md §2 rule 9, §4): a media file is RETIRED, never deleted.
+
+    * a file that any record holds (``app.services.file_holders``) → 409 ``MEDIA_IN_USE``,
+      nothing written — the Owner-approved request is the only way (R83(2));
+    * an unused file → the row stays with ``status="retired"``, the reason, who and when;
+      the original file stays on disk; one transaction with the canonical AuditEvent
+      ``media.file.retire``. The write is a CAS on ``ref_version`` (FG-579): a reference
+      written meanwhile makes it 409 ``MEDIA_CHANGED``.
+
+    Rights: the owner, Admin/Owner, the avatar's user; a reason and an Idempotency-Key."""
     tenant = _tenant(user)
     org_id = user["org_id"]
-    
-    # Find media with org_id check (prevents cross-org access)
-    media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id}, {"_id": 0})
-    if not media:
-        raise HTTPException(status_code=404, detail="Media file not found")
-    
-    # ACL check for delete action
-    await enforce_media_access(user, media, action="delete")
-    
-    # Delete the actual file
-    stored_filename = media.get("stored_filename")
-    if stored_filename:
-        file_path = Path("/app/backend/uploads") / stored_filename
-        if file_path.exists():
-            try:
-                file_path.unlink()
-            except OSError:
-                pass  # File may have been deleted externally
-    
-    # Delete from database
-    await tenant.media_files.delete_one({"id": media_id})
-    
-    return {"ok": True, "deleted": media_id}
+    key = lifecycle.require_key(idempotency_key)
+    why = lifecycle.require_reason((body or {}).get("reason") if (body or {}).get("reason")
+                                   is not None else reason)
+
+    async def work(session):
+        media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id},
+                                                  {"_id": 0}, session=session)
+        if not media:
+            raise HTTPException(status_code=404, detail="Media file not found")
+        await _enforce_retire_rights(user, media)
+        if media.get("status") == MEDIA_RETIRED:
+            raise lifecycle.refuse(409, "MEDIA_ALREADY_RETIRED", "Файлът вече е скрит")
+        uses = await _media_usages(tenant, org_id, media, session=session)
+        if uses or media.get("retire_request_pending"):
+            raise _in_use(user, media_id, uses)
+        now = lifecycle.now_iso()
+        res = await tenant.media_files.update_one(
+            {"id": media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
+             "retire_request_pending": None, "ref_version": media.get("ref_version"),
+             "$and": [_NO_PENDING],    # FG-588 condition 2: no pending holder
+             "context_type": media.get("context_type"), "context_id": media.get("context_id")},
+            {"$set": {"status": MEDIA_RETIRED, "retired_reason": why, "retired_at": now,
+                      "retired_by": user["id"]}}, session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "MEDIA_CHANGED", "Файлът току-що се промени")
+        await lifecycle.audit(session, user, action="media.file.retire",
+                              entity_type="media_file", entity_id=media_id, reason=why,
+                              key=key, source_flow="FLOW-029",
+                              diff={"before": {"status": media.get("status") or "active"},
+                                    "after": {"status": MEDIA_RETIRED},
+                                    "stored_filename": media.get("stored_filename")})
+        return {"ok": True, "retired": media_id}
+
+    return await lifecycle.keyed_transaction(user, key, "media.file.retire",
+                                             {"media_id": media_id, "reason": why}, work)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# R83(2) — retiring a file that is USED by a record: request → Owner approves
+# ══════════════════════════════════════════════════════════════════════════════
+# INTERIM (FLOW Guard pass 46): there is no canonical Approval runtime yet. This minimal
+# flow is debt to W0-07 and must not become a second Approval source of truth — when
+# W0-07 lands, ``media_retire_requests`` moves into it. Who files / approves is
+# ``app.services.media_policy`` (interim: an Admin files, an Owner approves).
+#   POST /api/media/{id}/retire-request            RETIRE_REQUEST_ROLES
+#   POST /api/media/retire-requests/{rid}/approve  RETIRE_APPROVER_ROLES, never the requester
+#   POST /api/media/retire-requests/{rid}/reject   RETIRE_APPROVER_ROLES
+#   GET  /api/media-retire-requests                Owner / Admin
+# FG-577 (CLAUDE.md §8 exact version): the request stores the holders, their version and
+# the file's ``ref_version``; while it is pending no writer may add a reference
+# (``file_holders.claim`` → 409); the approval re-reads the holders and refuses
+# 409 ``RETIRE_REQUEST_STALE`` when they are not the ones the request named.
+REQ_PENDING, REQ_APPROVED, REQ_REJECTED = "pending", "approved", "rejected"
+from app.services.file_holders import NO_PENDING as _NO_PENDING   # FG-588 condition 2
+
+
+class RetireRequestBody(BaseModel):
+    reason: Optional[str] = None
+
+
+def _approver_only(user: dict) -> None:
+    from app.services.media_policy import RETIRE_APPROVER_ROLES
+    if user.get("role") not in RETIRE_APPROVER_ROLES:
+        raise lifecycle.refuse(403, "OWNER_APPROVAL_REQUIRED",
+                               "Само собственикът одобрява премахване на използван файл")
+
+
+def _request_view(req: dict, user: dict) -> dict:
+    from app.services.file_holders import redact
+    out = {k: v for k, v in req.items() if k not in ("_id", "uses")}
+    out.update(redact(req.get("uses") or [], user))
+    return out
+
+
+@router.post("/media/{media_id}/retire-request", status_code=201)
+async def request_media_retire(media_id: str, data: RetireRequestBody,
+                               user: dict = Depends(get_current_user),
+                               idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    from app.services.file_holders import uses_version
+    from app.services.media_policy import RETIRE_REQUEST_ROLES
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    key = lifecycle.require_key(idempotency_key)
+    why = lifecycle.require_reason(data.reason)
+    if user.get("role") not in RETIRE_REQUEST_ROLES:
+        raise lifecycle.refuse(403, "RETIRE_REQUEST_NOT_ALLOWED",
+                               "Заявка за премахване на използван файл подава администратор")
+
+    async def work(session):
+        media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id},
+                                                  {"_id": 0}, session=session)
+        if not media:
+            raise HTTPException(status_code=404, detail="Media file not found")
+        if media.get("status") == MEDIA_RETIRED:
+            raise lifecycle.refuse(409, "MEDIA_ALREADY_RETIRED", "Файлът вече е скрит")
+        uses = await _media_usages(tenant, org_id, media, session=session)
+        if not uses:
+            raise lifecycle.refuse(409, "MEDIA_NOT_IN_USE",
+                                   "Файлът не се използва — премахва се директно (DELETE)")
+        if media.get("pending_holders"):
+            # FG-588: a movement is being written with this file — no request until it settles
+            raise _in_use(user, media_id, uses)
+        rid = str(uuid.uuid4())
+        now = lifecycle.now_iso()
+        res = await tenant.media_files.update_one(
+            {"id": media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
+             "retire_request_pending": None, "ref_version": media.get("ref_version"),
+             "$and": [_NO_PENDING]},
+            {"$set": {"retire_request_pending": rid}}, session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "RETIRE_REQUEST_PENDING", "Вече има чакаща заявка")
+        req = {"id": rid, "org_id": org_id, "media_id": media_id, "reason": why,
+               "status": REQ_PENDING, "uses": uses, "uses_version": uses_version(uses),
+               "ref_version": media.get("ref_version"), "requested_by": user["id"],
+               "requested_at": now, "decided_by": None, "decided_at": None,
+               "decision_reason": None, "interim_until": "W0-07"}
+        await tenant.media_retire_requests.insert_one(dict(req), session=session)
+        await lifecycle.audit(session, user, action="media.file.retire_request",
+                              entity_type="media_file", entity_id=media_id, reason=why,
+                              key=key, source_flow="FLOW-029",
+                              diff={"request_id": rid, "uses": uses,
+                                    "uses_version": req["uses_version"]})
+        return _request_view(req, user)
+
+    return await lifecycle.keyed_transaction(user, key, "media.file.retire_request",
+                                             {"media_id": media_id, "reason": why}, work)
+
+
+async def _decide(request_id: str, user: dict, approve: bool, reason: Optional[str],
+                  idempotency_key: Optional[str]) -> dict:
+    from app.services.file_holders import uses_version
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+    key = lifecycle.require_key(idempotency_key)
+    _approver_only(user)
+    why = lifecycle.require_reason(reason) if not approve or reason is not None else None
+    action = "media.file.retire" if approve else "media.file.retire_request.reject"
+
+    async def work(session):
+        req = await tenant.media_retire_requests.find_one({"id": request_id, "org_id": org_id},
+                                                          {"_id": 0}, session=session)
+        if not req:
+            raise HTTPException(status_code=404, detail="Retire request not found")
+        if req.get("status") != REQ_PENDING:
+            raise lifecycle.refuse(409, "RETIRE_REQUEST_DECIDED", "Заявката вече е решена")
+        if approve and req.get("requested_by") == user["id"]:
+            # the second-person check: whoever asked does not approve
+            raise lifecycle.refuse(403, "SELF_APPROVAL_FORBIDDEN",
+                                   "Заявителят не може да одобри собствената си заявка")
+        media_id = req["media_id"]
+        media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id},
+                                                  {"_id": 0}, session=session) or {}
+        now = lifecycle.now_iso()
+        uses = None
+        if approve:
+            # FG-577: the approval is for EXACTLY the holders the request named
+            uses = await _media_usages(tenant, org_id, media, session=session)
+            if (uses_version(uses) != req.get("uses_version")
+                    or media.get("ref_version") != req.get("ref_version")):
+                raise lifecycle.refuse(409, "RETIRE_REQUEST_STALE",
+                                       "Записите, които ползват файла, се промениха след заявката")
+        res = await tenant.media_retire_requests.update_one(
+            {"id": request_id, "org_id": org_id, "status": REQ_PENDING},
+            {"$set": {"status": REQ_APPROVED if approve else REQ_REJECTED,
+                      "decided_by": user["id"], "decided_at": now, "decision_reason": why}},
+            session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "RETIRE_REQUEST_DECIDED", "Заявката вече е решена")
+        if approve:
+            res = await tenant.media_files.update_one(
+                {"id": media_id, "org_id": org_id, "status": {"$ne": MEDIA_RETIRED},
+                 "retire_request_pending": request_id, "ref_version": req.get("ref_version"),
+                 "$and": [_NO_PENDING]},
+                {"$set": {"status": MEDIA_RETIRED, "retired_reason": req.get("reason"),
+                          "retired_at": now, "retired_by": req.get("requested_by"),
+                          "retired_in_use": True, "retired_uses": uses,
+                          "retire_request_id": request_id, "retire_approved_by": user["id"],
+                          "retire_request_pending": None}}, session=session)
+            if res.matched_count != 1:
+                raise lifecycle.refuse(409, "MEDIA_CHANGED", "Файлът току-що се промени")
+            diff = {"before": {"status": media.get("status") or "active"},
+                    "after": {"status": MEDIA_RETIRED}, "in_use": True, "uses": uses,
+                    "uses_version": req.get("uses_version"),
+                    "request_id": request_id, "requested_by": req.get("requested_by"),
+                    "approved_by": user["id"], "stored_filename": media.get("stored_filename")}
+            reason_out = req.get("reason")
+        else:
+            await tenant.media_files.update_one(
+                {"id": media_id, "org_id": org_id, "retire_request_pending": request_id},
+                {"$set": {"retire_request_pending": None}}, session=session)
+            diff = {"request_id": request_id, "requested_by": req.get("requested_by"),
+                    "rejected_by": user["id"]}
+            reason_out = why
+        await lifecycle.audit(session, user, action=action, entity_type="media_file",
+                              entity_id=media_id, reason=reason_out, key=key,
+                              source_flow="FLOW-029", diff=diff)
+        return {"ok": True, "request_id": request_id, "media_id": media_id,
+                "status": REQ_APPROVED if approve else REQ_REJECTED}
+
+    return await lifecycle.keyed_transaction(user, key, action,
+                                             {"request_id": request_id, "approve": approve,
+                                              "reason": why}, work)
+
+
+@router.post("/media/retire-requests/{request_id}/approve")
+async def approve_media_retire(request_id: str, data: RetireRequestBody = Body(None),
+                               user: dict = Depends(get_current_user),
+                               idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    return await _decide(request_id, user, True, (data.reason if data else None), idempotency_key)
+
+
+@router.post("/media/retire-requests/{request_id}/reject")
+async def reject_media_retire(request_id: str, data: RetireRequestBody = Body(None),
+                              user: dict = Depends(get_current_user),
+                              idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    return await _decide(request_id, user, False, (data.reason if data else None), idempotency_key)
+
+
+#: FG-693 / FG-706: the review lists page by KEYSET — newest first, then id; the cursor is
+#: the last row's (sort key, id), so a row that leaves the list between two pages (a
+#: restore, a decision) never shifts an unseen row past the reader. Never a silent cap.
+PAGE_LIMIT_DEFAULT, PAGE_LIMIT_MAX = 50, 200
+
+
+def _encode_cursor(key, row_id) -> str:
+    import base64
+    import json as _json
+    raw = _json.dumps([key, row_id], separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    return base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+
+
+def _decode_cursor(cursor: Optional[str]):
+    if cursor is None or cursor == "":
+        return None
+    import base64
+    import json as _json
+    try:
+        pad = "=" * (-len(cursor) % 4)
+        key, row_id = _json.loads(base64.urlsafe_b64decode(cursor + pad).decode("utf-8"))
+        if (key is not None and not isinstance(key, str)) or not isinstance(row_id, str):
+            raise ValueError("cursor shape")
+        return key, row_id
+    except Exception:                                     # noqa: BLE001
+        raise lifecycle.refuse(400, "BAD_CURSOR", "Невалиден курсор на страницата")
+
+
+def _check_limit(limit: int) -> int:
+    if limit < 1 or limit > PAGE_LIMIT_MAX:
+        raise lifecycle.refuse(400, "BAD_PAGE", "1 ≤ limit ≤ %d" % PAGE_LIMIT_MAX)
+    return limit
+
+
+def _after(field: str, cur) -> dict:
+    """The rows strictly AFTER the cursor in the order (field desc, id asc). A missing /
+    null sort key sorts after every value (BSON null is the lowest), so it has a branch."""
+    key, row_id = cur
+    if key is None:
+        return {field: None, "id": {"$gt": row_id}}
+    return {"$or": [{field: {"$lt": key}}, {field: key, "id": {"$gt": row_id}}, {field: None}]}
+
+
+async def _keyset_page(coll, flt: dict, field: str, projection: dict, cursor: Optional[str],
+                       limit: int) -> tuple:
+    """``(rows, total, next_cursor)`` — one page after ``cursor`` (FG-706)."""
+    limit = _check_limit(limit)
+    cur = _decode_cursor(cursor)
+    total = await coll.count_documents(flt)
+    query = {"$and": [flt, _after(field, cur)]} if cur else flt
+    rows = await coll.find(query, projection).sort([(field, -1), ("id", 1)]).limit(
+        limit + 1).to_list(None)
+    more = len(rows) > limit
+    rows = rows[:limit]
+    nxt = _encode_cursor(rows[-1].get(field), rows[-1]["id"]) if more and rows else None
+    return rows, total, nxt
+
+
+def _page(items: list, total: int, limit: int, next_cursor: Optional[str]) -> dict:
+    return {"items": items, "total": total, "limit": limit, "next_cursor": next_cursor}
+
+
+@router.get("/media-retire-requests")
+async def list_media_retire_requests(status: Optional[str] = REQ_PENDING,
+                                     cursor: Optional[str] = None,
+                                     limit: int = PAGE_LIMIT_DEFAULT,
+                                     user: dict = Depends(get_current_user)):
+    """Owner/Admin; newest first; keyset paging (FG-706):
+    ``{items, total, limit, next_cursor}`` — pass ``next_cursor`` back as ``cursor``."""
+    if user.get("role") not in ("Owner", "Admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    flt = {"org_id": user["org_id"]}
+    if status:
+        flt["status"] = status
+    rows, total, nxt = await _keyset_page(_tenant(user).media_retire_requests, flt,
+                                          "requested_at", {"_id": 0}, cursor, limit)
+    return _page([_request_view(r, user) for r in rows], total, limit, nxt)
+
+
+#: the fields a retire writes on the row — on restore they move into ``retire_history``
+_RETIRE_FIELDS = ("retired_reason", "retired_at", "retired_by", "retired_in_use", "retired_uses",
+                  "retire_request_id", "retire_approved_by")
+
+
+def _restore_reason(value) -> str:
+    """R88: a restore states why — missing / blank → 422 ``REASON_REQUIRED`` (the
+    orchestrator's contract for this route); too long / control characters → 400 (the
+    PAY-01-C01 reason rule every lifecycle reason follows)."""
+    reason = value.strip() if isinstance(value, str) else ""
+    if not reason:
+        raise lifecycle.refuse(422, "REASON_REQUIRED", "Посочете причина за връщането")
+    from app.services.money_amount import check_reason
+    check_reason(reason)
+    return reason
+
+
+@router.post("/media/{media_id}/restore")
+async def restore_media(media_id: str, body: Optional[dict] = Body(None),
+                        user: dict = Depends(get_current_user),
+                        idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """Krum R88 (FG-558): the Owner restores a retired file.
+
+    Owner only (``media_policy.RESTORE_ROLES``; everyone else 403, nothing written), an
+    ``Idempotency-Key`` (428; a replay returns the same answer) and a reason (422). One
+    transaction: a CAS on "still retired AND the ``ref_version`` read" (409
+    ``MEDIA_CHANGED`` otherwise), ``ref_version`` +1, the retire fields move into
+    ``retire_history`` (nothing is lost), ``status`` goes back to what an upload writes
+    (none), and the canonical AuditEvent ``media.file.restored``. The original never left
+    the disk; links, avatar flag and context are untouched."""
+    from app.services.media_policy import RESTORE_ENABLED, RESTORE_ROLES
+    if not RESTORE_ENABLED or user.get("role") not in RESTORE_ROLES:
+        raise lifecycle.refuse(403, "RESTORE_NOT_ALLOWED",
+                               "Само Собственикът може да върне файл")
+    key = lifecycle.require_key(idempotency_key)
+    why = _restore_reason((body or {}).get("reason"))
+    tenant = _tenant(user)
+    org_id = user["org_id"]
+
+    async def work(session):
+        media = await tenant.media_files.find_one({"id": media_id, "org_id": org_id},
+                                                  {"_id": 0}, session=session)
+        if not media:
+            raise HTTPException(status_code=404, detail="Media file not found")
+        if media.get("status") != MEDIA_RETIRED:
+            raise lifecycle.refuse(409, "MEDIA_NOT_RETIRED", "Файлът не е изваден от употреба")
+        now = lifecycle.now_iso()
+        entry = {f: media.get(f) for f in _RETIRE_FIELDS if f in media}
+        entry.update({"restored_at": now, "restored_by": user["id"], "restore_reason": why})
+        res = await tenant.media_files.update_one(
+            {"id": media_id, "org_id": org_id, "status": MEDIA_RETIRED,
+             "ref_version": media.get("ref_version")},
+            {"$unset": dict({"status": ""}, **{f: "" for f in _RETIRE_FIELDS}),
+             "$push": {"retire_history": entry}, "$inc": {"ref_version": 1}},
+            session=session)
+        if res.matched_count != 1:
+            raise lifecycle.refuse(409, "MEDIA_CHANGED", "Файлът току-що се промени")
+        await lifecycle.audit(session, user, action="media.file.restored",
+                              entity_type="media_file", entity_id=media_id, reason=why,
+                              key=key, source_flow="FLOW-029",
+                              diff={"before": {"status": MEDIA_RETIRED,
+                                               **{f: media.get(f) for f in _RETIRE_FIELDS
+                                                  if f in media}},
+                                    "after": {"status": "active"},
+                                    "ref_version": {"before": media.get("ref_version"),
+                                                    "after": (media.get("ref_version") or 0) + 1},
+                                    "stored_filename": media.get("stored_filename")})
+        return {"ok": True, "restored": media_id}
+
+    return await lifecycle.keyed_transaction(user, key, "media.file.restored",
+                                             {"media_id": media_id, "reason": why}, work)
+
+
+@router.get("/media-retired")
+async def list_retired_media(cursor: Optional[str] = None, limit: int = PAGE_LIMIT_DEFAULT,
+                             user: dict = Depends(get_current_user)):
+    """The retired files of the tenant (FG-558: Owner/Admin only), newest first, keyset
+    paging (FG-693 / FG-706: ``{items, total, limit, next_cursor}`` — a restore between two
+    pages skips nothing). Each row says whether THIS user may restore it (R88: the Owner)."""
+    from app.services.media_policy import RESTORE_ENABLED, RESTORE_ROLES, RETIRED_LIST_ROLES
+    if user.get("role") not in RETIRED_LIST_ROLES:
+        raise HTTPException(status_code=403, detail="Access denied")
+    flt = {"org_id": user["org_id"], "status": MEDIA_RETIRED}
+    rows, total, nxt = await _keyset_page(
+        _tenant(user).media_files, flt, "retired_at",
+        {"_id": 0, "id": 1, "filename": 1, "stored_filename": 1, "content_type": 1,
+         "context_type": 1, "context_id": 1, "owner_user_id": 1, "created_at": 1,
+         **{f: 1 for f in _RETIRE_FIELDS}}, cursor, limit)
+    may = RESTORE_ENABLED and user.get("role") in RESTORE_ROLES
+    for r in rows:
+        r["can_restore"] = may
+        if may:
+            r["restore"] = {"method": "POST", "path": "/api/media/%s/restore" % r["id"],
+                            "requires": ["reason", "Idempotency-Key"]}
+    return _page(rows, total, limit, nxt)
+
+
+@router.post("/media/{media_id}/pending-holders/{marker_id}/release")
+async def release_stale_pending_holder(media_id: str, marker_id: str,
+                                       user: dict = Depends(get_current_user),
+                                       idempotency_key: Optional[str] = Header(None, alias="Idempotency-Key")):
+    """FG-588 condition 4: an Owner/Admin releases a pending-holder marker that no movement
+    followed — only after ``media_policy.PENDING_HOLDER_MIN_AGE_SECONDS`` and a registry
+    proof that nothing references the file. Never retires anything; AuditEvent
+    ``media.file.pending_holder_release``."""
+    from app.services.file_holders import release_stale
+    from app.services.media_policy import PENDING_HOLDER_MIN_AGE_SECONDS
+    if user.get("role") not in ("Owner", "Admin"):
+        raise HTTPException(status_code=403, detail="Access denied")
+    key = lifecycle.require_key(idempotency_key)          # FG-598
+    return await release_stale(_tenant(user), user["org_id"], media_id, marker_id, actor=user,
+                               min_age_seconds=PENDING_HOLDER_MIN_AGE_SECONDS, key=key)

@@ -1,0 +1,33 @@
+# MEDIA-SEC-01 gates after FLOW Guard pass 68 (FG-707 --approval-ref required, FG-706 keyset paging) — code = c41da0ba; branch from main 3863610 (main unchanged)
+# backend: local real MongoDB 7.0 replica set rs0 (docker mongo:7.0, port 27019),
+#   W0_03_REAL_MONGO_URL='mongodb://127.0.0.1:27019/?directConnection=true', from backend/:
+#   PYTHONPATH=. pytest --noconftest -q -p no:cacheprovider -rfs <file>   (scratch DBs dropped between files)
+PM-01 harness exit 0
+tests/test_r0_01_billing_p0.py: 83 passed, 1 warning in 12.11s
+tests/test_r0_02_items_tenant_filter.py: 69 passed, 1 warning in 5.50s
+tests/test_r0_03_roles_email.py: 388 passed, 10 warnings in 97.23s (0:01:37)
+tests/test_r0_05_pay_run_selected_only.py: 145 passed, 1 warning in 12.97s
+tests/test_r0_06_paid_pay_run.py: 56 passed, 1 warning in 10.63s
+tests/test_r0_07_dev_reset.py: 73 passed, 1 warning in 5.64s
+R0 total: 814 passed
+tests/test_sec_01_c01_all_money_writes.py: 7 passed, 10 warnings in 27.25s
+tests/test_sec_01_c02_flow_guard_money_writes.py: 9 passed, 10 warnings in 25.13s
+tests/test_sec_01_c03_payment_amount_idempotency.py: 6 passed, 2 warnings in 26.78s
+tests/test_sec_01_money_write_permissions.py: 8 passed, 10 warnings in 15.19s
+SEC-01 total: 30 passed
+tests/test_pay_01_c01_amounts_reason.py: 153 passed, 1 warning in 32.28s
+tests/test_pay_01_c01_e_serialisation.py: 108 passed, 1 warning in 26.65s
+tests/test_pay_01_c01_idempotency.py: 198 passed, 1 warning in 43.25s
+tests/test_pay_01_c01_source_module.py: 80 passed, 1 warning in 17.18s
+tests/test_pay_01_payment_reversal.py: 91 passed, 1 warning in 20.99s
+PAY total: 630 passed
+tests/test_prj_01_project_lifecycle.py: 9 passed in 9.49s
+tests/test_media_sec_01.py: 62 passed in 12.31s
+tests/test_pm_01_permission_matrix.py: 6 passed, 10 warnings in 166.04s (0:02:46)
+tests/test_sec_02_finance_read.py: 31 passed, 10 warnings in 173.64s (0:02:53)
+W0: 16 failed, 1176 passed, 10 warnings in 124.11s (0:02:04)
+W0 failure set IDENTICAL to main's 16 (docs/evidence/PWA-01/main-merge-5e36dc2/w0_failed.txt): w0_failed.txt
+Warehouse canonical (PERMISSION_SERVICE_MODE=enforce, WAREHOUSE_CANONICAL_REQUIRE_REAL_MONGO=1, MONGO_URL=rs0): 44 files / 1121 passed, 0 failed, 0 errors — warehouse_suite.txt
+A1 tenant access guard: 498 units, 0 violations; A2C tenant boundary guard: 247 modules, 0 violations; A2B inventory regenerated: unchanged
+frontend: craco test --watchAll=false → Test Suites: 29 passed, 29 total Tests:       283 passed, 283 total build exit 0 
+red before / green after: red_pass68_on_2de0f859.txt (6 failed); red_pass67_on_163935e4.txt (2); red_r88_on_582eb9d.txt (3); earlier passes: red_pass49_on_700629f.txt, red_pass48_scope_on_35cc099.txt, red_pass48_on_cb19aeb.txt

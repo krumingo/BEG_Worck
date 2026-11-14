@@ -58,6 +58,8 @@ import AssetUnitDetailPage from "@/pages/AssetUnitDetailPage";
 import AssetsBatchIntakePage from "@/pages/AssetsBatchIntakePage";
 import AssetsIntakeReviewPage from "@/pages/AssetsIntakeReviewPage";
 import MasterDataReviewPage from "@/pages/MasterDataReviewPage";
+import MediaReviewPage from "@/pages/MediaReviewPage";
+import MediaReviewRoute from "@/components/MediaReviewRoute";
 import MasterDataRoute from "@/components/MasterDataRoute";
 import ScanLandingPage from "@/pages/ScanLandingPage";
 import MyToolsPage from "@/pages/MyToolsPage";
@@ -288,6 +290,7 @@ function AppRoutes() {
       <Route path="/assets/batch-intake" element={<FieldProtectedRoute><AssetsBatchIntakePage /></FieldProtectedRoute>} />
       <Route path="/assets/intake-review" element={<AdminRoute><AssetsIntakeReviewPage /></AdminRoute>} />
       <Route path="/data/master-data" element={<MasterDataRoute><MasterDataReviewPage /></MasterDataRoute>} />
+      <Route path="/media/review" element={<MediaReviewRoute><MediaReviewPage /></MediaReviewRoute>} />
       <Route path="/data/counterparties" element={<AdminRoute><CounterpartiesPage /></AdminRoute>} />
       <Route path="/data/items" element={<AdminRoute><ItemsPage /></AdminRoute>} />
       <Route path="/sales" element={<AdminRoute><SalesPage /></AdminRoute>} />

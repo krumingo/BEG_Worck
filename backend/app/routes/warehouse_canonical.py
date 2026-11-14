@@ -123,6 +123,45 @@ class MovementCommandResponse(BaseModel):
 # -----------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------
+async def _markers_for(tenant, user, idempotency_key, action, file_ids, route):
+    """MEDIA-SEC-01 (FG-588 / FG-596): the pending-holder markers for a movement's files.
+
+    FG-596 / FG-609: a REPLAY (THIS user's committed movement of this action under this
+    Idempotency-Key — the same actor_id the service records)
+    places no marker — the service answers with the stored result, which writes no new
+    reference, so a replay works even while a retire request is pending."""
+    from app.services.file_holders import mark_pending
+    if not file_ids:
+        return []
+    action = str(getattr(action, "value", action))
+    actor = str(user.get("id") or user.get("_id") or "unknown")   # = inp.actor_id
+    # FG-609: the replay is THIS user's committed movement (org + actor + action + key)
+    done = await tenant.warehouse_transactions.find_one(
+        {"org_id": tenant.org_id, "idempotency_key": idempotency_key, "action": action,
+         "actor_id": actor},
+        {"_id": 0, "movement_id": 1})
+    if done:
+        return []
+    return await mark_pending(tenant, tenant.org_id, list(file_ids),
+                              route=route, user_id=actor, ref=idempotency_key,
+                              action=action)
+
+
+async def _settled(markers, tenant, run):
+    """MEDIA-SEC-01 (FG-588 / FG-595): run the movement; confirm the pending-holder markers
+    when it commits, release them when it fails (the call's arguments are built inside, so
+    even a bad request releases). The settle is SHIELDED: a client disconnect or a
+    middleware cancel during the movement cannot skip it."""
+    from app.services.file_holders import settle_shielded
+    committed = False
+    try:
+        result = await run()
+        committed = True
+        return result
+    finally:
+        await settle_shielded(tenant, tenant.org_id, markers, confirmed=committed)
+
+
 def _service() -> CommandService:
     """A fresh CommandService over the shared Mongo client.
 
@@ -243,12 +282,17 @@ async def post_movement(
             # all SERVER-DERIVED by the command service — never
             # accepted from the request body.
         )
-        result = await service.execute(
+        # MEDIA-SEC-01 (FG-588, option 4): the attached files get a DURABLE pending-holder
+        # marker before the movement runs (a retired file / a pending retire request → 409,
+        # nothing written); confirmed after the movement commits, released if it fails.
+        markers = await _markers_for(tenant, user, body.idempotency_key, body.action,
+                                     body.file_ids, "POST /api/warehouse/canonical/movements")
+        result = await _settled(markers, tenant, lambda: service.execute(
             ctx=ctx,
             tenant_db=tenant._db,            # pylint: disable=protected-access
             tenant_collection=tenant.warehouse_transactions,
             inp=inp,
-        )
+        ))
     except WarehouseMovementError as exc:
         raise _render_error(exc) from exc
     except ValueError as exc:
@@ -417,7 +461,11 @@ async def post_project_writeoff(
     source_id = body.subproject_id or body.project_id
     service = _service()
     try:
-        result = await service.execute(
+        # MEDIA-SEC-01 (FG-588, option 4): durable pending-holder markers first (see above)
+        markers = await _markers_for(tenant, user, body.idempotency_key,
+                                     CanonicalAction.WRITE_OFF.value, body.file_ids,
+                                     "POST /api/warehouse/canonical/project-writeoff")
+        result = await _settled(markers, tenant, lambda: service.execute(
             ctx=ctx,
             tenant_db=tenant._db,            # pylint: disable=protected-access
             tenant_collection=tenant.warehouse_transactions,
@@ -434,7 +482,7 @@ async def post_project_writeoff(
                 file_ids=body.file_ids, reason=body.reason, notes=body.notes,
                 occurred_at=body.occurred_at,
             ),
-        )
+        ))
     except WarehouseMovementError as exc:
         raise _render_error(exc) from exc
     except ValueError as exc:

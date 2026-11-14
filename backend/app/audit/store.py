@@ -287,3 +287,15 @@ async def has_event(db, *, tenant_id: str, action: str, entity_id: str) -> bool:
     found = await db[AUDIT_COLLECTION].find_one(
         {"tenant_id": tenant_id, "action": action, "entity_id": entity_id}, {"_id": 0, "event_id": 1})
     return found is not None
+
+
+async def event_with_related_file(db, *, tenant_id: str, file_refs, session=None) -> Optional[Dict[str, Any]]:
+    """MEDIA-SEC-01 (FG-576): one event of the tenant's chain whose ``related_file_ids`` names
+    any of ``file_refs`` (the event is evidence that rests on the file), else ``None``.
+    Read-only; the audit chain is reached only through this module."""
+    refs = [r for r in (file_refs or []) if isinstance(r, str) and r]
+    if not refs or not tenant_id:
+        return None
+    return await db[AUDIT_COLLECTION].find_one(
+        {"tenant_id": tenant_id, "related_file_ids": {"$in": refs}},
+        {"_id": 0, "event_id": 1, "action": 1}, session=session)

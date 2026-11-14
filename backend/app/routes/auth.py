@@ -507,6 +507,10 @@ async def update_user(
     # Owner touches an Owner, the last active Owner stays — refused before any write.
     await check_user_update(tenant, actor=user, target=target, update=update,
                             mode=ctx.mode, tenant_id=ctx.tenant_id)
+    from app.services.media_avatar import check_avatar_url, write_user_with_avatar
+    if "avatar_url" in update:
+        # MEDIA-SEC-01 / R83(3): only a fresh profile photo of THIS user — checked before any write
+        update["avatar_url"] = await check_avatar_url(tenant, org_id, user_id, update["avatar_url"])
     diff = role_audit_diff(target, update)
     update["updated_at"] = datetime.now(timezone.utc).isoformat()
 
@@ -517,7 +521,13 @@ async def update_user(
                                     tool_or_endpoint="PUT /api/users/{user_id}")
 
     async def _business():
-        await tenant.users.update_one({"id": user_id}, {"$set": update})
+        if "avatar_url" in update:
+            # MEDIA-SEC-01 (FG-579 + pass 46): claim, write and AuditEvent in ONE transaction
+            await write_user_with_avatar(tdb, tenant, user, target_user_id=user_id, update=update,
+                                         before=target.get("avatar_url"),
+                                         endpoint="PUT /api/users/{user_id}")
+        else:
+            await tenant.users.update_one({"id": user_id}, {"$set": update})
         return user_id
 
     if ctx.mode != MODE_ENFORCE or "role" not in update:

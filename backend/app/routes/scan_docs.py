@@ -88,7 +88,10 @@ async def create_scan_doc(data: ScanDocCreate, user: dict = Depends(get_current_
         "updated_at": now,
     }
     
-    await tenant.scan_docs.insert_one(doc)
+    # MEDIA-SEC-01 (FG-579): claim the file and write the reference in ONE transaction
+    from app.services.file_holders import claimed_write
+    await claimed_write(tenant, user["org_id"], [data.media_id, data.file_url],
+                        lambda s: tenant.scan_docs.insert_one(doc, session=s))
     await log_audit(user["org_id"], user["id"], user["email"], "scan_doc_created", "scan_doc", doc["id"],
                     {"filename": data.original_filename})
     

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import ImageCropDialog from "@/components/ImageCropDialog";
 import { toast } from "sonner";
+import AuthImage from "@/components/AuthImage";
 
 const PAY_TYPES = [
   { value: "Monthly", label: "Месечно" },
@@ -29,17 +30,15 @@ const PAY_TYPES = [
 ];
 
 function Avatar({ name, url, size = 32 }) {
-  const fullUrl = url ? (url.startsWith("http") ? url : `${process.env.REACT_APP_BACKEND_URL}${url}`) : null;
-  const [imgErr, setImgErr] = useState(false);
   const initials = (name || "?").split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
-  if (fullUrl && !imgErr) {
-    return <img src={fullUrl} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} onError={() => setImgErr(true)} />;
-  }
-  return (
+  const badge = (
     <div className="rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold" style={{ width: size, height: size, fontSize: size * 0.38 }}>
       {initials}
     </div>
   );
+  // MEDIA-SEC-01 (FG-540): the avatar needs the session — fetched as a blob, not <img src>
+  if (url) return <AuthImage src={url} fallback={badge} alt={name} className="rounded-full object-cover" style={{ width: size, height: size }} />;
+  return badge;
 }
 
 export default function EmployeesPage() {
@@ -132,12 +131,14 @@ export default function EmployeesPage() {
         try {
           const fd = new FormData();
           fd.append("file", avatarFile);
-          fd.append("context_type", "avatar");
+          // MEDIA-SEC-01 (FG-590a, R83(3)): an avatar is a FRESH profile upload of this user,
+          // stored as /api/media/avatar/<stored name> (the server refuses any other value)
+          fd.append("context_type", "profile");
           fd.append("context_id", newUserId);
           const uploadRes = await API.post("/media/upload", fd, { headers: { "Content-Type": "multipart/form-data" } });
-          const url = uploadRes.data.url || uploadRes.data.file_url;
-          if (url) {
-            await API.put(`/users/${newUserId}`, { avatar_url: url });
+          const stored = (uploadRes.data.url || "").split("/").pop();
+          if (stored) {
+            await API.put(`/users/${newUserId}`, { avatar_url: `/api/media/avatar/${stored}` });
           }
         } catch { /* avatar upload is optional */ }
       }

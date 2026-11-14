@@ -1,0 +1,31 @@
+# MEDIA-SEC-01 FLOW Guard pass 68 (FG-707 --approval-ref required for --apply, FG-706 keyset paging) — the NEW tests/test_media_sec_01.py run against 2de0f859, real Mongo rs0
+E       assert (0 == 1)
+E       assert (0 == 1)
+E       AssertionError: assert {'has_cursor'...tal_ok': True} == {'has_cursor'...tal_ok': True}
+E         
+E         Omitting 3 identical items, use -vv to show
+E         Differing items:
+E         {'has_cursor': False} != {'has_cursor': True}
+E         Use -v to get more diff
+E       AssertionError: assert {'every_unsee...estored': 200} == {'every_unsee...estored': 200}
+E         
+E         Omitting 2 identical items, use -vv to show
+E         Differing items:
+E         {'every_unseen_reached': False} != {'every_unseen_reached': True}
+E         Use -v to get more diff
+E       assert (True is True and [False] == [True]
+E         
+E         At index 0 diff: False != True
+E         Use -v to get more diff)
+E       AssertionError: assert ('applied' == 'NotApproved'
+E         
+E         - NotApproved
+E         + applied)
+FAILED tests/test_media_sec_01.py::test_r83_4_the_backfill_applies_once_with_an_audit_event
+FAILED tests/test_media_sec_01.py::test_r83_4_fg578_revert_dry_runs_then_undoes_exactly_the_backfill
+FAILED tests/test_media_sec_01.py::test_fg693_fg706_the_review_lists_page_by_keyset_with_a_total
+FAILED tests/test_media_sec_01.py::test_fg706_a_restore_between_two_pages_skips_no_row
+FAILED tests/test_media_sec_01.py::test_fg692_the_backfill_records_the_approval_ref
+FAILED tests/test_media_sec_01.py::test_fg707_apply_and_revert_apply_need_the_approval_ref
+6 failed, 56 passed in 11.52s
+# on 2de0f859 an --apply without --approval-ref WROTE (the harness re-runs the dry run so the rest of the run can go on); skip/limit paging has no cursor

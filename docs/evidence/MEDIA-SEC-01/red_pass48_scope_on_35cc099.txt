@@ -1,0 +1,13 @@
+# MEDIA-SEC-01 pass 48 / FLOW Guard conditions 1-2 (own = full idempotency scope; decision in the proof) — the NEW tests/test_media_sec_01.py run against 35cc099 (key-string-only own), real Mongo rs0
+        # another key's movement only + age passed → RELEASED; the file stays held by that movement
+E       AssertionError: assert (['mv-5own'] == ['mv-5own']
+E         
+E         Use -v to get more diff and None == 'confirm')
+E       AssertionError: assert [200, None] == [409, 'PENDIN...R_TOO_RECENT']
+E         
+E         At index 0 diff: 200 != 409
+E         Use -v to get more diff
+FAILED tests/test_media_sec_01.py::test_fg588_3_the_stale_release_rule_is_decided_by_the_markers_own_ref
+FAILED tests/test_media_sec_01.py::test_fg598_own_means_the_full_idempotency_scope_not_the_key_string
+2 failed, 51 passed in 11.83s
+# test_fg598_own_*: on 35cc099 ANOTHER user's movement under the same key confirmed the marker (200, not 409); test_fg588_3: the proof has no decision

@@ -7,6 +7,7 @@ import {
   Users, Briefcase, FileText, FileX, HeartPulse, Palmtree,
   AlertTriangle, HelpCircle, ArrowUpRight, Clock, MapPin,
 } from "lucide-react";
+import AuthImage from "@/components/AuthImage";
 
 const STATUS_CONFIG = {
   working:  { color: "text-emerald-400", bg: "bg-emerald-500/15 border-emerald-500/30", icon: Briefcase },
@@ -109,7 +110,7 @@ export default function PersonnelTodayCard() {
             >
               {/* Avatar */}
               {p.avatar_url ? (
-                <img src={`${process.env.REACT_APP_BACKEND_URL}${p.avatar_url}`} className="w-8 h-8 rounded-full object-cover flex-shrink-0" alt="" />
+                <AuthImage src={p.avatar_url} className="w-8 h-8 rounded-full object-cover flex-shrink-0" alt="" />
               ) : (
                 <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-[10px] font-bold text-primary flex-shrink-0">
                   {(p.first_name?.[0] || "")}{(p.last_name?.[0] || "")}

@@ -131,7 +131,9 @@ ORG_KEYED: Dict[str, str] = {
               # WH-FIX-01 A2/A3: the deduplicated DQ issues (per tenant, org_id).
               "dq_issues"),
     **_family(FAMILY_FILES,
-              "media_files", "scan_docs", "excel_import_templates"),
+              "media_files", "scan_docs", "excel_import_templates",
+              # MEDIA-SEC-01 / R83(2): the Owner-approved retire requests (per tenant, org_id)
+              "media_retire_requests"),
     **_family(FAMILY_AUDIT,
               "audit_logs"),
     **_family(FAMILY_SETTINGS,

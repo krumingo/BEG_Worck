@@ -845,6 +845,10 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     """
     tenant = _tenant(user)
     org_id = user["org_id"]
+    # MEDIA-SEC-01 (FG-579): a retired photo / one with a pending retire request is
+    # refused BEFORE the report writes anything (the report write claims again, atomically)
+    from app.services.file_holders import claim as _claim_files
+    await _claim_files(tenant, org_id, list(data.photos or []))
     today = data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
     now = datetime.now(timezone.utc).isoformat()
 
@@ -1029,15 +1033,22 @@ async def submit_daily_report(data: DailyReportSubmit, user: dict = Depends(get_
     existing_report = await tenant.work_reports.find_one(
         {"org_id": org_id, "project_id": data.project_id, "user_id": user["id"], "date": today}
     )
+    # MEDIA-SEC-01 (FG-579): the report's photos are references to files — claimed in the
+    # same transaction as the report write
+    from app.services.file_holders import claimed_write
     if existing_report:
-        await tenant.work_reports.update_one({"id": existing_report["id"]}, {"$set": {
-            "entries_count": report["entries_count"], "total_hours": total_hours,
-            "general_notes": report["general_notes"], "photos": report["photos"],
-            "submitted_at": now, "status": "Draft",
-        }})
+        await claimed_write(tenant, org_id, list(data.photos or []),
+                            lambda s: tenant.work_reports.update_one(
+                                {"id": existing_report["id"]}, {"$set": {
+                                    "entries_count": report["entries_count"],
+                                    "total_hours": total_hours,
+                                    "general_notes": report["general_notes"],
+                                    "photos": report["photos"],
+                                    "submitted_at": now, "status": "Draft"}}, session=s))
         report["id"] = existing_report["id"]
     else:
-        await tenant.work_reports.insert_one(report)
+        await claimed_write(tenant, org_id, list(data.photos or []),
+                            lambda s: tenant.work_reports.insert_one(report, session=s))
 
     # Hours warnings per unique worker
     hours_warnings = []
@@ -1105,7 +1116,9 @@ async def quick_smr(data: QuickSMR, user: dict = Depends(get_current_user)):
         "linked_offer_id": None,
         "linked_change_order_id": None,
     }
-    await tenant.missing_smr.insert_one(ms)
+    from app.services.file_holders import claimed_write   # MEDIA-SEC-01 FG-579
+    await claimed_write(tenant, org_id, list(data.photos or []),
+                        lambda s: tenant.missing_smr.insert_one(ms, session=s))
     return {"missing_smr_id": ms["id"]}
 
 
@@ -1148,6 +1161,9 @@ async def photo_invoice(
     tenant = _tenant(user)
     org_id = user["org_id"]
     now = datetime.now(timezone.utc).isoformat()
+    # MEDIA-SEC-01 (FG-575, R83(1)): the one upload guard, before the file is read
+    from app.deps.upload_guard import require_uploader
+    await require_uploader(user, project_id)
 
     # Upload file
     content = await file.read()

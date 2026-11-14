@@ -1,0 +1,9 @@
+# MEDIA-SEC-01 pass 47 / FG-588 — the NEW tests/test_media_sec_01.py run against the OLD code 56ea33b (worktree), real Mongo rs0
+FAILED tests/test_media_sec_01.py::test_fg588_1_claim_then_delete_refuses_then_the_movement_holds_the_file
+FAILED tests/test_media_sec_01.py::test_fg588_2_a_failed_movement_releases_and_the_file_can_be_retired
+FAILED tests/test_media_sec_01.py::test_fg588_3_a_stale_marker_is_released_only_when_old_and_unreferenced
+FAILED tests/test_media_sec_01.py::test_fg588_4_retire_and_claim_in_parallel_exactly_one_wins
+FAILED tests/test_media_sec_01.py::test_fg588_5_two_writers_markers_on_one_file
+FAILED tests/test_media_sec_01.py::test_fg588_6_the_warehouse_route_a_retire_during_the_movement_is_refused
+6 failed, 44 passed in 10.18s
+# (on 56ea33b the route test shows the proven race: a retire DURING the movement succeeded — retire_during = retired)

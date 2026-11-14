@@ -348,6 +348,8 @@ async def create_supplier_invoice(data: SupplierInvoiceCreate, user: dict = Depe
 
 @router.post("/supplier-invoices/{inv_id}/upload-file")
 async def upload_invoice_file(inv_id: str, file: UploadFile = File(...), user: dict = Depends(require_m2)):
+    from app.deps.upload_guard import require_uploader
+    await require_uploader(user)   # MEDIA-SEC-01 (FG-575, R83(1))
     tenant = _tenant(user)
     inv = await tenant.supplier_invoices.find_one({"id": inv_id, "org_id": user["org_id"]})
     if not inv:
