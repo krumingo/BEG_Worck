@@ -17,7 +17,7 @@
 | #88 PWA-01 | `62f898a` | **PASS** (PWA88-N1 closed; D5 emergent script = Krum) | 2026-11-09 |
 | #92 PWA-02 | `4140b02` | **PASS** (code `4dd947c`; PWA92-M1 / M2 / M3 + N1 closed; no delete on attendance / daily reports; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
 | #91 MEDIA-SEC-01 | `2de0f85` | **PASS** (code `900dc9c`; R88 Owner-only restore + review screen + paging; warehouse 44/1121; SEC-02 + PM-01 regen 0 cells) | 2026-11-14 |
-| #82 WH-REV-01 | `cd454ea` | **PASS** (delta FG-573 run_meta only over `d6de7db` PASS; warehouse 44/1121; PM-01 regen 0 cells) | 2026-11-13 |
+| #82 WH-REV-01 | `558dfdf` | **PASS** (code `642227b`; R84 supplier claim replaces 409 PAID_ABOVE_NET; warehouse 44/1121; PM-01 regen 0; FLOW Guard single-source pending) | 2026-11-14 |
 | #56 AUTH-01/02 | `3234446` | PASS (AUTH-02 break-glass) | 2026-11-06 |
 | #55 LIVE-OPS-01 | `94c0571` | **PASS** (FG-124: deprecated allocation inputs locked; embedded `invoices.lines` is not a bypass) | 2026-11-07 |
 | #67 ST-02 | `675faba` | **PASS** (C03 R26); low: ST02-C03-L1 flaky bundle-id collision in test fixture; rehearsal evidence read, not re-run | 2026-11-06 |
@@ -7061,3 +7061,39 @@ Real Mongo; code is identical to `58d0e402`, where W0 ran.
 | R0 | 814 |
 | **warehouse** | **44 / 1121** |
 | jest | 29 / 283 |
+
+## 2026-11-14 — #82 WH-REV-01 `558dfdff` (code `642227b9`) — PASS (delta over `cd454eaa`)
+
+- **R84** (Krum 14.11.2026, FG-570): a return on an already-paid supplier invoice is recorded. `INVOICE_PAID_ABOVE_NET` is removed. The overpaid part opens one `supplier_claims` record per reversal:
+  - deterministic id `claim_<movement>`, so a replay adds nothing;
+  - written in the movement's transaction;
+  - AuditEvent `finance.supplier_claim.opened` on first insert only.
+  - It is never netted: payments are untouched. Refund / offset are t26 / #84 debt.
+- **Static check:**
+  - `overpaid_cents` / `claimed` / `cents(amount)` are all integer cents;
+  - claim = min(this return, overpaid − already-open claims);
+  - `supplier_claims` is classified (FAMILY finance).
+- **Merge check:** clean onto main `3863610`; role-union 0.
+- **Probe** `whrev01/test_probe_whrev01_r84_two.py` (new):
+  - two successive returns (2 + 2 of 10) on an invoice paid 120 → claims **24 + 24**; the second claims only the increment;
+  - the replay adds nothing; 2 AuditEvents;
+  - off / shadow / enforce.
+- **Gates** (real Mongo, warehouse in enforce):
+
+| Gate | Result |
+|---|---|
+| wh_rev_01 | 123 |
+| probe_whrev01 | 144 |
+| silock | 3 |
+| wh_fix_01 | 47 / 138 / 132 |
+| A2C / A1 | 0/245, 0/494 |
+| W0 | 16 = main's 16 |
+| PAY | 630 |
+| SEC-01 | 30 |
+| SEC-02 | 31 |
+| PM-01 | 6; regen 0 cells |
+| R0 | 814 |
+| **warehouse** | **44 / 1121** |
+
+- **Pending:** FLOW Guard's single-source question (`supplier_claims` vs the #84 ledgers).
+- **Note:** a claim no longer `open` (settled later) is not subtracted by a later return's `claimed`. Correct as long as settling also changes `paid` / credit. Check when t26 lands.
